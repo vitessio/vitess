@@ -42,7 +42,6 @@ var (
 
 func main() {
 	pflag.Parse()
-	rand.Seed(time.Now().UnixNano())
 
 	// Connect to vtgate.
 	db, err := vitessdriver.Open(*server, "@primary")

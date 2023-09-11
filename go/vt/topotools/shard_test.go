@@ -22,7 +22,6 @@ import (
 	"math/rand"
 	"sync"
 	"testing"
-	"time"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -109,7 +108,6 @@ func TestGetOrCreateShard(t *testing.T) {
 	// and do massive parallel GetOrCreateShard
 	keyspace := "test_keyspace"
 	wg := sync.WaitGroup{}
-	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func(i int) {

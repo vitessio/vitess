@@ -96,16 +96,6 @@ func newSelectGenerator(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, m
 	}
 }
 
-// getColumnName returns tableName.name (if tableName is nonempty), otherwise name
-func (c *column) getColumnName() string {
-	var columnName string
-	if c.tableName != "" {
-		columnName += c.tableName + "."
-	}
-
-	return columnName + c.name
-}
-
 // getASTExpr returns the AST representation of a column
 func (c *column) getASTExpr() sqlparser.Expr {
 	return sqlparser.NewColNameWithQualifier(c.name, sqlparser.NewTableName(c.tableName))

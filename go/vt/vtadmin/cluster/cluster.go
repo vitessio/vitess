@@ -30,8 +30,6 @@ import (
 	"text/template"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
@@ -39,7 +37,6 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
@@ -341,7 +338,7 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 			return nil, fmt.Errorf("failed parsing primary_term_start_time %s: %w", mtstStr, err)
 		}
 
-		topotablet.PrimaryTermStartTime = logutil.TimeToProto(timeTime)
+		topotablet.PrimaryTermStartTime = protoutil.TimeToProto(timeTime)
 	}
 
 	if c.TabletFQDNTmpl != nil {
@@ -1574,8 +1571,7 @@ func (c *Cluster) getSchemaFromTablets(ctx context.Context, keyspace string, tab
 
 			span, ctx := trace.NewSpan(ctx, "Vtctld.GetSchema")
 			defer span.Finish()
-
-			req := proto.Clone(opts.BaseRequest).(*vtctldatapb.GetSchemaRequest)
+			req := opts.BaseRequest.CloneVT()
 			req.TableSizesOnly = sizesOnly
 			req.TabletAlias = tablet.Tablet.Alias
 

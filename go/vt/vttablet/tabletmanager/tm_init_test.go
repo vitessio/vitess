@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -275,7 +276,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 	now := time.Now()
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = alias
-		si.PrimaryTermStartTime = logutil.TimeToProto(now)
+		si.PrimaryTermStartTime = protoutil.TimeToProto(now)
 		// Reassign to now for easier comparison.
 		now = si.GetPrimaryTermStartTime()
 		return nil
@@ -348,7 +349,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 	require.NoError(t, err)
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = otherAlias
-		si.PrimaryTermStartTime = logutil.TimeToProto(ter1.Add(-10 * time.Second))
+		si.PrimaryTermStartTime = protoutil.TimeToProto(ter1.Add(-10 * time.Second))
 		return nil
 	})
 	require.NoError(t, err)
@@ -365,7 +366,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 	// timestamp, we remain replica.
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = otherAlias
-		si.PrimaryTermStartTime = logutil.TimeToProto(ter4.Add(10 * time.Second))
+		si.PrimaryTermStartTime = protoutil.TimeToProto(ter4.Add(10 * time.Second))
 		return nil
 	})
 	require.NoError(t, err)
@@ -562,7 +563,7 @@ func TestCheckTabletTypeResets(t *testing.T) {
 	now := time.Now()
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = alias
-		si.PrimaryTermStartTime = logutil.TimeToProto(now)
+		si.PrimaryTermStartTime = protoutil.TimeToProto(now)
 		// Reassign to now for easier comparison.
 		now = si.GetPrimaryTermStartTime()
 		return nil

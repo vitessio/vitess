@@ -24,8 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
@@ -223,7 +221,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 	if qre.options == nil {
 		qre.options = &querypb.ExecuteOptions{}
 	} else {
-		qre.options = proto.Clone(qre.options).(*querypb.ExecuteOptions)
+		qre.options = qre.options.CloneVT()
 	}
 	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
 

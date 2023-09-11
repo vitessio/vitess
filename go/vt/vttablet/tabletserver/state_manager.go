@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"golang.org/x/sync/semaphore"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
@@ -192,7 +191,7 @@ type (
 
 // Init performs the second phase of initialization.
 func (sm *stateManager) Init(env tabletenv.Env, target *querypb.Target) {
-	sm.target = proto.Clone(target).(*querypb.Target)
+	sm.target = target.CloneVT()
 	sm.transitioning = semaphore.NewWeighted(1)
 	sm.checkMySQLThrottler = semaphore.NewWeighted(1)
 	sm.timebombDuration = env.Config().OltpReadPool.TimeoutSeconds.Get() * 10
@@ -806,7 +805,7 @@ func (sm *stateManager) State() servingState {
 func (sm *stateManager) Target() *querypb.Target {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	return proto.Clone(sm.target).(*querypb.Target)
+	return sm.target.CloneVT()
 }
 
 // IsServingString returns the name of the current TabletServer state.

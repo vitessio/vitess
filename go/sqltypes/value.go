@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/fastparse"
+	"vitess.io/vitess/go/mysql/format"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -186,12 +187,12 @@ func NewBoolean(v bool) Value {
 
 // NewFloat64 builds an Float64 Value.
 func NewFloat64(v float64) Value {
-	return MakeTrusted(Float64, strconv.AppendFloat(nil, v, 'g', -1, 64))
+	return MakeTrusted(Float64, format.FormatFloat(v))
 }
 
 // NewFloat32 builds a Float32 Value.
 func NewFloat32(v float32) Value {
-	return MakeTrusted(Float32, strconv.AppendFloat(nil, float64(v), 'g', -1, 64))
+	return MakeTrusted(Float32, format.FormatFloat(float64(v)))
 }
 
 // NewVarChar builds a VarChar Value.

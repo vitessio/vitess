@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -102,15 +101,6 @@ func (f *fakeTracer) AddGrpcClientOptions(addInterceptors func(s grpc.StreamClie
 
 func (f *fakeTracer) Close() error {
 	panic("implement me")
-}
-
-func (f *fakeTracer) assertNoSpanWith(t *testing.T, substr string) {
-	t.Helper()
-	for _, logLine := range f.log {
-		if strings.Contains(logLine, substr) {
-			t.Fatalf("expected to not find [%v] but found it in [%v]", substr, logLine)
-		}
-	}
 }
 
 type mockSpan struct {

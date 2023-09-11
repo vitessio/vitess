@@ -7,24 +7,25 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
+
+// This plugin imports Prometheus to allow for instrumentation
+// with the Prometheus client library
 
 import (
+	"vitess.io/vitess/go/stats/prometheusbackend"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtorc/logic"
 )
 
-// addStatusParts adds UI parts to the /debug/status page of VTOrc
-func addStatusParts() {
-	servenv.AddStatusPart("Recent Recoveries", logic.TopologyRecoveriesTemplate, func() any {
-		recoveries, _ := logic.ReadRecentRecoveries(false, 0)
-		return recoveries
+func init() {
+	servenv.OnRun(func() {
+		prometheusbackend.Init("vtorc")
 	})
 }

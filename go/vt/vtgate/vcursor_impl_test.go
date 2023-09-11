@@ -8,21 +8,18 @@ import (
 	"strings"
 	"testing"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
-	"vitess.io/vitess/go/vt/proto/vschema"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/topo"
-
-	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"github.com/stretchr/testify/require"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 var _ VSchemaOperator = (*fakeVSchemaOperator)(nil)
@@ -31,11 +28,11 @@ type fakeVSchemaOperator struct {
 	vschema *vindexes.VSchema
 }
 
-func (f fakeVSchemaOperator) GetCurrentSrvVschema() *vschema.SrvVSchema {
+func (f fakeVSchemaOperator) GetCurrentSrvVschema() *vschemapb.SrvVSchema {
 	panic("implement me")
 }
 
-func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, vschema *vschema.SrvVSchema) error {
+func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error {
 	panic("implement me")
 }
 

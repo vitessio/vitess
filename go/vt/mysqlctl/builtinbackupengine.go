@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -348,9 +349,9 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		return false, vterrors.Errorf(vtrpc.Code_ABORTED, "empty binlog name in response. Request=%v, Response=%v", req, resp)
 	}
 	incrDetails := &IncrementalBackupDetails{
-		FirstTimestamp:       FormatRFC3339(logutil.ProtoToTime(resp.FirstTimestamp)),
+		FirstTimestamp:       FormatRFC3339(protoutil.TimeFromProto(resp.FirstTimestamp).UTC()),
 		FirstTimestampBinlog: filepath.Base(resp.FirstTimestampBinlog),
-		LastTimestamp:        FormatRFC3339(logutil.ProtoToTime(resp.LastTimestamp)),
+		LastTimestamp:        FormatRFC3339(protoutil.TimeFromProto(resp.LastTimestamp).UTC()),
 		LastTimestampBinlog:  filepath.Base(resp.LastTimestampBinlog),
 	}
 	// It's worthwhile we explain the difference between params.IncrementalFromPos and incrementalBackupFromPosition.
@@ -917,7 +918,7 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 		}
 		req := &mysqlctlpb.ApplyBinlogFileRequest{
 			BinlogFileName:        binlogFile,
-			BinlogRestoreDatetime: logutil.TimeToProto(params.RestoreToTimestamp),
+			BinlogRestoreDatetime: protoutil.TimeToProto(params.RestoreToTimestamp),
 		}
 		if params.RestoreToPos.GTIDSet != nil {
 			req.BinlogRestorePosition = params.RestoreToPos.GTIDSet.String()

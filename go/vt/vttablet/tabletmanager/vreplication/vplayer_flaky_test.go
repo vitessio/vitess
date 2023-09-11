@@ -528,6 +528,62 @@ func TestPlayerSavepoint(t *testing.T) {
 	cancel()
 }
 
+// TestPlayerForeignKeyCheck tests that we can insert a row into a child table without the corresponding foreign key
+// if the foreign_key_checks is not set.
+func TestPlayerForeignKeyCheck(t *testing.T) {
+	doNotLogDBQueries = true
+	defer func() { doNotLogDBQueries = false }()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table parent(id int, name varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.parent(id int, name varchar(128), primary key(id))", vrepldb),
+		"create table child(id int, parent_id int, name varchar(128), primary key(id), foreign key(parent_id) references parent(id) on delete cascade)",
+		fmt.Sprintf("create table %s.child(id int, parent_id int, name varchar(128), primary key(id), foreign key(parent_id) references parent(id) on delete cascade)", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table child",
+		fmt.Sprintf("drop table %s.child", vrepldb),
+		"drop table parent",
+		fmt.Sprintf("drop table %s.parent", vrepldb),
+	})
+
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+
+	testSetForeignKeyQueries = true
+	defer func() {
+		testSetForeignKeyQueries = false
+	}()
+
+	execStatements(t, []string{
+		"insert into parent values(1, 'parent1')",
+		"insert into child values(1, 1, 'child1')",
+		"set foreign_key_checks=0",
+		"insert into child values(2, 100, 'child100')",
+	})
+	expectData(t, "parent", [][]string{
+		{"1", "parent1"},
+	})
+	expectData(t, "child", [][]string{
+		{"1", "1", "child1"},
+		{"2", "100", "child100"},
+	})
+	cancel()
+}
+
 func TestPlayerStatementModeWithFilter(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
