@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	"vitess.io/vitess/go/textutil"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -35,11 +36,11 @@ import (
 var (
 	// WorkflowStart makes a WorfklowUpdate gRPC call to a vtctld.
 	workflowStart = &cobra.Command{
-		Use:                   "Start",
+		Use:                   "start",
 		Short:                 "Start a VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer start --workflow commerce2customer`,
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"start"},
+		Aliases:               []string{"Start"},
 		Args:                  cobra.NoArgs,
 		RunE:                  commandWorkflowUpdateState,
 	}
@@ -102,12 +103,4 @@ func commandWorkflowUpdateState(cmd *cobra.Command, args []string) error {
 	fmt.Printf("%s\n", data)
 
 	return nil
-}
-
-func addWorkflowUpdateStateFlags(cmd *cobra.Command) {
-	workflowStart.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to start (required)")
-	workflowStart.MarkFlagRequired("workflow")
-	workflowStop.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to stop (required)")
-	workflowStop.MarkFlagRequired("workflow")
-
 }

@@ -32,11 +32,11 @@ import (
 
 func GetSwitchTrafficCommand(opts *SubCommandsOpts) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:                   "SwitchTraffic",
+		Use:                   "switchtraffic",
 		Short:                 fmt.Sprintf("Switch traffic for a %s VReplication workflow.", opts.SubCommand),
 		Example:               fmt.Sprintf(`vtctldclient --server localhost:15999 %s --workflow %s --target-keyspace customer switchtraffic --tablet-types "replica,rdonly"`, opts.SubCommand, opts.Workflow),
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"switchtraffic"},
+		Aliases:               []string{"SwitchTraffic"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			SwitchTrafficOptions.Direction = workflow.DirectionForward
@@ -57,11 +57,11 @@ func GetSwitchTrafficCommand(opts *SubCommandsOpts) *cobra.Command {
 
 func GetReverseTrafficCommand(opts *SubCommandsOpts) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:                   "ReverseTraffic",
+		Use:                   "reversetraffic",
 		Short:                 fmt.Sprintf("Reverse traffic for a %s VReplication workflow.", opts.SubCommand),
 		Example:               fmt.Sprintf(`vtctldclient --server localhost:15999 %s --workflow %s --target-keyspace customer reversetraffic`, opts.SubCommand, opts.Workflow),
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"reversetraffic"},
+		Aliases:               []string{"ReverseTraffic"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			SwitchTrafficOptions.Direction = workflow.DirectionBackward

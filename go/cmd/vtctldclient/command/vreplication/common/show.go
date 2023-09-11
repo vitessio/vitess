@@ -28,11 +28,11 @@ import (
 
 func GetShowCommand(opts *SubCommandsOpts) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:                   "Show",
+		Use:                   "show",
 		Short:                 fmt.Sprintf("Show the details for a %s VReplication workflow.", opts.SubCommand),
 		Example:               fmt.Sprintf(`vtctldclient --server localhost:15999 %s --workflow %s --target-keyspace customer show`, opts.SubCommand, opts.Workflow),
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"show"},
+		Aliases:               []string{"Show"},
 		Args:                  cobra.NoArgs,
 		RunE:                  commandShow,
 	}

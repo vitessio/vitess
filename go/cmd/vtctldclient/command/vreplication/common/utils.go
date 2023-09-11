@@ -172,21 +172,21 @@ func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format strin
 }
 
 func AddCommonFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&BaseOptions.TargetKeyspace, "target-keyspace", "", "Target keyspace for this workflow exists (required)")
+	cmd.Flags().StringVar(&BaseOptions.TargetKeyspace, "target-keyspace", "", "Target keyspace for this workflow exists (required).")
 	cmd.MarkFlagRequired("target-keyspace")
-	cmd.Flags().StringVarP(&BaseOptions.Workflow, "workflow", "w", "", "The workflow you want to perform the command on (required)")
+	cmd.Flags().StringVarP(&BaseOptions.Workflow, "workflow", "w", "", "The workflow you want to perform the command on (required).")
 	cmd.MarkFlagRequired("workflow")
-	cmd.Flags().StringVar(&BaseOptions.Format, "format", "text", "The format of the output; supported formats are: text,json")
+	cmd.Flags().StringVar(&BaseOptions.Format, "format", "text", "The format of the output; supported formats are: text,json.")
 }
 
 func AddCommonCreateFlags(cmd *cobra.Command) {
-	cmd.Flags().StringSliceVarP(&CreateOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to copy table data from")
-	cmd.Flags().Var((*topoproto.TabletTypeListFlag)(&CreateOptions.TabletTypes), "tablet-types", "Source tablet types to replicate table data from (e.g. PRIMARY,REPLICA,RDONLY)")
-	cmd.Flags().BoolVar(&CreateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-preference-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag")
-	cmd.Flags().StringVar(&CreateOptions.OnDDL, "on-ddl", onDDLDefault, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE")
-	cmd.Flags().BoolVar(&CreateOptions.DeferSecondaryKeys, "defer-secondary-keys", false, "Defer secondary index creation for a table until after it has been copied")
-	cmd.Flags().BoolVar(&CreateOptions.AutoStart, "auto-start", true, "Start the MoveTables workflow after creating it")
-	cmd.Flags().BoolVar(&CreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the MoveTables workflow after it's finished copying the existing rows and before it starts replicating changes")
+	cmd.Flags().StringSliceVarP(&CreateOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to copy table data from.")
+	cmd.Flags().Var((*topoproto.TabletTypeListFlag)(&CreateOptions.TabletTypes), "tablet-types", "Source tablet types to replicate table data from (e.g. PRIMARY,REPLICA,RDONLY).")
+	cmd.Flags().BoolVar(&CreateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-preference-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
+	cmd.Flags().StringVar(&CreateOptions.OnDDL, "on-ddl", onDDLDefault, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
+	cmd.Flags().BoolVar(&CreateOptions.DeferSecondaryKeys, "defer-secondary-keys", false, "Defer secondary index creation for a table until after it has been copied.")
+	cmd.Flags().BoolVar(&CreateOptions.AutoStart, "auto-start", true, "Start the MoveTables workflow after creating it.")
+	cmd.Flags().BoolVar(&CreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the MoveTables workflow after it's finished copying the existing rows and before it starts replicating changes.")
 }
 
 var SwitchTrafficOptions = struct {
@@ -201,12 +201,12 @@ var SwitchTrafficOptions = struct {
 }{}
 
 func AddCommonSwitchTrafficFlags(cmd *cobra.Command, initializeTargetSequences bool) {
-	cmd.Flags().StringSliceVarP(&SwitchTrafficOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to switch traffic in")
-	cmd.Flags().Var((*topoproto.TabletTypeListFlag)(&SwitchTrafficOptions.TabletTypes), "tablet-types", "Tablet types to switch traffic for")
+	cmd.Flags().StringSliceVarP(&SwitchTrafficOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to switch traffic in.")
+	cmd.Flags().Var((*topoproto.TabletTypeListFlag)(&SwitchTrafficOptions.TabletTypes), "tablet-types", "Tablet types to switch traffic for.")
 	cmd.Flags().DurationVar(&SwitchTrafficOptions.Timeout, "timeout", TimeoutDefault, "Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.")
-	cmd.Flags().DurationVar(&SwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", MaxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")
-	cmd.Flags().BoolVar(&SwitchTrafficOptions.EnableReverseReplication, "enable-reverse-replication", true, "Setup replication going back to the original source keyspace to support rolling back the traffic cutover")
-	cmd.Flags().BoolVar(&SwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
+	cmd.Flags().DurationVar(&SwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", MaxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this.")
+	cmd.Flags().BoolVar(&SwitchTrafficOptions.EnableReverseReplication, "enable-reverse-replication", true, "Setup replication going back to the original source keyspace to support rolling back the traffic cutover.")
+	cmd.Flags().BoolVar(&SwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred.")
 	if initializeTargetSequences {
 		cmd.Flags().BoolVar(&SwitchTrafficOptions.InitializeTargetSequences, "initialize-target-sequences", false, "When moving tables from an unsharded keyspace to a sharded keyspace, initialize any sequences that are being used on the target when switching writes.")
 	}

@@ -54,7 +54,7 @@ var (
 )
 
 func RegisterWorkflowCommands(root *cobra.Command) {
-	workflow.PersistentFlags().StringVarP(&workflowOptions.Keyspace, "keyspace", "k", "", "Keyspace context for the workflow (required)")
+	workflow.PersistentFlags().StringVarP(&workflowOptions.Keyspace, "keyspace", "k", "", "Keyspace context for the workflow (required).")
 	workflow.MarkPersistentFlagRequired("keyspace")
 	root.AddCommand(workflow)
 

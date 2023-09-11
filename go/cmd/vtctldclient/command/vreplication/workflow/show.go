@@ -31,11 +31,11 @@ import (
 var (
 	// WorkflowList makes a GetWorkflows gRPC call to a vtctld.
 	workflowList = &cobra.Command{
-		Use:                   "List",
+		Use:                   "list",
 		Short:                 "List the VReplication workflows in the given keyspace.",
 		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer list`,
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"list"},
+		Aliases:               []string{"List"},
 		Args:                  cobra.NoArgs,
 		RunE:                  commandWorkflowShow,
 	}
@@ -84,6 +84,6 @@ func commandWorkflowShow(cmd *cobra.Command, args []string) error {
 }
 
 func addWorkflowShowFlags(cmd *cobra.Command) {
-	workflowShow.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want the details for (required)")
+	workflowShow.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want the details for (required).")
 	workflowShow.MarkFlagRequired("workflow")
 }

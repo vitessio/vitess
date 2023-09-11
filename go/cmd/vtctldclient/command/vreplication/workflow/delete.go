@@ -37,11 +37,11 @@ var (
 
 	// WorkflowDelete makes a WorkflowDelete gRPC call to a vtctld.
 	workflowDelete = &cobra.Command{
-		Use:                   "Delete",
+		Use:                   "delete",
 		Short:                 "Delete a VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer delete --workflow commerce2customer`,
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"delete"},
+		Aliases:               []string{"Delete"},
 		Args:                  cobra.NoArgs,
 		RunE:                  commandWorkflowDelete,
 	}
@@ -77,9 +77,9 @@ func commandWorkflowDelete(cmd *cobra.Command, args []string) error {
 }
 
 func addWorkflowDeleteFlags(cmd *cobra.Command) {
-	workflowDelete.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want to delete (required)")
+	workflowDelete.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want to delete (required).")
 	workflowDelete.MarkFlagRequired("workflow")
-	workflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the workflow in the target keyspace")
-	workflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the workflow")
+	workflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the workflow in the target keyspace.")
+	workflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the workflow.")
 
 }

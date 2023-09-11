@@ -62,5 +62,5 @@ func registerMoveTablesCommands(root *cobra.Command) {
 }
 
 func init() {
-	common.RegisterCommandHandler("movetables", registerMoveTablesCommands)
+	common.RegisterCommandHandler("MoveTables", registerMoveTablesCommands)
 }

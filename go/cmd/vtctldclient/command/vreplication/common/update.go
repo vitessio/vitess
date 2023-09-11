@@ -56,11 +56,11 @@ var (
 
 func GetStartCommand(opts *SubCommandsOpts) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:                   "Start",
+		Use:                   "start",
 		Short:                 fmt.Sprintf("Start a %s workflow.", opts.SubCommand),
 		Example:               fmt.Sprintf(`vtctldclient --server localhost:15999 %s --workflow %s --target-keyspace customer start`, opts.SubCommand, opts.Workflow),
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"start"},
+		Aliases:               []string{"Start"},
 		Args:                  cobra.NoArgs,
 		PreRun:                bridgeToWorkflow,
 		RunE:                  commandUpdateState,
@@ -70,11 +70,11 @@ func GetStartCommand(opts *SubCommandsOpts) *cobra.Command {
 
 func GetStopCommand(opts *SubCommandsOpts) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:                   "Stop",
+		Use:                   "stop",
 		Short:                 fmt.Sprintf("Stop a %s workflow.", opts.SubCommand),
 		Example:               fmt.Sprintf(`vtctldclient --server localhost:15999 %s --workflow %s --target-keyspace customer stop`, opts.SubCommand, opts.Workflow),
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"stop"},
+		Aliases:               []string{"Stop"},
 		Args:                  cobra.NoArgs,
 		PreRun:                bridgeToWorkflow,
 		RunE:                  commandUpdateState,
@@ -114,7 +114,7 @@ func CanRestartWorkflow(keyspace, workflow string) error {
 	for _, shardStream := range wf.ShardStreams {
 		for _, stream := range shardStream.Streams {
 			if len(stream.CopyStates) > 0 {
-				return fmt.Errorf("stream %d is still in the copy phase: can only start workflow %s if all streams have completed the copy phase.", stream.Id, workflow)
+				return fmt.Errorf("stream %d is still in the copy phase: can only start workflow %s if all streams have completed the copy phase", stream.Id, workflow)
 			}
 		}
 	}

@@ -34,11 +34,11 @@ var cancelOptions = struct {
 
 func GetCancelCommand(opts *SubCommandsOpts) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:                   "Cancel",
+		Use:                   "cancel",
 		Short:                 fmt.Sprintf("Cancel a %s VReplication workflow.", opts.SubCommand),
 		Example:               fmt.Sprintf(`vtctldclient --server localhost:15999 %s --workflow %s --target-keyspace customer cancel`, opts.SubCommand, opts.Workflow),
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"cancel"},
+		Aliases:               []string{"Cancel"},
 		Args:                  cobra.NoArgs,
 		RunE:                  commandCancel,
 	}

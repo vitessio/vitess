@@ -28,11 +28,11 @@ import (
 
 func GetStatusCommand(opts *SubCommandsOpts) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:                   "Status",
+		Use:                   "status",
 		Short:                 fmt.Sprintf("Show the current status for a %s VReplication workflow.", opts.SubCommand),
 		Example:               fmt.Sprintf(`vtctldclient --server localhost:15999 %s --workflow %s --target-keyspace customer status`, opts.SubCommand, opts.Workflow),
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"status", "progress", "Progress"},
+		Aliases:               []string{"Status", "progress", "Progress"},
 		Args:                  cobra.NoArgs,
 		RunE:                  commandStatus,
 	}

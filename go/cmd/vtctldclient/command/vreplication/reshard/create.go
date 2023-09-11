@@ -34,12 +34,12 @@ var (
 
 	// reshardCreate makes a ReshardCreate gRPC call to a vtctld.
 	reshardCreate = &cobra.Command{
-		Use:                   "Create",
+		Use:                   "create",
 		Short:                 "Create and optionally run a reshard VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 reshard --workflow customer2customer --target-keyspace customer create --source_shards="0" --target_shards="-80,80-" --cells zone1 --cells zone2 --tablet-types replica`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"create"},
+		Aliases:               []string{"Create"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if err := common.ParseAndValidateCreateOptions(cmd); err != nil {
@@ -87,8 +87,8 @@ func commandReshardCreate(cmd *cobra.Command, args []string) error {
 
 func registerCreateCommand(root *cobra.Command) {
 	common.AddCommonCreateFlags(reshardCreate)
-	reshardCreate.Flags().StringSliceVar(&reshardCreateOptions.sourceShards, "source-shards", nil, "Comma-separated list of source shards")
-	reshardCreate.Flags().StringSliceVar(&reshardCreateOptions.targetShards, "target-shards", nil, "Comma-separated list of target shards")
-	reshardCreate.Flags().BoolVar(&reshardCreateOptions.skipSchemaCopy, "skip-schema-copy", false, "Skip copying the schema from the source shards to the target shards")
+	reshardCreate.Flags().StringSliceVar(&reshardCreateOptions.sourceShards, "source-shards", nil, "Source shards.")
+	reshardCreate.Flags().StringSliceVar(&reshardCreateOptions.targetShards, "target-shards", nil, "Target shards.")
+	reshardCreate.Flags().BoolVar(&reshardCreateOptions.skipSchemaCopy, "skip-schema-copy", false, "Skip copying the schema from the source shards to the target shards.")
 	root.AddCommand(reshardCreate)
 }
