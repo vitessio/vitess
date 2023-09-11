@@ -241,7 +241,11 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		}
 	})
 	var primitive *engine.Projection
-	columnNames := slice.Map(op.Columns, func(from *sqlparser.AliasedExpr) string {
+	cols, err := op.GetColumns(ctx)
+	if err != nil {
+		return nil, err
+	}
+	columnNames := slice.Map(cols, func(from *sqlparser.AliasedExpr) string {
 		return from.ColumnName()
 	})
 

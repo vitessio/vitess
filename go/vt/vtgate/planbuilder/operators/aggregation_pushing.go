@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 
@@ -87,7 +88,10 @@ func pushDownAggregationThroughSubquery(
 			if idx >= 0 {
 				continue
 			}
-			pushedAggr.addColumnWithoutPushing(aeWrap(colName), true)
+			_, err := pushedAggr.addColumnWithoutPushing(aeWrap(colName), true)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 	}
 
@@ -242,7 +246,10 @@ withNextColumn:
 				continue withNextColumn
 			}
 		}
-		pushedAggr.addColumnWithoutPushing(aeWrap(col), true)
+		_, err := pushedAggr.addColumnWithoutPushing(aeWrap(col), true)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	// Set the source of the filter to the new aggregator placed below the route.
@@ -373,7 +380,7 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 	joinColumns, output, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, lhs, rhs)
 	if err != nil {
 		// if we get this error, we just abort the splitting and fall back on simpler ways of solving the same query
-		if err == errAbortAggrPushing {
+		if errors.Is(err, errAbortAggrPushing) {
 			return nil, nil, nil
 		}
 		return nil, nil, err
@@ -480,10 +487,12 @@ func splitAggrColumnsToLeftAndRight(
 	join *ApplyJoin,
 	lhs, rhs *joinPusher,
 ) ([]JoinColumn, ops.Operator, error) {
+	proj := newAliasedProjection(join)
+	proj.FromAggr = true
 	builder := &aggBuilder{
 		lhs:       lhs,
 		rhs:       rhs,
-		proj:      &Projection{Source: join, FromAggr: true},
+		proj:      proj,
 		outerJoin: join.LeftJoin,
 	}
 
@@ -511,7 +520,10 @@ outer:
 				continue outer
 			}
 		}
-		builder.proj.addUnexploredExpr(col, col.Expr)
+		_, err := builder.proj.addUnexploredExpr(col, col.Expr)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	return builder.joinColumns, builder.proj, nil
 }
@@ -576,8 +588,7 @@ func (p *joinPusher) countStar(ctx *plancontext.PlanningContext) (*sqlparser.Ali
 func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) error {
 	switch aggr.OpCode {
 	case opcode.AggregateCountStar:
-		ab.handleCountStar(ctx, aggr)
-		return nil
+		return ab.handleCountStar(ctx, aggr)
 	case opcode.AggregateCount, opcode.AggregateSum:
 		return ab.handleAggrWithCountStarMultiplier(ctx, aggr)
 	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateAnyValue:
@@ -623,7 +634,10 @@ func (ab *aggBuilder) pushThroughRight(aggr Aggr) {
 }
 
 func (ab *aggBuilder) handlePushThroughAggregation(ctx *plancontext.PlanningContext, aggr Aggr) error {
-	ab.proj.addUnexploredExpr(aggr.Original, aggr.Original.Expr)
+	_, err := ab.proj.addUnexploredExpr(aggr.Original, aggr.Original.Expr)
+	if err != nil {
+		return err
+	}
 
 	deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
 	switch {
@@ -637,12 +651,12 @@ func (ab *aggBuilder) handlePushThroughAggregation(ctx *plancontext.PlanningCont
 	return nil
 }
 
-func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Aggr) {
+func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Aggr) error {
 	// Add the aggregate to both sides of the join.
 	lhsAE := ab.leftCountStar(ctx)
 	rhsAE := ab.rightCountStar(ctx)
 
-	ab.buildProjectionForAggr(lhsAE, rhsAE, aggr, true)
+	return ab.buildProjectionForAggr(lhsAE, rhsAE, aggr, true)
 }
 
 func (ab *aggBuilder) handleAggrWithCountStarMultiplier(ctx *plancontext.PlanningContext, aggr Aggr) error {
@@ -668,11 +682,10 @@ func (ab *aggBuilder) handleAggrWithCountStarMultiplier(ctx *plancontext.Plannin
 		return errAbortAggrPushing
 	}
 
-	ab.buildProjectionForAggr(lhsAE, rhsAE, aggr, addCoalesce)
-	return nil
+	return ab.buildProjectionForAggr(lhsAE, rhsAE, aggr, addCoalesce)
 }
 
-func (ab *aggBuilder) buildProjectionForAggr(lhsAE *sqlparser.AliasedExpr, rhsAE *sqlparser.AliasedExpr, aggr Aggr, coalesce bool) {
+func (ab *aggBuilder) buildProjectionForAggr(lhsAE *sqlparser.AliasedExpr, rhsAE *sqlparser.AliasedExpr, aggr Aggr, coalesce bool) error {
 	// We expect the expressions to be different on each side of the join, otherwise it's an error.
 	if lhsAE.Expr == rhsAE.Expr {
 		panic(fmt.Sprintf("Need the two produced expressions to be different. %T %T", lhsAE, rhsAE))
@@ -701,7 +714,11 @@ func (ab *aggBuilder) buildProjectionForAggr(lhsAE *sqlparser.AliasedExpr, rhsAE
 		As:   sqlparser.NewIdentifierCI(aggr.Original.ColumnName()),
 	}
 
-	ab.proj.addUnexploredExpr(projAE, projExpr)
+	_, err := ab.proj.addUnexploredExpr(projAE, projExpr)
+	if err != nil {
+		return nil
+	}
+	return err
 }
 
 func coalesceFunc(e sqlparser.Expr) sqlparser.Expr {

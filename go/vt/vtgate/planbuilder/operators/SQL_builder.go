@@ -124,22 +124,20 @@ func (qb *queryBuilder) addGroupBy(original sqlparser.Expr) {
 	sel.GroupBy = append(sel.GroupBy, original)
 }
 
-func (qb *queryBuilder) addProjection(projection *sqlparser.AliasedExpr) error {
+func (qb *queryBuilder) addProjection(projection sqlparser.SelectExpr) error {
 	switch stmt := qb.sel.(type) {
 	case *sqlparser.Select:
 		stmt.SelectExprs = append(stmt.SelectExprs, projection)
 		return nil
 	case *sqlparser.Union:
-		switch expr := projection.Expr.(type) {
-		case *sqlparser.ColName:
-			return checkUnionColumnByName(expr, qb.sel)
-		default:
-			// if there is more than just column names, we'll just push the UNION
-			// inside a derived table and then recurse into this method again
-			qb.pushUnionInsideDerived()
-			return qb.addProjection(projection)
+		if ae, ok := projection.(*sqlparser.AliasedExpr); ok {
+			if col, ok := ae.Expr.(*sqlparser.ColName); ok {
+				return checkUnionColumnByName(col, qb.sel)
+			}
 		}
 
+		qb.pushUnionInsideDerived()
+		return qb.addProjection(projection)
 	}
 	return vterrors.VT13001(fmt.Sprintf("unknown select statement type: %T", qb.sel))
 }
@@ -476,8 +474,11 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 	_, isSel := qb.sel.(*sqlparser.Select)
 	if isSel {
 		qb.clearProjections()
-
-		for _, column := range op.Columns {
+		cols, err := op.GetSelectExprs(qb.ctx)
+		if err != nil {
+			return err
+		}
+		for _, column := range cols {
 			err := qb.addProjection(column)
 			if err != nil {
 				return err
@@ -496,7 +497,11 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 	}
 
 	if !isSel {
-		for _, column := range op.Columns {
+		cols, err := op.GetSelectExprs(qb.ctx)
+		if err != nil {
+			return err
+		}
+		for _, column := range cols {
 			err := qb.addProjection(column)
 			if err != nil {
 				return err

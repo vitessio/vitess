@@ -635,7 +635,8 @@ func pushDownProjectionInApplyJoin(
 	p *Projection,
 	src *ApplyJoin,
 ) (ops.Operator, *rewrite.ApplyResult, error) {
-	if src.LeftJoin {
+	columns, err := p.GetColumns(ctx)
+	if src.LeftJoin || err != nil {
 		// we can't push down expression evaluation to the rhs if we are not sure if it will even be executed
 		return p, rewrite.SameTree, nil
 	}
@@ -643,7 +644,7 @@ func pushDownProjectionInApplyJoin(
 
 	src.JoinColumns = nil
 	for idx := 0; idx < len(p.Projections); idx++ {
-		err := splitProjectionAcrossJoin(ctx, src, lhs, rhs, p.Projections[idx], p.Columns[idx])
+		err := splitProjectionAcrossJoin(ctx, src, lhs, rhs, p.Projections[idx], columns[idx])
 		if err != nil {
 			return nil, nil, err
 		}
@@ -655,8 +656,6 @@ func pushDownProjectionInApplyJoin(
 			return nil, nil, err
 		}
 	}
-
-	var err error
 
 	// Create and update the Projection operators for the left and right children, if needed.
 	src.LHS, err = createProjectionWithTheseColumns(ctx, src.LHS, lhs, p.TableID, p.Alias)
@@ -786,7 +785,7 @@ func createProjectionWithTheseColumns(
 	if err != nil {
 		return nil, err
 	}
-	proj.Columns = p.names
+	proj.Columns = AliasedProjections(p.names)
 	proj.Projections = p.cols
 	proj.TableID = tableID
 	proj.Alias = alias

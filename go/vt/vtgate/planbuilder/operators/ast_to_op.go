@@ -259,16 +259,15 @@ func createComparisonSubQuery(
 	}
 	original = cloneASTAndSemState(ctx, original)
 
+	var predicate sqlparser.Expr
 	ae, ok := subq.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
-	if !ok {
-		return nil, vterrors.VT13001("can't use unexpanded projections here")
-	}
-
-	// this is a predicate that will only be used to check if we can merge the subquery with the outer query
-	predicate := &sqlparser.ComparisonExpr{
-		Operator: sqlparser.EqualOp,
-		Left:     outside,
-		Right:    ae.Expr,
+	if ok {
+		// this is a predicate that will only be used to check if we can merge the subquery with the outer query
+		predicate = &sqlparser.ComparisonExpr{
+			Operator: sqlparser.EqualOp,
+			Left:     outside,
+			Right:    ae.Expr,
+		}
 	}
 
 	filterType := opcode.PulloutValue

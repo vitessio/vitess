@@ -90,7 +90,7 @@ func (a *Aggregator) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpars
 	return a, nil
 }
 
-func (a *Aggregator) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
+func (a *Aggregator) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
 	offset := len(a.Columns)
 	a.Columns = append(a.Columns, expr)
 
@@ -109,12 +109,16 @@ func (a *Aggregator) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToG
 		aggr.ColOffset = offset
 		a.Aggregations = append(a.Aggregations, aggr)
 	}
-	return offset
+	return offset, nil
 }
 
-func (a *Aggregator) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, groupby []bool, expr []*sqlparser.AliasedExpr) (offsets []int) {
-	for i, ae := range expr {
-		offsets = append(offsets, a.addColumnWithoutPushing(ae, groupby[i]))
+func (a *Aggregator) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, groupby []bool, exprs []*sqlparser.AliasedExpr) (offsets []int, err error) {
+	for i, ae := range exprs {
+		offset, err := a.addColumnWithoutPushing(ae, groupby[i])
+		if err != nil {
+			return nil, err
+		}
+		offsets = append(offsets, offset)
 	}
 	return
 }
@@ -336,7 +340,7 @@ func (aggr Aggr) getPushDownColumn() sqlparser.Expr {
 }
 
 func (a *Aggregator) planOffsetsNotPushed(ctx *plancontext.PlanningContext) error {
-	a.Source = &Projection{Source: a.Source}
+	a.Source = newAliasedProjection(a.Source)
 	// we need to keep things in the column order, so we can't iterate over the aggregations or groupings
 	for colIdx := range a.Columns {
 		idx, err := a.addIfGroupingColumn(ctx, colIdx)

@@ -532,13 +532,16 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 }
 
 func createProjection(ctx *plancontext.PlanningContext, src ops.Operator) (*Projection, error) {
-	proj := &Projection{Source: src}
+	proj := newAliasedProjection(src)
 	cols, err := src.GetColumns(ctx)
 	if err != nil {
 		return nil, err
 	}
 	for _, col := range cols {
-		proj.addUnexploredExpr(col, col.Expr)
+		_, err := proj.addUnexploredExpr(col, col.Expr)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return proj, nil
 }
@@ -571,14 +574,14 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 	}
 	r.Source = src
 
-	offsets = src.addColumnsWithoutPushing(ctx, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
+	offsets, _ = src.addColumnsWithoutPushing(ctx, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
 	return offsets[0], nil
 }
 
 type selectExpressions interface {
 	ops.Operator
-	addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) int
-	addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) []int
+	addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error)
+	addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error)
 	isDerived() bool
 }
 
@@ -620,7 +623,7 @@ func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Op
 			// we have to add a new projection and can't build on this one
 			return op, false, nil
 		}
-		offset := op.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs)
+		offset, _ := op.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs)
 		return op, true, offset
 	case *Union:
 		tableID := semantics.SingleTableSet(len(ctx.SemTable.Tables))
@@ -631,7 +634,7 @@ func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Op
 		}
 		proj := &Projection{
 			Source:      op,
-			Columns:     unionColumns,
+			Columns:     AliasedProjections(unionColumns),
 			Projections: nil,
 			TableID:     &tableID,
 			Alias:       "dt",

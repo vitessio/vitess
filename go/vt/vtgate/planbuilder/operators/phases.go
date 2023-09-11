@@ -120,8 +120,12 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Op
 					// if the expression has been merged, there is nothing left we need to do
 					continue
 				}
-				// TODO: this doesn't look correct. what if the
-				op.Columns[idx].Expr = se.GetExpr()
+				col, err := op.Columns.GetColumns()
+				if err != nil {
+					// if we can't get the columns, we can't change this query
+					return op, rewrite.SameTree, nil
+				}
+				col[idx].Expr = se.GetExpr()
 			}
 			return op, rewrite.SameTree, nil
 		default:
