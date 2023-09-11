@@ -104,8 +104,17 @@ const (
 	ThrottleCheckSelf
 )
 
+<<<<<<< HEAD
 func init() {
 	rand.Seed(time.Now().UnixNano())
+=======
+// throttlerTopoService represents the functionality we expect from a TopoServer, abstracted so that
+// it can be mocked in unit tests
+type throttlerTopoService interface {
+	GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error)
+	FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error)
+	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
+>>>>>>> 7aed9ed748 (Tablet throttler: empty list of probes on non-leader (#13926))
 }
 
 // Throttler is the main entity in the throttling mechanism. This service runs, probes, collects data,
@@ -123,7 +132,7 @@ type Throttler struct {
 	env             tabletenv.Env
 	pool            *connpool.Pool
 	tabletTypeFunc  func() topodatapb.TabletType
-	ts              *topo.Server
+	ts              throttlerTopoService
 	srvTopoServer   srvtopo.Server
 	heartbeatWriter heartbeat.HeartbeatWriter
 
@@ -606,8 +615,14 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	throttledAppsTicker := addTicker(throttledAppsSnapshotInterval)
 	recentCheckTicker := addTicker(time.Second)
 
+<<<<<<< HEAD
+=======
+	tmClient := tmclient.NewTabletManagerClient()
+
+>>>>>>> 7aed9ed748 (Tablet throttler: empty list of probes on non-leader (#13926))
 	go func() {
 		defer log.Infof("Throttler: Operate terminated, tickers stopped")
+		defer tmClient.Close()
 		for _, t := range tickers {
 			defer t.Stop()
 			// since we just started the tickers now, speed up the ticks by forcing an immediate tick
@@ -765,9 +780,15 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 
 					var throttleMetricFunc func() *mysql.MySQLThrottleMetric
 					if clusterName == selfStoreName {
+						// Throttler is probing its own tablet's metrics:
 						throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, probe)
 					} else {
+<<<<<<< HEAD
 						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, clusterName, probe)
+=======
+						// Throttler probing other tablets:
+						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, tmClient, clusterName, probe)
+>>>>>>> 7aed9ed748 (Tablet throttler: empty list of probes on non-leader (#13926))
 					}
 					throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, throttleMetricFunc)
 					throttler.mysqlThrottleMetricChan <- throttleMetrics
@@ -780,7 +801,6 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 
 // refreshMySQLInventory will re-structure the inventory based on reading config settings
 func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
-
 	// distribute the query/threshold from the throttler down to the cluster settings and from there to the probes
 	metricsQuery := throttler.GetMetricsQuery()
 	metricsThreshold := throttler.MetricsThreshold.Load()
@@ -822,13 +842,24 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			}
 
 			if clusterName == selfStoreName {
-				// special case: just looking at this tablet's MySQL server
+				// special case: just looking at this tablet's MySQL server.
 				// We will probe this "cluster" (of one server) is a special way.
 				addInstanceKey("", 0, mysql.SelfInstanceKey, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return
 			}
+<<<<<<< HEAD
 			if atomic.LoadInt64(&throttler.isLeader) == 0 {
+=======
+			if !throttler.isLeader.Load() {
+				// This tablet may have used to be the primary, but it isn't now. It may have a recollection
+				// of previous clusters it used to probe. It may have recollection of specific probes for such clusters.
+				// This now ensures any existing cluster probes are overrridden with an empty list of probes.
+				// `clusterProbes` was created above as empty, and identificable via `clusterName`. This will in turn
+				// be used to overwrite throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] in
+				// updateMySQLClusterProbes().
+				throttler.mysqlClusterProbesChan <- clusterProbes
+>>>>>>> 7aed9ed748 (Tablet throttler: empty list of probes on non-leader (#13926))
 				// not the leader (primary tablet)? Then no more work for us.
 				return
 			}
