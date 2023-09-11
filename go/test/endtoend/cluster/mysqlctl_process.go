@@ -145,6 +145,8 @@ ssl_key={{.ServerKey}}
 		if init {
 			tmpProcess.Args = append(tmpProcess.Args, "init",
 				"--init_db_sql_file", mysqlctl.InitDBFile)
+		} else {
+			tmpProcess.Args = append(tmpProcess.Args, "start")
 		}
 	} else {
 		tmpProcess.Args = append(tmpProcess.Args, "start")
