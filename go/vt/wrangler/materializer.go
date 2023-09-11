@@ -54,6 +54,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type materializer struct {
@@ -130,7 +131,7 @@ func shouldInclude(table string, excludes []string) bool {
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypesStr string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
 	externalCluster string, dropForeignKeys, deferSecondaryKeys bool, sourceTimeZone, onDDL string,
-	sourceShards []string, noRoutingRules bool) (err error) {
+	sourceShards []string, noRoutingRules bool, atomicCopy bool) (err error) {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
@@ -210,7 +211,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		if !vschema.Sharded {
 			// Save the original in case we need to restore it for a late failure
 			// in the defer().
-			origVSchema = proto.Clone(vschema).(*vschemapb.Keyspace)
+			origVSchema = vschema.CloneVT()
 			if err := wr.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
 				return err
 			}
@@ -237,6 +238,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		SourceShards:              sourceShards,
 		OnDdl:                     onDDL,
 		DeferSecondaryKeys:        deferSecondaryKeys,
+		AtomicCopy:                atomicCopy,
 	}
 	if sourceTimeZone != "" {
 		ms.SourceTimeZone = sourceTimeZone
@@ -504,12 +506,13 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	// Important variables are pulled out here.
 	var (
 		// lookup vindex info
-		vindexName      string
-		vindex          *vschemapb.Vindex
-		targetKeyspace  string
-		targetTableName string
-		vindexFromCols  []string
-		vindexToCol     string
+		vindexName        string
+		vindex            *vschemapb.Vindex
+		targetKeyspace    string
+		targetTableName   string
+		vindexFromCols    []string
+		vindexToCol       string
+		vindexIgnoreNulls bool
 
 		// source table info
 		sourceTableName string
@@ -559,6 +562,18 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	// See if we can create the vindex without errors.
 	if _, err := vindexes.CreateVindex(vindex.Type, vindexName, vindex.Params); err != nil {
 		return nil, nil, nil, err
+	}
+	if ignoreNullsStr, ok := vindex.Params["ignore_nulls"]; ok {
+		// This mirrors the behavior of vindexes.boolFromMap().
+		switch ignoreNullsStr {
+		case "true":
+			vindexIgnoreNulls = true
+		case "false":
+			vindexIgnoreNulls = false
+		default:
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ignore_nulls value must be 'true' or 'false': '%s'",
+				ignoreNullsStr)
+		}
 	}
 
 	// Validate input table
@@ -696,21 +711,31 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	buf = sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("select ")
 	for i := range vindexFromCols {
-		buf.Myprintf("%v as %v, ", sqlparser.NewIdentifierCI(sourceVindexColumns[i]), sqlparser.NewIdentifierCI(vindexFromCols[i]))
+		buf.Myprintf("%s as %s, ", sqlparser.String(sqlparser.NewIdentifierCI(sourceVindexColumns[i])), sqlparser.String(sqlparser.NewIdentifierCI(vindexFromCols[i])))
 	}
 	if strings.EqualFold(vindexToCol, "keyspace_id") || strings.EqualFold(vindex.Type, "consistent_lookup_unique") || strings.EqualFold(vindex.Type, "consistent_lookup") {
-		buf.Myprintf("keyspace_id() as %v ", sqlparser.NewIdentifierCI(vindexToCol))
+		buf.Myprintf("keyspace_id() as %s ", sqlparser.String(sqlparser.NewIdentifierCI(vindexToCol)))
 	} else {
-		buf.Myprintf("%v as %v ", sqlparser.NewIdentifierCI(vindexToCol), sqlparser.NewIdentifierCI(vindexToCol))
+		buf.Myprintf("%s as %s ", sqlparser.String(sqlparser.NewIdentifierCI(vindexToCol)), sqlparser.String(sqlparser.NewIdentifierCI(vindexToCol)))
 	}
-	buf.Myprintf("from %v", sqlparser.NewIdentifierCS(sourceTableName))
+	buf.Myprintf("from %s", sqlparser.String(sqlparser.NewIdentifierCS(sourceTableName)))
+	if vindexIgnoreNulls {
+		buf.Myprintf(" where ")
+		lastValIdx := len(vindexFromCols) - 1
+		for i := range vindexFromCols {
+			buf.Myprintf("%s is not null", sqlparser.String(sqlparser.NewIdentifierCI(vindexFromCols[i])))
+			if i != lastValIdx {
+				buf.Myprintf(" and ")
+			}
+		}
+	}
 	if vindex.Owner != "" {
 		// Only backfill
 		buf.Myprintf(" group by ")
 		for i := range vindexFromCols {
-			buf.Myprintf("%v, ", sqlparser.NewIdentifierCI(vindexFromCols[i]))
+			buf.Myprintf("%s, ", sqlparser.String(sqlparser.NewIdentifierCI(vindexFromCols[i])))
 		}
-		buf.Myprintf("%v", sqlparser.NewIdentifierCI(vindexToCol))
+		buf.Myprintf("%s", sqlparser.String(sqlparser.NewIdentifierCI(vindexToCol)))
 	}
 	materializeQuery = buf.String()
 
@@ -1362,19 +1387,13 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 
 			bls.Filter.Rules = append(bls.Filter.Rules, rule)
 		}
-		workflowSubType := binlogdatapb.VReplicationWorkflowSubType_None
-		if mz.isPartial {
-			workflowSubType = binlogdatapb.VReplicationWorkflowSubType_Partial
+		var workflowSubType binlogdatapb.VReplicationWorkflowSubType
+		workflowSubType, s, err := mz.getWorkflowSubType()
+		if err != nil {
+			return s, err
 		}
-		var workflowType binlogdatapb.VReplicationWorkflowType
-		switch mz.ms.MaterializationIntent {
-		case vtctldatapb.MaterializationIntent_CUSTOM:
-			workflowType = binlogdatapb.VReplicationWorkflowType_Materialize
-		case vtctldatapb.MaterializationIntent_MOVETABLES:
-			workflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
-		case vtctldatapb.MaterializationIntent_CREATELOOKUPINDEX:
-			workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
-		}
+
+		workflowType := mz.getWorkflowType()
 
 		tabletTypeStr := mz.ms.TabletTypes
 		if mz.ms.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
@@ -1388,6 +1407,34 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 		)
 	}
 	return ig.String(), nil
+}
+
+func (mz *materializer) getWorkflowType() binlogdatapb.VReplicationWorkflowType {
+	var workflowType binlogdatapb.VReplicationWorkflowType
+	switch mz.ms.MaterializationIntent {
+	case vtctldatapb.MaterializationIntent_CUSTOM:
+		workflowType = binlogdatapb.VReplicationWorkflowType_Materialize
+	case vtctldatapb.MaterializationIntent_MOVETABLES:
+		workflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
+	case vtctldatapb.MaterializationIntent_CREATELOOKUPINDEX:
+		workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
+	}
+	return workflowType
+}
+
+func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowSubType, string, error) {
+	workflowSubType := binlogdatapb.VReplicationWorkflowSubType_None
+	switch {
+	case mz.isPartial && mz.ms.AtomicCopy:
+		return workflowSubType, "", fmt.Errorf("both atomic copy and partial mode cannot be specified for the same workflow")
+	case mz.isPartial:
+		workflowSubType = binlogdatapb.VReplicationWorkflowSubType_Partial
+	case mz.ms.AtomicCopy:
+		workflowSubType = binlogdatapb.VReplicationWorkflowSubType_AtomicCopy
+	default:
+		workflowSubType = binlogdatapb.VReplicationWorkflowSubType_None
+	}
+	return workflowSubType, "", nil
 }
 
 func matchColInSelect(col sqlparser.IdentifierCI, sel *sqlparser.Select) (*sqlparser.ColName, error) {

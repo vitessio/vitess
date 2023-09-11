@@ -71,7 +71,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, true)
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, true, false)
 	require.NoError(t, err)
 	rr, err := env.wr.ts.GetRoutingRules(ctx)
 	require.NoError(t, err)
@@ -99,7 +99,7 @@ func TestMigrateTables(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, false)
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, false, false)
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
@@ -142,11 +142,11 @@ func TestMissingTables(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, false)
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, false, false)
 	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt")
-	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, false)
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, false, false)
 	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt,txt")
-	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, false)
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, false, false)
 	require.NoError(t, err)
 }
 
@@ -204,7 +204,7 @@ func TestMoveTablesAllAndExclude(t *testing.T) {
 			env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables, true, false, "", false, false, "", defaultOnDDL, nil, false)
+			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables, true, false, "", false, false, "", defaultOnDDL, nil, false, false)
 			require.NoError(t, err)
 			require.EqualValues(t, tcase.want, targetTables(ctx, env))
 		})
@@ -240,7 +240,7 @@ func TestMoveTablesStopFlags(t *testing.T) {
 		env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 		// -auto_start=false is tested by NOT expecting the update query which sets state to RUNNING
 		err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
-			"", false, "", false, true, "", false, false, "", defaultOnDDL, nil, false)
+			"", false, "", false, true, "", false, false, "", defaultOnDDL, nil, false, false)
 		require.NoError(t, err)
 		env.tmc.verifyQueries(t)
 	})
@@ -268,7 +268,7 @@ func TestMigrateVSchema(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, false)
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil, false, false)
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
@@ -1332,6 +1332,127 @@ func TestCreateCustomizedVindex(t *testing.T) {
 	if !proto.Equal(got, want) {
 		t.Errorf("customize create lookup error same: got:\n%v, want\n%v", got, want)
 	}
+}
+
+func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		SourceKeyspace: "ks",
+		TargetKeyspace: "ks",
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+
+	specs := &vschemapb.Keyspace{
+		Vindexes: map[string]*vschemapb.Vindex{
+			"v": {
+				Type: "consistent_lookup",
+				Params: map[string]string{
+					"table":        "ks.lkp",
+					"from":         "col2,col1",
+					"to":           "keyspace_id",
+					"ignore_nulls": "true",
+				},
+				Owner: "t1",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:    "v",
+					Columns: []string{"col2", "col1"},
+				}},
+			},
+		},
+	}
+	// Dummy sourceSchema
+	sourceSchema := "CREATE TABLE `t1` (\n" +
+		"  `col1` int(11) NOT NULL AUTO_INCREMENT,\n" +
+		"  `col2` int(11) DEFAULT NULL,\n" +
+		"  PRIMARY KEY (`id`)\n" +
+		") ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1"
+
+	vschema := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "hash",
+					Column: "col1",
+				}},
+			},
+		},
+	}
+
+	wantKs := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+			"v": {
+				Type: "consistent_lookup",
+				Params: map[string]string{
+					"table":        "ks.lkp",
+					"from":         "col2,col1",
+					"to":           "keyspace_id",
+					"write_only":   "true",
+					"ignore_nulls": "true",
+				},
+				Owner: "t1",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "hash",
+					Column: "col1",
+				}, {
+					Name:    "v",
+					Columns: []string{"col2", "col1"},
+				}},
+			},
+			"lkp": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "col2",
+					Name:   "hash",
+				}},
+			},
+		},
+	}
+	wantQuery := "select col2 as col2, col1 as col1, keyspace_id() as keyspace_id from t1 where col2 is not null and col1 is not null group by col2, col1, keyspace_id"
+
+	env.tmc.schema[ms.SourceKeyspace+".t1"] = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Fields: []*querypb.Field{{
+				Name: "col1",
+				Type: querypb.Type_INT64,
+			}, {
+				Name: "col2",
+				Type: querypb.Type_INT64,
+			}},
+			Schema: sourceSchema,
+		}},
+	}
+	if err := env.topoServ.SaveVSchema(context.Background(), ms.SourceKeyspace, vschema); err != nil {
+		t.Fatal(err)
+	}
+
+	ms, ks, _, err := env.wr.prepareCreateLookup(context.Background(), ms.SourceKeyspace, specs, false)
+	require.NoError(t, err)
+	if !proto.Equal(wantKs, ks) {
+		t.Errorf("unexpected keyspace value: got:\n%v, want\n%v", ks, wantKs)
+	}
+	require.NotNil(t, ms)
+	require.GreaterOrEqual(t, len(ms.TableSettings), 1)
+	require.Equal(t, wantQuery, ms.TableSettings[0].SourceExpression, "unexpected query")
 }
 
 func TestStopAfterCopyFlag(t *testing.T) {
@@ -2971,7 +3092,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 			err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
-				"", false, "", false, true, "", false, false, "", onDDLAction, nil, false)
+				"", false, "", false, true, "", false, false, "", onDDLAction, nil, false, false)
 			require.NoError(t, err)
 		})
 	}

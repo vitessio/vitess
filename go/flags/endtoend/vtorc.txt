@@ -1,4 +1,9 @@
-Usage of vtorc:
+VTOrc is the automated fault detection and repair tool in Vitess.
+
+Usage:
+  vtorc [flags]
+
+Flags:
       --allow-emergency-reparent                                    Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary (default true)
       --alsologtostderr                                             log to standard error as well as files
       --audit-file-location string                                  File location where the audit logs are to be stored
@@ -25,7 +30,7 @@ Usage of vtorc:
       --grpc_keepalive_timeout duration                             After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
       --grpc_max_message_size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
       --grpc_prometheus                                             Enable gRPC monitoring with Prometheus.
-  -h, --help                                                        display usage and exit
+  -h, --help                                                        help for vtorc
       --instance-poll-time duration                                 Timer duration on which VTOrc refreshes MySQL information (default 5s)
       --keep_logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)

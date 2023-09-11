@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2022 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,17 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
+
+// This plugin imports Prometheus to allow for instrumentation
+// with the Prometheus client library
 
 import (
-	"vitess.io/vitess/go/trace"
-
+	"vitess.io/vitess/go/stats/prometheusbackend"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
 func init() {
-	servenv.OnInit(func() {
-		closer := trace.StartTracing("vtctld")
-		servenv.OnClose(trace.LogErrorsWhenClosing(closer))
+	servenv.OnRun(func() {
+		prometheusbackend.Init("vtorc")
 	})
 }

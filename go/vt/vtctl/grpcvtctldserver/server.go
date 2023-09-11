@@ -31,7 +31,6 @@ import (
 
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
@@ -571,7 +570,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	}
 
 	if req.DryRun {
-		afterTablet := proto.Clone(tablet.Tablet).(*topodatapb.Tablet)
+		afterTablet := tablet.Tablet.CloneVT()
 		afterTablet.Type = req.DbType
 
 		return &vtctldatapb.ChangeTabletTypeResponse{
@@ -619,7 +618,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 
 	// We should clone the tablet and change its type to the expected type before checking the durability rules
 	// Since we want to check the durability rules for the desired state and not before we make that change
-	expectedTablet := proto.Clone(tablet.Tablet).(*topodatapb.Tablet)
+	expectedTablet := tablet.Tablet.CloneVT()
 	expectedTablet.Type = req.DbType
 	err = s.tmc.ChangeType(ctx, tablet.Tablet, req.DbType, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, expectedTablet))
 	if err != nil {
@@ -2313,7 +2312,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	if !ok {
 		return fmt.Errorf("primary-elect tablet %v is not in the shard", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
-	ev.NewPrimary = proto.Clone(primaryElectTabletInfo.Tablet).(*topodatapb.Tablet)
+	ev.NewPrimary = primaryElectTabletInfo.Tablet.CloneVT()
 
 	// Check the primary is the only primary is the shard, or -force was used.
 	_, primaryTabletMap := topotools.SortedTabletMap(tabletMap)
@@ -3802,7 +3801,7 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 	log.Infof("TabletExternallyReparented: executing tablet type change %v -> PRIMARY on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
 	ev := &events.Reparent{
 		ShardInfo:  *shard,
-		NewPrimary: proto.Clone(tablet.Tablet).(*topodatapb.Tablet),
+		NewPrimary: tablet.Tablet.CloneVT(),
 		OldPrimary: &topodatapb.Tablet{
 			Alias: shard.PrimaryAlias,
 			Type:  topodatapb.TabletType_PRIMARY,
@@ -3854,9 +3853,7 @@ func (s *VtctldServer) UpdateCellInfo(ctx context.Context, req *vtctldatapb.Upda
 
 	var updatedCi *topodatapb.CellInfo
 	err = s.ts.UpdateCellInfoFields(ctx, req.Name, func(ci *topodatapb.CellInfo) error {
-		defer func() {
-			updatedCi = proto.Clone(ci).(*topodatapb.CellInfo)
-		}()
+		defer func() { updatedCi = ci.CloneVT() }()
 
 		changed := false
 
@@ -3902,9 +3899,7 @@ func (s *VtctldServer) UpdateCellsAlias(ctx context.Context, req *vtctldatapb.Up
 
 	var updatedCa *topodatapb.CellsAlias
 	err = s.ts.UpdateCellsAlias(ctx, req.Name, func(ca *topodatapb.CellsAlias) error {
-		defer func() {
-			updatedCa = proto.Clone(ca).(*topodatapb.CellsAlias)
-		}()
+		defer func() { updatedCa = ca.CloneVT() }()
 
 		ca.Cells = req.CellsAlias.Cells
 		return nil

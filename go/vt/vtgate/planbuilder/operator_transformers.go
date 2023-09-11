@@ -64,6 +64,8 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator) (
 		return transformDistinct(ctx, op)
 	case *operators.FkCascade:
 		return transformFkCascade(ctx, op)
+	case *operators.FkVerify:
+		return transformFkVerify(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
@@ -128,6 +130,33 @@ func transformSubQueryFilter(ctx *plancontext.PlanningContext, op *operators.Sub
 		return nil, err
 	}
 	return newSemiJoin(outer, inner, op.Vars, lhsCols), nil
+}
+
+// transformFkVerify transforms a FkVerify operator into a logical plan.
+func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify) (logicalPlan, error) {
+	inputLP, err := transformToLogicalPlan(ctx, fkv.Input)
+	if err != nil {
+		return nil, err
+	}
+
+	// Once we have the input logical plan, we can create the primitives for the verification operators.
+	// For all of these, we don't need the semTable anymore. We set it to nil, to avoid using an incorrect one.
+	ctx.SemTable = nil
+
+	// Go over the children and convert them to Primitives too.
+	var verify []*verifyLP
+	for _, v := range fkv.Verify {
+		lp, err := transformToLogicalPlan(ctx, v.Op)
+		if err != nil {
+			return nil, err
+		}
+		verify = append(verify, &verifyLP{
+			verify: lp,
+			typ:    v.Typ,
+		})
+	}
+
+	return newFkVerify(inputLP, verify), nil
 }
 
 func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (logicalPlan, error) {
@@ -424,20 +453,27 @@ func newRoutingParams(ctx *plancontext.PlanningContext, opCode engine.Opcode) *e
 }
 
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (logicalPlan, error) {
-	switch src := op.Source.(type) {
-	case *operators.Insert:
-		return transformInsertPlan(ctx, op, src)
-	case *operators.Update:
-		return transformUpdatePlan(ctx, op, src)
-	case *operators.Delete:
-		return transformDeletePlan(ctx, op, src)
-	}
-	condition := getVindexPredicate(op)
-	sel, err := operators.ToSQL(ctx, op.Source)
+	stmt, dmlOp, err := operators.ToSQL(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
 
+	switch stmt := stmt.(type) {
+	case sqlparser.SelectStatement:
+		return buildRouteLogicalPlan(ctx, op, stmt)
+	case *sqlparser.Update:
+		return buildUpdateLogicalPlan(ctx, op, dmlOp)
+	case *sqlparser.Delete:
+		return buildDeleteLogicalPlan(ctx, op, dmlOp)
+	case *sqlparser.Insert:
+		return buildInsertLogicalPlan(ctx, op, dmlOp, stmt)
+	default:
+		return nil, vterrors.VT13001(fmt.Sprintf("dont know how to %T", stmt))
+	}
+}
+
+func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route, stmt sqlparser.SelectStatement) (logicalPlan, error) {
+	condition := getVindexPredicate(op)
 	eroute, err := routeToEngineRoute(ctx, op)
 	for _, order := range op.Ordering {
 		typ, collation, _ := ctx.SemTable.TypeForExpr(order.AST)
@@ -454,17 +490,17 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	}
 	return &route{
 		eroute:    eroute,
-		Select:    sel,
+		Select:    stmt,
 		tables:    operators.TableID(op),
 		condition: condition,
 	}, nil
-
 }
 
-func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, ins *operators.Insert) (i *insert, err error) {
+func buildInsertLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Route, op ops.Operator, stmt *sqlparser.Insert) (logicalPlan, error) {
+	ins := op.(*operators.Insert)
 	eins := &engine.Insert{
-		Opcode:            mapToInsertOpCode(op.Routing.OpCode(), ins.Input != nil),
-		Keyspace:          op.Routing.Keyspace(),
+		Opcode:            mapToInsertOpCode(rb.Routing.OpCode(), ins.Input != nil),
+		Keyspace:          rb.Routing.Keyspace(),
 		TableName:         ins.VTable.Name.String(),
 		Ignore:            ins.Ignore,
 		ForceNonStreaming: ins.ForceNonStreaming,
@@ -473,7 +509,7 @@ func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 		VindexValues:      ins.VindexValues,
 		VindexValueOffset: ins.VindexValueOffset,
 	}
-	i = &insert{eInsert: eins}
+	lp := &insert{eInsert: eins}
 
 	// we would need to generate the query on the fly. The only exception here is
 	// when unsharded query with autoincrement for that there is no input operator.
@@ -482,15 +518,16 @@ func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	}
 
 	if ins.Input == nil {
-		eins.Query = generateQuery(ins.AST)
+		eins.Query = generateQuery(stmt)
 	} else {
-		i.source, err = transformToLogicalPlan(ctx, ins.Input)
+		newSrc, err := transformToLogicalPlan(ctx, ins.Input)
 		if err != nil {
-			return
+			return nil, err
 		}
+		lp.source = newSrc
 	}
 
-	return
+	return lp, nil
 }
 
 func mapToInsertOpCode(code engine.Opcode, insertSelect bool) engine.InsertOpcode {
@@ -564,22 +601,26 @@ func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 	node.Format(buf)
 }
 
-func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, upd *operators.Update) (logicalPlan, error) {
-	ast := upd.AST
-	rp := newRoutingParams(ctx, op.Routing.OpCode())
-	err := op.Routing.UpdateRoutingParams(ctx, rp)
+func buildUpdateLogicalPlan(
+	ctx *plancontext.PlanningContext,
+	rb *operators.Route,
+	dmlOp ops.Operator,
+) (logicalPlan, error) {
+	upd := dmlOp.(*operators.Update)
+	rp := newRoutingParams(ctx, rb.Routing.OpCode())
+	err := rb.Routing.UpdateRoutingParams(ctx, rp)
 	if err != nil {
 		return nil, err
 	}
 	edml := &engine.DML{
-		Query:             generateQuery(ast),
+		Query:             generateQuery(upd.AST),
 		TableNames:        []string{upd.VTable.Name.String()},
 		Vindexes:          upd.VTable.ColumnVindexes,
 		OwnedVindexQuery:  upd.OwnedVindexQuery,
 		RoutingParameters: rp,
 	}
 
-	transformDMLPlan(upd.VTable, edml, op.Routing, len(upd.ChangedVindexValues) > 0)
+	transformDMLPlan(upd.VTable, edml, rb.Routing, len(upd.ChangedVindexValues) > 0)
 
 	e := &engine.Update{
 		ChangedVindexValues: upd.ChangedVindexValues,
@@ -589,22 +630,26 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	return &primitiveWrapper{prim: e}, nil
 }
 
-func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, del *operators.Delete) (logicalPlan, error) {
-	ast := del.AST
-	rp := newRoutingParams(ctx, op.Routing.OpCode())
-	err := op.Routing.UpdateRoutingParams(ctx, rp)
+func buildDeleteLogicalPlan(
+	ctx *plancontext.PlanningContext,
+	rb *operators.Route,
+	dmlOp ops.Operator,
+) (logicalPlan, error) {
+	del := dmlOp.(*operators.Delete)
+	rp := newRoutingParams(ctx, rb.Routing.OpCode())
+	err := rb.Routing.UpdateRoutingParams(ctx, rp)
 	if err != nil {
 		return nil, err
 	}
 	edml := &engine.DML{
-		Query:             generateQuery(ast),
+		Query:             generateQuery(del.AST),
 		TableNames:        []string{del.VTable.Name.String()},
 		Vindexes:          del.VTable.Owned,
 		OwnedVindexQuery:  del.OwnedVindexQuery,
 		RoutingParameters: rp,
 	}
 
-	transformDMLPlan(del.VTable, edml, op.Routing, del.OwnedVindexQuery != "")
+	transformDMLPlan(del.VTable, edml, rb.Routing, del.OwnedVindexQuery != "")
 
 	e := &engine.Delete{
 		DML: edml,

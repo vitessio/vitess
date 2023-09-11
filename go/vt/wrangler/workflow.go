@@ -60,6 +60,7 @@ type VReplicationWorkflowParams struct {
 	SourceTimeZone            string
 	DropForeignKeys           bool
 	InitializeTargetSequences bool
+	AtomicCopy                bool
 
 	// Reshard specific
 	SourceShards, TargetShards []string
@@ -436,7 +437,8 @@ func (vrw *VReplicationWorkflow) initMoveTables() error {
 	return vrw.wr.MoveTables(vrw.ctx, vrw.params.Workflow, vrw.params.SourceKeyspace, vrw.params.TargetKeyspace,
 		vrw.params.Tables, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AllTables, vrw.params.ExcludeTables,
 		vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.ExternalCluster, vrw.params.DropForeignKeys,
-		vrw.params.DeferSecondaryKeys, vrw.params.SourceTimeZone, vrw.params.OnDDL, vrw.params.SourceShards, vrw.params.NoRoutingRules)
+		vrw.params.DeferSecondaryKeys, vrw.params.SourceTimeZone, vrw.params.OnDDL, vrw.params.SourceShards,
+		vrw.params.NoRoutingRules, vrw.params.AtomicCopy)
 }
 
 func (vrw *VReplicationWorkflow) initReshard() error {

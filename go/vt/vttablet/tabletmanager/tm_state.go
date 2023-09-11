@@ -89,7 +89,7 @@ func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
 	return &tmState{
 		tm: tm,
 		displayState: displayState{
-			tablet: proto.Clone(tablet).(*topodatapb.Tablet),
+			tablet: tablet.CloneVT(),
 		},
 		tablet: tablet,
 		ctx:    ctx,
@@ -459,15 +459,14 @@ type displayState struct {
 func (ts *tmState) publishForDisplay() {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
-
-	ts.displayState.tablet = proto.Clone(ts.tablet).(*topodatapb.Tablet)
+	ts.displayState.tablet = ts.tablet.CloneVT()
 	ts.displayState.deniedTables = ts.deniedTables[ts.tablet.Type]
 }
 
 func (ts *tmState) Tablet() *topodatapb.Tablet {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
-	return proto.Clone(ts.displayState.tablet).(*topodatapb.Tablet)
+	return ts.displayState.tablet.CloneVT()
 }
 
 func (ts *tmState) DeniedTables() []string {

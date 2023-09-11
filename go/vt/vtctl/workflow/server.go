@@ -27,9 +27,7 @@ import (
 	"time"
 
 	"golang.org/x/sync/semaphore"
-
 	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
@@ -1023,7 +1021,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	if !vschema.Sharded {
 		// Save the original in case we need to restore it for a late failure
 		// in the defer().
-		origVSchema = proto.Clone(vschema).(*vschemapb.Keyspace)
+		origVSchema = vschema.CloneVT()
 		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
 			return nil, err
 		}
@@ -1042,6 +1040,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		SourceShards:              req.SourceShards,
 		OnDdl:                     req.OnDdl,
 		DeferSecondaryKeys:        req.DeferSecondaryKeys,
+		AtomicCopy:                req.AtomicCopy,
 	}
 	if req.SourceTimeZone != "" {
 		ms.SourceTimeZone = req.SourceTimeZone

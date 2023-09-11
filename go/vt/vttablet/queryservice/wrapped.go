@@ -254,6 +254,13 @@ func (ws *wrappedService) VStreamRows(ctx context.Context, request *binlogdatapb
 	})
 }
 
+func (ws *wrappedService) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(response *binlogdatapb.VStreamTablesResponse) error) error {
+	return ws.wrapper(ctx, request.Target, ws.impl, "VStreamTables", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+		innerErr := conn.VStreamTables(ctx, request, send)
+		return false, innerErr
+	})
+}
+
 func (ws *wrappedService) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	return ws.wrapper(ctx, target, ws.impl, "VStreamResults", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.VStreamResults(ctx, target, query, send)

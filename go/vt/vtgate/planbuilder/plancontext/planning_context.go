@@ -44,6 +44,15 @@ type PlanningContext struct {
 	// We aggregate within a shard, and then at the vtgate level we aggregate the incoming shard aggregates
 	DelegateAggregation bool
 
+	// VerifyAllFKs tells whether we need verification for all the fk constraints on VTGate.
+	// This is required for queries we are running with /*+ SET_VAR(foreign_key_checks=OFF) */
+	VerifyAllFKs bool
+
+	// ParentFKToIgnore stores a specific parent foreign key that we would need to ignore while planning
+	// a certain query. This field is used in UPDATE CASCADE planning, wherein while planning the child update
+	// query, we need to ignore the parent foreign key constraint that caused the cascade in question.
+	ParentFKToIgnore string
+
 	// Projected subqueries that have been merged
 	MergedSubqueries []*sqlparser.Subquery
 }

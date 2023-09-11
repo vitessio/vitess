@@ -29722,7 +29722,8 @@ export namespace binlogdata {
     /** VReplicationWorkflowSubType enum. */
     enum VReplicationWorkflowSubType {
         None = 0,
-        Partial = 1
+        Partial = 1,
+        AtomicCopy = 2
     }
 
     /** VReplicationWorkflowState enum. */
@@ -30153,6 +30154,9 @@ export namespace binlogdata {
 
         /** RowEvent shard */
         shard?: (string|null);
+
+        /** RowEvent flags */
+        flags?: (number|null);
     }
 
     /** Represents a RowEvent. */
@@ -30175,6 +30179,9 @@ export namespace binlogdata {
 
         /** RowEvent shard. */
         public shard: string;
+
+        /** RowEvent flags. */
+        public flags: number;
 
         /**
          * Creates a new RowEvent instance using the specified properties.
@@ -31676,6 +31683,242 @@ export namespace binlogdata {
 
         /**
          * Gets the default type url for VStreamRowsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamTablesRequest. */
+    interface IVStreamTablesRequest {
+
+        /** VStreamTablesRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamTablesRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamTablesRequest target */
+        target?: (query.ITarget|null);
+    }
+
+    /** Represents a VStreamTablesRequest. */
+    class VStreamTablesRequest implements IVStreamTablesRequest {
+
+        /**
+         * Constructs a new VStreamTablesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamTablesRequest);
+
+        /** VStreamTablesRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamTablesRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamTablesRequest target. */
+        public target?: (query.ITarget|null);
+
+        /**
+         * Creates a new VStreamTablesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamTablesRequest instance
+         */
+        public static create(properties?: binlogdata.IVStreamTablesRequest): binlogdata.VStreamTablesRequest;
+
+        /**
+         * Encodes the specified VStreamTablesRequest message. Does not implicitly {@link binlogdata.VStreamTablesRequest.verify|verify} messages.
+         * @param message VStreamTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamTablesRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamTablesRequest.verify|verify} messages.
+         * @param message VStreamTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamTablesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamTablesRequest;
+
+        /**
+         * Decodes a VStreamTablesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamTablesRequest;
+
+        /**
+         * Verifies a VStreamTablesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamTablesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamTablesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamTablesRequest;
+
+        /**
+         * Creates a plain object from a VStreamTablesRequest message. Also converts values to other types if specified.
+         * @param message VStreamTablesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamTablesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamTablesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamTablesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamTablesResponse. */
+    interface IVStreamTablesResponse {
+
+        /** VStreamTablesResponse table_name */
+        table_name?: (string|null);
+
+        /** VStreamTablesResponse fields */
+        fields?: (query.IField[]|null);
+
+        /** VStreamTablesResponse pkfields */
+        pkfields?: (query.IField[]|null);
+
+        /** VStreamTablesResponse gtid */
+        gtid?: (string|null);
+
+        /** VStreamTablesResponse rows */
+        rows?: (query.IRow[]|null);
+
+        /** VStreamTablesResponse lastpk */
+        lastpk?: (query.IRow|null);
+    }
+
+    /** Represents a VStreamTablesResponse. */
+    class VStreamTablesResponse implements IVStreamTablesResponse {
+
+        /**
+         * Constructs a new VStreamTablesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamTablesResponse);
+
+        /** VStreamTablesResponse table_name. */
+        public table_name: string;
+
+        /** VStreamTablesResponse fields. */
+        public fields: query.IField[];
+
+        /** VStreamTablesResponse pkfields. */
+        public pkfields: query.IField[];
+
+        /** VStreamTablesResponse gtid. */
+        public gtid: string;
+
+        /** VStreamTablesResponse rows. */
+        public rows: query.IRow[];
+
+        /** VStreamTablesResponse lastpk. */
+        public lastpk?: (query.IRow|null);
+
+        /**
+         * Creates a new VStreamTablesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamTablesResponse instance
+         */
+        public static create(properties?: binlogdata.IVStreamTablesResponse): binlogdata.VStreamTablesResponse;
+
+        /**
+         * Encodes the specified VStreamTablesResponse message. Does not implicitly {@link binlogdata.VStreamTablesResponse.verify|verify} messages.
+         * @param message VStreamTablesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamTablesResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamTablesResponse.verify|verify} messages.
+         * @param message VStreamTablesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamTablesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamTablesResponse;
+
+        /**
+         * Decodes a VStreamTablesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamTablesResponse;
+
+        /**
+         * Verifies a VStreamTablesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamTablesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamTablesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamTablesResponse;
+
+        /**
+         * Creates a plain object from a VStreamTablesResponse message. Also converts values to other types if specified.
+         * @param message VStreamTablesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamTablesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamTablesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamTablesResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -42123,6 +42366,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings tablet_selection_preference */
         tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
+
+        /** MaterializeSettings atomic_copy */
+        atomic_copy?: (boolean|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -42178,6 +42424,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings tablet_selection_preference. */
         public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
+
+        /** MaterializeSettings atomic_copy. */
+        public atomic_copy: boolean;
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.
@@ -54352,6 +54601,9 @@ export namespace vtctldata {
 
         /** MoveTablesCreateRequest no_routing_rules */
         no_routing_rules?: (boolean|null);
+
+        /** MoveTablesCreateRequest atomic_copy */
+        atomic_copy?: (boolean|null);
     }
 
     /** Represents a MoveTablesCreateRequest. */
@@ -54416,6 +54668,9 @@ export namespace vtctldata {
 
         /** MoveTablesCreateRequest no_routing_rules. */
         public no_routing_rules: boolean;
+
+        /** MoveTablesCreateRequest atomic_copy. */
+        public atomic_copy: boolean;
 
         /**
          * Creates a new MoveTablesCreateRequest instance using the specified properties.

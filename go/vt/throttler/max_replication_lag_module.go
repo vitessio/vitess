@@ -207,7 +207,7 @@ func (m *MaxReplicationLagModule) applyLatestConfig() {
 func (m *MaxReplicationLagModule) getConfiguration() *throttlerdatapb.Configuration {
 	m.mutableConfigMu.Lock()
 	defer m.mutableConfigMu.Unlock()
-	return proto.Clone(m.mutableConfig.Configuration).(*throttlerdatapb.Configuration)
+	return m.mutableConfig.Configuration.CloneVT()
 }
 
 func (m *MaxReplicationLagModule) updateConfiguration(configuration *throttlerdatapb.Configuration, copyZeroValues bool) error {
@@ -217,7 +217,7 @@ func (m *MaxReplicationLagModule) updateConfiguration(configuration *throttlerda
 	newConfig := m.mutableConfig
 
 	if copyZeroValues {
-		newConfig.Configuration = proto.Clone(configuration).(*throttlerdatapb.Configuration)
+		newConfig.Configuration = configuration.CloneVT()
 	} else {
 		proto.Merge(newConfig.Configuration, configuration)
 	}

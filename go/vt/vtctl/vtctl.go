@@ -2099,6 +2099,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
 	dropForeignKeys := subFlags.Bool("drop_foreign_keys", false, "If true, tables in the target keyspace will be created without foreign keys.")
 	maxReplicationLagAllowed := subFlags.Duration("max_replication_lag_allowed", defaultMaxReplicationLagAllowed, "Allow traffic to be switched only if vreplication lag is below this (in seconds)")
+	atomicCopy := subFlags.Bool("atomic-copy", false, "(EXPERIMENTAL) Use this if your source keyspace has tables which use foreign key constraints. All tables from the source will be moved.")
 
 	onDDL := "IGNORE"
 	subFlags.StringVar(&onDDL, "on-ddl", onDDL, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
@@ -2159,6 +2160,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 		DryRun:         *dryRun,
 		AutoStart:      *autoStart,
 		StopAfterCopy:  *stopAfterCopy,
+		AtomicCopy:     *atomicCopy,
 	}
 
 	printDetails := func() error {
@@ -2250,6 +2252,24 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 				wr.Logger().Errorf("keyspace %s not found", *sourceKeyspace)
 				return err
 			}
+
+			if *atomicCopy {
+				var errors []string
+				if !*allTables {
+					errors = append(errors, "atomic copy requires --all.")
+				}
+				if *tables != "" {
+					errors = append(errors, "atomic copy does not support specifying tables.")
+				}
+				if *excludes != "" {
+					errors = append(errors, "atomic copy does not support specifying excludes.")
+				}
+				if len(errors) > 0 {
+					errors = append(errors, "Found options incompatible with atomic copy:")
+					return fmt.Errorf(strings.Join(errors, " "))
+				}
+			}
+
 			if !*allTables && *tables == "" {
 				return fmt.Errorf("no tables specified to move")
 			}

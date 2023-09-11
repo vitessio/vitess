@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,17 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
+
+// Imports and register the 'zk2' topo.Server.
 
 import (
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtorc/logic"
+	_ "vitess.io/vitess/go/vt/topo/zk2topo"
 )
-
-// addStatusParts adds UI parts to the /debug/status page of VTOrc
-func addStatusParts() {
-	servenv.AddStatusPart("Recent Recoveries", logic.TopologyRecoveriesTemplate, func() any {
-		recoveries, _ := logic.ReadRecentRecoveries(false, 0)
-		return recoveries
-	})
-}

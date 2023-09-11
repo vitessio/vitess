@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
@@ -127,8 +125,7 @@ func (tqsc *Controller) AddStatusPart() {
 func (tqsc *Controller) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.DBConfigs, _ mysqlctl.MysqlDaemon) error {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
-
-	tqsc.target = proto.Clone(target).(*querypb.Target)
+	tqsc.target = target.CloneVT()
 	return nil
 }
 
@@ -161,7 +158,7 @@ func (tqsc *Controller) IsServing() bool {
 func (tqsc *Controller) CurrentTarget() *querypb.Target {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
-	return proto.Clone(tqsc.target).(*querypb.Target)
+	return tqsc.target.CloneVT()
 }
 
 // IsHealthy is part of the tabletserver.Controller interface

@@ -546,8 +546,9 @@ func unwrapDerivedTables(ctx *plancontext.PlanningContext, exp sqlparser.Expr) s
 		}
 
 		exp = semantics.RewriteDerivedTableExpression(exp, tbl)
-		exp = getColName(exp)
-		if exp == nil {
+		if col := getColName(exp); col != nil {
+			exp = col
+		} else {
 			return nil
 		}
 	}
