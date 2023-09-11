@@ -179,7 +179,7 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.O
 	for _, fk := range childFks {
 		// Any RESTRICT type foreign keys that arrive here,
 		// are cross-shard/cross-keyspace RESTRICT cases, which we don't currently support.
-		if isRestrict(fk.OnDelete) {
+		if fk.OnDelete.IsRestrict() {
 			return nil, vterrors.VT12002()
 		}
 
