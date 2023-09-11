@@ -74,10 +74,10 @@ func TestIsAppThrottled(t *testing.T) {
 	assert.False(t, throttler.IsAppThrottled("app3"))
 	assert.False(t, throttler.IsAppThrottled("app4"))
 	//
-	throttler.ThrottleApp("app1", time.Now().Add(time.Hour), DefaultThrottleRatio, true)
-	throttler.ThrottleApp("app2", time.Now(), DefaultThrottleRatio, false)
-	throttler.ThrottleApp("app3", time.Now().Add(time.Hour), DefaultThrottleRatio, false)
-	throttler.ThrottleApp("app4", time.Now().Add(time.Hour), 0, false)
+	throttler.ThrottleApp("app1", time.Now().Add(time.Hour), DefaultThrottleRatio)
+	throttler.ThrottleApp("app2", time.Now(), DefaultThrottleRatio)
+	throttler.ThrottleApp("app3", time.Now().Add(time.Hour), DefaultThrottleRatio)
+	throttler.ThrottleApp("app4", time.Now().Add(time.Hour), 0)
 	assert.False(t, throttler.IsAppThrottled("app1")) // exempted
 	assert.False(t, throttler.IsAppThrottled("app2")) // expired
 	assert.True(t, throttler.IsAppThrottled("app3"))
@@ -91,34 +91,6 @@ func TestIsAppThrottled(t *testing.T) {
 	assert.False(t, throttler.IsAppThrottled("app2"))
 	assert.False(t, throttler.IsAppThrottled("app3"))
 	assert.False(t, throttler.IsAppThrottled("app4"))
-}
-
-func TestIsAppExempted(t *testing.T) {
-
-	throttler := Throttler{
-		throttledApps:   cache.New(cache.NoExpiration, 0),
-		heartbeatWriter: FakeHeartbeatWriter{},
-	}
-	assert.False(t, throttler.IsAppExempted("app1"))
-	assert.False(t, throttler.IsAppExempted("app2"))
-	assert.False(t, throttler.IsAppExempted("app3"))
-	//
-	throttler.ThrottleApp("app1", time.Now().Add(time.Hour), DefaultThrottleRatio, true)
-	throttler.ThrottleApp("app2", time.Now(), DefaultThrottleRatio, true) // instantly expire
-	assert.True(t, throttler.IsAppExempted("app1"))
-	assert.True(t, throttler.IsAppExempted("app1:other-tag"))
-	assert.False(t, throttler.IsAppExempted("app2")) // expired
-	assert.False(t, throttler.IsAppExempted("app3"))
-	//
-	throttler.UnthrottleApp("app1")
-	throttler.ThrottleApp("app2", time.Now().Add(time.Hour), DefaultThrottleRatio, false)
-	assert.False(t, throttler.IsAppExempted("app1"))
-	assert.False(t, throttler.IsAppExempted("app2"))
-	assert.False(t, throttler.IsAppExempted("app3"))
-	//
-	assert.True(t, throttler.IsAppExempted("schema-tracker"))
-	throttler.UnthrottleApp("schema-tracker") // meaningless. App is statically exempted
-	assert.True(t, throttler.IsAppExempted("schema-tracker"))
 }
 
 // TestRefreshMySQLInventory tests the behavior of the throttler's RefreshMySQLInventory() function, which
@@ -151,13 +123,13 @@ func TestRefreshMySQLInventory(t *testing.T) {
 	throttler.initThrottleTabletTypes()
 
 	validateClusterProbes := func(t *testing.T, ctx context.Context) {
-		testName := fmt.Sprintf("leader=%t", throttler.isLeader.Load())
+		testName := fmt.Sprintf("leader=%v", atomic.LoadInt64(&throttler.isLeader))
 		t.Run(testName, func(t *testing.T) {
 			// validateProbesCount expectes number of probes according to cluster name and throttler's leadership status
 			validateProbesCount := func(t *testing.T, clusterName string, probes *mysql.Probes) {
 				if clusterName == selfStoreName {
 					assert.Equal(t, 1, len(*probes))
-				} else if throttler.isLeader.Load() {
+				} else if atomic.LoadInt64(&throttler.isLeader) > 0 {
 					assert.NotZero(t, len(*probes))
 				} else {
 					assert.Empty(t, *probes)
@@ -202,19 +174,19 @@ func TestRefreshMySQLInventory(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("initial, not leader", func(t *testing.T) {
-		throttler.isLeader.Store(false)
+		atomic.StoreInt64(&throttler.isLeader, 0)
 		throttler.refreshMySQLInventory(ctx)
 		validateClusterProbes(t, ctx)
 	})
 
 	t.Run("promote", func(t *testing.T) {
-		throttler.isLeader.Store(true)
+		atomic.StoreInt64(&throttler.isLeader, 1)
 		throttler.refreshMySQLInventory(ctx)
 		validateClusterProbes(t, ctx)
 	})
 
 	t.Run("demote, expect cleanup", func(t *testing.T) {
-		throttler.isLeader.Store(false)
+		atomic.StoreInt64(&throttler.isLeader, 0)
 		throttler.refreshMySQLInventory(ctx)
 		validateClusterProbes(t, ctx)
 	})
