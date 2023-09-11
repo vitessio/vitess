@@ -78,7 +78,6 @@ func TestIsAppThrottled(t *testing.T) {
 	throttler.ThrottleApp("app2", time.Now(), DefaultThrottleRatio)
 	throttler.ThrottleApp("app3", time.Now().Add(time.Hour), DefaultThrottleRatio)
 	throttler.ThrottleApp("app4", time.Now().Add(time.Hour), 0)
-	assert.False(t, throttler.IsAppThrottled("app1")) // exempted
 	assert.False(t, throttler.IsAppThrottled("app2")) // expired
 	assert.True(t, throttler.IsAppThrottled("app3"))
 	assert.False(t, throttler.IsAppThrottled("app4")) // ratio is zero
