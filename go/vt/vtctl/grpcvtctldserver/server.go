@@ -3012,6 +3012,8 @@ func (s *VtctldServer) ReshardCreate(ctx context.Context, req *vtctldatapb.Resha
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("cells", req.Cells)
+	span.Annotate("source_shards", req.SourceShards)
+	span.Annotate("target_shards", req.TargetShards)
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("on_ddl", req.OnDdl)
 

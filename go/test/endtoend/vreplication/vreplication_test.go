@@ -790,9 +790,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */)"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
 
-		// FIXME for some reason, these inserts fails on mac, need to investigate, some vreplication bug because of case insensitiveness of table names on mac?
+		// FIXME for some reason, these inserts fails on mac, need to investigate, some
+		// vreplication bug because of case insensitiveness of table names on mac?
 		if runtime.GOOS == "linux" {
-			// confirm that the backticking of table names in the routing rules works
+			// Confirm that the backticking of table names in the routing rules works.
 			tbls := []string{"Lead", "Lead-1"}
 			for _, tbl := range tbls {
 				output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", fmt.Sprintf("%d", vc.ClusterConfig.vtgateMySQLPort),
@@ -1407,7 +1408,8 @@ func moveTablesActionWithTabletTypes(t *testing.T, action, cell, workflow, sourc
 	}
 }
 
-// reshardAction is a helper function to run the reshard command, using the vtctldclient commands.
+// reshardAction is a helper function to run the reshard command and
+// action using vtctldclient.
 func reshardAction(t *testing.T, action, workflow, keyspaceName, sourceShards, targetShards, cell, tabletTypes string, extraFlags ...string) {
 	var err error
 	args := []string{"Reshard", "--workflow=" + workflow, "--target-keyspace=" + keyspaceName, action}

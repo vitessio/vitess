@@ -28,10 +28,6 @@ import (
 	"text/template"
 	"time"
 
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/vtctl/schematools"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
-
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -44,14 +40,17 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow/vexec"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -1252,24 +1251,25 @@ func (s *Server) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCrea
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("workflow", req.Workflow)
+	span.Annotate("source_shards", req.SourceShards)
+	span.Annotate("target_shards", req.TargetShards)
 	span.Annotate("cells", req.Cells)
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("on_ddl", req.OnDdl)
 
 	keyspace := req.Keyspace
 	cells := req.Cells
-	// TODO validate workflow does not exist
+	// TODO: validate workflow does not exist.
 
 	if err := s.ts.ValidateSrvKeyspace(ctx, keyspace, strings.Join(cells, ",")); err != nil {
 		err2 := vterrors.Wrapf(err, "SrvKeyspace for keyspace %s is corrupt for cell(s) %s", keyspace, cells)
 		log.Errorf("%w", err2)
 		return nil, err
 	}
-	rs, err := s.buildResharder(ctx, keyspace, req.Workflow, req.SourceShards, req.TargetShards, strings.Join(cells, ","), "") //fixme
+	rs, err := s.buildResharder(ctx, keyspace, req.Workflow, req.SourceShards, req.TargetShards, strings.Join(cells, ","), "")
 	if err != nil {
 		return nil, vterrors.Wrap(err, "buildResharder")
 	}
-	_ = rs
 	rs.onDDL = req.OnDdl
 	rs.stopAfterCopy = req.StopAfterCopy
 	rs.deferSecondaryKeys = req.DeferSecondaryKeys
@@ -1287,7 +1287,7 @@ func (s *Server) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCrea
 			return nil, vterrors.Wrap(err, "startStreams")
 		}
 	} else {
-		log.Warningf("Streams will not be started since -auto_start is set to false")
+		log.Warningf("Streams will not be started since --auto-start is set to false")
 	}
 	return nil, nil
 }

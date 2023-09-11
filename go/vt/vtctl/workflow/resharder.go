@@ -29,27 +29,30 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 type resharder struct {
-	s                  *Server
-	keyspace           string
-	workflow           string
-	sourceShards       []*topo.ShardInfo
-	sourcePrimaries    map[string]*topo.TabletInfo
-	targetShards       []*topo.ShardInfo
-	targetPrimaries    map[string]*topo.TabletInfo
-	vschema            *vschemapb.Keyspace
-	refStreams         map[string]*refStream
-	cell               string //single cell or cellsAlias or comma-separated list of cells/cellsAliases
+	s               *Server
+	keyspace        string
+	workflow        string
+	sourceShards    []*topo.ShardInfo
+	sourcePrimaries map[string]*topo.TabletInfo
+	targetShards    []*topo.ShardInfo
+	targetPrimaries map[string]*topo.TabletInfo
+	vschema         *vschemapb.Keyspace
+	refStreams      map[string]*refStream
+	// This can be single cell name or cell alias but it can
+	// also be a comma-separated list of cells.
+	cell               string
 	tabletTypes        string
 	stopAfterCopy      bool
 	onDDL              string
@@ -300,7 +303,7 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 
 		for _, rstream := range rs.refStreams {
 			ig.AddRow(rstream.workflow, rstream.bls, "", rstream.cell, rstream.tabletTypes,
-				//todo: fix based on original stream
+				// TODO: fix based on original stream.
 				binlogdatapb.VReplicationWorkflowType_Reshard,
 				binlogdatapb.VReplicationWorkflowSubType_None,
 				rs.deferSecondaryKeys)
