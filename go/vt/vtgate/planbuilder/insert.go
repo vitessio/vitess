@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
@@ -44,9 +45,11 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	// We cannot shortcut here as sequence column needs additional planning.
 	ks, tables := ctx.SemTable.SingleUnshardedKeyspace()
 	if ks != nil && tables[0].AutoIncrement == nil {
-		plan := insertUnshardedShortcut(insStmt, ks, tables)
-		plan = pushCommentDirectivesOnPlan(plan, insStmt)
-		return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
+		if fkManagementNotRequiredForInsert(ctx, tables[0], sqlparser.UpdateExprs(insStmt.OnDup)) {
+			plan := insertUnshardedShortcut(insStmt, ks, tables)
+			plan = pushCommentDirectivesOnPlan(plan, insStmt)
+			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
+		}
 	}
 
 	tblInfo, err := ctx.SemTable.TableInfoFor(ctx.SemTable.TableSetFor(insStmt.Table))
@@ -81,6 +84,26 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	}
 
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
+}
+
+// TODO: Handle all this in semantic analysis.
+func fkManagementNotRequiredForInsert(ctx *plancontext.PlanningContext, vTbl *vindexes.Table, updateExprs sqlparser.UpdateExprs) bool {
+	ksMode, err := ctx.VSchema.ForeignKeyMode(vTbl.Keyspace.Name)
+	if err != nil || ksMode != vschemapb.Keyspace_FK_MANAGED {
+		return true
+	}
+
+	if len(vTbl.ParentFKsNeedsHandling(ctx.VerifyAllFKs, "")) > 0 {
+		return true
+	}
+
+	childFks := vTbl.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.UpdateAction)
+	getFKInfo := func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
+		return nil, childFks
+	}
+
+	// Check if any column in the parent table is being updated which has a child foreign key.
+	return !columnModified(updateExprs, getFKInfo)
 }
 
 func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {

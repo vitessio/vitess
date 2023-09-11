@@ -1057,5 +1057,32 @@
         "unsharded_fk_allow.u_tbl9"
       ]
     }
+  },
+  {
+    "comment": "Insert with on duplicate key update - foreign keys disallowed",
+    "query": "insert into u_tbl1 (id, col1) values (1, 3) on duplicate key update col1 = 5",
+    "plan": "VT12001: unsupported: ON DUPLICATE KEY UPDATE with foreign keys"
+  },
+  {
+    "comment": "Insert with on duplicate key update - foreign keys not on update column - allowed",
+    "query": "insert into u_tbl1 (id, col1, foo) values (1, 3, 'bar') on duplicate key update foo = 'baz'",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into u_tbl1 (id, col1, foo) values (1, 3, 'bar') on duplicate key update foo = 'baz'",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "unsharded_fk_allow",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert into u_tbl1(id, col1, foo) values (1, 3, 'bar') on duplicate key update foo = 'baz'",
+        "TableName": "u_tbl1"
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl1"
+      ]
+    }
   }
 ]

@@ -139,61 +139,79 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 		return nil, err
 	}
 
+	insOp, err := createInsertOperator(ctx, ins, vindexTable, routing)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find the foreign key mode and for unmanaged foreign-key-mode, we don't need to do anything.
+	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
+	if err != nil {
+		return nil, err
+	}
+	if ksMode != vschemapb.Keyspace_FK_MANAGED {
+		return insOp, nil
+	}
+
+	parentFKsForInsert := vindexTable.ParentFKsNeedsHandling(ctx.VerifyAllFKs, ctx.ParentFKToIgnore)
+	if len(parentFKsForInsert) > 0 {
+		return nil, vterrors.VT12002()
+	}
+	if len(ins.OnDup) == 0 {
+		return insOp, nil
+	}
+
+	parentFksForUpdate, childFksForUpdate := getFKRequirementsForUpdate(ctx, sqlparser.UpdateExprs(ins.OnDup), vindexTable)
+	if len(parentFksForUpdate) == 0 && len(childFksForUpdate) == 0 {
+		return insOp, nil
+	}
+	return nil, vterrors.VT12001("ON DUPLICATE KEY UPDATE with foreign keys")
+}
+
+func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.Insert, vTbl *vindexes.Table, routing Routing) (ops.Operator, error) {
 	if _, target := routing.(*TargetedRouting); target {
 		return nil, vterrors.VT12001("INSERT with a target destination")
 	}
 
 	insOp := &Insert{
-		VTable: vindexTable,
-		AST:    ins,
+		VTable: vTbl,
+		AST:    insStmt,
 	}
 	route := &Route{
 		Source:  insOp,
 		Routing: routing,
 	}
 
-	// Find the foreign key mode and store the ParentFKs that we need to verify.
-	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
-	if err != nil {
-		return nil, err
-	}
-	if ksMode == vschemapb.Keyspace_FK_MANAGED {
-		parentFKs := vindexTable.ParentFKsNeedsHandling(ctx.VerifyAllFKs, ctx.ParentFKToIgnore)
-		if len(parentFKs) > 0 {
-			return nil, vterrors.VT12002()
-		}
-	}
-
 	// Table column list is nil then add all the columns
 	// If the column list is empty then add only the auto-inc column and
 	// this happens on calling modifyForAutoinc
-	if ins.Columns == nil && valuesProvided(ins.Rows) {
-		if vindexTable.ColumnListAuthoritative {
-			ins = populateInsertColumnlist(ins, vindexTable)
+	if insStmt.Columns == nil && valuesProvided(insStmt.Rows) {
+		if vTbl.ColumnListAuthoritative {
+			insStmt = populateInsertColumnlist(insStmt, vTbl)
 		} else {
 			return nil, vterrors.VT09004()
 		}
 	}
 
 	// modify column list or values for autoincrement column.
-	autoIncGen, err := modifyForAutoinc(ins, vindexTable)
+	autoIncGen, err := modifyForAutoinc(insStmt, vTbl)
 	if err != nil {
 		return nil, err
 	}
 	insOp.AutoIncrement = autoIncGen
 
 	// set insert ignore.
-	insOp.Ignore = bool(ins.Ignore) || ins.OnDup != nil
+	insOp.Ignore = bool(insStmt.Ignore) || insStmt.OnDup != nil
 
 	insOp.ColVindexes = getColVindexes(insOp)
-	switch rows := ins.Rows.(type) {
+	switch rows := insStmt.Rows.(type) {
 	case sqlparser.Values:
-		route.Source, err = insertRowsPlan(insOp, ins, rows)
+		route.Source, err = insertRowsPlan(insOp, insStmt, rows)
 		if err != nil {
 			return nil, err
 		}
 	case sqlparser.SelectStatement:
-		route.Source, err = insertSelectPlan(ctx, insOp, ins, rows)
+		route.Source, err = insertSelectPlan(ctx, insOp, insStmt, rows)
 		if err != nil {
 			return nil, err
 		}
