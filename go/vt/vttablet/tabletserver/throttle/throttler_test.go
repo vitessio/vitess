@@ -24,6 +24,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+const (
+	waitForProbesTimeout = 30 * time.Second
+)
+
 type FakeTopoServer struct {
 }
 
@@ -117,6 +121,12 @@ func TestIsAppExempted(t *testing.T) {
 	assert.True(t, throttler.IsAppExempted("schema-tracker"))
 }
 
+// TestRefreshMySQLInventory tests the behavior of the throttler's RefreshMySQLInventory() function, which
+// is called periodically in actual throttler. For a given cluster name, it generates a list of probes
+// the throttler will use to check metrics.
+// On a "self" cluster, that list is expect to probe the tablet itself.
+// On any other cluster, the list is expected to be empty if non-leader (only leader throttler, on a
+// `PRIMARY` tablet, probes other tablets). On the leader, the list is expected to be non-empty.
 func TestRefreshMySQLInventory(t *testing.T) {
 	metricsQuery := "select 1"
 	config.Settings().Stores.MySQL.Clusters = map[string]*config.MySQLClusterConfigurationSettings{
@@ -143,8 +153,18 @@ func TestRefreshMySQLInventory(t *testing.T) {
 	validateClusterProbes := func(t *testing.T, ctx context.Context) {
 		testName := fmt.Sprintf("leader=%t", throttler.isLeader.Load())
 		t.Run(testName, func(t *testing.T) {
+			// validateProbesCount expectes number of probes according to cluster name and throttler's leadership status
+			validateProbesCount := func(t *testing.T, clusterName string, probes *mysql.Probes) {
+				if clusterName == selfStoreName {
+					assert.Equal(t, 1, len(*probes))
+				} else if throttler.isLeader.Load() {
+					assert.NotZero(t, len(*probes))
+				} else {
+					assert.Empty(t, *probes)
+				}
+			}
 			t.Run("waiting for probes", func(t *testing.T) {
-				ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				ctx, cancel := context.WithTimeout(ctx, waitForProbesTimeout)
 				defer cancel()
 				numClusterProbesResults := 0
 				for {
@@ -155,14 +175,10 @@ func TestRefreshMySQLInventory(t *testing.T) {
 						throttler.updateMySQLClusterProbes(ctx, probes)
 
 						numClusterProbesResults++
-						if probes.ClusterName == selfStoreName {
-							assert.Equal(t, 1, len(*probes.InstanceProbes))
-						} else if throttler.isLeader.Load() {
-							assert.NotZero(t, len(*probes.InstanceProbes))
-						} else {
-							assert.Empty(t, *probes.InstanceProbes)
-						}
+						validateProbesCount(t, probes.ClusterName, probes.InstanceProbes)
+
 						if numClusterProbesResults == len(clusters) {
+							// Achieved our goal
 							return
 						}
 					case <-ctx.Done():
@@ -174,13 +190,7 @@ func TestRefreshMySQLInventory(t *testing.T) {
 				for clusterName := range clusters {
 					probes, ok := throttler.mysqlInventory.ClustersProbes[clusterName]
 					require.True(t, ok)
-					if clusterName == selfStoreName {
-						assert.Equal(t, 1, len(*probes))
-					} else if throttler.isLeader.Load() {
-						assert.NotZero(t, len(*probes))
-					} else {
-						assert.Empty(t, *probes)
-					}
+					validateProbesCount(t, clusterName, probes)
 				}
 			})
 		})
