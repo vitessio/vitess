@@ -170,6 +170,9 @@ func TestRefreshMySQLInventory(t *testing.T) {
 				for {
 					select {
 					case probes := <-throttler.mysqlClusterProbesChan:
+						// Worth noting that in this unit test, the throttler is _closed_. Its own Operate() function does
+						// not run, and therefore there is none but us to both populate `mysqlClusterProbesChan` as well as
+						// read from it. We do not compete here with any other goroutine.
 						assert.NotNil(t, probes)
 
 						throttler.updateMySQLClusterProbes(ctx, probes)
