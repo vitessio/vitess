@@ -441,6 +441,33 @@ func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult 
 	}
 }
 
+// applyAllowZeroInDate takes a SQL string which may contain one or more statements,
+// and, assuming those are DDLs, adds a /*vt+ allowZeroInDate=true */ directive to all of them,
+// returning the result again as one long SQL.
+func applyAllowZeroInDate(sql string) (string, error) {
+	// sql may be a batch of multiple statements
+	sqls, err := sqlparser.SplitStatementToPieces(sql)
+	if err != nil {
+		return sql, err
+	}
+	modifiedSqls := []string{}
+	for _, singleSQL := range sqls {
+		// --allow-zero-in-date Applies to DDLs
+		stmt, err := sqlparser.Parse(singleSQL)
+		if err != nil {
+			return sql, err
+		}
+		if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
+			// Add comments directive to allow zero in date
+			const directive = `/*vt+ allowZeroInDate=true */`
+			ddlStmt.SetComments(ddlStmt.GetParsedComments().Prepend(directive))
+			singleSQL = sqlparser.String(ddlStmt)
+		}
+		modifiedSqls = append(modifiedSqls, singleSQL)
+	}
+	return strings.Join(modifiedSqls, ";"), err
+}
+
 func (exec *TabletExecutor) executeOneTablet(
 	ctx context.Context,
 	tablet *topodatapb.Tablet,
@@ -459,22 +486,17 @@ func (exec *TabletExecutor) executeOneTablet(
 	} else {
 		if exec.ddlStrategySetting != nil && exec.ddlStrategySetting.IsAllowZeroInDateFlag() {
 			// --allow-zero-in-date Applies to DDLs
-			stmt, err := sqlparser.Parse(string(sql))
+			sql, err = applyAllowZeroInDate(sql)
 			if err != nil {
 				errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
 				return
-			}
-			if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
-				// Add comments directive to allow zero in date
-				const directive = `/*vt+ allowZeroInDate=true */`
-				ddlStmt.SetComments(ddlStmt.GetParsedComments().Prepend(directive))
-				sql = sqlparser.String(ddlStmt)
 			}
 		}
 		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 			Query:   []byte(sql),
 			MaxRows: 10,
 		})
+
 	}
 	if err != nil {
 		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
