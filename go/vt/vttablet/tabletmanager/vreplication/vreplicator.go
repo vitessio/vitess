@@ -142,7 +142,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		log.Warningf("The supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
 			vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
 	}
-	return &vreplicator{
+	v := &vreplicator{
 		vre:             vre,
 		id:              id,
 		source:          source,
@@ -151,6 +151,8 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		dbClient:        newVDBClient(dbClient, stats),
 		mysqld:          mysqld,
 	}
+	v.readExistingRowsCopiedAndUpdateSelfIfNeeded()
+	return v
 }
 
 // Replicate starts a vreplication stream. It can be in one of three phases:
@@ -1029,4 +1031,37 @@ func (vr *vreplicator) newClientConnection(ctx context.Context) (*vdbClient, err
 		return nil, vterrors.Wrap(err, "failed to clear foreign key check")
 	}
 	return dbClient, nil
+}
+
+func (vr *vreplicator) readExistingRowsCopiedAndUpdateSelfIfNeeded() {
+	if vr.stats.CopyRowCount.Get() == 0 {
+		rowsCopiedExisting, err := vr.readExistingRowsCopied(vr.id)
+		if err != nil {
+			log.Warningf("failed to read existing rows copied: %v", err)
+		} else if rowsCopiedExisting != 0 {
+			log.Infof("resuming vreplication from another tablet, setting rows copied counter to %v", rowsCopiedExisting)
+			vr.stats.CopyRowCount.Set(rowsCopiedExisting)
+		}
+	}
+}
+
+func (vr *vreplicator) readExistingRowsCopied(uid int32) (int64, error) {
+	query, err := sqlparser.ParseAndBind(`SELECT rows_copied FROM _vt.vreplication WHERE id=%a`,
+		sqltypes.Int32BindVariable(uid),
+	)
+	if err != nil {
+		return 0, err
+	}
+	r, err := vr.dbClient.Execute(query)
+	if err != nil {
+		return 0, err
+	}
+	if len(r.Rows) == 0 {
+		return 0, nil
+	}
+	row := r.Named().Row()
+	if row == nil {
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Cannot find unique workflow for UUID: %+v", uid)
+	}
+	return row.AsInt64("rows_copied", 0), nil
 }
