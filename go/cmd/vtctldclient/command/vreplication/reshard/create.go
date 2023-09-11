@@ -32,7 +32,7 @@ var (
 		skipSchemaCopy bool
 	}{}
 
-	// reshardCreate makes a reshardCreate gRPC call to a vtctld.
+	// reshardCreate makes a ReshardCreate gRPC call to a vtctld.
 	reshardCreate = &cobra.Command{
 		Use:                   "Create",
 		Short:                 "Create and optionally run a reshard VReplication workflow.",
@@ -42,7 +42,7 @@ var (
 		Aliases:               []string{"create"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if err := common.ParseAndValidateCreateOptions(cmd, &common.CommonVRCreateOptions.VrCreateCommonOptions); err != nil {
+			if err := common.ParseAndValidateCreateOptions(cmd); err != nil {
 				return err
 			}
 			return nil
@@ -52,25 +52,24 @@ var (
 )
 
 func commandReshardCreate(cmd *cobra.Command, args []string) error {
-	cli.FinishedParsing(cmd)
-
-	format, err := common.GetCommonOptions(cmd, &common.CommonVROptions.VrCommonOptions)
+	format, err := common.GetOutputFormat(cmd)
 	if err != nil {
 		return err
 	}
-	tsp := common.GetCreateOptions(cmd, &common.CommonVRCreateOptions.VrCreateCommonOptions)
+	tsp := common.GetTabletSelectionPreference(cmd)
+	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.ReshardCreateRequest{
-		Workflow: common.CommonVROptions.Workflow,
-		Keyspace: common.CommonVROptions.TargetKeyspace,
+		Workflow: common.BaseOptions.Workflow,
+		Keyspace: common.BaseOptions.TargetKeyspace,
 
-		TabletTypes:               common.CommonVRCreateOptions.TabletTypes,
+		TabletTypes:               common.CreateOptions.TabletTypes,
 		TabletSelectionPreference: tsp,
-		Cells:                     common.CommonVRCreateOptions.Cells,
-		OnDdl:                     common.CommonVRCreateOptions.OnDDL,
-		DeferSecondaryKeys:        common.CommonVRCreateOptions.DeferSecondaryKeys,
-		AutoStart:                 common.CommonVRCreateOptions.AutoStart,
-		StopAfterCopy:             common.CommonVRCreateOptions.StopAfterCopy,
+		Cells:                     common.CreateOptions.Cells,
+		OnDdl:                     common.CreateOptions.OnDDL,
+		DeferSecondaryKeys:        common.CreateOptions.DeferSecondaryKeys,
+		AutoStart:                 common.CreateOptions.AutoStart,
+		StopAfterCopy:             common.CreateOptions.StopAfterCopy,
 
 		SourceShards:   reshardCreateOptions.sourceShards,
 		TargetShards:   reshardCreateOptions.targetShards,
@@ -88,8 +87,8 @@ func commandReshardCreate(cmd *cobra.Command, args []string) error {
 
 func registerCreateCommand(root *cobra.Command) {
 	common.AddCommonCreateFlags(reshardCreate)
-	reshardCreate.Flags().StringSliceVar(&reshardCreateOptions.sourceShards, "source-shards", nil, "Comma-separated list of source shards.")
-	reshardCreate.Flags().StringSliceVar(&reshardCreateOptions.targetShards, "target-shards", nil, "Comma-separated list of target shards.")
-	reshardCreate.Flags().BoolVar(&reshardCreateOptions.skipSchemaCopy, "skip-schema-copy", false, "Skip copying the schema from the source shards to the target shards.")
+	reshardCreate.Flags().StringSliceVar(&reshardCreateOptions.sourceShards, "source-shards", nil, "Comma-separated list of source shards")
+	reshardCreate.Flags().StringSliceVar(&reshardCreateOptions.targetShards, "target-shards", nil, "Comma-separated list of target shards")
+	reshardCreate.Flags().BoolVar(&reshardCreateOptions.skipSchemaCopy, "skip-schema-copy", false, "Skip copying the schema from the source shards to the target shards")
 	root.AddCommand(reshardCreate)
 }

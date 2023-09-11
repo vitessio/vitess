@@ -11,7 +11,7 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-var completeOptions = struct {
+var CompleteOptions = struct {
 	KeepData         bool
 	KeepRoutingRules bool
 	RenameTables     bool
@@ -32,19 +32,19 @@ func GetCompleteCommand(opts *SubCommandsOpts) *cobra.Command {
 }
 
 func commandComplete(cmd *cobra.Command, args []string) error {
-	format, err := ParseAndValidateFormat(cmd, &CommonVROptions.VrCommonOptions)
+	format, err := GetOutputFormat(cmd)
 	if err != nil {
 		return err
 	}
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.MoveTablesCompleteRequest{
-		Workflow:         CommonVROptions.Workflow,
-		TargetKeyspace:   CommonVROptions.TargetKeyspace,
-		KeepData:         completeOptions.KeepData,
-		KeepRoutingRules: completeOptions.KeepRoutingRules,
-		RenameTables:     completeOptions.RenameTables,
-		DryRun:           completeOptions.DryRun,
+		Workflow:         BaseOptions.Workflow,
+		TargetKeyspace:   BaseOptions.TargetKeyspace,
+		KeepData:         CompleteOptions.KeepData,
+		KeepRoutingRules: CompleteOptions.KeepRoutingRules,
+		RenameTables:     CompleteOptions.RenameTables,
+		DryRun:           CompleteOptions.DryRun,
 	}
 	resp, err := GetClient().MoveTablesComplete(GetCommandCtx(), req)
 	if err != nil {

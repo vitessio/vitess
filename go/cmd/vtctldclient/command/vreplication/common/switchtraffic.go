@@ -39,10 +39,10 @@ func GetSwitchTrafficCommand(opts *SubCommandsOpts) *cobra.Command {
 		Aliases:               []string{"switchtraffic"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			CommonSwitchTrafficOptions.Direction = workflow.DirectionForward
+			SwitchTrafficOptions.Direction = workflow.DirectionForward
 			if !cmd.Flags().Lookup("tablet-types").Changed {
 				// We switch traffic for all tablet types if none are provided.
-				CommonSwitchTrafficOptions.TabletTypes = []topodatapb.TabletType{
+				SwitchTrafficOptions.TabletTypes = []topodatapb.TabletType{
 					topodatapb.TabletType_PRIMARY,
 					topodatapb.TabletType_REPLICA,
 					topodatapb.TabletType_RDONLY,
@@ -64,10 +64,10 @@ func GetReverseTrafficCommand(opts *SubCommandsOpts) *cobra.Command {
 		Aliases:               []string{"reversetraffic"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			CommonSwitchTrafficOptions.Direction = workflow.DirectionBackward
+			SwitchTrafficOptions.Direction = workflow.DirectionBackward
 			if !cmd.Flags().Lookup("tablet-types").Changed {
 				// We switch traffic for all tablet types if none are provided.
-				CommonSwitchTrafficOptions.TabletTypes = []topodatapb.TabletType{
+				SwitchTrafficOptions.TabletTypes = []topodatapb.TabletType{
 					topodatapb.TabletType_PRIMARY,
 					topodatapb.TabletType_REPLICA,
 					topodatapb.TabletType_RDONLY,
@@ -81,7 +81,7 @@ func GetReverseTrafficCommand(opts *SubCommandsOpts) *cobra.Command {
 }
 
 func commandSwitchTraffic(cmd *cobra.Command, args []string) error {
-	format, err := ParseAndValidateFormat(cmd, &CommonVROptions.VrCommonOptions)
+	format, err := GetOutputFormat(cmd)
 	if err != nil {
 		return err
 	}
@@ -89,15 +89,15 @@ func commandSwitchTraffic(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.WorkflowSwitchTrafficRequest{
-		Keyspace:                  CommonVROptions.TargetKeyspace,
-		Workflow:                  CommonVROptions.Workflow,
-		TabletTypes:               CommonSwitchTrafficOptions.TabletTypes,
-		MaxReplicationLagAllowed:  protoutil.DurationToProto(CommonSwitchTrafficOptions.MaxReplicationLagAllowed),
-		Timeout:                   protoutil.DurationToProto(CommonSwitchTrafficOptions.Timeout),
-		DryRun:                    CommonSwitchTrafficOptions.DryRun,
-		EnableReverseReplication:  CommonSwitchTrafficOptions.EnableReverseReplication,
-		InitializeTargetSequences: CommonSwitchTrafficOptions.InitializeTargetSequences,
-		Direction:                 int32(CommonSwitchTrafficOptions.Direction),
+		Keyspace:                  BaseOptions.TargetKeyspace,
+		Workflow:                  BaseOptions.Workflow,
+		TabletTypes:               SwitchTrafficOptions.TabletTypes,
+		MaxReplicationLagAllowed:  protoutil.DurationToProto(SwitchTrafficOptions.MaxReplicationLagAllowed),
+		Timeout:                   protoutil.DurationToProto(SwitchTrafficOptions.Timeout),
+		DryRun:                    SwitchTrafficOptions.DryRun,
+		EnableReverseReplication:  SwitchTrafficOptions.EnableReverseReplication,
+		InitializeTargetSequences: SwitchTrafficOptions.InitializeTargetSequences,
+		Direction:                 int32(SwitchTrafficOptions.Direction),
 	}
 	resp, err := GetClient().WorkflowSwitchTraffic(GetCommandCtx(), req)
 	if err != nil {

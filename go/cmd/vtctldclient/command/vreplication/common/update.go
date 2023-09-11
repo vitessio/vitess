@@ -36,8 +36,8 @@ import (
 )
 
 func bridgeToWorkflow(cmd *cobra.Command, args []string) {
-	workflowUpdateOptions.Workflow = CommonVROptions.Workflow
-	workflowOptions.Keyspace = CommonVROptions.TargetKeyspace
+	workflowUpdateOptions.Workflow = BaseOptions.Workflow
+	workflowOptions.Keyspace = BaseOptions.TargetKeyspace
 }
 
 var (

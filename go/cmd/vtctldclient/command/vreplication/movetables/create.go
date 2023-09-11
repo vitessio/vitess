@@ -55,7 +55,7 @@ var (
 			if !cmd.Flags().Lookup("tables").Changed && !cmd.Flags().Lookup("all-tables").Changed {
 				return fmt.Errorf("tables or all-tables are required to specify which tables to move")
 			}
-			if err := common.ParseAndValidateCreateOptions(cmd, &common.CommonVRCreateOptions.VrCreateCommonOptions); err != nil {
+			if err := common.ParseAndValidateCreateOptions(cmd); err != nil {
 				return err
 			}
 			checkAtomicCopyOptions := func() error {
@@ -64,14 +64,13 @@ var (
 					return nil
 				}
 				if !moveTablesCreateOptions.AllTables {
-					errors = append(errors, "atomic copy requires --all-tables.")
+					errors = append(errors, "atomic copy requires --all-tables")
 				}
 				if len(moveTablesCreateOptions.IncludeTables) > 0 || len(moveTablesCreateOptions.ExcludeTables) > 0 {
-					errors = append(errors, "atomic copy does not support specifying tables.")
+					errors = append(errors, "atomic copy does not support specifying tables")
 				}
 				if len(errors) > 0 {
-					errors = append(errors, "Found options incompatible with atomic copy:")
-					return fmt.Errorf(strings.Join(errors, " "))
+					return fmt.Errorf("found options incompatible with atomic copy: %s", strings.Join(errors, ", "))
 				}
 				return nil
 			}
@@ -85,31 +84,29 @@ var (
 )
 
 func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
-
-	cli.FinishedParsing(cmd)
-
-	format, err := common.GetCommonOptions(cmd, &common.CommonVROptions.VrCommonOptions)
+	format, err := common.GetOutputFormat(cmd)
 	if err != nil {
 		return err
 	}
-	tsp := common.GetCreateOptions(cmd, &common.CommonVRCreateOptions.VrCreateCommonOptions)
+	tsp := common.GetTabletSelectionPreference(cmd)
+	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.MoveTablesCreateRequest{
-		Workflow:                  common.CommonVROptions.Workflow,
-		TargetKeyspace:            common.CommonVROptions.TargetKeyspace,
+		Workflow:                  common.BaseOptions.Workflow,
+		TargetKeyspace:            common.BaseOptions.TargetKeyspace,
 		SourceKeyspace:            moveTablesCreateOptions.SourceKeyspace,
 		SourceShards:              moveTablesCreateOptions.SourceShards,
 		SourceTimeZone:            moveTablesCreateOptions.SourceTimeZone,
-		Cells:                     common.CommonVRCreateOptions.Cells,
-		TabletTypes:               common.CommonVRCreateOptions.TabletTypes,
+		Cells:                     common.CreateOptions.Cells,
+		TabletTypes:               common.CreateOptions.TabletTypes,
 		TabletSelectionPreference: tsp,
 		AllTables:                 moveTablesCreateOptions.AllTables,
 		IncludeTables:             moveTablesCreateOptions.IncludeTables,
 		ExcludeTables:             moveTablesCreateOptions.ExcludeTables,
-		OnDdl:                     common.CommonVRCreateOptions.OnDDL,
-		DeferSecondaryKeys:        common.CommonVRCreateOptions.DeferSecondaryKeys,
-		AutoStart:                 common.CommonVRCreateOptions.AutoStart,
-		StopAfterCopy:             common.CommonVRCreateOptions.StopAfterCopy,
+		OnDdl:                     common.CreateOptions.OnDDL,
+		DeferSecondaryKeys:        common.CreateOptions.DeferSecondaryKeys,
+		AutoStart:                 common.CreateOptions.AutoStart,
+		StopAfterCopy:             common.CreateOptions.StopAfterCopy,
 		NoRoutingRules:            moveTablesCreateOptions.NoRoutingRules,
 		AtomicCopy:                moveTablesCreateOptions.AtomicCopy,
 	}
@@ -126,13 +123,13 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 
 func registerCreateCommand(root *cobra.Command) {
 	common.AddCommonCreateFlags(moveTablesCreate)
-	moveTablesCreate.PersistentFlags().StringVar(&moveTablesCreateOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables are being moved from (required)")
+	moveTablesCreate.PersistentFlags().StringVar(&moveTablesCreateOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables are being moved from (required).")
 	moveTablesCreate.MarkPersistentFlagRequired("source-keyspace")
-	moveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.SourceShards, "source-shards", nil, "Source shards to copy data from when performing a partial moveTables (experimental)")
-	moveTablesCreate.Flags().StringVar(&moveTablesCreateOptions.SourceTimeZone, "source-time-zone", "", "Specifying this causes any DATETIME fields to be converted from the given time zone into UTC")
-	moveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.AllTables, "all-tables", false, "Copy all tables from the source")
-	moveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.IncludeTables, "tables", nil, "Source tables to copy")
-	moveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.ExcludeTables, "exclude-tables", nil, "Source tables to exclude from copying")
+	moveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.SourceShards, "source-shards", nil, "Source shards to copy data from when performing a partial moveTables (experimental).")
+	moveTablesCreate.Flags().StringVar(&moveTablesCreateOptions.SourceTimeZone, "source-time-zone", "", "Specifying this causes any DATETIME fields to be converted from the given time zone into UTC.")
+	moveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.AllTables, "all-tables", false, "Copy all tables from the source.")
+	moveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.IncludeTables, "tables", nil, "Source tables to copy.")
+	moveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.ExcludeTables, "exclude-tables", nil, "Source tables to exclude from copying.")
 	moveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.NoRoutingRules, "no-routing-rules", false, "(Advanced) Do not create routing rules while creating the workflow. See the reference documentation for limitations if you use this flag.")
 	moveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.AtomicCopy, "atomic-copy", false, "(EXPERIMENTAL) A single copy phase is run for all tables from the source. Use this, for example, if your source keyspace has tables which use foreign key constraints.")
 	moveTables.AddCommand(moveTablesCreate)

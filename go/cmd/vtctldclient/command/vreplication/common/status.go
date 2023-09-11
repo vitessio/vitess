@@ -43,8 +43,8 @@ func commandStatus(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.WorkflowStatusRequest{
-		Keyspace: CommonVROptions.TargetKeyspace,
-		Workflow: CommonVROptions.Workflow,
+		Keyspace: BaseOptions.TargetKeyspace,
+		Workflow: BaseOptions.Workflow,
 	}
 	resp, err := GetClient().WorkflowStatus(GetCommandCtx(), req)
 	if err != nil {

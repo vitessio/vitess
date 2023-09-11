@@ -46,7 +46,7 @@ func GetCancelCommand(opts *SubCommandsOpts) *cobra.Command {
 }
 
 func commandCancel(cmd *cobra.Command, args []string) error {
-	format, err := ParseAndValidateFormat(cmd, &CommonVROptions.VrCommonOptions)
+	format, err := GetOutputFormat(cmd)
 	if err != nil {
 		return err
 	}
@@ -54,8 +54,8 @@ func commandCancel(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.WorkflowDeleteRequest{
-		Keyspace:         CommonVROptions.TargetKeyspace,
-		Workflow:         CommonVROptions.Workflow,
+		Keyspace:         BaseOptions.TargetKeyspace,
+		Workflow:         BaseOptions.Workflow,
 		KeepData:         cancelOptions.KeepData,
 		KeepRoutingRules: cancelOptions.KeepRoutingRules,
 	}
