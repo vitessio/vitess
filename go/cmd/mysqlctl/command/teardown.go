@@ -57,8 +57,8 @@ func commandTeardown(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	Teardown.Flags().DurationVar(&teardownArgs.WaitTime, "wait_time", teardownArgs.WaitTime, "How long to wait for mysqld shutdown")
-	Teardown.Flags().BoolVarP(&teardownArgs.Force, "force", "f", teardownArgs.Force, "Remove the root directory even if mysqld shutdown fails")
+	Teardown.Flags().DurationVar(&teardownArgs.WaitTime, "wait_time", teardownArgs.WaitTime, "How long to wait for mysqld shutdown.")
+	Teardown.Flags().BoolVarP(&teardownArgs.Force, "force", "f", teardownArgs.Force, "Remove the root directory even if mysqld shutdown fails.")
 
 	Root.AddCommand(Teardown)
 }
