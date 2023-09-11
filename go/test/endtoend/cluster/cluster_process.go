@@ -61,6 +61,7 @@ import (
 const (
 	DefaultCell      = "zone1"
 	DefaultStartPort = 6700
+	DefaultVttestEnv = "VTTEST=endtoend"
 )
 
 var (
