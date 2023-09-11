@@ -196,7 +196,7 @@ func (s SelectExpr) GetAliasedExpr() (*sqlparser.AliasedExpr, error) {
 	case *sqlparser.AliasedExpr:
 		return expr, nil
 	case *sqlparser.StarExpr:
-		return nil, vterrors.VT12001("'*' expression in cross-shard query")
+		return nil, vterrors.VT09015()
 	default:
 		return nil, vterrors.VT12001(fmt.Sprintf("not an aliased expression: %T", expr))
 	}

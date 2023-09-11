@@ -2029,20 +2029,48 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
+        "JoinColumnIndexes": "L:1",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select (select col from `user` where 1 != 1) as a, weight_string((select col from `user` where 1 != 1)) from `user` where 1 != 1",
-            "OrderBy": "(0|1) ASC",
-            "Query": "select (select col from `user` limit 1) as a, weight_string((select col from `user` limit 1)) from `user` order by a asc",
-            "Table": "`user`"
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "INT64(1)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select col from `user` where 1 != 1",
+                    "Query": "select col from `user` limit :__upper_limit",
+                    "Table": "`user`"
+                  }
+                ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select :__sq1 as a, (select col from `user` where 1 != 1), weight_string((select col from `user` where 1 != 1)) from `user` where 1 != 1",
+                "OrderBy": "(1|2) ASC",
+                "Query": "select :__sq1 as a, (select col from `user` limit 1), weight_string((select col from `user` limit 1)) from `user` order by a asc",
+                "Table": "`user`"
+              }
+            ]
           },
           {
             "OperatorType": "Route",
@@ -3379,7 +3407,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (1, 2, 3))",
+        "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (1, 2, 3)) OR music.user_id = 5",
         "Table": "music",
         "Values": [
           "(INT64(1), INT64(2), INT64(3))"
@@ -3590,6 +3618,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3605,6 +3634,7 @@
             "Vindex": "user_index"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3859,6 +3889,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Limit",
             "Count": "INT64(10)",
             "Inputs": [
@@ -3917,6 +3948,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Limit",
             "Count": "INT64(10)",
             "Inputs": [

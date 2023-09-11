@@ -27,7 +27,7 @@
   {
     "comment": "scatter order by with * expression",
     "query": "select * from user order by id",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "natural join",
@@ -57,7 +57,7 @@
   {
     "comment": "* expresson not allowed for cross-shard joins",
     "query": "select * from user join user_extra",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "Group by column number, used with non-aliased expression (duplicated code)",
@@ -447,22 +447,22 @@
   {
     "comment": "ORDER BY on select t.*",
     "query": "select t.*, t.col from user t order by t.col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "ORDER BY on select *",
     "query": "select *, col from user order by col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "ORDER BY on select multi t.*",
     "query": "select t.*, t.name, t.*, t.col from user t order by t.col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "ORDER BY on select multi *",
     "query": "select *, name, *, col from user order by col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
