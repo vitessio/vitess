@@ -238,6 +238,18 @@ func testApplySchemaBatch(t *testing.T) {
 		require.NoError(t, err)
 		checkTables(t, totalTableCount)
 	}
+	{
+		sqls := "create table batch1(id int primary key);create table batch2(id int primary key);create table batch3(id int primary key);create table batch4(id int primary key);create table batch5(id int primary key);"
+		_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "--ddl_strategy", "direct --allow-zero-in-date", "--sql", sqls, "--batch_size", "2", keyspaceName)
+		require.NoError(t, err)
+		checkTables(t, totalTableCount+5)
+	}
+	{
+		sqls := "drop table batch1; drop table batch2; drop table batch3; drop table batch4; drop table batch5"
+		_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "--sql", sqls, keyspaceName)
+		require.NoError(t, err)
+		checkTables(t, totalTableCount)
+	}
 }
 
 // checkTables checks the number of tables in the first two shards.
