@@ -22,7 +22,21 @@ import (
 	backup "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
 )
 
-// TestIncrementalBackupAndRestoreToPos
+// TestIncrementalBackupAndRestoreToPos - tests incremental backups and restores.
+// The general outline of the test:
+//   - Generate some schema with data
+//   - Take a full backup
+//   - Proceed to take a series of inremental backups. In between, inject data (insert rows), and keep record
+//     of which data (number of rows) is present in each backup, and at which position.
+//   - Expect backups success/failure per scenario
+//   - Next up, we start testing restores. Randomly pick recorded positions and restore to those points in time.
+//   - In each restore, excpect to find the data (number of rows) recorded for said position
+//   - Some restores should fail because the position exceeds the last binlog
+//   - Do so for all recorded positions.
+//   - Then, a 2nd round where some backups are purged -- this tests to see that we're still able to find a restore path
+//     (of course we only delete backups that still leave us with valid restore paths).
+//   - Last, create a new tablet with --restore_from_backup --restore_to_pos and see that it bootstraps with restored data
+//     and that it ends up in DRAINED type
 func TestIncrementalBackupAndRestoreToPos(t *testing.T) {
 	tcase := &backup.PITRTestCase{
 		Name:           "BuiltinBackup",
@@ -45,8 +59,8 @@ func TestIncrementalBackupAndRestoreToPos(t *testing.T) {
 //   - Do so for all recorded tiemstamps.
 //   - Then, a 2nd round where some backups are purged -- this tests to see that we're still able to find a restore path
 //     (of course we only delete backups that still leave us with valid restore paths).
-//
-// All of the above is done for BuiltinBackup, XtraBackup, Mysqlctld (which is technically builtin)
+//   - Last, create a new tablet with --restore_from_backup --restore_to_timestamp and see that it bootstraps with restored data
+//     and that it ends up in DRAINED type
 func TestIncrementalBackupAndRestoreToTimestamp(t *testing.T) {
 	tcase := &backup.PITRTestCase{
 		Name:           "BuiltinBackup",

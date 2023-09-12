@@ -91,6 +91,7 @@ var (
 			primary key (id)
 			) Engine=InnoDB
 		`
+	SetupReplica3Tablet func(extraArgs []string) (*cluster.Vttablet, error)
 )
 
 type CompressionDetails struct {
@@ -238,9 +239,6 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	if err := localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shard.Name); err != nil {
 		return 1, err
 	}
-	if err := localCluster.VtctlclientProcess.InitTablet(replica3, cell, keyspaceName, hostname, shard.Name); err != nil {
-		return 1, err
-	}
 	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
 	_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	if err != nil {
@@ -251,6 +249,17 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		if err := tablet.VttabletProcess.Setup(); err != nil {
 			return 1, err
 		}
+	}
+
+	SetupReplica3Tablet = func(extraArgs []string) (*cluster.Vttablet, error) {
+		replica3.VttabletProcess.ExtraArgs = append(replica3.VttabletProcess.ExtraArgs, extraArgs...)
+		if err := localCluster.VtctlclientProcess.InitTablet(replica3, cell, keyspaceName, hostname, shard.Name); err != nil {
+			return replica3, err
+		}
+		if err := replica3.VttabletProcess.Setup(); err != nil {
+			return replica3, err
+		}
+		return replica3, nil
 	}
 
 	if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
@@ -1153,6 +1162,8 @@ func getReplica(t *testing.T, replicaIndex int) *cluster.Vttablet {
 		return replica1
 	case 1:
 		return replica2
+	case 2:
+		return replica3
 	default:
 		assert.Failf(t, "invalid replica index", "index=%d", replicaIndex)
 		return nil
@@ -1303,6 +1314,7 @@ func TestReplicaRestoreToPos(t *testing.T, replicaIndex int, restoreToPos replic
 	}
 	require.NoErrorf(t, err, "output: %v", output)
 	verifyTabletRestoreStats(t, replica.VttabletProcess.GetVars())
+	checkTabletType(t, replica1.Alias, topodata.TabletType_DRAINED)
 }
 
 func TestReplicaRestoreToTimestamp(t *testing.T, restoreToTimestamp time.Time, expectError string) {
@@ -1316,6 +1328,7 @@ func TestReplicaRestoreToTimestamp(t *testing.T, restoreToTimestamp time.Time, e
 	}
 	require.NoErrorf(t, err, "output: %v", output)
 	verifyTabletRestoreStats(t, replica1.VttabletProcess.GetVars())
+	checkTabletType(t, replica1.Alias, topodata.TabletType_DRAINED)
 }
 
 func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
