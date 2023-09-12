@@ -71,7 +71,18 @@ func registerRestoreFlags(fs *pflag.FlagSet) {
 }
 
 var (
-	// Flags for PITR
+	// Flags for incremental restore (PITR) - new iteration
+	restoreToTimestampStr string
+	restoreToPos          string
+)
+
+func registerIncrementalRestoreFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&restoreToTimestampStr, "restore_to_timestamp", restoreToTimestampStr, "(init incremental restore parameter) if set, run a point in time recovery that restores up to the given timestamp, if possible. Given timestamp in RFC3339 format (`2006-01-02T15:04:05Z07:00`)")
+	fs.StringVar(&restoreToPos, "restore_to_pos", restoreToPos, "(init incremental restore parameter) if set, run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups")
+}
+
+var (
+	// Flags for PITR - old iteration
 	binlogHost           string
 	binlogPort           int
 	binlogUser           string
@@ -99,6 +110,9 @@ func init() {
 	servenv.OnParseFor("vtcombo", registerRestoreFlags)
 	servenv.OnParseFor("vttablet", registerRestoreFlags)
 
+	servenv.OnParseFor("vtcombo", registerIncrementalRestoreFlags)
+	servenv.OnParseFor("vttablet", registerIncrementalRestoreFlags)
+
 	servenv.OnParseFor("vtcombo", registerPointInTimeRestoreFlags)
 	servenv.OnParseFor("vttablet", registerPointInTimeRestoreFlags)
 
@@ -110,7 +124,14 @@ func init() {
 // It will either work, fail gracefully, or return
 // an error in case of a non-recoverable error.
 // It takes the action lock so no RPC interferes.
-func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, backupTime time.Time) error {
+func (tm *TabletManager) RestoreData(
+	ctx context.Context,
+	logger logutil.Logger,
+	waitForBackupInterval time.Duration,
+	deleteBeforeRestore bool,
+	backupTime time.Time,
+	restoreToTimetamp time.Time,
+	restoreToPos string) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -155,7 +176,9 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 	startTime = time.Now()
 
 	req := &tabletmanagerdatapb.RestoreFromBackupRequest{
-		BackupTime: protoutil.TimeToProto(backupTime),
+		BackupTime:         protoutil.TimeToProto(backupTime),
+		RestoreToPos:       restoreToPos,
+		RestoreToTimestamp: protoutil.TimeToProto(restoreToTimetamp),
 	}
 	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, req)
 	if err != nil {
@@ -207,7 +230,8 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		DryRun:              request.DryRun,
 		Stats:               backupstats.RestoreStats(),
 	}
-	if request.RestoreToPos != "" && !protoutil.TimeFromProto(request.RestoreToTimestamp).UTC().IsZero() {
+	restoreToTimestamp := protoutil.TimeFromProto(request.RestoreToTimestamp).UTC()
+	if request.RestoreToPos != "" && !restoreToTimestamp.IsZero() {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--restore_to_pos and --restore_to_timestamp are mutually exclusive")
 	}
 	if request.RestoreToPos != "" {
@@ -217,7 +241,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		}
 		params.RestoreToPos = pos
 	}
-	if restoreToTimestamp := protoutil.TimeFromProto(request.RestoreToTimestamp).UTC(); !restoreToTimestamp.IsZero() {
+	if !restoreToTimestamp.IsZero() {
 		// Restore to given timestamp
 		params.RestoreToTimestamp = restoreToTimestamp
 	}

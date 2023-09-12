@@ -766,8 +766,24 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 
 func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	// Sanity check for inconsistent flags
-	if tm.Cnf == nil && restoreFromBackup {
-		return false, fmt.Errorf("you cannot enable --restore_from_backup without a my.cnf file")
+	{
+		// mutually exclusive:
+		mutuallyExclusiveFlags := 0
+		if restoreFromBackup {
+			mutuallyExclusiveFlags++
+		}
+		if restoreToTimestampStr != "" {
+			mutuallyExclusiveFlags++
+		}
+		if restoreToPos != "" {
+			mutuallyExclusiveFlags++
+		}
+		if mutuallyExclusiveFlags > 1 {
+			return false, fmt.Errorf("You may only specify one out of --restore_from_backup, --restore_to_timestamp, --restore_to_pos")
+		}
+		if mutuallyExclusiveFlags > 0 && tm.Cnf == nil {
+			return false, fmt.Errorf("you cannot restore a tablet from backup without a my.cnf file")
+		}
 	}
 
 	// Restore in the background
@@ -778,7 +794,6 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 
 			// Zero date will cause us to use the latest, which is the default
 			backupTime := time.Time{}
-
 			// Or if a backup timestamp was specified then we use the last backup taken at or before that time
 			if restoreFromBackupTsStr != "" {
 				var err error
@@ -788,9 +803,17 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 				}
 			}
 
+			restoreToTimestamp := time.Time{}
+			if restoreToTimestampStr != "" {
+				var err error
+				restoreToTimestamp, err = mysqlctl.ParseRFC3339(restoreToTimestampStr)
+				if err != nil {
+					log.Exitf(fmt.Sprintf("RestoreFromBackup failed: unable to parse the --restore_to_timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err))
+				}
+			}
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime); err != nil {
+			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 		}()
