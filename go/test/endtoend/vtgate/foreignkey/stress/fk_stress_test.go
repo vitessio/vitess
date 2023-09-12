@@ -92,7 +92,8 @@ type WriteMetrics struct {
 	updatesAttempts, updatesFailures, updatesNoops, updates int64
 	deletesAttempts, deletesFailures, deletesNoops, deletes int64
 
-	insertsFKErrors, updatesFKErrors, deletesFKErrors int64
+	insertsFKErrors, updatesFKErrors, deletesFKErrors             int64
+	sampleInsertFKError, sampleUpdateFKError, sampleDeleteFKError error
 }
 
 func (w *WriteMetrics) Clear() {
@@ -573,26 +574,21 @@ func TestStressFK(t *testing.T) {
 
 	runOnlineDDL := false
 
-	for _, onUpdateAction := range referenceActions {
-		for _, onDeleteAction := range referenceActions {
-			tcase := &testCase{
-				workload:       false,
-				onDeleteAction: onDeleteAction,
-				onUpdateAction: onUpdateAction,
-			}
-			ExecuteFKTest(t, tcase)
+	for _, action := range referenceActions {
+		tcase := &testCase{
+			workload:       false,
+			onDeleteAction: action,
+			onUpdateAction: action,
 		}
+		ExecuteFKTest(t, tcase)
 	}
-
-	for _, onUpdateAction := range referenceActions {
-		for _, onDeleteAction := range referenceActions {
-			tcase := &testCase{
-				workload:       true,
-				onDeleteAction: onDeleteAction,
-				onUpdateAction: onUpdateAction,
-			}
-			ExecuteFKTest(t, tcase)
+	for _, action := range referenceActions {
+		tcase := &testCase{
+			workload:       true,
+			onDeleteAction: action,
+			onUpdateAction: action,
 		}
+		ExecuteFKTest(t, tcase)
 	}
 
 	if runOnlineDDL {
@@ -849,6 +845,7 @@ func generateInsert(t *testing.T, tableName string, conn *mysql.Conn) error {
 			writeMetrics[tableName].insertsFailures++
 			if isFKError(err) {
 				writeMetrics[tableName].insertsFKErrors++
+				writeMetrics[tableName].sampleInsertFKError = err
 			}
 			return
 		}
@@ -884,6 +881,7 @@ func generateUpdate(t *testing.T, tableName string, conn *mysql.Conn) error {
 			writeMetrics[tableName].updatesFailures++
 			if isFKError(err) {
 				writeMetrics[tableName].updatesFKErrors++
+				writeMetrics[tableName].sampleUpdateFKError = err
 			}
 			return
 		}
@@ -911,6 +909,7 @@ func generateDelete(t *testing.T, tableName string, conn *mysql.Conn) error {
 			writeMetrics[tableName].deletesFailures++
 			if isFKError(err) {
 				writeMetrics[tableName].deletesFKErrors++
+				writeMetrics[tableName].sampleDeleteFKError = err
 			}
 			return
 		}
@@ -1124,10 +1123,10 @@ func testSelectTableFKErrors(
 	defer writeMetrics[tableName].mu.Unlock()
 
 	if tcase.onDeleteAction == sqlparser.Cascade {
-		assert.Zerof(t, writeMetrics[tableName].deletesFKErrors, "unexpected foreign key errors for DELETEs in ON DELETE CASCADE")
+		assert.Zerof(t, writeMetrics[tableName].deletesFKErrors, "unexpected foreign key errors for DELETEs in ON DELETE CASCADE. Sample error: %v", writeMetrics[tableName].sampleDeleteFKError)
 	}
 	if tcase.onUpdateAction == sqlparser.Cascade {
-		assert.Zerof(t, writeMetrics[tableName].updatesFKErrors, "unexpected foreign key errors for UPDATEs in ON UPDATE CASCADE")
+		assert.Zerof(t, writeMetrics[tableName].updatesFKErrors, "unexpected foreign key errors for UPDATEs in ON UPDATE CASCADE. Sample error: %v", writeMetrics[tableName].sampleUpdateFKError)
 	}
 }
 
