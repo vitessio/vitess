@@ -1290,5 +1290,10 @@
     "comment": "Insert with unsharded table having fk reference in sharded table",
     "query": "insert into u_tbl (id, col) values (1, 2)",
     "plan": "VT12002: unsupported: cross-shard foreign keys"
+  },
+  {
+    "comment": "replace with fk reference unsupported",
+    "query": "replace into u_tbl1 (id, col1) values (1, 2)",
+    "plan": "VT12001: unsupported: REPLACE INTO with foreign keys"
   }
 ]

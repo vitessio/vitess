@@ -20,6 +20,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -45,7 +46,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	// We cannot shortcut here as sequence column needs additional planning.
 	ks, tables := ctx.SemTable.SingleUnshardedKeyspace()
 	if ks != nil && tables[0].AutoIncrement == nil {
-		if fkManagementNotRequiredForInsert(ctx, tables[0], sqlparser.UpdateExprs(insStmt.OnDup)) {
+		if fkManagementNotRequiredForInsert(ctx, tables[0], sqlparser.UpdateExprs(insStmt.OnDup), insStmt.Action == sqlparser.ReplaceAct) {
 			plan := insertUnshardedShortcut(insStmt, ks, tables)
 			plan = pushCommentDirectivesOnPlan(plan, insStmt)
 			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
@@ -56,8 +57,9 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	if err != nil {
 		return nil, err
 	}
-	if tblInfo.GetVindexTable().Keyspace.Sharded && ctx.SemTable.NotUnshardedErr != nil {
-		return nil, ctx.SemTable.NotUnshardedErr
+
+	if err = errOutIfPlanCannotBeConstructed(ctx, tblInfo.GetVindexTable(), insStmt); err != nil {
+		return nil, err
 	}
 
 	err = queryRewrite(ctx.SemTable, reservedVars, insStmt)
@@ -86,8 +88,21 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
 }
 
+func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vindexes.Table, insStmt *sqlparser.Insert) error {
+	if insStmt.Action == sqlparser.ReplaceAct {
+		if vTbl.AutoIncrement != nil {
+			return vterrors.VT12001("REPLACE INTO with auto-increment column")
+		}
+		return vterrors.VT12001("REPLACE INTO with foreign keys")
+	}
+	if vTbl.Keyspace.Sharded {
+		return ctx.SemTable.NotUnshardedErr
+	}
+	return nil
+}
+
 // TODO: Handle all this in semantic analysis.
-func fkManagementNotRequiredForInsert(ctx *plancontext.PlanningContext, vTbl *vindexes.Table, updateExprs sqlparser.UpdateExprs) bool {
+func fkManagementNotRequiredForInsert(ctx *plancontext.PlanningContext, vTbl *vindexes.Table, updateExprs sqlparser.UpdateExprs, replace bool) bool {
 	ksMode, err := ctx.VSchema.ForeignKeyMode(vTbl.Keyspace.Name)
 	if err != nil || ksMode != vschemapb.Keyspace_FK_MANAGED {
 		return true
@@ -98,12 +113,14 @@ func fkManagementNotRequiredForInsert(ctx *plancontext.PlanningContext, vTbl *vi
 	}
 
 	childFks := vTbl.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.UpdateAction)
-	getFKInfo := func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
-		return nil, childFks
+	if len(childFks) > 0 && replace {
+		return false
 	}
 
 	// Check if any column in the parent table is being updated which has a child foreign key.
-	return !columnModified(updateExprs, getFKInfo)
+	return !columnModified(updateExprs, func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
+		return nil, childFks
+	})
 }
 
 func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
