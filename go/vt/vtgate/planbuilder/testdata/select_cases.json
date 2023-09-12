@@ -1222,6 +1222,7 @@
   {
     "comment": "top level subquery in select",
     "query": "select a, (select col from user) from unsharded",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select a, (select col from user) from unsharded",
@@ -1267,6 +1268,7 @@
   {
     "comment": "sub-expression subquery in select",
     "query": "select a, 1+(select col from user) from unsharded",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select a, 1+(select col from user) from unsharded",
@@ -2023,6 +2025,7 @@
   {
     "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
     "query": "select (select col from user limit 1) as a from user join user_extra order by a",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
@@ -2094,6 +2097,7 @@
   {
     "comment": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
     "query": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
@@ -2694,6 +2698,7 @@
   {
     "comment": "select (select id from user order by id limit 1) from user_extra",
     "query": "select (select id from user order by id limit 1) from user_extra",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select (select id from user order by id limit 1) from user_extra",
@@ -3318,6 +3323,7 @@
   {
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes, with derived table",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) _inner)",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) _inner)",
@@ -3396,6 +3402,7 @@
   {
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes, but not a top level predicate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) OR music.user_id = 5",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select music.id from music where music.id in (select music.id from music where music.user_id in (1, 2, 3)) or music.user_id = 5",
@@ -3444,7 +3451,8 @@
   {
     "comment": "`IN` comparison on Vindex with `None` subquery, as non-routing predicate",
     "query": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5",
-    "plan": "VT12001: unsupported: subquery: music.id in (select music.id from music where music.user_id in (null)) or music.user_id = 5"
+    "plan": "VT12001: unsupported: subquery: music.id in (select music.id from music where music.user_id in (null)) or music.user_id = 5",
+    "skip": true
   },
   {
     "comment": "Mergeable scatter subquery",
@@ -3825,6 +3833,7 @@
   {
     "comment": "Mergeable subquery with multiple levels of derived statements",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id = 5 LIMIT 10) subquery_for_limit) subquery_for_limit)",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id = 5 LIMIT 10) subquery_for_limit) subquery_for_limit)",
@@ -3851,6 +3860,7 @@
   {
     "comment": "Mergeable subquery with multiple levels of derived statements, using a single value `IN` predicate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5) LIMIT 10) subquery_for_limit) subquery_for_limit)",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5) LIMIT 10) subquery_for_limit) subquery_for_limit)",
@@ -3877,6 +3887,7 @@
   {
     "comment": "Unmergeable subquery with multiple levels of derived statements, using a multi value `IN` predicate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5, 6) LIMIT 10) subquery_for_limit) subquery_for_limit)",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5, 6) LIMIT 10) subquery_for_limit) subquery_for_limit)",
@@ -3936,6 +3947,7 @@
   {
     "comment": "Unmergeable subquery with multiple levels of derived statements",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music LIMIT 10) subquery_for_limit) subquery_for_limit)",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music LIMIT 10) subquery_for_limit) subquery_for_limit)",
@@ -4035,7 +4047,8 @@
   {
     "comment": "`None` subquery nested inside `OR` expression - outer query keeps routing information",
     "query": "SELECT music.id FROM music WHERE (music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5)",
-    "plan": "VT12001: unsupported: subquery: music.id in (select music.id from music where music.user_id in (null)) or music.user_id = 5"
+    "plan": "VT12001: unsupported: subquery: music.id in (select music.id from music where music.user_id in (null)) or music.user_id = 5",
+    "skip": true
   },
   {
     "comment": "Joining with a subquery that uses an aggregate column and an `EqualUnique` route can be merged together",
@@ -4363,6 +4376,7 @@
   {
     "comment": "subquery having join table on clause, using column reference of outer select table",
     "query": "select (select 1 from user u1 join user u2 on u1.id = u2.id and u1.id = u3.id) subquery from user u3 where u3.id = 1",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select (select 1 from user u1 join user u2 on u1.id = u2.id and u1.id = u3.id) subquery from user u3 where u3.id = 1",

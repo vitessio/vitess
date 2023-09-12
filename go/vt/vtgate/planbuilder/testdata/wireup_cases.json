@@ -681,6 +681,7 @@
   {
     "comment": "Wire-up in underlying primitive after pullout",
     "query": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",

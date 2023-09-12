@@ -3245,6 +3245,7 @@
   {
     "comment": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
     "query": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",

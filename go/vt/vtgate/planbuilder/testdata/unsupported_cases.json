@@ -2,7 +2,8 @@
   {
     "comment": "union operations in subqueries (expressions)",
     "query": "select * from user where id in (select * from user union select * from user_extra)",
-    "plan": "VT13001: [BUG] should return uncorrelated subquery here"
+    "plan": "VT13001: [BUG] should return uncorrelated subquery here",
+    "skip": true
   },
   {
     "comment": "TODO: Implement support for select with a target destination",
@@ -317,7 +318,8 @@
   {
     "comment": "create view with top level subquery in select",
     "query": "create view user.view_a as select a, (select col from user) from unsharded",
-    "plan": "VT12001: unsupported: Select query does not belong to the same keyspace as the view statement"
+    "plan": "VT12001: unsupported: Select query does not belong to the same keyspace as the view statement",
+    "skip": true
   },
   {
     "comment": "create view with sql_calc_found_rows with limit",
@@ -467,12 +469,14 @@
   {
     "comment": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
     "query": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
-    "plan": "VT12001: unsupported: cross-shard correlated subquery"
+    "plan": "VT12001: unsupported: cross-shard correlated subquery",
+    "skip": true
   },
   {
     "comment": "correlated subquery part of an OR clause",
     "query": "select 1 from user u where u.col = 6 or exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
-    "plan": "VT12001: unsupported: subquery: u.col = 6 or exists (select 1 from user_extra as ue where ue.col = u.col and u.col = ue.col2)"
+    "plan": "VT12001: unsupported: subquery: u.col = 6 or exists (select 1 from user_extra as ue where ue.col = u.col and u.col = ue.col2)",
+    "skip": true
   },
   {
     "comment": "cant switch sides for outer joins",

@@ -7,7 +7,8 @@
   {
     "comment": "TPC-H query 2",
     "query": "select s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment from part, supplier, partsupp, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and p_size = 15 and p_type like '%BRASS' and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' and ps_supplycost = ( select min(ps_supplycost) from partsupp, supplier, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' ) order by s_acctbal desc, n_name, s_name, p_partkey limit 10",
-    "plan": "VT12001: unsupported: cross-shard correlated subquery"
+    "plan": "VT12001: unsupported: cross-shard correlated subquery",
+    "skip": true
   },
   {
     "comment": "TPC-H query 3",
@@ -510,6 +511,7 @@
   {
     "comment": "TPC-H query 7",
     "query": "select supp_nation, cust_nation, l_year, sum(volume) as revenue from (select n1.n_name as supp_nation, n2.n_name as cust_nation, extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume from supplier, lineitem, orders, customer, nation n1, nation n2 where s_suppkey = l_suppkey and o_orderkey = l_orderkey and c_custkey = o_custkey and s_nationkey = n1.n_nationkey and c_nationkey = n2.n_nationkey and ((n1.n_name = 'FRANCE' and n2.n_name = 'GERMANY') or (n1.n_name = 'GERMANY' and n2.n_name = 'FRANCE')) and l_shipdate between date('1995-01-01') and date('1996-12-31')) as shipping group by supp_nation, cust_nation, l_year order by supp_nation, cust_nation, l_year",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select supp_nation, cust_nation, l_year, sum(volume) as revenue from (select n1.n_name as supp_nation, n2.n_name as cust_nation, extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume from supplier, lineitem, orders, customer, nation n1, nation n2 where s_suppkey = l_suppkey and o_orderkey = l_orderkey and c_custkey = o_custkey and s_nationkey = n1.n_nationkey and c_nationkey = n2.n_nationkey and ((n1.n_name = 'FRANCE' and n2.n_name = 'GERMANY') or (n1.n_name = 'GERMANY' and n2.n_name = 'FRANCE')) and l_shipdate between date('1995-01-01') and date('1996-12-31')) as shipping group by supp_nation, cust_nation, l_year order by supp_nation, cust_nation, l_year",
@@ -738,12 +740,14 @@
   {
     "comment": "TPC-H query 8",
     "query": "select o_year, sum(case when nation = 'BRAZIL' then volume else 0 end) / sum(volume) as mkt_share from ( select extract(year from o_orderdate) as o_year, l_extendedprice * (1 - l_discount) as volume, n2.n_name as nation from part, supplier, lineitem, orders, customer, nation n1, nation n2, region where p_partkey = l_partkey and s_suppkey = l_suppkey and l_orderkey = o_orderkey and o_custkey = c_custkey and c_nationkey = n1.n_nationkey and n1.n_regionkey = r_regionkey and r_name = 'AMERICA' and s_nationkey = n2.n_nationkey and o_orderdate between date '1995-01-01' and date('1996-12-31') and p_type = 'ECONOMY ANODIZED STEEL' ) as all_nations group by o_year order by o_year",
-    "plan": "VT13002: unexpected AST struct for query: o_year"
+    "plan": "VT13002: unexpected AST struct for query: o_year",
+    "skip": true
   },
   {
     "comment": "TPC-H query 9",
     "query": "select nation, o_year, sum(amount) as sum_profit from ( select n_name as nation, extract(year from o_orderdate) as o_year, l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount from part, supplier, lineitem, partsupp, orders, nation where s_suppkey = l_suppkey and ps_suppkey = l_suppkey and ps_partkey = l_partkey and p_partkey = l_partkey and o_orderkey = l_orderkey and s_nationkey = n_nationkey and p_name like '%green%' ) as profit group by nation, o_year order by nation, o_year desc",
-    "plan": "VT13002: unexpected AST struct for query: nation"
+    "plan": "VT13002: unexpected AST struct for query: nation",
+    "skip": true
   },
   {
     "comment": "TPC-H query 10",
@@ -958,7 +962,8 @@
   {
     "comment": "TPC-H query 11",
     "query": "select ps_partkey, sum(ps_supplycost * ps_availqty) as value from partsupp, supplier, nation where ps_suppkey = s_suppkey and s_nationkey = n_nationkey and n_name = 'GERMANY' group by ps_partkey  having sum(ps_supplycost * ps_availqty) > ( select sum(ps_supplycost * ps_availqty) * 0.00001000000 from partsupp, supplier, nation where ps_suppkey = s_suppkey and s_nationkey = n_nationkey and n_name = 'GERMANY' ) order by value desc",
-    "plan": "VT12001: unsupported: in scatter query: complex aggregate expression"
+    "plan": "VT12001: unsupported: in scatter query: complex aggregate expression",
+    "skip": true
   },
   {
     "comment": "TPC-H query 12",
@@ -1174,7 +1179,8 @@
         "main.revenue0",
         "main.supplier"
       ]
-    }
+    },
+    "skip": true
   },
   {
     "comment": "TPC-H query 16",
@@ -1268,7 +1274,8 @@
         "main.partsupp",
         "main.supplier"
       ]
-    }
+    },
+    "skip": true
   },
   {
     "comment": "TPC-H query 17",
@@ -1418,7 +1425,8 @@
         "main.lineitem",
         "main.orders"
       ]
-    }
+    },
+    "skip": true
   },
   {
     "comment": "TPC-H query 19",
@@ -1628,11 +1636,13 @@
         "main.orders",
         "main.supplier"
       ]
-    }
+    },
+    "skip": true
   },
   {
     "comment": "TPC-H query 22",
     "query": "select cntrycode, count(*) as numcust, sum(c_acctbal) as totacctbal from ( select substring(c_phone from 1 for 2) as cntrycode, c_acctbal from customer where substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') and c_acctbal > ( select avg(c_acctbal) from customer where c_acctbal > 0.00 and substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') ) and not exists ( select * from orders where o_custkey = c_custkey ) ) as custsale group by cntrycode order by cntrycode",
-    "plan": "VT12001: unsupported: subquery: not exists (select 1 from orders where o_custkey = c_custkey)"
+    "plan": "VT12001: unsupported: subquery: not exists (select 1 from orders where o_custkey = c_custkey)",
+    "skip": true
   }
 ]

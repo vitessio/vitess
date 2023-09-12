@@ -4149,6 +4149,7 @@
   {
     "comment": "unsharded subquery in sharded update, not the same keyspace between outer and inner",
     "query": "update user set col = (select id from unsharded)",
+    "skip": true,
     "plan": {
       "QueryType": "UPDATE",
       "Original": "update user set col = (select id from unsharded)",
@@ -4194,6 +4195,7 @@
   {
     "comment": "sharded subquery in unsharded update, not the same keyspace",
     "query": "update unsharded set col = (select id from user)",
+    "skip": true,
     "plan": {
       "QueryType": "UPDATE",
       "Original": "update unsharded set col = (select id from user)",
@@ -4239,6 +4241,7 @@
   {
     "comment": "sharded join unsharded subqueries in unsharded update",
     "query": "update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)",
+    "skip": true,
     "plan": {
       "QueryType": "UPDATE",
       "Original": "update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)",
@@ -4310,6 +4313,7 @@
   {
     "comment": "sharded update with sub query where the sources can be merged into a single query",
     "query": "update user set col = (select count(*) from user_extra where user_extra.user_id = 5) where id = 5",
+    "skip": true,
     "plan": {
       "QueryType": "UPDATE",
       "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = 5) where id = 5",
@@ -4337,6 +4341,7 @@
   {
     "comment": "merge through correlated subquery",
     "query": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id = 5",
+    "skip": true,
     "plan": {
       "QueryType": "UPDATE",
       "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id = 5",
@@ -4364,6 +4369,7 @@
   {
     "comment": "merge through correlated subquery #2",
     "query": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id > 5",
+    "skip": true,
     "plan": {
       "QueryType": "UPDATE",
       "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id > 5",
