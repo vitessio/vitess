@@ -1045,23 +1045,19 @@ func (vr *vreplicator) readExistingRowsCopiedAndUpdateSelfIfNeeded() {
 	}
 }
 
-func (vr *vreplicator) readExistingRowsCopied(uid int32) (int64, error) {
+func (vr *vreplicator) readExistingRowsCopied(id int32) (int64, error) {
 	query, err := sqlparser.ParseAndBind(`SELECT rows_copied FROM _vt.vreplication WHERE id=%a`,
-		sqltypes.Int32BindVariable(uid),
+		sqltypes.Int32BindVariable(id),
 	)
 	if err != nil {
-		return 0, err
+		return -1, err
 	}
 	r, err := vr.dbClient.Execute(query)
 	if err != nil {
-		return 0, err
+		return -1, err
 	}
-	if len(r.Rows) == 0 {
-		return 0, nil
+	if len(r.Rows) != 1 || len(r.Rows[0]) != 1 {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not get expected single row value when getting rows_copied for workflow id: %d", id)
 	}
-	row := r.Named().Row()
-	if row == nil {
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Cannot find unique workflow for UUID: %+v", uid)
-	}
-	return row.AsInt64("rows_copied", 0), nil
+	return r.Rows[0][0].ToInt64()
 }
