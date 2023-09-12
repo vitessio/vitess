@@ -299,8 +299,8 @@ func tryPushProjection(
 			return p, rewrite.SameTree, nil
 		}
 		outer := TableID(src.Outer)
-		for idx, proj := range p.Projections {
-			_, isOffset := proj.(Offset)
+		for _, proj := range p.Projections {
+			_, isOffset := proj.(*Offset)
 			if isOffset {
 				continue
 			}
@@ -310,9 +310,9 @@ func tryPushProjection(
 				return p, rewrite.SameTree, nil
 			}
 
-			se, ok := proj.(SubQueryExpression)
+			se, ok := proj.(*SubQueryExpression)
 			if ok {
-				p.Projections[idx] = rewriteColNameToArgument(se, src)
+				rewriteColNameToArgument(se, src)
 			}
 		}
 		// all projections can be pushed to the outer
@@ -327,7 +327,7 @@ func rewriteSubqueryExpressions(ctx *plancontext.PlanningContext, p *Projection)
 	cols, colsErr := p.GetColumns(ctx)
 	// we wait with checking the error since we don't know if we are going to need the columns or not
 	for idx, expr := range p.Projections {
-		se, ok := expr.(SubQueryExpression)
+		se, ok := expr.(*SubQueryExpression)
 		if !ok || se.Original.Expr == se.E {
 			continue
 		}
@@ -431,9 +431,9 @@ func splitProjectionAcrossJoin(
 	var err error
 
 	switch expr := in.(type) {
-	case UnexploredExpression:
+	case *UnexploredExpression:
 		col, err = splitUnexploredExpression(ctx, join, lhs, rhs, expr, column)
-	case SubQueryExpression:
+	case *SubQueryExpression:
 		col, err = splitSubqueryExpression(ctx, join, lhs, rhs, expr, column)
 	default:
 		err = vterrors.VT13001(fmt.Sprintf("%T can't be split", in))
@@ -451,7 +451,7 @@ func splitSubqueryExpression(
 	ctx *plancontext.PlanningContext,
 	join *ApplyJoin,
 	lhs, rhs *projector,
-	in SubQueryExpression,
+	in *SubQueryExpression,
 	originalAE *sqlparser.AliasedExpr,
 ) (JoinColumn, error) {
 	ae := &sqlparser.AliasedExpr{Expr: in.E, As: originalAE.As}

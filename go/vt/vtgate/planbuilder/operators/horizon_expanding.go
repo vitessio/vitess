@@ -213,7 +213,7 @@ func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) (
 		if err != nil {
 			return nil, err
 		}
-		p.Projections = append(p.Projections, UnexploredExpression{E: ae.Expr})
+		p.Projections = append(p.Projections, &UnexploredExpression{E: ae.Expr})
 	}
 	for i, by := range a.Grouping {
 		a.Grouping[i].ColOffset = len(a.Columns)

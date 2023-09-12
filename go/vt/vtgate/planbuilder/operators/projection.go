@@ -133,7 +133,7 @@ func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjectio
 			return nil, err
 		}
 
-		p.Projections = append(p.Projections, Offset{Expr: ae.Expr, Offset: offset})
+		p.Projections = append(p.Projections, &Offset{Expr: ae.Expr, Offset: offset})
 		p.Columns, err = p.Columns.AddColumn(ae)
 		if err != nil {
 			return nil, err
@@ -150,7 +150,7 @@ func (p *Projection) canPushDown(ctx *plancontext.PlanningContext) bool {
 		return true
 	}
 	for _, projection := range p.Projections {
-		if _, ok := projection.(SubQueryExpression); ok {
+		if _, ok := projection.(*SubQueryExpression); ok {
 			return false
 		}
 	}
@@ -164,7 +164,7 @@ func (p *Projection) addUnexploredExpr(ae *sqlparser.AliasedExpr, e sqlparser.Ex
 		return 0, err
 	}
 	offset := len(p.Projections)
-	p.Projections = append(p.Projections, UnexploredExpression{E: e})
+	p.Projections = append(p.Projections, &UnexploredExpression{E: e})
 	return offset, nil
 }
 
@@ -174,7 +174,7 @@ func (p *Projection) addSubqueryExpr(ae *sqlparser.AliasedExpr, expr sqlparser.E
 	if err != nil {
 		return err
 	}
-	p.Projections = append(p.Projections, SubQueryExpression{E: expr, sqs: sqs, Original: ae})
+	p.Projections = append(p.Projections, &SubQueryExpression{E: expr, sqs: sqs, Original: ae})
 	return nil
 }
 
@@ -256,20 +256,20 @@ func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, reuse bool, add
 	if err != nil {
 		return 0, err
 	}
-	p.Projections = append(p.Projections, Offset{
+	p.Projections = append(p.Projections, &Offset{
 		Expr:   ae.Expr,
 		Offset: inputOffset,
 	})
 	return outputOffset, nil
 }
 
-func (po Offset) GetExpr() sqlparser.Expr { return po.Expr }
+func (po *Offset) GetExpr() sqlparser.Expr { return po.Expr }
 
-func (po Eval) GetExpr() sqlparser.Expr { return po.Expr }
+func (po *Eval) GetExpr() sqlparser.Expr { return po.Expr }
 
-func (po UnexploredExpression) GetExpr() sqlparser.Expr { return po.E }
+func (po *UnexploredExpression) GetExpr() sqlparser.Expr { return po.E }
 
-func (po SubQueryExpression) GetExpr() sqlparser.Expr { return po.E }
+func (po *SubQueryExpression) GetExpr() sqlparser.Expr { return po.E }
 
 func (p *Projection) Clone(inputs []ops.Operator) ops.Operator {
 	return &Projection{
@@ -320,7 +320,7 @@ func (p *Projection) GetOrdering() ([]ops.OrderBy, error) {
 // if all columns are of type Offset. If any column is not of type Offset, it returns nil.
 func (p *Projection) AllOffsets() (cols []int) {
 	for _, c := range p.Projections {
-		offset, ok := c.(Offset)
+		offset, ok := c.(*Offset)
 		if !ok {
 			return nil
 		}
@@ -374,7 +374,7 @@ func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *r
 	// for projections that are not derived tables, we can check if it is safe to remove or not
 	needed := false
 	for i, projection := range p.Projections {
-		e, ok := projection.(Offset)
+		e, ok := projection.(*Offset)
 		if !ok || e.Offset != i {
 			needed = true
 			break
@@ -403,10 +403,10 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, src *Appl
 	var newColumnsAST []JoinColumn
 	for idx, col := range p.Projections {
 		switch col := col.(type) {
-		case Offset:
+		case *Offset:
 			newColumns = append(newColumns, src.Columns[col.Offset])
 			newColumnsAST = append(newColumnsAST, src.JoinColumns[col.Offset])
-		case UnexploredExpression:
+		case *UnexploredExpression:
 			if !ctx.SemTable.EqualsExprWithDeps(col.E, cols[idx].Expr) {
 				// the inner expression is different from what we are presenting to the outside - this means we need to evaluate
 				return p, rewrite.SameTree, nil
@@ -432,7 +432,7 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, src *Appl
 
 func (p *Projection) compactWithRoute(ctx *plancontext.PlanningContext, rb *Route) (ops.Operator, *rewrite.ApplyResult, error) {
 	for i, col := range p.Projections {
-		offset, ok := col.(Offset)
+		offset, ok := col.(*Offset)
 		if !ok || offset.Offset != i {
 			return p, rewrite.SameTree, nil
 		}
@@ -469,7 +469,7 @@ func (p *Projection) needsEvaluation(ctx *plancontext.PlanningContext, e sqlpars
 
 func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 	for i, col := range p.Projections {
-		_, unexplored := col.(UnexploredExpression)
+		_, unexplored := col.(*UnexploredExpression)
 		if !unexplored {
 			continue
 		}
@@ -484,7 +484,7 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 		offset, ok := rewritten.(*sqlparser.Offset)
 		if ok {
 			// we got a pure offset back. No need to do anything else
-			p.Projections[i] = Offset{
+			p.Projections[i] = &Offset{
 				Expr:   expr,
 				Offset: offset.V,
 			}
@@ -497,7 +497,7 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 			return err
 		}
 
-		p.Projections[i] = Eval{
+		p.Projections[i] = &Eval{
 			Expr:  rewritten,
 			EExpr: eexpr,
 		}

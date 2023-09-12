@@ -259,9 +259,9 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 	failed := false
 	evalengineExprs := slice.Map(op.Projections, func(from operators.ProjExpr) evalengine.Expr {
 		switch e := from.(type) {
-		case operators.Eval:
+		case *operators.Eval:
 			return e.EExpr
-		case operators.Offset:
+		case *operators.Offset:
 			typ, col, _ := ctx.SemTable.TypeForExpr(e.Expr)
 			return evalengine.NewColumn(e.Offset, typ, col)
 		default:

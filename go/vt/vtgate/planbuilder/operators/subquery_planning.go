@@ -80,7 +80,7 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Op
 			return outer, rewrite.NewTree("extracted subqueries from subquery container", outer), nil
 		case *Projection:
 			for idx, proj := range op.Projections {
-				se, ok := proj.(SubQueryExpression)
+				se, ok := proj.(*SubQueryExpression)
 				if !ok {
 					continue
 				}
@@ -106,7 +106,7 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Op
 	return rewrite.BottomUp(op, TableID, visit, nil)
 }
 
-func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpression) sqlparser.Expr {
+func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se *SubQueryExpression) sqlparser.Expr {
 	expr := se.GetExpr()
 	for _, sq := range se.sqs {
 		for _, sq2 := range ctx.MergedSubqueries {
@@ -284,8 +284,8 @@ func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sql
 
 func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, src *SubQueryContainer) (ops.Operator, *rewrite.ApplyResult, error) {
 	outer := TableID(src.Outer)
-	for idx, proj := range p.Projections {
-		_, isOffset := proj.(Offset)
+	for _, proj := range p.Projections {
+		_, isOffset := proj.(*Offset)
 		if isOffset {
 			continue
 		}
@@ -295,9 +295,9 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, src 
 			return p, rewrite.SameTree, nil
 		}
 
-		se, ok := proj.(SubQueryExpression)
+		se, ok := proj.(*SubQueryExpression)
 		if ok {
-			p.Projections[idx] = rewriteColNameToArgument(se, src.Inner...)
+			rewriteColNameToArgument(se, src.Inner...)
 		}
 	}
 	// all projections can be pushed to the outer
@@ -305,7 +305,7 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, src 
 	return src, rewrite.NewTree("push projection into outer side of subquery", p), nil
 }
 
-func rewriteColNameToArgument(se SubQueryExpression, subqueries ...*SubQuery) SubQueryExpression {
+func rewriteColNameToArgument(se *SubQueryExpression, subqueries ...*SubQuery) {
 	cols := make(map[*sqlparser.ColName]any)
 	for _, sq1 := range se.sqs {
 		for _, sq2 := range subqueries {
@@ -315,7 +315,7 @@ func rewriteColNameToArgument(se SubQueryExpression, subqueries ...*SubQuery) Su
 		}
 	}
 	if len(cols) <= 0 {
-		return se
+		return
 	}
 
 	// replace the ColNames with Argument inside the subquery
@@ -332,8 +332,6 @@ func rewriteColNameToArgument(se SubQueryExpression, subqueries ...*SubQuery) Su
 		return true
 	})
 	se.E = result.(sqlparser.Expr)
-
-	return se
 }
 
 func pushOrMergeSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQueryContainer) (ops.Operator, *rewrite.ApplyResult, error) {
