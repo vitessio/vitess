@@ -42,6 +42,7 @@ func registerReshardCommands(root *cobra.Command) {
 	registerCreateCommand(reshard)
 	opts := &common.SubCommandsOpts{
 		SubCommand: "Reshard",
+		Workflow:   "cust2cust",
 	}
 	reshard.AddCommand(common.GetShowCommand(opts))
 	reshard.AddCommand(common.GetStatusCommand(opts))

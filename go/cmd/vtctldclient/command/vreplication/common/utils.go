@@ -79,7 +79,7 @@ func RegisterCommands(root *cobra.Command) {
 
 type SubCommandsOpts struct {
 	SubCommand string
-	Workflow   string
+	Workflow   string // used to specify an example workflow name for the Examples section of the help output.
 }
 
 func SetClient(c vtctldclient.VtctldClient) {

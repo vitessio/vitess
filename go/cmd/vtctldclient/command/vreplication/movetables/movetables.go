@@ -42,6 +42,7 @@ func registerMoveTablesCommands(root *cobra.Command) {
 	registerCreateCommand(moveTables)
 	opts := &common.SubCommandsOpts{
 		SubCommand: "MoveTables",
+		Workflow:   "commerce2customer",
 	}
 	moveTables.AddCommand(common.GetShowCommand(opts))
 	moveTables.AddCommand(common.GetStatusCommand(opts))
