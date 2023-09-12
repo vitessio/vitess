@@ -766,24 +766,11 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 
 func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	// Sanity check for inconsistent flags
-	{
-		// mutually exclusive:
-		mutuallyExclusiveFlags := 0
-		if restoreFromBackup {
-			mutuallyExclusiveFlags++
-		}
-		if restoreToTimestampStr != "" {
-			mutuallyExclusiveFlags++
-		}
-		if restoreToPos != "" {
-			mutuallyExclusiveFlags++
-		}
-		if mutuallyExclusiveFlags > 1 {
-			return false, fmt.Errorf("You may only specify one out of --restore_from_backup, --restore_to_timestamp, --restore_to_pos")
-		}
-		if mutuallyExclusiveFlags > 0 && tm.Cnf == nil {
-			return false, fmt.Errorf("you cannot restore a tablet from backup without a my.cnf file")
-		}
+	if tm.Cnf == nil && restoreFromBackup {
+		return false, fmt.Errorf("you cannot enable --restore_from_backup without a my.cnf file")
+	}
+	if restoreToTimestampStr != "" && restoreToPos != "" {
+		return false, fmt.Errorf("--restore_to_timestamp and --restore_to_pos are mutually exclusive")
 	}
 
 	// Restore in the background
