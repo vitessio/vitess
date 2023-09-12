@@ -326,14 +326,14 @@ func TestCreateLookupVindexFull(t *testing.T) {
 	sourceVSchema := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Name:   "hash",
+					Name:   "xxhash",
 					Column: "col1",
 				}},
 			},
@@ -370,8 +370,8 @@ func TestCreateLookupVindexFull(t *testing.T) {
 	wantvschema := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 			"v": {
 				Type: "lookup_unique",
@@ -387,7 +387,7 @@ func TestCreateLookupVindexFull(t *testing.T) {
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Name:   "hash",
+					Name:   "xxhash",
 					Column: "col1",
 				}, {
 					Name:   "v",
@@ -423,15 +423,15 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "col1",
-					Name:   "hash",
+					Name:   "xxhash",
 				}},
 			},
 		},
@@ -678,14 +678,14 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 		sourceVSchema: &vschemapb.Keyspace{
 			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
-				"hash": {
-					Type: "hash",
+				"xxhash": {
+					Type: "xxhash",
 				},
 			},
 			Tables: map[string]*vschemapb.Table{
 				"t1": {
 					ColumnVindexes: []*vschemapb.ColumnVindex{{
-						Name:   "hash",
+						Name:   "xxhash",
 						Column: "col1",
 					}},
 				},
@@ -694,8 +694,8 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 		out: &vschemapb.Keyspace{
 			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
-				"hash": {
-					Type: "hash",
+				"xxhash": {
+					Type: "xxhash",
 				},
 				"v": {
 					Type: "lookup_unique",
@@ -711,7 +711,7 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 			Tables: map[string]*vschemapb.Table{
 				"t1": {
 					ColumnVindexes: []*vschemapb.ColumnVindex{{
-						Name:   "hash",
+						Name:   "xxhash",
 						Column: "col1",
 					}, {
 						Name:   "v",
@@ -725,8 +725,8 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 		sourceVSchema: &vschemapb.Keyspace{
 			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
-				"hash": {
-					Type: "hash",
+				"xxhash": {
+					Type: "xxhash",
 				},
 				"v": {
 					Type: "lookup_unique",
@@ -742,7 +742,7 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 			Tables: map[string]*vschemapb.Table{
 				"t1": {
 					ColumnVindexes: []*vschemapb.ColumnVindex{{
-						Name:   "hash",
+						Name:   "xxhash",
 						Column: "col1",
 					}},
 				},
@@ -751,8 +751,8 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 		out: &vschemapb.Keyspace{
 			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
-				"hash": {
-					Type: "hash",
+				"xxhash": {
+					Type: "xxhash",
 				},
 				"v": {
 					Type: "lookup_unique",
@@ -768,7 +768,7 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 			Tables: map[string]*vschemapb.Table{
 				"t1": {
 					ColumnVindexes: []*vschemapb.ColumnVindex{{
-						Name:   "hash",
+						Name:   "xxhash",
 						Column: "col1",
 					}, {
 						Name:   "v",
@@ -782,8 +782,8 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 		sourceVSchema: &vschemapb.Keyspace{
 			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
-				"hash": {
-					Type: "hash",
+				"xxhash": {
+					Type: "xxhash",
 				},
 				"v": {
 					Type: "lookup_unique",
@@ -799,10 +799,10 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 			Tables: map[string]*vschemapb.Table{
 				"t1": {
 					ColumnVindexes: []*vschemapb.ColumnVindex{{
-						Name:   "hash",
+						Name:   "xxhash",
 						Column: "col1",
 					}, {
-						Name:   "hash",
+						Name:   "xxhash",
 						Column: "col2",
 					}},
 				},
@@ -811,8 +811,8 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 		out: &vschemapb.Keyspace{
 			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
-				"hash": {
-					Type: "hash",
+				"xxhash": {
+					Type: "xxhash",
 				},
 				"v": {
 					Type: "lookup_unique",
@@ -828,10 +828,10 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 			Tables: map[string]*vschemapb.Table{
 				"t1": {
 					ColumnVindexes: []*vschemapb.ColumnVindex{{
-						Name:   "hash",
+						Name:   "xxhash",
 						Column: "col1",
 					}, {
-						Name:   "hash",
+						Name:   "xxhash",
 						Column: "col2",
 					}, {
 						Name:   "v",
@@ -882,15 +882,15 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 	sourcevs := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "col1",
-					Name:   "hash",
+					Name:   "xxhash",
 				}},
 			},
 		},
@@ -903,15 +903,15 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 	withTable := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t2": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "c1",
-					Name:   "hash",
+					Name:   "xxhash",
 				}},
 			},
 		},
@@ -960,15 +960,15 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 		out: &vschemapb.Keyspace{
 			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
-				"hash": {
-					Type: "hash",
+				"xxhash": {
+					Type: "xxhash",
 				},
 			},
 			Tables: map[string]*vschemapb.Table{
 				"lkp": {
 					ColumnVindexes: []*vschemapb.ColumnVindex{{
 						Column: "c1",
-						Name:   "hash",
+						Name:   "xxhash",
 					}},
 				},
 			},
@@ -1001,24 +1001,23 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 		targetVSchema: &vschemapb.Keyspace{
 			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
-				// Create a misleading vindex name.
-				"hash": {
-					Type: "hash",
+				"xxhash": {
+					Type: "xxhash",
 				},
 			},
 		},
 		out: &vschemapb.Keyspace{
 			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
-				"hash": {
-					Type: "hash",
+				"xxhash": {
+					Type: "xxhash",
 				},
 			},
 			Tables: map[string]*vschemapb.Table{
 				"lkp": {
 					ColumnVindexes: []*vschemapb.ColumnVindex{{
 						Column: "c1",
-						Name:   "hash",
+						Name:   "xxhash",
 					}},
 				},
 			},
@@ -1031,12 +1030,12 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
 				// Create a misleading vindex name.
-				"hash": {
+				"xxhash": {
 					Type: "unicode_loose_md5",
 				},
 			},
 		},
-		err: "a conflicting vindex named hash already exists in the target vschema",
+		err: "a conflicting vindex named xxhash already exists in the target vschema",
 	}, {
 		description:     "sharded, int64, good table",
 		targetTable:     "t2",
@@ -1045,15 +1044,15 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 		out: &vschemapb.Keyspace{
 			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
-				"hash": {
-					Type: "hash",
+				"xxhash": {
+					Type: "xxhash",
 				},
 			},
 			Tables: map[string]*vschemapb.Table{
 				"t2": {
 					ColumnVindexes: []*vschemapb.ColumnVindex{{
 						Column: "c1",
-						Name:   "hash",
+						Name:   "xxhash",
 					}},
 				},
 			},
@@ -1151,14 +1150,14 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 	vschema := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Name:   "hash",
+					Name:   "xxhash",
 					Column: "col1",
 				}},
 			},
@@ -1167,8 +1166,8 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 	want := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 			"v": {
 				Type: "lookup_unique",
@@ -1184,7 +1183,7 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Name:   "hash",
+					Name:   "xxhash",
 					Column: "col1",
 				}, {
 					Name:   "v",
@@ -1194,7 +1193,7 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 			"lkp": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "c1",
-					Name:   "hash",
+					Name:   "xxhash",
 				}},
 			},
 		},
@@ -1263,14 +1262,14 @@ func TestCreateCustomizedVindex(t *testing.T) {
 	vschema := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Name:   "hash",
+					Name:   "xxhash",
 					Column: "col1",
 				}},
 			},
@@ -1279,8 +1278,8 @@ func TestCreateCustomizedVindex(t *testing.T) {
 	want := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 			"v": {
 				Type: "lookup_unique",
@@ -1296,7 +1295,7 @@ func TestCreateCustomizedVindex(t *testing.T) {
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Name:   "hash",
+					Name:   "xxhash",
 					Column: "col1",
 				}, {
 					Name:   "v",
@@ -1306,7 +1305,7 @@ func TestCreateCustomizedVindex(t *testing.T) {
 			"lkp": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "c1",
-					Name:   "hash",
+					Name:   "xxhash",
 				}},
 			},
 		},
@@ -1377,14 +1376,14 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 	vschema := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Name:   "hash",
+					Name:   "xxhash",
 					Column: "col1",
 				}},
 			},
@@ -1394,8 +1393,8 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 	wantKs := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 			"v": {
 				Type: "consistent_lookup",
@@ -1412,7 +1411,7 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Name:   "hash",
+					Name:   "xxhash",
 					Column: "col1",
 				}, {
 					Name:    "v",
@@ -1422,7 +1421,7 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 			"lkp": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "col2",
-					Name:   "hash",
+					Name:   "xxhash",
 				}},
 			},
 		},
@@ -1496,14 +1495,14 @@ func TestStopAfterCopyFlag(t *testing.T) {
 	vschema := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Name:   "hash",
+					Name:   "xxhash",
 					Column: "col1",
 				}},
 			},
@@ -1556,7 +1555,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
 			"other": {
-				Type: "hash",
+				Type: "xxhash",
 			},
 			"v": {
 				Type: "lookup_unique",
@@ -1593,10 +1592,10 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 		input: &vschemapb.Keyspace{
 			Vindexes: map[string]*vschemapb.Vindex{
 				"v1": {
-					Type: "hash",
+					Type: "xxhash",
 				},
 				"v2": {
-					Type: "hash",
+					Type: "xxhash",
 				},
 			},
 		},
@@ -1606,11 +1605,11 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 		input: &vschemapb.Keyspace{
 			Vindexes: map[string]*vschemapb.Vindex{
 				"v": {
-					Type: "hash",
+					Type: "xxhash",
 				},
 			},
 		},
-		err: "vindex hash is not a lookup type",
+		err: "vindex xxhash is not a lookup type",
 	}, {
 		description: "unqualified table",
 		input: &vschemapb.Keyspace{
@@ -1822,8 +1821,8 @@ func TestExternalizeVindex(t *testing.T) {
 	sourceVSchema := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 			"owned": {
 				Type: "lookup_unique",
@@ -1856,7 +1855,7 @@ func TestExternalizeVindex(t *testing.T) {
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Name:   "hash",
+					Name:   "xxhash",
 					Column: "col1",
 				}, {
 					Name:   "owned",
@@ -2051,15 +2050,15 @@ func TestMaterializerOneToMany(t *testing.T) {
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "c1",
-					Name:   "hash",
+					Name:   "xxhash",
 				}},
 			},
 		},
@@ -2074,13 +2073,13 @@ func TestMaterializerOneToMany(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*-80.*`,
+			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*-80.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*80-.*`,
+			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*80-.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
@@ -2111,15 +2110,15 @@ func TestMaterializerManyToMany(t *testing.T) {
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "c1",
-					Name:   "hash",
+					Name:   "xxhash",
 				}},
 			},
 		},
@@ -2134,15 +2133,15 @@ func TestMaterializerManyToMany(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`.*shard:\\"-40\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*-80.*`+
-			`.*shard:\\"40-\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*-80.*`,
+			`.*shard:\\"-40\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*-80.*`+
+			`.*shard:\\"40-\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*-80.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`.*shard:\\"-40\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*80-.*`+
-			`.*shard:\\"40-\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*80-.*`,
+			`.*shard:\\"-40\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*80-.*`+
+			`.*shard:\\"40-\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*80-.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
@@ -2747,15 +2746,15 @@ func TestMaterializerComplexVindexExpression(t *testing.T) {
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "c1",
-					Name:   "hash",
+					Name:   "xxhash",
 				}},
 			},
 		},
@@ -2790,15 +2789,15 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "c1",
-					Name:   "hash",
+					Name:   "xxhash",
 				}},
 			},
 		},
@@ -2968,15 +2967,15 @@ func TestMaterializerManyToManySomeUnreachable(t *testing.T) {
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+			"xxhash": {
+				Type: "xxhash",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "c1",
-					Name:   "hash",
+					Name:   "xxhash",
 				}},
 			},
 		},
@@ -3019,7 +3018,7 @@ func TestMaterializerManyToManySomeUnreachable(t *testing.T) {
 	}
 
 	getStreamInsert := func(sourceShard, targetShard string) string {
-		return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*%s.*`, sourceShard, targetShard)
+		return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*%s.*`, sourceShard, targetShard)
 	}
 
 	for _, tcase := range testcases {
@@ -3176,7 +3175,7 @@ func TestAddTablesToVSchema(t *testing.T) {
 						ColumnVindexes: []*vschemapb.ColumnVindex{ // Should be stripped on target
 							{
 								Column: "c1",
-								Name:   "hash",
+								Name:   "xxhash",
 							},
 						},
 					},
@@ -3223,7 +3222,7 @@ func TestAddTablesToVSchema(t *testing.T) {
 						ColumnVindexes: []*vschemapb.ColumnVindex{ // Should be stripped on target
 							{
 								Column: "c1",
-								Name:   "hash",
+								Name:   "xxhash",
 							},
 						},
 					},
