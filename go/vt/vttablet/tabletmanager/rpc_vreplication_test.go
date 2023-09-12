@@ -765,8 +765,8 @@ func TestSourceShardSelection(t *testing.T) {
 						&sqltypes.Result{InsertID: uint64(i + 1)},
 						err,
 					)
-					if err != nil {
-						continue
+					if errors.Is(err, errShortCircuit) {
+						break
 					}
 					tt.vrdbClient.ExpectRequest(getAutoIncrementStep, &sqltypes.Result{}, nil)
 					tt.vrdbClient.ExpectRequest(
