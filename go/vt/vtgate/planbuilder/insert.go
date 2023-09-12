@@ -45,8 +45,11 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	// Check single unsharded. Even if the table is for single unsharded but sequence table is used.
 	// We cannot shortcut here as sequence column needs additional planning.
 	ks, tables := ctx.SemTable.SingleUnshardedKeyspace()
-	if ks != nil && tables[0].AutoIncrement == nil {
-		if fkManagementNotRequiredForInsert(ctx, tables[0], sqlparser.UpdateExprs(insStmt.OnDup), insStmt.Action == sqlparser.ReplaceAct) {
+	FkPlanNeeded := false
+	if ks != nil {
+		noAutoInc := tables[0].AutoIncrement == nil
+		FkPlanNeeded = fkManagementRequiredForInsert(ctx, tables[0], sqlparser.UpdateExprs(insStmt.OnDup), insStmt.Action == sqlparser.ReplaceAct)
+		if noAutoInc && !FkPlanNeeded {
 			plan := insertUnshardedShortcut(insStmt, ks, tables)
 			plan = pushCommentDirectivesOnPlan(plan, insStmt)
 			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
@@ -58,7 +61,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 		return nil, err
 	}
 
-	if err = errOutIfPlanCannotBeConstructed(ctx, tblInfo.GetVindexTable(), insStmt); err != nil {
+	if err = errOutIfPlanCannotBeConstructed(ctx, tblInfo.GetVindexTable(), insStmt, FkPlanNeeded); err != nil {
 		return nil, err
 	}
 
@@ -88,37 +91,37 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
 }
 
-func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vindexes.Table, insStmt *sqlparser.Insert) error {
-	if insStmt.Action == sqlparser.ReplaceAct {
-		if vTbl.AutoIncrement != nil {
-			return vterrors.VT12001("REPLACE INTO with auto-increment column")
-		}
-		return vterrors.VT12001("REPLACE INTO with foreign keys")
-	}
-	if vTbl.Keyspace.Sharded {
+func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vindexes.Table, insStmt *sqlparser.Insert, fkPlanNeeded bool) error {
+	if vTbl.Keyspace.Sharded && ctx.SemTable.NotUnshardedErr != nil {
 		return ctx.SemTable.NotUnshardedErr
+	}
+	if insStmt.Action != sqlparser.ReplaceAct {
+		return nil
+	}
+	if fkPlanNeeded {
+		return vterrors.VT12001("REPLACE INTO with foreign keys")
 	}
 	return nil
 }
 
 // TODO: Handle all this in semantic analysis.
-func fkManagementNotRequiredForInsert(ctx *plancontext.PlanningContext, vTbl *vindexes.Table, updateExprs sqlparser.UpdateExprs, replace bool) bool {
+func fkManagementRequiredForInsert(ctx *plancontext.PlanningContext, vTbl *vindexes.Table, updateExprs sqlparser.UpdateExprs, replace bool) bool {
 	ksMode, err := ctx.VSchema.ForeignKeyMode(vTbl.Keyspace.Name)
 	if err != nil || ksMode != vschemapb.Keyspace_FK_MANAGED {
-		return true
+		return false
 	}
 
 	if len(vTbl.ParentFKsNeedsHandling(ctx.VerifyAllFKs, "")) > 0 {
-		return false
+		return true
 	}
 
 	childFks := vTbl.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.UpdateAction)
 	if len(childFks) > 0 && replace {
-		return false
+		return true
 	}
 
 	// Check if any column in the parent table is being updated which has a child foreign key.
-	return !columnModified(updateExprs, func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
+	return columnModified(updateExprs, func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
 		return nil, childFks
 	})
 }
