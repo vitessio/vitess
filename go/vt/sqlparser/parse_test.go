@@ -3214,6 +3214,10 @@ var (
 			input: "alter table t secondary_engine_attribute 'rapid'",
 			output: "alter table t",
 		},
+		{
+			input: "table t",
+			output: "select * from t",
+		},
 	}
 
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.

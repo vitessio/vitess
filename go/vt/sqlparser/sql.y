@@ -750,6 +750,10 @@ base_select_no_cte:
       $$.(*Select).CalcFoundRows = true
     }
   }
+| TABLE table_reference
+  {
+    $$ = &Select{SelectExprs: SelectExprs{&StarExpr{}}, From: TableExprs{$2}}
+  }
 
 from_opt:
   {
