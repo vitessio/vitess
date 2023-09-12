@@ -288,6 +288,11 @@ func setReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return tmc.SetReadOnly(ctx, tablet)
 }
 
+// changeTabletType calls the said RPC for the given tablet with the given parameters.
+func changeTabletType(ctx context.Context, tablet *topodatapb.Tablet, tabletType topodatapb.TabletType, semiSync bool) error {
+	return tmc.ChangeType(ctx, tablet, tabletType, semiSync)
+}
+
 // setReplicationSource calls the said RPC with the parameters provided
 func setReplicationSource(ctx context.Context, replica *topodatapb.Tablet, primary *topodatapb.Tablet, semiSync bool) error {
 	return tmc.SetReplicationSource(ctx, replica, primary.Alias, 0, "", true, semiSync)
