@@ -258,29 +258,35 @@ func commandOnlineDDLRetry(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// commandOnlineDDLThrottle throttles one or multiple migrations.
-// As opposed to *most* OnlineDDL functions, this functionality does not end up calling a gRPC on tablets.
-// Instead, it updates Keyspace and SrvKeyspace entries, on which the tablets listen.
-func commandOnlineDDLThrottle(cmd *cobra.Command, args []string) error {
+// throttleCommandHelper is a helper function that implements the logic for both
+// commandOnlineDDLThrottle and commandOnlineDDLUnthrottle ; the only difference between the two
+// is the ThrottledApp *rule* sent in UpdateThrottlerConfigRequest.
+// input: `throttleType`: true stands for "throttle", `false` stands for "unthrottle"
+func throttleCommandHelper(cmd *cobra.Command, throttleType bool) error {
 	keyspace, uuid, err := analyzeOnlineDDLCommandWithUuidOrAllArgument(cmd)
 	if err != nil {
 		return err
 	}
 	cli.FinishedParsing(cmd)
 
-	throttledAppRule := topodatapb.ThrottledAppRule{
-		Ratio:     throttle.DefaultThrottleRatio,
-		ExpiresAt: protoutil.TimeToProto(time.Now().Add(throttle.DefaultAppThrottleDuration)),
-	}
-	if strings.ToLower(uuid) == AllMigrationsIndicator {
-		throttledAppRule.Name = throttlerapp.OnlineDDLName.String()
+	var rule topodatapb.ThrottledAppRule
+	if throttleType {
+		rule.Ratio = throttle.DefaultThrottleRatio
+		rule.ExpiresAt = protoutil.TimeToProto(time.Now().Add(throttle.DefaultAppThrottleDuration))
 	} else {
-		throttledAppRule.Name = uuid
+		rule.Ratio = 0
+		rule.ExpiresAt = protoutil.TimeToProto(time.Now())
+	}
+
+	if strings.ToLower(uuid) == AllMigrationsIndicator {
+		rule.Name = throttlerapp.OnlineDDLName.String()
+	} else {
+		rule.Name = uuid
 	}
 
 	updateThrottlerConfigOptions := vtctldatapb.UpdateThrottlerConfigRequest{
 		Keyspace:     keyspace,
-		ThrottledApp: &throttledAppRule,
+		ThrottledApp: &rule,
 	}
 	resp, err := client.UpdateThrottlerConfig(commandCtx, &updateThrottlerConfigOptions)
 	if err != nil {
@@ -296,42 +302,18 @@ func commandOnlineDDLThrottle(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// commandOnlineDDLThrottle throttles one or multiple migrations.
+// As opposed to *most* OnlineDDL functions, this functionality does not end up calling a gRPC on tablets.
+// Instead, it updates Keyspace and SrvKeyspace entries, on which the tablets listen.
+func commandOnlineDDLThrottle(cmd *cobra.Command, args []string) error {
+	return throttleCommandHelper(cmd, true)
+}
+
 // commandOnlineDDLUnthrottle unthrottles one or multiple migrations.
 // As opposed to *most* OnlineDDL functions, this functionality does not end up calling a gRPC on tablets.
 // Instead, it updates Keyspace and SrvKeyspace entries, on which the tablets listen.
 func commandOnlineDDLUnthrottle(cmd *cobra.Command, args []string) error {
-	keyspace, uuid, err := analyzeOnlineDDLCommandWithUuidOrAllArgument(cmd)
-	if err != nil {
-		return err
-	}
-	cli.FinishedParsing(cmd)
-
-	unthrottledAppRule := topodatapb.ThrottledAppRule{
-		Ratio:     0,
-		ExpiresAt: protoutil.TimeToProto(time.Now()),
-	}
-	if strings.ToLower(uuid) == AllMigrationsIndicator {
-		unthrottledAppRule.Name = throttlerapp.OnlineDDLName.String()
-	} else {
-		unthrottledAppRule.Name = uuid
-	}
-
-	updateThrottlerConfigOptions := vtctldatapb.UpdateThrottlerConfigRequest{
-		Keyspace:     keyspace,
-		ThrottledApp: &unthrottledAppRule,
-	}
-	resp, err := client.UpdateThrottlerConfig(commandCtx, &updateThrottlerConfigOptions)
-	if err != nil {
-		return err
-	}
-
-	data, err := cli.MarshalJSON(resp)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("%s\n", data)
-	return nil
+	return throttleCommandHelper(cmd, false)
 }
 
 var onlineDDLShowArgs = struct {
