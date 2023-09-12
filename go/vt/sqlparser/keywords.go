@@ -332,6 +332,7 @@ var keywords = map[string]int{
 	"kill":                          KILL,
 	"lag":                           LAG,
 	"language":                      LANGUAGE,
+	"last":                          LAST,
 	"last_insert_id":                LAST_INSERT_ID,
 	"last_value":                    LAST_VALUE,
 	"lateral":                       LATERAL,

@@ -3258,6 +3258,42 @@ var (
 			input: "alter table t table_checksum = 1",
 			output: "alter table t",
 		},
+		{
+			input: "create table t (i int) union (a, b, c)",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") union (a,b,c)",
+		},
+		{
+			input: "create table t (i int) union (`a`, `b`, `c`)",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") union (a,b,c)",
+		},
+		{
+			input: "alter table t union=(a, b, c)",
+			output: "alter table t",
+		},
+		{
+			input: "create table t (i int) insert_method last",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") insert_method last",
+		},
+		{
+			input: "create table t (i int) insert_method=last",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") insert_method last",
+		},
+		{
+			input: "alter table t insert_method last",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t insert_method=last",
+			output: "alter table t",
+		},
 	}
 
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.

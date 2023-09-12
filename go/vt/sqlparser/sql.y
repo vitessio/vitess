@@ -603,6 +603,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <grantAssumption> grant_assumption
 %type <boolean> with_grant_opt with_admin_opt
 %type <bytes> any_identifier
+%type <str> any_identifier_list
 %type <statement> create_spatial_ref_sys
 %type <srsAttr> srs_attribute
 
@@ -4196,9 +4197,9 @@ table_option:
   {
     $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
   }
-| UNION equal_opt table_opt_value
+| UNION equal_opt openb any_identifier_list closeb
   {
-    $$ = string($1) + " " + $3
+    $$ = string($1) + " " + "(" + $4 + ")"
   }
 
 table_option_collate:
@@ -4258,6 +4259,16 @@ row_fmt_opt:
 | COMPACT
   {
     $$ = string($1)
+  }
+
+any_identifier_list:
+  any_identifier
+  {
+    $$ = string($1)
+  }
+| any_identifier_list ',' any_identifier
+  {
+    $$ = $1 + "," + string($3)
   }
 
 any_identifier:
@@ -4582,6 +4593,22 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr}
   }
 | TABLE_CHECKSUM equal_opt INTEGRAL
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| UNION equal_opt openb any_identifier_list closeb
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| INSERT_METHOD equal_opt NO
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| INSERT_METHOD equal_opt FIRST
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| INSERT_METHOD equal_opt LAST
   {
     $$ = &DDL{Action: AlterStr}
   }
