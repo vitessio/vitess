@@ -94,7 +94,7 @@ func fkManagementNotRequiredForInsert(ctx *plancontext.PlanningContext, vTbl *vi
 	}
 
 	if len(vTbl.ParentFKsNeedsHandling(ctx.VerifyAllFKs, "")) > 0 {
-		return true
+		return false
 	}
 
 	childFks := vTbl.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.UpdateAction)
