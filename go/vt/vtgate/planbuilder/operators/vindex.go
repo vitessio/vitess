@@ -111,6 +111,7 @@ func (v *Vindex) GetOrdering() ([]ops.OrderBy, error) {
 func (v *Vindex) GetColNames() []*sqlparser.ColName {
 	return v.Columns
 }
+
 func (v *Vindex) AddCol(col *sqlparser.ColName) {
 	v.Columns = append(v.Columns, col)
 }

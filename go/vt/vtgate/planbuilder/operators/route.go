@@ -672,6 +672,7 @@ func (r *Route) TablesUsed() []string {
 	}
 	return collect()
 }
+
 func isSpecialOrderBy(o ops.OrderBy) bool {
 	if sqlparser.IsNull(o.Inner.Expr) {
 		return true

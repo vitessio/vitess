@@ -99,6 +99,7 @@ func (to *Table) GetOrdering() ([]ops.OrderBy, error) {
 func (to *Table) GetColNames() []*sqlparser.ColName {
 	return to.Columns
 }
+
 func (to *Table) AddCol(col *sqlparser.ColName) {
 	to.Columns = append(to.Columns, col)
 }

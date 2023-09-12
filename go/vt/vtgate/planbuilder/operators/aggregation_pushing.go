@@ -625,6 +625,7 @@ func (ab *aggBuilder) pushThroughLeft(aggr Aggr) {
 		LHSExprs: []sqlparser.Expr{aggr.Original.Expr},
 	})
 }
+
 func (ab *aggBuilder) pushThroughRight(aggr Aggr) {
 	ab.rhs.pushThroughAggr(aggr)
 	ab.joinColumns = append(ab.joinColumns, JoinColumn{

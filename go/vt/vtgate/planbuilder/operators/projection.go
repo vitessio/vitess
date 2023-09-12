@@ -256,10 +256,13 @@ func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, reuse bool, add
 	return outputOffset, nil
 }
 
-func (po Offset) GetExpr() sqlparser.Expr               { return po.Expr }
-func (po Eval) GetExpr() sqlparser.Expr                 { return po.Expr }
+func (po Offset) GetExpr() sqlparser.Expr { return po.Expr }
+
+func (po Eval) GetExpr() sqlparser.Expr { return po.Expr }
+
 func (po UnexploredExpression) GetExpr() sqlparser.Expr { return po.E }
-func (po SubQueryExpression) GetExpr() sqlparser.Expr   { return po.E }
+
+func (po SubQueryExpression) GetExpr() sqlparser.Expr { return po.E }
 
 func (p *Projection) Clone(inputs []ops.Operator) ops.Operator {
 	return &Projection{
