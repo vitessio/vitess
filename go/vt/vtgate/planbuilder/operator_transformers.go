@@ -439,6 +439,12 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 
 	switch stmt := stmt.(type) {
 	case sqlparser.SelectStatement:
+		if op.Lock != sqlparser.NoLock {
+			stmt.SetLock(op.Lock)
+		}
+		if op.Comments != nil {
+			stmt.SetComments(op.Comments.GetComments())
+		}
 		return buildRouteLogicalPlan(ctx, op, stmt)
 	case *sqlparser.Update:
 		return buildUpdateLogicalPlan(ctx, op, dmlOp, stmt)

@@ -306,7 +306,7 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 		fkChildren = append(fkChildren, fkChild)
 	}
 
-	selectionOp, err := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, nil)
+	selectionOp, err := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, nil, sqlparser.ForUpdateLock)
 	if err != nil {
 		return nil, err
 	}
@@ -551,7 +551,8 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 				sqlparser.NewJoinCondition(joinCond, nil)),
 		},
 		sqlparser.NewWhere(sqlparser.WhereClause, whereCond),
-		sqlparser.NewLimitWithoutOffset(1))
+		sqlparser.NewLimitWithoutOffset(1),
+		sqlparser.ShareModeLock)
 }
 
 // Each child foreign key constraint is verified by a join query of the form:
@@ -604,5 +605,6 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updSt
 				sqlparser.NewJoinCondition(joinCond, nil)),
 		},
 		sqlparser.NewWhere(sqlparser.WhereClause, whereCond),
-		sqlparser.NewLimitWithoutOffset(1))
+		sqlparser.NewLimitWithoutOffset(1),
+		sqlparser.ShareModeLock)
 }

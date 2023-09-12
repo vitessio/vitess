@@ -1050,6 +1050,11 @@ func (node *Select) GetLimit() *Limit {
 	return node.Limit
 }
 
+// GetLock returns the lock clause
+func (node *Select) GetLock() Lock {
+	return node.Lock
+}
+
 // SetLock sets the lock clause
 func (node *Select) SetLock(lock Lock) {
 	node.Lock = lock
@@ -1194,6 +1199,11 @@ func (node *Union) GetLimit() *Limit {
 // GetColumns gets the columns
 func (node *Union) GetColumns() SelectExprs {
 	return node.Left.GetColumns()
+}
+
+// GetLock returns the lock clause
+func (node *Union) GetLock() Lock {
+	return node.Lock
 }
 
 // SetLock sets the lock clause
