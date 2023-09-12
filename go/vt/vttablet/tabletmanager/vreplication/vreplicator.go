@@ -1033,11 +1033,13 @@ func (vr *vreplicator) newClientConnection(ctx context.Context) (*vdbClient, err
 	return dbClient, nil
 }
 
-// setExistingRowsCopied deals with the case where another tablet started the workflow and a reparent occurred,
-// and now that we manage the workflow, we need to read the rows_copied that already exists and add them to our
-// counter, otherwise it will look like the reparent wiped all the rows_copied.
-// So in the event that our CopyRowCount counter is zero, and the existing rows_copied in the vreplication table
-// is not, copy the value of vreplication.rows_copied into our CopyRowCount
+// setExistingRowsCopied deals with the case where another tablet started
+// the workflow and a reparent occurred, and now that we manage the
+// workflow, we need to read the rows_copied that already exists and add
+// them to our counter, otherwise it will look like the reparent wiped all the
+// rows_copied. So in the event that our CopyRowCount counter is zero, and
+// the existing rows_copied in the vreplication table is not, copy the value of
+// vreplication.rows_copied into our CopyRowCount.
 func (vr *vreplicator) setExistingRowsCopied() {
 	if vr.stats.CopyRowCount.Get() == 0 {
 		rowsCopiedExisting, err := vr.readExistingRowsCopied(vr.id)
