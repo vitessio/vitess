@@ -901,11 +901,11 @@ func TestChooseVindexForType(t *testing.T) {
 		// used for a vindex. If the test case provides an empty output
 		// value then we expect an error.
 		if tcase.out == "" {
-			assert.Error(t, err, "unexpectedly got a recommended vindex type of %s for input column type: %v",
+			assert.Error(t, err, "unexpectedly got a recommended vindex type of %s for input column type %v",
 				out, tcase.in)
 			continue
 		}
-		assert.Equal(t, out, tcase.out, "expected a recommended vindex type of %s for %v but got: %q",
+		assert.Equal(t, out, tcase.out, "expected a recommended vindex type of %s for input column type %v but got %s",
 			tcase.out, tcase.in, out)
 	}
 }
