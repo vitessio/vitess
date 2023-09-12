@@ -663,6 +663,7 @@ func TestResumingFromPreviousWorkflowKeepingRowsCopied(t *testing.T) {
 	err = dbClient.Connect()
 	require.NoError(t, err)
 	defer dbClient.Close()
+
 	dbName := dbClient.DBName()
 	rowsCopied := int64(500000)
 	// Ensure there's an existing vreplication workflow
