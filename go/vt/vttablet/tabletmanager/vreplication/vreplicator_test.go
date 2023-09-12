@@ -650,6 +650,7 @@ func TestResumingFromPreviousWorkflowKeepingRowsCopied(t *testing.T) {
 	// filtered connections.
 	dbconfigs.GlobalDBConfigs.Filtered.User = "vt_dba"
 	id := int32(1)
+
 	vsclient := newTabletConnector(tablet)
 	stats := binlogplayer.NewStats()
 	defer stats.Stop()
