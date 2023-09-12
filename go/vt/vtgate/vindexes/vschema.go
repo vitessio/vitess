@@ -1230,7 +1230,7 @@ func LoadFormalKeyspace(filename string) (*vschemapb.Keyspace, error) {
 func ChooseVindexForType(typ querypb.Type) (string, error) {
 	switch {
 	case sqltypes.IsIntegral(typ):
-		return "hash", nil
+		return "xxhash", nil
 	case sqltypes.IsText(typ):
 		return "unicode_loose_md5", nil
 	case sqltypes.IsBinary(typ):
