@@ -1080,9 +1080,11 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 		return nil, fmt.Errorf("no target shards specified for workflow %s ", ms.Workflow)
 	}
 	differentPVs := false
-	if sourceVSchema, err := wr.ts.GetVSchema(ctx, ms.SourceKeyspace); err == nil {
-		differentPVs = primaryVindexesDiffer(ms, sourceVSchema, vschema)
+	sourceVSchema, err := wr.ts.GetVSchema(ctx, ms.SourceKeyspace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get source keyspace vschema: %v", err)
 	}
+	differentPVs = primaryVindexesDiffer(ms, sourceVSchema, vschema)
 
 	return &materializer{
 		wr:                    wr,
@@ -1505,9 +1507,18 @@ func (mz *materializer) checkTZConversion(ctx context.Context, tz string) error 
 // when the source and target shard have the same primary vindexes.
 func (mz *materializer) filterSourceShards(targetShard *topo.ShardInfo) []*topo.ShardInfo {
 	if mz.primaryVindexesDiffer || mz.ms.MaterializationIntent != vtctldatapb.MaterializationIntent_MOVETABLES {
-		return useAllSourceShards(targetShard, mz.sourceShards)
+		// Use all source shards.
+		return mz.sourceShards
 	}
-	return useIntersectingSourceShards(targetShard, mz.sourceShards)
+	// Use intersecting source shards.
+	var filteredSourceShards []*topo.ShardInfo
+	for _, sourceShard := range mz.sourceShards {
+		if !key.KeyRangeIntersect(sourceShard.KeyRange, targetShard.KeyRange) {
+			continue
+		}
+		filteredSourceShards = append(filteredSourceShards, sourceShard)
+	}
+	return filteredSourceShards
 }
 
 // primaryVindexesDiffer returns true if, for any tables defined in the provided
@@ -1548,7 +1559,8 @@ func primaryVindexesDiffer(ms *vtctldatapb.MaterializeSettings, source, target *
 		if len(sColumnVindexes) > 0 && len(tColumnVindexes) == 0 {
 			return true
 		}
-		// If neither source nor target have any vindexes, treat the answer to the question as trivially false.
+		// If neither source nor target have any vindexes, treat the answer to
+		// the question as trivially false.
 		if len(sColumnVindexes) == 0 && len(tColumnVindexes) == 0 {
 			return true
 		}
@@ -1577,30 +1589,28 @@ func primaryVindexesDiffer(ms *vtctldatapb.MaterializeSettings, source, target *
 			}
 		}
 
-		// Assume the source and target keyspaces specify the vindex referenced
-		// in column vindex definitions.
+		// Get source and target vindex definitions.
 		spv := source.Vindexes[sColumnVindexes[0].Name]
 		tpv := target.Vindexes[tColumnVindexes[0].Name]
-
+		// If the source has vindex definition, but target does not, then the
+		// target vschema is invalid. Assume the primary vindexes differ.
+		if spv != nil && tpv == nil {
+			return true
+		}
+		// If the target has vindex definition, but source does not, then the
+		// source vschema is invalid. Assume the primary vindexes differ.
+		if spv == nil && tpv != nil {
+			return true
+		}
+		// If both target and source are missing vindex definitions, then both
+		// are equally invalid.
+		if spv == nil && tpv == nil {
+			continue
+		}
 		// Compare source and target vindex type.
 		if !strings.EqualFold(spv.Type, tpv.Type) {
 			return true
 		}
 	}
 	return false
-}
-
-func useAllSourceShards(_ *topo.ShardInfo, sourceShards []*topo.ShardInfo) []*topo.ShardInfo {
-	return sourceShards
-}
-
-func useIntersectingSourceShards(targetShard *topo.ShardInfo, sourceShards []*topo.ShardInfo) []*topo.ShardInfo {
-	var filteredSourceShards []*topo.ShardInfo
-	for _, sourceShard := range sourceShards {
-		if !key.KeyRangeIntersect(sourceShard.KeyRange, targetShard.KeyRange) {
-			continue
-		}
-		filteredSourceShards = append(filteredSourceShards, sourceShard)
-	}
-	return filteredSourceShards
 }
