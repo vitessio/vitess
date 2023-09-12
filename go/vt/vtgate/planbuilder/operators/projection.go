@@ -21,6 +21,7 @@ import (
 	"slices"
 	"strings"
 
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -30,29 +31,31 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
+// Projection is used when we need to evaluate expressions on the vtgate
+// It uses the evalengine to accomplish its goal
+type Projection struct {
+	Source ops.Operator
+
+	// TODO: we should replace these two slices with a single slice that contains both items. Keeping these two slices in sync leads to fragile code (systay 2023-07-25)
+	// Columns contain the expressions as viewed from the outside of this operator
+	Columns ProjCols
+
+	// Projections will contain the actual evaluations we need to
+	// do if this operator is still above a route after optimisation
+	Projections []ProjExpr
+
+	// TableID will be non-nil for derived tables
+	TableID *semantics.TableSet
+	Alias   string
+
+	FromAggr bool
+}
+
 type (
-	// Projection is used when we need to evaluate expressions on the vtgate
-	// It uses the evalengine to accomplish its goal
-	Projection struct {
-		Source ops.Operator
-
-		// TODO: we should replace these two slices with a single slice that contains both items. Keeping these two slices in sync leads to fragile code (systay 2023-07-25)
-		// Columns contain the expressions as viewed from the outside of this operator
-		Columns ProjCols
-
-		// Projections will contain the actual evaluations we need to
-		// do if this operator is still above a route after optimisation
-		Projections []ProjExpr
-
-		// TableID will be non-nil for derived tables
-		TableID *semantics.TableSet
-		Alias   string
-
-		FromAggr bool
-	}
-
+	// ProjCols is used to enable projections that are only valid if we can push them into a route, and we never need to ask it about offsets
 	ProjCols interface {
 		GetColumns() ([]*sqlparser.AliasedExpr, error)
+		GetSelectExprs() sqlparser.SelectExprs
 		AddColumn(*sqlparser.AliasedExpr) (ProjCols, error)
 	}
 
@@ -61,7 +64,9 @@ type (
 
 	// Used when we know all the columns
 	AliasedProjections []*sqlparser.AliasedExpr
+)
 
+type (
 	ProjExpr interface {
 		GetExpr() sqlparser.Expr
 	}
@@ -109,8 +114,18 @@ func (sp StarProjections) AddColumn(*sqlparser.AliasedExpr) (ProjCols, error) {
 	return nil, vterrors.VT09015()
 }
 
+func (sp StarProjections) GetSelectExprs() sqlparser.SelectExprs {
+	return sqlparser.SelectExprs(sp)
+}
+
 func (ap AliasedProjections) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return ap, nil
+}
+
+func (ap AliasedProjections) GetSelectExprs() sqlparser.SelectExprs {
+	return slice.Map(ap, func(e *sqlparser.AliasedExpr) sqlparser.SelectExpr {
+		return e
+	})
 }
 
 func (ap AliasedProjections) AddColumn(col *sqlparser.AliasedExpr) (ProjCols, error) {
@@ -304,12 +319,8 @@ func (p *Projection) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.Alia
 	return p.Columns.GetColumns()
 }
 
-func (p *Projection) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
-	if se, ok := p.Columns.(StarProjections); ok {
-		return sqlparser.SelectExprs(se), nil
-	}
-
-	return transformColumnsToSelectExprs(ctx, p)
+func (p *Projection) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return p.Columns.GetSelectExprs(), nil
 }
 
 func (p *Projection) GetOrdering() ([]ops.OrderBy, error) {
