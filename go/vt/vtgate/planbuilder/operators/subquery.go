@@ -58,6 +58,10 @@ func (s *SubQueryInner) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
+func (s *SubQueryInner) GetOrdering() ([]ops.OrderBy, error) {
+	return s.Inner.GetOrdering()
+}
+
 // Inputs implements the Operator interface
 func (s *SubQueryInner) Inputs() []ops.Operator {
 	return []ops.Operator{s.Inner}
@@ -83,6 +87,10 @@ func (s *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
+func (s *SubQuery) GetOrdering() ([]ops.OrderBy, error) {
+	return s.Outer.GetOrdering()
+}
+
 // Inputs implements the Operator interface
 func (s *SubQuery) Inputs() []ops.Operator {
 	operators := []ops.Operator{s.Outer}
@@ -103,7 +111,7 @@ func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparse
 	}
 	subq := &SubQuery{}
 	for _, sq := range ctx.SemTable.SubqueryMap[stmt] {
-		opInner, err := createLogicalOperatorFromAST(ctx, sq.Subquery.Select)
+		opInner, err := translateQueryToOp(ctx, sq.Subquery.Select)
 		if err != nil {
 			return nil, err
 		}
@@ -117,4 +125,12 @@ func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparse
 		})
 	}
 	return subq, nil
+}
+
+func (s *SubQuery) ShortDescription() string {
+	return ""
+}
+
+func (s *SubQueryInner) ShortDescription() string {
+	return ""
 }

@@ -54,7 +54,7 @@ func AddPredicate(
 	case deps.IsSolvedBy(TableID(join.GetRHS())):
 		// if we are dealing with an outer join, always start by checking if this predicate can turn
 		// the join into an inner join
-		if !join.IsInner() && canConvertToInner(ctx, expr, TableID(join.GetRHS())) {
+		if !joinPredicates && !join.IsInner() && canConvertToInner(ctx, expr, TableID(join.GetRHS())) {
 			join.MakeInner()
 		}
 
@@ -106,7 +106,7 @@ func AddPredicate(
 // matched no rows on the right-hand, if we are later going to remove all the rows where the right-hand
 // side did not match, we might as well turn the join into an inner join.
 //
-// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
+// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al.
 func canConvertToInner(ctx *plancontext.PlanningContext, expr sqlparser.Expr, rhs semantics.TableSet) bool {
 	isColNameFromRHS := func(e sqlparser.Expr) bool {
 		return sqlparser.IsColName(e) && ctx.SemTable.RecursiveDeps(e).IsSolvedBy(rhs)

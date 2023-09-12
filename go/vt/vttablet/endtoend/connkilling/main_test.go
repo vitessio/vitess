@@ -17,6 +17,7 @@ limitations under the License.
 package connkilling
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -80,8 +81,10 @@ func TestMain(m *testing.M) {
 		connParams = cluster.MySQLConnParams()
 		connAppDebugParams = cluster.MySQLAppDebugConnParams()
 		config := tabletenv.NewDefaultConfig()
-		config.Oltp.TxTimeoutSeconds = tabletenv.Seconds(3)
-		err := framework.StartCustomServer(connParams, connAppDebugParams, cluster.DbName(), config)
+		_ = config.Oltp.TxTimeoutSeconds.Set("3s")
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		err := framework.StartCustomServer(ctx, connParams, connAppDebugParams, cluster.DbName(), config)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1

@@ -19,8 +19,6 @@ package fakes
 import (
 	"context"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -53,7 +51,7 @@ func NewStreamHealthQueryService(target *querypb.Target) *StreamHealthQueryServi
 	return &StreamHealthQueryService{
 		QueryService:    ErrorQueryService,
 		healthResponses: make(chan *querypb.StreamHealthResponse, 1000),
-		target:          proto.Clone(target).(*querypb.Target),
+		target:          target.CloneVT(),
 	}
 }
 
@@ -81,7 +79,7 @@ func (q *StreamHealthQueryService) StreamHealth(ctx context.Context, callback fu
 // The response will have default values typical for a healthy tablet.
 func (q *StreamHealthQueryService) AddDefaultHealthResponse() {
 	q.healthResponses <- &querypb.StreamHealthResponse{
-		Target:  proto.Clone(q.target).(*querypb.Target),
+		Target:  q.target.CloneVT(),
 		Serving: true,
 		RealtimeStats: &querypb.RealtimeStats{
 			ReplicationLagSeconds: DefaultReplicationLagSeconds,
@@ -93,7 +91,7 @@ func (q *StreamHealthQueryService) AddDefaultHealthResponse() {
 // Only "qps" is different in this message.
 func (q *StreamHealthQueryService) AddHealthResponseWithQPS(qps float64) {
 	q.healthResponses <- &querypb.StreamHealthResponse{
-		Target:  proto.Clone(q.target).(*querypb.Target),
+		Target:  q.target.CloneVT(),
 		Serving: true,
 		RealtimeStats: &querypb.RealtimeStats{
 			Qps:                   qps,
@@ -106,7 +104,7 @@ func (q *StreamHealthQueryService) AddHealthResponseWithQPS(qps float64) {
 // buffer channel. Only "replication_lag_seconds" is different in this message.
 func (q *StreamHealthQueryService) AddHealthResponseWithReplicationLag(replicationLag uint32) {
 	q.healthResponses <- &querypb.StreamHealthResponse{
-		Target:  proto.Clone(q.target).(*querypb.Target),
+		Target:  q.target.CloneVT(),
 		Serving: true,
 		RealtimeStats: &querypb.RealtimeStats{
 			ReplicationLagSeconds: replicationLag,
@@ -118,7 +116,7 @@ func (q *StreamHealthQueryService) AddHealthResponseWithReplicationLag(replicati
 // buffer channel. Only "Serving" is different in this message.
 func (q *StreamHealthQueryService) AddHealthResponseWithNotServing() {
 	q.healthResponses <- &querypb.StreamHealthResponse{
-		Target:  proto.Clone(q.target).(*querypb.Target),
+		Target:  q.target.CloneVT(),
 		Serving: false,
 		RealtimeStats: &querypb.RealtimeStats{
 			ReplicationLagSeconds: DefaultReplicationLagSeconds,

@@ -27,12 +27,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
@@ -41,9 +38,12 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	tacl "vitess.io/vitess/go/vt/tableacl/acl"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -172,7 +172,7 @@ type QueryEngine struct {
 
 	// stats
 	// Note: queryErrorCountsWithCode is similar to queryErrorCounts except it contains error code as an additional dimension
-	queryCounts, queryTimes, queryErrorCounts, queryErrorCountsWithCode, queryRowsAffected, queryRowsReturned *stats.CountersWithMultiLabels
+	queryCounts, queryCountsWithTabletType, queryTimes, queryErrorCounts, queryErrorCountsWithCode, queryRowsAffected, queryRowsReturned *stats.CountersWithMultiLabels
 
 	// stats flags
 	enablePerWorkloadTableMetrics bool
@@ -258,6 +258,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	}
 
 	qe.queryCounts = env.Exporter().NewCountersWithMultiLabels("QueryCounts", "query counts", labels)
+	qe.queryCountsWithTabletType = env.Exporter().NewCountersWithMultiLabels("QueryCountsWithTabletType", "query counts with tablet type labels", []string{"Table", "Plan", "TabletType"})
 	qe.queryTimes = env.Exporter().NewCountersWithMultiLabels("QueryTimesNs", "query times in ns", labels)
 	qe.queryRowsAffected = env.Exporter().NewCountersWithMultiLabels("QueryRowsAffected", "query rows affected", labels)
 	qe.queryRowsReturned = env.Exporter().NewCountersWithMultiLabels("QueryRowsReturned", "query rows returned", labels)
@@ -299,7 +300,7 @@ func (qe *QueryEngine) Open() error {
 	}
 
 	qe.streamConns.Open(qe.env.Config().DB.AppWithDB(), qe.env.Config().DB.DbaWithDB(), qe.env.Config().DB.AppDebugWithDB())
-	qe.se.RegisterNotifier("qe", qe.schemaChanged)
+	qe.se.RegisterNotifier("qe", qe.schemaChanged, true)
 	qe.isOpen = true
 	return nil
 }
@@ -313,7 +314,7 @@ func (qe *QueryEngine) Close() {
 	}
 	// Close in reverse order of Open.
 	qe.se.UnregisterNotifier("qe")
-	qe.plans.Clear()
+	qe.plans.Close()
 	qe.tables = make(map[string]*schema.Table)
 	qe.streamConns.Close()
 	qe.conns.Close()
@@ -427,7 +428,7 @@ func (qe *QueryEngine) ClearQueryPlanCache() {
 func (qe *QueryEngine) IsMySQLReachable() error {
 	conn, err := dbconnpool.NewDBConnection(context.TODO(), qe.env.Config().DB.AppWithDB())
 	if err != nil {
-		if mysql.IsTooManyConnectionsErr(err) {
+		if sqlerror.IsTooManyConnectionsErr(err) {
 			return nil
 		}
 		return err
@@ -436,7 +437,7 @@ func (qe *QueryEngine) IsMySQLReachable() error {
 	return nil
 }
 
-func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []string) {
+func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []*schema.Table) {
 	qe.mu.Lock()
 	defer qe.mu.Unlock()
 	qe.tables = tables
@@ -490,7 +491,7 @@ func (qe *QueryEngine) QueryPlanCacheLen() int {
 }
 
 // AddStats adds the given stats for the planName.tableName
-func (qe *QueryEngine) AddStats(planType planbuilder.PlanType, tableName, workload string, queryCount int64, duration, mysqlTime time.Duration, rowsAffected, rowsReturned, errorCount int64, errorCode string) {
+func (qe *QueryEngine) AddStats(planType planbuilder.PlanType, tableName, workload string, tabletType topodata.TabletType, queryCount int64, duration, mysqlTime time.Duration, rowsAffected, rowsReturned, errorCount int64, errorCode string) {
 	// table names can contain "." characters, replace them!
 	keys := []string{tableName, planType.String()}
 	// Only use the workload as a label if that's enabled in the configuration.
@@ -500,6 +501,9 @@ func (qe *QueryEngine) AddStats(planType planbuilder.PlanType, tableName, worklo
 	qe.queryCounts.Add(keys, queryCount)
 	qe.queryTimes.Add(keys, int64(duration))
 	qe.queryErrorCounts.Add(keys, errorCount)
+
+	qe.queryCountsWithTabletType.Add([]string{tableName, planType.String(), tabletType.String()}, queryCount)
+
 	// queryErrorCountsWithCode is similar to queryErrorCounts except we have an additional dimension
 	// of error code.
 	if errorCount > 0 {
@@ -621,10 +625,6 @@ func (qe *QueryEngine) handleHTTPAclJSON(response http.ResponseWriter, request *
 
 // ServeHTTP lists the most recent, cached queries and their count.
 func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, request *http.Request) {
-	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
-		acl.SendError(response, err)
-		return
-	}
 	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
 		acl.SendError(response, err)
 		return

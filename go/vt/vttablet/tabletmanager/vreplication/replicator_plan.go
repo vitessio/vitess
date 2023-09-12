@@ -22,11 +22,10 @@ import (
 	"sort"
 	"strings"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/bytes2"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -36,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet"
 )
 
 // ReplicatorPlan is the execution plan for the replicator. It contains
@@ -77,7 +77,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 		// bind var names.
 		tplanv.Fields = make([]*querypb.Field, 0, len(fieldEvent.Fields))
 		for _, fld := range fieldEvent.Fields {
-			trimmed := proto.Clone(fld).(*querypb.Field)
+			trimmed := fld.CloneVT()
 			trimmed.Name = strings.Trim(trimmed.Name, "`")
 			tplanv.Fields = append(tplanv.Fields, trimmed)
 		}
@@ -200,11 +200,21 @@ type TablePlan struct {
 	ConvertIntToEnum map[string]bool
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
-	PKReferences            []string
+	PKReferences []string
+	// PKIndices is an array, length = #columns, true if column is part of the PK
+	PKIndices               []bool
 	Stats                   *binlogplayer.Stats
 	FieldsToSkip            map[string]bool
 	ConvertCharset          map[string](*binlogdatapb.CharsetConversion)
 	HasExtraSourcePkColumns bool
+
+	TablePlanBuilder *tablePlanBuilder
+	// PartialInserts is a dynamically generated cache of insert ParsedQueries, which update only some columns.
+	// This is when we use a binlog_row_image which is not "full". The key is a serialized bitmap of data columns
+	// which are sent as part of the RowEvent.
+	PartialInserts map[string]*sqlparser.ParsedQuery
+	// PartialUpdates are same as PartialInserts, but for update statements
+	PartialUpdates map[string]*sqlparser.ParsedQuery
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -270,7 +280,7 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.R
 // now and punt on the others.
 func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable, before, after bool, stmtType string) bool {
 	// added empty comments below, otherwise gofmt removes the spaces between the bitwise & and obfuscates this check!
-	if vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalFlagOptimizeInserts == 0 {
+	if vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagOptimizeInserts == 0 {
 		return false
 	}
 	// Ensure there is one and only one value in lastpk and pkrefs.
@@ -305,21 +315,15 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
 	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
 		// Non-null string value, for which we have a charset conversion instruction
-		valString := val.ToString()
-		fromEncoding, encodingOK := mysql.CharacterSetEncoding[conversion.FromCharset]
-		if !encodingOK {
+		fromCollation := collations.Local().DefaultCollationForCharset(conversion.FromCharset)
+		if fromCollation == collations.Unknown {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, field.Name)
 		}
-		if fromEncoding != nil {
-			// As reminder, encoding can be nil for trivial charsets, like utf8 or ascii.
-			// encoding will be non-nil for charsets like latin1, gbk, etc.
-			var err error
-			valString, err = fromEncoding.NewDecoder().String(valString)
-			if err != nil {
-				return nil, err
-			}
+		out, err := charset.Convert(nil, charset.Charset_utf8mb4{}, val.Raw(), colldata.Lookup(fromCollation).Charset())
+		if err != nil {
+			return nil, err
 		}
-		return sqltypes.StringBindVariable(valString), nil
+		return sqltypes.StringBindVariable(string(out)), nil
 	}
 	if tp.ConvertIntToEnum[field.Name] && !val.IsNull() {
 		// An integer converted to an enum. We must write the textual value of the int. i.e. 0 turns to '0'
@@ -374,9 +378,13 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			var newVal *sqltypes.Value
 			var err error
 			if field.Type == querypb.Type_JSON {
-				newVal, err = vjson.MarshalSQLValue(vals[i].Raw())
-				if err != nil {
-					return nil, err
+				if vals[i].IsNull() { // An SQL NULL and not an actual JSON value
+					newVal = &sqltypes.NULL
+				} else { // A JSON value (which may be a JSON null literal value)
+					newVal, err = vjson.MarshalSQLValue(vals[i].Raw())
+					if err != nil {
+						return nil, err
+					}
 				}
 				bindVar, err = tp.bindFieldVal(field, newVal)
 			} else {
@@ -394,7 +402,16 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
 			return nil, nil
 		}
-		return execParsedQuery(tp.Insert, bindvars, executor)
+		if tp.isPartial(rowChange) {
+			ins, err := tp.getPartialInsertQuery(rowChange.DataColumns)
+			if err != nil {
+				return nil, err
+			}
+			tp.Stats.PartialQueryCount.Add([]string{"insert"}, 1)
+			return execParsedQuery(ins, bindvars, executor)
+		} else {
+			return execParsedQuery(tp.Insert, bindvars, executor)
+		}
 	case before && !after:
 		if tp.Delete == nil {
 			return nil, nil
@@ -402,7 +419,16 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
 		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
-			return execParsedQuery(tp.Update, bindvars, executor)
+			if tp.isPartial(rowChange) {
+				upd, err := tp.getPartialUpdateQuery(rowChange.DataColumns)
+				if err != nil {
+					return nil, err
+				}
+				tp.Stats.PartialQueryCount.Add([]string{"update"}, 1)
+				return execParsedQuery(upd, bindvars, executor)
+			} else {
+				return execParsedQuery(tp.Update, bindvars, executor)
+			}
 		}
 		if tp.Delete != nil {
 			if _, err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {
@@ -418,12 +444,19 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	return nil, nil
 }
 
-func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+func getQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable) (string, error) {
 	sql, err := pq.GenerateQuery(bindvars, nil)
+	if err != nil {
+		return "", err
+	}
+	return sql, nil
+}
+func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+	query, err := getQuery(pq, bindvars)
 	if err != nil {
 		return nil, err
 	}
-	return executor(sql)
+	return executor(query)
 }
 
 func (tp *TablePlan) pkChanged(bindvars map[string]*querypb.BindVariable) bool {

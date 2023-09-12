@@ -674,13 +674,13 @@ func TestSchemaDiff(t *testing.T) {
 			}
 			assert.Equalf(t, tc.expectDiffs, len(allDiffs), "found diffs: %v", allDiffsStatements)
 
-			deps := schemaDiff.AllDeps()
+			deps := schemaDiff.AllDependenciess()
 			depsKeys := []string{}
 			for _, dep := range deps {
 				depsKeys = append(depsKeys, dep.hashKey())
 			}
 			assert.Equalf(t, tc.expectDeps, len(deps), "found deps: %v", depsKeys)
-			assert.Equal(t, tc.sequential, schemaDiff.HasSequentialExecutionDeps())
+			assert.Equal(t, tc.sequential, schemaDiff.HasSequentialExecutionDependencies())
 
 			orderedDiffs, err := schemaDiff.OrderedDiffs()
 			if tc.conflictingDiffs > 0 {

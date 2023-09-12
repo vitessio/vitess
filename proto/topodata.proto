@@ -157,16 +157,14 @@ message Tablet {
   //
   vttime.Time primary_term_start_time = 14;
 
-  // db_server_version represents the database version used by the tablet.
-  string db_server_version = 15;
-
   // default_conn_collation is the default connection collation used by this tablet.
   uint32 default_conn_collation = 16;
 
   // OBSOLETE: ip and tablet health information
   // string ip = 3;
   // map<string, string> health_map = 11;
-  reserved 3, 11;
+  // string db_server_version = 15;
+  reserved 3, 11, 15;
 }
 
 // A Shard contains data about a subset of the data whithin a keyspace.
@@ -368,6 +366,19 @@ message ShardTabletControl {
   bool query_service_disabled = 3;
 }
 
+// ThrottledAppRule defines an app-specific throttling rule, with expiration.
+message ThrottledAppRule {
+  // Name of the app to be throttled, e.g. "vreplication" or "online-ddl"
+  string name = 1;
+  // Ratio defines how much the app should be throttled, range [0.0...1.0]. 1.0 means fully throttled. 0.0 means not throttled at all.
+  // Negative values are reserved for a future implementation.
+  double ratio = 2;
+  // ExpiresAt is the time at which the rule expires.
+  vttime.Time expires_at = 3;
+  // Exempt indicates the app should never be throttled, even if the throttler is, in general, throttling other apps.
+  bool exempt = 4;
+}
+
 message ThrottlerConfig {
   // Enabled indicates that the throttler is actually checking state for
   // requests. When disabled, it automatically returns 200 OK for all
@@ -385,6 +396,9 @@ message ThrottlerConfig {
   // CheckAsCheckSelf indicates whether a throttler /check request
   // should behave like a /check-self.
   bool check_as_check_self = 4;
+
+  // ThrottledApps is a map of rules for app-specific throttling
+  map<string, ThrottledAppRule> throttled_apps = 5;
 }
 
 // SrvKeyspace is a rollup node for the keyspace itself.

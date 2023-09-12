@@ -16,7 +16,7 @@ permissions: read-all
 
 jobs:
   unit-tests:
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-4cores-1
     steps:
       - name: Skip CI
         run: |
@@ -42,7 +42,7 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
         with:
           # node-version should match package.json
-          node-version: '16.19.0'
+          node-version: '18.16.0'
 
       - name: Install dependencies
         if: steps.skip-workflow.outputs.skip-workflow == 'false'

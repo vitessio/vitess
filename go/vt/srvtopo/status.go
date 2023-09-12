@@ -18,9 +18,11 @@ package srvtopo
 
 import (
 	"context"
-	"html/template"
 	"sort"
 	"time"
+
+	"github.com/google/safehtml"
+	"github.com/google/safehtml/template"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -121,30 +123,35 @@ type SrvKeyspaceCacheStatus struct {
 	LastError      error
 }
 
+var noData = safehtml.HTMLEscaped("No Data")
+var partitions = template.Must(template.New("partitions").Parse(`
+<b>Partitions:</b><br>
+{{ range .Partitions }}
+&nbsp;<b>{{ .ServedType }}:</b>
+{{ range .ShardReferences }}
+&nbsp;{{ .Name }}
+{{ end }}
+<br>
+{{ end }}
+{{if .ServedFrom }}
+<b>ServedFrom:</b><br>
+{{ range .ServedFrom }}
+&nbsp;<b>{{ .TabletType }}:</b>&nbsp;{{ .Keyspace}}</b><br>
+{{ end }}
+{{ end }}
+`))
+
 // StatusAsHTML returns an HTML version of our status.
 // It works best if there is data in the cache.
-func (st *SrvKeyspaceCacheStatus) StatusAsHTML() template.HTML {
+func (st *SrvKeyspaceCacheStatus) StatusAsHTML() safehtml.HTML {
 	if st.Value == nil {
-		return template.HTML("No Data")
+		return noData
 	}
-
-	result := "<b>Partitions:</b><br>"
-	for _, keyspacePartition := range st.Value.Partitions {
-		result += "&nbsp;<b>" + keyspacePartition.ServedType.String() + ":</b>"
-		for _, shard := range keyspacePartition.ShardReferences {
-			result += "&nbsp;" + shard.Name
-		}
-		result += "<br>"
+	html, err := partitions.ExecuteToHTML(st.Value)
+	if err != nil {
+		panic(err)
 	}
-
-	if len(st.Value.ServedFrom) > 0 {
-		result += "<b>ServedFrom:</b><br>"
-		for _, sf := range st.Value.ServedFrom {
-			result += "&nbsp;<b>" + sf.TabletType.String() + ":</b>&nbsp;" + sf.Keyspace + "<br>"
-		}
-	}
-
-	return template.HTML(result)
+	return html
 }
 
 // SrvKeyspaceCacheStatusList is used for sorting
@@ -183,17 +190,19 @@ func (server *ResilientServer) CacheStatus() *ResilientServerCacheStatus {
 	return result
 }
 
+var expired = template.MustParseAndExecuteToHTML("<b>Expired</b>")
+
 // Returns the ttl for the cached entry or "Expired" if it is in the past
-func ttlTime(expirationTime time.Time) template.HTML {
+func ttlTime(expirationTime time.Time) safehtml.HTML {
 	ttl := time.Until(expirationTime).Round(time.Second)
 	if ttl < 0 {
-		return template.HTML("<b>Expired</b>")
+		return expired
 	}
-	return template.HTML(ttl.String())
+	return safehtml.HTMLEscaped(ttl.String())
 }
 
-func timeSince(t time.Time) template.HTML {
-	return template.HTML(time.Since(t).Round(time.Second).String())
+func timeSince(t time.Time) safehtml.HTML {
+	return safehtml.HTMLEscaped(time.Since(t).Round(time.Second).String())
 }
 
 // StatusFuncs is required for CacheStatus) to work properly.

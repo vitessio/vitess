@@ -59,8 +59,6 @@ func TestSchemaVersioning(t *testing.T) {
 	tsv.EnableHistorian(false)
 	tsv.SetTracking(false)
 	tsv.EnableHeartbeat(false)
-	tsv.EnableThrottler(false)
-	defer tsv.EnableThrottler(true)
 	defer tsv.EnableHeartbeat(true)
 	defer tsv.EnableHistorian(true)
 	defer tsv.SetTracking(true)
@@ -202,6 +200,13 @@ func TestSchemaVersioning(t *testing.T) {
 			log.Infof("Received event %v", event)
 			evs = append(evs, event)
 		}
+		// Ignore unrelated events.
+		if len(evs) == 3 &&
+			evs[0].Type == binlogdatapb.VEventType_BEGIN &&
+			evs[1].Type == binlogdatapb.VEventType_GTID &&
+			evs[2].Type == binlogdatapb.VEventType_COMMIT {
+			return nil
+		}
 		select {
 		case eventCh <- evs:
 		case <-ctx.Done():
@@ -267,6 +272,13 @@ func TestSchemaVersioning(t *testing.T) {
 			log.Infof("Received event %v", event)
 			evs = append(evs, event)
 		}
+		// Ignore unrelated events.
+		if len(evs) == 3 &&
+			evs[0].Type == binlogdatapb.VEventType_BEGIN &&
+			evs[1].Type == binlogdatapb.VEventType_GTID &&
+			evs[2].Type == binlogdatapb.VEventType_COMMIT {
+			return nil
+		}
 		select {
 		case eventCh <- evs:
 		case <-ctx.Done():
@@ -298,7 +310,7 @@ func TestSchemaVersioning(t *testing.T) {
 		`version`,
 		`gtid`,
 		/*at this point we only have latest schema so we have types (int32, int32, varbinary, varbinary) so the types don't match. Hence the @ fieldnames*/
-		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"@1" type:INT32} fields:{name:"@2" type:INT32} fields:{name:"@3" type:INT32}}`,
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"@1" type:INT32 charset:63} fields:{name:"@2" type:INT32 charset:63} fields:{name:"@3" type:INT32 charset:63}}`,
 		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 values:"220200"}}}`,
 		`gtid`,
 		`gtid`,
@@ -372,6 +384,10 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
 					continue
 				}
+				if ev.Type == binlogdatapb.VEventType_ROW {
+					ev.RowEvent.Flags = 0 // null Flags, so we don't have to define flags in every wanted row event.
+				}
+
 				if ev.Throttled {
 					continue
 				}

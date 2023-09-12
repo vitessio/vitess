@@ -70,7 +70,7 @@ func (v *vTableInfo) Name() (sqlparser.TableName, error) {
 	return sqlparser.TableName{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "oh noes")
 }
 
-func (v *vTableInfo) getExpr() *sqlparser.AliasedTableExpr {
+func (v *vTableInfo) GetExpr() *sqlparser.AliasedTableExpr {
 	return nil
 }
 

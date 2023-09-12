@@ -183,7 +183,7 @@ func (logger *StreamLogger[T]) Name() string {
 // ServeLogs registers the URL on which messages will be broadcast.
 // It is safe to register multiple URLs for the same StreamLogger.
 func (logger *StreamLogger[T]) ServeLogs(url string, logf LogFormatter) {
-	http.HandleFunc(url, func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc(url, func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 			acl.SendError(w, err)
 			return
@@ -262,18 +262,11 @@ func GetFormatter[T any](logger *StreamLogger[T]) LogFormatter {
 // ShouldEmitLog returns whether the log with the given SQL query
 // should be emitted or filtered
 func ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64) bool {
-	if queryLogRowThreshold > maxUint64(rowsAffected, rowsReturned) && queryLogFilterTag == "" {
+	if queryLogRowThreshold > max(rowsAffected, rowsReturned) && queryLogFilterTag == "" {
 		return false
 	}
 	if queryLogFilterTag != "" {
 		return strings.Contains(sql, queryLogFilterTag)
 	}
 	return true
-}
-
-func maxUint64(a, b uint64) uint64 {
-	if a < b {
-		return b
-	}
-	return a
 }

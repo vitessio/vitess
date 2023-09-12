@@ -735,6 +735,46 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, request *binlogdat
 	}
 }
 
+// VStreamTables streams rows of a query from the specified starting point.
+func (conn *gRPCQueryClient) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(*binlogdatapb.VStreamTablesResponse) error) error {
+	stream, err := func() (queryservicepb.Query_VStreamTablesClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		req := &binlogdatapb.VStreamTablesRequest{
+			Target:            request.Target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		}
+		stream, err := conn.c.VStreamTables(ctx, req)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return err
+	}
+	r := binlogdatapb.VStreamTablesResponseFromVTPool()
+	defer r.ReturnToVTPool()
+	for {
+		err := stream.RecvMsg(r)
+		if err != nil {
+			return tabletconn.ErrorFromGRPC(err)
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err := send(r); err != nil {
+			return err
+		}
+		r.ResetVT()
+	}
+}
+
 // VStreamResults streams rows of a query from the specified starting point.
 func (conn *gRPCQueryClient) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	stream, err := func() (queryservicepb.Query_VStreamResultsClient, error) {

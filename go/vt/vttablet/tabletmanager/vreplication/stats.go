@@ -27,6 +27,8 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/servenv"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -60,6 +62,7 @@ type vrStats struct {
 }
 
 func (st *vrStats) register() {
+
 	stats.NewGaugeFunc("VReplicationStreamCount", "Number of vreplication streams", st.numControllers)
 	stats.NewGaugeFunc("VReplicationLagSecondsMax", "Max vreplication seconds behind primary", st.maxReplicationLagSeconds)
 	stats.NewStringMapFuncWithMultiLabels(
@@ -151,7 +154,10 @@ func (st *vrStats) register() {
 		defer st.mu.Unlock()
 		result := make(map[string]string, len(st.controllers))
 		for _, ct := range st.controllers {
-			result[fmt.Sprintf("%v", ct.id)] = ct.sourceTablet.Load().(string)
+			ta := ct.sourceTablet.Load()
+			if ta != nil {
+				result[fmt.Sprintf("%v", ct.id)] = ta.(*topodatapb.TabletAlias).String()
+			}
 		}
 		return result
 	}))
@@ -214,7 +220,6 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
-
 	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationQueryCount",
 		"vreplication query counts per stream",
@@ -382,6 +387,7 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
+
 	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationTableCopyTimings",
 		"vreplication copy phase timings per table per stream",
@@ -397,6 +403,37 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
+	stats.NewCountersFuncWithMultiLabels(
+		"VReplicationPartialQueryCount",
+		"count of partial queries per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "type"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for typ, t := range ct.blpStats.PartialQueryCount.Counts() {
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+typ] = t
+				}
+			}
+			return result
+		})
+	stats.NewCountersFuncWithMultiLabels(
+		"VReplicationPartialQueryCacheSize",
+		"cache size for partial queries per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "type"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for typ, t := range ct.blpStats.PartialQueryCacheSize.Counts() {
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+typ] = t
+				}
+			}
+			return result
+		})
+
 }
 
 func (st *vrStats) numControllers() int64 {
@@ -436,7 +473,7 @@ func (st *vrStats) status() *EngineStatus {
 			ReplicationLagSeconds: ct.blpStats.ReplicationLagSeconds.Load(),
 			Counts:                ct.blpStats.Timings.Counts(),
 			Rates:                 ct.blpStats.Rates.Get(),
-			SourceTablet:          ct.sourceTablet.Load().(string),
+			SourceTablet:          ct.sourceTablet.Load().(*topodatapb.TabletAlias),
 			Messages:              ct.blpStats.MessageHistory(),
 			QueryCounts:           ct.blpStats.QueryCount.Counts(),
 			PhaseTimings:          ct.blpStats.PhaseTimings.Counts(),
@@ -474,7 +511,7 @@ type ControllerStatus struct {
 	Counts                map[string]int64
 	Rates                 map[string][]float64
 	State                 string
-	SourceTablet          string
+	SourceTablet          *topodatapb.TabletAlias
 	Messages              []string
 	QueryCounts           map[string]int64
 	PhaseTimings          map[string]int64
@@ -484,7 +521,7 @@ type ControllerStatus struct {
 	TableCopyTimings      map[string]int64
 }
 
-var vreplicationTemplate = `
+const vreplicationTemplate = `
 {{if .IsOpen}}VReplication state: Open</br>
 <table>
   <tr>

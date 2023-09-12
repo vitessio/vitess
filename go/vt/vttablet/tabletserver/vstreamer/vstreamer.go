@@ -25,9 +25,11 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	mysqlbinlog "vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/binlog"
@@ -37,10 +39,11 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vtschema "vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 const (
@@ -59,11 +62,12 @@ type vstreamer struct {
 	ctx    context.Context
 	cancel func()
 
-	cp       dbconfigs.Connector
-	se       *schema.Engine
-	startPos string
-	filter   *binlogdatapb.Filter
-	send     func([]*binlogdatapb.VEvent) error
+	cp           dbconfigs.Connector
+	se           *schema.Engine
+	startPos     string
+	filter       *binlogdatapb.Filter
+	send         func([]*binlogdatapb.VEvent) error
+	throttlerApp throttlerapp.Name
 
 	vevents        chan *localVSchema
 	vschema        *localVSchema
@@ -73,7 +77,7 @@ type vstreamer struct {
 
 	// format and pos are updated by parseEvent.
 	format  mysql.BinlogFormat
-	pos     mysql.Position
+	pos     replication.Position
 	stopPos string
 
 	phase string
@@ -110,22 +114,23 @@ type streamerPlan struct {
 //
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
-		ctx:      ctx,
-		cancel:   cancel,
-		cp:       cp,
-		se:       se,
-		startPos: startPos,
-		stopPos:  stopPos,
-		filter:   filter,
-		send:     send,
-		vevents:  make(chan *localVSchema, 1),
-		vschema:  vschema,
-		plans:    make(map[uint64]*streamerPlan),
-		phase:    phase,
-		vse:      vse,
+		ctx:          ctx,
+		cancel:       cancel,
+		cp:           cp,
+		se:           se,
+		startPos:     startPos,
+		stopPos:      stopPos,
+		throttlerApp: throttlerApp,
+		filter:       filter,
+		send:         send,
+		vevents:      make(chan *localVSchema, 1),
+		vschema:      vschema,
+		plans:        make(map[uint64]*streamerPlan),
+		phase:        phase,
+		vse:          vse,
 	}
 }
 
@@ -161,7 +166,7 @@ func (vs *vstreamer) Stream() error {
 	}()
 	vs.vse.vstreamersCreated.Add(1)
 	log.Infof("Starting Stream() with startPos %s", vs.startPos)
-	pos, err := mysql.DecodePosition(vs.startPos)
+	pos, err := replication.DecodePosition(vs.startPos)
 	if err != nil {
 		vs.vse.errorCounts.Add("StreamRows", 1)
 		vs.vse.vstreamersEndedWithErrors.Add(1)
@@ -297,9 +302,10 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
 		throttledHeartbeatsRateLimiter := timer.NewRateLimiter(HeartbeatTime)
+		defer throttledHeartbeatsRateLimiter.Stop()
 		for {
 			// check throttler.
-			if !vs.vse.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+			if !vs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vs.throttlerApp) {
 				// make sure to leave if context is cancelled
 				select {
 				case <-ctx.Done():
@@ -441,11 +447,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_BEGIN,
 			})
 		}
-		vs.pos = mysql.AppendGTID(vs.pos, gtid)
+		vs.pos = replication.AppendGTID(vs.pos, gtid)
 	case ev.IsXID():
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID,
-			Gtid: mysql.EncodePosition(vs.pos),
+			Gtid: replication.EncodePosition(vs.pos),
 		}, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_COMMIT,
 		})
@@ -456,7 +462,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		}
 		// Insert/Delete/Update are supported only to be used in the context of external mysql streams where source databases
 		// could be using SBR. Vitess itself will never run into cases where it needs to consume non rbr statements.
-
 		switch cat := sqlparser.Preview(q.SQL); cat {
 		case sqlparser.StmtInsert:
 			mustSend := mustSendStmt(q, vs.cp.DBName())
@@ -502,7 +507,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			if mustSendDDL(q, vs.cp.DBName(), vs.filter) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
-					Gtid: mysql.EncodePosition(vs.pos),
+					Gtid: replication.EncodePosition(vs.pos),
 				}, &binlogdatapb.VEvent{
 					Type:      binlogdatapb.VEventType_DDL,
 					Statement: q.SQL,
@@ -511,7 +516,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				// If the DDL need not be sent, send a dummy OTHER event.
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
-					Gtid: mysql.EncodePosition(vs.pos),
+					Gtid: replication.EncodePosition(vs.pos),
 				}, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_OTHER,
 				})
@@ -536,7 +541,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			//    that we want to keep out of the stream for now.
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_GTID,
-				Gtid: mysql.EncodePosition(vs.pos),
+				Gtid: replication.EncodePosition(vs.pos),
 			}, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_OTHER,
 			})
@@ -569,10 +574,10 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			log.Infof("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name)
 		}
 
-		if tm.Database == sidecardb.GetName() && tm.Name == "resharding_journal" {
+		if tm.Database == sidecar.GetName() && tm.Name == "resharding_journal" {
 			// A journal is a special case that generates a JOURNAL event.
 			return nil, vs.buildJournalPlan(id, tm)
-		} else if tm.Database == sidecardb.GetName() && tm.Name == "schema_version" && !vs.se.SkipMetaCheck {
+		} else if tm.Database == sidecar.GetName() && tm.Name == "schema_version" && !vs.se.SkipMetaCheck {
 			// Generates a Version event when it detects that a schema is stored in the schema_version table.
 			return nil, vs.buildVersionPlan(id, tm)
 		}
@@ -611,6 +616,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, err
 		}
+
 		if id == vs.journalTableID {
 			vevents, err = vs.processJournalEvent(vevents, plan, rows)
 		} else if id == vs.versionTableID {
@@ -626,9 +632,27 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, err
 		}
-	case ev.IsCompressed():
-		log.Errorf("VReplication does not handle binlog compression")
-		return nil, fmt.Errorf("VReplication does not handle binlog compression")
+	case ev.IsTransactionPayload():
+		if !vs.pos.MatchesFlavor(replication.Mysql56FlavorID) {
+			return nil, fmt.Errorf("compressed transaction payload events are not supported with database flavor %s",
+				vs.vse.env.Config().DB.Flavor)
+		}
+		tpevents, err := ev.TransactionPayload(vs.format)
+		if err != nil {
+			return nil, err
+		}
+		// Events inside the payload don't have their own checksum.
+		ogca := vs.format.ChecksumAlgorithm
+		defer func() { vs.format.ChecksumAlgorithm = ogca }()
+		vs.format.ChecksumAlgorithm = mysql.BinlogChecksumAlgOff
+		for _, tpevent := range tpevents {
+			tpvevents, err := vs.parseEvent(tpevent)
+			if err != nil {
+				return nil, vterrors.Wrap(err, "failed to parse transaction payload's internal event")
+			}
+			vevents = append(vevents, tpvevents...)
+		}
+		vs.vse.vstreamerCompressedTransactionsDecoded.Add(1)
 	}
 	for _, vevent := range vevents {
 		vevent.Timestamp = int64(ev.Timestamp())
@@ -644,7 +668,7 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 	}
 	defer conn.Close()
 	qr, err := conn.ExecuteFetch(sqlparser.BuildParsedQuery("select * from %s.resharding_journal where 1 != 1",
-		sidecardb.GetIdentifier()).Query, 1, true)
+		sidecar.GetIdentifier()).Query, 1, true)
 	if err != nil {
 		return err
 	}
@@ -653,7 +677,7 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, fields)
 	}
 	table := &Table{
-		Name:   fmt.Sprintf("%s.resharding_journal", sidecardb.GetIdentifier()),
+		Name:   fmt.Sprintf("%s.resharding_journal", sidecar.GetIdentifier()),
 		Fields: fields[:len(tm.Types)],
 	}
 	// Build a normal table plan, which means, return all rows
@@ -678,7 +702,7 @@ func (vs *vstreamer) buildVersionPlan(id uint64, tm *mysql.TableMap) error {
 	}
 	defer conn.Close()
 	qr, err := conn.ExecuteFetch(sqlparser.BuildParsedQuery("select * from %s.schema_version where 1 != 1",
-		sidecardb.GetIdentifier()).Query, 1, true)
+		sidecar.GetIdentifier()).Query, 1, true)
 	if err != nil {
 		return err
 	}
@@ -687,7 +711,7 @@ func (vs *vstreamer) buildVersionPlan(id uint64, tm *mysql.TableMap) error {
 		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, fields)
 	}
 	table := &Table{
-		Name:   fmt.Sprintf("%s.schema_version", sidecardb.GetIdentifier()),
+		Name:   fmt.Sprintf("%s.schema_version", sidecar.GetIdentifier()),
 		Fields: fields[:len(tm.Types)],
 	}
 	// Build a normal table plan, which means, return all rows
@@ -746,11 +770,13 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 			return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
 		}
 		fields = append(fields, &querypb.Field{
-			Name: fmt.Sprintf("@%d", i+1),
-			Type: t,
+			Name:    fmt.Sprintf("@%d", i+1),
+			Type:    t,
+			Charset: uint32(collations.DefaultCollationForType(t)),
+			Flags:   mysql.FlagsForColumn(t, collations.DefaultCollationForType(t)),
 		})
 	}
-	st, err := vs.se.GetTableForPos(sqlparser.NewIdentifierCS(tm.Name), mysql.EncodePosition(vs.pos))
+	st, err := vs.se.GetTableForPos(sqlparser.NewIdentifierCS(tm.Name), replication.EncodePosition(vs.pos))
 	if err != nil {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
 			log.Infof("No schema found for table %s", tm.Name)
@@ -775,39 +801,16 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 	}
 
 	// Columns should be truncated to match those in tm.
-	fields = st.Fields[:len(tm.Types)]
-	extColInfos, err := vs.getExtColInfos(tm.Name, tm.Database)
+	fieldsCopy, err := getFields(vs.ctx, vs.cp, tm.Name, tm.Database, st.Fields[:len(tm.Types)])
 	if err != nil {
 		return nil, err
 	}
-	for _, field := range fields {
-		// we want the MySQL column type info so that we can properly handle
-		// ambiguous binlog events and other cases where the internal types
-		// don't match the MySQL column type. One example being that in binlog
-		// events CHAR columns with a binary collation are indistinguishable
-		// from BINARY columns.
-		if extColInfo, ok := extColInfos[field.Name]; ok {
-			field.ColumnType = extColInfo.columnType
-		}
-	}
-	return fields, nil
+	return fieldsCopy, nil
 }
 
-// additional column attributes from information_schema.columns. Currently only column_type is used, but
-// we expect to add more in the future
-type extColInfo struct {
-	columnType string
-}
-
-func encodeString(in string) string {
-	buf := bytes.NewBuffer(nil)
-	sqltypes.NewVarChar(in).EncodeSQL(buf)
-	return buf.String()
-}
-
-func (vs *vstreamer) getExtColInfos(table, database string) (map[string]*extColInfo, error) {
+func getExtColInfos(ctx context.Context, cp dbconfigs.Connector, table, database string) (map[string]*extColInfo, error) {
 	extColInfos := make(map[string]*extColInfo)
-	conn, err := vs.cp.Connect(vs.ctx)
+	conn, err := cp.Connect(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -827,6 +830,37 @@ func (vs *vstreamer) getExtColInfos(table, database string) (map[string]*extColI
 	return extColInfos, nil
 }
 
+func getFields(ctx context.Context, cp dbconfigs.Connector, table, database string, fields []*querypb.Field) ([]*querypb.Field, error) {
+	// Make a deep copy of the schema.Engine fields as they are pointers and
+	// will be modified by adding ColumnType below
+	fieldsCopy := make([]*querypb.Field, len(fields))
+	for i, field := range fields {
+		fieldsCopy[i] = field.CloneVT()
+	}
+	extColInfos, err := getExtColInfos(ctx, cp, table, database)
+	if err != nil {
+		return nil, err
+	}
+	for _, field := range fieldsCopy {
+		if colInfo, ok := extColInfos[field.Name]; ok {
+			field.ColumnType = colInfo.columnType
+		}
+	}
+	return fieldsCopy, nil
+}
+
+// additional column attributes from information_schema.columns. Currently only column_type is used, but
+// we expect to add more in the future
+type extColInfo struct {
+	columnType string
+}
+
+func encodeString(in string) string {
+	buf := bytes.NewBuffer(nil)
+	sqltypes.NewVarChar(in).EncodeSQL(buf)
+	return buf.String()
+}
+
 func (vs *vstreamer) processJournalEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
 	// Get DbName
 	params, err := vs.cp.MysqlParams()
@@ -835,7 +869,7 @@ func (vs *vstreamer) processJournalEvent(vevents []*binlogdatapb.VEvent, plan *s
 	}
 nextrow:
 	for _, row := range rows.Rows {
-		afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
+		afterOK, afterValues, _, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
 		if err != nil {
 			return nil, err
 		}
@@ -873,11 +907,11 @@ nextrow:
 func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
 	rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
 	for _, row := range rows.Rows {
-		beforeOK, beforeValues, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns)
+		beforeOK, beforeValues, _, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns)
 		if err != nil {
 			return nil, err
 		}
-		afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
+		afterOK, afterValues, partial, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
 		if err != nil {
 			return nil, err
 		}
@@ -890,6 +924,14 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		}
 		if afterOK {
 			rowChange.After = sqltypes.RowToProto3(afterValues)
+			if (vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) &&
+				partial {
+
+				rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
+					Count: int64(rows.DataColumns.Count()),
+					Cols:  rows.DataColumns.Bits(),
+				}
+			}
 		}
 		rowChanges = append(rowChanges, rowChange)
 	}
@@ -901,6 +943,7 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 				RowChanges: rowChanges,
 				Keyspace:   vs.vse.keyspace,
 				Shard:      vs.vse.shard,
+				Flags:      uint32(rows.Flags),
 			},
 		})
 	}
@@ -929,17 +972,27 @@ func (vs *vstreamer) rebuildPlans() error {
 	return nil
 }
 
-func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataColumns, nullColumns mysql.Bitmap) (bool, []sqltypes.Value, error) {
+// extractRowAndFilter takes the data and bitmaps from the binlog events and returns the following
+//   - true, if row needs to be skipped because of workflow filter rules
+//   - data values, array of one value per column
+//   - true, if the row image was partial (i.e. binlog_row_image=noblob and dml doesn't update one or more blob/text columns)
+func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataColumns, nullColumns mysql.Bitmap) (bool, []sqltypes.Value, bool, error) {
 	if len(data) == 0 {
-		return false, nil, nil
+		return false, nil, false, nil
 	}
 	values := make([]sqltypes.Value, dataColumns.Count())
 	charsets := make([]collations.ID, len(values))
 	valueIndex := 0
 	pos := 0
+	partial := false
 	for colNum := 0; colNum < dataColumns.Count(); colNum++ {
 		if !dataColumns.Bit(colNum) {
-			return false, nil, fmt.Errorf("partial row image encountered: ensure binlog_row_image is set to 'full'")
+			if vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage == 0 {
+				return false, nil, false, fmt.Errorf("partial row image encountered: ensure binlog_row_image is set to 'full'")
+			} else {
+				partial = true
+			}
+			continue
 		}
 		if nullColumns.Bit(valueIndex) {
 			valueIndex++
@@ -949,7 +1002,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		if err != nil {
 			log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
 				err, plan.Table.Name, colNum, plan.Table.Fields, values)
-			return false, nil, err
+			return false, nil, false, err
 		}
 		pos += l
 
@@ -959,10 +1012,10 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 	}
 	filtered := make([]sqltypes.Value, len(plan.ColExprs))
 	ok, err := plan.filter(values, filtered, charsets)
-	return ok, filtered, err
+	return ok, filtered, partial, err
 }
 
-func wrapError(err error, stopPos mysql.Position, vse *Engine) error {
+func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 	if err != nil {
 		vse.vstreamersEndedWithErrors.Add(1)
 		vse.errorCounts.Add("StreamEnded", 1)

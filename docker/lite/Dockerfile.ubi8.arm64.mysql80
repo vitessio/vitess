@@ -17,7 +17,7 @@
 #       ensure images contain the right binaries.
 
 # Use a temporary layer for the build stage.
-ARG bootstrap_version=17
+ARG bootstrap_version=22
 ARG image="vitess/bootstrap:${bootstrap_version}-mysql80"
 
 FROM "${image}" AS builder
@@ -36,6 +36,7 @@ RUN make cross-install PREFIX=/vt/install GOOS=linux GOARCH=arm64
 FROM registry.access.redhat.com/ubi8/ubi:latest
 
 # Install keys and dependencies
+RUN rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2022
 RUN mkdir /tmp/gpg && chmod 700 /tmp/gpg && export GNUPGHOME=/tmp/gpg \
  && yum install -y --setopt=alwaysprompt=no gnupg \
  && ( gpg --keyserver keyserver.ubuntu.com --recv-keys 430BDF5C56E7C94E848EE60C1C4CBDCDCD2EFD2A 4D1BB29D63D98E422B2113B19334A25F8507EFA5 99DB70FAE1D7CE227FB6488205B555B38483C65D 3A79BD29 A4A9406876FCBD3C456770C88C718D3B5072E1F5 94E279EB8D8F25B21810ADF121EA45AB2F86D6A1 ) \
@@ -54,7 +55,7 @@ RUN mkdir /tmp/gpg && chmod 700 /tmp/gpg && export GNUPGHOME=/tmp/gpg \
  && rm -f /tmp/mysqlrepo.rpm /tmp/perconarepo.rpm
 RUN echo H4sICIDAHmICA2ZvbwDVkDFLxEAQhfv9FVfY7o4RhCBsoXJcIXKHwUIOi7m5MVk2yS6zG0//vYlRULTU4rrHvOHN+2ZL5Q4TP6oeO7bX3Od1pcuFXlyNUzVZg7S2yTmmCwDsgzjuDSUyB5SDI2+QzOChcyJBEnwkPOPQZijNuTkrigKmsHUFJ1MeCjUQEqg61tQweVtM0vOrfXItj1eAM0H0DiR2erTgbnOrV5uVvlk+6M+Kinvctby3p0ptqRziHjOnnxz3s/FnKJcxVlkYu/+k4Zcs+AvM8n3+jWW8MBc2NO6FZILUMEsoYQ76UvWI/vAGB/SOZZsCAAA= | base64 -d | gzip -dc > /etc/yum.repos.d/CentOS-Base.repo \
  && yum install -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs --enablerepo c8base --enablerepo c8updates --enablerepo c8extras libev numactl-libs sysstat strace \
- && yum install -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs https://download-ib01.fedoraproject.org/pub/epel/8/Everything/aarch64/Packages/g/gperftools-libs-2.7-9.el8.aarch64.rpm https://download-ib01.fedoraproject.org/pub/epel/8/Everything/aarch64/Packages/j/jemalloc-5.2.1-2.el8.aarch64.rpm https://download-ib01.fedoraproject.org/pub/epel/8/Everything/aarch64/Packages/l/libunwind-1.3.1-3.el8.aarch64.rpm
+ && yum install -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs https://dl.fedoraproject.org/pub/epel/8/Everything/aarch64/Packages/g/gperftools-libs-2.7-9.el8.aarch64.rpm https://dl.fedoraproject.org/pub/epel/8/Everything/aarch64/Packages/j/jemalloc-5.2.1-2.el8.aarch64.rpm https://dl.fedoraproject.org/pub/epel/8/Everything/aarch64/Packages/l/libunwind-1.3.1-3.el8.aarch64.rpm
 RUN yum update -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs \
  && yum install -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs bzip2 ca-certificates gnupg libaio libcurl \
     procps-ng rsync wget openssl hostname curl tzdata make \

@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -38,7 +38,7 @@ func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*db
 	// Run a test query to see if this connection is still good.
 	if _, err := conn.ExecuteFetch("SELECT 1", 1, false); err != nil {
 		// If we get a connection error, try to reconnect.
-		if sqlErr, ok := err.(*mysql.SQLError); ok && (sqlErr.Number() == mysql.CRServerGone || sqlErr.Number() == mysql.CRServerLost) {
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && (sqlErr.Number() == sqlerror.CRServerGone || sqlErr.Number() == sqlerror.CRServerLost) {
 			if err := conn.Reconnect(ctx); err != nil {
 				conn.Recycle()
 				return nil, err
@@ -134,7 +134,7 @@ func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn *dbconnpool.
 		default:
 		}
 
-		// The context expired or was cancelled.
+		// The context expired or was canceled.
 		// Try to kill the connection to effectively cancel the ExecuteFetch().
 		connID := conn.ID()
 		log.Infof("Mysqld.executeFetchContext(): killing connID %v due to timeout of query: %v", connID, query)
@@ -147,7 +147,7 @@ func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn *dbconnpool.
 		// Close the connection. Upon Recycle() it will be thrown out.
 		conn.Close()
 		// ExecuteFetch() may have succeeded before we tried to kill it.
-		// If ExecuteFetch() had returned because we cancelled it,
+		// If ExecuteFetch() had returned because we canceled it,
 		// then executeErr would be an error like "MySQL has gone away".
 		if executeErr == nil {
 			return qr, executeErr

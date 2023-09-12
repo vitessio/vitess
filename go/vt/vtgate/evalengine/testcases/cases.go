@@ -18,6 +18,7 @@ package testcases
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"strconv"
@@ -35,6 +36,7 @@ var Cases = []TestCase{
 	{Run: CharsetConversionOperators},
 	{Run: CaseExprWithPredicate},
 	{Run: CaseExprWithValue},
+	{Run: If},
 	{Run: Base64},
 	{Run: Conversion},
 	{Run: LargeDecimals},
@@ -52,7 +54,9 @@ var Cases = []TestCase{
 	{Run: NegateArithmetic},
 	{Run: CollationOperations},
 	{Run: LikeComparison},
+	{Run: StrcmpComparison},
 	{Run: MultiComparisons},
+	{Run: IntervalStatement},
 	{Run: IsStatement},
 	{Run: NotStatement},
 	{Run: LogicalStatement},
@@ -65,8 +69,19 @@ var Cases = []TestCase{
 	{Run: FnLength},
 	{Run: FnBitLength},
 	{Run: FnAscii},
+	{Run: FnOrd},
 	{Run: FnRepeat},
+	{Run: FnLeft},
+	{Run: FnLpad},
+	{Run: FnRight},
+	{Run: FnRpad},
+	{Run: FnLTrim},
+	{Run: FnRTrim},
+	{Run: FnTrim},
+	{Run: FnConcat},
+	{Run: FnConcatWs},
 	{Run: FnHex},
+	{Run: FnUnhex},
 	{Run: FnCeil},
 	{Run: FnFloor},
 	{Run: FnAbs},
@@ -106,7 +121,10 @@ var Cases = []TestCase{
 	{Run: FnDayOfMonth},
 	{Run: FnDayOfWeek},
 	{Run: FnDayOfYear},
+	{Run: FnFromUnixtime},
 	{Run: FnHour},
+	{Run: FnMakedate},
+	{Run: FnMaketime},
 	{Run: FnMicroSecond},
 	{Run: FnMinute},
 	{Run: FnMonth},
@@ -114,11 +132,29 @@ var Cases = []TestCase{
 	{Run: FnQuarter},
 	{Run: FnSecond},
 	{Run: FnTime},
+	{Run: FnUnixTimestamp},
 	{Run: FnWeek},
 	{Run: FnWeekDay},
 	{Run: FnWeekOfYear},
 	{Run: FnYear},
 	{Run: FnYearWeek},
+	{Run: FnInetAton},
+	{Run: FnInetNtoa},
+	{Run: FnInet6Aton},
+	{Run: FnInet6Ntoa},
+	{Run: FnIsIPv4},
+	{Run: FnIsIPv4Compat},
+	{Run: FnIsIPv4Mapped},
+	{Run: FnIsIPv6},
+	{Run: FnBinToUUID},
+	{Run: FnIsUUID},
+	{Run: FnUUID},
+	{Run: FnUUIDToBin},
+	{Run: DateMath},
+	{Run: RegexpLike},
+	{Run: RegexpInstr},
+	{Run: RegexpSubstr},
+	{Run: RegexpReplace},
 }
 
 func JSONPathOperations(yield Query) {
@@ -694,11 +730,27 @@ func CaseExprWithValue(yield Query) {
 	}
 }
 
+func If(yield Query) {
+	var elements []string
+	elements = append(elements, inputBitwise...)
+	elements = append(elements, inputComparisonElement...)
+
+	for _, cmpbase := range elements {
+		for _, val1 := range elements {
+			for _, val2 := range elements {
+				yield(fmt.Sprintf("if(%s, %s, %s)", cmpbase, val1, val2), nil)
+			}
+		}
+	}
+}
+
 func Base64(yield Query) {
 	var inputs = []string{
 		`'bGlnaHQgdw=='`,
 		`'bGlnaHQgd28='`,
 		`'bGlnaHQgd29y'`,
+		// MySQL trims whitespace
+		`'  \t\r\n  bGlnaHQgd28=  \n \t '`,
 	}
 
 	inputs = append(inputs, inputConversions...)
@@ -777,10 +829,47 @@ func BitwiseOperators(yield Query) {
 func WeightString(yield Query) {
 	var inputs = []string{
 		`'foobar'`, `_latin1 'foobar'`,
-		`'foobar' as char(12)`, `'foobar' as binary(12)`,
+		`'foobar' as char(12)`, `'foobar' as char(3)`, `'foobar' as binary(12)`, `'foobar' as binary(3)`,
+		`'foobar' collate utf8mb4_bin as char(12)`, `'foobar' collate utf8mb4_bin as char(3)`,
+		`'foobar' collate binary as char(12)`, `'foobar' collate binary as char(3)`,
 		`_latin1 'foobar' as char(12)`, `_latin1 'foobar' as binary(12)`,
+		`_binary 'foobar' as char(12)`, `_binary 'foobar' as binary(12)`,
+		`1`, `-1`, `9223372036854775807`, `18446744073709551615`, `-9223372036854775808`,
+		`1 as char(1)`, `-1 as char(1)`, `9223372036854775807 as char(1)`, `18446744073709551615 as char(1)`, `-9223372036854775808 as char(1)`,
+		`1 as char(32)`, `-1 as char(32)`, `9223372036854775807 as char(32)`, `18446744073709551615 as char(32)`, `-9223372036854775808 as char(32)`,
+		`1 as binary(1)`, `-1 as binary(1)`, `9223372036854775807 as binary(1)`, `18446744073709551615 as binary(1)`, `-9223372036854775808 as binary(1)`,
+		`1 as binary(32)`, `-1 as binary(32)`, `9223372036854775807 as binary(32)`, `18446744073709551615 as binary(32)`, `-9223372036854775808 as binary(32)`,
 		`1234.0`, `12340e0`,
 		`0x1234`, `0x1234 as char(12)`, `0x1234 as char(2)`,
+		`date'2000-01-01'`, `date'2000-01-01' as char(12)`, `date'2000-01-01' as char(2)`, `date'2000-01-01' as binary(12)`, `date'2000-01-01' as binary(2)`,
+		`timestamp'2000-01-01 11:22:33'`, `timestamp'2000-01-01 11:22:33' as char(12)`, `timestamp'2000-01-01 11:22:33' as char(2)`, `timestamp'2000-01-01 11:22:33' as binary(12)`, `timestamp'2000-01-01 11:22:33' as binary(2)`,
+		`timestamp'2000-01-01 11:22:33.123456'`, `timestamp'2000-01-01 11:22:33.123456' as char(12)`, `timestamp'2000-01-01 11:22:33.123456' as char(2)`, `timestamp'2000-01-01 11:22:33.123456' as binary(12)`, `timestamp'2000-01-01 11:22:33.123456' as binary(2)`,
+		`time'-11:22:33'`, `time'-11:22:33' as char(12)`, `time'-11:22:33' as char(2)`, `time'-11:22:33' as binary(12)`, `time'-11:22:33' as binary(2)`,
+		`time'11:22:33'`, `time'11:22:33' as char(12)`, `time'11:22:33' as char(2)`, `time'11:22:33' as binary(12)`, `time'11:22:33' as binary(2)`,
+		`time'101:22:33'`, `time'101:22:33' as char(12)`, `time'101:22:33' as char(2)`, `time'101:22:33' as binary(12)`, `time'101:22:33' as binary(2)`,
+		"cast(0 as json)", "cast(1 as json)",
+		"cast(true as json)", "cast(false as json)",
+		"cast('{}' as json)", "cast('[]' as json)",
+		"cast('null' as json)", "cast('true' as json)", "cast('false' as json)",
+		"cast('1' as json)", "cast('2' as json)", "cast('1.1' as json)", "cast('-1.1' as json)",
+		"cast('9223372036854775807' as json)", "cast('18446744073709551615' as json)",
+		// JSON strings
+		"cast('\"foo\"' as json)", "cast('\"bar\"' as json)", "cast('invalid' as json)",
+		// JSON binary values
+		"cast(_binary' \"foo\"' as json)", "cast(_binary '\"bar\"' as json)",
+		"cast(0xFF666F6F626172FF as json)", "cast(0x666F6F626172FF as json)",
+		"cast(0b01 as json)", "cast(0b001 as json)",
+		// JSON arrays
+		"cast('[\"a\"]' as json)", "cast('[\"ab\"]' as json)",
+		"cast('[\"ab\", \"cd\", \"ef\"]' as json)", "cast('[\"ab\", \"ef\"]' as json)",
+		// JSON objects
+		"cast('{\"a\": 1, \"b\": 2}' as json)", "cast('{\"b\": 2, \"a\": 1}' as json)",
+		"cast('{\"c\": 1, \"b\": 2}' as json)", "cast('{\"b\": 2, \"c\": 1}' as json)",
+		"cast(' \"b\": 2}' as json)", "cast('\"a\": 1' as json)",
+		// JSON date, datetime & time
+		"cast(date '2000-01-01' as json)", "cast(date '2000-01-02' as json)",
+		"cast(timestamp '2000-01-01 12:34:58' as json)",
+		"cast(time '12:34:56' as json)", "cast(time '12:34:58' as json)", "cast(time '5 12:34:58' as json)",
 	}
 
 	for _, i := range inputs {
@@ -949,6 +1038,11 @@ func NegateArithmetic(yield Query) {
 		yield(fmt.Sprintf("- %s", rhs), nil)
 		yield(fmt.Sprintf("-%s", rhs), nil)
 	}
+
+	for _, rhs := range inputConversions {
+		yield(fmt.Sprintf("- %s", rhs), nil)
+		yield(fmt.Sprintf("-%s", rhs), nil)
+	}
 }
 
 func CollationOperations(yield Query) {
@@ -984,6 +1078,39 @@ func LikeComparison(yield Query) {
 	for _, lhs := range left {
 		for _, rhs := range right {
 			yield(fmt.Sprintf("%s LIKE %s", lhs, rhs), nil)
+		}
+	}
+}
+
+func StrcmpComparison(yield Query) {
+	inputs := append([]string{
+		`'foobar'`, `'FOOBAR'`,
+		`'1234'`, `1234`,
+		`_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci`,
+		`_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci`,
+		`'foo%'`, `'FOO%'`, `'foo_ar'`, `'FOO_AR'`,
+		`'12%'`, `'12_4'`, `'12x4'`, `'12$4'`,
+		`_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci`,
+		`_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci`,
+		`_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci`,
+		`_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci`,
+		`_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci`,
+		`_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci`,
+		`_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci`,
+	}, inputConversions...)
+
+	for _, lhs := range inputs {
+		for _, rhs := range inputs {
+			yield(fmt.Sprintf("STRCMP(%s, %s)", lhs, rhs), nil)
 		}
 	}
 }
@@ -1029,6 +1156,28 @@ func MultiComparisons(yield Query) {
 			yield(fmt.Sprintf("%s(%s, %s, %s)", method, arg[0], arg[1], arg[2]), nil)
 			yield(fmt.Sprintf("%s(%s, %s, %s)", method, arg[2], arg[1], arg[0]), nil)
 		})
+	}
+}
+
+func IntervalStatement(yield Query) {
+	inputs := []string{
+		"-1", "0", "1", "2", "3", "0xFF", "1.1", "1.9", "1.1e0", "1.9e0",
+		strconv.FormatUint(math.MaxUint64, 10),
+		strconv.FormatUint(math.MaxInt64, 10),
+		strconv.FormatUint(math.MaxInt64+1, 10),
+		strconv.FormatInt(math.MinInt64, 10),
+		"18446744073709551616",
+		"-9223372036854775809",
+		`"foobar"`, "NULL", "cast('invalid' as json)",
+	}
+	for _, base := range inputs {
+		for _, arg1 := range inputs {
+			for _, arg2 := range inputs {
+				for _, arg3 := range inputs {
+					yield(fmt.Sprintf("INTERVAL(%s, %s, %s, %s)", base, arg1, arg2, arg3), nil)
+				}
+			}
+		}
 	}
 }
 
@@ -1198,11 +1347,141 @@ func FnAscii(yield Query) {
 	}
 }
 
+func FnOrd(yield Query) {
+	for _, str := range inputStrings {
+		yield(fmt.Sprintf("ORD(%s)", str), nil)
+	}
+}
+
 func FnRepeat(yield Query) {
 	counts := []string{"-1", "1.9", "3", "1073741825", "'1.9'"}
 	for _, str := range inputStrings {
 		for _, cnt := range counts {
-			yield(fmt.Sprintf("repeat(%s, %s)", str, cnt), nil)
+			yield(fmt.Sprintf("REPEAT(%s, %s)", str, cnt), nil)
+		}
+	}
+}
+
+func FnLeft(yield Query) {
+	counts := []string{"-1", "1.9", "3", "10", "'1.9'"}
+	for _, str := range inputStrings {
+		for _, cnt := range counts {
+			yield(fmt.Sprintf("LEFT(%s, %s)", str, cnt), nil)
+		}
+	}
+}
+
+func FnLpad(yield Query) {
+	counts := []string{"-1", "1.9", "3", "10", "'1.9'"}
+	for _, str := range inputStrings {
+		for _, cnt := range counts {
+			for _, pad := range inputStrings {
+				yield(fmt.Sprintf("LPAD(%s, %s, %s)", str, cnt, pad), nil)
+			}
+		}
+	}
+}
+
+func FnRight(yield Query) {
+	counts := []string{"-1", "1.9", "3", "10", "'1.9'"}
+	for _, str := range inputStrings {
+		for _, cnt := range counts {
+			yield(fmt.Sprintf("RIGHT(%s, %s)", str, cnt), nil)
+		}
+	}
+}
+
+func FnRpad(yield Query) {
+	counts := []string{"-1", "1.9", "3", "10", "'1.9'"}
+	for _, str := range inputStrings {
+		for _, cnt := range counts {
+			for _, pad := range inputStrings {
+				yield(fmt.Sprintf("RPAD(%s, %s, %s)", str, cnt, pad), nil)
+			}
+		}
+	}
+}
+
+func FnLTrim(yield Query) {
+	for _, str := range inputTrimStrings {
+		yield(fmt.Sprintf("LTRIM(%s)", str), nil)
+	}
+}
+
+func FnRTrim(yield Query) {
+	for _, str := range inputTrimStrings {
+		yield(fmt.Sprintf("RTRIM(%s)", str), nil)
+	}
+}
+
+func FnTrim(yield Query) {
+	for _, str := range inputTrimStrings {
+		yield(fmt.Sprintf("TRIM(%s)", str), nil)
+	}
+
+	modes := []string{"LEADING", "TRAILING", "BOTH"}
+	for _, str := range inputTrimStrings {
+		for _, mode := range modes {
+			yield(fmt.Sprintf("TRIM(%s FROM %s)", mode, str), nil)
+		}
+	}
+
+	for _, str := range inputTrimStrings {
+		for _, pat := range inputTrimStrings {
+			yield(fmt.Sprintf("TRIM(%s FROM %s)", pat, str), nil)
+			for _, mode := range modes {
+				yield(fmt.Sprintf("TRIM(%s %s FROM %s)", mode, pat, str), nil)
+			}
+		}
+	}
+}
+
+func FnConcat(yield Query) {
+	for _, str := range inputStrings {
+		yield(fmt.Sprintf("CONCAT(%s)", str), nil)
+	}
+
+	for _, str1 := range inputConversions {
+		for _, str2 := range inputConversions {
+			yield(fmt.Sprintf("CONCAT(%s, %s)", str1, str2), nil)
+		}
+	}
+
+	for _, str1 := range inputStrings {
+		for _, str2 := range inputStrings {
+			for _, str3 := range inputStrings {
+				yield(fmt.Sprintf("CONCAT(%s, %s, %s)", str1, str2, str3), nil)
+			}
+		}
+	}
+}
+
+func FnConcatWs(yield Query) {
+	for _, str := range inputStrings {
+		yield(fmt.Sprintf("CONCAT_WS(%s, NULL)", str), nil)
+	}
+
+	for _, str1 := range inputConversions {
+		for _, str2 := range inputStrings {
+			for _, str3 := range inputStrings {
+				yield(fmt.Sprintf("CONCAT_WS(%s, %s, %s)", str1, str2, str3), nil)
+			}
+		}
+	}
+
+	for _, str1 := range inputStrings {
+		for _, str2 := range inputConversions {
+			for _, str3 := range inputStrings {
+				yield(fmt.Sprintf("CONCAT_WS(%s, %s, %s)", str1, str2, str3), nil)
+			}
+		}
+	}
+
+	for _, str1 := range inputStrings {
+		for _, str2 := range inputStrings {
+			for _, str3 := range inputConversions {
+				yield(fmt.Sprintf("CONCAT_WS(%s, %s, %s)", str1, str2, str3), nil)
+			}
 		}
 	}
 }
@@ -1218,6 +1497,26 @@ func FnHex(yield Query) {
 
 	for _, str := range inputBitwise {
 		yield(fmt.Sprintf("hex(%s)", str), nil)
+	}
+}
+
+func FnUnhex(yield Query) {
+	var inputs = []string{
+		`'f'`,
+		`'fe'`,
+		`'fea'`,
+		`'666F6F626172'`,
+		// MySQL trims whitespace
+		`'  \t\r\n  4f  \n \t '`,
+	}
+
+	inputs = append(inputs, inputConversions...)
+	for _, input := range inputConversions {
+		inputs = append(inputs, "'"+hex.EncodeToString([]byte(input))+"'")
+	}
+
+	for _, lhs := range inputs {
+		yield(fmt.Sprintf("UNHEX(%s)", lhs), nil)
 	}
 }
 
@@ -1277,46 +1576,8 @@ func FnInfo(yield Query) {
 }
 
 func FnDateFormat(yield Query) {
-	formats := []struct {
-		c    byte
-		expr string
-	}{
-		{'a', "LEFT(DAYNAME(d),3)"},
-		{'b', "LEFT(MONTHNAME(d),3)"},
-		{'c', "MONTH(d)"},
-		{'D', ""},
-		{'d', "LPAD(DAYOFMONTH(d),0,2)"},
-		{'e', "DAYOFMONTH(d)"},
-		{'f', "LPAD(MICROSECOND(t),6,0)"},
-		{'H', "LPAD(HOUR(t),2,0)"},
-		{'h', ""},
-		{'I', ""},
-		{'i', "LPAD(MINUTE(t),2,0)"},
-		{'j', ""},
-		{'k', "HOUR(t)"},
-		{'l', ""},
-		{'M', "MONTHNAME(d)"},
-		{'m', "LPAD(MONTH(d),2,0)"},
-		{'p', ""},
-		{'r', ""},
-		{'S', "LPAD(SECOND(t),2,0)"},
-		{'s', "LPAD(SECOND(t),2,0)"},
-		{'T', ""},
-		{'U', "LPAD(WEEK(d,0),2,0)"},
-		{'u', "LPAD(WEEK(d,1),2,0)"},
-		{'V', "RIGHT(YEARWEEK(d,2),2)"},
-		{'v', "RIGHT(YEARWEEK(d,3),2)"},
-		{'W', "DAYNAME(d)"},
-		{'w', "DAYOFWEEK(d)-1"},
-		{'X', "LEFT(YEARWEEK(d,2),4)"},
-		{'x', "LEFT(YEARWEEK(d,3),4)"},
-		{'Y', "YEAR(d)"},
-		{'y', "RIGHT(YEAR(d),2)"},
-		{'%', ""},
-	}
-
 	var buf strings.Builder
-	for _, f := range formats {
+	for _, f := range dateFormats {
 		buf.WriteByte('%')
 		buf.WriteByte(f.c)
 		buf.WriteByte(' ')
@@ -1381,9 +1642,47 @@ func FnDayOfYear(yield Query) {
 	}
 }
 
+func FnFromUnixtime(yield Query) {
+	var buf strings.Builder
+	for _, f := range dateFormats {
+		buf.WriteByte('%')
+		buf.WriteByte(f.c)
+		buf.WriteByte(' ')
+	}
+	format := buf.String()
+
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("FROM_UNIXTIME(%s)", d), nil)
+		yield(fmt.Sprintf("FROM_UNIXTIME(%s, %q)", d, format), nil)
+	}
+}
+
 func FnHour(yield Query) {
 	for _, d := range inputConversions {
 		yield(fmt.Sprintf("HOUR(%s)", d), nil)
+	}
+}
+
+func FnMakedate(yield Query) {
+	for _, y := range inputConversions {
+		for _, d := range inputConversions {
+			yield(fmt.Sprintf("MAKEDATE(%s, %s)", y, d), nil)
+		}
+	}
+}
+
+func FnMaketime(yield Query) {
+	// Don't use inputConversions for minutes as those are simplest
+	// and otherwise we explode in test runtime.
+	minutes := []string{
+		"''", "0", "'3'", "59", "60", "0xFF666F6F626172FF", "18446744073709551615",
+	}
+	for _, h := range inputConversions {
+		for _, m := range minutes {
+			for _, s := range inputConversions {
+				yield(fmt.Sprintf("MAKETIME(%s, %s, %s)", h, m, s), nil)
+			}
+		}
 	}
 }
 
@@ -1429,6 +1728,15 @@ func FnTime(yield Query) {
 	}
 }
 
+func FnUnixTimestamp(yield Query) {
+	yield("UNIX_TIMESTAMP()", nil)
+
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("UNIX_TIMESTAMP(%s)", d), nil)
+		yield(fmt.Sprintf("UNIX_TIMESTAMP(%s) + 1", d), nil)
+	}
+}
+
 func FnWeek(yield Query) {
 	for i := 0; i < 16; i++ {
 		for _, d := range inputConversions {
@@ -1466,5 +1774,452 @@ func FnYearWeek(yield Query) {
 	}
 	for _, d := range inputConversions {
 		yield(fmt.Sprintf("YEARWEEK(%s)", d), nil)
+	}
+}
+
+func FnInetAton(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("INET_ATON(%s)", d), nil)
+	}
+}
+
+func FnInetNtoa(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("INET_NTOA(%s)", d), nil)
+		yield(fmt.Sprintf("INET_NTOA(INET_ATON(%s))", d), nil)
+	}
+}
+
+func FnInet6Aton(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("INET6_ATON(%s)", d), nil)
+	}
+}
+
+func FnInet6Ntoa(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("INET6_NTOA(%s)", d), nil)
+		yield(fmt.Sprintf("INET6_NTOA(INET6_ATON(%s))", d), nil)
+	}
+}
+
+func FnIsIPv4(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("IS_IPV4(%s)", d), nil)
+	}
+}
+
+func FnIsIPv4Compat(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("IS_IPV4_COMPAT(%s)", d), nil)
+		yield(fmt.Sprintf("IS_IPV4_COMPAT(INET6_ATON(%s))", d), nil)
+	}
+}
+
+func FnIsIPv4Mapped(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("IS_IPV4_MAPPED(%s)", d), nil)
+		yield(fmt.Sprintf("IS_IPV4_MAPPED(INET6_ATON(%s))", d), nil)
+	}
+}
+
+func FnIsIPv6(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("IS_IPV6(%s)", d), nil)
+	}
+}
+
+func FnBinToUUID(yield Query) {
+	args := []string{
+		"NULL",
+		"-1",
+		"0",
+		"1",
+		"2",
+		"''",
+		"'-1'",
+		"'0'",
+		"'1'",
+		"'2'",
+	}
+	for _, d := range uuidInputs {
+		yield(fmt.Sprintf("BIN_TO_UUID(%s)", d), nil)
+	}
+
+	for _, d := range uuidInputs {
+		for _, a := range args {
+			yield(fmt.Sprintf("BIN_TO_UUID(%s, %s)", d, a), nil)
+		}
+	}
+}
+
+func FnIsUUID(yield Query) {
+	for _, d := range uuidInputs {
+		yield(fmt.Sprintf("IS_UUID(%s)", d), nil)
+	}
+}
+
+func FnUUID(yield Query) {
+	yield("LENGTH(UUID())", nil)
+	yield("COLLATION(UUID())", nil)
+	yield("IS_UUID(UUID())", nil)
+	yield("LENGTH(UUID_TO_BIN(UUID())", nil)
+}
+
+func FnUUIDToBin(yield Query) {
+	args := []string{
+		"NULL",
+		"-1",
+		"0",
+		"1",
+		"2",
+		"''",
+		"'-1'",
+		"'0'",
+		"'1'",
+		"'2'",
+	}
+	for _, d := range uuidInputs {
+		yield(fmt.Sprintf("UUID_TO_BIN(%s)", d), nil)
+	}
+
+	for _, d := range uuidInputs {
+		for _, a := range args {
+			yield(fmt.Sprintf("UUID_TO_BIN(%s, %s)", d, a), nil)
+		}
+	}
+}
+
+func DateMath(yield Query) {
+	dates := []string{
+		`DATE'2018-05-01'`,
+		`TIMESTAMP'2020-12-31 23:59:59'`,
+		`TIMESTAMP'2025-01-01 00:00:00'`,
+		`'2018-05-01'`,
+		`'2020-12-31 23:59:59'`,
+		`'2025-01-01 00:00:00'`,
+		`20250101`,
+		`'pokemon trainers'`,
+		`'20250101'`,
+	}
+	intervalValues := []string{
+		`1`, `'1:1'`, `'1 1:1:1'`, `'-1 10'`, `'1 10'`, `31`, `30`, `'1.999999'`, `1.999`, `'1.999'`,
+		`'1:1:1:1'`, `'1:1 1:1'`, `'-1:10'`, `'1:10'`, `1.5`, `1.5000`, `6/4`, `'6/4'`, `1.5e0`, `1.5000e0`,
+		`CAST(6/4 AS DECIMAL(3,1))`, `CAST(6/4 AS DECIMAL(3,0))`, `1e0`, `'1.0'`, `'1.0foobar'`,
+	}
+	mysqlDocSamples := []string{
+		`DATE_ADD(DATE'2018-05-01',INTERVAL 1 DAY)`,
+		`DATE_SUB(DATE'2018-05-01',INTERVAL 1 YEAR)`,
+		`DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1 SECOND)`,
+		`DATE_ADD(TIMESTAMP'2018-12-31 23:59:59', INTERVAL 1 DAY)`,
+		`DATE_ADD(TIMESTAMP'2100-12-31 23:59:59', INTERVAL '1:1' MINUTE_SECOND)`,
+		`DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 1:1:1' DAY_SECOND)`,
+		`DATE_ADD(TIMESTAMP'1900-01-01 00:00:00', INTERVAL '-1 10' DAY_HOUR)`,
+		`DATE_SUB(DATE'1998-01-02', INTERVAL 31 DAY)`,
+		`DATE_ADD(TIMESTAMP'1992-12-31 23:59:59.000002', INTERVAL '1.999999' SECOND_MICROSECOND)`,
+		`DATE_ADD(DATE'2024-03-30', INTERVAL 1 MONTH)`,
+		`DATE_ADD(DATE'2024-03-31', INTERVAL 1 MONTH)`,
+		`TIMESTAMPADD(MINUTE, 1, '2003-01-02')`,
+		`TIMESTAMPADD(WEEK,1,'2003-01-02')`,
+		`TIMESTAMPADD(MONTH, 1, DATE '2024-03-30')`,
+		`TIMESTAMPADD(MONTH, 1, DATE '2024-03-31')`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+
+	for _, d := range dates {
+		for _, i := range inputIntervals {
+			for _, v := range intervalValues {
+				yield(fmt.Sprintf("DATE_ADD(%s, INTERVAL %s %s)", d, v, i), nil)
+				yield(fmt.Sprintf("DATE_SUB(%s, INTERVAL %s %s)", d, v, i), nil)
+				yield(fmt.Sprintf("TIMESTAMPADD(%v, %s, %s)", i, v, d), nil)
+			}
+		}
+	}
+}
+
+func RegexpLike(yield Query) {
+	mysqlDocSamples := []string{
+		`'Michael!' REGEXP '.*'`,
+		`'Michael!' RLIKE '.*'`,
+		`'Michael!' NOT REGEXP '.*'`,
+		`'Michael!' NOT RLIKE '.*'`,
+		`'new*\n*line' REGEXP 'new\\*.\\*line'`,
+		`'a' REGEXP '^[a-d]'`,
+		`REGEXP_LIKE('CamelCase', 'CAMELCASE')`,
+		`REGEXP_LIKE('CamelCase', 'CAMELCASE' COLLATE utf8mb4_0900_as_cs)`,
+		`REGEXP_LIKE('abc', 'ABC'`,
+		`REGEXP_LIKE('abc', 'ABC', 'c')`,
+		`REGEXP_LIKE(1234, 12)`,
+		`REGEXP_LIKE(1234, 12, 'c')`,
+		`' '  REGEXP '[[:blank:]]'`,
+		`'\t' REGEXP '[[:blank:]]'`,
+		`' '  REGEXP '[[:space:]]'`,
+		`'\t' REGEXP '[[:space:]]'`,
+		`_latin1 0xFF regexp _latin1 '[[:lower:]]' COLLATE latin1_bin`,
+		`_koi8r  0xFF regexp _koi8r  '[[:lower:]]' COLLATE koi8r_bin`,
+		`_latin1 0xFF regexp _latin1 '[[:upper:]]' COLLATE latin1_bin`,
+		`_koi8r  0xFF regexp _koi8r  '[[:upper:]]' COLLATE koi8r_bin`,
+		`_latin1 0xF7 regexp _latin1 '[[:alpha:]]'`,
+		`_koi8r  0xF7 regexp _koi8r  '[[:alpha:]]'`,
+		`_latin1'a' regexp _latin1'A' collate latin1_general_ci`,
+		`_latin1'a' regexp _latin1'A' collate latin1_bin`,
+
+		`_latin1 'ÿ' regexp _utf8mb4 'ÿ'`,
+		`_utf8mb4 'ÿ' regexp _latin1 'ÿ'`,
+		`convert('ÿ' as char character set latin1) regexp _utf8mb4 'ÿ'`,
+		`_utf8mb4 'ÿ' regexp convert('ÿ' as char character set latin1)`,
+
+		`'a' regexp '\\p{alphabetic}'`,
+		`'a' regexp '\\P{alphabetic}'`,
+		`'👌🏾regexp '\\p{Emoji}\\p{Emoji_modifier}'`,
+		`'a' regexp '\\p{Lowercase_letter}'`,
+		`'a' regexp '\\p{Uppercase_letter}'`,
+		`'A' regexp '\\p{Lowercase_letter}'`,
+		`'A' regexp '\\p{Uppercase_letter}'`,
+		`'a' collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}'`,
+		`'A' collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}'`,
+		`'a' collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}'`,
+		`'A' collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}'`,
+		`0xff REGEXP 0xff`,
+		`0xff REGEXP 0xfe`,
+		`cast(time '12:34:58' as json) REGEXP 0xff`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+
+	for _, i := range regexInputs {
+		for _, p := range regexInputs {
+			yield(fmt.Sprintf("%s REGEXP %s", i, p), nil)
+			yield(fmt.Sprintf("%s NOT REGEXP %s", i, p), nil)
+			for _, m := range regexMatchStrings {
+				yield(fmt.Sprintf("REGEXP_LIKE(%s, %s, %s)", i, p, m), nil)
+			}
+		}
+	}
+}
+
+func RegexpInstr(yield Query) {
+	mysqlDocSamples := []string{
+		`REGEXP_INSTR('Michael!', '.*')`,
+		`REGEXP_INSTR('new*\n*line', 'new\\*.\\*line')`,
+		`REGEXP_INSTR('a', '^[a-d]')`,
+		`REGEXP_INSTR('CamelCase', 'CAMELCASE')`,
+		`REGEXP_INSTR('CamelCase', 'CAMELCASE' COLLATE utf8mb4_0900_as_cs)`,
+		`REGEXP_INSTR('abc', 'ABC'`,
+		`REGEXP_INSTR('abc', 'ABC', 'c')`,
+		`REGEXP_INSTR('0', '0', 1, 0)`,
+		`REGEXP_INSTR(' ', '[[:blank:]]')`,
+		`REGEXP_INSTR('\t', '[[:blank:]]')`,
+		`REGEXP_INSTR(' ', '[[:space:]]')`,
+		`REGEXP_INSTR('\t', '[[:space:]]')`,
+		`REGEXP_INSTR(_latin1 0xFF, _latin1 '[[:lower:]]' COLLATE latin1_bin)`,
+		`REGEXP_INSTR(_koi8r  0xFF, _koi8r  '[[:lower:]]' COLLATE koi8r_bin)`,
+		`REGEXP_INSTR(_latin1 0xFF, _latin1 '[[:upper:]]' COLLATE latin1_bin)`,
+		`REGEXP_INSTR(_koi8r  0xFF, _koi8r  '[[:upper:]]' COLLATE koi8r_bin)`,
+		`REGEXP_INSTR(_latin1 0xF7, _latin1 '[[:alpha:]]')`,
+		`REGEXP_INSTR(_koi8r  0xF7, _koi8r  '[[:alpha:]]')`,
+		`REGEXP_INSTR(_latin1'a', _latin1'A' collate latin1_general_ci)`,
+		`REGEXP_INSTR(_latin1'a', _latin1'A' collate latin1_bin)`,
+		`REGEXP_INSTR('a', '\\p{alphabetic}')`,
+		`REGEXP_INSTR('a', '\\P{alphabetic}')`,
+		`REGEXP_INSTR('👌🏾, '\\p{Emoji}\\p{Emoji_modifier}')`,
+		`REGEXP_INSTR('a', '\\p{Lowercase_letter}')`,
+		`REGEXP_INSTR('a', '\\p{Uppercase_letter}')`,
+		`REGEXP_INSTR('A', '\\p{Lowercase_letter}')`,
+		`REGEXP_INSTR('A', '\\p{Uppercase_letter}')`,
+		`REGEXP_INSTR('a', collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}')`,
+		`REGEXP_INSTR('A', collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}')`,
+		`REGEXP_INSTR('a', collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}')`,
+		`REGEXP_INSTR('A', collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}')`,
+		`REGEXP_INSTR('dog cat dog', 'dog')`,
+		`REGEXP_INSTR('dog cat dog', 'dog', 2)`,
+		`REGEXP_INSTR('dog cat dog', 'dog', 1, 1)`,
+		`REGEXP_INSTR('dog cat dog', 'dog', 1, 1, 0)`,
+		`REGEXP_INSTR('dog cat dog', 'dog', 1, 1, 1)`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, 1, 1, 'i')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, 1, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', 'dog', 1, 2)`,
+		`REGEXP_INSTR('dog cat dog', 'dog', 1, 2, 0)`,
+		`REGEXP_INSTR('dog cat dog', 'dog', 1, 2, 1)`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, 1, 'i')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, 1, 'c')`,
+		`REGEXP_INSTR('aa aaa aaaa', 'a{2}')`,
+		`REGEXP_INSTR('aa aaa aaaa', 'a{4}')`,
+		`REGEXP_INSTR(1234, 12)`,
+		`REGEXP_INSTR(1234, 12, 1)`,
+		`REGEXP_INSTR(1234, 12, 100)`,
+		`REGEXP_INSTR(1234, 12, 1, 1)`,
+		`REGEXP_INSTR(1234, 12, 1, 1, 1)`,
+		`REGEXP_INSTR(1234, 12, 1, 1, 1, 'c')`,
+		`REGEXP_INSTR('', ' ', 1000)`,
+		`REGEXP_INSTR(' ', ' ', 1000)`,
+		`REGEXP_INSTR(NULL, 'DOG', 1, 2, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', NULL, 1, 2, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', NULL, 2, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, NULL, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, NULL, 'c')`,
+		`REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, 1, NULL)`,
+
+		`REGEXP_INSTR('dog cat dog', NULL, 1, 2, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', _latin1 'DOG', NULL, 2, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', _latin1 'DOG', 1, NULL, 1, 'c')`,
+		`REGEXP_INSTR('dog cat dog', _latin1 'DOG', 1, 2, NULL, 'c')`,
+		`REGEXP_INSTR('dog cat dog', _latin1 'DOG', 1, 2, 1, NULL)`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+}
+
+func RegexpSubstr(yield Query) {
+	mysqlDocSamples := []string{
+		`REGEXP_SUBSTR('Michael!', '.*')`,
+		`REGEXP_SUBSTR('new*\n*line', 'new\\*.\\*line')`,
+		`REGEXP_SUBSTR('a', '^[a-d]')`,
+		`REGEXP_SUBSTR('CamelCase', 'CAMELCASE')`,
+		`REGEXP_SUBSTR('CamelCase', 'CAMELCASE' COLLATE utf8mb4_0900_as_cs)`,
+		`REGEXP_SUBSTR('abc', 'ABC'`,
+		`REGEXP_SUBSTR(' ', '[[:blank:]]')`,
+		`REGEXP_SUBSTR('\t', '[[:blank:]]')`,
+		`REGEXP_SUBSTR(' ', '[[:space:]]')`,
+		`REGEXP_SUBSTR('\t', '[[:space:]]')`,
+		`REGEXP_SUBSTR(_latin1'a', _latin1'A' collate latin1_general_ci)`,
+		`REGEXP_SUBSTR(_latin1'a', _latin1'A' collate latin1_bin)`,
+		`REGEXP_SUBSTR('a', '\\p{alphabetic}')`,
+		`REGEXP_SUBSTR('a', '\\P{alphabetic}')`,
+		`REGEXP_SUBSTR('👌🏾, '\\p{Emoji}\\p{Emoji_modifier}')`,
+		`REGEXP_SUBSTR('a', '\\p{Lowercase_letter}')`,
+		`REGEXP_SUBSTR('a', '\\p{Uppercase_letter}')`,
+		`REGEXP_SUBSTR('A', '\\p{Lowercase_letter}')`,
+		`REGEXP_SUBSTR('A', '\\p{Uppercase_letter}')`,
+		`REGEXP_SUBSTR('a', collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}')`,
+		`REGEXP_SUBSTR('A', collate utf8mb4_0900_as_cs regexp '\\p{Lowercase_letter}')`,
+		`REGEXP_SUBSTR('a', collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}')`,
+		`REGEXP_SUBSTR('A', collate utf8mb4_0900_as_cs regexp '\\p{Uppercase_letter}')`,
+		`REGEXP_SUBSTR('dog cat dog', 'dog')`,
+		`REGEXP_SUBSTR('dog cat dog', 'dog', 2)`,
+		`REGEXP_SUBSTR('dog cat dog', 'dog', 1, 1)`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, 'c')`,
+		`REGEXP_SUBSTR('dog cat dog', 'dog', 1, 2)`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 2, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 2, 'c')`,
+		`REGEXP_SUBSTR('aa aaa aaaa', 'a{2}')`,
+		`REGEXP_SUBSTR('aa aaa aaaa', 'a{4}')`,
+		`REGEXP_SUBSTR(1234, 12)`,
+		`REGEXP_SUBSTR(1234, 12, 1)`,
+		`REGEXP_SUBSTR(1234, 12, 100)`,
+		`REGEXP_SUBSTR(1234, 12, 1, 1)`,
+		`REGEXP_SUBSTR(1234, 12, 1, 1, 'c')`,
+
+		`REGEXP_SUBSTR(NULL, 'DOG', 1, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', NULL, 1, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', NULL, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, NULL, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, NULL)`,
+
+		`REGEXP_SUBSTR(NULL, '[', 1, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', '[', NULL, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', '[', 1, NULL, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', '[', 1, 1, NULL)`,
+
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 0, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', -1, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 100, 1, 'i')`,
+		`REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, 0)`,
+
+		`REGEXP_SUBSTR(' ', ' ', 1)`,
+		`REGEXP_SUBSTR(' ', ' ', 2)`,
+		`REGEXP_SUBSTR(' ', ' ', 3)`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+}
+
+func RegexpReplace(yield Query) {
+	mysqlDocSamples := []string{
+		`REGEXP_REPLACE('a b c', 'b', 'X')`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 0)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 1)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 2)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 2, 0)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 2, 1)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 2, 2)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 2, 3)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 3, 0)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 3, 1)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 3, 2)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 3, 3)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 4, 0)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 4, 1)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 4, 2)`,
+		`REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 4, 3)`,
+		`REGEXP_REPLACE('a', '\\p{Lowercase_letter}', 'X')`,
+		`REGEXP_REPLACE('a', '\\p{Uppercase_letter}', 'X')`,
+		`REGEXP_REPLACE('A', '\\p{Lowercase_letter}', 'X')`,
+		`REGEXP_REPLACE('A', '\\p{Uppercase_letter}', 'X')`,
+		`REGEXP_REPLACE(1234, 12, 6)`,
+		`REGEXP_REPLACE(1234, 12, 6, 1)`,
+		`REGEXP_REPLACE(1234, 12, 6, 100)`,
+		`REGEXP_REPLACE(1234, 12, 6, 1, 1)`,
+		`REGEXP_REPLACE(1234, 12, 6, 1, 1, 'c')`,
+
+		`REGEXP_REPLACE(NULL, 'DOG', 'bar', 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', NULL, 'bar', 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', NULL, 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', 1, NULL, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', 1, 1, NULL)`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', '1', '1', 0)`,
+
+		`REGEXP_REPLACE(NULL, _latin1'DOG', 'bar', 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', NULL, 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', 1, NULL, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', 1, 1, NULL)`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', '1', '1', 0)`,
+
+		`REGEXP_REPLACE(NULL, '[', 'bar', 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', '[', NULL, 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', '[', 'bar', 1, NULL, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', '[', 'bar', 1, 1, NULL)`,
+
+		`REGEXP_REPLACE(NULL, _latin1'[', 'bar', 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'[', NULL, 1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'[', 'bar', 1, NULL, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'[', 'bar', 1, 1, NULL)`,
+
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', 0, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', -1, 1, 'i')`,
+		`REGEXP_REPLACE('', 'DOG', 'bar', -1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', 100, 1, 'i')`,
+		`REGEXP_REPLACE('', 'DOG', 'bar', 100, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', 'DOG', 'bar', 1, 1, 0)`,
+
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', 0, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', -1, 1, 'i')`,
+		`REGEXP_REPLACE('', _latin1'DOG', 'bar', -1, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', 100, 1, 'i')`,
+		`REGEXP_REPLACE('', _latin1'DOG', 'bar', 100, 1, 'i')`,
+		`REGEXP_REPLACE('dog cat dog', _latin1'DOG', 'bar', 1, 1, 0)`,
+
+		`REGEXP_REPLACE(' ', ' ', 'x', 1)`,
+		`REGEXP_REPLACE(' ', ' ', 'x', 2)`,
+		`REGEXP_REPLACE(' ', ' ', 'x', 3)`,
+
+		`REGEXP_REPLACE(' ', _latin1' ', 'x', 1)`,
+		`REGEXP_REPLACE(' ', _latin1' ', 'x', 2)`,
+		`REGEXP_REPLACE(' ', _latin1' ', 'x', 3)`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
 	}
 }

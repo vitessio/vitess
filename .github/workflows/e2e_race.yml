@@ -5,7 +5,7 @@ jobs:
 
   build:
     name: End-to-End Test (Race)
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-4cores-1
     steps:
     - name: Skip CI
       run: |
@@ -50,9 +50,9 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.20.3
+        go-version: 1.21.1
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -87,4 +87,4 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
-        make e2e_test_race
+        NOVTADMINBUILD=1 make e2e_test_race

@@ -19,11 +19,12 @@ package mysqlctl
 import (
 	"context"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -33,7 +34,9 @@ type MysqlDaemon interface {
 	// methods related to mysql running or not
 	Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...string) error
 	Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool) error
-	RunMysqlUpgrade() error
+	RunMysqlUpgrade(ctx context.Context) error
+	ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error
+	ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error)
 	ReinitConfig(ctx context.Context, cnf *Mycnf) error
 	Wait(ctx context.Context, cnf *Mycnf) error
 
@@ -49,14 +52,15 @@ type MysqlDaemon interface {
 	// replication related methods
 	StartReplication(hookExtraEnv map[string]string) error
 	RestartReplication(hookExtraEnv map[string]string) error
-	StartReplicationUntilAfter(ctx context.Context, pos mysql.Position) error
+	StartReplicationUntilAfter(ctx context.Context, pos replication.Position) error
 	StopReplication(hookExtraEnv map[string]string) error
 	StopIOThread(ctx context.Context) error
-	ReplicationStatus() (mysql.ReplicationStatus, error)
-	PrimaryStatus(ctx context.Context) (mysql.PrimaryStatus, error)
-	GetGTIDPurged(ctx context.Context) (mysql.Position, error)
+	ReplicationStatus() (replication.ReplicationStatus, error)
+	PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error)
+	GetGTIDPurged(ctx context.Context) (replication.Position, error)
 	SetSemiSyncEnabled(source, replica bool) error
 	SemiSyncEnabled() (source, replica bool)
+	SemiSyncExtensionLoaded() (bool, error)
 	SemiSyncStatus() (source, replica bool)
 	SemiSyncClients() (count uint32)
 	SemiSyncSettings() (timeout uint64, numReplicas uint32)
@@ -70,20 +74,20 @@ type MysqlDaemon interface {
 
 	// reparenting related methods
 	ResetReplication(ctx context.Context) error
-	PrimaryPosition() (mysql.Position, error)
+	PrimaryPosition() (replication.Position, error)
 	IsReadOnly() (bool, error)
 	IsSuperReadOnly() (bool, error)
 	SetReadOnly(on bool) error
 	SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error)
-	SetReplicationPosition(ctx context.Context, pos mysql.Position) error
+	SetReplicationPosition(ctx context.Context, pos replication.Position) error
 	SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
-	WaitSourcePos(context.Context, mysql.Position) error
+	WaitSourcePos(context.Context, replication.Position) error
 
 	// Promote makes the current server the primary. It will not change
 	// the read_only state of the server.
-	Promote(map[string]string) (mysql.Position, error)
+	Promote(map[string]string) (replication.Position, error)
 
 	// Schema related methods
 	GetSchema(ctx context.Context, dbName string, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error)
@@ -101,22 +105,16 @@ type MysqlDaemon interface {
 	GetAllPrivsConnection(ctx context.Context) (*dbconnpool.DBConnection, error)
 
 	// GetVersionString returns the database version as a string
-	GetVersionString() string
+	GetVersionString(ctx context.Context) (string, error)
 
 	// GetVersionComment returns the version comment
-	GetVersionComment(ctx context.Context) string
+	GetVersionComment(ctx context.Context) (string, error)
 
 	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(ctx context.Context, queryList []string) error
 
 	// FetchSuperQuery executes one query, returns the result
 	FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error)
-
-	// EnableBinlogPlayback enables playback of binlog events
-	EnableBinlogPlayback() error
-
-	// DisableBinlogPlayback disable playback of binlog events
-	DisableBinlogPlayback() error
 
 	// Close will close this instance of Mysqld. It will wait for all dba
 	// queries to be finished.

@@ -56,3 +56,23 @@ func (call *builtinBitCount) typeof(env *ExpressionEnv, fields []*querypb.Field)
 	// The MySQL docs are actually wrong and this returns an int64, not a uint64.
 	return sqltypes.Int64, f
 }
+
+func (expr *builtinBitCount) compile(c *compiler) (ctype, error) {
+	ct, err := expr.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(ct)
+
+	if ct.Type == sqltypes.VarBinary && !ct.isHexOrBitLiteral() {
+		c.asm.BitCount_b()
+		c.asm.jumpDestination(skip)
+		return ctype{Type: sqltypes.Int64, Col: collationBinary}, nil
+	}
+
+	_ = c.compileToBitwiseUint64(ct, 1)
+	c.asm.BitCount_u()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationBinary}, nil
+}

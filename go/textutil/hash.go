@@ -53,7 +53,7 @@ func UUIDv5(inputs ...string) string {
 	return uuidv5(inputs...).String()
 }
 
-// UUIDv5Var creeates a UUID v5 string based on the given inputs. Return value is a big.Int
+// UUIDv5Val creates a UUID v5 string based on the given inputs. Return value is a big.Int
 func UUIDv5Val(inputs ...string) big.Int {
 	u := uuidv5(inputs...)
 	var i big.Int
@@ -61,7 +61,7 @@ func UUIDv5Val(inputs ...string) big.Int {
 	return i
 }
 
-// UUIDv5Base36 creeates a UUID v5 string based on the given inputs. Return value is a 25 character, base36 string
+// UUIDv5Base36 creates a UUID v5 string based on the given inputs. Return value is a 25 character, base36 string
 func UUIDv5Base36(inputs ...string) string {
 	i := UUIDv5Val(inputs...)
 	return fmt.Sprintf("%025s", i.Text(36))

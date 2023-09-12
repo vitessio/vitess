@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 var (
@@ -49,9 +50,16 @@ type RowStreamer interface {
 }
 
 // NewRowStreamer returns a RowStreamer
-func NewRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) RowStreamer {
-	return newRowStreamer(ctx, cp, se, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send, vse)
+func NewRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine, mode RowStreamerMode) RowStreamer {
+	return newRowStreamer(ctx, cp, se, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send, vse, mode, nil)
 }
+
+type RowStreamerMode int32
+
+const (
+	RowStreamerModeSingleTable RowStreamerMode = iota
+	RowStreamerModeAllTables
+)
 
 // rowStreamer is used for copying the existing rows of a table
 // before vreplication begins streaming binlogs. The rowStreamer
@@ -79,10 +87,14 @@ type rowStreamer struct {
 	vse           *Engine
 	pktsize       PacketSizer
 
-	throttleResponseRateLimiter *timer.RateLimiter
+	mode RowStreamerMode
+	conn *snapshotConn
 }
 
-func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) *rowStreamer {
+func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string,
+	lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine,
+	mode RowStreamerMode, conn *snapshotConn) *rowStreamer {
+
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
 		ctx:     ctx,
@@ -95,8 +107,8 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 		vschema: vschema,
 		vse:     vse,
 		pktsize: DefaultPacketSizer(),
-
-		throttleResponseRateLimiter: timer.NewRateLimiter(rowStreamertHeartbeatInterval),
+		mode:    mode,
+		conn:    conn,
 	}
 }
 
@@ -114,15 +126,18 @@ func (rs *rowStreamer) Stream() error {
 	if err := rs.buildPlan(); err != nil {
 		return err
 	}
-	conn, err := snapshotConnect(rs.ctx, rs.cp)
-	if err != nil {
-		return err
+	if rs.conn == nil {
+		conn, err := snapshotConnect(rs.ctx, rs.cp)
+		if err != nil {
+			return err
+		}
+		rs.conn = conn
+		defer rs.conn.Close()
+		if _, err := rs.conn.ExecuteFetch("set names 'binary'", 1, false); err != nil {
+			return err
+		}
 	}
-	defer conn.Close()
-	if _, err := conn.ExecuteFetch("set names 'binary'", 1, false); err != nil {
-		return err
-	}
-	return rs.streamQuery(conn, rs.send)
+	return rs.streamQuery(rs.send)
 }
 
 func (rs *rowStreamer) buildPlan() error {
@@ -146,16 +161,21 @@ func (rs *rowStreamer) buildPlan() error {
 		// where it in fact does exist.
 		// For this reason we give vstreamer a "second chance" to review the up-to-date state of the schema.
 		// In the future, we will reduce this operation to reading a single table rather than the entire schema.
-		rs.se.ReloadAt(context.Background(), mysql.Position{})
+		rs.se.ReloadAt(context.Background(), replication.Position{})
 		st, err = rs.se.GetTableForPos(fromTable, "")
 	}
 	if err != nil {
 		return err
 	}
 	ti := &Table{
-		Name:   st.Name,
-		Fields: st.Fields,
+		Name: st.Name,
 	}
+
+	ti.Fields, err = getFields(rs.ctx, rs.cp, st.Name, rs.cp.DBName(), st.Fields)
+	if err != nil {
+		return err
+	}
+
 	// The plan we build is identical to the one for vstreamer.
 	// This is because the row format of a read is identical
 	// to the row format of a binlog event. So, the same
@@ -277,7 +297,9 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 	return buf.String(), nil
 }
 
-func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	throttleResponseRateLimiter := timer.NewRateLimiter(rowStreamertHeartbeatInterval)
+	defer throttleResponseRateLimiter.Stop()
 
 	var sendMu sync.Mutex
 	safeSend := func(r *binlogdatapb.VStreamRowsResponse) error {
@@ -289,31 +311,39 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	if err := rs.vse.waitForMySQL(rs.ctx, rs.cp, rs.plan.Table.Name); err != nil {
 		return err
 	}
-
+	var (
+		gtid       string
+		rotatedLog bool
+		err        error
+	)
 	log.Infof("Streaming query: %v\n", rs.sendQuery)
-	gtid, rotatedLog, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
-	if rotatedLog {
-		rs.vse.vstreamerFlushedBinlogs.Add(1)
-	}
-	if err != nil {
-		return err
-	}
-
-	// first call the callback with the fields
-	flds, err := conn.Fields()
-	if err != nil {
-		return err
-	}
-	pkfields := make([]*querypb.Field, len(rs.pkColumns))
-	for i, pk := range rs.pkColumns {
-		pkfields[i] = &querypb.Field{
-			Name: flds[pk].Name,
-			Type: flds[pk].Type,
+	if rs.mode == RowStreamerModeSingleTable {
+		gtid, rotatedLog, err = rs.conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
+		if err != nil {
+			return err
+		}
+		if rotatedLog {
+			rs.vse.vstreamerFlushedBinlogs.Add(1)
+		}
+	} else {
+		// Comes here when we stream all tables. The snapshot is created just once at the start.
+		if err := rs.conn.ExecuteStreamFetch(rs.query); err != nil {
+			return err
 		}
 	}
 
-	charsets := make([]collations.ID, len(flds))
-	for i, fld := range flds {
+	pkfields := make([]*querypb.Field, len(rs.pkColumns))
+	for i, pk := range rs.pkColumns {
+		pkfields[i] = &querypb.Field{
+			Name:    rs.plan.Table.Fields[pk].Name,
+			Type:    rs.plan.Table.Fields[pk].Type,
+			Charset: rs.plan.Table.Fields[pk].Charset,
+			Flags:   rs.plan.Table.Fields[pk].Flags,
+		}
+	}
+
+	charsets := make([]collations.ID, len(rs.plan.Table.Fields))
+	for i, fld := range rs.plan.Table.Fields {
 		charsets[i] = collations.ID(fld.Charset)
 	}
 
@@ -330,15 +360,20 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	heartbeatTicker := time.NewTicker(rowStreamertHeartbeatInterval)
 	defer heartbeatTicker.Stop()
 	go func() {
-		for range heartbeatTicker.C {
+		select {
+		case <-rs.ctx.Done():
+			return
+		case <-heartbeatTicker.C:
 			safeSend(&binlogdatapb.VStreamRowsResponse{Heartbeat: true})
 		}
 	}()
 
-	var response binlogdatapb.VStreamRowsResponse
-	var rows []*querypb.Row
-	var rowCount int
-	var mysqlrow []sqltypes.Value
+	var (
+		response binlogdatapb.VStreamRowsResponse
+		rows     []*querypb.Row
+		rowCount int
+		mysqlrow []sqltypes.Value
+	)
 
 	filtered := make([]sqltypes.Value, len(rs.plan.ColExprs))
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
@@ -350,8 +385,8 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		}
 
 		// check throttler.
-		if !rs.vse.throttlerClient.ThrottleCheckOKOrWait(rs.ctx) {
-			rs.throttleResponseRateLimiter.Do(func() error {
+		if !rs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(rs.ctx, throttlerapp.RowStreamerName) {
+			throttleResponseRateLimiter.Do(func() error {
 				return safeSend(&binlogdatapb.VStreamRowsResponse{Throttled: true})
 			})
 			continue
@@ -360,7 +395,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		if mysqlrow != nil {
 			mysqlrow = mysqlrow[:0]
 		}
-		mysqlrow, err = conn.FetchNext(mysqlrow)
+		mysqlrow, err = rs.conn.FetchNext(mysqlrow)
 		if err != nil {
 			return err
 		}

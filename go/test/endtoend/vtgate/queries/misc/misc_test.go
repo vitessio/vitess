@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -37,7 +36,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		tables := []string{"t1"}
+		tables := []string{"t1", "uks.unsharded"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -101,21 +100,21 @@ func TestQueryTimeoutWithDual(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ sleep(0.04) from dual")
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.04) from dual")
 	assert.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ sleep(0.24) from dual")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.24) from dual")
 	assert.Error(t, err)
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "set @@session.query_timeout=20")
 	require.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ sleep(0.04) from dual")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.04) from dual")
 	assert.Error(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ sleep(0.01) from dual")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.01) from dual")
 	assert.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=500 */ sleep(0.24) from dual")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.24) from dual")
 	assert.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=10 */ sleep(0.04) from dual")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=10 */ sleep(0.04) from dual")
 	assert.Error(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=10 */ sleep(0.001) from dual")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=15 */ sleep(0.001) from dual")
 	assert.NoError(t, err)
 }
 
@@ -126,41 +125,24 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	// unsharded
 	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
 	for i := 0; i < 12; i++ {
-		utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into uks.unsharded(id1) select id1+5 from uks.unsharded")
+		utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=2000 */ into uks.unsharded(id1) select id1+5 from uks.unsharded")
 	}
 
 	utils.Exec(t, mcmp.VtConn, "select count(*) from uks.unsharded where id1 > 31")
-	utils.Exec(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=100 */ count(*) from uks.unsharded where id1 > 31")
+	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*) from uks.unsharded where id1 > 31")
 
 	// the query usually takes more than 5ms to return. So this should fail.
-	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=1 */ count(*) from uks.unsharded where id1 > 31")
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=1 */ count(*) from uks.unsharded where id1 > 31")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
 
 	// sharded
-	for i := 0; i < 300000; i += 1000 {
-		var str strings.Builder
-		for j := 1; j <= 1000; j++ {
-			if j == 1 {
-				str.WriteString(fmt.Sprintf("(%d)", i*1000+j))
-				continue
-			}
-			str.WriteString(fmt.Sprintf(",(%d)", i*1000+j))
-		}
-		utils.Exec(t, mcmp.VtConn, fmt.Sprintf("insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into t1(id1) values %s", str.String()))
-	}
-	// too much data added in the loop, do drop and recreate the table.
-	defer func() {
-		mcmp.Exec("drop table t1")
-		mcmp.Exec(schemaSQL)
-	}()
+	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into ks_misc.t1(id1, id2) values (1,2),(2,4),(3,6),(4,8),(5,10)")
 
-	utils.Exec(t, mcmp.VtConn, "select count(*) from t1 where id1 > 31")
-	utils.Exec(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=100 */ count(*) from t1 where id1 > 31")
-
-	// the query usually takes more than 5ms to return. So this should fail.
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=1 */ count(*) from t1 where id1 > 31")
+	// sleep take in seconds, so 0.1 is 100ms
+	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.1) from t1 where id1 = 1")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=20 */ sleep(0.1) from t1 where id1 = 1")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
@@ -174,8 +156,8 @@ func TestIntervalWithMathFunctions(t *testing.T) {
 	// Set the time zone explicitly to UTC, otherwise the output of FROM_UNIXTIME is going to be dependent
 	// on the time zone of the system.
 	mcmp.Exec("SET time_zone = '+00:00'")
-	mcmp.AssertMatches("select '2020-01-01' + interval month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month))-1 month", `[[CHAR("2020-12-01")]]`)
-	mcmp.AssertMatches("select DATE_ADD(MIN(FROM_UNIXTIME(1673444922)),interval -DAYOFWEEK(MIN(FROM_UNIXTIME(1673444922)))+1 DAY)", `[[DATETIME("2023-01-08 13:48:42")]]`)
+	mcmp.AssertMatches("select '2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month))-1 month", `[[CHAR("2020-12-01")]]`)
+	mcmp.AssertMatches("select date_add(MIN(FROM_UNIXTIME(1673444922)),interval -DAYOFWEEK(MIN(FROM_UNIXTIME(1673444922)))+1 DAY)", `[[DATETIME("2023-01-08 13:48:42")]]`)
 }
 
 // TestCast tests the queries that contain the cast function.
@@ -229,10 +211,12 @@ func TestHighNumberOfParams(t *testing.T) {
 	// connect to the vitess cluster
 	db, err := sql.Open("mysql", fmt.Sprintf("@tcp(%s:%v)/%s", vtParams.Host, vtParams.Port, vtParams.DbName))
 	require.NoError(t, err)
+	defer db.Close()
 
 	// run the query
 	r, err := db.Query(fmt.Sprintf("SELECT /*vt+ QUERY_TIMEOUT_MS=10000 */ id1 FROM t1 WHERE id1 in (%s) ORDER BY id1 ASC", strings.Join(params, ", ")), vals...)
 	require.NoError(t, err)
+	defer r.Close()
 
 	// check the results we got, we should get 5 rows with each: 0, 1, 2, 3, 4
 	// count is the row number we are currently visiting, also correspond to the
@@ -302,4 +286,21 @@ func TestPrepareStatements(t *testing.T) {
 
 	_, err = mcmp.ExecAllowAndCompareError("deallocate prepare prep_art")
 	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to DEALLOCATE PREPARE")
+}
+
+// TestBuggyOuterJoin validates inconsistencies around outer joins, adding these tests to stop regressions.
+func TestBuggyOuterJoin(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (1,2), (42,5), (5, 42)")
+	mcmp.Exec("select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2")
+}
+
+func TestLeftJoinUsingUnsharded(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, mcmp.VtConn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
+	utils.Exec(t, mcmp.VtConn, "select * from uks.unsharded as A left join uks.unsharded as B using(id1)")
 }

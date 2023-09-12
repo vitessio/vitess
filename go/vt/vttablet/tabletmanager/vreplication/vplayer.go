@@ -26,11 +26,12 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -38,15 +39,15 @@ import (
 // vplayer replays binlog events by pulling them from a vstreamer.
 type vplayer struct {
 	vr        *vreplicator
-	startPos  mysql.Position
-	stopPos   mysql.Position
+	startPos  replication.Position
+	stopPos   replication.Position
 	saveStop  bool
 	copyState map[string]*sqltypes.Result
 
 	replicatorPlan *ReplicatorPlan
 	tablePlans     map[string]*TablePlan
 
-	pos mysql.Position
+	pos replication.Position
 	// unsavedEvent is set any time we skip an event without
 	// saving, which is on an empty commit.
 	// If nothing else happens for idleTimeout since timeLastSaved,
@@ -67,7 +68,11 @@ type vplayer struct {
 	phase string
 
 	throttlerAppName string
+
+	foreignKeyCheck bool
 }
+
+const NoForeignKeyCheckFlagBitmask uint32 = 1 << 1
 
 // newVPlayer creates a new vplayer. Parameters:
 // vreplicator: the outer replicator. It's used for common functions like setState.
@@ -83,7 +88,7 @@ type vplayer struct {
 // pausePos: if set, replication will stop at that position without updating the state to "Stopped".
 //
 //	This is used by the fastForward function during copying.
-func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position, phase string) *vplayer {
+func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos replication.Position, phase string) *vplayer {
 	saveStop := true
 	if !pausePos.IsZero() {
 		settings.StopPos = pausePos
@@ -99,7 +104,8 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		timeLastSaved:    time.Now(),
 		tablePlans:       make(map[string]*TablePlan),
 		phase:            phase,
-		throttlerAppName: vr.throttlerAppName(),
+		throttlerAppName: throttlerapp.VCopierName.ConcatenateString(vr.throttlerAppName()),
+		foreignKeyCheck:  false,
 	}
 }
 
@@ -108,7 +114,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 	if !vp.stopPos.IsZero() && vp.startPos.AtLeast(vp.stopPos) {
 		log.Infof("Stop position %v already reached: %v", vp.startPos, vp.stopPos)
 		if vp.saveStop {
-			return vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
+			return vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
 		}
 		return nil
 	}
@@ -132,6 +138,25 @@ func (vp *vplayer) play(ctx context.Context) error {
 	return vp.fetchAndApply(ctx)
 }
 
+// updateFKCheck will check if the fk checks value has changed from what it is currently set to and update it if it has.
+// This is done to avoid setting the fk checks value for every row event. vplayer starts with fk checks off.
+func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
+	// The 2nd bit (least significant) of the flags attribute of the binlog row event
+	// is set to 1 if foreign key checks are disabled.
+	enableFK := true
+	if flags2&NoForeignKeyCheckFlagBitmask == NoForeignKeyCheckFlagBitmask {
+		enableFK = false
+	}
+	if vp.foreignKeyCheck == enableFK {
+		// if not changed, return
+		return nil
+	}
+	vp.foreignKeyCheck = enableFK
+	log.Infof("Setting foreign_key_checks to %v", enableFK)
+	_, err := vp.vr.dbClient.ExecuteWithRetry(ctx, "set @@session.foreign_key_checks="+strconv.FormatBool(enableFK))
+	return err
+}
+
 // fetchAndApply performs the fetching and application of the binlogs.
 // This is done by two different threads. The fetcher thread pulls
 // events from the vstreamer and adds them to the relayLog.
@@ -152,7 +177,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	streamErr := make(chan error, 1)
 	go func() {
-		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, mysql.EncodePosition(vp.startPos), nil, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)
 		})
 	}()
@@ -216,6 +241,9 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 }
 
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
+	if err := vp.updateFKCheck(ctx, rowEvent.Flags); err != nil {
+		return err
+	}
 	tplan := vp.tablePlans[rowEvent.TableName]
 	if tplan == nil {
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
@@ -250,7 +278,7 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	if posReached {
 		log.Infof("Stopped at position: %v", vp.stopPos)
 		if vp.saveStop {
-			if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
+			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
 				return false, err
 			}
 		}
@@ -335,8 +363,8 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			return ctx.Err()
 		}
 		// check throttler.
-		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vp.throttlerAppName) {
-			_ = vp.vr.updateTimeThrottled(VPlayerComponentName)
+		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)) {
+			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName)
 			continue
 		}
 
@@ -502,6 +530,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
+			log.Infof("Error applying row event: %s", err.Error())
 			return err
 		}
 		//Row event is logged AFTER RowChanges are applied so as to calculate the total elapsed time for the Row event
@@ -543,7 +572,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.updatePos(event.Timestamp); err != nil {
 				return err
 			}
-			if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
+			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
 				return err
 			}
 			if err := vp.vr.dbClient.Commit(); err != nil {
@@ -607,7 +636,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			switch {
 			case found && notFound:
 				// Some were found and some were not found. We can't handle this.
-				if err := vp.vr.setState(binlogplayer.BlpStopped, "unable to handle journal event: tables were partially matched"); err != nil {
+				if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, "unable to handle journal event: tables were partially matched"); err != nil {
 					return err
 				}
 				return io.EOF
@@ -619,7 +648,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 		log.Infof("Binlog event registering journal event %+v", event.Journal)
 		if err := vp.vr.vre.registerJournal(event.Journal, vp.vr.id); err != nil {
-			if err := vp.vr.setState(binlogplayer.BlpStopped, err.Error()); err != nil {
+			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, err.Error()); err != nil {
 				return err
 			}
 			return io.EOF
@@ -628,7 +657,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		if event.Throttled {
-			if err := vp.vr.updateTimeThrottled(VStreamerComponentName); err != nil {
+			if err := vp.vr.updateTimeThrottled(throttlerapp.VStreamerName); err != nil {
 				return err
 			}
 		}

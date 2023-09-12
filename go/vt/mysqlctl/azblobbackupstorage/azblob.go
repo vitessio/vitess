@@ -32,6 +32,7 @@ import (
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -40,26 +41,68 @@ import (
 
 var (
 	// This is the account name
-	accountName string
+	accountName = viperutil.Configure(
+		configKey("account.name"),
+		viperutil.Options[string]{
+			EnvVars:  []string{"VT_AZBLOB_ACCOUNT_NAME"},
+			FlagName: "azblob_backup_account_name",
+		},
+	)
 
 	// This is the private access key
-	accountKeyFile string
+	accountKeyFile = viperutil.Configure(
+		configKey("account.key_file"),
+		viperutil.Options[string]{
+			FlagName: "azblob_backup_account_key_file",
+		},
+	)
 
 	// This is the name of the container that will store the backups
-	containerName string
+	containerName = viperutil.Configure(
+		configKey("container_name"),
+		viperutil.Options[string]{
+			FlagName: "azblob_backup_container_name",
+		},
+	)
 
 	// This is an optional prefix to prepend to all files
-	storageRoot string
+	storageRoot = viperutil.Configure(
+		configKey("storage_root"),
+		viperutil.Options[string]{
+			FlagName: "azblob_backup_storage_root",
+		},
+	)
 
-	azBlobParallelism int
+	azBlobBufferSize = viperutil.Configure(
+		configKey("buffer_size"),
+		viperutil.Options[int]{
+			Default:  100 << (10 * 2), // 100 MiB
+			FlagName: "azblob_buffer_size",
+		},
+	)
+
+	azBlobParallelism = viperutil.Configure(
+		configKey("parallelism"),
+		viperutil.Options[int]{
+			Default:  1,
+			FlagName: "azblob_backup_parallelism",
+		},
+	)
 )
 
+const configKeyPrefix = "backup.storage.azblob"
+
+var configKey = viperutil.KeyPrefixFunc(configKeyPrefix)
+
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&accountName, "azblob_backup_account_name", "", "Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.")
-	fs.StringVar(&accountKeyFile, "azblob_backup_account_key_file", "", "Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).")
-	fs.StringVar(&containerName, "azblob_backup_container_name", "", "Azure Blob Container Name.")
-	fs.StringVar(&storageRoot, "azblob_backup_storage_root", "", "Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').")
-	fs.IntVar(&azBlobParallelism, "azblob_backup_parallelism", 1, "Azure Blob operation parallelism (requires extra memory when increased).")
+	fs.String("azblob_backup_account_name", accountName.Default(), "Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.")
+	fs.String("azblob_backup_account_key_file", accountKeyFile.Default(), "Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).")
+	fs.String("azblob_backup_container_name", containerName.Default(), "Azure Blob Container Name.")
+	fs.String("azblob_backup_storage_root", storageRoot.Default(), "Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').")
+	fs.Int("azblob_backup_buffer_size", azBlobBufferSize.Default(), "The memory buffer size to use in bytes, per file or stripe, when streaming to Azure Blob Service.")
+	fs.Int("azblob_backup_parallelism", azBlobParallelism.Default(), "Azure Blob operation parallelism (requires extra memory when increased -- a multiple of azblob_backup_buffer_size).")
+
+	viperutil.BindFlags(fs, accountName, accountKeyFile, containerName, storageRoot, azBlobParallelism)
 }
 
 func init() {
@@ -79,16 +122,12 @@ const (
 // 1. Direct Command Line Flag (azblob_backup_account_name, azblob_backup_account_key)
 // 2. Environment variables
 func azInternalCredentials() (string, string, error) {
-	actName := accountName
-	if actName == "" {
-		// Check the Environmental Value
-		actName = os.Getenv("VT_AZBLOB_ACCOUNT_NAME")
-	}
+	actName := accountName.Get()
 
 	var actKey string
-	if accountKeyFile != "" {
-		log.Infof("Getting Azure Storage Account key from file: %s", accountKeyFile)
-		dat, err := os.ReadFile(accountKeyFile)
+	if keyFile := accountKeyFile.Get(); keyFile != "" {
+		log.Infof("Getting Azure Storage Account key from file: %s", keyFile)
+		dat, err := os.ReadFile(keyFile)
 		if err != nil {
 			return "", "", err
 		}
@@ -218,8 +257,8 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 	go func() {
 		defer bh.waitGroup.Done()
 		_, err := azblob.UploadStreamToBlockBlob(bh.ctx, reader, blockBlobURL, azblob.UploadStreamToBlockBlobOptions{
-			BufferSize: azblob.BlockBlobMaxStageBlockBytes,
-			MaxBuffers: azBlobParallelism,
+			BufferSize: azBlobBufferSize.Get(),
+			MaxBuffers: azBlobParallelism.Get(),
 		})
 		if err != nil {
 			reader.CloseWithError(err)
@@ -286,7 +325,7 @@ func (bs *AZBlobBackupStorage) containerURL() (*azblob.ContainerURL, error) {
 	if err != nil {
 		return nil, err
 	}
-	u := azServiceURL(credentials).NewContainerURL(containerName)
+	u := azServiceURL(credentials).NewContainerURL(containerName.Get())
 	return &u, nil
 }
 
@@ -425,8 +464,8 @@ func (bs *AZBlobBackupStorage) WithParams(params backupstorage.Params) backupsto
 // Unlike path.Join, it doesn't collapse ".." or strip trailing slashes.
 // It also adds the value of the -azblob_backup_storage_root flag if set.
 func objName(parts ...string) string {
-	if storageRoot != "" {
-		return storageRoot + "/" + strings.Join(parts, "/")
+	if root := storageRoot.Get(); root != "" {
+		return root + "/" + strings.Join(parts, "/")
 	}
 	return strings.Join(parts, "/")
 }

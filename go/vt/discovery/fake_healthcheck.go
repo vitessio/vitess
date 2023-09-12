@@ -176,6 +176,11 @@ func (fhc *FakeHealthCheck) SetTabletType(tablet *topodatapb.Tablet, tabletType 
 func (fhc *FakeHealthCheck) Unsubscribe(c chan *TabletHealth) {
 }
 
+// GetLoadTabletsTrigger is not implemented.
+func (fhc *FakeHealthCheck) GetLoadTabletsTrigger() chan struct{} {
+	return nil
+}
+
 // AddTablet adds the tablet.
 func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet) {
 	key := TabletToMapKey(tablet)
@@ -360,12 +365,24 @@ func (fhc *FakeHealthCheck) GetAllTablets() map[string]*topodatapb.Tablet {
 	return res
 }
 
+// BroadcastAll broadcasts all the tablets' healthchecks
+func (fhc *FakeHealthCheck) BroadcastAll() {
+	if fhc.ch == nil {
+		return
+	}
+	fhc.mu.Lock()
+	defer fhc.mu.Unlock()
+	for _, item := range fhc.items {
+		fhc.ch <- simpleCopy(item.ts)
+	}
+}
+
 func simpleCopy(th *TabletHealth) *TabletHealth {
 	return &TabletHealth{
 		Conn:                 th.Conn,
-		Tablet:               proto.Clone(th.Tablet).(*topodatapb.Tablet),
-		Target:               proto.Clone(th.Target).(*querypb.Target),
-		Stats:                proto.Clone(th.Stats).(*querypb.RealtimeStats),
+		Tablet:               th.Tablet.CloneVT(),
+		Target:               th.Target.CloneVT(),
+		Stats:                th.Stats.CloneVT(),
 		LastError:            th.LastError,
 		PrimaryTermStartTime: th.PrimaryTermStartTime,
 		Serving:              th.Serving,

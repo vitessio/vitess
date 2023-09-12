@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -344,10 +345,10 @@ func TestSysvarSocket(t *testing.T) {
 
 	_, err = utils.ExecAllowError(t, conn, "set socket = '/any/path'")
 	require.Error(t, err)
-	sqlErr, ok := err.(*mysql.SQLError)
+	sqlErr, ok := err.(*sqlerror.SQLError)
 	require.True(t, ok, "not a mysql error: %T", err)
-	assert.Equal(t, mysql.ERIncorrectGlobalLocalVar, sqlErr.Number())
-	assert.Equal(t, mysql.SSUnknownSQLState, sqlErr.SQLState())
+	assert.Equal(t, sqlerror.ERIncorrectGlobalLocalVar, sqlErr.Number())
+	assert.Equal(t, sqlerror.SSUnknownSQLState, sqlErr.SQLState())
 	assert.Equal(t, "VT03010: variable 'socket' is a read only variable (errno 1238) (sqlstate HY000) during query: set socket = '/any/path'", sqlErr.Error())
 }
 

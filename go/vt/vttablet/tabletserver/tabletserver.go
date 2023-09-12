@@ -33,10 +33,9 @@ import (
 	"syscall"
 	"time"
 
-	"google.golang.org/protobuf/proto"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -64,6 +63,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
@@ -98,6 +98,7 @@ type TabletServer struct {
 	stats                  *tabletenv.Stats
 	QueryTimeout           atomic.Int64
 	TerseErrors            bool
+	TruncateErrorLen       int
 	enableHotRowProtection bool
 	topoServer             *topo.Server
 
@@ -111,7 +112,7 @@ type TabletServer struct {
 	tracker      *schema.Tracker
 	watcher      *BinlogWatcher
 	qe           *QueryEngine
-	txThrottler  *txthrottler.TxThrottler
+	txThrottler  txthrottler.TxThrottler
 	te           *TxEngine
 	messager     *messager.Engine
 	hs           *healthStreamer
@@ -137,8 +138,8 @@ var _ queryservice.QueryService = (*TabletServer)(nil)
 var RegisterFunctions []func(Controller)
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(name string, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
-	return NewTabletServer(name, tabletenv.NewCurrentConfig(), topoServer, alias)
+func NewServer(ctx context.Context, name string, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
+	return NewTabletServer(ctx, name, tabletenv.NewCurrentConfig(), topoServer, alias)
 }
 
 var (
@@ -148,20 +149,21 @@ var (
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
+func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
 	exporter := servenv.NewExporter(name, "Tablet")
 	tsv := &TabletServer{
 		exporter:               exporter,
 		stats:                  tabletenv.NewStats(exporter),
 		config:                 config,
 		TerseErrors:            config.TerseErrors,
+		TruncateErrorLen:       config.TruncateErrorLen,
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		topoServer:             topoServer,
-		alias:                  proto.Clone(alias).(*topodatapb.TabletAlias),
+		alias:                  alias.CloneVT(),
 	}
 	tsv.QueryTimeout.Store(config.Oltp.QueryTimeoutSeconds.Get().Nanoseconds())
 
-	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
+	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(ctx, topoServer, "TabletSrvTopo") })
 
 	tabletTypeFunc := func() topodatapb.TabletType {
 		if tsv.sm == nil {
@@ -173,8 +175,8 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.statelessql = NewQueryList("oltp-stateless")
 	tsv.statefulql = NewQueryList("oltp-stateful")
 	tsv.olapql = NewQueryList("olap")
-	tsv.hs = newHealthStreamer(tsv, alias)
 	tsv.se = schema.NewEngine(tsv)
+	tsv.hs = newHealthStreamer(tsv, alias, tsv.se)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
 	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias.Cell, tsv.rt.HeartbeatWriter(), tabletTypeFunc)
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
@@ -262,7 +264,7 @@ func (tsv *TabletServer) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.
 		return vterrors.NewErrorf(vtrpcpb.Code_UNAVAILABLE, vterrors.ServerNotAvailable, "Server isn't available")
 	}
 	tsv.sm.Init(tsv, target)
-	tsv.sm.target = proto.Clone(target).(*querypb.Target)
+	tsv.sm.target = target.CloneVT()
 	tsv.config.DB = dbcfgs
 
 	tsv.se.InitDBConfig(tsv.config.DB.DbaWithDB())
@@ -368,12 +370,12 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfi
 // SetServingType changes the serving type of the tabletserver. It starts or
 // stops internal services as deemed necessary.
 // Returns true if the state of QueryService or the tablet type changed.
-func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, serving bool, reason string) error {
+func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, ptsTimestamp time.Time, serving bool, reason string) error {
 	state := StateNotServing
 	if serving {
 		state = StateServing
 	}
-	return tsv.sm.SetServingType(tabletType, terTimestamp, state, reason)
+	return tsv.sm.SetServingType(tabletType, ptsTimestamp, state, reason)
 }
 
 // StartService is a convenience function for InitDBConfig->SetServingType
@@ -424,9 +426,9 @@ func (tsv *TabletServer) ReloadSchema(ctx context.Context) error {
 // changes to finish being applied.
 func (tsv *TabletServer) WaitForSchemaReset(timeout time.Duration) {
 	onSchemaChange := make(chan struct{}, 1)
-	tsv.se.RegisterNotifier("_tsv_wait", func(_ map[string]*schema.Table, _, _, _ []string) {
+	tsv.se.RegisterNotifier("_tsv_wait", func(_ map[string]*schema.Table, _, _, _ []*schema.Table) {
 		onSchemaChange <- struct{}{}
-	})
+	}, true)
 	defer tsv.se.UnregisterNotifier("_tsv_wait")
 
 	after := time.NewTimer(timeout)
@@ -491,8 +493,8 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			startTime := time.Now()
-			if tsv.txThrottler.Throttle() {
-				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
+			if tsv.txThrottler.Throttle(tsv.getPriorityFromOptions(options), options.GetWorkloadName()) {
+				return errTxThrottled
 			}
 			var connSetting *pools.Setting
 			if len(settings) > 0 {
@@ -514,6 +516,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 			logStats.OriginalSQL = beginSQL
 			if beginSQL != "" {
 				tsv.stats.QueryTimings.Record("BEGIN", startTime)
+				tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), startTime)
 			} else {
 				logStats.Method = ""
 			}
@@ -521,6 +524,30 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 		},
 	)
 	return state, err
+}
+
+func (tsv *TabletServer) getPriorityFromOptions(options *querypb.ExecuteOptions) int {
+	priority := tsv.config.TxThrottlerDefaultPriority
+	if options == nil {
+		return priority
+	}
+	if options.Priority == "" {
+		return priority
+	}
+
+	optionsPriority, err := strconv.Atoi(options.Priority)
+	// This should never error out, as the value for Priority has been validated in the vtgate already.
+	// Still, handle it just to make sure.
+	if err != nil {
+		log.Errorf(
+			"The value of the %s query directive could not be converted to integer, using the "+
+				"default value. Error was: %s",
+			sqlparser.DirectivePriority, priority, err)
+
+		return priority
+	}
+
+	return optionsPriority
 }
 
 // Commit commits the specified transaction.
@@ -545,6 +572,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 			// handlePanicAndSendLogStats doesn't log the no-op.
 			if commitSQL != "" {
 				tsv.stats.QueryTimings.Record("COMMIT", startTime)
+				tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), startTime)
 			} else {
 				logStats.Method = ""
 			}
@@ -562,6 +590,7 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, t
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("ROLLBACK", time.Now())
+			defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
 			logStats.TransactionID = transactionID
 			newReservedID, err = tsv.te.Rollback(ctx, transactionID)
 			if newReservedID > 0 {
@@ -819,10 +848,7 @@ func smallerTimeout(t1, t2 time.Duration) time.Duration {
 	if t2 == 0 {
 		return t1
 	}
-	if t1 < t2 {
-		return t1
-	}
-	return t2
+	return min(t1, t2)
 }
 
 // StreamExecute executes the query and streams the result.
@@ -1118,7 +1144,7 @@ func (tsv *TabletServer) VStream(ctx context.Context, request *binlogdatapb.VStr
 	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
 		return err
 	}
-	return tsv.vstreamer.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, send)
+	return tsv.vstreamer.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send)
 }
 
 // VStreamRows streams rows from the specified starting point.
@@ -1135,6 +1161,14 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, request *binlogdatapb.
 		row = r.Rows[0]
 	}
 	return tsv.vstreamer.StreamRows(ctx, request.Query, row, send)
+}
+
+// VStreamTables streams all tables.
+func (tsv *TabletServer) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(*binlogdatapb.VStreamTablesResponse) error) error {
+	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
+		return err
+	}
+	return tsv.vstreamer.StreamTables(ctx, send)
 }
 
 // VStreamResults streams rows from the specified starting point.
@@ -1170,6 +1204,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
+			defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
 			connID, sessionStateChanges, err = tsv.te.ReserveBegin(ctx, options, preQueries, postBeginQueries)
 			if err != nil {
 				return err
@@ -1215,6 +1250,7 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
+			defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
 			connID, sessionStateChanges, err = tsv.te.ReserveBegin(ctx, options, preQueries, postBeginQueries)
 			if err != nil {
 				return err
@@ -1268,6 +1304,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 		target, options, allowOnShutdown,
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
+			defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
 			state.ReservedID, err = tsv.te.Reserve(ctx, options, transactionID, preQueries)
 			if err != nil {
 				return err
@@ -1318,6 +1355,7 @@ func (tsv *TabletServer) ReserveStreamExecute(
 		target, options, allowOnShutdown,
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
+			defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
 			state.ReservedID, err = tsv.te.Reserve(ctx, options, transactionID, preQueries)
 			if err != nil {
 				return err
@@ -1347,6 +1385,7 @@ func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, tr
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RELEASE", time.Now())
+			defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
 			logStats.TransactionID = transactionID
 			logStats.ReservedID = reservedID
 			if reservedID != 0 {
@@ -1471,14 +1510,16 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 		// the log message is controlled by SanitizeLogMessages.
 		// We are handling an unrecoverable panic, so the cost of the dual message handling is
 		// not a concern.
-		var messagef, errMessage, logMessage string
+		var messagef, logMessage, query, truncatedQuery string
 		messagef = fmt.Sprintf("Uncaught panic for %%v:\n%v\n%s", x, tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
-		errMessage = fmt.Sprintf(messagef, queryAsString(sql, bindVariables, tsv.TerseErrors))
-		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", errMessage)
+		query = queryAsString(sql, bindVariables, tsv.TerseErrors, false)
+		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", fmt.Sprintf(messagef, query))
 		if tsv.TerseErrors == tsv.Config().SanitizeLogMessages {
-			logMessage = errMessage
+			truncatedQuery = queryAsString(sql, bindVariables, tsv.TerseErrors, true)
+			logMessage = fmt.Sprintf(messagef, truncatedQuery)
 		} else {
-			logMessage = fmt.Sprintf(messagef, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages))
+			truncatedQuery = queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true)
+			logMessage = fmt.Sprintf(messagef, truncatedQuery)
 		}
 		log.Error(logMessage)
 		tsv.stats.InternalErrors.Add("Panic", 1)
@@ -1532,25 +1573,25 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	// If so, we don't want to suppress the error. This will allow VTGate to
 	// detect and perform buffering during failovers.
 	var message string
-	sqlErr, ok := err.(*mysql.SQLError)
+	sqlErr, ok := err.(*sqlerror.SQLError)
 	if ok {
 		sqlState := sqlErr.SQLState()
 		errnum := sqlErr.Number()
 		if tsv.TerseErrors && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
-			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors))
+			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors, false))
 			if logMethod != nil {
-				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
+				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true))
 			}
 		} else {
-			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false))
+			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false, false))
 			if logMethod != nil {
-				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
+				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true))
 			}
 		}
 	} else {
 		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
 		if logMethod != nil {
-			message = fmt.Sprintf("%v: %v", err, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
+			message = fmt.Sprintf("%v: %v", err, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true))
 		}
 	}
 
@@ -1562,101 +1603,69 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		logStats.Error = err
 	}
 
-	return err
-}
-
-// truncateSQLAndBindVars calls TruncateForLog which:
-//
-//	splits off trailing comments, truncates the query, re-adds the trailing comments,
-//	if sanitize is false appends quoted bindvar:value pairs in sorted order, and
-//	lastly it truncates the resulting string
-func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool) string {
-	truncatedQuery := sqlparser.TruncateForLog(sql)
-	buf := &bytes.Buffer{}
-	fmt.Fprintf(buf, "BindVars: {")
-	if len(bindVariables) > 0 {
-		if sanitize {
-			fmt.Fprintf(buf, "[REDACTED]")
-		} else {
-			var keys []string
-			for key := range bindVariables {
-				keys = append(keys, key)
-			}
-			sort.Strings(keys)
-			for _, key := range keys {
-				fmt.Fprintf(buf, "%s: %q", key, fmt.Sprintf("%v", bindVariables[key]))
-			}
-		}
-	}
-	fmt.Fprintf(buf, "}")
-	bv := buf.String()
-	maxLen := sqlparser.GetTruncateErrLen()
-	if maxLen != 0 && len(bv) > maxLen {
-		bv = bv[:maxLen-12] + " [TRUNCATED]"
-	}
-	return fmt.Sprintf("Sql: %q, %s", truncatedQuery, bv)
+	return vterrors.TruncateError(err, tsv.TruncateErrorLen)
 }
 
 func convertErrorCode(err error) vtrpcpb.Code {
 	errCode := vterrors.Code(err)
-	sqlErr, ok := err.(*mysql.SQLError)
+	sqlErr, ok := err.(*sqlerror.SQLError)
 	if !ok {
 		return errCode
 	}
 
 	switch sqlErr.Number() {
-	case mysql.ERNotSupportedYet:
+	case sqlerror.ERNotSupportedYet:
 		errCode = vtrpcpb.Code_UNIMPLEMENTED
-	case mysql.ERDiskFull, mysql.EROutOfMemory, mysql.EROutOfSortMemory, mysql.ERConCount, mysql.EROutOfResources, mysql.ERRecordFileFull, mysql.ERHostIsBlocked,
-		mysql.ERCantCreateThread, mysql.ERTooManyDelayedThreads, mysql.ERNetPacketTooLarge, mysql.ERTooManyUserConnections, mysql.ERLockTableFull, mysql.ERUserLimitReached:
+	case sqlerror.ERDiskFull, sqlerror.EROutOfMemory, sqlerror.EROutOfSortMemory, sqlerror.ERConCount, sqlerror.EROutOfResources, sqlerror.ERRecordFileFull, sqlerror.ERHostIsBlocked,
+		sqlerror.ERCantCreateThread, sqlerror.ERTooManyDelayedThreads, sqlerror.ERNetPacketTooLarge, sqlerror.ERTooManyUserConnections, sqlerror.ERLockTableFull, sqlerror.ERUserLimitReached:
 		errCode = vtrpcpb.Code_RESOURCE_EXHAUSTED
-	case mysql.ERLockWaitTimeout:
+	case sqlerror.ERLockWaitTimeout:
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
-	case mysql.CRServerGone, mysql.ERServerShutdown, mysql.ERServerIsntAvailable, mysql.CRConnectionError, mysql.CRConnHostError:
+	case sqlerror.CRServerGone, sqlerror.ERServerShutdown, sqlerror.ERServerIsntAvailable, sqlerror.CRConnectionError, sqlerror.CRConnHostError:
 		errCode = vtrpcpb.Code_UNAVAILABLE
-	case mysql.ERFormNotFound, mysql.ERKeyNotFound, mysql.ERBadFieldError, mysql.ERNoSuchThread, mysql.ERUnknownTable, mysql.ERCantFindUDF, mysql.ERNonExistingGrant,
-		mysql.ERNoSuchTable, mysql.ERNonExistingTableGrant, mysql.ERKeyDoesNotExist:
+	case sqlerror.ERFormNotFound, sqlerror.ERKeyNotFound, sqlerror.ERBadFieldError, sqlerror.ERNoSuchThread, sqlerror.ERUnknownTable, sqlerror.ERCantFindUDF, sqlerror.ERNonExistingGrant,
+		sqlerror.ERNoSuchTable, sqlerror.ERNonExistingTableGrant, sqlerror.ERKeyDoesNotExist:
 		errCode = vtrpcpb.Code_NOT_FOUND
-	case mysql.ERDBAccessDenied, mysql.ERAccessDeniedError, mysql.ERKillDenied, mysql.ERNoPermissionToCreateUsers:
+	case sqlerror.ERDBAccessDenied, sqlerror.ERAccessDeniedError, sqlerror.ERKillDenied, sqlerror.ERNoPermissionToCreateUsers:
 		errCode = vtrpcpb.Code_PERMISSION_DENIED
-	case mysql.ERNoDb, mysql.ERNoSuchIndex, mysql.ERCantDropFieldOrKey, mysql.ERTableNotLockedForWrite, mysql.ERTableNotLocked, mysql.ERTooBigSelect, mysql.ERNotAllowedCommand,
-		mysql.ERTooLongString, mysql.ERDelayedInsertTableLocked, mysql.ERDupUnique, mysql.ERRequiresPrimaryKey, mysql.ERCantDoThisDuringAnTransaction, mysql.ERReadOnlyTransaction,
-		mysql.ERCannotAddForeign, mysql.ERNoReferencedRow, mysql.ERRowIsReferenced, mysql.ERCantUpdateWithReadLock, mysql.ERNoDefault, mysql.EROperandColumns,
-		mysql.ERSubqueryNo1Row, mysql.ERNonUpdateableTable, mysql.ERFeatureDisabled, mysql.ERDuplicatedValueInType, mysql.ERRowIsReferenced2,
-		mysql.ErNoReferencedRow2, mysql.ERWarnDataOutOfRange:
+	case sqlerror.ERNoDb, sqlerror.ERNoSuchIndex, sqlerror.ERCantDropFieldOrKey, sqlerror.ERTableNotLockedForWrite, sqlerror.ERTableNotLocked, sqlerror.ERTooBigSelect, sqlerror.ERNotAllowedCommand,
+		sqlerror.ERTooLongString, sqlerror.ERDelayedInsertTableLocked, sqlerror.ERDupUnique, sqlerror.ERRequiresPrimaryKey, sqlerror.ERCantDoThisDuringAnTransaction, sqlerror.ERReadOnlyTransaction,
+		sqlerror.ERCannotAddForeign, sqlerror.ERNoReferencedRow, sqlerror.ERRowIsReferenced, sqlerror.ERCantUpdateWithReadLock, sqlerror.ERNoDefault, sqlerror.EROperandColumns,
+		sqlerror.ERSubqueryNo1Row, sqlerror.ERNonUpdateableTable, sqlerror.ERFeatureDisabled, sqlerror.ERDuplicatedValueInType, sqlerror.ERRowIsReferenced2,
+		sqlerror.ErNoReferencedRow2, sqlerror.ERWarnDataOutOfRange:
 		errCode = vtrpcpb.Code_FAILED_PRECONDITION
-	case mysql.EROptionPreventsStatement:
+	case sqlerror.EROptionPreventsStatement:
 		errCode = vtrpcpb.Code_CLUSTER_EVENT
-	case mysql.ERTableExists, mysql.ERDupEntry, mysql.ERFileExists, mysql.ERUDFExists:
+	case sqlerror.ERTableExists, sqlerror.ERDupEntry, sqlerror.ERFileExists, sqlerror.ERUDFExists:
 		errCode = vtrpcpb.Code_ALREADY_EXISTS
-	case mysql.ERGotSignal, mysql.ERForcingClose, mysql.ERAbortingConnection, mysql.ERLockDeadlock:
+	case sqlerror.ERGotSignal, sqlerror.ERForcingClose, sqlerror.ERAbortingConnection, sqlerror.ERLockDeadlock:
 		// For ERLockDeadlock, a deadlock rolls back the transaction.
 		errCode = vtrpcpb.Code_ABORTED
-	case mysql.ERUnknownComError, mysql.ERBadNullError, mysql.ERBadDb, mysql.ERBadTable, mysql.ERNonUniq, mysql.ERWrongFieldWithGroup, mysql.ERWrongGroupField,
-		mysql.ERWrongSumSelect, mysql.ERWrongValueCount, mysql.ERTooLongIdent, mysql.ERDupFieldName, mysql.ERDupKeyName, mysql.ERWrongFieldSpec, mysql.ERParseError,
-		mysql.EREmptyQuery, mysql.ERNonUniqTable, mysql.ERInvalidDefault, mysql.ERMultiplePriKey, mysql.ERTooManyKeys, mysql.ERTooManyKeyParts, mysql.ERTooLongKey,
-		mysql.ERKeyColumnDoesNotExist, mysql.ERBlobUsedAsKey, mysql.ERTooBigFieldLength, mysql.ERWrongAutoKey, mysql.ERWrongFieldTerminators, mysql.ERBlobsAndNoTerminated,
-		mysql.ERTextFileNotReadable, mysql.ERWrongSubKey, mysql.ERCantRemoveAllFields, mysql.ERUpdateTableUsed, mysql.ERNoTablesUsed, mysql.ERTooBigSet,
-		mysql.ERBlobCantHaveDefault, mysql.ERWrongDbName, mysql.ERWrongTableName, mysql.ERUnknownProcedure, mysql.ERWrongParamCountToProcedure,
-		mysql.ERWrongParametersToProcedure, mysql.ERFieldSpecifiedTwice, mysql.ERInvalidGroupFuncUse, mysql.ERTableMustHaveColumns, mysql.ERUnknownCharacterSet,
-		mysql.ERTooManyTables, mysql.ERTooManyFields, mysql.ERTooBigRowSize, mysql.ERWrongOuterJoin, mysql.ERNullColumnInIndex, mysql.ERFunctionNotDefined,
-		mysql.ERWrongValueCountOnRow, mysql.ERInvalidUseOfNull, mysql.ERRegexpError, mysql.ERMixOfGroupFuncAndFields, mysql.ERIllegalGrantForTable, mysql.ERSyntaxError,
-		mysql.ERWrongColumnName, mysql.ERWrongKeyColumn, mysql.ERBlobKeyWithoutLength, mysql.ERPrimaryCantHaveNull, mysql.ERTooManyRows, mysql.ERUnknownSystemVariable,
-		mysql.ERSetConstantsOnly, mysql.ERWrongArguments, mysql.ERWrongUsage, mysql.ERWrongNumberOfColumnsInSelect, mysql.ERDupArgument, mysql.ERLocalVariable,
-		mysql.ERGlobalVariable, mysql.ERWrongValueForVar, mysql.ERWrongTypeForVar, mysql.ERVarCantBeRead, mysql.ERCantUseOptionHere, mysql.ERIncorrectGlobalLocalVar,
-		mysql.ERWrongFKDef, mysql.ERKeyRefDoNotMatchTableRef, mysql.ERCyclicReference, mysql.ERCollationCharsetMismatch, mysql.ERCantAggregate2Collations,
-		mysql.ERCantAggregate3Collations, mysql.ERCantAggregateNCollations, mysql.ERVariableIsNotStruct, mysql.ERUnknownCollation, mysql.ERWrongNameForIndex,
-		mysql.ERWrongNameForCatalog, mysql.ERBadFTColumn, mysql.ERTruncatedWrongValue, mysql.ERTooMuchAutoTimestampCols, mysql.ERInvalidOnUpdate, mysql.ERUnknownTimeZone,
-		mysql.ERInvalidCharacterString, mysql.ERIllegalReference, mysql.ERDerivedMustHaveAlias, mysql.ERTableNameNotAllowedHere, mysql.ERDataTooLong, mysql.ERDataOutOfRange,
-		mysql.ERTruncatedWrongValueForField, mysql.ERIllegalValueForType:
+	case sqlerror.ERUnknownComError, sqlerror.ERBadNullError, sqlerror.ERBadDb, sqlerror.ERBadTable, sqlerror.ERNonUniq, sqlerror.ERWrongFieldWithGroup, sqlerror.ERWrongGroupField,
+		sqlerror.ERWrongSumSelect, sqlerror.ERWrongValueCount, sqlerror.ERTooLongIdent, sqlerror.ERDupFieldName, sqlerror.ERDupKeyName, sqlerror.ERWrongFieldSpec, sqlerror.ERParseError,
+		sqlerror.EREmptyQuery, sqlerror.ERNonUniqTable, sqlerror.ERInvalidDefault, sqlerror.ERMultiplePriKey, sqlerror.ERTooManyKeys, sqlerror.ERTooManyKeyParts, sqlerror.ERTooLongKey,
+		sqlerror.ERKeyColumnDoesNotExist, sqlerror.ERBlobUsedAsKey, sqlerror.ERTooBigFieldLength, sqlerror.ERWrongAutoKey, sqlerror.ERWrongFieldTerminators, sqlerror.ERBlobsAndNoTerminated,
+		sqlerror.ERTextFileNotReadable, sqlerror.ERWrongSubKey, sqlerror.ERCantRemoveAllFields, sqlerror.ERUpdateTableUsed, sqlerror.ERNoTablesUsed, sqlerror.ERTooBigSet,
+		sqlerror.ERBlobCantHaveDefault, sqlerror.ERWrongDbName, sqlerror.ERWrongTableName, sqlerror.ERUnknownProcedure, sqlerror.ERWrongParamCountToProcedure,
+		sqlerror.ERWrongParametersToProcedure, sqlerror.ERFieldSpecifiedTwice, sqlerror.ERInvalidGroupFuncUse, sqlerror.ERTableMustHaveColumns, sqlerror.ERUnknownCharacterSet,
+		sqlerror.ERTooManyTables, sqlerror.ERTooManyFields, sqlerror.ERTooBigRowSize, sqlerror.ERWrongOuterJoin, sqlerror.ERNullColumnInIndex, sqlerror.ERFunctionNotDefined,
+		sqlerror.ERWrongValueCountOnRow, sqlerror.ERInvalidUseOfNull, sqlerror.ERRegexpError, sqlerror.ERMixOfGroupFuncAndFields, sqlerror.ERIllegalGrantForTable, sqlerror.ERSyntaxError,
+		sqlerror.ERWrongColumnName, sqlerror.ERWrongKeyColumn, sqlerror.ERBlobKeyWithoutLength, sqlerror.ERPrimaryCantHaveNull, sqlerror.ERTooManyRows, sqlerror.ERUnknownSystemVariable,
+		sqlerror.ERSetConstantsOnly, sqlerror.ERWrongArguments, sqlerror.ERWrongUsage, sqlerror.ERWrongNumberOfColumnsInSelect, sqlerror.ERDupArgument, sqlerror.ERLocalVariable,
+		sqlerror.ERGlobalVariable, sqlerror.ERWrongValueForVar, sqlerror.ERWrongTypeForVar, sqlerror.ERVarCantBeRead, sqlerror.ERCantUseOptionHere, sqlerror.ERIncorrectGlobalLocalVar,
+		sqlerror.ERWrongFKDef, sqlerror.ERKeyRefDoNotMatchTableRef, sqlerror.ERCyclicReference, sqlerror.ERCollationCharsetMismatch, sqlerror.ERCantAggregate2Collations,
+		sqlerror.ERCantAggregate3Collations, sqlerror.ERCantAggregateNCollations, sqlerror.ERVariableIsNotStruct, sqlerror.ERUnknownCollation, sqlerror.ERWrongNameForIndex,
+		sqlerror.ERWrongNameForCatalog, sqlerror.ERBadFTColumn, sqlerror.ERTruncatedWrongValue, sqlerror.ERTooMuchAutoTimestampCols, sqlerror.ERInvalidOnUpdate, sqlerror.ERUnknownTimeZone,
+		sqlerror.ERInvalidCharacterString, sqlerror.ERIllegalReference, sqlerror.ERDerivedMustHaveAlias, sqlerror.ERTableNameNotAllowedHere, sqlerror.ERDataTooLong, sqlerror.ERDataOutOfRange,
+		sqlerror.ERTruncatedWrongValueForField, sqlerror.ERIllegalValueForType:
 		errCode = vtrpcpb.Code_INVALID_ARGUMENT
-	case mysql.ERSpecifiedAccessDenied:
+	case sqlerror.ERSpecifiedAccessDenied:
 		errCode = vtrpcpb.Code_PERMISSION_DENIED
 		// This code is also utilized for Google internal failover error code.
 		if strings.Contains(err.Error(), "failover in progress") {
 			errCode = vtrpcpb.Code_FAILED_PRECONDITION
 		}
-	case mysql.CRServerLost:
+	case sqlerror.CRServerLost:
 		// Query was killed.
 		errCode = vtrpcpb.Code_CANCELED
 	}
@@ -1705,6 +1714,12 @@ func (tsv *TabletServer) TopoServer() *topo.Server {
 	return tsv.topoServer
 }
 
+// CheckThrottler issues a self check
+func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
+	r := tsv.lagThrottler.CheckByType(ctx, appName, "", flags, throttle.ThrottleCheckSelf)
+	return r
+}
+
 // HandlePanic is part of the queryservice.QueryService interface
 func (tsv *TabletServer) HandlePanic(err *error) {
 	if x := recover(); x != nil {
@@ -1712,8 +1727,11 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 	}
 }
 
-// Close is a no-op.
+// Close shuts down any remaining go routines
 func (tsv *TabletServer) Close(ctx context.Context) error {
+	tsv.sm.closeAll()
+	tsv.qe.Close()
+	tsv.stats.Stop()
 	return nil
 }
 
@@ -1803,7 +1821,7 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			}
 			appName := r.URL.Query().Get("app")
 			if appName == "" {
-				appName = throttle.DefaultAppName
+				appName = throttlerapp.DefaultName.String()
 			}
 			flags := &throttle.CheckFlags{
 				LowPriority:           (r.URL.Query().Get("p") == "low"),
@@ -1846,7 +1864,7 @@ func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
 			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
 			return
 		}
-		var ratio = 1.0
+		var ratio = throttle.DefaultThrottleRatio
 		if ratioParam := r.URL.Query().Get("ratio"); ratioParam != "" {
 			ratio, err = strconv.ParseFloat(ratioParam, 64)
 			if err != nil {
@@ -1854,7 +1872,7 @@ func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
 				return
 			}
 		}
-		appThrottle := tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), ratio)
+		appThrottle := tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), ratio, false)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(appThrottle)
@@ -1891,13 +1909,6 @@ func (tsv *TabletServer) registerDebugEnvHandler() {
 // Only to be used for testing.
 func (tsv *TabletServer) EnableHeartbeat(enabled bool) {
 	tsv.rt.EnableHeartbeat(enabled)
-}
-
-// EnableThrottler forces throttler to be on or off.
-// When throttler is off, it responds to all check requests with HTTP 200 OK
-// Only to be used for testing.
-func (tsv *TabletServer) EnableThrottler(enabled bool) {
-	tsv.Config().EnableLagThrottler = enabled
 }
 
 // SetTracking forces tracking to be on or off.
@@ -2019,17 +2030,17 @@ func (tsv *TabletServer) ConsolidatorMode() string {
 	return tsv.qe.consolidatorMode.Load().(string)
 }
 
-// queryAsString returns a readable normalized version of the query and if sanitize
-// is false it also includes the bind variables.
-func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool) string {
-	buf := &bytes.Buffer{}
-	// sql is the normalized query without the bind vars
-	fmt.Fprintf(buf, "Sql: %q", sql)
+// queryAsString returns a readable normalized version of the query.
+// If sanitize is false it also includes the bind variables.
+// If truncateForLog is true, it truncates the sql query and the
+// bind variables.
+func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool, truncateForLog bool) string {
 	// Add the bind vars unless this needs to be sanitized, e.g. for log messages
-	fmt.Fprintf(buf, ", BindVars: {")
+	bvBuf := &bytes.Buffer{}
+	fmt.Fprintf(bvBuf, "BindVars: {")
 	if len(bindVariables) > 0 {
 		if sanitize {
-			fmt.Fprintf(buf, "[REDACTED]")
+			fmt.Fprintf(bvBuf, "[REDACTED]")
 		} else {
 			var keys []string
 			for key := range bindVariables {
@@ -2039,12 +2050,30 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, s
 			var valString string
 			for _, key := range keys {
 				valString = fmt.Sprintf("%v", bindVariables[key])
-				fmt.Fprintf(buf, "%s: %q", key, valString)
+				fmt.Fprintf(bvBuf, "%s: %q", key, valString)
 			}
 		}
 	}
-	fmt.Fprintf(buf, "}")
-	return buf.String()
+	fmt.Fprintf(bvBuf, "}")
+
+	// Truncate the bind vars if necessary
+	bv := bvBuf.String()
+	maxLen := sqlparser.GetTruncateErrLen()
+	if truncateForLog && maxLen > 0 && len(bv) > maxLen {
+		if maxLen <= 12 {
+			bv = sqlparser.TruncationText
+		} else {
+			bv = bv[:maxLen-(len(sqlparser.TruncationText)+1)] + " " + sqlparser.TruncationText
+		}
+	}
+
+	// Truncate the sql query if necessary
+	if truncateForLog {
+		sql = sqlparser.TruncateForLog(sql)
+	}
+
+	// sql is the normalized query without the bind vars
+	return fmt.Sprintf("Sql: %q, %s", sql, bv)
 }
 
 // withTimeout returns a context based on the specified timeout.

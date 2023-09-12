@@ -23,13 +23,13 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/mysqlctl"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -54,11 +54,11 @@ var (
 				sqltypes.NULL,                          // stop_pos
 				sqltypes.NewInt64(9223372036854775807), // max_tps
 				sqltypes.NewInt64(9223372036854775807), // max_replication_lag
-				sqltypes.NewVarBinary("Running"),       // state
-				sqltypes.NewInt64(1),                   // workflow_type
-				sqltypes.NewVarChar("wf"),              // workflow
-				sqltypes.NewInt64(0),                   // workflow_sub_type
-				sqltypes.NewInt64(0),                   // defer_secondary_keys
+				sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()), // state
+				sqltypes.NewInt64(1),      // workflow_type
+				sqltypes.NewVarChar("wf"), // workflow
+				sqltypes.NewInt64(0),      // workflow_sub_type
+				sqltypes.NewInt64(0),      // defer_secondary_keys
 			},
 		},
 	}
@@ -74,7 +74,7 @@ func TestControllerKeyRange(t *testing.T) {
 	defer deleteTablet(wantTablet)
 	params := map[string]string{
 		"id":     "1",
-		"state":  binlogplayer.BlpRunning,
+		"state":  binlogdatapb.VReplicationWorkflowState_Running.String(),
 		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 	}
 
@@ -90,8 +90,9 @@ func TestControllerKeyRange(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &mysqlctl.FakeMysqlDaemon{}
 	mysqld.MysqlPort.Store(3306)
+	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, nil)
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, vre)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +112,7 @@ func TestControllerTables(t *testing.T) {
 
 	params := map[string]string{
 		"id":     "1",
-		"state":  binlogplayer.BlpRunning,
+		"state":  binlogdatapb.VReplicationWorkflowState_Running.String(),
 		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" tables:"table1" tables:"/funtables_/" `, env.KeyspaceName),
 	}
 
@@ -151,8 +152,9 @@ func TestControllerTables(t *testing.T) {
 		},
 	}
 	mysqld.MysqlPort.Store(3306)
+	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, nil)
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, vre)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +181,7 @@ func TestControllerBadID(t *testing.T) {
 func TestControllerStopped(t *testing.T) {
 	params := map[string]string{
 		"id":    "1",
-		"state": binlogplayer.BlpStopped,
+		"state": binlogdatapb.VReplicationWorkflowState_Stopped.String(),
 	}
 
 	ct, err := newController(context.Background(), params, nil, nil, nil, "", "", nil, nil)
@@ -202,7 +204,7 @@ func TestControllerOverrides(t *testing.T) {
 
 	params := map[string]string{
 		"id":           "1",
-		"state":        binlogplayer.BlpRunning,
+		"state":        binlogdatapb.VReplicationWorkflowState_Running.String(),
 		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 		"cell":         env.Cells[0],
 		"tablet_types": "replica",
@@ -220,8 +222,9 @@ func TestControllerOverrides(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &mysqlctl.FakeMysqlDaemon{}
 	mysqld.MysqlPort.Store(3306)
+	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil, nil)
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil, vre)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,17 +238,20 @@ func TestControllerOverrides(t *testing.T) {
 }
 
 func TestControllerCanceledContext(t *testing.T) {
-	defer deleteTablet(addTablet(100))
+	wantTablet := addTablet(100)
+	defer deleteTablet(wantTablet)
 
 	params := map[string]string{
 		"id":     "1",
-		"state":  binlogplayer.BlpRunning,
+		"state":  binlogdatapb.VReplicationWorkflowState_Running.String(),
 		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	ct, err := newController(ctx, params, nil, nil, env.TopoServ, env.Cells[0], "rdonly", nil, nil)
+	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, nil, nil, nil, "", nil)
+
+	ct, err := newController(ctx, params, nil, nil, env.TopoServ, env.Cells[0], "rdonly", nil, vre)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +274,7 @@ func TestControllerRetry(t *testing.T) {
 
 	params := map[string]string{
 		"id":           "1",
-		"state":        binlogplayer.BlpRunning,
+		"state":        binlogdatapb.VReplicationWorkflowState_Running.String(),
 		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 		"cell":         env.Cells[0],
 		"tablet_types": "replica",
@@ -289,8 +295,9 @@ func TestControllerRetry(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &mysqlctl.FakeMysqlDaemon{}
 	mysqld.MysqlPort.Store(3306)
+	vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil, nil)
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil, vre)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +313,7 @@ func TestControllerStopPosition(t *testing.T) {
 
 	params := map[string]string{
 		"id":     "1",
-		"state":  binlogplayer.BlpRunning,
+		"state":  binlogdatapb.VReplicationWorkflowState_Running.String(),
 		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 	}
 
@@ -328,15 +335,15 @@ func TestControllerStopPosition(t *testing.T) {
 		InsertID: 0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // pos
-				sqltypes.NewVarBinary("MariaDB/0-1-1235"), // stop_pos
-				sqltypes.NewInt64(9223372036854775807),    // max_tps
-				sqltypes.NewInt64(9223372036854775807),    // max_replication_lag
-				sqltypes.NewVarBinary("Running"),          // state
-				sqltypes.NewInt64(1),                      // workflow_type
-				sqltypes.NewVarChar("wf"),                 // workflow
-				sqltypes.NewInt64(1),                      // workflow_sub_type
-				sqltypes.NewInt64(1),                      // defer_secondary_keys
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"),                                      // pos
+				sqltypes.NewVarBinary("MariaDB/0-1-1235"),                                      // stop_pos
+				sqltypes.NewInt64(9223372036854775807),                                         // max_tps
+				sqltypes.NewInt64(9223372036854775807),                                         // max_replication_lag
+				sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()), // state
+				sqltypes.NewInt64(1),                                                           // workflow_type
+				sqltypes.NewVarChar("wf"),                                                      // workflow
+				sqltypes.NewInt64(1),                                                           // workflow_sub_type
+				sqltypes.NewInt64(1),                                                           // defer_secondary_keys
 			},
 		},
 	}
@@ -350,8 +357,9 @@ func TestControllerStopPosition(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &mysqlctl.FakeMysqlDaemon{}
 	mysqld.MysqlPort.Store(3306)
+	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, nil)
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, vre)
 	if err != nil {
 		t.Fatal(err)
 	}

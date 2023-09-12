@@ -23,12 +23,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -111,12 +109,20 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 				// The timestamp format allows us to compare them lexicographically.
 				// We don't test that the ETA always increases as it can decrease based on how
 				// quickly we're doing work.
-				if info.Progress.ETA != "" {
-					// If we're operating at the second boundary then the ETA can be up
-					// to 1 second in the past due to using second based precision.
-					loc, _ := time.LoadLocation("UTC")
-					require.GreaterOrEqual(t, info.Progress.ETA, time.Now().Add(-time.Second).In(loc).Format(vdiff2.TimestampFormat))
-				}
+
+				// Commenting out this check for now as it is quite flaky in Github CI: we sometimes get a difference of
+				// more than 1s between the ETA and the current time, empirically seen 2s when it has failed,
+				// but presumably it can be higher. Keeping the code here for now in case we want to re-enable it.
+
+				/*
+					if info.Progress.ETA != "" {
+						// If we're operating at the second boundary then the ETA can be up
+						// to 1 second in the past due to using second based precision.
+						loc, _ := time.LoadLocation("UTC")
+						require.GreaterOrEqual(t, info.Progress.ETA, time.Now().Add(-time.Second).In(loc).Format(vdiff2.TimestampFormat))
+					}
+				*/
+
 				if !first {
 					require.GreaterOrEqual(t, info.Progress.Percentage, previousProgress.Percentage)
 				}
@@ -155,8 +161,8 @@ func doVdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDif
 			require.Equal(t, strings.Join(want.shards, ","), info.Shards)
 			require.Equal(t, want.hasMismatch, info.HasMismatch)
 		} else {
-			require.Equal(t, "completed", info.State)
-			require.False(t, info.HasMismatch)
+			require.Equal(t, "completed", info.State, "vdiff results: %+v", info)
+			require.False(t, info.HasMismatch, "vdiff results: %+v", info)
 		}
 		if strings.Contains(t.Name(), "AcrossDBVersions") {
 			log.Errorf("VDiff resume cannot be guaranteed between major MySQL versions due to implied collation differences, skipping resume test...")
@@ -176,7 +182,7 @@ func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg stri
 	log.Infof("vdiff2 output: %+v (err: %+v)", output, err)
 	if !expectError {
 		require.Nil(t, err)
-		uuid, err = jsonparser.GetString([]byte(output), "UUID")
+		uuid = gjson.Get(output, "UUID").String()
 		if action != "delete" && !(action == "show" && actionArg == "all") { // a UUID is not required
 			require.NoError(t, err)
 			require.NotEmpty(t, uuid)
@@ -195,19 +201,18 @@ type vdiffInfo struct {
 	Progress           vdiff2.ProgressReport
 }
 
-func getVDiffInfo(jsonStr string) *vdiffInfo {
+func getVDiffInfo(json string) *vdiffInfo {
 	var info vdiffInfo
-	json := []byte(jsonStr)
-	info.Workflow, _ = jsonparser.GetString(json, "Workflow")
-	info.Keyspace, _ = jsonparser.GetString(json, "Keyspace")
-	info.State, _ = jsonparser.GetString(json, "State")
-	info.Shards, _ = jsonparser.GetString(json, "Shards")
-	info.RowsCompared, _ = jsonparser.GetInt(json, "RowsCompared")
-	info.StartedAt, _ = jsonparser.GetString(json, "StartedAt")
-	info.CompletedAt, _ = jsonparser.GetString(json, "CompletedAt")
-	info.HasMismatch, _ = jsonparser.GetBoolean(json, "HasMismatch")
-	info.Progress.Percentage, _ = jsonparser.GetFloat(json, "Progress", "Percentage")
-	info.Progress.ETA, _ = jsonparser.GetString(json, "Progress", "ETA")
+	info.Workflow = gjson.Get(json, "Workflow").String()
+	info.Keyspace = gjson.Get(json, "Keyspace").String()
+	info.State = gjson.Get(json, "State").String()
+	info.Shards = gjson.Get(json, "Shards").String()
+	info.RowsCompared = gjson.Get(json, "RowsCompared").Int()
+	info.StartedAt = gjson.Get(json, "StartedAt").String()
+	info.CompletedAt = gjson.Get(json, "CompletedAt").String()
+	info.HasMismatch = gjson.Get(json, "HasMismatch").Bool()
+	info.Progress.Percentage = gjson.Get(json, "Progress.Percentage").Float()
+	info.Progress.ETA = gjson.Get(json, "Progress.ETA").String()
 	return &info
 }
 
@@ -215,30 +220,6 @@ func encodeString(in string) string {
 	var buf strings.Builder
 	sqltypes.NewVarChar(in).EncodeSQL(&buf)
 	return buf.String()
-}
-
-// updateTableStats runs ANALYZE TABLE on each table involved in the workflow.
-// You should execute this if you leverage table information from e.g.
-// information_schema.tables in your test.
-func updateTableStats(t *testing.T, tablet *cluster.VttabletProcess, tables string) {
-	dbName := "vt_" + tablet.Keyspace
-	tableList := strings.Split(strings.TrimSpace(tables), ",")
-	if len(tableList) == 0 {
-		// we need to get all of the tables in the keyspace
-		res, err := tablet.QueryTabletWithDB("show tables", dbName)
-		require.NoError(t, err)
-		for _, row := range res.Rows {
-			tableList = append(tableList, row[0].String())
-		}
-	}
-	for _, table := range tableList {
-		table = strings.TrimSpace(table)
-		if table != "" {
-			res, err := tablet.QueryTabletWithDB(fmt.Sprintf(sqlAnalyzeTable, sqlescape.EscapeID(table)), dbName)
-			require.NoError(t, err)
-			require.Equal(t, 1, len(res.Rows))
-		}
-	}
 }
 
 // generateMoreCustomers creates additional test data for better tests

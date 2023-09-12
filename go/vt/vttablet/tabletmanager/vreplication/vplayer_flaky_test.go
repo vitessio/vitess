@@ -27,16 +27,107 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
+
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
+
+// TestPlayerGeneratedInvisiblePrimaryKey confirms that the gipk column is replicated by vplayer, both for target
+// tables that have a gipk column and those that make it visible.
+func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
+	if !env.HasCapability(testenv.ServerCapabilityGeneratedInvisiblePrimaryKey) {
+		t.Skip("skipping test as server does not support generated invisible primary keys")
+	}
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"SET @@session.sql_generate_invisible_primary_key=ON;",
+		"create table t1(val varbinary(128))",
+		fmt.Sprintf("create table %s.t1(val varbinary(128))", vrepldb),
+		"create table t2(val varbinary(128))",
+		"SET @@session.sql_generate_invisible_primary_key=OFF;",
+		fmt.Sprintf("create table %s.t2(my_row_id int, val varbinary(128), primary key(my_row_id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+		"drop table t2",
+		fmt.Sprintf("drop table %s.t2", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}, {
+			Match:  "t2",
+			Filter: "select * from t2",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	testcases := []struct {
+		input       string
+		output      string
+		table       string
+		data        [][]string
+		query       string
+		queryResult [][]string
+	}{{
+		input:  "insert into t1(val) values ('aaa')",
+		output: "insert into t1(my_row_id,val) values (1,'aaa')",
+		table:  "t1",
+		data: [][]string{
+			{"aaa"},
+		},
+		query: "select my_row_id, val from t1",
+		queryResult: [][]string{
+			{"1", "aaa"},
+		},
+	}, {
+		input:  "insert into t2(val) values ('bbb')",
+		output: "insert into t2(my_row_id,val) values (1,'bbb')",
+		table:  "t2",
+		data: [][]string{
+			{"1", "bbb"},
+		},
+		query: "select my_row_id, val from t2",
+		queryResult: [][]string{
+			{"1", "bbb"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := qh.Expect(tcases.output)
+		expectNontxQueries(t, output)
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+		if tcases.query != "" {
+			expectQueryResult(t, tcases.query, tcases.queryResult)
+		}
+	}
+}
 
 func TestPlayerInvisibleColumns(t *testing.T) {
 	if !supportsInvisibleColumns() {
@@ -111,6 +202,7 @@ func TestHeartbeatFrequencyFlag(t *testing.T) {
 	}()
 
 	stats := binlogplayer.NewStats()
+	defer stats.Stop()
 	vp := &vplayer{vr: &vreplicator{dbClient: newVDBClient(realDBClientFactory(), stats), stats: stats}}
 
 	type testcount struct {
@@ -433,6 +525,62 @@ func TestPlayerSavepoint(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
+	cancel()
+}
+
+// TestPlayerForeignKeyCheck tests that we can insert a row into a child table without the corresponding foreign key
+// if the foreign_key_checks is not set.
+func TestPlayerForeignKeyCheck(t *testing.T) {
+	doNotLogDBQueries = true
+	defer func() { doNotLogDBQueries = false }()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table parent(id int, name varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.parent(id int, name varchar(128), primary key(id))", vrepldb),
+		"create table child(id int, parent_id int, name varchar(128), primary key(id), foreign key(parent_id) references parent(id) on delete cascade)",
+		fmt.Sprintf("create table %s.child(id int, parent_id int, name varchar(128), primary key(id), foreign key(parent_id) references parent(id) on delete cascade)", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table child",
+		fmt.Sprintf("drop table %s.child", vrepldb),
+		"drop table parent",
+		fmt.Sprintf("drop table %s.parent", vrepldb),
+	})
+
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+
+	testSetForeignKeyQueries = true
+	defer func() {
+		testSetForeignKeyQueries = false
+	}()
+
+	execStatements(t, []string{
+		"insert into parent values(1, 'parent1')",
+		"insert into child values(1, 1, 'child1')",
+		"set foreign_key_checks=0",
+		"insert into child values(2, 100, 'child100')",
+	})
+	expectData(t, "parent", [][]string{
+		{"1", "parent1"},
+	})
+	expectData(t, "child", [][]string{
+		{"1", "1", "child1"},
+		{"2", "100", "child100"},
+	})
 	cancel()
 }
 
@@ -1493,17 +1641,26 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
-		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1,CAST(null as JSON),JSON_OBJECT(),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
+		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1,null,JSON_OBJECT(),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
 		table:  "vitess_json",
 		data: [][]string{
 			{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 		},
 	}, {
-		input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4)",
+		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values ('null', '{\"name\":null}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
+		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (2,CAST(_utf8mb4'null' as JSON),JSON_OBJECT(_utf8mb4'name', null),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
+		table:  "vitess_json",
+		data: [][]string{
+			{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+			{"2", "null", `{"name": null}`, "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+		},
+	}, {
+		input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4) where id=1",
 		output: "update vitess_json set val1=JSON_OBJECT(_utf8mb4'bar', _utf8mb4'foo'), val2=JSON_OBJECT(), val3=CAST(123 as JSON), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
 		table:  "vitess_json",
 		data: [][]string{
 			{"1", `{"bar": "foo"}`, "{}", "123", `{"a": [98, 123]}`, `{}`},
+			{"2", "null", `{"name": null}`, "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 		},
 	}}
 
@@ -1689,13 +1846,13 @@ func TestGTIDCompress(t *testing.T) {
 			require.NotNil(t, qr)
 			require.Equal(t, 1, len(qr.Rows))
 			gotGTID := qr.Rows[0][0].ToString()
-			pos, err := mysql.DecodePosition(gotGTID)
+			pos, err := replication.DecodePosition(gotGTID)
 			if tCase.compress {
 				require.True(t, pos.IsZero())
 				pos, err = binlogplayer.DecodePosition(gotGTID)
 				require.NoError(t, err)
 				require.NotNil(t, pos)
-				tpos, err := mysql.DecodePosition(tCase.gtid)
+				tpos, err := replication.DecodePosition(tCase.gtid)
 				require.NoError(t, err)
 				require.Equal(t, tpos.String(), pos.String())
 			} else {
@@ -1737,7 +1894,7 @@ func TestPlayerStopPos(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
 	startPos := primaryPosition(t)
-	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogplayer.BlpStopped, vrepldb, 0, 0)
+	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogdatapb.VReplicationWorkflowState_Stopped, vrepldb, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -1841,7 +1998,7 @@ func TestPlayerStopAtOther(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogplayer.BlpStopped, vrepldb, 0, 0)
+	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogdatapb.VReplicationWorkflowState_Stopped, vrepldb, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -2642,7 +2799,7 @@ func TestVReplicationLogs(t *testing.T) {
 
 	for _, want := range expected {
 		t.Run("", func(t *testing.T) {
-			err = insertLog(vdbc, LogMessage, 1, "Running", "message1")
+			err = insertLog(vdbc, LogMessage, 1, binlogdatapb.VReplicationWorkflowState_Running.String(), "message1")
 			require.NoError(t, err)
 			qr, err := env.Mysqld.FetchSuperQuery(context.Background(), query)
 			require.NoError(t, err)
@@ -2802,6 +2959,154 @@ func TestPlayerInvalidDates(t *testing.T) {
 		}
 	}
 }
+
+// TestPlayerNoBlob sets up a new environment with mysql running with binlog_row_image as noblob. It creates DMLs for
+// tables with blob and text columns and executes DMLs with different combinations of columns with and without
+// blob/text columns. It confirms that we handle the partial images sent by vstreamer and generates the correct
+// dmls on the target.
+func TestPlayerNoBlob(t *testing.T) {
+	if !runNoBlobTest {
+		t.Skip()
+	}
+	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
+	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
+	defer func() {
+		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
+	}()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table t1(id int, val1 varchar(20), blb1 blob, id2 int, blb2 longblob, val2 varbinary(10), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val1 varchar(20), blb1 blob, id2 int, blb2 longblob, val2 varbinary(10), primary key(id))", vrepldb),
+		"create table t2(id int, val1 varchar(20), txt1 text, id2 int, val2 varbinary(10), unique key(id, val1))",
+		fmt.Sprintf("create table %s.t2(id int, val1 varchar(20), txt1 text, id2 int, val2 varbinary(10), primary key(id, val1))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+		"drop table t2",
+		fmt.Sprintf("drop table %s.t2", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}, {
+			Match:  "t2",
+			Filter: "select * from t2",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, vrId := startVReplication(t, bls, "")
+	defer cancel()
+
+	testcases := []struct {
+		input  string
+		output string
+		table  string
+		data   [][]string
+	}{{ // 1. PartialQueryTemplate-Insert=1, PartialQueryCount-Insert=1 (blb1,blb2 are not inserted)
+		input:  "insert into t1(id,val1,blb1,id2,val2) values (1,'aaa','blb1',10,'AAA')",
+		output: "insert into t1(id,val1,blb1,id2,val2) values (1,'aaa','blb1',10,'AAA')",
+		table:  "t1",
+		data: [][]string{
+			{"1", "aaa", "blb1", "10", "", "AAA"},
+		},
+	}, { // 2. PartialQueryTemplate-Update=1, PartialQueryCount-Update=1 (blb1 is not updated)
+		input:  "update t1 set blb2 = 'blb22' where id = 1",
+		output: "update t1 set val1='aaa', id2=10, blb2='blb22', val2='AAA' where id=1",
+		table:  "t1",
+		data: [][]string{
+			{"1", "aaa", "blb1", "10", "blb22", "AAA"},
+		},
+	}, { // 3. PartialQueryTemplate-Update=2, PartialQueryCount-Update=2 (blb1 and blb2 are not updated)
+		input:  "update t1 set val1 = 'bbb' where id = 1",
+		output: "update t1 set val1='bbb', id2=10, val2='AAA' where id=1",
+		table:  "t1",
+		data: [][]string{
+			{"1", "bbb", "blb1", "10", "blb22", "AAA"},
+		},
+	}, { // 4. PartialQueryTemplate-Update=2, PartialQueryCount-Update=3 (blb1 and blb2 are not updated, same #3)
+		input:  "update t1 set val2 = 'CCC', id2=99 where id = 1",
+		output: "update t1 set val1='bbb', id2=99, val2='CCC' where id=1",
+		table:  "t1",
+		data: [][]string{
+			{"1", "bbb", "blb1", "99", "blb22", "CCC"},
+		},
+	}, { // 5. PartialQueryTemplate-Update=2, PartialQueryCount-Update=4 (blb1 is not updated, same as #1)
+		input:  "update t1 set blb2 = 'blb21' where id = 1",
+		output: "update t1 set val1='bbb', id2=99, blb2='blb21', val2='CCC' where id=1",
+
+		table: "t1",
+		data: [][]string{
+			{"1", "bbb", "blb1", "99", "blb21", "CCC"},
+		},
+	}, { // 6. Not a partial update
+		input:  "update t1 set blb2 = 'blb222', blb1 = 'blb11' where id = 1",
+		output: "update t1 set val1='bbb', blb1='blb11', id2=99, blb2='blb222', val2='CCC' where id=1",
+		table:  "t1",
+		data: [][]string{
+			{"1", "bbb", "blb11", "99", "blb222", "CCC"},
+		},
+	}, { // 7. PartialQueryTemplate-Insert=2, PartialQueryCount-Insert=2 (txt1 is not inserted)
+		input:  "insert into t2(id,val1,id2,val2) values (1,'aaa',10,'AAA')",
+		output: "insert into t2(id,val1,id2,val2) values (1,'aaa',10,'AAA')",
+		table:  "t2",
+		data: [][]string{
+			{"1", "aaa", "", "10", "AAA"},
+		},
+	}, { // 7. PartialQueryTemplate-Insert=2, PartialQueryCount-Insert=3 (txt1 is not inserted, same as #7)
+		input:  "insert into t2(id,val1,id2,val2) values (1,'bbb',20,'BBB')",
+		output: "insert into t2(id,val1,id2,val2) values (1,'bbb',20,'BBB')",
+		table:  "t2",
+		data: [][]string{
+			{"1", "aaa", "", "10", "AAA"},
+			{"1", "bbb", "", "20", "BBB"},
+		},
+	}, { // 8. Not a partial update, all columns are present
+		input:  "update t2 set txt1 = 'txt1' where id = 1 and val1 = 'aaa'",
+		output: "update t2 set txt1='txt1', id2=10, val2='AAA' where id=1 and val1='aaa'",
+		table:  "t2",
+		data: [][]string{
+			{"1", "aaa", "txt1", "10", "AAA"},
+			{"1", "bbb", "", "20", "BBB"},
+		},
+	}, { // 9. Not a partial update, all columns are present, same as #8
+		input:  "update t2 set val2 = 'DDD', txt1 = 'txt2' where id = 1 and val1 = 'bbb'",
+		output: "update t2 set txt1='txt2', id2=20, val2='DDD' where id=1 and val1='bbb'",
+		table:  "t2",
+		data: [][]string{
+			{"1", "aaa", "txt1", "10", "AAA"},
+			{"1", "bbb", "txt2", "20", "DDD"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := qh.Expect(tcases.output)
+		expectNontxQueries(t, output)
+		time.Sleep(1 * time.Second)
+		log.Flush()
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+	}
+	stats := globalStats.controllers[int32(vrId)].blpStats
+	require.Equal(t, 2, len(stats.PartialQueryCount.Counts()))
+	require.Equal(t, 2, len(stats.PartialQueryCacheSize.Counts()))
+	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["insert"])
+	require.Equal(t, int64(3), stats.PartialQueryCount.Counts()["insert"])
+	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["update"])
+	require.Equal(t, int64(4), stats.PartialQueryCount.Counts()["update"])
+}
+
 func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
 	t.Helper()
 
@@ -2841,7 +3146,8 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 	if pos == "" {
 		pos = primaryPosition(t)
 	}
-	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, 0, 0, false)
+	// fake workflow type as MoveTables so that we can test with "noblob" binlog row image
+	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)

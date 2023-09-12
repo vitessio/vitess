@@ -105,6 +105,10 @@ type Exporter struct {
 	mu          sync.Mutex
 }
 
+func init() {
+	HTTPHandle("/debug/vars", expvar.Handler())
+}
+
 // NewExporter creates a new Exporter with name as namespace.
 // label is the name of the additional dimension for the stats vars.
 func NewExporter(name, label string) *Exporter {
@@ -153,12 +157,12 @@ func (e *Exporter) URLPrefix() string {
 
 // HandleFunc sets or overwrites the handler for url. If Exporter has a name,
 // url remapped from /path to /name/path. If name is empty, the request
-// is passed through to http.HandleFunc.
+// is passed through to HTTPHandleFunc.
 func (e *Exporter) HandleFunc(url string, f func(w http.ResponseWriter, r *http.Request)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.name == "" {
-		http.HandleFunc(url, f)
+		HTTPHandleFunc(url, f)
 		return
 	}
 
@@ -169,7 +173,7 @@ func (e *Exporter) HandleFunc(url string, f func(w http.ResponseWriter, r *http.
 	hf := &handleFunc{f: f}
 	e.handleFuncs[url] = hf
 
-	http.HandleFunc(e.URLPrefix()+url, func(w http.ResponseWriter, r *http.Request) {
+	HTTPHandleFunc(e.URLPrefix()+url, func(w http.ResponseWriter, r *http.Request) {
 		if f := hf.Get(); f != nil {
 			f(w, r)
 		}

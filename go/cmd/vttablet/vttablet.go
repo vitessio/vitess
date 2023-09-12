@@ -95,7 +95,7 @@ func main() {
 	config, mycnf := initConfig(tabletAlias)
 
 	ts := topo.Open()
-	qsc := createTabletServer(config, ts, tabletAlias)
+	qsc := createTabletServer(context.Background(), config, ts, tabletAlias)
 
 	mysqld := mysqlctl.NewMysqld(config.DB)
 	servenv.OnClose(mysqld.Close)
@@ -109,7 +109,7 @@ func main() {
 	if servenv.GRPCPort() != 0 {
 		gRPCPort = int32(servenv.GRPCPort())
 	}
-	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(servenv.Port()), gRPCPort, mysqld.GetVersionString(), config.DB)
+	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(servenv.Port()), gRPCPort, config.DB)
 	if err != nil {
 		log.Exitf("failed to parse --tablet-path: %v", err)
 	}
@@ -204,7 +204,7 @@ func extractOnlineDDL() error {
 	return nil
 }
 
-func createTabletServer(config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias) *tabletserver.TabletServer {
+func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias) *tabletserver.TabletServer {
 	if tableACLConfig != "" {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
@@ -212,7 +212,7 @@ func createTabletServer(config *tabletenv.TabletConfig, ts *topo.Server, tabletA
 		log.Exit("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
 	}
 	// creates and registers the query service
-	qsc := tabletserver.NewTabletServer("", config, ts, tabletAlias)
+	qsc := tabletserver.NewTabletServer(ctx, "", config, ts, tabletAlias)
 	servenv.OnRun(func() {
 		qsc.Register()
 		addStatusParts(qsc)

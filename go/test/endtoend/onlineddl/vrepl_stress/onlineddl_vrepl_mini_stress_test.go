@@ -35,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
+	"vitess.io/vitess/go/test/endtoend/throttler"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -177,9 +178,6 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--enable-lag-throttler",
-			"--throttle_threshold", "1s",
-			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
@@ -231,6 +229,8 @@ func TestSchemaChange(t *testing.T) {
 
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
+
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, time.Second)
 
 	t.Run("create schema", func(t *testing.T) {
 		assert.Equal(t, 1, len(clusterInstance.Keyspaces[0].Shards))
@@ -372,6 +372,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	rowcount := 0
+
 	for {
 		queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 		require.Nil(t, err)
@@ -382,10 +383,14 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 
 		select {
 		case <-time.After(time.Second):
+			continue // Keep looping
 		case <-ctx.Done():
-			break
+			// Break below to the assertion
 		}
+
+		break
 	}
+
 	assert.Equal(t, expectCount, rowcount)
 }
 

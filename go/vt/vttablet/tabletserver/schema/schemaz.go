@@ -17,9 +17,10 @@ limitations under the License.
 package schema
 
 import (
-	"html/template"
 	"net/http"
 	"sort"
+
+	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"

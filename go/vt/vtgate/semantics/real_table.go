@@ -73,7 +73,7 @@ func (r *RealTable) getColumns() []ColumnInfo {
 }
 
 // GetExpr implements the TableInfo interface
-func (r *RealTable) getExpr() *sqlparser.AliasedTableExpr {
+func (r *RealTable) GetExpr() *sqlparser.AliasedTableExpr {
 	return r.ASTNode
 }
 
@@ -104,10 +104,14 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 	nameMap := map[string]any{}
 	cols := make([]ColumnInfo, 0, len(tbl.Columns))
 	for _, col := range tbl.Columns {
-		var collation collations.ID
+		collation := collations.DefaultCollationForType(col.Type)
 		if sqltypes.IsText(col.Type) {
-			collation, _ = collations.Local().LookupID(col.CollationName)
+			coll, found := collations.Local().LookupID(col.CollationName)
+			if found {
+				collation = coll
+			}
 		}
+
 		cols = append(cols, ColumnInfo{
 			Name: col.Name.String(),
 			Type: Type{

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -64,9 +65,9 @@ var testCases = []*testCase{
 		tabletBaseID:      200,
 		tables:            "customer,Lead,Lead-1",
 		autoRetryError:    true,
-		retryInsert:       `insert into customer(cid, name, typ) values(91234, 'Testy McTester', 'soho')`,
+		retryInsert:       `insert into customer(cid, name, typ) values(1991234, 'Testy McTester', 'soho')`,
 		resume:            true,
-		resumeInsert:      `insert into customer(cid, name, typ) values(92234, 'Testy McTester (redux)', 'enterprise')`,
+		resumeInsert:      `insert into customer(cid, name, typ) values(1992234, 'Testy McTester (redux)', 'enterprise')`,
 		testCLIErrors:     true, // test for errors in the simplest workflow
 		testCLICreateWait: true, // test wait on create feature against simplest workflow
 	},
@@ -80,9 +81,9 @@ var testCases = []*testCase{
 		targetShards:   "-40,40-a0,a0-",
 		tabletBaseID:   400,
 		autoRetryError: true,
-		retryInsert:    `insert into customer(cid, name, typ) values(93234, 'Testy McTester Jr', 'enterprise'), (94234, 'Testy McTester II', 'enterprise')`,
+		retryInsert:    `insert into customer(cid, name, typ) values(1993234, 'Testy McTester Jr', 'enterprise'), (1993235, 'Testy McTester II', 'enterprise')`,
 		resume:         true,
-		resumeInsert:   `insert into customer(cid, name, typ) values(95234, 'Testy McTester III', 'enterprise')`,
+		resumeInsert:   `insert into customer(cid, name, typ) values(1994234, 'Testy McTester III', 'enterprise')`,
 		stop:           true,
 	},
 	{
@@ -95,9 +96,9 @@ var testCases = []*testCase{
 		targetShards:   "0",
 		tabletBaseID:   700,
 		autoRetryError: true,
-		retryInsert:    `insert into customer(cid, name, typ) values(96234, 'Testy McTester IV', 'enterprise')`,
+		retryInsert:    `insert into customer(cid, name, typ) values(1995234, 'Testy McTester IV', 'enterprise')`,
 		resume:         true,
-		resumeInsert:   `insert into customer(cid, name, typ) values(97234, 'Testy McTester V', 'enterprise'), (98234, 'Testy McTester VI', 'enterprise')`,
+		resumeInsert:   `insert into customer(cid, name, typ) values(1996234, 'Testy McTester V', 'enterprise'), (1996235, 'Testy McTester VI', 'enterprise')`,
 		stop:           true,
 	},
 }
@@ -234,16 +235,47 @@ func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
 
 func testDelete(t *testing.T, ksWorkflow, cells string) {
 	t.Run("Delete", func(t *testing.T) {
-		// test show verbose too as a side effect
-		uuid, output := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false, "--verbose")
-		// only present with --verbose
-		require.Contains(t, output, `"TableSummary":`)
-		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", uuid, false)
-		require.Contains(t, output, `"Status": "completed"`)
-		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", "all", false)
-		require.Contains(t, output, `"Status": "completed"`)
+		// Let's be sure that we have at least 3 unique VDiffs.
+		// We have one record in the SHOW output per VDiff, per
+		// shard. So we want to get a count of the unique VDiffs
+		// by UUID.
+		uuidCount := func(uuids []gjson.Result) int64 {
+			seen := make(map[string]struct{})
+			for _, uuid := range uuids {
+				seen[uuid.String()] = struct{}{}
+			}
+			return int64(len(seen))
+		}
+		_, output := performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
+		initialVDiffCount := uuidCount(gjson.Get(output, "#.UUID").Array())
+		for ; initialVDiffCount < 3; initialVDiffCount++ {
+			_, _ = performVDiff2Action(t, ksWorkflow, cells, "create", "", false)
+		}
+
+		// Now let's confirm that we have at least 3 unique VDiffs.
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
-		require.Equal(t, "[]\n", output)
+		require.GreaterOrEqual(t, uuidCount(gjson.Get(output, "#.UUID").Array()), int64(3))
+		// And that our initial count is what we expect.
+		require.Equal(t, initialVDiffCount, uuidCount(gjson.Get(output, "#.UUID").Array()))
+
+		// Test show last with verbose too as a side effect.
+		uuid, output := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false, "--verbose")
+		// The TableSummary is only present with --verbose.
+		require.Contains(t, output, `"TableSummary":`)
+
+		// Now let's delete one of the VDiffs.
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", uuid, false)
+		require.Equal(t, "completed", gjson.Get(output, "Status").String())
+		// And confirm that our unique VDiff count has only decreased by one.
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
+		require.Equal(t, initialVDiffCount-1, uuidCount(gjson.Get(output, "#.UUID").Array()))
+
+		// Now let's delete all of them.
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", "all", false)
+		require.Equal(t, "completed", gjson.Get(output, "Status").String())
+		// And finally confirm that we have no more VDiffs.
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
+		require.Equal(t, int64(0), gjson.Get(output, "#").Int())
 	})
 }
 

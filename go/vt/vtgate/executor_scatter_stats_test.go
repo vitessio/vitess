@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"net/http/httptest"
 	"testing"
 
@@ -27,10 +26,11 @@ import (
 )
 
 func TestScatterStatsWithNoScatterQuery(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
-	_, err := executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from main1", nil)
+	_, err := executor.Execute(ctx, nil, "TestExecutorResultsExceeded", session, "select * from main1", nil)
 	require.NoError(t, err)
 
 	result, err := executor.gatherScatterStats()
@@ -39,10 +39,10 @@ func TestScatterStatsWithNoScatterQuery(t *testing.T) {
 }
 
 func TestScatterStatsWithSingleScatterQuery(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _, ctx := createExecutorEnv(t)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
-	_, err := executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from user", nil)
+	_, err := executor.Execute(ctx, nil, "TestExecutorResultsExceeded", session, "select * from user", nil)
 	require.NoError(t, err)
 
 	result, err := executor.gatherScatterStats()
@@ -51,20 +51,20 @@ func TestScatterStatsWithSingleScatterQuery(t *testing.T) {
 }
 
 func TestScatterStatsHttpWriting(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _, ctx := createExecutorEnv(t)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
-	_, err := executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from user", nil)
+	_, err := executor.Execute(ctx, nil, "TestExecutorResultsExceeded", session, "select * from user", nil)
 	require.NoError(t, err)
 
-	_, err = executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from user where Id = 15", nil)
+	_, err = executor.Execute(ctx, nil, "TestExecutorResultsExceeded", session, "select * from user where Id = 15", nil)
 	require.NoError(t, err)
 
-	_, err = executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from user where Id > 15", nil)
+	_, err = executor.Execute(ctx, nil, "TestExecutorResultsExceeded", session, "select * from user where Id > 15", nil)
 	require.NoError(t, err)
 
 	query4 := "select * from user as u1 join  user as u2 on u1.Id = u2.Id"
-	_, err = executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, query4, nil)
+	_, err = executor.Execute(ctx, nil, "TestExecutorResultsExceeded", session, query4, nil)
 	require.NoError(t, err)
 
 	executor.plans.Wait()

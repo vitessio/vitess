@@ -189,7 +189,7 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 		prevTarget.TabletType != topodata.TabletType_PRIMARY && prevTarget.TabletType == shr.Target.TabletType && thc.isTrivialReplagChange(shr.RealtimeStats)
 	thc.lastResponseTimestamp = time.Now()
 	thc.Target = shr.Target
-	thc.PrimaryTermStartTime = shr.TabletExternallyReparentedTimestamp
+	thc.PrimaryTermStartTime = shr.PrimaryTermStartTimestamp
 	thc.Stats = shr.RealtimeStats
 	thc.LastError = healthErr
 	reason := "healthCheck update"
@@ -212,7 +212,7 @@ func (thc *tabletHealthCheck) isTrivialReplagChange(newStats *query.RealtimeStat
 	}
 	// Skip replag filter when replag remains in the low rep lag range,
 	// which should be the case majority of the time.
-	lowRepLag := lowReplicationLag.Seconds()
+	lowRepLag := lowReplicationLag.Get().Seconds()
 	oldRepLag := float64(thc.Stats.ReplicationLagSeconds)
 	newRepLag := float64(newStats.ReplicationLagSeconds)
 	if oldRepLag <= lowRepLag && newRepLag <= lowRepLag {

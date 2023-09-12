@@ -24,9 +24,12 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/protoutil"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -57,7 +60,7 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 	if err != nil {
 		return nil, err
 	}
-	return mysql.ReplicationStatusToProto(status), nil
+	return replication.ReplicationStatusToProto(status), nil
 }
 
 // FullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
@@ -81,7 +84,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return nil, err
 	}
 	if err == nil {
-		replicationStatusProto = mysql.ReplicationStatusToProto(replicationStatus)
+		replicationStatusProto = replication.ReplicationStatusToProto(replicationStatus)
 	}
 
 	// Primary status - "SHOW MASTER STATUS"
@@ -91,7 +94,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return nil, err
 	}
 	if err == nil {
-		primaryStatusProto = mysql.PrimaryStatusToProto(primaryStatus)
+		primaryStatusProto = replication.PrimaryStatusToProto(primaryStatus)
 	}
 
 	// Purged GTID set
@@ -101,10 +104,21 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	}
 
 	// Version string "majorVersion.minorVersion.patchRelease"
-	version := tm.MysqlDaemon.GetVersionString()
+	version, err := tm.MysqlDaemon.GetVersionString(ctx)
+	if err != nil {
+		return nil, err
+	}
+	_, v, err := mysqlctl.ParseVersionString(version)
+	if err != nil {
+		return nil, err
+	}
+	version = fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
 
 	// Version comment "select @@global.version_comment"
-	versionComment := tm.MysqlDaemon.GetVersionComment(ctx)
+	versionComment, err := tm.MysqlDaemon.GetVersionComment(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	// Read only - "SHOW VARIABLES LIKE 'read_only'"
 	readOnly, err := tm.MysqlDaemon.IsReadOnly()
@@ -147,7 +161,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		ServerUuid:                  serverUUID,
 		ReplicationStatus:           replicationStatusProto,
 		PrimaryStatus:               primaryStatusProto,
-		GtidPurged:                  mysql.EncodePosition(purgedGTIDs),
+		GtidPurged:                  replication.EncodePosition(purgedGTIDs),
 		Version:                     version,
 		VersionComment:              versionComment,
 		ReadOnly:                    readOnly,
@@ -173,7 +187,7 @@ func (tm *TabletManager) PrimaryStatus(ctx context.Context) (*replicationdatapb.
 	if err != nil {
 		return nil, err
 	}
-	return mysql.PrimaryStatusToProto(status), nil
+	return replication.PrimaryStatusToProto(status), nil
 }
 
 // PrimaryPosition returns the position of a primary database
@@ -182,13 +196,13 @@ func (tm *TabletManager) PrimaryPosition(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return mysql.EncodePosition(pos), nil
+	return replication.EncodePosition(pos), nil
 }
 
 // WaitForPosition waits until replication reaches the desired position
 func (tm *TabletManager) WaitForPosition(ctx context.Context, pos string) error {
 	log.Infof("WaitForPosition: %v", pos)
-	mpos, err := mysql.DecodePosition(pos)
+	mpos, err := replication.DecodePosition(pos)
 	if err != nil {
 		return err
 	}
@@ -225,7 +239,7 @@ func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position st
 	}
 	defer tm.unlock()
 
-	pos, err := mysql.DecodePosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return "", err
 	}
@@ -241,7 +255,7 @@ func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position st
 	if err != nil {
 		return "", err
 	}
-	return mysql.EncodePosition(pos), nil
+	return replication.EncodePosition(pos), nil
 }
 
 // StartReplication will start the mysql. Works both when Vitess manages
@@ -253,7 +267,12 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 	}
 	defer tm.unlock()
 
-	if err := tm.fixSemiSync(tm.Tablet().Type, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return err
+	}
+
+	if err := tm.fixSemiSync(tm.Tablet().Type, semiSyncAction); err != nil {
 		return err
 	}
 	return tm.MysqlDaemon.StartReplication(tm.hookExtraEnv())
@@ -271,7 +290,7 @@ func (tm *TabletManager) StartReplicationUntilAfter(ctx context.Context, positio
 	waitCtx, cancel := context.WithTimeout(ctx, waitTime)
 	defer cancel()
 
-	pos, err := mysql.DecodePosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
 	}
@@ -306,7 +325,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 
 	// Setting super_read_only `OFF` so that we can run the DDL commands
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
-		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERUnknownSystemVariable {
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			log.Warningf("server does not know about super_read_only, continuing anyway...")
 		} else {
 			return "", err
@@ -325,27 +344,32 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		return "", err
 	}
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return "", err
+	}
+
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
 	// we'll still need some replicas to be able to commit transactions.
-	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, semiSyncAction); err != nil {
 		return "", err
 	}
 
 	// Enforce semi-sync after changing the tablet type to PRIMARY. Otherwise, the
 	// primary will hang while trying to create the database.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 		return "", err
 	}
 
-	return mysql.EncodePosition(pos), nil
+	return replication.EncodePosition(pos), nil
 }
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
 func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, primaryAlias *topodatapb.TabletAlias, position string) error {
 	log.Infof("PopulateReparentJournal: action: %v parent: %v  position: %v timeCreatedNS: %d actionName: %s primaryAlias: %s",
 		actionName, primaryAlias, position, timeCreatedNS, actionName, primaryAlias)
-	pos, err := mysql.DecodePosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
 	}
@@ -364,16 +388,21 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	}
 	defer tm.unlock()
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return err
+	}
+
 	// If we were a primary type, switch our type to replica.  This
 	// is used on the old primary when using InitShardPrimary with
 	// -force, and the new primary is different from the old primary.
 	if tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
-		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_REPLICA, DBActionNone, convertBoolToSemiSyncAction(semiSync)); err != nil {
+		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_REPLICA, DBActionNone, semiSyncAction); err != nil {
 			return err
 		}
 	}
 
-	pos, err := mysql.DecodePosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
 	}
@@ -389,7 +418,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if tt == topodatapb.TabletType_PRIMARY {
 		tt = topodatapb.TabletType_REPLICA
 	}
-	if err := tm.fixSemiSync(tt, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	if err := tm.fixSemiSync(tt, semiSyncAction); err != nil {
 		return err
 	}
 
@@ -455,12 +484,12 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		// considered successful. If we are already not serving, this will be
 		// idempotent.
 		log.Infof("DemotePrimary disabling query service")
-		if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.PrimaryTermStartTime), false, "demotion in progress"); err != nil {
+		if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), false, "demotion in progress"); err != nil {
 			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
 		}
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasServing {
-				if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.PrimaryTermStartTime), true, ""); err != nil {
+				if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
 					log.Warningf("SetServingType(serving=true) failed during revert: %v", err)
 				}
 			}
@@ -472,7 +501,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
-		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERUnknownSystemVariable {
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			log.Warningf("server does not know about super_read_only, continuing anyway...")
 		} else {
 			return nil, err
@@ -510,7 +539,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	if err != nil {
 		return nil, err
 	}
-	return mysql.PrimaryStatusToProto(status), nil
+	return replication.PrimaryStatusToProto(status), nil
 }
 
 // UndoDemotePrimary reverts a previous call to DemotePrimary
@@ -523,8 +552,13 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	}
 	defer tm.unlock()
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return err
+	}
+
 	// If using semi-sync, we need to enable source-side.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 		return err
 	}
 
@@ -536,7 +570,7 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	// Update serving graph
 	tablet := tm.Tablet()
 	log.Infof("UndoDemotePrimary re-enabling query service")
-	if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.PrimaryTermStartTime), true, ""); err != nil {
+	if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
 	}
 	return nil
@@ -581,25 +615,14 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 	}
 	defer tm.unlock()
 
-	// setReplicationSourceLocked also fixes the semi-sync. In case the tablet type is primary it assumes that it will become a replica if SetReplicationSource
-	// is called, so we always call fixSemiSync with a non-primary tablet type. This will always set the source side replication to false.
-	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, convertBoolToSemiSyncAction(semiSync))
-}
-
-func (tm *TabletManager) setReplicationSourceRepairReplication(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) (err error) {
-	parent, err := tm.TopoServer.GetTablet(ctx, parentAlias)
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
 	if err != nil {
 		return err
 	}
 
-	ctx, unlock, lockErr := tm.TopoServer.LockShard(ctx, parent.Tablet.GetKeyspace(), parent.Tablet.GetShard(), fmt.Sprintf("repairReplication to %v as parent)", topoproto.TabletAliasString(parentAlias)))
-	if lockErr != nil {
-		return lockErr
-	}
-
-	defer unlock(&err)
-
-	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, SemiSyncActionNone)
+	// setReplicationSourceLocked also fixes the semi-sync. In case the tablet type is primary it assumes that it will become a replica if SetReplicationSource
+	// is called, so we always call fixSemiSync with a non-primary tablet type. This will always set the source side replication to false.
+	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, semiSyncAction)
 }
 
 func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
@@ -638,7 +661,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		shouldbeReplicating = true
 		// Since we continue in the case of this error, make sure 'status' is
 		// in a known, empty state.
-		status = mysql.ReplicationStatus{}
+		status = replication.ReplicationStatus{}
 	} else if err != nil {
 		// Abort on any other non-nil error.
 		return err
@@ -672,14 +695,12 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	}
 	host := parent.Tablet.MysqlHostname
 	port := parent.Tablet.MysqlPort
-	// We want to reset the replication parameters and set replication source again when forceStartReplication is provided
-	// because sometimes MySQL gets stuck due to improper initialization of master info structure or related failures and throws errors like
-	// ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log
-	// These errors can only be resolved by resetting the replication parameters, otherwise START SLAVE fails. So when this RPC
-	// gets called from VTOrc or replication manager to fix the replication in these cases with forceStartReplication, we should also
-	// reset the replication parameters and set the source port information again.
-	if status.SourceHost != host || status.SourcePort != port || forceStartReplication {
-		// This handles reseting the replication parameters, changing the address and then starting the replication.
+	// If host is empty, then we shouldn't even attempt the reparent. That tablet has already shutdown.
+	if host == "" {
+		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard primary has empty mysql hostname")
+	}
+	if status.SourceHost != host || status.SourcePort != port {
+		// This handles both changing the address and starting replication.
 		if err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, wasReplicating, shouldbeReplicating); err != nil {
 			if err := tm.handleRelayLogError(err); err != nil {
 				return err
@@ -707,7 +728,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if shouldbeReplicating {
 		log.Infof("Set up MySQL replication; should now be replicating from %s at %s", parentAlias, waitPosition)
 		if waitPosition != "" {
-			pos, err := mysql.DecodePosition(waitPosition)
+			pos, err := replication.DecodePosition(waitPosition)
 			if err != nil {
 				return err
 			}
@@ -758,7 +779,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	if err != nil {
 		return StopReplicationAndGetStatusResponse{}, vterrors.Wrap(err, "before status failed")
 	}
-	before := mysql.ReplicationStatusToProto(rs)
+	before := replication.ReplicationStatusToProto(rs)
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
 		if !rs.IOHealthy() {
@@ -804,7 +825,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 			},
 		}, vterrors.Wrap(err, "acquiring replication status failed")
 	}
-	after := mysql.ReplicationStatusToProto(rsAfter)
+	after := replication.ReplicationStatusToProto(rsAfter)
 
 	rs.Position = rsAfter.Position
 	rs.RelayLogPosition = rsAfter.RelayLogPosition
@@ -839,15 +860,20 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 		return "", err
 	}
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return "", err
+	}
+
 	// If using semi-sync, we need to enable it before going read-write.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 		return "", err
 	}
 
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone); err != nil {
 		return "", err
 	}
-	return mysql.EncodePosition(pos), nil
+	return replication.EncodePosition(pos), nil
 }
 
 func isPrimaryEligible(tabletType topodatapb.TabletType) bool {
@@ -930,11 +956,17 @@ func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletT
 	return nil
 }
 
+// handleRelayLogError resets replication of the instance.
+// This is required because sometimes MySQL gets stuck due to improper initialization of
+// master info structure or related failures and throws errors like
+// ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log
+// These errors can only be resolved by resetting the replication, otherwise START SLAVE fails.
 func (tm *TabletManager) handleRelayLogError(err error) error {
 	// attempt to fix this error:
 	// Slave failed to initialize relay log info structure from the repository (errno 1872) (sqlstate HY000) during query: START SLAVE
 	// see https://bugs.mysql.com/bug.php?id=83713 or https://github.com/vitessio/vitess/issues/5067
-	if strings.Contains(err.Error(), "Slave failed to initialize relay log info structure from the repository") {
+	// The same fix also works for https://github.com/vitessio/vitess/issues/10955.
+	if strings.Contains(err.Error(), "Slave failed to initialize relay log info structure from the repository") || strings.Contains(err.Error(), "Could not initialize master info structure") {
 		// Stop, reset and start replication again to resolve this error
 		if err := tm.MysqlDaemon.RestartReplication(tm.hookExtraEnv()); err != nil {
 			return err
@@ -942,27 +974,4 @@ func (tm *TabletManager) handleRelayLogError(err error) error {
 		return nil
 	}
 	return err
-}
-
-// repairReplication tries to connect this server to whoever is
-// the current primary of the shard, and start replicating.
-func (tm *TabletManager) repairReplication(ctx context.Context) error {
-	tablet := tm.Tablet()
-
-	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
-	if err != nil {
-		return err
-	}
-	if !si.HasPrimary() {
-		return fmt.Errorf("no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
-	}
-
-	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
-		// The shard record says we are primary, but we disagree; we wouldn't
-		// reach this point unless we were told to check replication.
-		// Hopefully someone is working on fixing that, but in any case,
-		// we should not try to reparent to ourselves.
-		return fmt.Errorf("shard %v/%v record claims tablet %v is primary, but its type is %v", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(tablet.Alias), tablet.Type)
-	}
-	return tm.setReplicationSourceRepairReplication(ctx, si.PrimaryAlias, 0, "", true)
 }

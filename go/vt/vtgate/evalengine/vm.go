@@ -77,6 +77,10 @@ func (p *CompiledExpr) simplify(env *ExpressionEnv) error {
 	return nil
 }
 
+func (p *CompiledExpr) compile(c *compiler) (ctype, error) {
+	panic("called compile() on already compiled Expr")
+}
+
 var _ Expr = (*CompiledExpr)(nil)
 
 func (env *ExpressionEnv) EvaluateVM(p *CompiledExpr) (EvalResult, error) {

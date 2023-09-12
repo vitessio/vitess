@@ -73,6 +73,7 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
 	allowPrimary := subFlags.Bool("allow_primary", false, "Allows backups to be taken on primary. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
 	incrementalFromPos := subFlags.String("incremental_from_pos", "", "Position of previous backup. Default: empty. If given, then this backup becomes an incremental backup from given position. If value is 'auto', backup taken from last successful backup position")
+	upgradeSafe := subFlags.Bool("upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -91,6 +92,7 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 		Concurrency:        uint64(*concurrency),
 		AllowPrimary:       *allowPrimary,
 		IncrementalFromPos: *incrementalFromPos,
+		UpgradeSafe:        *upgradeSafe,
 	}, &backupEventStreamLogger{logger: wr.Logger(), ctx: ctx})
 }
 
@@ -112,6 +114,8 @@ func (b *backupEventStreamLogger) Send(resp *vtctldatapb.BackupResponse) error {
 func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
 	allowPrimary := subFlags.Bool("allow_primary", false, "Whether to use primary tablet for backup. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
+	incrementalFromPos := subFlags.String("incremental_from_pos", "", "Position of previous backup. Default: empty. If given, then this backup becomes an incremental backup from given position. If value is 'auto', backup taken from last successful backup position")
+	upgradeSafe := subFlags.Bool("upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -126,10 +130,12 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	}
 
 	return wr.VtctldServer().BackupShard(&vtctldatapb.BackupShardRequest{
-		Keyspace:     keyspace,
-		Shard:        shard,
-		Concurrency:  uint64(*concurrency),
-		AllowPrimary: *allowPrimary,
+		Keyspace:           keyspace,
+		Shard:              shard,
+		Concurrency:        uint64(*concurrency),
+		AllowPrimary:       *allowPrimary,
+		IncrementalFromPos: *incrementalFromPos,
+		UpgradeSafe:        *upgradeSafe,
 	}, &backupEventStreamLogger{logger: wr.Logger(), ctx: ctx})
 }
 
@@ -202,6 +208,7 @@ func (b *backupRestoreEventStreamLogger) Send(resp *vtctldatapb.RestoreFromBacku
 func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	backupTimestampStr := subFlags.String("backup_timestamp", "", "Use the backup taken at or before this timestamp rather than using the latest backup.")
 	restoreToPos := subFlags.String("restore_to_pos", "", "Run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups")
+	restoreToTimestampStr := subFlags.String("restore_to_timestamp", "", "Run a point in time recovery that restores up to, and excluding, given timestamp in RFC3339 format (`2006-01-02T15:04:05Z07:00`). This will attempt to use one full backup followed by zero or more incremental backups")
 	dryRun := subFlags.Bool("dry_run", false, "Only validate restore steps, do not actually restore data")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -227,10 +234,18 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return err
 	}
 
+	var restoreToTimestamp time.Time
+	if *restoreToTimestampStr != "" {
+		restoreToTimestamp, err = mysqlctl.ParseRFC3339(*restoreToTimestampStr)
+		if err != nil {
+			return vterrors.Wrapf(err, "parsing --restore_to_timestamp args")
+		}
+	}
 	req := &vtctldatapb.RestoreFromBackupRequest{
-		TabletAlias:  tabletAlias,
-		RestoreToPos: *restoreToPos,
-		DryRun:       *dryRun,
+		TabletAlias:        tabletAlias,
+		RestoreToPos:       *restoreToPos,
+		RestoreToTimestamp: protoutil.TimeToProto(restoreToTimestamp),
+		DryRun:             *dryRun,
 	}
 
 	if !backupTime.IsZero() {

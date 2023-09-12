@@ -17,16 +17,16 @@ limitations under the License.
 package operators
 
 import (
-	"golang.org/x/exp/slices"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"slices"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -64,10 +64,10 @@ func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 		// Use the Binary vindex, which is the identity function
 		// for keyspace id.
 		routing.RouteOpCode = engine.EqualUnique
-		vindex, _ := vindexes.NewBinary("binary", nil)
+		vindex, _ := vindexes.CreateVindex("binary", "binary", nil)
 		routing.Selected = &VindexOption{
 			Ready:       true,
-			Values:      []evalengine.Expr{evalengine.NewLiteralString(vtable.Pinned, collations.TypedCollation{})},
+			Values:      []evalengine.Expr{evalengine.NewLiteralString(vtable.Pinned, collations.SystemCollation)},
 			ValueExprs:  nil,
 			Predicates:  nil,
 			OpCode:      engine.EqualUnique,
@@ -79,6 +79,10 @@ func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 
 	}
 	for _, columnVindex := range vtable.ColumnVindexes {
+		// ignore any backfilling vindexes from vindex selection.
+		if columnVindex.IsBackfilling() {
+			continue
+		}
 		routing.VindexPreds = append(routing.VindexPreds, &VindexPlusPredicates{ColVindex: columnVindex, TableID: id})
 	}
 	return routing
@@ -91,7 +95,7 @@ func (tr *ShardedRouting) isScatter() bool {
 // tryImprove rewrites the predicates for this query to see if we can produce a better plan.
 // The rewrites are two:
 //  1. first we turn the predicate a conjunctive normal form - an AND of ORs.
-//     This can sometimes push a predicate to the top so it's not hiding inside of an OR
+//     This can sometimes push a predicate to the top, so it's not hiding inside an OR
 //  2. If that is not enough, an additional rewrite pass is performed where we try to
 //     turn ORs into IN, which is easier for the planner to plan
 func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTable *QueryTable) (Routing, error) {
@@ -151,7 +155,11 @@ func (tr *ShardedRouting) Clone() Routing {
 		selected = &t
 	}
 	return &ShardedRouting{
-		VindexPreds:    slices.Clone(tr.VindexPreds),
+		VindexPreds: slice.Map(tr.VindexPreds, func(from *VindexPlusPredicates) *VindexPlusPredicates {
+			// we do this to create a copy of the struct
+			p := *from
+			return &p
+		}),
 		Selected:       selected,
 		keyspace:       tr.keyspace,
 		RouteOpCode:    tr.RouteOpCode,
@@ -361,74 +369,114 @@ func (tr *ShardedRouting) haveMatchingVindex(
 	vfunc func(*vindexes.ColumnVindex) vindexes.Vindex,
 ) bool {
 	newVindexFound := false
+
 	for _, v := range tr.VindexPreds {
-		// check that the
+		// Check if the dependency is solved by the table ID.
 		if !ctx.SemTable.DirectDeps(column).IsSolvedBy(v.TableID) {
 			continue
 		}
+
 		switch v.ColVindex.Vindex.(type) {
 		case vindexes.SingleColumn:
-			col := v.ColVindex.Columns[0]
-			if column.Name.Equal(col) {
-				// single column vindex - just add the option
-				routeOpcode := opcode(v.ColVindex)
-				vindex := vfunc(v.ColVindex)
-				if vindex == nil || routeOpcode == engine.Scatter {
-					continue
-				}
-				v.Options = append(v.Options, &VindexOption{
-					Values:      []evalengine.Expr{value},
-					ValueExprs:  []sqlparser.Expr{valueExpr},
-					Predicates:  []sqlparser.Expr{node},
-					OpCode:      routeOpcode,
-					FoundVindex: vindex,
-					Cost:        costFor(v.ColVindex, routeOpcode),
-					Ready:       true,
-				})
-				newVindexFound = true
-			}
+			newVindexFound = tr.processSingleColumnVindex(node, valueExpr, column, value, opcode, vfunc, v, newVindexFound)
+
 		case vindexes.MultiColumn:
-			colLoweredName := ""
-			indexOfCol := -1
-			for idx, col := range v.ColVindex.Columns {
-				if column.Name.Equal(col) {
-					colLoweredName = column.Name.Lowered()
-					indexOfCol = idx
-					break
-				}
-			}
-			if colLoweredName == "" {
-				break
-			}
-
-			var newOption []*VindexOption
-			for _, op := range v.Options {
-				if op.Ready {
-					continue
-				}
-				_, isPresent := op.ColsSeen[colLoweredName]
-				if isPresent {
-					continue
-				}
-				option := copyOption(op)
-				optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.ColVindex, opcode)
-				if optionReady {
-					newVindexFound = true
-				}
-				newOption = append(newOption, option)
-			}
-			v.Options = append(v.Options, newOption...)
-
-			// multi-column vindex - just always add as new option
-			option := createOption(v.ColVindex, vfunc)
-			optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.ColVindex, opcode)
-			if optionReady {
-				newVindexFound = true
-			}
-			v.Options = append(v.Options, option)
+			newVindexFound = tr.processMultiColumnVindex(node, valueExpr, column, value, opcode, vfunc, v, newVindexFound)
 		}
 	}
+
 	return newVindexFound
+}
+
+func (tr *ShardedRouting) processSingleColumnVindex(
+	node sqlparser.Expr,
+	valueExpr sqlparser.Expr,
+	column *sqlparser.ColName,
+	value evalengine.Expr,
+	opcode func(*vindexes.ColumnVindex) engine.Opcode,
+	vfunc func(*vindexes.ColumnVindex) vindexes.Vindex,
+	vindexPlusPredicates *VindexPlusPredicates,
+	newVindexFound bool,
+) bool {
+	col := vindexPlusPredicates.ColVindex.Columns[0]
+	if !column.Name.Equal(col) {
+		return newVindexFound
+	}
+
+	routeOpcode := opcode(vindexPlusPredicates.ColVindex)
+	vindex := vfunc(vindexPlusPredicates.ColVindex)
+	if vindex == nil || routeOpcode == engine.Scatter {
+		return newVindexFound
+	}
+
+	vindexPlusPredicates.Options = append(vindexPlusPredicates.Options, &VindexOption{
+		Values:      []evalengine.Expr{value},
+		ValueExprs:  []sqlparser.Expr{valueExpr},
+		Predicates:  []sqlparser.Expr{node},
+		OpCode:      routeOpcode,
+		FoundVindex: vindex,
+		Cost:        costFor(vindexPlusPredicates.ColVindex, routeOpcode),
+		Ready:       true,
+	})
+	return true
+}
+
+func (tr *ShardedRouting) processMultiColumnVindex(
+	node sqlparser.Expr,
+	valueExpr sqlparser.Expr,
+	column *sqlparser.ColName,
+	value evalengine.Expr,
+	opcode func(*vindexes.ColumnVindex) engine.Opcode,
+	vfunc func(*vindexes.ColumnVindex) vindexes.Vindex,
+	v *VindexPlusPredicates,
+	newVindexFound bool,
+) bool {
+	colLoweredName, indexOfCol := tr.getLoweredNameAndIndex(v.ColVindex, column)
+
+	if colLoweredName == "" {
+		return newVindexFound
+	}
+
+	var newOption []*VindexOption
+	for _, op := range v.Options {
+		if op.Ready {
+			continue
+		}
+		_, isPresent := op.ColsSeen[colLoweredName]
+		if isPresent {
+			continue
+		}
+		option := copyOption(op)
+		optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.ColVindex, opcode)
+		if optionReady {
+			newVindexFound = true
+		}
+		newOption = append(newOption, option)
+	}
+	v.Options = append(v.Options, newOption...)
+
+	// Multi-column vindex - just always add as new option
+	option := createOption(v.ColVindex, vfunc)
+	optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.ColVindex, opcode)
+	if optionReady {
+		newVindexFound = true
+	}
+	v.Options = append(v.Options, option)
+
+	return newVindexFound
+}
+
+func (tr *ShardedRouting) getLoweredNameAndIndex(colVindex *vindexes.ColumnVindex, column *sqlparser.ColName) (string, int) {
+	colLoweredName := ""
+	indexOfCol := -1
+	for idx, col := range colVindex.Columns {
+		if column.Name.Equal(col) {
+			colLoweredName = column.Name.Lowered()
+			indexOfCol = idx
+			break
+		}
+	}
+	return colLoweredName, indexOfCol
 }
 
 func (tr *ShardedRouting) planEqualOp(ctx *plancontext.PlanningContext, node *sqlparser.ComparisonExpr) bool {
@@ -509,29 +557,6 @@ func (tr *ShardedRouting) hasVindex(column *sqlparser.ColName) bool {
 	return false
 }
 
-// Reset all vindex predicates on this route and re-build their options from
-// the list of seen routing predicates.
-func (tr *ShardedRouting) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
-	tr.RouteOpCode = engine.Scatter
-	tr.Selected = nil
-	for i, vp := range tr.VindexPreds {
-		tr.VindexPreds[i] = &VindexPlusPredicates{ColVindex: vp.ColVindex, TableID: vp.TableID}
-	}
-
-	var routing Routing = tr
-	for _, predicate := range tr.SeenPredicates {
-		var err error
-		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-		if err != nil {
-			return err
-		}
-	}
-	if routing != tr {
-		return vterrors.VT13001("uh-oh. we ended up with a different type of routing")
-	}
-	return nil
-}
-
 func (tr *ShardedRouting) SelectedVindex() vindexes.Vindex {
 	if tr.Selected == nil {
 		return nil
@@ -546,7 +571,13 @@ func (tr *ShardedRouting) VindexExpressions() []sqlparser.Expr {
 	return tr.Selected.ValueExprs
 }
 
-func tryMergeShardedRouting(ctx *plancontext.PlanningContext, routeA *Route, routeB *Route, m merger, joinPredicates []sqlparser.Expr) (ops.Operator, error) {
+func tryMergeJoinShardedRouting(
+	ctx *plancontext.PlanningContext,
+	routeA *Route,
+	routeB *Route,
+	m merger,
+	joinPredicates []sqlparser.Expr,
+) (ops.Operator, error) {
 	sameKeyspace := routeA.Routing.Keyspace() == routeB.Routing.Keyspace()
 	tblA := routeA.Routing.(*ShardedRouting)
 	tblB := routeB.Routing.(*ShardedRouting)
@@ -560,7 +591,7 @@ func tryMergeShardedRouting(ctx *plancontext.PlanningContext, routeA *Route, rou
 			aExpr := tblA.VindexExpressions()
 			bExpr := tblB.VindexExpressions()
 			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-				return m.mergeTables(tblA, tblB, routeA, routeB)
+				return m.mergeShardedRouting(tblA, tblB, routeA, routeB)
 			}
 		}
 
@@ -584,7 +615,7 @@ func tryMergeShardedRouting(ctx *plancontext.PlanningContext, routeA *Route, rou
 		if !canMerge {
 			return nil, nil
 		}
-		return m.mergeTables(tblA, tblB, routeA, routeB)
+		return m.mergeShardedRouting(tblA, tblB, routeA, routeB)
 	}
 	return nil, nil
 }
@@ -608,7 +639,10 @@ func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) eval
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		ee, _ := evalengine.Translate(expr, &evalengine.Config{Collation: ctx.SemTable.Collation})
+		ee, _ := evalengine.Translate(expr, &evalengine.Config{
+			Collation:   ctx.SemTable.Collation,
+			ResolveType: ctx.SemTable.TypeForExpr,
+		})
 		if ee != nil {
 			return ee
 		}

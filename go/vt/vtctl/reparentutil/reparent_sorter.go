@@ -19,7 +19,7 @@ package reparentutil
 import (
 	"sort"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -30,12 +30,12 @@ import (
 // candidate for intermediate promotion in emergency reparent shard, and the new primary in planned reparent shard
 type reparentSorter struct {
 	tablets    []*topodatapb.Tablet
-	positions  []mysql.Position
+	positions  []replication.Position
 	durability Durabler
 }
 
 // newReparentSorter creates a new reparentSorter
-func newReparentSorter(tablets []*topodatapb.Tablet, positions []mysql.Position, durability Durabler) *reparentSorter {
+func newReparentSorter(tablets []*topodatapb.Tablet, positions []replication.Position, durability Durabler) *reparentSorter {
 	return &reparentSorter{
 		tablets:    tablets,
 		positions:  positions,
@@ -84,7 +84,7 @@ func (rs *reparentSorter) Less(i, j int) bool {
 
 // sortTabletsForReparent sorts the tablets, given their positions for emergency reparent shard and planned reparent shard.
 // Tablets are sorted first by their replication positions, with ties broken by the promotion rules.
-func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []mysql.Position, durability Durabler) error {
+func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []replication.Position, durability Durabler) error {
 	// throw an error internal error in case of unequal number of tablets and positions
 	// fail-safe code prevents panic in sorting in case the lengths are unequal
 	if len(tablets) != len(positions) {

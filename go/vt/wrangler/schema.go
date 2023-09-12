@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"html/template"
 	"sync"
+	"text/template"
 	"time"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -37,11 +37,6 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-)
-
-const (
-	// DefaultWaitReplicasTimeout is the default value for waitReplicasTimeout, which is used when calling method CopySchemaShardFromShard.
-	DefaultWaitReplicasTimeout = 10 * time.Second
 )
 
 // helper method to asynchronously diff a schema

@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/log"
@@ -124,6 +125,10 @@ type DB struct {
 	// if fakesqldb is asked to serve queries or query patterns that it has not been explicitly told about it will
 	// error out by default. However if you set this flag then any unmatched query results in an empty result
 	neverFail atomic.Bool
+
+	// lastError stores the last error in returning a query result.
+	lastErrorMu sync.Mutex
+	lastError   error
 }
 
 // QueryHandler is the interface used by the DB to simulate executed queries
@@ -176,6 +181,7 @@ func New(t testing.TB) *DB {
 		connections:              make(map[uint32]*mysql.Conn),
 		queryPatternUserCallback: make(map[*regexp.Regexp]func(string)),
 		patternData:              make(map[string]exprResult),
+		lastErrorMu:              sync.Mutex{},
 	}
 
 	db.Handler = db
@@ -183,7 +189,7 @@ func New(t testing.TB) *DB {
 	authServer := mysql.NewAuthServerNone()
 
 	// Start listening.
-	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false)
+	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -243,6 +249,13 @@ func (db *DB) CloseAllConnections() {
 	for _, c := range db.connections {
 		c.Close()
 	}
+}
+
+// LastError gives the last error the DB ran into
+func (db *DB) LastError() error {
+	db.lastErrorMu.Lock()
+	defer db.lastErrorMu.Unlock()
+	return db.lastError
 }
 
 // WaitForClose should be used after CloseAllConnections() is closed and
@@ -342,7 +355,14 @@ func (db *DB) WarningCount(c *mysql.Conn) uint16 {
 }
 
 // HandleQuery is the default implementation of the QueryHandler interface
-func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) (err error) {
+	defer func() {
+		if err != nil {
+			db.lastErrorMu.Lock()
+			db.lastError = err
+			db.lastErrorMu.Unlock()
+		}
+	}()
 	if db.allowAll.Load() {
 		return callback(&sqltypes.Result{})
 	}
@@ -363,7 +383,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	if db.shouldClose.Load() {
 		c.Close()
 
-		//log error
+		// log error
 		if err := callback(&sqltypes.Result{}); err != nil {
 			log.Errorf("callback failed : %v", err)
 		}
@@ -374,7 +394,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	// The driver may send this at connection time, and we don't want it to
 	// interfere.
 	if key == "set names utf8" || strings.HasPrefix(key, "set collation_connection = ") {
-		//log error
+		// log error
 		if err := callback(&sqltypes.Result{}); err != nil {
 			log.Errorf("callback failed : %v", err)
 		}
@@ -413,7 +433,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		return callback(&sqltypes.Result{})
 	}
 	// Nothing matched.
-	err := fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v",
+	err = fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v",
 		sqlparser.TruncateForUI(query), db.name)
 	log.Errorf("Query not found: %s", sqlparser.TruncateForUI(query))
 
@@ -508,7 +528,7 @@ func (db *DB) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos uint32) err
 }
 
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
-func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet mysql.GTIDSet) error {
+func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
 	return nil
 }
 

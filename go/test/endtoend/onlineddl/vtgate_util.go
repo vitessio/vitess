@@ -19,25 +19,34 @@ package onlineddl
 import (
 	"context"
 	"fmt"
-	"io"
 	"math"
-	"net/http"
 	"os"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
-	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const (
+	ThrottledAppsTimeout = 60 * time.Second
+)
+
+var (
+	testsStartupTime time.Time
+)
+
+func init() {
+	testsStartupTime = time.Now()
+}
 
 // VtgateExecQuery runs a query on VTGate using given query params
 func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, expectError string) *sqltypes.Result {
@@ -311,17 +320,36 @@ func UnthrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
 }
 
 // CheckThrottledApps checks for existence or non-existence of an app in the throttled apps list
-func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, appName string, expectFind bool) {
-	query := "show vitess_throttled_apps"
-	r := VtgateExecQuery(t, vtParams, query, "")
+func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, throttlerApp throttlerapp.Name, expectFind bool) {
 
-	found := false
-	for _, row := range r.Named().Rows {
-		if row.AsString("app", "") == appName {
-			found = true
+	ctx, cancel := context.WithTimeout(context.Background(), ThrottledAppsTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		query := "show vitess_throttled_apps"
+		r := VtgateExecQuery(t, vtParams, query, "")
+
+		appFound := false
+		for _, row := range r.Named().Rows {
+			if throttlerApp.Equals(row.AsString("app", "")) {
+				appFound = true
+			}
+		}
+		if appFound == expectFind {
+			// we're all good
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			assert.Failf(t, "CheckThrottledApps timed out waiting for %v to be in throttled status '%v'", throttlerApp.String(), expectFind)
+			return
+		case <-ticker.C:
 		}
 	}
-	assert.Equal(t, expectFind, found, "check app %v in throttled apps: %v", appName, found)
 }
 
 // WaitForThrottledTimestamp waits for a migration to have a non-empty last_throttled_timestamp
@@ -347,49 +375,6 @@ func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid st
 	}
 	t.Error("timeout waiting for last_throttled_timestamp to have nonempty value")
 	return
-}
-
-// WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as enabled.
-func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, timeout time.Duration) {
-	jsonPath := "IsEnabled"
-	url := fmt.Sprintf("http://localhost:%d/throttler/status", tablet.HTTPPort)
-
-	ctx, cancel := context.WithTimeout(context.Background(), throttlerConfigTimeout)
-	defer cancel()
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	for {
-		body := getHTTPBody(url)
-		val, err := jsonparser.GetBoolean([]byte(body), jsonPath)
-		require.NoError(t, err)
-		if val {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			t.Error("timeout waiting for tablet's throttler status to be enabled")
-			return
-		case <-ticker.C:
-		}
-	}
-}
-
-func getHTTPBody(url string) string {
-	resp, err := http.Get(url)
-	if err != nil {
-		log.Infof("http Get returns %+v", err)
-		return ""
-	}
-	if resp.StatusCode != 200 {
-		log.Infof("http Get returns status %d", resp.StatusCode)
-		return ""
-	}
-	respByte, _ := io.ReadAll(resp.Body)
-	defer resp.Body.Close()
-	body := string(respByte)
-	return body
 }
 
 // ValidateSequentialMigrationIDs validates that schem_migrations.id column, which is an AUTO_INCREMENT, does
@@ -427,4 +412,32 @@ func ValidateSequentialMigrationIDs(t *testing.T, vtParams *mysql.ConnParams, sh
 		assert.NotZero(t, count)
 		assert.Equalf(t, count, shardMax[shard]-shardMin[shard]+1, "mismatch: shared=%v, count=%v, min=%v, max=%v", shard, count, shardMin[shard], shardMax[shard])
 	}
+}
+
+// ValidateCompletedTimestamp ensures that any migration in `cancelled`, `completed`, `failed` statuses
+// has a non-nil and valid `completed_timestamp` value.
+func ValidateCompletedTimestamp(t *testing.T, vtParams *mysql.ConnParams) {
+	require.False(t, testsStartupTime.IsZero())
+	r := VtgateExecQuery(t, vtParams, "show vitess_migrations", "")
+
+	completedTimestampNumValidations := 0
+	for _, row := range r.Named().Rows {
+		migrationStatus := row.AsString("migration_status", "")
+		require.NotEmpty(t, migrationStatus)
+		switch migrationStatus {
+		case string(schema.OnlineDDLStatusComplete),
+			string(schema.OnlineDDLStatusFailed),
+			string(schema.OnlineDDLStatusCancelled):
+			{
+				assert.False(t, row["completed_timestamp"].IsNull())
+				// Also make sure the timestamp is "real", and that it is recent.
+				timestamp := row.AsString("completed_timestamp", "")
+				completedTime, err := time.Parse(sqltypes.TimestampFormat, timestamp)
+				assert.NoError(t, err)
+				assert.Greater(t, completedTime.Unix(), testsStartupTime.Unix())
+				completedTimestampNumValidations++
+			}
+		}
+	}
+	assert.NotZero(t, completedTimestampNumValidations)
 }

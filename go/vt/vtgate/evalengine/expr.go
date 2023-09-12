@@ -29,6 +29,7 @@ type (
 		format(buf *formatter, depth int)
 		constant() bool
 		simplify(env *ExpressionEnv) error
+		compile(c *compiler) (ctype, error)
 	}
 
 	UnaryExpr struct {

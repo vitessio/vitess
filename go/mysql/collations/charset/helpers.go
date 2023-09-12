@@ -21,14 +21,18 @@ func Slice(charset Charset, input []byte, from, to int) []byte {
 		return charset.Slice(input, from, to)
 	}
 	iter := input
+	start := 0
 	for i := 0; i < to; i++ {
 		r, size := charset.DecodeRune(iter)
 		if r == RuneError && size < 2 {
 			break
 		}
+		if i < from {
+			start += size
+		}
 		iter = iter[size:]
 	}
-	return input[:len(input)-len(iter)]
+	return input[start : len(input)-len(iter)]
 }
 
 func Validate(charset Charset, input []byte) bool {

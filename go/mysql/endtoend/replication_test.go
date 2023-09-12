@@ -29,11 +29,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // connectForReplication is a helper method to connect for replication
@@ -70,7 +71,7 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 		t.Fatalf("SHOW MASTER STATUS returned unexpected result: %v", result)
 	}
 	file := result.Rows[0][0].ToString()
-	position, err := evalengine.ToUint64(result.Rows[0][1])
+	position, err := result.Rows[0][1].ToCastUint64()
 	require.NoError(t, err, "SHOW MASTER STATUS returned invalid position: %v", result.Rows[0][1])
 
 	// Tell the server that we understand the format of events
@@ -126,9 +127,9 @@ func TestReplicationConnectionClosing(t *testing.T) {
 		for {
 			data, err := conn.ReadPacket()
 			if err != nil {
-				serr, ok := err.(*mysql.SQLError)
-				assert.True(t, ok, "Got a non mysql.SQLError error: %v", err)
-				assert.Equal(t, mysql.CRServerLost, serr.Num, "Got an unexpected mysql.SQLError error: %v", serr)
+				serr, ok := err.(*sqlerror.SQLError)
+				assert.True(t, ok, "Got a non sqlerror.SQLError error: %v", err)
+				assert.Equal(t, sqlerror.CRServerLost, serr.Num, "Got an unexpected sqlerror.SQLError error: %v", serr)
 
 				// we got the right error, all good.
 				return

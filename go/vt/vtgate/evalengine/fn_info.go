@@ -36,6 +36,11 @@ func (call *builtinUser) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.
 	return sqltypes.VarChar, 0
 }
 
+func (*builtinUser) compile(c *compiler) (ctype, error) {
+	c.asm.Fn_User()
+	return ctype{Type: sqltypes.VarChar, Col: collationUtf8mb3}, nil
+}
+
 func (call *builtinUser) constant() bool {
 	return false
 }
@@ -54,6 +59,11 @@ func (call *builtinVersion) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltyp
 	return sqltypes.VarChar, 0
 }
 
+func (*builtinVersion) compile(c *compiler) (ctype, error) {
+	c.asm.Fn_Version()
+	return ctype{Type: sqltypes.Datetime, Col: collationUtf8mb3}, nil
+}
+
 type builtinDatabase struct {
 	CallExpr
 }
@@ -70,6 +80,11 @@ func (call *builtinDatabase) eval(env *ExpressionEnv) (eval, error) {
 
 func (call *builtinDatabase) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.VarChar, 0
+}
+
+func (*builtinDatabase) compile(c *compiler) (ctype, error) {
+	c.asm.Fn_Database()
+	return ctype{Type: sqltypes.Datetime, Col: collationUtf8mb3}, nil
 }
 
 func (call *builtinDatabase) constant() bool {

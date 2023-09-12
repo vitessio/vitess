@@ -1,3 +1,5 @@
+//go:build !race
+
 /*
 Copyright 2021 The Vitess Authors.
 
@@ -27,14 +29,14 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/mysql/format"
-	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/callerid"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/testcases"
@@ -43,7 +45,7 @@ import (
 var (
 	collationEnv *collations.Environment
 
-	debugPrintAll        bool
+	debugGolden          = false
 	debugNormalize       = true
 	debugSimplify        = time.Now().UnixNano()&1 != 0
 	debugCheckTypes      = true
@@ -51,7 +53,7 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&debugPrintAll, "print-all", debugPrintAll, "print all matching tests")
+	fs.BoolVar(&debugGolden, "golden", debugGolden, "print golden test files")
 	fs.BoolVar(&debugNormalize, "normalize", debugNormalize, "normalize comparisons against MySQL values")
 	fs.BoolVar(&debugSimplify, "simplify", debugSimplify, "simplify expressions before evaluating them")
 	fs.BoolVar(&debugCheckTypes, "check-types", debugCheckTypes, "check the TypeOf operator for all queries")
@@ -144,7 +146,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 	var localVal, remoteVal sqltypes.Value
 	var localCollation, remoteCollation collations.ID
 	if localErr == nil {
-		v := local.Value()
+		v := local.Value(collations.Default())
 		if debugCheckCollations {
 			if v.IsNull() {
 				localCollation = collations.CollationBinaryID
@@ -177,7 +179,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 				// TODO: passthrough proper collations for nullable fields
 				remoteCollation = collations.CollationBinaryID
 			} else {
-				remoteCollation = collationEnv.LookupByName(remote.Rows[0][1].ToString()).ID()
+				remoteCollation = collationEnv.LookupByName(remote.Rows[0][1].ToString())
 			}
 		}
 	}
@@ -193,12 +195,23 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		Collation: remoteCollation,
 	}
 
+	if debugGolden {
+		g := GoldenTest{Query: localQuery}
+		if remoteErr != nil {
+			g.Error = remoteErr.Error()
+		} else {
+			g.Value = remoteVal.String()
+		}
+		seenGoldenTests = append(seenGoldenTests, g)
+		return
+	}
+
 	if err := compareResult(localResult, remoteResult, cmp); err != nil {
 		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", err, localQuery, debugSimplify, env.Row)
-	} else if debugPrintAll {
-		t.Logf("local=%s mysql=%s\nquery: %s\nrow: %v", localVal.String(), remoteVal.String(), localQuery, env.Row)
 	}
 }
+
+var seenGoldenTests []GoldenTest
 
 type vcursor struct {
 }
@@ -237,6 +250,7 @@ func initTimezoneData(t *testing.T, conn *mysql.Conn) {
 }
 
 func TestMySQL(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
@@ -258,5 +272,9 @@ func TestMySQL(t *testing.T) {
 				compareRemoteExprEnv(t, env, conn, query, tc.Schema, tc.Compare)
 			})
 		})
+	}
+
+	if debugGolden {
+		writeGolden(t, seenGoldenTests)
 	}
 }

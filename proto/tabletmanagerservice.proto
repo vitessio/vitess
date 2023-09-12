@@ -66,6 +66,8 @@ service TabletManager {
 
   rpc ApplySchema(tabletmanagerdata.ApplySchemaRequest) returns (tabletmanagerdata.ApplySchemaResponse) {};
 
+  rpc ResetSequences(tabletmanagerdata.ResetSequencesRequest) returns (tabletmanagerdata.ResetSequencesResponse) {};
+
   rpc LockTables(tabletmanagerdata.LockTablesRequest) returns (tabletmanagerdata.LockTablesResponse) {};
 
   rpc UnlockTables(tabletmanagerdata.UnlockTablesRequest) returns (tabletmanagerdata.UnlockTablesResponse) {};
@@ -112,9 +114,12 @@ service TabletManager {
   rpc GetReplicas(tabletmanagerdata.GetReplicasRequest) returns (tabletmanagerdata.GetReplicasResponse) {};
 
   // VReplication API
+  rpc CreateVReplicationWorkflow(tabletmanagerdata.CreateVReplicationWorkflowRequest) returns (tabletmanagerdata.CreateVReplicationWorkflowResponse) {};
+  rpc DeleteVReplicationWorkflow(tabletmanagerdata.DeleteVReplicationWorkflowRequest) returns(tabletmanagerdata.DeleteVReplicationWorkflowResponse) {};
+  rpc ReadVReplicationWorkflow(tabletmanagerdata.ReadVReplicationWorkflowRequest) returns(tabletmanagerdata.ReadVReplicationWorkflowResponse) {};
   rpc VReplicationExec(tabletmanagerdata.VReplicationExecRequest) returns(tabletmanagerdata.VReplicationExecResponse) {};
   rpc VReplicationWaitForPos(tabletmanagerdata.VReplicationWaitForPosRequest) returns(tabletmanagerdata.VReplicationWaitForPosResponse) {};
-  rpc UpdateVRWorkflow(tabletmanagerdata.UpdateVRWorkflowRequest) returns(tabletmanagerdata.UpdateVRWorkflowResponse) {};
+  rpc UpdateVReplicationWorkflow(tabletmanagerdata.UpdateVReplicationWorkflowRequest) returns(tabletmanagerdata.UpdateVReplicationWorkflowResponse) {};
 
   // VDiff API
   rpc VDiff(tabletmanagerdata.VDiffRequest) returns(tabletmanagerdata.VDiffResponse) {};
@@ -173,4 +178,6 @@ service TabletManager {
   // RestoreFromBackup deletes all local data and restores it from the latest backup.
   rpc RestoreFromBackup(tabletmanagerdata.RestoreFromBackupRequest) returns (stream tabletmanagerdata.RestoreFromBackupResponse) {};
 
+  // CheckThrottler issues a 'check' on a tablet's throttler
+  rpc CheckThrottler(tabletmanagerdata.CheckThrottlerRequest) returns (tabletmanagerdata.CheckThrottlerResponse) {};
 }

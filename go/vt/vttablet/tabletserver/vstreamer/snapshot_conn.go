@@ -20,8 +20,11 @@ import (
 	"context"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -139,7 +142,7 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
 		return "", err
 	}
-	return mysql.EncodePosition(mpos), nil
+	return replication.EncodePosition(mpos), nil
 }
 
 // startSnapshotWithConsistentGTID performs the snapshotting without locking tables. This assumes
@@ -155,14 +158,14 @@ func (conn *snapshotConn) startSnapshotWithConsistentGTID(ctx context.Context) (
 	}
 	// The "session_track_gtids = START_GTID" patch is only applicable to MySQL56 GTID, which is
 	// why we hardcode the position as mysql.Mysql56FlavorID
-	mpos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, result.SessionStateChanges)
+	mpos, err := replication.ParsePosition(replication.Mysql56FlavorID, result.SessionStateChanges)
 	if err != nil {
 		return "", err
 	}
 	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
 		return "", err
 	}
-	return mysql.EncodePosition(mpos), nil
+	return replication.EncodePosition(mpos), nil
 }
 
 // Close rollsback any open transactions and closes the connection.
@@ -214,4 +217,48 @@ func GetBinlogRotationThreshold() int64 {
 // stream (e.g. a ResultStreamer or RowStreamer).
 func SetBinlogRotationThreshold(threshold int64) {
 	atomic.StoreInt64(&binlogRotationThreshold, threshold)
+}
+
+// startSnapshotAllTables starts a streaming query with a snapshot view of all tables, returning the
+// GTID set from the time when the snapshot was taken.
+func (conn *snapshotConn) startSnapshotAllTables(ctx context.Context) (gtid string, err error) {
+	const MaxLockWaitTime = 30 * time.Second
+	shortCtx, cancel := context.WithTimeout(ctx, MaxLockWaitTime)
+	defer cancel()
+
+	lockConn, err := mysqlConnect(shortCtx, conn.cp)
+	if err != nil {
+		return "", err
+	}
+	// To be safe, always unlock tables, even if lock tables might fail.
+	defer func() {
+		_, err := lockConn.ExecuteFetch("unlock tables", 0, false)
+		if err != nil {
+			log.Warning("Unlock tables failed: %v", err)
+		}
+		lockConn.Close()
+	}()
+
+	log.Infof("Locking all tables")
+	if _, err := lockConn.ExecuteFetch("FLUSH TABLES WITH READ LOCK", 1, false); err != nil {
+		log.Infof("Error locking all tables")
+		return "", err
+	}
+	mpos, err := lockConn.PrimaryPosition()
+	if err != nil {
+		return "", err
+	}
+
+	// Starting a transaction now will allow us to start the read later,
+	// which will happen after we release the lock on the table.
+	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
+		return "", err
+	}
+	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false); err != nil {
+		return "", err
+	}
+	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
+		return "", err
+	}
+	return replication.EncodePosition(mpos), nil
 }

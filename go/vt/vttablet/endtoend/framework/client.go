@@ -21,8 +21,6 @@ import (
 	"errors"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
@@ -59,7 +57,7 @@ func NewClient() *QueryClient {
 
 // NewClientWithTabletType creates a new client for Server with the provided tablet type.
 func NewClientWithTabletType(tabletType topodatapb.TabletType) *QueryClient {
-	targetCopy := proto.Clone(Target).(*querypb.Target)
+	targetCopy := Target.CloneVT()
 	targetCopy.TabletType = tabletType
 	return &QueryClient{
 		ctx: callerid.NewContext(
@@ -415,9 +413,11 @@ func (client *QueryClient) UpdateContext(ctx context.Context) {
 }
 
 func (client *QueryClient) GetSchema(tableType querypb.SchemaTableType, tableNames ...string) (map[string]string, error) {
-	schemaDef := map[string]string{}
+	schemaDef := make(map[string]string)
 	err := client.server.GetSchema(client.ctx, client.target, tableType, tableNames, func(schemaRes *querypb.GetSchemaResponse) error {
-		schemaDef = schemaRes.TableDefinition
+		for tableName, schemaDefinition := range schemaRes.TableDefinition {
+			schemaDef[tableName] = schemaDefinition
+		}
 		return nil
 	})
 	if err != nil {

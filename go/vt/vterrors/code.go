@@ -59,6 +59,8 @@ var (
 
 	VT06001 = errorWithState("VT06001", vtrpcpb.Code_ALREADY_EXISTS, DbCreateExists, "cannot create database '%s'; database exists", "The given database name already exists.")
 
+	VT07001 = errorWithState("VT07001", vtrpcpb.Code_PERMISSION_DENIED, KillDeniedError, "%s", "Kill statement is not allowed. More in docs about how to enable it and its limitations.")
+
 	VT09001 = errorWithState("VT09001", vtrpcpb.Code_FAILED_PRECONDITION, RequiresPrimaryKey, PrimaryVindexNotSet, "the table does not have a primary vindex, the operation is impossible.")
 	VT09002 = errorWithState("VT09002", vtrpcpb.Code_FAILED_PRECONDITION, InnodbReadOnly, "%s statement with a replica target", "This type of DML statement is not allowed on a replica target.")
 	VT09003 = errorWithoutState("VT09003", vtrpcpb.Code_FAILED_PRECONDITION, "INSERT query does not have primary vindex column '%v' in the column list", "A vindex column is mandatory for the insert, please provide one.")
@@ -70,10 +72,16 @@ var (
 	VT09009 = errorWithoutState("VT09009", vtrpcpb.Code_FAILED_PRECONDITION, "stream is supported only for primary tablet type, current type: %v", "Stream is only supported for primary tablets, please use a stream on those tablets.")
 	VT09010 = errorWithoutState("VT09010", vtrpcpb.Code_FAILED_PRECONDITION, "SHOW VITESS_THROTTLER STATUS works only on primary tablet", "SHOW VITESS_THROTTLER STATUS works only on primary tablet.")
 	VT09011 = errorWithState("VT09011", vtrpcpb.Code_FAILED_PRECONDITION, UnknownStmtHandler, "Unknown prepared statement handler (%s) given to %s", "The prepared statement is not available")
+	VT09012 = errorWithoutState("VT09012", vtrpcpb.Code_FAILED_PRECONDITION, "%s statement with %s tablet not allowed", "This type of statement is not allowed on the given tablet.")
+	VT09013 = errorWithoutState("VT09013", vtrpcpb.Code_FAILED_PRECONDITION, "semi-sync plugins are not loaded", "Durability policy wants Vitess to use semi-sync, but the MySQL instances don't have the semi-sync plugin loaded.")
+	VT09014 = errorWithoutState("VT09014", vtrpcpb.Code_FAILED_PRECONDITION, "vindex cannot be modified", "The vindex cannot be used as table in DML statement")
+	VT09015 = errorWithoutState("VT09015", vtrpcpb.Code_FAILED_PRECONDITION, "schema tracking required", "This query cannot be planned without more information on the SQL schema. Please turn on schema tracking or add authoritative columns information to your VSchema.")
+	VT09016 = errorWithState("VT09016", vtrpcpb.Code_FAILED_PRECONDITION, RowIsReferenced2, "Cannot delete or update a parent row: a foreign key constraint fails", "SET DEFAULT is not supported by InnoDB")
 
 	VT10001 = errorWithoutState("VT10001", vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed", "Foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.")
 
 	VT12001 = errorWithoutState("VT12001", vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", "This statement is unsupported by Vitess. Please rewrite your query to use supported syntax.")
+	VT12002 = errorWithoutState("VT12002", vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard foreign keys", "Vitess does not support cross shard foreign keys.")
 
 	// VT13001 General Error
 	VT13001 = errorWithoutState("VT13001", vtrpcpb.Code_INTERNAL, "[BUG] %s", "This error should not happen and is a bug. Please file an issue on GitHub: https://github.com/vitessio/vitess/issues/new/choose.")
@@ -119,6 +127,7 @@ var (
 		VT05006,
 		VT05007,
 		VT06001,
+		VT07001,
 		VT09001,
 		VT09002,
 		VT09003,
@@ -130,14 +139,21 @@ var (
 		VT09009,
 		VT09010,
 		VT09011,
+		VT09012,
+		VT09013,
+		VT09014,
+		VT09015,
+		VT09016,
 		VT10001,
 		VT12001,
+		VT12002,
 		VT13001,
 		VT13002,
 		VT14001,
 		VT14002,
 		VT14003,
 		VT14004,
+		VT14005,
 	}
 )
 

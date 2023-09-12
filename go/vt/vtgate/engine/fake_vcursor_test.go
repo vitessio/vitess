@@ -93,6 +93,10 @@ func (t *noopVCursor) SetExec(ctx context.Context, name string, value string) er
 	panic("implement me")
 }
 
+func (t *noopVCursor) ThrottleApp(ctx context.Context, throttleAppRule *topodatapb.ThrottledAppRule) error {
+	panic("implement me")
+}
+
 func (t *noopVCursor) ShowExec(ctx context.Context, command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
 	panic("implement me")
 }
@@ -104,7 +108,7 @@ func (t *noopVCursor) SetContextWithValue(key, value interface{}) func() {
 
 // ConnCollation implements VCursor
 func (t *noopVCursor) ConnCollation() collations.ID {
-	return collations.CollationUtf8mb4ID
+	return collations.Default()
 }
 
 func (t *noopVCursor) TimeZone() *time.Location {
@@ -152,6 +156,14 @@ func (t *noopVCursor) SetDDLStrategy(strategy string) {
 }
 
 func (t *noopVCursor) GetDDLStrategy() string {
+	panic("implement me")
+}
+
+func (t *noopVCursor) SetMigrationContext(migrationContext string) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetMigrationContext() string {
 	panic("implement me")
 }
 
@@ -270,6 +282,10 @@ func (t *noopVCursor) SetWorkloadName(string) {
 }
 
 func (t *noopVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) SetPriority(string) {
 	panic("implement me")
 }
 
@@ -706,6 +722,10 @@ func (f *loggingVCursor) SetWorkloadName(string) {
 }
 
 func (f *loggingVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion) {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetPriority(string) {
 	panic("implement me")
 }
 

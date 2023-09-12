@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
@@ -63,7 +64,7 @@ func (stats *VrLogStats) Send(detail string) {
 }
 
 func init() {
-	http.HandleFunc("/debug/vrlog", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/vrlog", func(w http.ResponseWriter, r *http.Request) {
 		ch := vrLogStatsLogger.Subscribe("vrlogstats")
 		defer vrLogStatsLogger.Unsubscribe(ch)
 		vrlogStatsHandler(ch, w, r)

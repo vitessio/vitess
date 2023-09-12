@@ -29,8 +29,8 @@ limitations under the License.
 package servenv
 
 import (
-	// register the HTTP handlers for profiling
-	_ "net/http/pprof"
+	"flag"
+	"fmt"
 	"net/url"
 	"os"
 	"os/signal"
@@ -40,19 +40,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/viperutil"
+	viperdebug "vitess.io/vitess/go/viperutil/debug"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	// register the proper init and shutdown hooks for logging
-	_ "vitess.io/vitess/go/vt/logutil"
 
 	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
 	_flag "vitess.io/vitess/go/internal/flag"
@@ -325,10 +325,16 @@ func getFlagHooksFor(cmd string) (hooks []func(fs *pflag.FlagSet)) {
 	return hooks
 }
 
+// Needed because some tests require multiple parse passes, so we guard against
+// that here.
+var debugConfigRegisterOnce sync.Once
+
 // ParseFlags initializes flags and handles the common case when no positional
 // arguments are expected.
 func ParseFlags(cmd string) {
 	fs := GetFlagSetFor(cmd)
+
+	viperutil.BindFlags(fs)
 
 	_flag.Parse(fs)
 
@@ -343,7 +349,54 @@ func ParseFlags(cmd string) {
 		log.Exitf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " "))
 	}
 
+	loadViper(cmd)
+
 	logutil.PurgeLogs()
+}
+
+// ParseFlagsForTests initializes flags but skips the version, filesystem
+// args and go flag related work.
+// Note: this should not be used outside of unit tests.
+func ParseFlagsForTests(cmd string) {
+	fs := GetFlagSetFor(cmd)
+	pflag.CommandLine = fs
+	pflag.Parse()
+	viperutil.BindFlags(fs)
+	loadViper(cmd)
+}
+
+// MoveFlagsToCobraCommand moves the servenv-registered flags to the flagset of
+// the given cobra command, then copies over the glog flags that otherwise
+// require manual transferring.
+func MoveFlagsToCobraCommand(cmd *cobra.Command) {
+	cmd.Flags().AddFlagSet(GetFlagSetFor(cmd.Use))
+	// glog flags, no better way to do this
+	_flag.PreventGlogVFlagFromClobberingVersionFlagShorthand(cmd.Flags())
+	cmd.Flags().AddGoFlag(flag.Lookup("logtostderr"))
+	cmd.Flags().AddGoFlag(flag.Lookup("log_backtrace_at"))
+	cmd.Flags().AddGoFlag(flag.Lookup("alsologtostderr"))
+	cmd.Flags().AddGoFlag(flag.Lookup("stderrthreshold"))
+	cmd.Flags().AddGoFlag(flag.Lookup("log_dir"))
+	cmd.Flags().AddGoFlag(flag.Lookup("vmodule"))
+}
+
+// CobraPreRunE returns the common function that commands will need to load
+// viper infrastructure. It matches the signature of cobra's (Pre|Post)RunE-type
+// functions.
+func CobraPreRunE(cmd *cobra.Command, args []string) error {
+	_flag.TrickGlog()
+
+	watchCancel, err := viperutil.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("%s: failed to read in config: %s", cmd.Name(), err)
+	}
+
+	OnTerm(watchCancel)
+	HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
+
+	logutil.PurgeLogs()
+
+	return nil
 }
 
 // GetFlagSetFor returns the flag set for a given command.
@@ -361,6 +414,8 @@ func GetFlagSetFor(cmd string) *pflag.FlagSet {
 func ParseFlagsWithArgs(cmd string) []string {
 	fs := GetFlagSetFor(cmd)
 
+	viperutil.BindFlags(fs)
+
 	_flag.Parse(fs)
 
 	if version {
@@ -373,9 +428,22 @@ func ParseFlagsWithArgs(cmd string) []string {
 		log.Exitf("%s expected at least one positional argument", cmd)
 	}
 
+	loadViper(cmd)
+
 	logutil.PurgeLogs()
 
 	return args
+}
+
+func loadViper(cmd string) {
+	watchCancel, err := viperutil.LoadConfig()
+	if err != nil {
+		log.Exitf("%s: failed to read in config: %s", cmd, err.Error())
+	}
+	OnTerm(watchCancel)
+	debugConfigRegisterOnce.Do(func() {
+		HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
+	})
 }
 
 // Flag installations for packages that servenv imports. We need to register
@@ -405,7 +473,6 @@ func init() {
 		"vtctld",
 		"vtgate",
 		"vtgateclienttest",
-		"vtgr",
 		"vtorc",
 		"vttablet",
 		"vttestserver",
@@ -419,7 +486,6 @@ func init() {
 		"vtcombo",
 		"vtctld",
 		"vtgate",
-		"vtgr",
 		"vttablet",
 		"vtorc",
 	} {
@@ -430,6 +496,8 @@ func init() {
 	OnParse(log.RegisterFlags)
 	// Flags in package logutil are installed for all binaries.
 	OnParse(logutil.RegisterFlags)
+	// Flags in package viperutil/config are installed for all binaries.
+	OnParse(viperutil.RegisterFlags)
 }
 
 func RegisterFlagsForTopoBinaries(registerFlags func(fs *pflag.FlagSet)) {
@@ -439,7 +507,6 @@ func RegisterFlagsForTopoBinaries(registerFlags func(fs *pflag.FlagSet)) {
 		"vtctl",
 		"vtctld",
 		"vtgate",
-		"vtgr",
 		"vttablet",
 		"vttestserver",
 		"zk",

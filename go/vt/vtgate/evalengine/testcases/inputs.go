@@ -86,7 +86,7 @@ var inputComparisonElement = []string{
 }
 
 var inputConversions = []string{
-	"0", "1", "255",
+	"0", "1", "255", "' 0 '", "' 1 '", "' 255 '", `'\t1foo\t'`, "' 255 foo'",
 	"0.0e0", "1.0e0", "1.5e0", "-1.5e0", "1.1e0", "-1.1e0", "-1.7e0",
 	"0.0", "0.000", "1.5", "-1.5", "1.1", "1.7", "-1.1", "-1.7", "'1.5'", "'-1.5'",
 	`'foobar'`, `_utf8 'foobar'`, `''`, `_binary 'foobar'`,
@@ -97,10 +97,11 @@ var inputConversions = []string{
 	"18446744073709540000e0",
 	"-18446744073709540000e0",
 	"JSON_OBJECT()", "JSON_ARRAY()",
-	"time '10:04:58'", "time '31:34:58'", "time '32:34:58'", "time '101:34:58'", "time '5 10:34:58'", "date '2000-01-01'", "timestamp '2000-01-01 10:34:58'",
-	"20000101103458", "20000101103458.123456", "20000101", "103458", "103458.123456",
-	"'20000101103458'", "'20000101103458.123456'", "'20000101'", "'103458'", "'103458.123456'",
-	"'20000101103458foo'", "'20000101103458.123456foo'", "'20000101foo'", "'103458foo'", "'103458.123456foo'",
+	"time '10:04:58'", "time '31:34:58'", "time '32:34:58'", "time '101:34:58'", "time '5 10:34:58'", "date '2000-01-01'",
+	"timestamp '2000-01-01 10:34:58'", "timestamp '2000-01-01 10:34:58.123456'", "timestamp '2000-01-01 10:34:58.978654'",
+	"20000101103458", "20000101103458.1234", "20000101103458.123456", "20000101", "103458", "103458.123456",
+	"'20000101103458'", "'20000101103458.1234'", "'20000101103458.123456'", "'20000101'", "'103458'", "'103458.123456'",
+	"'20000101103458foo'", "'20000101103458.1234foo'", "'20000101103458.123456foo'", "'20000101foo'", "'103458foo'", "'103458.123456foo'",
 	"time '-10:04:58'", "time '-31:34:58'", "time '-32:34:58'",
 	"time '-101:34:58'", "time '-5 10:34:58'",
 	"'10:04:58'", "'101:34:58'", "'5 10:34:58'", "'2000-01-01'", "'2000-01-01 12:34:58'",
@@ -132,6 +133,35 @@ var inputConversions = []string{
 	"cast(time '12:34:56' as json)", "cast(time '12:34:58' as json)", "cast(time '5 12:34:58' as json)",
 }
 
+var regexInputs = []string{
+	"0", "1", "' 0 '", `'\t1foo\t'`,
+	`'foobar'`, `_utf8 'foobar'`, `''`, `_binary 'foobar'`,
+	`0x0`, `0x1`, `0xff`,
+	"NULL", "true", "false",
+	"0xFF666F6F626172FF",
+	"time '10:04:58'", "date '2000-01-01'",
+	"timestamp '2000-01-01 10:34:58'",
+	"cast(0 as json)", "cast(1 as json)",
+	"cast(true as json)", "cast(false as json)",
+	// JSON numbers
+	"cast(2 as json)", "cast(1.1 as json)", "cast(-1.1 as json)",
+	// JSON strings
+	"cast('\"foo\"' as json)",
+	// JSON binary values
+	"cast(_binary' \"foo\"' as json)",
+	"cast(0xFF666F6F626172FF as json)",
+	"cast(0b01 as json)",
+	// JSON arrays
+	"cast('[\"a\"]' as json)",
+	// JSON objects
+	"cast('{\"a\": 1, \"b\": 2}' as json)",
+}
+
+var regexMatchStrings = []string{
+	"NULL",
+	"'c'", "'i'", "'m'", "'n'", "'u'", "'cimnu'", "'cimnuunmic'",
+}
+
 const inputPi = "314159265358979323846264338327950288419716939937510582097494459"
 
 var inputStrings = []string{
@@ -154,9 +184,9 @@ var inputStrings = []string{
 	"-9223372036854775808",
 	"999999999999999999999999",
 	"-999999999999999999999999",
-	"_latin1 X'ÂÄÌå'",
 	"_binary 'Müller' ",
 	"_utf8mb4 'abcABCÅå'",
+	"_latin1 0xFF",
 	// TODO: support other multibyte encodings
 	// "_dec8 'ÒòÅå'",
 	// "_utf8mb3 'abcABCÅå'",
@@ -169,8 +199,140 @@ var inputConversionTypes = []string{
 	"BINARY", "BINARY(1)", "BINARY(0)", "BINARY(16)", "BINARY(-1)",
 	"CHAR", "CHAR(1)", "CHAR(0)", "CHAR(16)", "CHAR(-1)",
 	"NCHAR", "NCHAR(1)", "NCHAR(0)", "NCHAR(16)", "NCHAR(-1)",
-	"DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)", "DECIMAL(60)",
+	"DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)", "DECIMAL(60)", "DECIMAL(60, 6)",
 	"DOUBLE", "REAL",
 	"SIGNED", "UNSIGNED", "SIGNED INTEGER", "UNSIGNED INTEGER", "JSON",
 	"DATE", "DATETIME", "TIME", "DATETIME(4)", "TIME(4)", "DATETIME(6)", "TIME(6)",
+}
+
+var dateFormats = []struct {
+	c    byte
+	expr string
+}{
+	{'a', "LEFT(DAYNAME(d),3)"},
+	{'b', "LEFT(MONTHNAME(d),3)"},
+	{'c', "MONTH(d)"},
+	{'D', ""},
+	{'d', "LPAD(DAYOFMONTH(d),0,2)"},
+	{'e', "DAYOFMONTH(d)"},
+	{'f', "LPAD(MICROSECOND(t),6,0)"},
+	{'H', "LPAD(HOUR(t),2,0)"},
+	{'h', ""},
+	{'I', ""},
+	{'i', "LPAD(MINUTE(t),2,0)"},
+	{'j', ""},
+	{'k', "HOUR(t)"},
+	{'l', ""},
+	{'M', "MONTHNAME(d)"},
+	{'m', "LPAD(MONTH(d),2,0)"},
+	{'p', ""},
+	{'r', ""},
+	{'S', "LPAD(SECOND(t),2,0)"},
+	{'s', "LPAD(SECOND(t),2,0)"},
+	{'T', ""},
+	{'U', "LPAD(WEEK(d,0),2,0)"},
+	{'u', "LPAD(WEEK(d,1),2,0)"},
+	{'V', "RIGHT(YEARWEEK(d,2),2)"},
+	{'v', "RIGHT(YEARWEEK(d,3),2)"},
+	{'W', "DAYNAME(d)"},
+	{'w', "DAYOFWEEK(d)-1"},
+	{'X', "LEFT(YEARWEEK(d,2),4)"},
+	{'x', "LEFT(YEARWEEK(d,3),4)"},
+	{'Y', "YEAR(d)"},
+	{'y', "RIGHT(YEAR(d),2)"},
+	{'%', ""},
+}
+
+var inputTrimStrings = []string{
+	"\" Å å\" ",
+	"NULL",
+	"\"\"",
+	"\"a\"",
+	"\"abc\"",
+	"'abca'",
+	"1",
+	"-1",
+	"0123",
+	"0xAACC",
+	"3.1415926",
+	"\" 中文测试\"",
+	"\"日本語テスト \"",
+	"\"한국어 시험\"",
+	"\" 😊😂🤢\r\t \"",
+	"'123'",
+	"9223372036854775807",
+	"-9223372036854775808",
+	"999999999999999999999999",
+	"-999999999999999999999999",
+	"_binary 'Müller\r\n' ",
+	"_utf8mb4 '\nabcABCÅå '",
+	// utf8mb4 version of the non-breaking space
+	"_utf8mb4 0xC2A078C2A0",
+	// latin1 version of the non-breaking space
+	"_latin1 0xA078A0",
+}
+
+var ipInputs = []string{
+	"NULL",
+	"'10.0.5.9'",
+	"'10.0.5.256'",
+	"'fdfe::5a55:caff:fefa:9089'",
+	"'::ffff:10.0.5.9'",
+	"'::10.0.5.9'",
+	"'198.51.100.1'",
+	"'::c0a8:0001'",
+	"'::c0a8:1'",
+	"'::ffff:198.51.100.1'",
+	"'::ffff:c0a8:0001'",
+	"'::ffff:c0a8:1'",
+	"'::'",
+	"'::1'",
+	"'::ff'",
+	"'::ffff'",
+	"'::1:ffff'",
+	"'127.0.0.1'",
+	"'::ffff:'",
+	"'foobar'",
+	"167773449",
+	strconv.FormatInt(math.MinInt32, 10),
+	strconv.FormatInt(math.MinInt32-1, 10),
+	strconv.FormatUint(math.MaxInt32, 10),
+	strconv.FormatUint(math.MaxInt32+1, 10),
+	strconv.FormatUint(math.MaxUint32, 10),
+	strconv.FormatUint(math.MaxUint32+1, 10),
+	"0x0000000000000000000000000A000509",
+}
+
+var uuidInputs = []string{
+	"NULL",
+	"'foobar'",
+	"''",
+	"'09db81f6-f266-11ed-a6f9-20fc8fd6830e'",
+	"'09db81f6f26611eda6f920fc8fd6830e'",
+	"'{09db81f6-f266-11ed-a6f9-20fc8fd6830e}'",
+	"0x0000000000000000000000000A000509",
+	"0x09DB81F6F26611EDA6F920FC8FD6830E",
+	"0x11EDF26609DB81F6A6F920FC8FD6830E",
+}
+
+var inputIntervals = []string{"day",
+	"week",
+	"month",
+	"year",
+	"day_hour",
+	"day_microsecond",
+	"day_minute",
+	"day_second",
+	"hour",
+	"hour_microsecond",
+	"hour_minute",
+	"hour_second",
+	"microsecond",
+	"minute",
+	"minute_microsecond",
+	"minute_second",
+	"quarter",
+	"second",
+	"second_microsecond",
+	"year_month",
 }

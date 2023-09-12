@@ -44,17 +44,25 @@ var (
 		partialDDL           bool
 		ignoreNormalizerTest bool
 	}{{
+		input: "select * from foo limit 5 + 5",
+	}, {
 		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
 		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT (CURRENT_TIMESTAMP))",
-		output: "create table t (\n\tid int primary key,\n\tdt datetime default current_timestamp()\n)",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default (current_timestamp())\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT now())",
 		output: "create table t (\n\tid int primary key,\n\tdt datetime default now()\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT (now()))",
-		output: "create table t (\n\tid int primary key,\n\tdt datetime default now()\n)",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default (now())\n)",
+	}, {
+		input:  "create table t (id int primary key, dt datetime(6) DEFAULT (now()))",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime(6) default (now())\n)",
+	}, {
+		input:  "create table t (id int primary key, dt datetime DEFAULT (now() + 1))",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default (now() + 1)\n)",
 	}, {
 		input:  "create table x (e enum('red','yellow') null collate 'utf8_bin')",
 		output: "create table x (\n\te enum('red', 'yellow') collate 'utf8_bin' null\n)",
@@ -93,52 +101,52 @@ var (
 		output: "select extract(microsecond from '2003-01-02 10:30:00.000123') from dual",
 	}, {
 		input:  "CREATE TABLE t2 (b BLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb BLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b blob DEFAULT 'abc')",
-		output: "create table t2 (\n\tb blob default ('abc')\n)",
+		output: "create table t2 (\n\tb blob default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b BLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb TINYBLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb MEDIUMBLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb LONGBLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb TEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb TINYTEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb MEDIUMTEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb LONGTEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
@@ -147,16 +155,16 @@ var (
 		output: "create table t2 (\n\tb JSON default null\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b JSON DEFAULT (null))",
-		output: "create table t2 (\n\tb JSON default null\n)",
+		output: "create table t2 (\n\tb JSON default (null)\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b JSON DEFAULT '{name:abc}')",
-		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
+		output: "create table t2 (\n\tb JSON default '{name:abc}'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b JSON DEFAULT ('{name:abc}'))",
 		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
 	}, {
 		input:  "create table x(location POINT DEFAULT 7.0)",
-		output: "create table x (\n\tlocation POINT default (7.0)\n)",
+		output: "create table x (\n\tlocation POINT default 7.0\n)",
 	}, {
 		input:  "create table x(location POINT DEFAULT (7.0))",
 		output: "create table x (\n\tlocation POINT default (7.0)\n)",
@@ -373,6 +381,126 @@ var (
 	}, {
 		input:  "SELECT ST_IsEmpty(ST_GeomFromText('POINT(1 1)'))",
 		output: "select st_isempty(st_geometryfromtext('POINT(1 1)')) from dual",
+	}, {
+		input:  "SELECT ST_Latitude(@pt);",
+		output: "select st_latitude(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_Latitude(@pt, 10));",
+		output: "select st_astext(st_latitude(@pt, 10)) from dual",
+	}, {
+		input:  "SELECT ST_Longitude(@pt);",
+		output: "select st_longitude(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_Longitude(@pt, 10));",
+		output: "select st_astext(st_longitude(@pt, 10)) from dual",
+	}, {
+		input:  "SELECT ST_X(@pt);",
+		output: "select st_x(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_X(@pt, 10));",
+		output: "select st_astext(st_x(@pt, 10)) from dual",
+	}, {
+		input:  "SELECT ST_Y(@pt);",
+		output: "select st_y(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_Y(@pt, 10));",
+		output: "select st_astext(st_y(@pt, 10)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_EndPoint(ST_GeomFromText(@ls)));",
+		output: "select st_astext(st_endpoint(st_geometryfromtext(@ls))) from dual",
+	}, {
+		input:  "SELECT ST_IsClosed(ST_GeomFromText(@ls1));",
+		output: "select st_isclosed(st_geometryfromtext(@ls1)) from dual",
+	}, {
+		input:  "SELECT IsClosed(ST_GeomFromText(@ls1));",
+		output: "select st_isclosed(st_geometryfromtext(@ls1)) from dual",
+	}, {
+		input:  "SELECT ST_Length(@ls);",
+		output: "select st_length(@ls) from dual",
+	}, {
+		input:  "SELECT ST_Length(@ls, 'metre');",
+		output: "select st_length(@ls, 'metre') from dual",
+	}, {
+		input:  "SELECT GLength(@ls);",
+		output: "select st_length(@ls) from dual",
+	}, {
+		input:  "SELECT GLength(@ls, 'metre');",
+		output: "select st_length(@ls, 'metre') from dual",
+	}, {
+		input:  "SELECT ST_NumPoints(ST_GeomFromText(@ls));",
+		output: "select st_numpoints(st_geometryfromtext(@ls)) from dual",
+	}, {
+		input:  "SELECT Numpoints(ST_GeomFromText(@ls));",
+		output: "select st_numpoints(st_geometryfromtext(@ls)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PointN(ST_GeomFromText(@ls),2));",
+		output: "select st_astext(st_pointn(st_geometryfromtext(@ls), 2)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(PointN(ST_GeomFromText(@ls),2));",
+		output: "select st_astext(st_pointn(st_geometryfromtext(@ls), 2)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_StartPoint(ST_GeomFromText(@ls)));",
+		output: "select st_astext(st_startpoint(st_geometryfromtext(@ls))) from dual",
+	}, {
+		input:  "SELECT ST_AsText(StartPoint(ST_GeomFromText(@ls)));",
+		output: "select st_astext(st_startpoint(st_geometryfromtext(@ls))) from dual",
+	}, {
+		input:  "SELECT ST_Area(ST_GeomFromText(@mpoly));",
+		output: "select st_area(st_geometryfromtext(@mpoly)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeometryN(ST_GeomFromText(@gc),1));",
+		output: "select st_astext(st_geometryn(st_geometryfromtext(@gc), 1)) from dual",
+	}, {
+		input:  "SELECT ST_NumGeometries(ST_GeomFromText(@gc));",
+		output: "select st_numgeometries(st_geometryfromtext(@gc)) from dual",
+	}, {
+		input:  "SELECT ST_GeometryType(@poly),ST_AsText(ST_Centroid(@poly));",
+		output: "select st_geometrytype(@poly), st_astext(st_centroid(@poly)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_ExteriorRing(ST_GeomFromText(@poly)));",
+		output: "select st_astext(st_exteriorring(st_geometryfromtext(@poly))) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_InteriorRingN(ST_GeomFromText(@poly),1));",
+		output: "select st_astext(st_interiorringN(st_geometryfromtext(@poly), 1)) from dual",
+	}, {
+		input:  "SELECT ST_NumInteriorRings(ST_GeomFromText(@poly));",
+		output: "select st_numinteriorrings(st_geometryfromtext(@poly)) from dual",
+	}, {
+		input:  "SELECT ST_NumInteriorRing(ST_GeomFromText(@poly));",
+		output: "select st_numinteriorrings(st_geometryfromtext(@poly)) from dual",
+	}, {
+		input:  "SELECT ST_GeoHash(180,0,10), ST_GeoHash(-180,-90,15);",
+		output: "select st_geohash(180, 0, 10), st_geohash(-180, -90, 15) from dual",
+	}, {
+		input:  "SELECT ST_GeoHash(@p,10);",
+		output: "select st_geohash(@p, 10) from dual",
+	}, {
+		input:  "SELECT ST_LatFromGeoHash(ST_GeoHash(45,-20,10));",
+		output: "select st_latfromgeohash(st_geohash(45, -20, 10)) from dual",
+	}, {
+		input:  "SELECT ST_LongFromGeoHash(ST_GeoHash(45,-20,10));",
+		output: "select st_longfromgeohash(st_geohash(45, -20, 10)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PointFromGeoHash(@gh,0));",
+		output: "select st_astext(st_pointfromgeohash(@gh, 0)) from dual",
+	}, {
+		input:  "SELECT ST_AsGeoJSON(ST_GeomFromText('POINT(11.11111 12.22222)'));",
+		output: "select st_asgeojson(st_geometryfromtext('POINT(11.11111 12.22222)')) from dual",
+	}, {
+		input:  "SELECT ST_AsGeoJSON(ST_GeomFromText('POINT(11.11111 12.22222)'),2);",
+		output: "select st_asgeojson(st_geometryfromtext('POINT(11.11111 12.22222)'), 2) from dual",
+	}, {
+		input:  "SELECT ST_AsGeoJSON(ST_GeomFromText('POINT(11.11111 12.22222)'),2,0);",
+		output: "select st_asgeojson(st_geometryfromtext('POINT(11.11111 12.22222)'), 2, 0) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomFromGeoJSON(@json));",
+		output: "select st_astext(st_geomfromgeojson(@`json`)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_SRID(ST_GeomFromGeoJSON(@json, 0),0));",
+		output: "select st_astext(ST_SRID(st_geomfromgeojson(@`json`, 0), 0)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_SRID(ST_GeomFromGeoJSON(@json),1,4326));",
+		output: "select st_astext(ST_SRID(st_geomfromgeojson(@`json`), 1, 4326)) from dual",
 	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
 		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
@@ -1040,16 +1168,16 @@ var (
 		input: "select /* interval keyword */ adddate('2008-01-02', interval 1 year) from t",
 	}, {
 		input:  "select /* TIMESTAMPADD */ TIMESTAMPADD(MINUTE, 1, '2008-01-04') from t",
-		output: "select /* TIMESTAMPADD */ timestampadd(MINUTE, 1, '2008-01-04') from t",
+		output: "select /* TIMESTAMPADD */ timestampadd(minute, 1, '2008-01-04') from t",
 	}, {
 		input:  "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
-		output: "select /* TIMESTAMPDIFF */ timestampdiff(MINUTE, '2008-01-02', '2008-01-04') from t",
+		output: "select /* TIMESTAMPDIFF */ timestampdiff(minute, '2008-01-02', '2008-01-04') from t",
 	}, {
 		input:  "select DATE_ADD(MIN(FROM_UNIXTIME(1673444922)),interval -DAYOFWEEK(MIN(FROM_UNIXTIME(1673444922)))+1 DAY)",
-		output: "select DATE_ADD(min(FROM_UNIXTIME(1673444922)), interval (-DAYOFWEEK(min(FROM_UNIXTIME(1673444922))) + 1) DAY) from dual",
+		output: "select date_add(min(FROM_UNIXTIME(1673444922)), interval -DAYOFWEEK(min(FROM_UNIXTIME(1673444922))) + 1 day) from dual",
 	}, {
 		input:  "select '2020-01-01' + interval month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month))-1 month",
-		output: "select '2020-01-01' + interval (month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month)) - 1) month from dual",
+		output: "select '2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month)) - 1 month from dual",
 	}, {
 		input: "select /* dual */ 1 from dual",
 	}, {
@@ -1171,6 +1299,11 @@ var (
 		input: "update /* simple */ a set b = 3",
 	}, {
 		input: "update /* a.b */ a.b set b = 3",
+	}, {
+		input: "update a.b set d = @v := d + 7 where u = 42",
+	}, {
+		input:  "select @topic3_id:= 10103;",
+		output: "select @topic3_id := 10103 from dual",
 	}, {
 		input: "update /* list */ a set b = 3, c = 4",
 	}, {
@@ -1951,7 +2084,7 @@ var (
 		output: "rename table x.a to b, b to c",
 	}, {
 		input:  "drop view a,B,c",
-		output: "drop view a, b, c",
+		output: "drop view a, B, c",
 	}, {
 		input: "drop /*vt+ strategy=online */ view if exists v",
 	}, {
@@ -2474,7 +2607,8 @@ var (
 	}, {
 		input: "select 1 from t where foo = _binary 'bar'",
 	}, {
-		input: "select 1 from t where foo = _utf8 'bar' and bar = _latin1 'sjösjuk'",
+		input:  "select 1 from t where foo = _utf8 'bar' and bar = _latin1 'sjösjuk'",
+		output: "select 1 from t where foo = _utf8mb3 'bar' and bar = _latin1 'sjösjuk'",
 	}, {
 		input:  "select 1 from t where foo = _binary'bar'",
 		output: "select 1 from t where foo = _binary 'bar'",
@@ -2485,10 +2619,10 @@ var (
 		output: "select 1 from t where foo = _utf8mb4 'bar'",
 	}, {
 		input:  "select 1 from t where foo = _utf8mb3 'bar'",
-		output: "select 1 from t where foo = _utf8 'bar'",
+		output: "select 1 from t where foo = _utf8mb3 'bar'",
 	}, {
-		input:  "select 1 from t where foo = _utf8mb3'bar'",
-		output: "select 1 from t where foo = _utf8 'bar'",
+		input:  "select 1 from t where foo = _utf8'bar'",
+		output: "select 1 from t where foo = _utf8mb3 'bar'",
 	}, {
 		input: "select match(a) against ('foo') from t",
 	}, {
@@ -2516,6 +2650,8 @@ var (
 	}, {
 		input:  "select name, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by name",
 		output: "select `name`, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by `name`",
+	}, {
+		input: "select foo, any_value(id) from tbl group by foo",
 	}, {
 		input: "select * from t partition (p0)",
 	}, {
@@ -3386,13 +3522,13 @@ var (
 		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc range 10 preceding)",
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ROWS INTERVAL 5 DAY PRECEDING);",
-		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc rows interval 5 DAY preceding)",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc rows interval 5 day preceding)",
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time RANGE 5 FOLLOWING);",
 		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc range 5 following)",
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ROWS INTERVAL '2:30' MINUTE_SECOND FOLLOWING);",
-		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc rows interval '2:30' MINUTE_SECOND following)",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc rows interval '2:30' minute_second following)",
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ASC RANGE BETWEEN 10 PRECEDING AND 10 FOLLOWING);",
 		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc range between 10 preceding and 10 following)",
@@ -3522,6 +3658,13 @@ var (
 	}, {
 		input:  `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
 		output: `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
+	}, {
+		input: `kill connection 18446744073709551615`,
+	}, {
+		input: `kill query 18446744073709551615`,
+	}, {
+		input:  `kill 18446744073709551615`,
+		output: `kill connection 18446744073709551615`,
 	}}
 )
 
@@ -3902,13 +4045,13 @@ func TestIntroducers(t *testing.T) {
 		output: "select _utf32 'x' from dual",
 	}, {
 		input:  "select _utf8 'x'",
-		output: "select _utf8 'x' from dual",
+		output: "select _utf8mb3 'x' from dual",
 	}, {
 		input:  "select _utf8mb4 'x'",
 		output: "select _utf8mb4 'x' from dual",
 	}, {
 		input:  "select _utf8mb3 'x'",
-		output: "select _utf8 'x' from dual",
+		output: "select _utf8mb3 'x' from dual",
 	}}
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -3940,9 +4083,7 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "alter table A convert unparsable",
 		output: "alter table A",
 	}, {
-		// View names get lower-cased.
-		input:  "alter view A as select * from t",
-		output: "alter view a as select * from t",
+		input: "alter view A as select * from t",
 	}, {
 		input:  "alter table A rename to B",
 		output: "alter table A rename B",
@@ -3992,14 +4133,11 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "CREATE TABLE A (\n\t`A` int\n)",
 		output: "create table A (\n\tA int\n)",
 	}, {
-		input:  "create view A as select * from b",
-		output: "create view a as select * from b",
+		input: "create view A as select * from b",
 	}, {
-		input:  "drop view A",
-		output: "drop view a",
+		input: "drop view A",
 	}, {
-		input:  "drop view if exists A",
-		output: "drop view if exists a",
+		input: "drop view if exists A",
 	}, {
 		input:  "select /* lock in SHARE MODE */ 1 from t lock in SHARE MODE",
 		output: "select /* lock in SHARE MODE */ 1 from t lock in share mode",
@@ -4077,7 +4215,7 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input: "select left(a, 5) from t",
 	}, {
-		input: "update t set d = adddate(date('2003-12-31 01:02:03'), interval 5 days)",
+		input: "update t set d = adddate(date('2003-12-31 01:02:03'), interval 5 day)",
 	}, {
 		input: "insert into t(a, b) values (left('foo', 1), 'b')",
 	}, {
@@ -4871,7 +5009,7 @@ func TestCreateTable(t *testing.T) {
 			output: `create table t (
 	time1 timestamp default now(),
 	time2 timestamp default now(),
-	time3 timestamp default now(),
+	time3 timestamp default (now()),
 	time4 timestamp default now() on update now(),
 	time5 timestamp default now() on update now(),
 	time6 timestamp(3) default now(3) on update now(3)
@@ -5677,17 +5815,7 @@ var (
 			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
 			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
 			"(F(F(F(F(F(F(F(F(F(F(F(F(",
-		output: "max nesting level reached at position 406",
-	}, {
-		input: "select(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
-			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
-			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
-			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
-			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
-			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
-			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
-			"(F(F(F(F(F(F(F(F(F(F(F(",
-		output: "syntax error at position 404",
+		output: "syntax error at position 406",
 	}, {
 		// This construct is considered invalid due to a grammar conflict.
 		input:  "insert into a select * from b join c on duplicate key update d=e",
@@ -6067,7 +6195,7 @@ func testFile(t *testing.T, filename, tempDir string) {
 		if fail && tempDir != "" {
 			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
 			_ = os.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
-			fmt.Println(fmt.Sprintf("Errors found in parse tests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) // nolint
+			fmt.Printf("Errors found in parse tests. If the output is correct, run `cp %s/* testdata/` to update test expectations\n", tempDir)
 		}
 	})
 }

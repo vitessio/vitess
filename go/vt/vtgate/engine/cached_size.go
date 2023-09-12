@@ -145,7 +145,7 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(128)
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
@@ -153,10 +153,17 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.KsidVindex.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Table []*vitess.io/vitess/go/vt/vtgate/vindexes.Table
+	// field TableNames []string
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Table)) * int64(8))
-		for _, elem := range cached.Table {
+		size += hack.RuntimeAllocSize(int64(cap(cached.TableNames)) * int64(16))
+		for _, elem := range cached.TableNames {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	// field Vindexes []*vitess.io/vitess/go/vt/vtgate/vindexes.ColumnVindex
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Vindexes)) * int64(8))
+		for _, elem := range cached.Vindexes {
 			size += elem.CachedSize(true)
 		}
 	}
@@ -192,24 +199,10 @@ func (cached *Distinct) CachedSize(alloc bool) int64 {
 	}
 	// field CheckCols []vitess.io/vitess/go/vt/vtgate/engine.CheckCol
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.CheckCols)) * int64(18))
+		size += hack.RuntimeAllocSize(int64(cap(cached.CheckCols)) * int64(22))
 		for _, elem := range cached.CheckCols {
 			size += elem.CachedSize(false)
 		}
-	}
-	return size
-}
-func (cached *DistinctV3) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(16)
-	}
-	// field Source vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Source.(cachedObject); ok {
-		size += cc.CachedSize(true)
 	}
 	return size
 }
@@ -240,7 +233,7 @@ func (cached *Filter) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Predicate vitess.io/vitess/go/vt/vtgate/evalengine.Expr
 	if cc, ok := cached.Predicate.(cachedObject); ok {
@@ -256,7 +249,52 @@ func (cached *Filter) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *Gen4CompareV3) CachedSize(alloc bool) int64 {
+func (cached *FkCascade) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Selection vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Selection.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Children []*vitess.io/vitess/go/vt/vtgate/engine.FkChild
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Children)) * int64(8))
+		for _, elem := range cached.Children {
+			size += elem.CachedSize(true)
+		}
+	}
+	// field Parent vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Parent.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *FkChild) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field BVName string
+	size += hack.RuntimeAllocSize(int64(len(cached.BVName)))
+	// field Cols []int
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(8))
+	}
+	// field Exec vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Exec.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *FkVerify) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -264,12 +302,15 @@ func (cached *Gen4CompareV3) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(48)
 	}
-	// field V3 vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.V3.(cachedObject); ok {
-		size += cc.CachedSize(true)
+	// field Verify []*vitess.io/vitess/go/vt/vtgate/engine.Verify
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Verify)) * int64(8))
+		for _, elem := range cached.Verify {
+			size += elem.CachedSize(true)
+		}
 	}
-	// field Gen4 vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Gen4.(cachedObject); ok {
+	// field Exec vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Exec.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size
@@ -338,7 +379,7 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(224)
+		size += int64(240)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -370,8 +411,8 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
-	// field Table *vitess.io/vitess/go/vt/vtgate/vindexes.Table
-	size += cached.Table.CachedSize(true)
+	// field TableName string
+	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
 	// field Generate *vitess.io/vitess/go/vt/vtgate/engine.Generate
 	size += cached.Generate.CachedSize(true)
 	// field Prefix string
@@ -533,7 +574,7 @@ func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(38))
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
@@ -560,7 +601,7 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(38))
 	}
 	return size
 }
@@ -588,15 +629,13 @@ func (cached *OnlineDDL) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-
-//go:nocheckptr
 func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(80)
 	}
 	// field Aggregates []*vitess.io/vitess/go/vt/vtgate/engine.AggregateParams
 	{
@@ -610,17 +649,6 @@ func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
 		size += hack.RuntimeAllocSize(int64(cap(cached.GroupByKeys)) * int64(8))
 		for _, elem := range cached.GroupByKeys {
 			size += elem.CachedSize(true)
-		}
-	}
-	// field Collations map[int]vitess.io/vitess/go/mysql/collations.ID
-	if cached.Collations != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.Collations)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 96))
-		if len(cached.Collations) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 96))
 		}
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
@@ -788,7 +816,7 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(38))
 	}
 	// field RoutingParameters *vitess.io/vitess/go/vt/vtgate/engine.RoutingParameters
 	size += cached.RoutingParameters.CachedSize(true)
@@ -864,7 +892,7 @@ func (cached *Rows) CachedSize(alloc bool) int64 {
 		size += hack.RuntimeAllocSize(int64(cap(cached.rows)) * int64(24))
 		for _, elem := range cached.rows {
 			{
-				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(32))
+				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(56))
 				for _, elem := range elem {
 					size += elem.CachedSize(false)
 				}
@@ -898,32 +926,19 @@ func (cached *SQLCalcFoundRows) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-
-//go:nocheckptr
 func (cached *ScalarAggregate) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(48)
 	}
 	// field Aggregates []*vitess.io/vitess/go/vt/vtgate/engine.AggregateParams
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Aggregates)) * int64(8))
 		for _, elem := range cached.Aggregates {
 			size += elem.CachedSize(true)
-		}
-	}
-	// field Collations map[int]vitess.io/vitess/go/mysql/collations.ID
-	if cached.Collations != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.Collations)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 96))
-		if len(cached.Collations) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 96))
 		}
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
@@ -1123,6 +1138,20 @@ func (cached *SysVarSetAware) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ThrottleApp) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
+	size += cached.Keyspace.CachedSize(true)
+	// field ThrottledAppRule *vitess.io/vitess/go/vt/proto/topodata.ThrottledAppRule
+	size += cached.ThrottledAppRule.CachedSize(true)
+	return size
+}
 
 //go:nocheckptr
 func (cached *Update) CachedSize(alloc bool) int64 {
@@ -1212,6 +1241,22 @@ func (cached *VStream) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
 	// field Position string
 	size += hack.RuntimeAllocSize(int64(len(cached.Position)))
+	return size
+}
+func (cached *Verify) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Exec vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Exec.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Typ string
+	size += hack.RuntimeAllocSize(int64(len(cached.Typ)))
 	return size
 }
 func (cached *VindexFunc) CachedSize(alloc bool) int64 {

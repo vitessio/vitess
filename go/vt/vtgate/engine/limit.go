@@ -154,8 +154,8 @@ func (l *Limit) GetFields(ctx context.Context, vcursor VCursor, bindVars map[str
 }
 
 // Inputs returns the input to limit
-func (l *Limit) Inputs() []Primitive {
-	return []Primitive{l.Input}
+func (l *Limit) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{l.Input}, nil
 }
 
 // NeedsTransaction implements the Primitive interface.
@@ -165,18 +165,18 @@ func (l *Limit) NeedsTransaction() bool {
 
 func (l *Limit) getCountAndOffset(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (count int, offset int, err error) {
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	count, err = getIntFrom(env, l.Count)
+	count, err = getIntFrom(env, vcursor, l.Count)
 	if err != nil {
 		return
 	}
-	offset, err = getIntFrom(env, l.Offset)
+	offset, err = getIntFrom(env, vcursor, l.Offset)
 	if err != nil {
 		return
 	}
 	return
 }
 
-func getIntFrom(env *evalengine.ExpressionEnv, expr evalengine.Expr) (int, error) {
+func getIntFrom(env *evalengine.ExpressionEnv, vcursor VCursor, expr evalengine.Expr) (int, error) {
 	if expr == nil {
 		return 0, nil
 	}
@@ -184,7 +184,7 @@ func getIntFrom(env *evalengine.ExpressionEnv, expr evalengine.Expr) (int, error
 	if err != nil {
 		return 0, err
 	}
-	value := evalResult.Value()
+	value := evalResult.Value(vcursor.ConnCollation())
 	if value.IsNull() {
 		return 0, nil
 	}

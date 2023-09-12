@@ -18,7 +18,6 @@ package sqltypes
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -30,16 +29,83 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+// TestProtoConversions checks coverting to and fro between querypb.Value and sqltypes.Value.
 func TestProtoConversions(t *testing.T) {
-	v := TestValue(Int64, "1")
-	got := ValueToProto(v)
-	want := &querypb.Value{Type: Int64, Value: []byte("1")}
-	if !proto.Equal(got, want) {
-		t.Errorf("ValueToProto: %v, want %v", got, want)
+	tcases := []struct {
+		name     string
+		val      Value
+		protoVal *querypb.Value
+	}{
+		{
+			name:     "integer value",
+			val:      TestValue(Int64, "1"),
+			protoVal: &querypb.Value{Type: Int64, Value: []byte("1")},
+		}, {
+			name: "tuple value",
+			val: Value{
+				typ: Tuple,
+				values: []Value{
+					TestValue(VarChar, "1"),
+					TestValue(Int64, "3"),
+				},
+			},
+			protoVal: &querypb.Value{
+				Type: Tuple,
+				Values: []*querypb.Value{
+					{
+						Type:  VarChar,
+						Value: []byte("1"),
+					}, {
+						Type:  Int64,
+						Value: []byte("3"),
+					},
+				},
+			},
+		}, {
+			name: "tuple of tuple as a value",
+			val: Value{
+				typ: Tuple,
+				values: []Value{
+					{
+						typ: Tuple,
+						values: []Value{
+							TestValue(VarChar, "1"),
+							TestValue(Int64, "3"),
+						},
+					},
+					TestValue(Int64, "5"),
+				},
+			},
+			protoVal: &querypb.Value{
+				Type: Tuple,
+				Values: []*querypb.Value{
+					{
+						Type: Tuple,
+						Values: []*querypb.Value{
+							{
+								Type:  VarChar,
+								Value: []byte("1"),
+							}, {
+								Type:  Int64,
+								Value: []byte("3"),
+							},
+						},
+					}, {
+						Type:  Int64,
+						Value: []byte("5"),
+					},
+				},
+			},
+		},
 	}
-	gotback := ProtoToValue(got)
-	if !reflect.DeepEqual(gotback, v) {
-		t.Errorf("ProtoToValue: %v, want %v", gotback, v)
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			got := ValueToProto(tcase.val)
+			require.True(t, proto.Equal(got, tcase.protoVal), "ValueToProto: %v, want %v", got, tcase.protoVal)
+			gotback := ProtoToValue(got)
+			require.EqualValues(t, tcase.val, gotback)
+		})
 	}
 }
 
@@ -329,7 +395,7 @@ func TestValidateBindVarables(t *testing.T) {
 				Value: []byte("a"),
 			},
 		},
-		err: `v: strconv.ParseInt: parsing "a": invalid syntax`,
+		err: `v: cannot parse int64 from "a"`,
 	}, {
 		in: map[string]*querypb.BindVariable{
 			"v": {
@@ -340,7 +406,7 @@ func TestValidateBindVarables(t *testing.T) {
 				}},
 			},
 		},
-		err: `v: strconv.ParseInt: parsing "a": invalid syntax`,
+		err: `v: cannot parse int64 from "a"`,
 	}}
 	for _, tcase := range tcases {
 		err := ValidateBindVariables(tcase.in)
@@ -500,31 +566,31 @@ func TestValidateBindVariable(t *testing.T) {
 			Type:  querypb.Type_INT64,
 			Value: []byte(InvalidNeg),
 		},
-		err: "out of range",
+		err: `cannot parse int64 from "-9223372036854775809": overflow`,
 	}, {
 		in: &querypb.BindVariable{
 			Type:  querypb.Type_INT64,
 			Value: []byte(InvalidPos),
 		},
-		err: "out of range",
+		err: `cannot parse int64 from "18446744073709551616": overflow`,
 	}, {
 		in: &querypb.BindVariable{
 			Type:  querypb.Type_UINT64,
 			Value: []byte("-1"),
 		},
-		err: "invalid syntax",
+		err: `cannot parse uint64 from "-1"`,
 	}, {
 		in: &querypb.BindVariable{
 			Type:  querypb.Type_UINT64,
 			Value: []byte(InvalidPos),
 		},
-		err: "out of range",
+		err: `cannot parse uint64 from "18446744073709551616": overflow`,
 	}, {
 		in: &querypb.BindVariable{
 			Type:  querypb.Type_FLOAT64,
 			Value: []byte("a"),
 		},
-		err: "invalid syntax",
+		err: `unparsed tail left after parsing float64 from "a"`,
 	}, {
 		in: &querypb.BindVariable{
 			Type:  querypb.Type_EXPRESSION,

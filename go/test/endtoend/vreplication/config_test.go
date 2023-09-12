@@ -42,7 +42,7 @@ var (
 create table product(pid int, description varbinary(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid), key(date1,date2)) CHARSET=utf8mb4;
 create table customer(cid int, name varchar(128) collate utf8mb4_bin, meta json default null, typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),
 	ts timestamp not null default current_timestamp, bits bit(2) default b'11', date1 datetime not null default '0000-00-00 00:00:00', 
-	date2 datetime not null default '2021-00-01 00:00:00', dec80 decimal(8,0), primary key(cid,typ), key(name)) CHARSET=utf8mb4;
+	date2 datetime not null default '2021-00-01 00:00:00', dec80 decimal(8,0), blb blob, primary key(cid,typ), key(name)) CHARSET=utf8mb4;
 create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 create table merchant(mname varchar(128), category varchar(128), primary key(mname), key(category)) CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 create table orders(oid int, cid int, pid int, mname varchar(128), price int, qty int, total int as (qty * price), total2 int as (qty * price) stored, primary key(oid), key(pid), key(cid)) CHARSET=utf8;
@@ -55,8 +55,11 @@ create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, v
 create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at), key (dstuff)) CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 create table vdiff_order (order_id varchar(50) collate utf8mb4_unicode_ci not null, primary key (order_id), key (order_id)) charset=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id), key (dt1));
-create table json_tbl (id int, j1 json, j2 json, primary key(id));
+create table json_tbl (id int, j1 json, j2 json, j3 json not null, primary key(id));
 create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, mp multipoint, mls multilinestring, mpg multipolygon, gc geometrycollection, primary key(id));
+create table  ` + "`blüb_tbl`" + ` (id int, val1 varchar(20), ` + "`blöb1`" + ` blob, val2 varbinary(20), ` + "`bl@b2`" + ` longblob, txt1 text, blb3 tinyblob, txt2 longtext, blb4 mediumblob, primary key(id));
+create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
+create table loadtest (id int, name varchar(256), primary key(id), key(name));
 `
 	// These should always be ignored in vreplication
 	internalSchema = `
@@ -71,28 +74,59 @@ create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, m
 	initialProductVSchema = `
 {
   "tables": {
-	"product": {},
-	"merchant": {},
-	"orders": {},
-	"customer": {},
-	"customer_seq": {
-		"type": "sequence"
-	},
-	"customer2": {},
-	"customer_seq2": {
-		"type": "sequence"
-	},
-	"order_seq": {
-		"type": "sequence"
-	},
-	"Lead": {},
-	"Lead-1": {},
-	"db_order_test": {},
-	"vdiff_order": {},
-	"datze": {}
+    "product": {},
+    "merchant": {},
+    "orders": {},
+    "loadtest": {},
+    "customer": {},
+    "customer_seq": {
+      "type": "sequence"
+    },
+    "customer2": {},
+    "customer_seq2": {
+      "type": "sequence"
+    },
+    "order_seq": {
+      "type": "sequence"
+    },
+    "Lead": {},
+    "Lead-1": {},
+    "db_order_test": {},
+    "vdiff_order": {},
+    "datze": {},
+    "reftable": {
+      "type": "reference"
+    }
   }
 }
 `
+
+	createLookupVindexVSchema = `
+{
+  "sharded": true,
+  "vindexes": {
+    "customer_name_keyspace_id": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "product.customer_name_keyspace_id",
+        "from": "name,cid",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "customer"
+    }
+  },
+  "tables": {
+    "customer": {
+      "column_vindexes": [{
+        "columns": ["name", "cid"],
+        "name": "customer_name_keyspace_id"
+      }]
+    }
+  }
+}
+`
+
 	customerSchema  = ""
 	customerVSchema = `
 {
@@ -112,6 +146,14 @@ create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, m
     }
   },
   "tables": {
+    "loadtest": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
     "customer": {
       "column_vindexes": [
         {
@@ -184,6 +226,14 @@ create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, m
         }
       ]
     },
+    "blüb_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
     "datze": {
       "column_vindexes": [
         {
@@ -191,6 +241,9 @@ create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, m
           "name": "reverse_bits"
         }
       ]
+    },
+    "reftable": {
+      "type": "reference"
     }
   }
 }
@@ -267,7 +320,15 @@ create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, m
     }
   },
   "tables": {
-	"customer": {
+	"loadtest": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "customer": {
 	      "column_vindexes": [
 	        {
 	          "column": "cid",
@@ -323,12 +384,23 @@ create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, m
         }
       ]
     },
+    "blüb_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
     "cproduct": {
 		"type": "reference"
 	},
 	"vproduct": {
 		"type": "reference"
-	}
+	},
+  "reftable": {
+    "type": "reference"
+  }
   }
 }
 `

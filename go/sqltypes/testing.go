@@ -18,8 +18,14 @@ package sqltypes
 
 import (
 	"bytes"
+	crand "crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
+	"math/rand"
+	"strconv"
 	"strings"
+	"time"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -72,6 +78,7 @@ func MakeTestResult(fields []*querypb.Field, rows ...string) *Result {
 		result.Rows[i] = make([]Value, len(fields))
 		for j, col := range split(row) {
 			if col == "null" {
+				result.Rows[i][j] = NULL
 				continue
 			}
 			result.Rows[i][j] = MakeTrusted(fields[j].Type, []byte(col))
@@ -152,4 +159,125 @@ func PrintResults(results []*Result) string {
 
 func split(str string) []string {
 	return strings.Split(str, "|")
+}
+
+func TestRandomValues() (Value, Value) {
+	if rand.Int()%2 == 0 {
+		// create a single value, and turn it into two different types
+		v := rand.Int()
+		return randomNumericType(v), randomNumericType(v)
+	}
+
+	// just produce two arbitrary random values and compare
+	return randomNumericType(rand.Int()), randomNumericType(rand.Int())
+}
+
+func randomNumericType(i int) Value {
+	r := rand.Intn(len(numericTypes))
+	return numericTypes[r](i)
+}
+
+var numericTypes = []func(int) Value{
+	func(i int) Value { return NULL },
+	func(i int) Value { return NewInt8(int8(i)) },
+	func(i int) Value { return NewInt32(int32(i)) },
+	func(i int) Value { return NewInt64(int64(i)) },
+	func(i int) Value { return NewUint64(uint64(i)) },
+	func(i int) Value { return NewUint32(uint32(i)) },
+	func(i int) Value { return NewFloat64(float64(i)) },
+	func(i int) Value { return NewDecimal(fmt.Sprintf("%d", i)) },
+	func(i int) Value { return NewVarChar(fmt.Sprintf("%d", i)) },
+	func(i int) Value { return NewVarChar(fmt.Sprintf("  %f aa", float64(i))) },
+}
+
+type RandomGenerator func() Value
+
+func randomBytes() []byte {
+	b := make([]byte, rand.Intn(128))
+	_, _ = crand.Read(b)
+	return b
+}
+
+var RandomGenerators = map[Type]RandomGenerator{
+	Null: func() Value {
+		return NULL
+	},
+	Int8: func() Value {
+		return NewInt8(int8(rand.Intn(255)))
+	},
+	Int32: func() Value {
+		return NewInt32(rand.Int31())
+	},
+	Int64: func() Value {
+		return NewInt64(rand.Int63())
+	},
+	Uint32: func() Value {
+		return NewUint32(rand.Uint32())
+	},
+	Uint64: func() Value {
+		return NewUint64(rand.Uint64())
+	},
+	Float64: func() Value {
+		return NewFloat64(rand.ExpFloat64())
+	},
+	Decimal: func() Value {
+		dec := fmt.Sprintf("%d.%d", rand.Intn(9999999999), rand.Intn(9999999999))
+		if rand.Int()&0x1 == 1 {
+			dec = "-" + dec
+		}
+		return NewDecimal(dec)
+	},
+	VarChar: func() Value {
+		return NewVarChar(base64.StdEncoding.EncodeToString(randomBytes()))
+	},
+	VarBinary: func() Value {
+		return NewVarBinary(string(randomBytes()))
+	},
+	Date: func() Value {
+		return NewDate(randTime().Format(time.DateOnly))
+	},
+	Datetime: func() Value {
+		return NewDatetime(randTime().Format(time.DateTime))
+	},
+	Timestamp: func() Value {
+		return NewTimestamp(randTime().Format(time.DateTime))
+	},
+	Time: func() Value {
+		return NewTime(randTime().Format(time.TimeOnly))
+	},
+	TypeJSON: func() Value {
+		var j string
+		switch rand.Intn(6) {
+		case 0:
+			j = "null"
+		case 1:
+			i := rand.Int63()
+			if rand.Int()&0x1 == 1 {
+				i = -i
+			}
+			j = strconv.FormatInt(i, 10)
+		case 2:
+			j = strconv.FormatFloat(rand.NormFloat64(), 'g', -1, 64)
+		case 3:
+			j = strconv.Quote(hex.EncodeToString(randomBytes()))
+		case 4:
+			j = "true"
+		case 5:
+			j = "false"
+		}
+		v, err := NewJSON(j)
+		if err != nil {
+			panic(err)
+		}
+		return v
+	},
+}
+
+func randTime() time.Time {
+	min := time.Date(1970, 1, 0, 0, 0, 0, 0, time.UTC).Unix()
+	max := time.Date(2070, 1, 0, 0, 0, 0, 0, time.UTC).Unix()
+	delta := max - min
+
+	sec := rand.Int63n(delta) + min
+	return time.Unix(sec, 0)
 }

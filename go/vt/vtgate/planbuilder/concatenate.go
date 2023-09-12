@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,69 +20,65 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type concatenate struct {
-	v3Plan
-	lhs, rhs logicalPlan
-	order    int
+	sources []logicalPlan
+
+	// These column offsets do not need to be typed checked - they usually contain weight_string()
+	// columns that are not going to be returned to the user
+	noNeedToTypeCheck []int
 }
 
 var _ logicalPlan = (*concatenate)(nil)
 
-func (c *concatenate) Order() int {
-	return c.order
-}
-
-func (c *concatenate) ResultColumns() []*resultColumn {
-	return c.lhs.ResultColumns()
-}
-
-func (c *concatenate) Reorder(order int) {
-	c.lhs.Reorder(order)
-	c.rhs.Reorder(c.lhs.Order())
-	c.order = c.rhs.Order() + 1
-}
-
-func (c *concatenate) Wireup(plan logicalPlan, jt *jointab) error {
-	// TODO systay should we do something different here?
-	err := c.lhs.Wireup(plan, jt)
-	if err != nil {
-		return err
+// WireupGen4 implements the logicalPlan interface
+func (c *concatenate) Wireup(ctx *plancontext.PlanningContext) error {
+	for _, source := range c.sources {
+		err := source.Wireup(ctx)
+		if err != nil {
+			return err
+		}
 	}
-	return c.rhs.Wireup(plan, jt)
+	return nil
 }
 
-func (c *concatenate) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	panic("implement me")
-}
-
-func (c *concatenate) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	panic("implement me")
-}
-
-func (c *concatenate) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
-	panic("implement me")
-}
-
+// Primitive implements the logicalPlan interface
 func (c *concatenate) Primitive() engine.Primitive {
-	lhs := c.lhs.Primitive()
-	rhs := c.rhs.Primitive()
+	var sources []engine.Primitive
+	for _, source := range c.sources {
+		sources = append(sources, source.Primitive())
+	}
 
-	return engine.NewConcatenate([]engine.Primitive{lhs, rhs}, nil)
+	return engine.NewConcatenate(sources, c.noNeedToTypeCheck)
 }
 
 // Rewrite implements the logicalPlan interface
 func (c *concatenate) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 2 {
+	if len(inputs) != len(c.sources) {
 		return vterrors.VT13001("concatenate: wrong number of inputs")
 	}
-	c.lhs = inputs[0]
-	c.rhs = inputs[1]
+	c.sources = inputs
 	return nil
+}
+
+// ContainsTables implements the logicalPlan interface
+func (c *concatenate) ContainsTables() semantics.TableSet {
+	var tableSet semantics.TableSet
+	for _, source := range c.sources {
+		tableSet = tableSet.Merge(source.ContainsTables())
+	}
+	return tableSet
 }
 
 // Inputs implements the logicalPlan interface
 func (c *concatenate) Inputs() []logicalPlan {
-	return []logicalPlan{c.lhs, c.rhs}
+	return c.sources
+}
+
+// OutputColumns implements the logicalPlan interface
+func (c *concatenate) OutputColumns() []sqlparser.SelectExpr {
+	return c.sources[0].OutputColumns()
 }

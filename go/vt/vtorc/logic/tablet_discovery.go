@@ -19,6 +19,8 @@ package logic
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -26,22 +28,21 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
-	"vitess.io/vitess/go/vt/vtorc/config"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -65,8 +66,6 @@ func RegisterFlags(fs *pflag.FlagSet) {
 func OpenTabletDiscovery() <-chan time.Time {
 	// TODO(sougou): If there's a shutdown signal, we have to close the topo.
 	ts = topo.Open()
-	// TODO(sougou): remove ts and push some functions into inst.
-	inst.TopoServ = ts
 	tmc = tmclient.NewTabletManagerClient()
 	// Clear existing cache and perform a new refresh.
 	if _, err := db.ExecVTOrc("delete from vitess_tablet"); err != nil {
@@ -77,12 +76,12 @@ func OpenTabletDiscovery() <-chan time.Time {
 
 // refreshAllTablets reloads the tablets from topo and discovers the ones which haven't been refreshed in a while
 func refreshAllTablets() {
-	refreshTabletsUsing(func(instanceKey *inst.InstanceKey) {
-		DiscoverInstance(*instanceKey, false /* forceDiscovery */)
+	refreshTabletsUsing(func(tabletAlias string) {
+		DiscoverInstance(tabletAlias, false /* forceDiscovery */)
 	}, false /* forceRefresh */)
 }
 
-func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
+func refreshTabletsUsing(loader func(tabletAlias string), forceRefresh bool) {
 	if !IsLeaderOrActive() {
 		return
 	}
@@ -144,61 +143,58 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefres
 			wg.Add(1)
 			go func(ks *topo.KeyspaceShard) {
 				defer wg.Done()
-				refreshTabletsInKeyspaceShard(refreshCtx, ks.Keyspace, ks.Shard, loader, forceRefresh)
+				refreshTabletsInKeyspaceShard(refreshCtx, ks.Keyspace, ks.Shard, loader, forceRefresh, nil)
 			}(ks)
 		}
 		wg.Wait()
 	}
 }
 
-func refreshTabletsInCell(ctx context.Context, cell string, loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
+func refreshTabletsInCell(ctx context.Context, cell string, loader func(tabletAlias string), forceRefresh bool) {
 	tablets, err := topotools.GetTabletMapForCell(ctx, ts, cell)
 	if err != nil {
 		log.Errorf("Error fetching topo info for cell %v: %v", cell, err)
 		return
 	}
-	query := "select hostname, port, info from vitess_tablet where cell = ?"
+	query := "select alias from vitess_tablet where cell = ?"
 	args := sqlutils.Args(cell)
-	refreshTablets(tablets, query, args, loader, forceRefresh)
+	refreshTablets(tablets, query, args, loader, forceRefresh, nil)
 }
 
 // forceRefreshAllTabletsInShard is used to refresh all the tablet's information (both MySQL information and topo records)
 // for a given shard. This function is meant to be called before or after a cluster-wide operation that we know will
 // change the replication information for the entire cluster drastically enough to warrant a full forceful refresh
-func forceRefreshAllTabletsInShard(ctx context.Context, keyspace, shard string) {
-	log.Infof("force refresh of all tablets in shard - %v/%v", keyspace, shard)
+func forceRefreshAllTabletsInShard(ctx context.Context, keyspace, shard string, tabletsToIgnore []string) {
 	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
-	refreshTabletsInKeyspaceShard(refreshCtx, keyspace, shard, func(instanceKey *inst.InstanceKey) {
-		DiscoverInstance(*instanceKey, true)
-	}, true)
+	refreshTabletsInKeyspaceShard(refreshCtx, keyspace, shard, func(tabletAlias string) {
+		DiscoverInstance(tabletAlias, true)
+	}, true, tabletsToIgnore)
 }
 
 // refreshTabletInfoOfShard only refreshes the tablet records from the topo-server for all the tablets
 // of the given keyspace-shard.
 func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
 	log.Infof("refresh of tablet records of shard - %v/%v", keyspace, shard)
-	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(instanceKey *inst.InstanceKey) {
+	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias string) {
 		// No-op
 		// We only want to refresh the tablet information for the given shard
-	}, false)
+	}, false, nil)
 }
 
-func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
+func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
 	tablets, err := ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		log.Errorf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err)
 		return
 	}
-	query := "select hostname, port, info from vitess_tablet where keyspace = ? and shard = ?"
+	query := "select alias from vitess_tablet where keyspace = ? and shard = ?"
 	args := sqlutils.Args(keyspace, shard)
-	refreshTablets(tablets, query, args, loader, forceRefresh)
+	refreshTablets(tablets, query, args, loader, forceRefresh, tabletsToIgnore)
 }
 
-func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []any, loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
+func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []any, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
 	// Discover new tablets.
-	// TODO(sougou): enhance this to work with multi-schema,
-	// where each instanceKey can have multiple tablets.
 	latestInstances := make(map[string]bool)
 	var wg sync.WaitGroup
 	for _, tabletInfo := range tablets {
@@ -206,15 +202,9 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 		if tablet.Type != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(tablet.Type) {
 			continue
 		}
-		latestInstances[topoproto.TabletAliasString(tablet.Alias)] = true
-		if tablet.MysqlHostname == "" {
-			continue
-		}
-		instanceKey := inst.InstanceKey{
-			Hostname: tablet.MysqlHostname,
-			Port:     int(tablet.MysqlPort),
-		}
-		old, err := inst.ReadTablet(instanceKey)
+		tabletAliasString := topoproto.TabletAliasString(tablet.Alias)
+		latestInstances[tabletAliasString] = true
+		old, err := inst.ReadTablet(tabletAliasString)
 		if err != nil && err != inst.ErrTabletAliasNil {
 			log.Error(err)
 			continue
@@ -229,68 +219,55 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			loader(&instanceKey)
+			if slices.Contains(tabletsToIgnore, topoproto.TabletAliasString(tablet.Alias)) {
+				return
+			}
+			loader(tabletAliasString)
 		}()
 		log.Infof("Discovered: %v", tablet)
 	}
 	wg.Wait()
 
 	// Forget tablets that were removed.
-	toForget := make(map[inst.InstanceKey]*topodatapb.Tablet)
+	var toForget []string
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
-		curKey := inst.InstanceKey{
-			Hostname: row.GetString("hostname"),
-			Port:     row.GetInt("port"),
-		}
-		tablet := &topodatapb.Tablet{}
-		if err := prototext.Unmarshal([]byte(row.GetString("info")), tablet); err != nil {
-			log.Error(err)
-			return nil
-		}
-		if !latestInstances[topoproto.TabletAliasString(tablet.Alias)] {
-			toForget[curKey] = tablet
+		tabletAlias := row.GetString("alias")
+		if !latestInstances[tabletAlias] {
+			toForget = append(toForget, tabletAlias)
 		}
 		return nil
 	})
 	if err != nil {
 		log.Error(err)
 	}
-	for instanceKey, tablet := range toForget {
-		log.Infof("Forgetting: %v", tablet)
-		_, err := db.ExecVTOrc(`
-					delete
-						from vitess_tablet
-					where
-						hostname=? and port=?`,
-			instanceKey.Hostname,
-			instanceKey.Port,
-		)
-		if err != nil {
-			log.Error(err)
-		}
-		if err := inst.ForgetInstance(&instanceKey); err != nil {
+	for _, tabletAlias := range toForget {
+		if err := inst.ForgetInstance(tabletAlias); err != nil {
 			log.Error(err)
 		}
 	}
 }
 
+func getLockAction(analysedInstance string, code inst.AnalysisCode) string {
+	return fmt.Sprintf("VTOrc Recovery for %v on %v", code, analysedInstance)
+}
+
 // LockShard locks the keyspace-shard preventing others from performing conflicting actions.
-func LockShard(ctx context.Context, instanceKey inst.InstanceKey) (context.Context, func(*error), error) {
-	if instanceKey.Hostname == "" {
-		return nil, nil, errors.New("Can't lock shard: instance is unspecified")
+func LockShard(ctx context.Context, tabletAlias string, lockAction string) (context.Context, func(*error), error) {
+	if tabletAlias == "" {
+		return nil, nil, errors.New("can't lock shard: instance is unspecified")
 	}
 	val := atomic.LoadInt32(&hasReceivedSIGTERM)
 	if val > 0 {
-		return nil, nil, errors.New("Can't lock shard: SIGTERM received")
+		return nil, nil, errors.New("can't lock shard: SIGTERM received")
 	}
 
-	tablet, err := inst.ReadTablet(instanceKey)
+	tablet, err := inst.ReadTablet(tabletAlias)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	atomic.AddInt32(&shardsLockCounter, 1)
-	ctx, unlock, err := ts.TryLockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
+	ctx, unlock, err := ts.TryLockShard(ctx, tablet.Keyspace, tablet.Shard, lockAction)
 	if err != nil {
 		atomic.AddInt32(&shardsLockCounter, -1)
 		return nil, nil, err
@@ -311,6 +288,11 @@ func setReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return tmc.SetReadOnly(ctx, tablet)
 }
 
+// changeTabletType calls the said RPC for the given tablet with the given parameters.
+func changeTabletType(ctx context.Context, tablet *topodatapb.Tablet, tabletType topodatapb.TabletType, semiSync bool) error {
+	return tmc.ChangeType(ctx, tablet, tabletType, semiSync)
+}
+
 // setReplicationSource calls the said RPC with the parameters provided
 func setReplicationSource(ctx context.Context, replica *topodatapb.Tablet, primary *topodatapb.Tablet, semiSync bool) error {
 	return tmc.SetReplicationSource(ctx, replica, primary.Alias, 0, "", true, semiSync)
@@ -319,11 +301,7 @@ func setReplicationSource(ctx context.Context, replica *topodatapb.Tablet, prima
 // shardPrimary finds the primary of the given keyspace-shard by reading the vtorc backend
 func shardPrimary(keyspace string, shard string) (primary *topodatapb.Tablet, err error) {
 	query := `SELECT
-		info,
-		hostname,
-		port,
-		tablet_type,
-		primary_timestamp
+		info
 	FROM 
 		vitess_tablet
 	WHERE
@@ -336,7 +314,8 @@ func shardPrimary(keyspace string, shard string) (primary *topodatapb.Tablet, er
 	err = db.Db.QueryVTOrc(query, sqlutils.Args(keyspace, shard, topodatapb.TabletType_PRIMARY), func(m sqlutils.RowMap) error {
 		if primary == nil {
 			primary = &topodatapb.Tablet{}
-			return prototext.Unmarshal([]byte(m.GetString("info")), primary)
+			opts := prototext.UnmarshalOptions{DiscardUnknown: true}
+			return opts.Unmarshal([]byte(m.GetString("info")), primary)
 		}
 		return nil
 	})
@@ -347,10 +326,10 @@ func shardPrimary(keyspace string, shard string) (primary *topodatapb.Tablet, er
 }
 
 // restartsReplication restarts the replication on the provided replicaKey. It also sets the correct semi-sync settings when it starts replication
-func restartReplication(replicaKey *inst.InstanceKey) error {
-	replicaTablet, err := inst.ReadTablet(*replicaKey)
+func restartReplication(replicaAlias string) error {
+	replicaTablet, err := inst.ReadTablet(replicaAlias)
 	if err != nil {
-		log.Info("Could not read tablet - %+v", replicaKey)
+		log.Info("Could not read tablet - %+v", replicaAlias)
 		return err
 	}
 
@@ -360,7 +339,7 @@ func restartReplication(replicaKey *inst.InstanceKey) error {
 		return err
 	}
 
-	durabilityPolicy, err := inst.GetDurabilityPolicy(replicaTablet)
+	durabilityPolicy, err := inst.GetDurabilityPolicy(replicaTablet.Keyspace)
 	if err != nil {
 		log.Info("Could not read the durability policy for %v/%v", replicaTablet.Keyspace, replicaTablet.Shard)
 		return err
@@ -370,12 +349,12 @@ func restartReplication(replicaKey *inst.InstanceKey) error {
 	defer cancel()
 	err = tmc.StopReplication(ctx, replicaTablet)
 	if err != nil {
-		log.Info("Could not stop replication on %v", topoproto.TabletAliasString(replicaTablet.Alias))
+		log.Info("Could not stop replication on %v", replicaAlias)
 		return err
 	}
-	err = tmc.StartReplication(ctx, replicaTablet, inst.IsReplicaSemiSync(durabilityPolicy, primaryTablet, replicaTablet))
+	err = tmc.StartReplication(ctx, replicaTablet, reparentutil.IsReplicaSemiSync(durabilityPolicy, primaryTablet, replicaTablet))
 	if err != nil {
-		log.Info("Could not start replication on %v", topoproto.TabletAliasString(replicaTablet.Alias))
+		log.Info("Could not start replication on %v", replicaAlias)
 		return err
 	}
 	return nil

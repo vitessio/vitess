@@ -18,19 +18,14 @@ package evalengine
 
 import (
 	"math"
-	"strings"
-
-	"golang.org/x/exp/constraints"
 
 	"vitess.io/vitess/go/mysql/decimal"
-
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func dataOutOfRangeError[N1, N2 constraints.Integer | constraints.Float](v1 N1, v2 N2, typ, sign string) error {
+func dataOutOfRangeError[N1, N2 int | int64 | uint64 | float64](v1 N1, v2 N2, typ, sign string) error {
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in '(%v %s %v)'", typ, v1, sign, v2)
 }
 
@@ -59,8 +54,8 @@ func addNumericWithError(left, right eval) (eval, error) {
 }
 
 func subtractNumericWithError(left, right eval) (eval, error) {
-	v1 := evalToNumeric(left)
-	v2 := evalToNumeric(right)
+	v1 := evalToNumeric(left, true)
+	v2 := evalToNumeric(right, true)
 	switch v1 := v1.(type) {
 	case *evalInt64:
 		switch v2 := v2.(type) {
@@ -118,8 +113,8 @@ func multiplyNumericWithError(left, right eval) (eval, error) {
 }
 
 func divideNumericWithError(left, right eval, precise bool) (eval, error) {
-	v1 := evalToNumeric(left)
-	v2 := evalToNumeric(right)
+	v1 := evalToNumeric(left, true)
+	v2 := evalToNumeric(right, true)
 	if v1, ok := v1.(*evalFloat); ok {
 		return mathDiv_fx(v1.f, v2)
 	}
@@ -195,8 +190,8 @@ func integerDivideNumericWithError(left, right eval) (eval, error) {
 }
 
 func modNumericWithError(left, right eval, precise bool) (eval, error) {
-	v1 := evalToNumeric(left)
-	v2 := evalToNumeric(right)
+	v1 := evalToNumeric(left, true)
+	v2 := evalToNumeric(right, true)
 
 	switch v1 := v1.(type) {
 	case *evalInt64:
@@ -254,8 +249,8 @@ func modNumericWithError(left, right eval, precise bool) (eval, error) {
 // makeNumericAndPrioritize reorders the input parameters
 // to be Float64, Decimal, Uint64, Int64.
 func makeNumericAndPrioritize(left, right eval) (evalNumeric, evalNumeric) {
-	i1 := evalToNumeric(left)
-	i2 := evalToNumeric(right)
+	i1 := evalToNumeric(left, true)
+	i2 := evalToNumeric(right, true)
 	switch i1.SQLType() {
 	case sqltypes.Int64:
 		if i2.SQLType() == sqltypes.Uint64 || i2.SQLType() == sqltypes.Float64 || i2.SQLType() == sqltypes.Decimal {
@@ -331,12 +326,12 @@ func mathAdd_dx(v1 *evalDecimal, v2 evalNumeric) *evalDecimal {
 }
 
 func mathAdd_dd(v1, v2 *evalDecimal) *evalDecimal {
-	return newEvalDecimalWithPrec(v1.dec.Add(v2.dec), maxprec(v1.length, v2.length))
+	return newEvalDecimalWithPrec(v1.dec.Add(v2.dec), max(v1.length, v2.length))
 }
 
 func mathAdd_dd0(v1, v2 *evalDecimal) {
 	v1.dec = v1.dec.Add(v2.dec)
-	v1.length = maxprec(v1.length, v2.length)
+	v1.length = max(v1.length, v2.length)
 }
 
 func mathSub_ii(v1, v2 int64) (*evalInt64, error) {
@@ -422,12 +417,12 @@ func mathSub_xd(v1 evalNumeric, v2 *evalDecimal) *evalDecimal {
 }
 
 func mathSub_dd(v1, v2 *evalDecimal) *evalDecimal {
-	return newEvalDecimalWithPrec(v1.dec.Sub(v2.dec), maxprec(v1.length, v2.length))
+	return newEvalDecimalWithPrec(v1.dec.Sub(v2.dec), max(v1.length, v2.length))
 }
 
 func mathSub_dd0(v1, v2 *evalDecimal) {
 	v1.dec = v1.dec.Sub(v2.dec)
-	v1.length = maxprec(v1.length, v2.length)
+	v1.length = max(v1.length, v2.length)
 }
 
 func mathMul_ii(v1, v2 int64) (*evalInt64, error) {
@@ -484,13 +479,6 @@ func mathMul_fx(v1 float64, v2 evalNumeric) (eval, error) {
 
 func mathMul_ff(v1, v2 float64) *evalFloat {
 	return newEvalFloat(v1 * v2)
-}
-
-func maxprec(a, b int32) int32 {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func mathMul_dx(v1 *evalDecimal, v2 evalNumeric) *evalDecimal {
@@ -717,17 +705,4 @@ func mathMod_dd0(v1, v2 *evalDecimal) (decimal.Decimal, int32) {
 	}
 	_, rem := v1.dec.QuoRem(v2.dec, 0)
 	return rem, length
-}
-
-func parseStringToFloat(str string) float64 {
-	str = strings.TrimSpace(str)
-
-	// We only care to parse as many of the initial float characters of the
-	// string as possible. This functionality is implemented in the `strconv` package
-	// of the standard library, but not exposed, so we hook into it.
-	val, _, err := hack.ParseFloatPrefix(str, 64)
-	if err != nil {
-		return 0.0
-	}
-	return val
 }

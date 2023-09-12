@@ -18,10 +18,11 @@ package vtgate
 
 import (
 	"fmt"
-	"html/template"
 	"net/http"
 	"sync/atomic"
 	"time"
+
+	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/vt/logz"
 

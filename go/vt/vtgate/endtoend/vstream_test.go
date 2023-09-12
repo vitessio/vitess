@@ -25,19 +25,19 @@ import (
 	"sync"
 	"testing"
 
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 func initialize(ctx context.Context, t *testing.T) (*vtgateconn.VTGateConn, *mysql.Conn, *mysql.Conn, func()) {
@@ -150,11 +150,12 @@ func TestVStream(t *testing.T) {
 			Keyspace:  "ks",
 			Shard:     "-80",
 			RowChanges: []*binlogdatapb.RowChange{{
-				After: &query.Row{
+				After: &querypb.Row{
 					Lengths: []int64{1, 1},
 					Values:  []byte("11"),
 				},
 			}},
+			Flags: 1, // foreign_key_checks are enabled by default.
 		}
 		gotRows := events[2].RowEvent
 		if !proto.Equal(gotRows, wantRows) {
@@ -176,7 +177,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 	}
 
 	lastPK := sqltypes.Result{
-		Fields: []*query.Field{{Name: "id1", Type: query.Type_INT32}},
+		Fields: []*querypb.Field{{Name: "id1", Type: querypb.Type_INT32}},
 		Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(4)}},
 	}
 	qr := sqltypes.ResultToProto3(&lastPK)
@@ -404,7 +405,7 @@ func TestVStreamCopyResume(t *testing.T) {
 
 	// lastPK is id1=4, meaning we should only copy rows for id1 IN(5,6,7,8,9)
 	lastPK := sqltypes.Result{
-		Fields: []*query.Field{{Name: "id1", Type: query.Type_INT64}},
+		Fields: []*querypb.Field{{Name: "id1", Type: querypb.Type_INT64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_BINARY_FLAG)}},
 		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(4)}},
 	}
 	tableLastPK := []*binlogdatapb.TableLastPK{{
@@ -466,9 +467,9 @@ func TestVStreamCopyResume(t *testing.T) {
 		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:2 values:"990"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
 		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1_copy_resume" row_changes:{before:{lengths:1 lengths:1 values:"99"} after:{lengths:1 lengths:2 values:"990"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
 	}
-	redash80 := regexp.MustCompile(`(?i)type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+"}} keyspace:"ks" shard:"(-80|80-)"`)
-	re80dash := regexp.MustCompile(`(?i)type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+"} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}}} keyspace:"ks" shard:"(-80|80-)"`)
-	both := regexp.MustCompile(`(?i)type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}}} keyspace:"ks" shard:"(-80|80-)"`)
+	redash80 := regexp.MustCompile(`(?i)type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64 charset:63 flags:[0-9]+} rows:{lengths:1 values:"[0-9]"}}}} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+"}} keyspace:"ks" shard:"(-80|80-)"`)
+	re80dash := regexp.MustCompile(`(?i)type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+"} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64 charset:63 flags:[0-9]+} rows:{lengths:1 values:"[0-9]"}}}}} keyspace:"ks" shard:"(-80|80-)"`)
+	both := regexp.MustCompile(`(?i)type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64 charset:63 flags:[0-9]+} rows:{lengths:1 values:"[0-9]"}}}} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64 charset:63 flags:[0-9]+} rows:{lengths:1 values:"[0-9]"}}}}} keyspace:"ks" shard:"(-80|80-)"`)
 	var evs []*binlogdatapb.VEvent
 
 	for {
@@ -477,6 +478,7 @@ func TestVStreamCopyResume(t *testing.T) {
 		case nil:
 			for _, ev := range e {
 				if ev.Type == binlogdatapb.VEventType_ROW {
+					ev.RowEvent.Flags = 0 // null Flags, so we don't have to define flags in every wanted row event.
 					evs = append(evs, ev)
 					if ev.Timestamp == 0 {
 						rowCopyEvents++
@@ -615,9 +617,9 @@ func TestVStreamSharded(t *testing.T) {
 		received bool
 	}
 	expectedEvents := []*expectedEvent{
-		{`type:FIELD field_event:{table_name:"ks.t1_sharded" fields:{name:"id1" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_-80" org_name:"id1" column_length:20 charset:63 flags:53251} fields:{name:"id2" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_-80" org_name:"id2" column_length:20 charset:63 flags:32768} keyspace:"ks" shard:"-80"}`, false},
+		{`type:FIELD field_event:{table_name:"ks.t1_sharded" fields:{name:"id1" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_-80" org_name:"id1" column_length:20 charset:63 flags:53251 column_type:"bigint(20)"} fields:{name:"id2" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_-80" org_name:"id2" column_length:20 charset:63 flags:32768 column_type:"bigint(20)"} keyspace:"ks" shard:"-80"}`, false},
 		{`type:ROW row_event:{table_name:"ks.t1_sharded" row_changes:{after:{lengths:1 lengths:1 values:"11"}} keyspace:"ks" shard:"-80"}`, false},
-		{`type:FIELD field_event:{table_name:"ks.t1_sharded" fields:{name:"id1" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_80-" org_name:"id1" column_length:20 charset:63 flags:53251} fields:{name:"id2" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_80-" org_name:"id2" column_length:20 charset:63 flags:32768} keyspace:"ks" shard:"80-"}`, false},
+		{`type:FIELD field_event:{table_name:"ks.t1_sharded" fields:{name:"id1" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_80-" org_name:"id1" column_length:20 charset:63 flags:53251 column_type:"bigint(20)"} fields:{name:"id2" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_80-" org_name:"id2" column_length:20 charset:63 flags:32768 column_type:"bigint(20)"} keyspace:"ks" shard:"80-"}`, false},
 		{`type:ROW row_event:{table_name:"ks.t1_sharded" row_changes:{after:{lengths:1 lengths:1 values:"44"}} keyspace:"ks" shard:"80-"}`, false},
 	}
 	for {
@@ -642,7 +644,7 @@ func TestVStreamSharded(t *testing.T) {
 				for _, ev := range evs {
 					s := fmt.Sprintf("%v", ev)
 					for _, expectedEv := range expectedEvents {
-						if expectedEv.ev == s {
+						if removeAnyDeprecatedDisplayWidths(expectedEv.ev) == removeAnyDeprecatedDisplayWidths(s) {
 							expectedEv.received = true
 							break
 						}
@@ -664,6 +666,136 @@ func TestVStreamSharded(t *testing.T) {
 		}
 	}
 
+}
+
+// TestVStreamCopyTransactions tests that we are properly wrapping
+// ROW events in the stream with BEGIN and COMMIT events.
+func TestVStreamCopyTransactions(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	keyspace := "ks"
+	shards := []string{"-80", "80-"}
+	table := "t1_copy_basic"
+	beginEventSeen, commitEventSeen := false, false
+	numResultInTrx := 0
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{
+			{
+				Keyspace: keyspace,
+				Shard:    shards[0],
+				Gtid:     "", // Start a vstream copy
+			},
+			{
+				Keyspace: keyspace,
+				Shard:    shards[1],
+				Gtid:     "", // Start a vstream copy
+			},
+		},
+	}
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  table,
+			Filter: fmt.Sprintf("select * from %s", table),
+		}},
+	}
+
+	gconn, conn, _, closeConnections := initialize(ctx, t)
+	defer closeConnections()
+
+	// Clear any existing data.
+	q := fmt.Sprintf("delete from %s", table)
+	_, err := conn.ExecuteFetch(q, -1, false)
+	require.NoError(t, err, "error clearing data: %v", err)
+
+	// Generate some test data. Enough to cross the default
+	// vstream_packet_size threshold.
+	for i := 1; i <= 100000; i++ {
+		values := fmt.Sprintf("(%d, %d)", i, i)
+		q := fmt.Sprintf("insert into %s (id1, id2) values %s", table, values)
+		_, err := conn.ExecuteFetch(q, 1, false)
+		require.NoError(t, err, "error inserting data: %v", err)
+	}
+
+	// Start a vstream.
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, nil)
+	require.NoError(t, err, "error starting vstream: %v", err)
+
+recvLoop:
+	for {
+		vevents, err := reader.Recv()
+		numResultInTrx++
+		eventCount := len(vevents)
+		t.Logf("------------------ Received %d events in response #%d for the transaction ------------------\n",
+			eventCount, numResultInTrx)
+		switch err {
+		case nil:
+			for _, event := range vevents {
+				switch event.Type {
+				case binlogdatapb.VEventType_BEGIN:
+					require.False(t, beginEventSeen, "received a second BEGIN event within the transaction: numResultInTrx=%d\n",
+						numResultInTrx)
+					beginEventSeen = true
+					t.Logf("Found BEGIN event, beginEventSeen=%t, commitEventSeen=%t, eventType=%v, numResultInTrx=%d\n",
+						beginEventSeen, commitEventSeen, event.Type, numResultInTrx)
+					require.False(t, commitEventSeen, "received a BEGIN event when expecting a COMMIT event: numResultInTrx=%d\n",
+						numResultInTrx)
+				case binlogdatapb.VEventType_VGTID:
+					t.Logf("Found VGTID event, beginEventSeen=%t, commitEventSeen=%t, eventType=%v, numResultInTrx=%d, event=%+v\n",
+						beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
+				case binlogdatapb.VEventType_FIELD:
+					t.Logf("Found FIELD event, beginEventSeen=%t, commitEventSeen=%t, eventType=%v, numResultInTrx=%d, event=%+v\n",
+						beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
+				case binlogdatapb.VEventType_ROW:
+					// Uncomment if you need to do more debugging.
+					// t.Logf("Found ROW event, beginEventSeen=%t, commitEventSeen=%t, eventType=%v, numResultInTrx=%d, event=%+v\n",
+					//	beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
+				case binlogdatapb.VEventType_COMMIT:
+					commitEventSeen = true
+					t.Logf("Found COMMIT event, beginEventSeen=%t, commitEventSeen=%t, eventType=%v, numResultInTrx=%d, event=%+v\n",
+						beginEventSeen, commitEventSeen, event.Type, numResultInTrx, event)
+					require.True(t, beginEventSeen, "received COMMIT event before receiving BEGIN event: numResultInTrx=%d\n",
+						numResultInTrx)
+				case binlogdatapb.VEventType_COPY_COMPLETED:
+					t.Logf("Finished vstream copy\n")
+					t.Logf("-------------------------------------------------------------------\n\n")
+					cancel()
+					break recvLoop
+				default:
+					t.Logf("Found extraneous event: %+v\n", event)
+				}
+				if beginEventSeen && commitEventSeen {
+					t.Logf("Received both BEGIN and COMMIT, so resetting transactional state\n")
+					beginEventSeen = false
+					commitEventSeen = false
+					numResultInTrx = 0
+				}
+			}
+		case io.EOF:
+			t.Logf("vstream ended\n")
+			t.Logf("-------------------------------------------------------------------\n\n")
+			cancel()
+			return
+		default:
+			require.FailNowf(t, "unexpected error", "encountered error in vstream: %v", err)
+			return
+		}
+	}
+	// The last response, when the vstream copy completes, does not
+	// typically contain ROW events.
+	if beginEventSeen || commitEventSeen {
+		require.True(t, (beginEventSeen && commitEventSeen), "did not receive both BEGIN and COMMIT events in the final ROW event set")
+	}
+}
+
+func removeAnyDeprecatedDisplayWidths(orig string) string {
+	var adjusted string
+	baseIntType := "int"
+	intRE := regexp.MustCompile(`(?i)int\(([0-9]*)?\)`)
+	adjusted = intRE.ReplaceAllString(orig, baseIntType)
+	baseYearType := "year"
+	yearRE := regexp.MustCompile(`(?i)year\(([0-9]*)?\)`)
+	adjusted = yearRE.ReplaceAllString(adjusted, baseYearType)
+	return adjusted
 }
 
 var printMu sync.Mutex

@@ -66,7 +66,8 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateMigrationStatusFailedOrCancelled = `UPDATE _vt.schema_migrations
-			SET migration_status=IF(cancelled_timestamp IS NULL, 'failed', 'cancelled')
+			SET migration_status=IF(cancelled_timestamp IS NULL, 'failed', 'cancelled'),
+			completed_timestamp=NOW(6)
 		WHERE
 			migration_uuid=%a
 	`
@@ -213,6 +214,7 @@ const (
 	`
 	sqlUpdateMigrationProgressByRowsCopied = `UPDATE _vt.schema_migrations
 			SET
+				table_rows=GREATEST(table_rows, %a),
 				progress=CASE
 					WHEN table_rows=0 THEN 100
 					ELSE LEAST(100, 100*%a/table_rows)
@@ -355,7 +357,7 @@ const (
 		SET
 			completed_timestamp=NOW(6)
 		WHERE
-			migration_status='failed'
+			migration_status IN ('cancelled', 'failed')
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp IS NULL
 	`
@@ -462,6 +464,7 @@ const (
 		COLUMNS.CHARACTER_SET_NAME as character_set_name,
 		LOCATE('auto_increment', EXTRA) > 0 as is_auto_increment,
 		(DATA_TYPE='float' OR DATA_TYPE='double') AS is_float,
+		has_subpart,
 		has_nullable
 	FROM INFORMATION_SCHEMA.COLUMNS INNER JOIN (
 		SELECT
@@ -471,6 +474,7 @@ const (
 			COUNT(*) AS COUNT_COLUMN_IN_INDEX,
 			GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX ASC) AS COLUMN_NAMES,
 			SUBSTRING_INDEX(GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX ASC), ',', 1) AS FIRST_COLUMN_NAME,
+			SUM(SUB_PART IS NOT NULL) > 0 AS has_subpart,
 			SUM(NULLABLE='YES') > 0 AS has_nullable
 		FROM INFORMATION_SCHEMA.STATISTICS
 		WHERE
@@ -495,6 +499,10 @@ const (
 			WHEN 0 THEN 0
 			ELSE 1
 		END,
+		CASE has_subpart
+			WHEN 0 THEN 0
+			ELSE 1
+		END,
 		CASE IFNULL(CHARACTER_SET_NAME, '')
 				WHEN '' THEN 0
 				ELSE 1
@@ -514,6 +522,7 @@ const (
 	sqlDropTableIfExists = "DROP TABLE IF EXISTS `%a`"
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
 	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
+	sqlAnalyzeTable      = "ANALYZE NO_WRITE_TO_BINLOG TABLE `%a`"
 	sqlShowCreateTable   = "SHOW CREATE TABLE `%a`"
 	sqlGetAutoIncrement  = `
 		SELECT
@@ -560,13 +569,6 @@ const (
 	sqlUnlockTables       = "UNLOCK TABLES"
 	sqlCreateSentryTable  = "CREATE TABLE IF NOT EXISTS `%a` (id INT PRIMARY KEY)"
 	sqlFindProcess        = "SELECT id, Info as info FROM information_schema.processlist WHERE id=%a AND Info LIKE %a"
-)
-
-const (
-	retryMigrationHint     = "retry"
-	cancelMigrationHint    = "cancel"
-	cancelAllMigrationHint = "cancel-all"
-	completeMigrationHint  = "complete"
 )
 
 var (

@@ -19,6 +19,7 @@ package mysql
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/mysql/replication"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -95,7 +96,7 @@ type BinlogEvent interface {
 	// GTID returns the GTID from the event, and if this event
 	// also serves as a BEGIN statement.
 	// This is only valid if IsGTID() returns true.
-	GTID(BinlogFormat) (GTID, bool, error)
+	GTID(BinlogFormat) (replication.GTID, bool, error)
 	// Query returns a Query struct representing data from a QUERY_EVENT.
 	// This is only valid if IsQuery() returns true.
 	Query(BinlogFormat) (Query, error)
@@ -107,7 +108,7 @@ type BinlogEvent interface {
 	Rand(BinlogFormat) (uint64, uint64, error)
 	// PreviousGTIDs returns the Position from the event.
 	// This is only valid if IsPreviousGTIDs() returns true.
-	PreviousGTIDs(BinlogFormat) (Position, error)
+	PreviousGTIDs(BinlogFormat) (replication.Position, error)
 
 	// TableID returns the table ID for a TableMap, UpdateRows,
 	// WriteRows or DeleteRows event.
@@ -121,6 +122,9 @@ type BinlogEvent interface {
 	// IsWriteRows(), IsUpdateRows(), or IsDeleteRows() returns
 	// true.
 	Rows(BinlogFormat, *TableMap) (Rows, error)
+	// TransactionPayload returns a list of BinlogEvents contained
+	// within the compressed transaction.
+	TransactionPayload(BinlogFormat) ([]BinlogEvent, error)
 	// NextLogFile returns the name of the next binary log file & pos.
 	// This is only valid if IsRotate() returns true
 	NextLogFile(BinlogFormat) (string, uint64, error)
@@ -133,8 +137,9 @@ type BinlogEvent interface {
 	// IsPseudo is for custom implementations of GTID.
 	IsPseudo() bool
 
-	// IsCompressed returns true if a compressed event is found (binlog_transaction_compression=ON)
-	IsCompressed() bool
+	// IsTransactionPayload returns true if a compressed transaction
+	// payload event is found (binlog_transaction_compression=ON).
+	IsTransactionPayload() bool
 
 	// Bytes returns the binary representation of the event
 	Bytes() []byte
@@ -281,6 +286,11 @@ func NewServerBitmap(count int) Bitmap {
 // Count returns the number of bits in this Bitmap.
 func (b *Bitmap) Count() int {
 	return b.count
+}
+
+// Bits returns the underlying bitmap.
+func (b *Bitmap) Bits() []byte {
+	return b.data[:]
 }
 
 // Bit returned the value of a given bit in the Bitmap.

@@ -18,7 +18,6 @@ io.WriteString(net/http.ResponseWriter)
 
 (net.Listener).Close
 (net/http.ResponseWriter).Write
-net/http.Serve
 
 (*os.File).Close
 os.Remove

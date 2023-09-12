@@ -17,7 +17,7 @@ limitations under the License.
 
 package json
 
-import "golang.org/x/exp/slices"
+import "slices"
 
 // Del deletes the entry with the given key from o.
 func (o *Object) Del(key string) {

@@ -41,12 +41,14 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
+	"vitess.io/vitess/go/test/endtoend/throttler"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -136,73 +138,73 @@ var (
 		{
 			name:                    "negative UK, different PK",
 			prepareStatement:        "add unique key negative_uidx(id_negative)",
-			alterStatement:          "drop primary key, add primary key(rand_text(40))",
+			alterStatement:          "drop primary key, add primary key(rand_text)",
 			expectAddedUniqueKeys:   1,
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "text UK, no PK",
-			prepareStatement:        "add unique key text_uidx(rand_text(40))",
+			prepareStatement:        "add unique key text_uidx(rand_text)",
 			alterStatement:          "drop primary key",
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "text UK, different PK",
-			prepareStatement:        "add unique key text_uidx(rand_text(40))",
+			prepareStatement:        "add unique key text_uidx(rand_text)",
 			alterStatement:          "drop primary key, add primary key (id, id_negative)",
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "compound UK 1 by text, no PK",
-			prepareStatement:        "add unique key compound_uidx(rand_text(40), id_negative)",
+			prepareStatement:        "add unique key compound_uidx(rand_text, id_negative)",
 			alterStatement:          "drop primary key",
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "compound UK 2 by negative, no PK",
-			prepareStatement:        "add unique key compound_uidx(id_negative, rand_text(40))",
+			prepareStatement:        "add unique key compound_uidx(id_negative, rand_text)",
 			alterStatement:          "drop primary key",
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "compound UK 3 by ascending int, no PK",
-			prepareStatement:        "add unique key compound_uidx(id, rand_num, rand_text(40))",
+			prepareStatement:        "add unique key compound_uidx(id, rand_num, rand_text)",
 			alterStatement:          "drop primary key",
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "compound UK 4 by rand int, no PK",
-			prepareStatement:        "add unique key compound_uidx(rand_num, rand_text(40))",
+			prepareStatement:        "add unique key compound_uidx(rand_num, rand_text)",
 			alterStatement:          "drop primary key",
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "compound UK 5 by rand int, different PK",
-			prepareStatement:        "add unique key compound_uidx(rand_num, rand_text(40))",
+			prepareStatement:        "add unique key compound_uidx(rand_num, rand_text)",
 			alterStatement:          "drop primary key, add primary key (id, id_negative)",
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "multiple UK choices 1",
-			prepareStatement:        "add unique key compound_uidx(rand_num, rand_text(40)), add unique key negative_uidx(id_negative)",
+			prepareStatement:        "add unique key compound_uidx(rand_num, rand_text), add unique key negative_uidx(id_negative)",
 			alterStatement:          "drop primary key, add primary key(updates, id)",
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "multiple UK choices 2",
-			prepareStatement:        "add unique key compound_uidx(rand_num, rand_text(40)), add unique key negative_uidx(id_negative)",
+			prepareStatement:        "add unique key compound_uidx(rand_num, rand_text), add unique key negative_uidx(id_negative)",
 			alterStatement:          "drop primary key, add primary key(id, id_negative)",
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "multiple UK choices including nullable with PK",
-			prepareStatement:        "add unique key compound_uidx(rand_num, rand_text(40)), add unique key nullable_uidx(nullable_num, id_negative), add unique key negative_uidx(id_negative)",
+			prepareStatement:        "add unique key compound_uidx(rand_num, rand_text), add unique key nullable_uidx(nullable_num, id_negative), add unique key negative_uidx(id_negative)",
 			alterStatement:          "drop primary key, drop key negative_uidx, add primary key(id_negative)",
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "multiple UK choices including nullable",
-			prepareStatement:        "add unique key compound_uidx(rand_num, rand_text(40)), add unique key nullable_uidx(nullable_num, id_negative), add unique key negative_uidx(id_negative)",
+			prepareStatement:        "add unique key compound_uidx(rand_num, rand_text), add unique key nullable_uidx(nullable_num, id_negative), add unique key negative_uidx(id_negative)",
 			alterStatement:          "drop primary key, add primary key(updates, id)",
 			expectRemovedUniqueKeys: 1,
 		},
@@ -240,14 +242,14 @@ var (
 		{
 			name:                    "different PRIMARY KEY, text",
 			prepareStatement:        "",
-			alterStatement:          "drop primary key, add primary key(rand_text(40))",
+			alterStatement:          "drop primary key, add primary key(rand_text)",
 			expectAddedUniqueKeys:   1,
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "different PRIMARY KEY, rand",
 			prepareStatement:        "",
-			alterStatement:          "drop primary key, add primary key(rand_num, rand_text(40))",
+			alterStatement:          "drop primary key, add primary key(rand_num, rand_text)",
 			expectAddedUniqueKeys:   1,
 			expectRemovedUniqueKeys: 1,
 		},
@@ -260,42 +262,42 @@ var (
 		},
 		{
 			name:                    "different PRIMARY KEY, from text to int",
-			prepareStatement:        "drop primary key, add primary key(rand_text(40))",
+			prepareStatement:        "drop primary key, add primary key(rand_text)",
 			alterStatement:          "drop primary key, add primary key(id)",
 			expectAddedUniqueKeys:   1,
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "different PRIMARY KEY, from text to rand",
-			prepareStatement:        "drop primary key, add primary key(rand_text(40))",
-			alterStatement:          "drop primary key, add primary key(rand_num, rand_text(40))",
+			prepareStatement:        "drop primary key, add primary key(rand_text)",
+			alterStatement:          "drop primary key, add primary key(rand_num, rand_text)",
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "partially shared PRIMARY KEY 1",
 			prepareStatement:        "drop primary key, add primary key(id, id_negative)",
-			alterStatement:          "drop primary key, add primary key(id, rand_text(40))",
+			alterStatement:          "drop primary key, add primary key(id, rand_text)",
 			expectAddedUniqueKeys:   1,
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "partially shared PRIMARY KEY 2",
 			prepareStatement:        "drop primary key, add primary key(id, id_negative)",
-			alterStatement:          "drop primary key, add primary key(id_negative, rand_text(40))",
+			alterStatement:          "drop primary key, add primary key(id_negative, rand_text)",
 			expectAddedUniqueKeys:   1,
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "partially shared PRIMARY KEY 3",
 			prepareStatement:        "drop primary key, add primary key(id, id_negative)",
-			alterStatement:          "drop primary key, add primary key(rand_text(40), id)",
+			alterStatement:          "drop primary key, add primary key(rand_text, id)",
 			expectAddedUniqueKeys:   1,
 			expectRemovedUniqueKeys: 1,
 		},
 		{
 			name:                    "partially shared PRIMARY KEY 4",
 			prepareStatement:        "drop primary key, add primary key(id_negative, id)",
-			alterStatement:          "drop primary key, add primary key(rand_text(40), id)",
+			alterStatement:          "drop primary key, add primary key(rand_text, id)",
 			expectAddedUniqueKeys:   1,
 			expectRemovedUniqueKeys: 1,
 		},
@@ -309,7 +311,7 @@ var (
 		{
 			name:                    "no shared UK, multiple options",
 			prepareStatement:        "add unique key negative_uidx(id_negative)",
-			alterStatement:          "drop primary key, drop key negative_uidx, add primary key(rand_text(40)), add unique key negtext_uidx(id_negative, rand_text(40))",
+			alterStatement:          "drop primary key, drop key negative_uidx, add primary key(rand_text), add unique key negtext_uidx(id_negative, rand_text)",
 			expectAddedUniqueKeys:   1,
 			expectRemovedUniqueKeys: 2,
 		},
@@ -429,9 +431,6 @@ func TestMain(m *testing.M) {
 		// thereby examining lastPK on vcopier side. We will be iterating tables using non-PK order throughout
 		// this test suite, and so the low setting ensures we hit the more interesting code paths.
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--enable-lag-throttler",
-			"--throttle_threshold", "1s",
-			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
@@ -484,6 +483,8 @@ func TestSchemaChange(t *testing.T) {
 
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
+
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, time.Second)
 
 	for _, testcase := range testCases {
 		require.NotEmpty(t, testcase.name)
@@ -706,9 +707,9 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 				// Table renamed to _before, due to -vreplication-test-suite flag
 				err = nil
 			}
-			if sqlErr, ok := err.(*mysql.SQLError); ok {
+			if sqlErr, ok := err.(*sqlerror.SQLError); ok {
 				switch sqlErr.Number() {
-				case mysql.ERLockDeadlock:
+				case sqlerror.ERLockDeadlock:
 					// That's fine. We create a lot of contention; some transactions will deadlock and
 					// rollback. It happens, and we can ignore those and keep on going.
 					err = nil

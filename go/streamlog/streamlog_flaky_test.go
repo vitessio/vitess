@@ -28,6 +28,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 type logMessage struct {
@@ -51,7 +53,12 @@ func TestHTTP(t *testing.T) {
 	defer l.Close()
 	addr := l.Addr().String()
 
-	go http.Serve(l, nil)
+	go func() {
+		err := servenv.HTTPServe(l)
+		if err != nil {
+			t.Errorf("http serve returned unexpected error: %v", err)
+		}
+	}()
 
 	logger := New[*logMessage]("logger", 1)
 	logger.ServeLogs("/log", testLogf)

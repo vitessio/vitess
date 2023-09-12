@@ -21,6 +21,7 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/require"
@@ -64,7 +65,7 @@ func TestDeleteUnsharded(t *testing.T) {
 }
 
 func TestDeleteEqual(t *testing.T) {
-	vindex, _ := vindexes.NewHash("", nil)
+	vindex, _ := vindexes.CreateVindex("hash", "", nil)
 	del := &Delete{
 		DML: &DML{
 			RoutingParameters: &RoutingParameters{
@@ -89,14 +90,14 @@ func TestDeleteEqual(t *testing.T) {
 	})
 
 	// Failure case
-	expr := evalengine.NewBindVar("aa")
+	expr := evalengine.NewBindVar("aa", sqltypes.Unknown, collations.Unknown)
 	del.Values = []evalengine.Expr{expr}
 	_, err = del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "query arguments missing for aa")
 }
 
 func TestDeleteEqualMultiCol(t *testing.T) {
-	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	vindex, _ := vindexes.CreateVindex("region_experimental", "", map[string]string{"region_bytes": "1"})
 	del := &Delete{
 		DML: &DML{
 			RoutingParameters: &RoutingParameters{
@@ -121,14 +122,14 @@ func TestDeleteEqualMultiCol(t *testing.T) {
 	})
 
 	// Failure case
-	expr := evalengine.NewBindVar("aa")
+	expr := evalengine.NewBindVar("aa", sqltypes.Unknown, collations.Unknown)
 	del.Values = []evalengine.Expr{expr}
 	_, err = del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "query arguments missing for aa")
 }
 
 func TestDeleteEqualNoRoute(t *testing.T) {
-	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
+	vindex, _ := vindexes.CreateVindex("lookup_unique", "", map[string]string{
 		"table": "lkp",
 		"from":  "from",
 		"to":    "toc",
@@ -160,7 +161,7 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 
 func TestDeleteEqualNoScatter(t *testing.T) {
 	t.Skip("planner does not produces this plan anymore")
-	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
+	vindex, _ := vindexes.CreateVindex("lookup_unique", "", map[string]string{
 		"table":      "lkp",
 		"from":       "from",
 		"to":         "toc",
@@ -196,10 +197,9 @@ func TestDeleteOwnedVindex(t *testing.T) {
 				Vindex:   ks.Vindexes["hash"],
 				Values:   []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			},
-			Query: "dummy_delete",
-			Table: []*vindexes.Table{
-				ks.Tables["t1"],
-			},
+			Query:            "dummy_delete",
+			TableNames:       []string{ks.Tables["t1"].Name.String()},
+			Vindexes:         ks.Tables["t1"].Owned,
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"],
 			KsidLength:       1,
@@ -284,10 +284,9 @@ func TestDeleteOwnedVindexMultiCol(t *testing.T) {
 				Vindex:   ks.Vindexes["rg_vdx"],
 				Values:   []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
 			},
-			Query: "dummy_delete",
-			Table: []*vindexes.Table{
-				ks.Tables["rg_tbl"],
-			},
+			Query:            "dummy_delete",
+			TableNames:       []string{ks.Tables["rg_tbl"].Name.String()},
+			Vindexes:         ks.Tables["rg_tbl"].Owned,
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["rg_vdx"],
 			KsidLength:       2,
@@ -367,10 +366,9 @@ func TestDeleteSharded(t *testing.T) {
 				Opcode:   Scatter,
 				Keyspace: ks.Keyspace,
 			},
-			Query: "dummy_delete",
-			Table: []*vindexes.Table{
-				ks.Tables["t2"],
-			},
+			Query:      "dummy_delete",
+			TableNames: []string{ks.Tables["t2"].Name.String()},
+			Vindexes:   ks.Tables["t2"].Owned,
 		},
 	}
 
@@ -396,10 +394,9 @@ func TestDeleteShardedStreaming(t *testing.T) {
 				Opcode:   Scatter,
 				Keyspace: ks.Keyspace,
 			},
-			Query: "dummy_delete",
-			Table: []*vindexes.Table{
-				ks.Tables["t2"],
-			},
+			Query:      "dummy_delete",
+			TableNames: []string{ks.Tables["t2"].Name.String()},
+			Vindexes:   ks.Tables["t2"].Owned,
 		},
 	}
 
@@ -422,10 +419,9 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 				Opcode:   Scatter,
 				Keyspace: ks.Keyspace,
 			},
-			Query: "dummy_delete",
-			Table: []*vindexes.Table{
-				ks.Tables["t1"],
-			},
+			Query:            "dummy_delete",
+			TableNames:       []string{ks.Tables["t1"].Name.String()},
+			Vindexes:         ks.Tables["t1"].Owned,
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"],
 			KsidLength:       1,
@@ -514,10 +510,9 @@ func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 					evalengine.NewLiteralInt(3),
 				},
 			},
-			Query: "dummy_update",
-			Table: []*vindexes.Table{
-				ks.Tables["rg_tbl"],
-			},
+			Query:            "dummy_update",
+			TableNames:       []string{ks.Tables["rg_tbl"].Name.String()},
+			Vindexes:         ks.Tables["rg_tbl"].Owned,
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["rg_vdx"],
 			KsidLength:       2,
@@ -555,7 +550,7 @@ func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 }
 
 func TestDeleteEqualSubshard(t *testing.T) {
-	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	vindex, _ := vindexes.CreateVindex("region_experimental", "", map[string]string{"region_bytes": "1"})
 	del := &Delete{
 		DML: &DML{
 			RoutingParameters: &RoutingParameters{
