@@ -155,6 +155,7 @@ func TestVStream(t *testing.T) {
 					Values:  []byte("11"),
 				},
 			}},
+			Flags: 1, // foreign_key_checks are enabled by default.
 		}
 		gotRows := events[2].RowEvent
 		if !proto.Equal(gotRows, wantRows) {
@@ -477,6 +478,7 @@ func TestVStreamCopyResume(t *testing.T) {
 		case nil:
 			for _, ev := range e {
 				if ev.Type == binlogdatapb.VEventType_ROW {
+					ev.RowEvent.Flags = 0 // null Flags, so we don't have to define flags in every wanted row event.
 					evs = append(evs, ev)
 					if ev.Timestamp == 0 {
 						rowCopyEvents++

@@ -65,3 +65,7 @@ func (d *Delete) GetOrdering() ([]ops.OrderBy, error) {
 func (d *Delete) ShortDescription() string {
 	return fmt.Sprintf("%s.%s %s", d.VTable.Keyspace.Name, d.VTable.Name.String(), sqlparser.String(d.AST.Where))
 }
+
+func (d *Delete) Statement() sqlparser.Statement {
+	return d.AST
+}

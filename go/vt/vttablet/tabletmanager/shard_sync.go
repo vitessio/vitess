@@ -22,8 +22,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -114,7 +114,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			}
 			// If we think we're primary, check if we need to update the shard record.
 			// Fetch the start time from the record we just got, because the tm's tablet can change.
-			primaryAlias, shouldDemote, err := syncShardPrimary(ctx, tm.TopoServer, tablet, logutil.ProtoToTime(tablet.PrimaryTermStartTime))
+			primaryAlias, shouldDemote, err := syncShardPrimary(ctx, tm.TopoServer, tablet, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC())
 			if err != nil {
 				log.Errorf("Failed to sync shard record: %v", err)
 				// Start retry timer and go back to sleep.
@@ -191,7 +191,7 @@ func syncShardPrimary(ctx context.Context, ts *topo.Server, tablet *topodatapb.T
 		aliasStr := topoproto.TabletAliasString(tablet.Alias)
 		log.Infof("Updating shard record: primary_alias=%v, primary_term_start_time=%v", aliasStr, PrimaryTermStartTime)
 		si.PrimaryAlias = tablet.Alias
-		si.PrimaryTermStartTime = logutil.TimeToProto(PrimaryTermStartTime)
+		si.PrimaryTermStartTime = protoutil.TimeToProto(PrimaryTermStartTime)
 		return nil
 	})
 	if err != nil {

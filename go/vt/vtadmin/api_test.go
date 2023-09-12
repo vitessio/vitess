@@ -803,8 +803,7 @@ func TestFindSchema(t *testing.T) {
 
 		if schema != nil {
 			// Clone so our mutation below doesn't trip the race detector.
-			schema = proto.Clone(schema).(*vtadminpb.Schema)
-
+			schema = schema.CloneVT()
 			for _, td := range schema.TableDefinitions {
 				// Zero these out because they're non-deterministic and also not
 				// relevant to the final result.
@@ -1571,7 +1570,7 @@ func TestGetSchema(t *testing.T) {
 
 				if resp != nil {
 					// Clone so our mutation below doesn't trip the race detector.
-					resp = proto.Clone(resp).(*vtadminpb.Schema)
+					resp = resp.CloneVT()
 				}
 
 				assert.NoError(t, err)
@@ -1729,8 +1728,7 @@ func TestGetSchema(t *testing.T) {
 
 		if schema != nil {
 			// Clone so our mutation below doesn't trip the race detector.
-			schema = proto.Clone(schema).(*vtadminpb.Schema)
-
+			schema = schema.CloneVT()
 			for _, td := range schema.TableDefinitions {
 				// Zero these out because they're non-deterministic and also not
 				// relevant to the final result.
@@ -2538,8 +2536,7 @@ func TestGetSchemas(t *testing.T) {
 			// Clone schemas so our mutations below don't trip the race detector.
 			schemas := make([]*vtadminpb.Schema, len(resp.Schemas))
 			for i, schema := range resp.Schemas {
-				schema := proto.Clone(schema).(*vtadminpb.Schema)
-
+				schema := schema.CloneVT()
 				for _, td := range schema.TableDefinitions {
 					// Zero these out because they're non-deterministic and also not
 					// relevant to the final result.

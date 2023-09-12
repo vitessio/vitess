@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -49,7 +48,7 @@ func gen4UpdateStmtPlanner(
 	}
 
 	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
-		if fkManagementNotRequiredForUpdate(ctx.SemTable, vschema, tables, updStmt.Exprs) {
+		if fkManagementNotRequiredForUpdate(ctx, vschema, tables, updStmt.Exprs) {
 			plan := updateUnshardedShortcut(updStmt, ks, tables)
 			plan = pushCommentDirectivesOnPlan(plan, updStmt)
 			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
@@ -87,7 +86,7 @@ func gen4UpdateStmtPlanner(
 }
 
 // TODO: Handle all this in semantic analysis.
-func fkManagementNotRequiredForUpdate(semTable *semantics.SemTable, vschema plancontext.VSchema, vTables []*vindexes.Table, updateExprs sqlparser.UpdateExprs) bool {
+func fkManagementNotRequiredForUpdate(ctx *plancontext.PlanningContext, vschema plancontext.VSchema, vTables []*vindexes.Table, updateExprs sqlparser.UpdateExprs) bool {
 	childFkMap := make(map[string][]vindexes.ChildFKInfo)
 
 	// Find the foreign key mode and check for any managed child foreign keys.
@@ -99,14 +98,14 @@ func fkManagementNotRequiredForUpdate(semTable *semantics.SemTable, vschema plan
 		if ksMode != vschemapb.Keyspace_FK_MANAGED {
 			continue
 		}
-		childFks := vTable.ChildFKsNeedsHandling(vindexes.UpdateAction)
+		childFks := vTable.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.UpdateAction)
 		if len(childFks) > 0 {
 			childFkMap[vTable.String()] = childFks
 		}
 	}
 
 	getFKInfo := func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
-		tblInfo, err := semTable.TableInfoForExpr(expr.Name)
+		tblInfo, err := ctx.SemTable.TableInfoForExpr(expr.Name)
 		if err != nil {
 			return nil, nil
 		}

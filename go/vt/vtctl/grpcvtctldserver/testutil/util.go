@@ -24,8 +24,6 @@ import (
 	"fmt"
 	"testing"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/nettest"
 	"google.golang.org/grpc"
@@ -106,7 +104,7 @@ func WithTestServers(
 // could not be added. It shallow copies the proto struct to prevent XXX_ fields
 // from changing in the marshalling.
 func AddKeyspace(ctx context.Context, t *testing.T, ts *topo.Server, ks *vtctldatapb.Keyspace) {
-	err := ts.CreateKeyspace(ctx, ks.Name, proto.Clone(ks.Keyspace).(*topodatapb.Keyspace))
+	err := ts.CreateKeyspace(ctx, ks.Name, ks.Keyspace.CloneVT())
 	require.NoError(t, err)
 }
 
@@ -150,7 +148,7 @@ type AddTabletOptions struct {
 // AddTablet will fail the test.
 func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topodatapb.Tablet, opts *AddTabletOptions) {
 	t.Helper()
-	tablet = proto.Clone(tablet).(*topodatapb.Tablet)
+	tablet = tablet.CloneVT()
 	if opts == nil {
 		opts = &AddTabletOptions{}
 	}

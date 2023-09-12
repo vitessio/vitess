@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -535,17 +534,6 @@ func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
 	val, _, _, err = jsonparser.Get([]byte(body), varPath...)
 	require.NoError(t, err)
 	return string(val), nil
-}
-
-func getDebugVars(t *testing.T, port int) map[string]any {
-	out := map[string]any{}
-	response, err := http.Get(fmt.Sprintf("http://localhost:%d/debug/vars", port))
-	if err != nil {
-		return out
-	}
-	defer response.Body.Close()
-	_ = json.NewDecoder(response.Body).Decode(&out)
-	return out
 }
 
 func confirmWorkflowHasCopiedNoData(t *testing.T, targetKS, workflow string) {

@@ -28,12 +28,10 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -165,7 +163,7 @@ func main() {
 	//
 	// We will use this to determine the shard structure when keyspaces
 	// get recreated.
-	originalTopology := proto.Clone(&tpb).(*vttestpb.VTTestTopology)
+	originalTopology := (&tpb).CloneVT()
 
 	// default cell to "test" if unspecified
 	if len(tpb.Cells) == 0 {
@@ -240,7 +238,7 @@ func main() {
 		// will end up with the same number of shards.
 		for _, originalKs := range originalTopology.Keyspaces {
 			if originalKs.Name == ks.Name {
-				ks = proto.Clone(originalKs).(*vttestpb.Keyspace)
+				ks = originalKs.CloneVT()
 			}
 		}
 

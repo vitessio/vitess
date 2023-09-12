@@ -86,6 +86,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		vitess_keyspace.durability_policy AS durability_policy,
 		vitess_shard.primary_timestamp AS shard_primary_term_timestamp,
 		primary_instance.read_only AS read_only,
+		MIN(primary_instance.gtid_errant) AS gtid_errant, 
 		MIN(primary_instance.alias) IS NULL AS is_invalid,
 		MIN(primary_instance.data_center) AS data_center,
 		MIN(primary_instance.region) AS region,
@@ -362,6 +363,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.ReplicationStopped = m.GetBool("replication_stopped")
 		a.IsBinlogServer = m.GetBool("is_binlog_server")
 		a.ClusterDetails.ReadRecoveryInfo()
+		a.ErrantGTID = m.GetString("gtid_errant")
 
 		countValidOracleGTIDReplicas := m.GetUint("count_valid_oracle_gtid_replicas")
 		a.OracleGTIDImmediateTopology = countValidOracleGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
@@ -475,6 +477,9 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
 			//
+		} else if topo.IsReplicaType(a.TabletType) && a.ErrantGTID != "" {
+			a.Analysis = ErrantGTIDDetected
+			a.Description = "Tablet has errant GTIDs"
 		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp == "" {
 			// ClusterHasNoPrimary should only be detected when the shard record doesn't have any primary term start time specified either.
 			a.Analysis = ClusterHasNoPrimary
