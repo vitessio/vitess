@@ -539,7 +539,6 @@ func shouldIgnoreQuery(query string) bool {
 		", time_throttled=",      // update of last throttle time, can happen out-of-band, so can't test for it
 		", component_throttled=", // update of last throttle time, can happen out-of-band, so can't test for it
 		"context cancel",
-		"SELECT rows_copied FROM _vt.vreplication",
 	}
 	if sidecardb.MatchesInitQuery(query) {
 		return true

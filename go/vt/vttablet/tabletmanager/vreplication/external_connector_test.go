@@ -181,6 +181,7 @@ func getExpectedVreplicationQueries(t *testing.T, pos string) []string {
 	if pos == "" {
 		return []string{
 			"/insert into _vt.vreplication",
+			"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 			"begin",
 			"/insert into _vt.copy_state",
 			"/update _vt.vreplication set state='Copying'",
@@ -190,6 +191,7 @@ func getExpectedVreplicationQueries(t *testing.T, pos string) []string {
 	}
 	return []string{
 		"/insert into _vt.vreplication",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update _vt.vreplication set state='Running'",
 	}
 }

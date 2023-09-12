@@ -142,7 +142,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		log.Warningf("The supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
 			vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
 	}
-	v := &vreplicator{
+	vr := &vreplicator{
 		vre:             vre,
 		id:              id,
 		source:          source,
@@ -151,8 +151,8 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		dbClient:        newVDBClient(dbClient, stats),
 		mysqld:          mysqld,
 	}
-	v.readExistingRowsCopiedAndUpdateSelfIfNeeded()
-	return v
+	vr.setExistingRowsCopied()
+	return vr
 }
 
 // Replicate starts a vreplication stream. It can be in one of three phases:
@@ -1033,7 +1033,12 @@ func (vr *vreplicator) newClientConnection(ctx context.Context) (*vdbClient, err
 	return dbClient, nil
 }
 
-func (vr *vreplicator) readExistingRowsCopiedAndUpdateSelfIfNeeded() {
+// setExistingRowsCopied deals with the case where another tablet started the workflow and a reparent occurred,
+// and now that we manage the workflow, we need to read the rows_copied that already exists and add them to our
+// counter, otherwise it will look like the reparent wiped all the rows_copied.
+// So in the event that our CopyRowCount counter is zero, and the existing rows_copied in the vreplication table
+// is not, copy the value of vreplication.rows_copied into our CopyRowCount
+func (vr *vreplicator) setExistingRowsCopied() {
 	if vr.stats.CopyRowCount.Get() == 0 {
 		rowsCopiedExisting, err := vr.readExistingRowsCopied(vr.id)
 		if err != nil {
@@ -1050,13 +1055,13 @@ func (vr *vreplicator) readExistingRowsCopied(id int32) (int64, error) {
 		sqltypes.Int32BindVariable(id),
 	)
 	if err != nil {
-		return -1, err
+		return 0, err
 	}
 	r, err := vr.dbClient.Execute(query)
 	if err != nil {
-		return -1, err
+		return 0, err
 	}
-	if len(r.Rows) != 1 || len(r.Rows[0]) != 1 {
+	if len(r.Rows) != 1 {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not get expected single row value when getting rows_copied for workflow id: %d", id)
 	}
 	return r.Rows[0][0].ToInt64()

@@ -68,6 +68,7 @@ const (
 	initSequenceTable        = "insert into %a.%a (id, next_id, cache) values (0, %d, 1000) on duplicate key update next_id = if(next_id < %d, %d, next_id)"
 	deleteWorkflow           = "delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'"
 	updatePickedSourceTablet = `update _vt.vreplication set message='Picked source tablet: cell:\"%s\" uid:%d' where id=1`
+	getRowsCopied            = "SELECT rows_copied FROM _vt.vreplication WHERE id=1"
 )
 
 var (
@@ -322,6 +323,16 @@ func TestMoveTables(t *testing.T) {
 		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(updatePickedSourceTablet, tenv.cells[0], sourceTabletUID), &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(setSessionTZ, &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(setNames, &sqltypes.Result{}, nil)
+		ftc.vrdbClient.ExpectRequest(getRowsCopied,
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"rows_copied",
+					"int64",
+				),
+				"0",
+			),
+			nil,
+		)
 		ftc.vrdbClient.ExpectRequest(getWorkflowState, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"pos|stop_pos|max_tps|max_replication_lag|state|workflow_type|workflow|workflow_sub_type|defer_secondary_keys",
@@ -657,6 +668,16 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 		&sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(setSessionTZ, &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(setNames, &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(getRowsCopied,
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"rows_copied",
+				"int64",
+			),
+			"0",
+		),
+		nil,
+	)
 	targetTablet.vrdbClient.ExpectRequest(getWorkflowState,
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
