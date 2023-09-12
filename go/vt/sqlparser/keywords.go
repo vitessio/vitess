@@ -581,6 +581,7 @@ var keywords = map[string]int{
 	"system_time":                   SYSTEM_TIME,
 	"system_variables_admin":        SYSTEM_VARIABLES_ADMIN,
 	"table":                         TABLE,
+	"table_checksum":                TABLE_CHECKSUM,
 	"table_encryption_admin":        TABLE_ENCRYPTION_ADMIN,
 	"table_name":                    TABLE_NAME,
 	"tables":                        TABLES,

@@ -349,7 +349,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> DUAL JSON_TABLE PATH
 
 // Table options
-%token <bytes> AVG_ROW_LENGTH CHECKSUM COMPRESSION DIRECTORY DELAY_KEY_WRITE ENGINE_ATTRIBUTE INSERT_METHOD MAX_ROWS
+%token <bytes> AVG_ROW_LENGTH CHECKSUM TABLE_CHECKSUM COMPRESSION DIRECTORY DELAY_KEY_WRITE ENGINE_ATTRIBUTE INSERT_METHOD MAX_ROWS
 %token <bytes> MIN_ROWS PACK_KEYS ROW_FORMAT SECONDARY_ENGINE SECONDARY_ENGINE_ATTRIBUTE STATS_AUTO_RECALC STATS_PERSISTENT
 %token <bytes> STATS_SAMPLE_PAGES STORAGE DISK MEMORY DYNAMIC COMPRESSED REDUNDANT
 %token <bytes> COMPACT LIST HASH PARTITIONS SUBPARTITION SUBPARTITIONS
@@ -4060,6 +4060,10 @@ table_option:
   {
     $$ = string($1) + " " + string($3)
   }
+| TABLE_CHECKSUM equal_opt INTEGRAL
+  {
+    $$ = "CHECKSUM" + " " + string($3)
+  }
 | COLLATE equal_opt table_option_collate
   {
     $$ = string($1) + " " + $3
@@ -4570,6 +4574,14 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr}
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| CHECKSUM equal_opt INTEGRAL
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| TABLE_CHECKSUM equal_opt INTEGRAL
   {
     $$ = &DDL{Action: AlterStr}
   }
@@ -8796,6 +8808,7 @@ non_reserved_keyword:
 | SUBJECT
 | SUBPARTITION
 | SUBPARTITIONS
+| TABLE_CHECKSUM
 | TABLES
 | TABLESPACE
 | TABLE_NAME
