@@ -239,6 +239,8 @@ Usage of vtgate:
 	Select tcp, tcp4, or tcp6 to control the socket type. (default tcp)
   --no_scatter
 	when set to true, the planner will fail instead of producing a plan that includes scatter queries
+  --no_vstream_copy
+	when set to true, vstream copy will not be allowed - temporary until we can properly support RDONLY for this
   --normalize_queries
 	Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars. (default true)
   --onclose_timeout duration

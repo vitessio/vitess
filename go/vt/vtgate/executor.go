@@ -107,6 +107,9 @@ type Executor struct {
 
 	// allowScatter will fail planning if set to false and a plan contains any scatter queries
 	allowScatter bool
+	// allowVstreamCopy will fail on vstream copy if false and no GTID provided for the stream.
+	// This is temporary until RDONLYs are properly supported for bootstrapping.
+	allowVstreamCopy bool
 }
 
 var executorOnce sync.Once
@@ -127,20 +130,22 @@ func NewExecutor(
 	schemaTracker SchemaInfo,
 	noScatter bool,
 	pv plancontext.PlannerVersion,
+	noVstreamCopy bool,
 ) *Executor {
 	e := &Executor{
-		serv:            serv,
-		cell:            cell,
-		resolver:        resolver,
-		scatterConn:     resolver.scatterConn,
-		txConn:          resolver.scatterConn.txConn,
-		plans:           cache.NewDefaultCacheImpl(cacheCfg),
-		normalize:       normalize,
-		warnShardedOnly: warnOnShardedOnly,
-		streamSize:      streamSize,
-		schemaTracker:   schemaTracker,
-		allowScatter:    !noScatter,
-		pv:              pv,
+		serv:             serv,
+		cell:             cell,
+		resolver:         resolver,
+		scatterConn:      resolver.scatterConn,
+		txConn:           resolver.scatterConn.txConn,
+		plans:            cache.NewDefaultCacheImpl(cacheCfg),
+		normalize:        normalize,
+		warnShardedOnly:  warnOnShardedOnly,
+		streamSize:       streamSize,
+		schemaTracker:    schemaTracker,
+		allowScatter:     !noScatter,
+		allowVstreamCopy: !noVstreamCopy,
+		pv:               pv,
 	}
 
 	vschemaacl.Init()
@@ -1318,7 +1323,7 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 		return err
 	}
 
-	vsm := newVStreamManager(e.resolver.resolver, e.serv, e.cell)
+	vsm := newVStreamManager(e.resolver.resolver, e.serv, e.cell, e.allowVstreamCopy)
 	vs := &vstream{
 		vgtid:              vgtid,
 		tabletType:         topodatapb.TabletType_PRIMARY,
