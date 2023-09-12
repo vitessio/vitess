@@ -229,7 +229,7 @@ func getFKRequirementsForUpdate(ctx *plancontext.PlanningContext, updateExprs sq
 
 func buildFkOperator(ctx *plancontext.PlanningContext, updOp ops.Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) (ops.Operator, error) {
 	// We only support simple expressions in update queries for foreign key handling.
-	if updClone.Exprs.IsNonLiteral() {
+	if isNonLiteral(updClone.Exprs, parentFks, childFks) {
 		return nil, vterrors.VT12001("update expression with non-literal values with foreign key constraints")
 	}
 
@@ -241,6 +241,25 @@ func buildFkOperator(ctx *plancontext.PlanningContext, updOp ops.Operator, updCl
 	}
 
 	return createFKVerifyOp(ctx, op, updClone, parentFks, restrictChildFks)
+}
+
+func isNonLiteral(updExprs sqlparser.UpdateExprs, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo) bool {
+	for _, updateExpr := range updExprs {
+		if sqlparser.IsLiteral(updateExpr.Expr) {
+			continue
+		}
+		for _, parentFk := range parentFks {
+			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				return true
+			}
+		}
+		for _, childFk := range childFks {
+			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // splitChildFks splits the child foreign keys into restrict and cascade list as restrict is handled through Verify operator and cascade is handled through Cascade operator.

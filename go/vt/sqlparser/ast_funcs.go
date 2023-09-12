@@ -2533,21 +2533,20 @@ func (v *visitor) visitAllSelects(in SelectStatement, f func(p *Select, idx int)
 	panic("switch should be exhaustive")
 }
 
-func (updExprs UpdateExprs) IsNonLiteral() bool {
-	for _, updateExpr := range updExprs {
-		switch updateExpr.Expr.(type) {
-		case *Argument, *NullVal, BoolVal, *Literal:
-		default:
-			return true
-		}
-	}
-	return false
-}
-
 // IsRestrict returns true if the reference action is of restrict type.
 func (ra ReferenceAction) IsRestrict() bool {
 	switch ra {
 	case Restrict, NoAction, DefaultAction:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsLiteral returns true if the expression is of a literal type.
+func IsLiteral(expr Expr) bool {
+	switch expr.(type) {
+	case *Argument, *NullVal, BoolVal, *Literal:
 		return true
 	default:
 		return false
