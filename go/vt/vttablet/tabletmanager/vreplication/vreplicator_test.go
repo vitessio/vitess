@@ -658,6 +658,7 @@ func TestResumingFromPreviousWorkflowKeepingRowsCopied(t *testing.T) {
 	err := dbaconn.Connect()
 	require.NoError(t, err)
 	defer dbaconn.Close()
+
 	dbClient := playerEngine.dbClientFactoryFiltered()
 	err = dbClient.Connect()
 	require.NoError(t, err)
