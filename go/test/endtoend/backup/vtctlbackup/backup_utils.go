@@ -61,6 +61,7 @@ var (
 	primary       *cluster.Vttablet
 	replica1      *cluster.Vttablet
 	replica2      *cluster.Vttablet
+	replica3      *cluster.Vttablet
 	localCluster  *cluster.LocalProcessCluster
 	newInitDBFile string
 	useXtrabackup bool
@@ -170,9 +171,10 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		0: "primary",
 		1: "replica",
 		2: "rdonly",
+		3: "spare",
 	}
-	for i := 0; i < 3; i++ {
-		tabletType := tabletTypes[i]
+
+	createTablet := func(tabletType string) error {
 		tablet := localCluster.NewVttabletInstance(tabletType, 0, cell)
 		tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
 		tablet.VttabletProcess.DbPassword = dbPassword
@@ -182,33 +184,40 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		if setupType == Mysqlctld {
 			mysqlctldProcess, err := cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 			if err != nil {
-				return 1, err
+				return err
 			}
 			tablet.MysqlctldProcess = *mysqlctldProcess
 			tablet.MysqlctldProcess.InitDBFile = newInitDBFile
 			tablet.MysqlctldProcess.ExtraArgs = extraArgs
 			tablet.MysqlctldProcess.Password = tablet.VttabletProcess.DbPassword
 			if err := tablet.MysqlctldProcess.Start(); err != nil {
-				return 1, err
+				return err
 			}
 			shard.Vttablets = append(shard.Vttablets, tablet)
-			continue
+			return nil
 		}
 
 		mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 		if err != nil {
-			return 1, err
+			return err
 		}
 		tablet.MysqlctlProcess = *mysqlctlProcess
 		tablet.MysqlctlProcess.InitDBFile = newInitDBFile
 		tablet.MysqlctlProcess.ExtraArgs = extraArgs
 		proc, err := tablet.MysqlctlProcess.StartProcess()
 		if err != nil {
-			return 1, err
+			return err
 		}
 		mysqlProcs = append(mysqlProcs, proc)
 
 		shard.Vttablets = append(shard.Vttablets, tablet)
+		return nil
+	}
+	for i := 0; i < 3; i++ {
+		tabletType := tabletTypes[i]
+		if err := createTablet(tabletType); err != nil {
+			return 1, err
+		}
 	}
 	for _, proc := range mysqlProcs {
 		if err := proc.Wait(); err != nil {
@@ -218,6 +227,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	primary = shard.Vttablets[0]
 	replica1 = shard.Vttablets[1]
 	replica2 = shard.Vttablets[2]
+	replica3 = shard.Vttablets[3]
 
 	if err := localCluster.VtctlclientProcess.InitTablet(primary, cell, keyspaceName, hostname, shard.Name); err != nil {
 		return 1, err
@@ -228,13 +238,16 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	if err := localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shard.Name); err != nil {
 		return 1, err
 	}
+	if err := localCluster.VtctlclientProcess.InitTablet(replica3, cell, keyspaceName, hostname, shard.Name); err != nil {
+		return 1, err
+	}
 	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
 	_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	if err != nil {
 		return 1, err
 	}
 
-	for _, tablet := range []*cluster.Vttablet{primary, replica1, replica2} {
+	for _, tablet := range []*cluster.Vttablet{primary, replica1, replica2} { // we don't start replica3 yet
 		if err := tablet.VttabletProcess.Setup(); err != nil {
 			return 1, err
 		}
