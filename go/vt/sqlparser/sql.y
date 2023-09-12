@@ -350,7 +350,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 
 // Table options
 %token <bytes> AVG_ROW_LENGTH CHECKSUM COMPRESSION DIRECTORY DELAY_KEY_WRITE ENGINE_ATTRIBUTE INSERT_METHOD MAX_ROWS
-%token <bytes> MIN_ROWS PACK_KEYS ROW_FORMAT SECONDARY_ENGINE_ATTRIBUTE STATS_AUTO_RECALC STATS_PERSISTENT
+%token <bytes> MIN_ROWS PACK_KEYS ROW_FORMAT SECONDARY_ENGINE SECONDARY_ENGINE_ATTRIBUTE STATS_AUTO_RECALC STATS_PERSISTENT
 %token <bytes> STATS_SAMPLE_PAGES STORAGE DISK MEMORY DYNAMIC COMPRESSED REDUNDANT
 %token <bytes> COMPACT LIST HASH PARTITIONS SUBPARTITION SUBPARTITIONS
 
@@ -390,7 +390,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <bytes> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD ORDINALITY ORGANIZATION OTHERS PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
-%token <bytes> REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP
+%token <bytes> REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN SECONDARY SECONDARY_LOAD SECONDARY_UNLOAD SKIP
 %token <bytes> THREAD_PRIORITY TIES VCPU VISIBLE INFILE
 
 // MySQL unreserved keywords that are currently unused
@@ -3740,6 +3740,14 @@ index_option:
   {
     $$ = &IndexOption{Name: string($1), Value: NewStrVal($2)}
   }
+| ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &IndexOption{Name: string($1), Value: NewStrVal($3)}
+  }
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &IndexOption{Name: string($1), Value: NewStrVal($3)}
+  }
 
 equal_opt:
   /* empty */
@@ -4131,6 +4139,14 @@ table_option:
 | START TRANSACTION
   {
     $$ = string($1) + " "  + string($2)
+  }
+| SECONDARY_ENGINE equal_opt ID
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| SECONDARY_ENGINE equal_opt STRING
+  {
+    $$ = string($1) + " " + string($3)
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
@@ -4540,6 +4556,18 @@ alter_table_statement_part:
 | default_keyword_opt COLLATE equal_opt charset
   {
     $$ = &DDL{Action: AlterStr, AlterCollationSpec: &AlterCollationSpec{CharacterSet: "", Collation: $4}}
+  }
+| SECONDARY_ENGINE equal_opt ID
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
   }
 
 column_order_opt:

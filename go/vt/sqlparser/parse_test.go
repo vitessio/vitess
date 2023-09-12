@@ -3168,6 +3168,52 @@ var (
 				"organization 'organization' identified by 4321\n" +
 				"description 'description'",
 		},
+		{
+			input: "create table t (i int) secondary_engine=rapid",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") secondary_engine rapid",
+		},
+		{
+			input: "create table t (i int) secondary_engine='rapid'",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") secondary_engine rapid",
+		},
+		{
+			input: "create table t (i int) secondary_engine='rapid'",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") secondary_engine rapid",
+		},
+		{
+			input: "alter table t secondary_engine=rapid",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t secondary_engine rapid",
+			output: "alter table t",
+		},
+		{
+			input: "create table t (i int) secondary_engine_attribute='rapid'",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") secondary_engine_attribute 'rapid'",
+		},
+		{
+			input: "create table t (i int) secondary_engine_attribute='rapid'",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") secondary_engine_attribute 'rapid'",
+		},
+		{
+			input: "alter table t secondary_engine_attribute='rapid'",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t secondary_engine_attribute 'rapid'",
+			output: "alter table t",
+		},
 	}
 
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.

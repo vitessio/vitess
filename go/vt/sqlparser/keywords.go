@@ -509,6 +509,7 @@ var keywords = map[string]int{
 	"schemas":                       SCHEMAS,
 	"second":                        SECOND,
 	"second_microsecond":            SECOND_MICROSECOND,
+	"secondary_engine":              SECONDARY_ENGINE,
 	"secondary_engine_attribute":    SECONDARY_ENGINE_ATTRIBUTE,
 	"security":                      SECURITY,
 	"select":                        SELECT,
