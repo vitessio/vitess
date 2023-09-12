@@ -205,16 +205,22 @@ func (sj *SubQuery) GetMergePredicates() []sqlparser.Expr {
 
 func (sj *SubQuery) settle(ctx *plancontext.PlanningContext, outer ops.Operator) (ops.Operator, error) {
 	if sj.IsProjection() {
+		if sj.OuterPredicate != nil || len(sj.Predicates) > 0 {
+			// this means that we have a correlated subquery on our hands
+			return nil, correlatedSubqueryErr
+		}
 		sj.SubqueryValueName = sj.ReplacedSqColName.Name.String()
 		return outer, nil
 	}
 	return sj.settleFilter(ctx, outer)
 }
 
+var correlatedSubqueryErr = vterrors.VT12001("correlated subquery is only supported for EXISTS")
+
 func (sj *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Operator) (ops.Operator, error) {
 	if len(sj.Predicates) > 0 {
 		if sj.FilterType != opcode.PulloutExists {
-			return nil, vterrors.VT12001("correlated subquery is only supported for EXISTS")
+			return nil, correlatedSubqueryErr
 		}
 		return sj.settleExistSubquery(ctx, outer)
 	}

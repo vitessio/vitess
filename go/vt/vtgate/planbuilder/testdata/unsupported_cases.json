@@ -512,5 +512,10 @@
     "comment": "subquery in ON clause, with left join primitives",
     "query": "select unsharded.col from unsharded left join user on user.col in (select col from user)",
     "plan": "VT12001: unsupported: subquery in outer join predicate"
+  },
+  {
+    "comment": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
+    "query": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   }
 ]

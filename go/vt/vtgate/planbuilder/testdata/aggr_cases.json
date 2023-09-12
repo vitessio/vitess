@@ -3242,65 +3242,7 @@
       ]
     }
   },
-  {
-    "comment": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
-    "query": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
-    "skip": true,
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
-      "Instructions": {
-        "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
-        "PulloutVars": [
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "InputName": "SubQuery",
-            "OperatorType": "Filter",
-            "Predicate": "count(ue.col) > 10",
-            "Inputs": [
-              {
-                "OperatorType": "Aggregate",
-                "Variant": "Scalar",
-                "Aggregates": "any_value(0) AS 1, sum_count(1) AS count(ue.col)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1, count(ue.col) from `user` as u where 1 != 1",
-                    "Query": "select 1, count(ue.col) from `user` as u",
-                    "Table": "`user`"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "InputName": "Outer",
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select :__sq1 from user_extra as ue where 1 != 1",
-            "Query": "select :__sq1 from user_extra as ue",
-            "Table": "user_extra"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user",
-        "user.user_extra"
-      ]
-    }
-  },
+
   {
     "comment": "group by and ',' joins with condition",
     "query": "select user.col from user join user_extra on user_extra.col = user.col group by user.id",
