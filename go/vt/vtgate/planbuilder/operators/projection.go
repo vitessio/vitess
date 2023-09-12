@@ -88,8 +88,9 @@ type (
 	}
 
 	SubQueryExpression struct {
-		E   sqlparser.Expr
-		sqs []*SubQuery
+		Original *sqlparser.AliasedExpr
+		E        sqlparser.Expr
+		sqs      []*SubQuery
 	}
 )
 
@@ -141,13 +142,19 @@ func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjectio
 	return p, nil
 }
 
-func (p *Projection) hasSubqueryProjection() bool {
+// canPushDown returns false if the projection has subquery expressions in it and the subqueries have not yet
+// been settled. Once they have settled, we know where to push the projection, but if we push too early
+// the projection can end up in the wrong branch of joins
+func (p *Projection) canPushDown(ctx *plancontext.PlanningContext) bool {
+	if ctx.SubqueriesSettled {
+		return true
+	}
 	for _, projection := range p.Projections {
 		if _, ok := projection.(SubQueryExpression); ok {
-			return true
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 func (p *Projection) addUnexploredExpr(ae *sqlparser.AliasedExpr, e sqlparser.Expr) (int, error) {
@@ -167,7 +174,7 @@ func (p *Projection) addSubqueryExpr(ae *sqlparser.AliasedExpr, expr sqlparser.E
 	if err != nil {
 		return err
 	}
-	p.Projections = append(p.Projections, SubQueryExpression{E: expr, sqs: sqs})
+	p.Projections = append(p.Projections, SubQueryExpression{E: expr, sqs: sqs, Original: ae})
 	return nil
 }
 
@@ -324,32 +331,39 @@ func (p *Projection) AllOffsets() (cols []int) {
 }
 
 func (p *Projection) ShortDescription() string {
-	var columns []string
+	var result []string
 	if p.Alias != "" {
-		columns = append(columns, "derived["+p.Alias+"]")
+		result = append(result, "derived["+p.Alias+"]")
 	}
 
-	switch colType := p.Columns.(type) {
+	var types string
+
+	switch columns := p.Columns.(type) {
 	case StarProjections:
-		for _, se := range colType {
-			columns = append(columns, sqlparser.String(se))
+		for _, se := range columns {
+			result = append(result, sqlparser.String(se))
 		}
 	case AliasedProjections:
 		for i, col := range p.Projections {
-			aliasExpr := colType[i]
+			sprintf := fmt.Sprintf("%T", col)
+			types += string(sprintf[10])
+			aliasExpr := columns[i]
+			var expr string
 			if aliasExpr.Expr == col.GetExpr() {
-				columns = append(columns, sqlparser.String(aliasExpr))
+				expr = sqlparser.String(aliasExpr.Expr)
 			} else {
-				if aliasExpr.As.IsEmpty() {
-					columns = append(columns, sqlparser.String(col.GetExpr()))
-				} else {
-					columns = append(columns, fmt.Sprintf("%s AS %s", sqlparser.String(col.GetExpr()), aliasExpr.As.String()))
-				}
+				expr = sqlparser.String(aliasExpr.Expr) + "|" + sqlparser.String(col.GetExpr())
+			}
+
+			if aliasExpr.As.IsEmpty() {
+				result = append(result, expr)
+			} else {
+				result = append(result, expr+" AS "+aliasExpr.As.String())
 			}
 		}
 	}
 
-	return strings.Join(columns, ", ")
+	return strings.Join(result, ", ") + " " + types
 }
 
 func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {

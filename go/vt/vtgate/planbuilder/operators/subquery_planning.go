@@ -86,12 +86,16 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Op
 				}
 				se.E = rewriteMergedSubqueryExpr(ctx, se)
 				op.Projections[idx] = se
-				col, err := op.Columns.GetColumns()
+				columns, err := op.Columns.GetColumns()
 				if err != nil {
 					// if we can't get the columns, we can't change this query
 					return op, rewrite.SameTree, nil
 				}
-				col[idx].Expr = se.E
+				col := columns[idx]
+				//if col.As.IsEmpty() {
+				//	col.As = sqlparser.NewIdentifierCI(sqlparser.String(col.Expr))
+				//}
+				col.Expr = se.E
 			}
 			return op, rewrite.SameTree, nil
 		default:
@@ -293,7 +297,7 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, src 
 
 		se, ok := proj.(SubQueryExpression)
 		if ok {
-			p.Projections[idx] = rewriteColNameToArgument(se, src)
+			p.Projections[idx] = rewriteColNameToArgument(se, src.Inner...)
 		}
 	}
 	// all projections can be pushed to the outer
@@ -301,10 +305,10 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, src 
 	return src, rewrite.NewTree("push projection into outer side of subquery", p), nil
 }
 
-func rewriteColNameToArgument(se SubQueryExpression, src *SubQueryContainer) SubQueryExpression {
+func rewriteColNameToArgument(se SubQueryExpression, subqueries ...*SubQuery) SubQueryExpression {
 	cols := make(map[*sqlparser.ColName]any)
 	for _, sq1 := range se.sqs {
-		for _, sq2 := range src.Inner {
+		for _, sq2 := range subqueries {
 			if sq1.ReplacedSqColName == sq2.ReplacedSqColName && sq1.ReplacedSqColName != nil {
 				cols[sq1.ReplacedSqColName] = nil
 			}

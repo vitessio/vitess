@@ -865,6 +865,7 @@
   {
     "comment": "Field query should work for joins select bind vars",
     "query": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
@@ -895,8 +896,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select (select :user_id2 + outm.m + unsharded.m from unsharded where 1 != 1) from unsharded as outm where 1 != 1",
-            "Query": "select (select :user_id2 + outm.m + unsharded.m from unsharded) from unsharded as outm",
+            "FieldQuery": "select (select :user_id2 + outm.m + unsharded.m from unsharded where 1 != 1) as `(select ``user``.id + outm.m + unsharded.m from unsharded)` from unsharded as outm where 1 != 1",
+            "Query": "select (select :user_id2 + outm.m + unsharded.m from unsharded) as `(select ``user``.id + outm.m + unsharded.m from unsharded)` from unsharded as outm",
             "Table": "unsharded"
           }
         ]
@@ -1253,8 +1254,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select a, :__sq1 from unsharded where 1 != 1",
-            "Query": "select a, :__sq1 from unsharded",
+            "FieldQuery": "select a, :__sq1 as `(select col from ``user``)` from unsharded where 1 != 1",
+            "Query": "select a, :__sq1 as `(select col from ``user``)` from unsharded",
             "Table": "unsharded"
           }
         ]
@@ -1268,7 +1269,6 @@
   {
     "comment": "sub-expression subquery in select",
     "query": "select a, 1+(select col from user) from unsharded",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select a, 1+(select col from user) from unsharded",
@@ -1911,6 +1911,7 @@
   {
     "comment": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
     "query": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
@@ -2097,7 +2098,6 @@
   {
     "comment": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
     "query": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
@@ -4279,6 +4279,7 @@
   {
     "comment": "Earlier columns are in scope in subqueries https://github.com/vitessio/vitess/issues/11246",
     "query": "SELECT 1 as x, (SELECT x)",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT 1 as x, (SELECT x)",

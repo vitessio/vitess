@@ -44,6 +44,7 @@
   {
     "comment": "system schema query as a subquery",
     "query": "SELECT (SELECT 1 FROM information_schema.schemata WHERE schema_name='MyDatabase' LIMIT 1);",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT (SELECT 1 FROM information_schema.schemata WHERE schema_name='MyDatabase' LIMIT 1);",

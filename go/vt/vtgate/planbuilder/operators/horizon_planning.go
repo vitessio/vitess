@@ -274,25 +274,76 @@ func tryPushProjection(
 ) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := p.Source.(type) {
 	case *Route:
+		err := rewriteSubqueryExpressions(ctx, p)
+		if err != nil {
+			return nil, nil, err
+		}
 		return rewrite.Swap(p, src, "push projection under route")
 	case *ApplyJoin:
-		if p.FromAggr || p.hasSubqueryProjection() && !ctx.SubqueriesSettled {
+		if p.FromAggr || !p.canPushDown(ctx) {
 			return p, rewrite.SameTree, nil
 		}
 		return pushDownProjectionInApplyJoin(ctx, p, src)
 	case *Vindex:
-		if p.hasSubqueryProjection() && !ctx.SubqueriesSettled {
+		if !p.canPushDown(ctx) {
 			return p, rewrite.SameTree, nil
 		}
 		return pushDownProjectionInVindex(ctx, p, src)
 	case *SubQueryContainer:
-		if p.hasSubqueryProjection() && !ctx.SubqueriesSettled {
+		if !p.canPushDown(ctx) {
 			return p, rewrite.SameTree, nil
 		}
 		return pushProjectionToOuter(ctx, p, src)
+	case *SubQuery:
+		if !ctx.SubqueriesSettled {
+			return p, rewrite.SameTree, nil
+		}
+		outer := TableID(src.Outer)
+		for idx, proj := range p.Projections {
+			_, isOffset := proj.(Offset)
+			if isOffset {
+				continue
+			}
+
+			expr := proj.GetExpr()
+			if !ctx.SemTable.RecursiveDeps(expr).IsSolvedBy(outer) {
+				return p, rewrite.SameTree, nil
+			}
+
+			se, ok := proj.(SubQueryExpression)
+			if ok {
+				p.Projections[idx] = rewriteColNameToArgument(se, src)
+			}
+		}
+		// all projections can be pushed to the outer
+		src.Outer, p.Source = p, src.Outer
+		return src, rewrite.NewTree("push projection into outer side of subquery", p), nil
 	default:
 		return p, rewrite.SameTree, nil
 	}
+}
+
+func rewriteSubqueryExpressions(ctx *plancontext.PlanningContext, p *Projection) error {
+	cols, colsErr := p.GetColumns(ctx)
+	// we wait with checking the error since we don't know if we are going to need the columns or not
+	for idx, expr := range p.Projections {
+		se, ok := expr.(SubQueryExpression)
+		if !ok || se.Original.Expr == se.E {
+			continue
+		}
+		if colsErr != nil {
+			return colsErr
+		}
+
+		ae := cols[idx]
+		ae.Expr = se.E
+		if !ae.As.IsEmpty() {
+			continue
+		}
+
+		ae.As = sqlparser.NewIdentifierCI(sqlparser.String(se.Original.Expr))
+	}
+	return nil
 }
 
 func pushDownProjectionInVindex(

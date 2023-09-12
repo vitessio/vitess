@@ -290,3 +290,7 @@ func (sj *SubQuery) settleExistSubquery(ctx *plancontext.PlanningContext, outer 
 
 	return outer, nil
 }
+
+func (sj *SubQuery) isMerged(ctx *plancontext.PlanningContext) bool {
+	return slices.Index(ctx.MergedSubqueries, sj._sq) >= 0
+}
