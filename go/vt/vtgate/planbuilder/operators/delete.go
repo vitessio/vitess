@@ -116,7 +116,12 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	return createFkCascadeOpForDelete(ctx, delOp, delClone, childFks)
 }
 
-func createDeleteOperator(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete, qt *QueryTable, vindexTable *vindexes.Table, routing Routing) (ops.Operator, error) {
+func createDeleteOperator(
+	ctx *plancontext.PlanningContext,
+	deleteStmt *sqlparser.Delete,
+	qt *QueryTable,
+	vindexTable *vindexes.Table,
+	routing Routing) (ops.Operator, error) {
 	del := &Delete{
 		QTable: qt,
 		VTable: vindexTable,
