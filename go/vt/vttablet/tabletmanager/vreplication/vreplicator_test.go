@@ -653,6 +653,7 @@ func TestResumingFromPreviousWorkflowKeepingRowsCopied(t *testing.T) {
 	vsclient := newTabletConnector(tablet)
 	stats := binlogplayer.NewStats()
 	defer stats.Stop()
+
 	dbaconn := playerEngine.dbClientFactoryDba()
 	err := dbaconn.Connect()
 	require.NoError(t, err)
