@@ -629,8 +629,9 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 }
 
 // TestResumingFromPreviousWorkflowKeepingRowsCopied tests that when you
-// resume a workflow started by another tablet (eg. a reparent occurred), the
-// rows_copied does not reset to zero but continues along from where it left off
+// resume a workflow started by another tablet (eg. a reparent occurred),
+// the rows_copied does not reset to zero but continues along from where
+// it left off.
 func TestResumingFromPreviousWorkflowKeepingRowsCopied(t *testing.T) {
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
