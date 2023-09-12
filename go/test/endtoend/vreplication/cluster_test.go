@@ -730,14 +730,6 @@ func (vc *VitessCluster) TearDown(t *testing.T) {
 	// some processes seem to hang around for a bit
 	time.Sleep(5 * time.Second)
 	vc.CleanupDataroot(t, false)
-
-	// Flush and clear FS pagecache and slab object cache to avoid OOMs
-	// on any subsequent tests that might run on the same machine.
-	cmd := exec.Command("/bin/sh", "-c", "sudo sync; echo 3 | sudo tee /proc/sys/vm/drop_caches")
-	if err := cmd.Run(); err != nil {
-		output, _ := cmd.CombinedOutput()
-		log.Errorf("Failed to clear FS cache. Output: %s ; Error: %v", string(output), err)
-	}
 }
 
 func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName string, tabletType string) map[string]*cluster.VttabletProcess {
