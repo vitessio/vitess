@@ -1037,7 +1037,7 @@ func (vr *vreplicator) readExistingRowsCopiedAndUpdateSelfIfNeeded() {
 	if vr.stats.CopyRowCount.Get() == 0 {
 		rowsCopiedExisting, err := vr.readExistingRowsCopied(vr.id)
 		if err != nil {
-			log.Warningf("failed to read existing rows copied: %v", err)
+			log.Warningf("Failed to read existing rows copied value for %s worfklow: %v", vr.WorkflowName, err)
 		} else if rowsCopiedExisting != 0 {
 			log.Infof("resuming vreplication from another tablet, setting rows copied counter to %v", rowsCopiedExisting)
 			vr.stats.CopyRowCount.Set(rowsCopiedExisting)
