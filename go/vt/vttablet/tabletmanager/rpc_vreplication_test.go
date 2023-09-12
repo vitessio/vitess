@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"runtime/debug"
@@ -578,6 +579,10 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 
 // TestSourceShardSelection tests the RPC calls made by VtctldServer to tablet
 // managers include the correct set of BLS settings.
+//
+// errShortCircuit is intentionally injected into the MoveTables workflow to
+// short-circuit the workflow after we've validated everything we wanted to in
+// the test.
 func TestSourceShardSelection(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -757,6 +762,9 @@ func TestSourceShardSelection(t *testing.T) {
 					tt.vrdbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 					var err error
 					if i == len(streams)-1 {
+						// errShortCircuit is intentionally injected into the MoveTables
+						// workflow to short-circuit the workflow after we've validated
+						// everything we wanted to in the test.
 						err = errShortCircuit
 					}
 					tt.vrdbClient.ExpectRequest(
@@ -787,6 +795,9 @@ func TestSourceShardSelection(t *testing.T) {
 			for _, tt := range targetTablets {
 				tt.vrdbClient.Wait()
 			}
+			// errShortCircuit is intentionally injected into the MoveTables
+			// workflow to short-circuit the workflow after we've validated
+			// everything we wanted to in the test.
 			require.ErrorContains(t, err, fmt.Sprintf("%s\n%s", errShortCircuit.Error(), errShortCircuit.Error()))
 		})
 	}

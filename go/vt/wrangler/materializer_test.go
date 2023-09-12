@@ -2815,8 +2815,8 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 		}},
 	}
 
-	getStreamInsert := func(sourceShard, targetShard string) string {
-		return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*%s.*`, sourceShard, targetShard)
+	getStreamInsert := func(sourceShard, sourceColumn, targetVindex, targetShard string) string {
+		return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(%s.*targetks\.%s.*%s.*`, sourceShard, sourceColumn, targetVindex, targetShard)
 	}
 
 	targetVSchema := &vschemapb.Keyspace{
@@ -2839,14 +2839,18 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 	type testcase struct {
 		name                         string
 		targetShards, sourceShards   []string
+		sourceColumn                 string
+		targetVindex                 string
 		insertMap                    map[string][]string
 		targetVSchema, sourceVSchema *vschemapb.Keyspace
-		getStreamInsert              func(sourceShard, targetShard string) string
+		getStreamInsert              func(sourceShard, sourceColumn, targetVindexName, targetShard string) string
 	}
 	testcases := []testcase{
 		{
 			targetShards:    []string{"-40", "40-80", "80-c0", "c0-"},
 			sourceShards:    []string{"-80", "80-"},
+			sourceColumn:    "c1",
+			targetVindex:    "hash",
 			insertMap:       map[string][]string{"-40": {"-80"}, "40-80": {"-80"}, "80-c0": {"80-"}, "c0-": {"80-"}},
 			targetVSchema:   targetVSchema,
 			getStreamInsert: getStreamInsert,
@@ -2854,6 +2858,8 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 		{
 			targetShards:    []string{"-20", "20-40", "40-a0", "a0-f0", "f0-"},
 			sourceShards:    []string{"-40", "40-80", "80-c0", "c0-"},
+			sourceColumn:    "c1",
+			targetVindex:    "hash",
 			insertMap:       map[string][]string{"-20": {"-40"}, "20-40": {"-40"}, "40-a0": {"40-80", "80-c0"}, "a0-f0": {"80-c0", "c0-"}, "f0-": {"c0-"}},
 			targetVSchema:   targetVSchema,
 			getStreamInsert: getStreamInsert,
@@ -2861,6 +2867,8 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 		{
 			targetShards:    []string{"-40", "40-80", "80-"},
 			sourceShards:    []string{"-80", "80-"},
+			sourceColumn:    "c1",
+			targetVindex:    "hash",
 			insertMap:       map[string][]string{"-40": {"-80"}, "40-80": {"-80"}, "80-": {"80-"}},
 			targetVSchema:   targetVSchema,
 			getStreamInsert: getStreamInsert,
@@ -2868,6 +2876,8 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 		{
 			targetShards:    []string{"-80", "80-"},
 			sourceShards:    []string{"-40", "40-80", "80-c0", "c0-"},
+			sourceColumn:    "c1",
+			targetVindex:    "hash",
 			insertMap:       map[string][]string{"-80": {"-40", "40-80"}, "80-": {"80-c0", "c0-"}},
 			targetVSchema:   targetVSchema,
 			getStreamInsert: getStreamInsert,
@@ -2875,6 +2885,8 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 		{
 			targetShards:    []string{"0"},
 			sourceShards:    []string{"-80", "80-"},
+			sourceColumn:    "c1",
+			targetVindex:    "hash",
 			insertMap:       map[string][]string{"0": {"-80", "80-"}},
 			targetVSchema:   targetVSchema,
 			getStreamInsert: getStreamInsert,
@@ -2882,6 +2894,8 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 		{
 			targetShards:    []string{"-80", "80-"},
 			sourceShards:    []string{"0"},
+			sourceColumn:    "c1",
+			targetVindex:    "hash",
 			insertMap:       map[string][]string{"-80": {"0"}, "80-": {"0"}},
 			targetVSchema:   targetVSchema,
 			getStreamInsert: getStreamInsert,
@@ -2890,6 +2904,8 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 			name:         "different primary vindex type, use all source shards",
 			targetShards: []string{"-80", "80-"},
 			sourceShards: []string{"-40", "40-80", "80-c0", "c0-"},
+			sourceColumn: "c1",
+			targetVindex: "hash",
 			insertMap: map[string][]string{
 				"-80": {"-40", "40-80", "80-c0", "c0-"},
 				"80-": {"-40", "40-80", "80-c0", "c0-"},
@@ -2910,14 +2926,14 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 					},
 				},
 			},
-			getStreamInsert: func(sourceShard, targetShard string) string {
-				return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*%s.*`, sourceShard, targetShard)
-			},
+			getStreamInsert: getStreamInsert,
 		},
 		{
 			name:         "different vindex type and name, use all source shards",
 			targetShards: []string{"-80", "80-"},
 			sourceShards: []string{"-40", "40-80", "80-c0", "c0-"},
+			sourceColumn: "c1",
+			targetVindex: "xxhash",
 			insertMap: map[string][]string{
 				"-80": {"-40", "40-80", "80-c0", "c0-"},
 				"80-": {"-40", "40-80", "80-c0", "c0-"},
@@ -2938,14 +2954,14 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 					},
 				},
 			},
-			getStreamInsert: func(sourceShard, targetShard string) string {
-				return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*%s.*`, sourceShard, targetShard)
-			},
+			getStreamInsert: getStreamInsert,
 		},
 		{
 			name:         "same vindex type but different name, use intersecting source shards",
 			targetShards: []string{"-80", "80-"},
 			sourceShards: []string{"-40", "40-80", "80-c0", "c0-"},
+			sourceColumn: "c1",
+			targetVindex: "hash",
 			insertMap:    map[string][]string{"-80": {"-40", "40-80"}, "80-": {"80-c0", "c0-"}},
 			targetVSchema: &vschemapb.Keyspace{
 				Sharded: true,
@@ -2969,6 +2985,7 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 			name:         "unsharded source, sharded target, use all source shards",
 			targetShards: []string{"-80", "80-"},
 			sourceShards: []string{"-"},
+			targetVindex: "hash",
 			insertMap: map[string][]string{
 				"-80": {"-"},
 				"80-": {"-"},
@@ -2989,7 +3006,9 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 			targetVSchema: &vschemapb.Keyspace{
 				Sharded: false,
 			},
-			getStreamInsert: func(sourceShard, targetShard string) string {
+			// The single target shard streams all data from each source shard
+			// without any keyrange filtering.
+			getStreamInsert: func(sourceShard, _, _, targetShard string) string {
 				return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1`, sourceShard)
 			},
 		},
@@ -2997,6 +3016,8 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 			name:         "target secondary vindexes, use intersecting source shards",
 			targetShards: []string{"-80", "80-"},
 			sourceShards: []string{"-40", "40-80", "80-c0", "c0-"},
+			sourceColumn: "c1",
+			targetVindex: "hash",
 			insertMap:    map[string][]string{"-80": {"-40", "40-80"}, "80-": {"80-c0", "c0-"}},
 			targetVSchema: &vschemapb.Keyspace{
 				Sharded: true,
@@ -3029,6 +3050,8 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 			name:         "same vindex type but different cols, use all source shards",
 			targetShards: []string{"-80", "80-"},
 			sourceShards: []string{"-40", "40-80", "80-c0", "c0-"},
+			sourceColumn: "c2",
+			targetVindex: "hash",
 			sourceVSchema: &vschemapb.Keyspace{
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
@@ -3061,9 +3084,7 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 					},
 				},
 			},
-			getStreamInsert: func(sourceShard, targetShard string) string {
-				return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1`, sourceShard)
-			},
+			getStreamInsert: getStreamInsert,
 		},
 	}
 
@@ -3088,7 +3109,7 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 				streamsInsert := ""
 				sourceShards := tcase.insertMap[targetShard]
 				for _, sourceShard := range sourceShards {
-					streamsInsert += tcase.getStreamInsert(sourceShard, targetShard)
+					streamsInsert += tcase.getStreamInsert(sourceShard, tcase.sourceColumn, tcase.targetVindex, targetShard)
 				}
 				env.tmc.expectVRQuery(
 					tabletID,
