@@ -213,7 +213,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		shard.Vttablets = append(shard.Vttablets, tablet)
 		return nil
 	}
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 4; i++ {
 		tabletType := tabletTypes[i]
 		if err := createTablet(tabletType); err != nil {
 			return 1, err
