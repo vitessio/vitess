@@ -77,6 +77,7 @@ func TestJournalOneToOne(t *testing.T) {
 		fmt.Sprintf("delete from _vt.vreplication where id=%d", firstID),
 		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update _vt.vreplication set state='Running', message='' where id.*",
 	})
 
@@ -146,6 +147,8 @@ func TestJournalOneToMany(t *testing.T) {
 		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update _vt.vreplication set state='Running', message='' where id.*",
 		"/update _vt.vreplication set state='Running', message='' where id.*",
 	})
@@ -209,6 +212,7 @@ func TestJournalTablePresent(t *testing.T) {
 		fmt.Sprintf("delete from _vt.vreplication where id=%d", firstID),
 		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update _vt.vreplication set state='Running', message='' where id.*",
 	})
 
