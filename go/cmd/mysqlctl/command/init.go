@@ -29,8 +29,15 @@ import (
 var Init = &cobra.Command{
 	Use:   "init",
 	Short: "Initializes the directory structure and starts mysqld.",
-	Args:  cobra.NoArgs,
-	RunE:  commandInit,
+	Long: "Bootstraps a new `mysqld` instance, initializes its data directory, and starts the instance.\n" +
+		"The MySQL version and flavor will be auto-detected, with a minimal configuration file applied.",
+	Example: `mysqlctl \
+	--alsologtostderr \
+	--tablet_uid 101 \
+	--mysql_port 12345 \
+	init`,
+	Args: cobra.NoArgs,
+	RunE: commandInit,
 }
 
 var initArgs = struct {

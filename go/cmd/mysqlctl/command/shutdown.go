@@ -29,8 +29,12 @@ import (
 var Shutdown = &cobra.Command{
 	Use:   "shutdown",
 	Short: "Shuts down mysqld, without removing any files.",
-	Args:  cobra.NoArgs,
-	RunE:  commandShutdown,
+	Long: "Stop a `mysqld` instance that was previously started with `init` or `start`.\n\n" +
+
+		"For large `mysqld` instances, you may need to extend the `wait_time` to shutdown cleanly.",
+	Example: `mysqlctl --tablet_uid 101 --alsologtostderr shutdown`,
+	Args:    cobra.NoArgs,
+	RunE:    commandShutdown,
 }
 
 var shutdownArgs = struct {

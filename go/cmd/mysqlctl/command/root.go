@@ -36,6 +36,11 @@ var (
 	Root = &cobra.Command{
 		Use:   "mysqlctl",
 		Short: "mysqlctl initializes and controls mysqld with Vitess-specific configuration.",
+		Long: "`mysqlctl` is a command-line client used for managing `mysqld` instances.\n\n" +
+
+			"It is responsible for bootstrapping tasks such as generating a configuration file for `mysqld` and initializing the instance and its data directory.\n" +
+			"The `mysqld_safe` watchdog is utilized when present.\n" +
+			"This helps ensure that `mysqld` is automatically restarted after failures.",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if err := servenv.CobraPreRunE(cmd, args); err != nil {
 				return nil

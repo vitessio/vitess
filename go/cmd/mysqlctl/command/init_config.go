@@ -27,8 +27,15 @@ import (
 var InitConfig = &cobra.Command{
 	Use:   "init_config",
 	Short: "Initializes the directory structure, creates my.cnf file, but does not start mysqld.",
-	Args:  cobra.NoArgs,
-	RunE:  commandInitConfig,
+	Long: "Bootstraps the configuration for a new `mysqld` instance and initializes its data directory.\n" +
+		"This command is the same as `init` except the `mysqld` server will not be started.",
+	Example: `mysqlctl \
+	--alsologtostderr \
+	--tablet_uid 101 \
+	--mysql_port 12345 \
+	init_config`,
+	Args: cobra.NoArgs,
+	RunE: commandInitConfig,
 }
 
 func commandInitConfig(cmd *cobra.Command, args []string) error {

@@ -28,8 +28,15 @@ import (
 var ReinitConfig = &cobra.Command{
 	Use:   "reinit_config",
 	Short: "Reinitializes my.cnf file with new server_id.",
-	Args:  cobra.NoArgs,
-	RunE:  commandReinitConfig,
+	Long: "Regenerate new configuration files for an existing `mysqld` instance (generating new server_id and server_uuid values).\n" +
+		"This could be helpful to revert configuration changes, or to pick up changes made to the bundled config in newer Vitess versions.",
+	Example: `mysqlctl \
+	--alsologtostderr \
+	--tablet_uid 101 \
+	--mysql_port 12345 \
+	reinit_config`,
+	Args: cobra.NoArgs,
+	RunE: commandReinitConfig,
 }
 
 func commandReinitConfig(cmd *cobra.Command, args []string) error {
