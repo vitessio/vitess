@@ -245,17 +245,13 @@ func executeOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletPro
 func assertQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) {
 	t.Helper()
 	count0, body0, count1, body1 := executeOnTablet(t, conn, tablet, ksName, query, matchQuery)
-	if count0+1 != count1 {
-		t.Errorf("query %q did not execute in target;\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\n", query, matchQuery, body0, body1)
-	}
+	assert.Equalf(t, count0+1, count1, "query %q did not execute in target;\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\n", query, matchQuery, body0, body1)
 }
 
-func assertQueryNotExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) {
+func assertQueryDoesNotExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) {
 	t.Helper()
 	count0, body0, count1, body1 := executeOnTablet(t, conn, tablet, ksName, query, matchQuery)
-	if count0 != count1 {
-		t.Errorf("query %q executed in target;\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\n", query, matchQuery, body0, body1)
-	}
+	assert.Equalf(t, count0, count1, "query %q executed in target;\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\n", query, matchQuery, body0, body1)
 }
 
 // waitForWorkflowState waits for all of the given workflow's

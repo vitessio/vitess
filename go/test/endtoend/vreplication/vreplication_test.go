@@ -841,7 +841,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		printShardPositions(vc, ksShards)
 		insertQuery2 := "insert into customer(name, cid) values('tempCustomer2', 100)"
 		matchInsertQuery2 := "insert into customer(`name`, cid) values (:vtg1 /* VARCHAR */, :_cid_0)"
-		assertQueryNotExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2)
+		assertQueryDoesNotExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2)
 
 		insertQuery2 = "insert into customer(name, cid) values('tempCustomer3', 101)" // ID 101, hence due to reverse_bits in shard 80-
 		assertQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2)
@@ -865,9 +865,9 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			assertQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1)
 			// both inserts go into 80-, this tests the edge-case where a stream (-80) has no relevant new events after the previous switch
 			insertQuery1 = "insert into customer(cid, name) values(1003, 'tempCustomer6')"
-			assertQueryNotExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery1, matchInsertQuery1)
+			assertQueryDoesNotExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery1, matchInsertQuery1)
 			insertQuery1 = "insert into customer(cid, name) values(1004, 'tempCustomer7')"
-			assertQueryNotExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery1, matchInsertQuery1)
+			assertQueryDoesNotExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery1, matchInsertQuery1)
 
 			waitForNoWorkflowLag(t, vc, targetKs, workflow)
 
@@ -902,7 +902,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			require.True(t, found)
 
 			insertQuery2 = "insert into customer(name, cid) values('tempCustomer8', 103)" // ID 103, hence due to reverse_bits in shard 80-
-			assertQueryNotExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2)
+			assertQueryDoesNotExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2)
 			insertQuery2 = "insert into customer(name, cid) values('tempCustomer10', 104)" // ID 105, hence due to reverse_bits in shard -80
 			assertQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2)
 			insertQuery2 = "insert into customer(name, cid) values('tempCustomer9', 105)" // ID 104, hence due to reverse_bits in shard 80-
