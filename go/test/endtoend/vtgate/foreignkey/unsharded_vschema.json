@@ -2,7 +2,23 @@
   "sharded": false,
   "foreignKeyMode": "FK_MANAGED",
   "tables": {
-    "u_a": {},
-    "u_b": {}
+    "u_t1": {},
+    "u_t2": {},
+    "fk_t1": {},
+    "fk_t2": {},
+    "fk_t3": {},
+    "fk_t4": {},
+    "fk_t5": {},
+    "fk_t6": {},
+    "fk_t7": {},
+    "fk_t10": {},
+    "fk_t11": {},
+    "fk_t12": {},
+    "fk_t13": {},
+    "fk_t15": {},
+    "fk_t16": {},
+    "fk_t17": {},
+    "fk_t18": {},
+    "fk_t19": {}
   }
 }
