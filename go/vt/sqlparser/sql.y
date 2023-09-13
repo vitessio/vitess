@@ -309,7 +309,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM SERIAL
 %token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC DEC FIXED PRECISION
 %token <bytes> TIME TIMESTAMP DATETIME
-%token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR NVARCHAR NATIONAL VARYING
+%token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR NVARCHAR NATIONAL VARYING VARCHARACTER
 %token <bytes> TEXT TINYTEXT MEDIUMTEXT LONGTEXT LONG
 %token <bytes> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
 %token <bytes> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
@@ -384,7 +384,6 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> PURGE
 %token <bytes> READ_WRITE RLIKE
 %token <bytes> SENSITIVE SPECIFIC SQL_BIG_RESULT SQL_SMALL_RESULT
-%token <bytes> VARCHARACTER
 
 %token <bytes> UNUSED DESCRIPTION LATERAL MEMBER RECURSIVE
 %token <bytes> BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
@@ -3113,9 +3112,21 @@ char_type:
   {
     $$ = ColumnType{Type: string($1), Length: $2}
   }
+| NCHAR VARCHAR char_length_opt
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
+  }
+| NCHAR VARYING char_length_opt
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
+  }
 | VARCHAR char_length_opt
   {
     $$ = ColumnType{Type: string($1), Length: $2}
+  }
+| CHAR VARYING char_length_opt
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
 | CHARACTER VARYING char_length_opt
   {
@@ -3128,6 +3139,10 @@ char_type:
 | NATIONAL VARCHAR char_length_opt
   {
     $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
+  }
+| NATIONAL CHAR VARYING char_length_opt
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2) + " " + string($3), Length: $4}
   }
 | NATIONAL CHARACTER VARYING char_length_opt
   {

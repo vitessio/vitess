@@ -5390,12 +5390,17 @@ func TestCreateTable(t *testing.T) {
 			"	col_character2 character(2),\n" +
 			"	col_character3 character(3) character set ascii,\n" +
 			"	col_character4 character(4) character set ascii collate ascii_bin,\n" +
+			"	col_char_varying char varying(2),\n" +
+			"	col_char_varying2 char varying(10) character set utf8,\n" +
 			"	col_nchar nchar,\n" +
 			"	col_nchar2 nchar(2),\n" +
+			"	col_nchar_varchar nchar varchar(2),\n" +
+			"	col_nchar_varying nchar varying(2),\n" +
 			"	col_national_char national char,\n" +
 			"	col_national_char2 national char(2),\n" +
 			"	col_national_character national character,\n" +
 			"	col_national_character2 national character(2),\n" +
+			"	col_national_char_varying national char varying(2),\n" +
 			"	col_varchar varchar,\n" +
 			"	col_varchar2 varchar(2),\n" +
 			"	col_varchar3 varchar(3) character set ascii,\n" +
