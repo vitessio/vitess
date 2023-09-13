@@ -108,11 +108,11 @@ type (
 	ksID = []byte
 )
 
-func (ins *Insert) Inputs() []Primitive {
+func (ins *Insert) Inputs() ([]Primitive, []map[string]any) {
 	if ins.Input == nil {
-		return nil
+		return nil, nil
 	}
-	return []Primitive{ins.Input}
+	return []Primitive{ins.Input}, nil
 }
 
 // NewQueryInsert creates an Insert with a query string.

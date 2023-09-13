@@ -21,8 +21,6 @@ import (
 	"errors"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
@@ -59,7 +57,7 @@ func NewClient() *QueryClient {
 
 // NewClientWithTabletType creates a new client for Server with the provided tablet type.
 func NewClientWithTabletType(tabletType topodatapb.TabletType) *QueryClient {
-	targetCopy := proto.Clone(Target).(*querypb.Target)
+	targetCopy := Target.CloneVT()
 	targetCopy.TabletType = tabletType
 	return &QueryClient{
 		ctx: callerid.NewContext(

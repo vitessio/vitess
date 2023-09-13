@@ -26,11 +26,9 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/bytes2"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -408,7 +406,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	copyStateGCTicker := time.NewTicker(copyStateGCInterval)
 	defer copyStateGCTicker.Stop()
 
-	parallelism := int(math.Max(1, float64(vreplicationParallelInsertWorkers)))
+	parallelism := getInsertParallelism()
 	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
 	copyWorkQueue := vc.newCopyWorkQueue(parallelism, copyWorkerFactory)
 	defer copyWorkQueue.close()
@@ -483,12 +481,16 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: initialPlan.SendRule.Match,
 			}
-			fieldEvent.Fields = append(fieldEvent.Fields, rows.Fields...)
+			for _, f := range rows.Fields {
+				fieldEvent.Fields = append(fieldEvent.Fields, f.CloneVT())
+			}
 			tablePlan, err := plan.buildExecutionPlan(fieldEvent)
 			if err != nil {
 				return err
 			}
-			pkfields = append(pkfields, rows.Pkfields...)
+			for _, f := range rows.Pkfields {
+				pkfields = append(pkfields, f.CloneVT())
+			}
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf(
 				"insert into _vt.copy_state (lastpk, vrepl_id, table_name) values (%a, %s, %s)", ":lastpk",
@@ -504,8 +506,14 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		// Clone rows, since pointer values will change while async work is
 		// happening. Can skip this when there's no parallelism.
 		if parallelism > 1 {
-			rows = proto.Clone(rows).(*binlogdatapb.VStreamRowsResponse)
+			rows = rows.CloneVT()
 		}
+
+		// Code below is copied from vcopier.go. It was implemented to facilitate
+		// parallel bulk inserts in https://github.com/vitessio/vitess/pull/10828.
+		// We can probably extract this into a common package and use it for both
+		// flavors of the vcopier. But cut/pasting it for now, so as to not change
+		// vcopier at the moment to avoid any regressions.
 
 		// Prepare a vcopierCopyTask for the current batch of work.
 		// TODO(maxeng) see if using a pre-allocated pool will speed things up.
@@ -667,6 +675,18 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	}
 
 	return nil
+}
+
+// updatePos is called after the last table is copied in an atomic copy, to set the gtid so that the replicating phase
+// can start from the gtid where the snapshot with all tables was taken. It also updates the final copy row count.
+func (vc *vcopier) updatePos(ctx context.Context, gtid string) error {
+	pos, err := replication.DecodePosition(gtid)
+	if err != nil {
+		return err
+	}
+	update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get(), vreplicationStoreCompressedGTID)
+	_, err = vc.vr.dbClient.Execute(update)
+	return err
 }
 
 func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltypes.Result, gtid string) error {
@@ -1072,6 +1092,10 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 			}
 		case vcopierCopyTaskInsertCopyState:
 			advanceFn = func(ctx context.Context, args *vcopierCopyTaskArgs) error {
+				if vbc.copyStateInsert == nil { // we don't insert copy state for atomic copy
+					log.Infof("Skipping copy_state insert")
+					return nil
+				}
 				if err := vbc.insertCopyState(ctx, args.lastpk); err != nil {
 					return vterrors.Wrapf(err, "error updating _vt.copy_state")
 				}
@@ -1197,4 +1221,10 @@ func vcopierCopyTaskGetNextState(vts vcopierCopyTaskState) vcopierCopyTaskState 
 		return vcopierCopyTaskComplete
 	}
 	return vts
+}
+
+// getInsertParallelism returns the number of parallel workers to use for inserting batches during the copy phase.
+func getInsertParallelism() int {
+	parallelism := int(math.Max(1, float64(vreplicationParallelInsertWorkers)))
+	return parallelism
 }

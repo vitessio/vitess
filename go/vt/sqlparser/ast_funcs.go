@@ -1150,6 +1150,22 @@ func (node *Update) AddWhere(expr Expr) {
 	}
 }
 
+// AddWhere adds the boolean expression to the
+// WHERE clause as an AND condition.
+func (node *Delete) AddWhere(expr Expr) {
+	if node.Where == nil {
+		node.Where = &Where{
+			Type: WhereClause,
+			Expr: expr,
+		}
+		return
+	}
+	node.Where.Expr = &AndExpr{
+		Left:  node.Where.Expr,
+		Right: expr,
+	}
+}
+
 // AddOrder adds an order by element
 func (node *Union) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
@@ -1996,17 +2012,6 @@ func (node *ColName) CompliantName() string {
 	return node.Name.CompliantName()
 }
 
-// isExprAliasForCurrentTimeStamp returns true if the Expr provided is an alias for CURRENT_TIMESTAMP
-func isExprAliasForCurrentTimeStamp(expr Expr) bool {
-	switch node := expr.(type) {
-	case *FuncExpr:
-		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
-	case *CurTimeFuncExpr:
-		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
-	}
-	return false
-}
-
 // AtCount represents the '@' count in IdentifierCI
 type AtCount int
 
@@ -2169,19 +2174,6 @@ func (s SelectExprs) AllAggregation() bool {
 		}
 	}
 	return true
-}
-
-func isExprLiteral(expr Expr) bool {
-	switch expr := expr.(type) {
-	case *Literal:
-		return true
-	case BoolVal:
-		return true
-	case *UnaryExpr:
-		return isExprLiteral(expr.Expr)
-	default:
-		return false
-	}
 }
 
 // RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
@@ -2539,4 +2531,15 @@ func (v *visitor) visitAllSelects(in SelectStatement, f func(p *Select, idx int)
 		return v.visitAllSelects(sel.Right, f)
 	}
 	panic("switch should be exhaustive")
+}
+
+func IsNonLiteral(updExprs UpdateExprs) bool {
+	for _, updateExpr := range updExprs {
+		switch updateExpr.Expr.(type) {
+		case *Argument, *NullVal, BoolVal, *Literal:
+		default:
+			return true
+		}
+	}
+	return false
 }

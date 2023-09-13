@@ -132,8 +132,7 @@ func (obp OrderByParams) String() string {
 	}
 
 	if sqltypes.IsText(obp.Type) && obp.CollationID != collations.Unknown {
-		collation := obp.CollationID.Get()
-		val += " COLLATE " + collation.Name()
+		val += " COLLATE " + collations.Local().LookupName(obp.CollationID)
 	}
 	return val
 }

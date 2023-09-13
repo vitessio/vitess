@@ -66,10 +66,6 @@ func TestVersion(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	// We need to run this test with the /debug/vars version of the
-	// plugin.
-	wrangler.ResetDebugVarsGetVersion()
-
 	// Initialize our environment
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

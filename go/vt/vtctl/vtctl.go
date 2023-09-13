@@ -444,7 +444,7 @@ var commands = []commandGroup{
 			{
 				name:   "MoveTables",
 				method: commandMoveTables,
-				params: "[--source=<sourceKs>] [--tables=<tableSpecs>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--all] [--exclude=<tables>] [--auto_start] [--stop_after_copy] [--defer-secondary-keys] [--on-ddl=<ddl-action>] [--source_shards=<source_shards>] [--source_time_zone=<mysql_time_zone>] [--initialize-target-sequences] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <targetKs.workflow>",
+				params: "[--source=<sourceKs>] [--tables=<tableSpecs>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--all] [--exclude=<tables>] [--auto_start] [--stop_after_copy] [--defer-secondary-keys] [--on-ddl=<ddl-action>] [--source_shards=<source_shards>] [--source_time_zone=<mysql_time_zone>] [--initialize-target-sequences] [--no-routing-rules] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <targetKs.workflow>",
 				help:   `Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`,
 			},
 			{
@@ -800,7 +800,7 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	mtst := "<null>"
 	// special case for old primary that hasn't updated topo yet
 	if ti.PrimaryTermStartTime != nil && ti.PrimaryTermStartTime.Seconds > 0 {
-		mtst = logutil.ProtoToTime(ti.PrimaryTermStartTime).Format(time.RFC3339)
+		mtst = protoutil.TimeFromProto(ti.PrimaryTermStartTime).UTC().Format(time.RFC3339)
 	}
 	return fmt.Sprintf("%v %v %v %v %v %v %v %v", topoproto.TabletAliasString(ti.Alias), keyspace, shard, topoproto.TabletTypeLString(ti.Type), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags), mtst)
 }
@@ -1861,7 +1861,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		if timeTime.After(time.Now()) {
 			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "snapshot_time can not be more than current time")
 		}
-		snapshotTime = logutil.TimeToProto(timeTime)
+		snapshotTime = protoutil.TimeToProto(timeTime)
 	}
 	ki := &topodatapb.Keyspace{
 		KeyspaceType:     ktype,
@@ -2099,6 +2099,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
 	dropForeignKeys := subFlags.Bool("drop_foreign_keys", false, "If true, tables in the target keyspace will be created without foreign keys.")
 	maxReplicationLagAllowed := subFlags.Duration("max_replication_lag_allowed", defaultMaxReplicationLagAllowed, "Allow traffic to be switched only if vreplication lag is below this (in seconds)")
+	atomicCopy := subFlags.Bool("atomic-copy", false, "(EXPERIMENTAL) Use this if your source keyspace has tables which use foreign key constraints. All tables from the source will be moved.")
 
 	onDDL := "IGNORE"
 	subFlags.StringVar(&onDDL, "on-ddl", onDDL, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
@@ -2116,6 +2117,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 
 	// MoveTables-only params
 	renameTables := subFlags.Bool("rename_tables", false, "MoveTables only. Rename tables instead of dropping them. --rename_tables is only supported for Complete.")
+	noRoutingRules := subFlags.Bool("no-routing-rules", false, "(Advanced) MoveTables Create only. Do not create routing rules while creating the workflow. See the reference documentation for limitations if you use this flag.")
 
 	// MoveTables and Reshard params
 	sourceShards := subFlags.String("source_shards", "", "Source shards")
@@ -2158,6 +2160,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 		DryRun:         *dryRun,
 		AutoStart:      *autoStart,
 		StopAfterCopy:  *stopAfterCopy,
+		AtomicCopy:     *atomicCopy,
 	}
 
 	printDetails := func() error {
@@ -2249,6 +2252,24 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 				wr.Logger().Errorf("keyspace %s not found", *sourceKeyspace)
 				return err
 			}
+
+			if *atomicCopy {
+				var errors []string
+				if !*allTables {
+					errors = append(errors, "atomic copy requires --all.")
+				}
+				if *tables != "" {
+					errors = append(errors, "atomic copy does not support specifying tables.")
+				}
+				if *excludes != "" {
+					errors = append(errors, "atomic copy does not support specifying excludes.")
+				}
+				if len(errors) > 0 {
+					errors = append(errors, "Found options incompatible with atomic copy:")
+					return fmt.Errorf(strings.Join(errors, " "))
+				}
+			}
+
 			if !*allTables && *tables == "" {
 				return fmt.Errorf("no tables specified to move")
 			}
@@ -2260,6 +2281,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 			vrwp.ExternalCluster = externalClusterName
 			vrwp.SourceTimeZone = *sourceTimeZone
 			vrwp.DropForeignKeys = *dropForeignKeys
+			vrwp.NoRoutingRules = *noRoutingRules
 			if *sourceShards != "" {
 				vrwp.SourceShards = strings.Split(*sourceShards, ",")
 			}
@@ -3625,13 +3647,13 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 			Name:      *throttledApp,
 			Ratio:     *throttledAppRatio,
 			Exempt:    *throttledAppExempt,
-			ExpiresAt: logutil.TimeToProto(time.Now().Add(*throttledAppDuration)),
+			ExpiresAt: protoutil.TimeToProto(time.Now().Add(*throttledAppDuration)),
 		}
 	} else if *unthrottledApp != "" {
 		req.ThrottledApp = &topodatapb.ThrottledAppRule{
 			Name:      *unthrottledApp,
 			Ratio:     0,
-			ExpiresAt: logutil.TimeToProto(time.Now()),
+			ExpiresAt: protoutil.TimeToProto(time.Now()),
 		}
 	}
 	_, err = wr.VtctldServer().UpdateThrottlerConfig(ctx, req)

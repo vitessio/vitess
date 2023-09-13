@@ -22,13 +22,10 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/mysql/collations/charset"
-	"vitess.io/vitess/go/vt/vttablet"
-
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -38,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet"
 )
 
 // ReplicatorPlan is the execution plan for the replicator. It contains
@@ -79,7 +77,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 		// bind var names.
 		tplanv.Fields = make([]*querypb.Field, 0, len(fieldEvent.Fields))
 		for _, fld := range fieldEvent.Fields {
-			trimmed := proto.Clone(fld).(*querypb.Field)
+			trimmed := fld.CloneVT()
 			trimmed.Name = strings.Trim(trimmed.Name, "`")
 			tplanv.Fields = append(tplanv.Fields, trimmed)
 		}
@@ -318,10 +316,10 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
 		// Non-null string value, for which we have a charset conversion instruction
 		fromCollation := collations.Local().DefaultCollationForCharset(conversion.FromCharset)
-		if fromCollation == nil {
+		if fromCollation == collations.Unknown {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, field.Name)
 		}
-		out, err := charset.Convert(nil, charset.Charset_utf8mb4{}, val.Raw(), fromCollation.Charset())
+		out, err := charset.Convert(nil, charset.Charset_utf8mb4{}, val.Raw(), colldata.Lookup(fromCollation).Charset())
 		if err != nil {
 			return nil, err
 		}
@@ -380,9 +378,13 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			var newVal *sqltypes.Value
 			var err error
 			if field.Type == querypb.Type_JSON {
-				newVal, err = vjson.MarshalSQLValue(vals[i].Raw())
-				if err != nil {
-					return nil, err
+				if vals[i].IsNull() { // An SQL NULL and not an actual JSON value
+					newVal = &sqltypes.NULL
+				} else { // A JSON value (which may be a JSON null literal value)
+					newVal, err = vjson.MarshalSQLValue(vals[i].Raw())
+					if err != nil {
+						return nil, err
+					}
 				}
 				bindVar, err = tp.bindFieldVal(field, newVal)
 			} else {

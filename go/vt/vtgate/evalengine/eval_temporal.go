@@ -1,8 +1,6 @@
 package evalengine
 
 import (
-	"time"
-
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
@@ -138,10 +136,6 @@ func (e *evalTemporal) toDate() *evalTemporal {
 
 func (e *evalTemporal) isZero() bool {
 	return e.dt.IsZero()
-}
-
-func (e *evalTemporal) toStdTime(loc *time.Location) time.Time {
-	return e.dt.ToStdTime(loc)
 }
 
 func (e *evalTemporal) addInterval(interval *datetime.Interval, strcoll collations.TypedCollation) eval {

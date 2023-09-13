@@ -1194,7 +1194,15 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 		default:
 			// Trouble.  The compiled pattern contains an entry with an
 			//           unrecognized type tag.
-			panic("unreachable")
+			// Unknown opcode type in opType = URX_TYPE(pat[fp->fPatIdx]). But we have
+			// reports of this in production code, don't use UPRV_UNREACHABLE_EXIT.
+			// See ICU-21669.
+			return &MatchError{
+				Code:     InternalMatchError,
+				Pattern:  m.pattern.pattern,
+				Position: *fp.inputIdx(),
+				Input:    m.input,
+			}
 		}
 	}
 
@@ -1549,7 +1557,15 @@ func (m *Matcher) Find() (bool, error) {
 			}
 		}
 	default:
-		panic("unreachable")
+		// Unknown value in fPattern->fStartType, should be from StartOfMatch enum. But
+		// we have reports of this in production code, don't use UPRV_UNREACHABLE_EXIT.
+		// See ICU-21669.
+		return false, &MatchError{
+			Code:     InternalMatchError,
+			Pattern:  m.pattern.pattern,
+			Position: startPos,
+			Input:    m.input,
+		}
 	}
 }
 

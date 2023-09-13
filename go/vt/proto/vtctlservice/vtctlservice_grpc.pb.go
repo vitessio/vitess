@@ -169,6 +169,8 @@ type VtctldClient interface {
 	ChangeTabletType(ctx context.Context, in *vtctldata.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTypeResponse, error)
 	// CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
 	CleanupSchemaMigration(ctx context.Context, in *vtctldata.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CleanupSchemaMigrationResponse, error)
+	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
+	CompleteSchemaMigration(ctx context.Context, in *vtctldata.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CompleteSchemaMigrationResponse, error)
 	// CreateKeyspace creates the specified keyspace in the topology. For a
 	// SNAPSHOT keyspace, the request must specify the name of a base keyspace,
 	// as well as a snapshot time.
@@ -271,6 +273,8 @@ type VtctldClient interface {
 	// PlannedReparentShard or EmergencyReparentShard should be used in those
 	// cases instead.
 	InitShardPrimary(ctx context.Context, in *vtctldata.InitShardPrimaryRequest, opts ...grpc.CallOption) (*vtctldata.InitShardPrimaryResponse, error)
+	// LaunchSchemaMigration launches one or all migrations executed with --postpone-launch.
+	LaunchSchemaMigration(ctx context.Context, in *vtctldata.LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.LaunchSchemaMigrationResponse, error)
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
 	MoveTablesCreate(ctx context.Context, in *vtctldata.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
@@ -572,6 +576,15 @@ func (c *vtctldClient) ChangeTabletType(ctx context.Context, in *vtctldata.Chang
 func (c *vtctldClient) CleanupSchemaMigration(ctx context.Context, in *vtctldata.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CleanupSchemaMigrationResponse, error) {
 	out := new(vtctldata.CleanupSchemaMigrationResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/CleanupSchemaMigration", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) CompleteSchemaMigration(ctx context.Context, in *vtctldata.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CompleteSchemaMigrationResponse, error) {
+	out := new(vtctldata.CompleteSchemaMigrationResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/CompleteSchemaMigration", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -914,6 +927,15 @@ func (c *vtctldClient) GetWorkflows(ctx context.Context, in *vtctldata.GetWorkfl
 func (c *vtctldClient) InitShardPrimary(ctx context.Context, in *vtctldata.InitShardPrimaryRequest, opts ...grpc.CallOption) (*vtctldata.InitShardPrimaryResponse, error) {
 	out := new(vtctldata.InitShardPrimaryResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/InitShardPrimary", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) LaunchSchemaMigration(ctx context.Context, in *vtctldata.LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.LaunchSchemaMigrationResponse, error) {
+	out := new(vtctldata.LaunchSchemaMigrationResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/LaunchSchemaMigration", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1385,6 +1407,8 @@ type VtctldServer interface {
 	ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error)
 	// CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
 	CleanupSchemaMigration(context.Context, *vtctldata.CleanupSchemaMigrationRequest) (*vtctldata.CleanupSchemaMigrationResponse, error)
+	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
+	CompleteSchemaMigration(context.Context, *vtctldata.CompleteSchemaMigrationRequest) (*vtctldata.CompleteSchemaMigrationResponse, error)
 	// CreateKeyspace creates the specified keyspace in the topology. For a
 	// SNAPSHOT keyspace, the request must specify the name of a base keyspace,
 	// as well as a snapshot time.
@@ -1487,6 +1511,8 @@ type VtctldServer interface {
 	// PlannedReparentShard or EmergencyReparentShard should be used in those
 	// cases instead.
 	InitShardPrimary(context.Context, *vtctldata.InitShardPrimaryRequest) (*vtctldata.InitShardPrimaryResponse, error)
+	// LaunchSchemaMigration launches one or all migrations executed with --postpone-launch.
+	LaunchSchemaMigration(context.Context, *vtctldata.LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error)
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
 	MoveTablesCreate(context.Context, *vtctldata.MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
@@ -1679,6 +1705,9 @@ func (UnimplementedVtctldServer) ChangeTabletType(context.Context, *vtctldata.Ch
 func (UnimplementedVtctldServer) CleanupSchemaMigration(context.Context, *vtctldata.CleanupSchemaMigrationRequest) (*vtctldata.CleanupSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CleanupSchemaMigration not implemented")
 }
+func (UnimplementedVtctldServer) CompleteSchemaMigration(context.Context, *vtctldata.CompleteSchemaMigrationRequest) (*vtctldata.CompleteSchemaMigrationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CompleteSchemaMigration not implemented")
+}
 func (UnimplementedVtctldServer) CreateKeyspace(context.Context, *vtctldata.CreateKeyspaceRequest) (*vtctldata.CreateKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateKeyspace not implemented")
 }
@@ -1792,6 +1821,9 @@ func (UnimplementedVtctldServer) GetWorkflows(context.Context, *vtctldata.GetWor
 }
 func (UnimplementedVtctldServer) InitShardPrimary(context.Context, *vtctldata.InitShardPrimaryRequest) (*vtctldata.InitShardPrimaryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InitShardPrimary not implemented")
+}
+func (UnimplementedVtctldServer) LaunchSchemaMigration(context.Context, *vtctldata.LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LaunchSchemaMigration not implemented")
 }
 func (UnimplementedVtctldServer) MoveTablesCreate(context.Context, *vtctldata.MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesCreate not implemented")
@@ -2141,6 +2173,24 @@ func _Vtctld_CleanupSchemaMigration_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).CleanupSchemaMigration(ctx, req.(*vtctldata.CleanupSchemaMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_CompleteSchemaMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.CompleteSchemaMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).CompleteSchemaMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/CompleteSchemaMigration",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).CompleteSchemaMigration(ctx, req.(*vtctldata.CompleteSchemaMigrationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2825,6 +2875,24 @@ func _Vtctld_InitShardPrimary_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).InitShardPrimary(ctx, req.(*vtctldata.InitShardPrimaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_LaunchSchemaMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.LaunchSchemaMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).LaunchSchemaMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/LaunchSchemaMigration",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).LaunchSchemaMigration(ctx, req.(*vtctldata.LaunchSchemaMigrationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3686,6 +3754,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_CleanupSchemaMigration_Handler,
 		},
 		{
+			MethodName: "CompleteSchemaMigration",
+			Handler:    _Vtctld_CompleteSchemaMigration_Handler,
+		},
+		{
 			MethodName: "CreateKeyspace",
 			Handler:    _Vtctld_CreateKeyspace_Handler,
 		},
@@ -3836,6 +3908,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "InitShardPrimary",
 			Handler:    _Vtctld_InitShardPrimary_Handler,
+		},
+		{
+			MethodName: "LaunchSchemaMigration",
+			Handler:    _Vtctld_LaunchSchemaMigration_Handler,
 		},
 		{
 			MethodName: "MoveTablesCreate",

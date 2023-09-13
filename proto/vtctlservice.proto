@@ -64,6 +64,8 @@ service Vtctld {
   rpc ChangeTabletType(vtctldata.ChangeTabletTypeRequest) returns (vtctldata.ChangeTabletTypeResponse) {};
   // CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
   rpc CleanupSchemaMigration(vtctldata.CleanupSchemaMigrationRequest) returns (vtctldata.CleanupSchemaMigrationResponse) {};
+  // CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
+  rpc CompleteSchemaMigration(vtctldata.CompleteSchemaMigrationRequest) returns (vtctldata.CompleteSchemaMigrationResponse) {};
   // CreateKeyspace creates the specified keyspace in the topology. For a
   // SNAPSHOT keyspace, the request must specify the name of a base keyspace,
   // as well as a snapshot time.
@@ -166,6 +168,8 @@ service Vtctld {
   // PlannedReparentShard or EmergencyReparentShard should be used in those
   // cases instead.
   rpc InitShardPrimary(vtctldata.InitShardPrimaryRequest) returns (vtctldata.InitShardPrimaryResponse) {};
+  // LaunchSchemaMigration launches one or all migrations executed with --postpone-launch.
+  rpc LaunchSchemaMigration(vtctldata.LaunchSchemaMigrationRequest) returns (vtctldata.LaunchSchemaMigrationResponse) {};
   // MoveTablesCreate creates a workflow which moves one or more tables from a
   // source keyspace to a target keyspace.
   rpc MoveTablesCreate(vtctldata.MoveTablesCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};

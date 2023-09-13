@@ -32,11 +32,11 @@ import (
 )
 
 var (
-	engine    *Engine
-	env       *testenv.Env
-	schemaDir string
+	engine *Engine
+	env    *testenv.Env
 
 	ignoreKeyspaceShardInFieldAndRowEvents bool
+	testRowEventFlags                      bool
 )
 
 func TestMain(m *testing.M) {

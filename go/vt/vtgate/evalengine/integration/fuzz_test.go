@@ -344,11 +344,12 @@ func compareResult(local, remote Result, cmp *testcases.Comparison) error {
 
 	var localCollationName string
 	var remoteCollationName string
-	if coll := local.Collation.Get(); coll != nil {
-		localCollationName = coll.Name()
+	env := collations.Local()
+	if coll := local.Collation; coll != collations.Unknown {
+		localCollationName = env.LookupName(coll)
 	}
-	if coll := remote.Collation.Get(); coll != nil {
-		remoteCollationName = coll.Name()
+	if coll := remote.Collation; coll != collations.Unknown {
+		remoteCollationName = env.LookupName(coll)
 	}
 
 	equals, err := cmp.Equals(local.Value, remote.Value)

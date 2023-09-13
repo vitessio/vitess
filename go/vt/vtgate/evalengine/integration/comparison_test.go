@@ -179,7 +179,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 				// TODO: passthrough proper collations for nullable fields
 				remoteCollation = collations.CollationBinaryID
 			} else {
-				remoteCollation = collationEnv.LookupByName(remote.Rows[0][1].ToString()).ID()
+				remoteCollation = collationEnv.LookupByName(remote.Rows[0][1].ToString())
 			}
 		}
 	}

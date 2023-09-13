@@ -177,7 +177,7 @@ func (f *TableFilter) Includes(tableName string, tableType string) bool {
 // (tables), no denied tables (excludeTables) and optionally
 // views (includeViews).
 func FilterTables(sd *tabletmanagerdatapb.SchemaDefinition, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	copy := proto.Clone(sd).(*tabletmanagerdatapb.SchemaDefinition)
+	copy := sd.CloneVT()
 	copy.TableDefinitions = make([]*tabletmanagerdatapb.TableDefinition, 0, len(sd.TableDefinitions))
 
 	f, err := NewTableFilter(tables, excludeTables, includeViews)

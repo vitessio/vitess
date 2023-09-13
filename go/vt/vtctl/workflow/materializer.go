@@ -61,6 +61,20 @@ type materializer struct {
 	isPartial     bool
 }
 
+func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowSubType, error) {
+	switch {
+	case mz.isPartial && mz.ms.AtomicCopy:
+		return binlogdatapb.VReplicationWorkflowSubType_None,
+			fmt.Errorf("both atomic copy and partial mode cannot be specified for the same workflow")
+	case mz.isPartial:
+		return binlogdatapb.VReplicationWorkflowSubType_Partial, nil
+	case mz.ms.AtomicCopy:
+		return binlogdatapb.VReplicationWorkflowSubType_AtomicCopy, nil
+	default:
+		return binlogdatapb.VReplicationWorkflowSubType_None, nil
+	}
+}
+
 func (mz *materializer) prepareMaterializerStreams(req *vtctldatapb.MoveTablesCreateRequest) error {
 	if err := validateNewWorkflow(mz.ctx, mz.ts, mz.tmc, mz.ms.TargetKeyspace, mz.ms.Workflow); err != nil {
 		return err
@@ -72,10 +86,13 @@ func (mz *materializer) prepareMaterializerStreams(req *vtctldatapb.MoveTablesCr
 	if err := mz.deploySchema(); err != nil {
 		return err
 	}
-	workflowSubType := binlogdatapb.VReplicationWorkflowSubType_None
-	if mz.isPartial {
-		workflowSubType = binlogdatapb.VReplicationWorkflowSubType_Partial
+
+	var workflowSubType binlogdatapb.VReplicationWorkflowSubType
+	workflowSubType, err = mz.getWorkflowSubType()
+	if err != nil {
+		return err
 	}
+
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
 		if err != nil {

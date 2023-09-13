@@ -528,6 +528,62 @@ func TestPlayerSavepoint(t *testing.T) {
 	cancel()
 }
 
+// TestPlayerForeignKeyCheck tests that we can insert a row into a child table without the corresponding foreign key
+// if the foreign_key_checks is not set.
+func TestPlayerForeignKeyCheck(t *testing.T) {
+	doNotLogDBQueries = true
+	defer func() { doNotLogDBQueries = false }()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table parent(id int, name varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.parent(id int, name varchar(128), primary key(id))", vrepldb),
+		"create table child(id int, parent_id int, name varchar(128), primary key(id), foreign key(parent_id) references parent(id) on delete cascade)",
+		fmt.Sprintf("create table %s.child(id int, parent_id int, name varchar(128), primary key(id), foreign key(parent_id) references parent(id) on delete cascade)", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table child",
+		fmt.Sprintf("drop table %s.child", vrepldb),
+		"drop table parent",
+		fmt.Sprintf("drop table %s.parent", vrepldb),
+	})
+
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+
+	testSetForeignKeyQueries = true
+	defer func() {
+		testSetForeignKeyQueries = false
+	}()
+
+	execStatements(t, []string{
+		"insert into parent values(1, 'parent1')",
+		"insert into child values(1, 1, 'child1')",
+		"set foreign_key_checks=0",
+		"insert into child values(2, 100, 'child100')",
+	})
+	expectData(t, "parent", [][]string{
+		{"1", "parent1"},
+	})
+	expectData(t, "child", [][]string{
+		{"1", "1", "child1"},
+		{"2", "100", "child100"},
+	})
+	cancel()
+}
+
 func TestPlayerStatementModeWithFilter(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
@@ -1585,17 +1641,26 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
-		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1,CAST(null as JSON),JSON_OBJECT(),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
+		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1,null,JSON_OBJECT(),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
 		table:  "vitess_json",
 		data: [][]string{
 			{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 		},
 	}, {
-		input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4)",
+		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values ('null', '{\"name\":null}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
+		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (2,CAST(_utf8mb4'null' as JSON),JSON_OBJECT(_utf8mb4'name', null),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
+		table:  "vitess_json",
+		data: [][]string{
+			{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+			{"2", "null", `{"name": null}`, "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+		},
+	}, {
+		input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4) where id=1",
 		output: "update vitess_json set val1=JSON_OBJECT(_utf8mb4'bar', _utf8mb4'foo'), val2=JSON_OBJECT(), val3=CAST(123 as JSON), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
 		table:  "vitess_json",
 		data: [][]string{
 			{"1", `{"bar": "foo"}`, "{}", "123", `{"a": [98, 123]}`, `{}`},
+			{"2", "null", `{"name": null}`, "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 		},
 	}}
 
@@ -1688,6 +1753,7 @@ func TestPlayerDDL(t *testing.T) {
 		"/update.*'Running'",
 		// Second update is from vreplicator.
 		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update.*'Running'",
 		"begin",
 		fmt.Sprintf("/update.*'%s'", pos2),
@@ -1854,6 +1920,7 @@ func TestPlayerStopPos(t *testing.T) {
 		"/update.*'Running'",
 		// Second update is from vreplicator.
 		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update.*'Running'",
 		"begin",
 		"insert into yes(id,val) values (1,'aaa')",
@@ -1879,6 +1946,7 @@ func TestPlayerStopPos(t *testing.T) {
 		"/update.*'Running'",
 		// Second update is from vreplicator.
 		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update.*'Running'",
 		"begin",
 		// Since 'no' generates empty transactions that are skipped by
@@ -1897,6 +1965,7 @@ func TestPlayerStopPos(t *testing.T) {
 		"/update.*'Running'",
 		// Second update is from vreplicator.
 		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update.*'Running'",
 		"/update.*'Stopped'.*already reached",
 	))
@@ -2518,6 +2587,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 	})
 	expectDBClientQueries(t, qh.Expect(
 		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update _vt.vreplication set state='Running'",
 		"begin",
 		"insert into t1(id,val) values (2,'aaa')",
@@ -3090,6 +3160,7 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 	expectDBClientQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update _vt.vreplication set state='Running'",
 	))
 	var once sync.Once

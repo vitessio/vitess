@@ -26,11 +26,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -236,7 +234,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		}
 
 		// Now use these sequence tables in the target sharded keyspace.
-		tks := proto.Clone(vs).(*vschemapb.Keyspace)
+		tks := vs.CloneVT()
 		tks.Tables["t1"].AutoIncrement = &vschemapb.AutoIncrement{
 			Column:   "id",
 			Sequence: "t1_seq",

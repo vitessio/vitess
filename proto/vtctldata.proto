@@ -96,6 +96,7 @@ message MaterializeSettings {
   // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table copy finishes.
   bool defer_secondary_keys = 14;
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 15;
+  bool atomic_copy = 16;
 }
 
 /* Data types for VtctldServer */
@@ -429,6 +430,16 @@ message CleanupSchemaMigrationRequest {
 }
 
 message CleanupSchemaMigrationResponse {
+  map<string, uint64> rows_affected_by_shard = 1;
+}
+
+
+message CompleteSchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message CompleteSchemaMigrationResponse {
   map<string, uint64> rows_affected_by_shard = 1;
 }
 
@@ -975,6 +986,15 @@ message InitShardPrimaryResponse {
   repeated logutil.Event events = 1;
 }
 
+message LaunchSchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message LaunchSchemaMigrationResponse {
+  map<string, uint64> rows_affected_by_shard = 1;
+}
+
 message MoveTablesCreateRequest {
   // The necessary info gets passed on to each primary tablet involved
   // in the workflow via the CreateVReplicationWorkflow tabletmanager RPC.
@@ -1002,6 +1022,10 @@ message MoveTablesCreateRequest {
   bool defer_secondary_keys = 16;
   // Start the workflow after creating it.
   bool auto_start = 17;
+  // NoRoutingRules is set to true if routing rules should not be created on the target when the workflow is created.
+  bool no_routing_rules = 18;
+  // Run a single copy phase for the entire database.
+  bool atomic_copy = 19;
 }
 
 message MoveTablesCreateResponse {

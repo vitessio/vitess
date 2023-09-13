@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -195,7 +196,7 @@ func (c *ConvertExpr) convertToBinaryType(tt sqltypes.Type) sqltypes.Type {
 
 func (c *ConvertExpr) convertToCharType(tt sqltypes.Type) sqltypes.Type {
 	if c.HasLength {
-		col := c.Collation.Get()
+		col := colldata.Lookup(c.Collation)
 		length := c.Length * col.Charset().MaxWidth()
 		if length > 64*1024 {
 			return sqltypes.Text

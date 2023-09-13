@@ -261,7 +261,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "on" != v.Val {
+		if v.Val != "on" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -286,7 +286,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "on" != v.Val {
+		if v.Val != "on" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -313,7 +313,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "off" != v.Val {
+		if v.Val != "off" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -338,7 +338,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "off" != v.Val {
+		if v.Val != "off" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -737,7 +737,22 @@ func TestSplitStatementToPieces(t *testing.T) {
 			"`createtime` datetime NOT NULL DEFAULT NOW() COMMENT 'create time;'," +
 			"`comment` varchar(100) NOT NULL DEFAULT '' COMMENT 'comment'," +
 			"PRIMARY KEY (`id`))",
-	}}
+	}, {
+		input:  "create table t1 (id int primary key); create table t2 (id int primary key);",
+		output: "create table t1 (id int primary key); create table t2 (id int primary key)",
+	}, {
+		input:  ";;; create table t1 (id int primary key);;; ;create table t2 (id int primary key);",
+		output: " create table t1 (id int primary key);create table t2 (id int primary key)",
+	}, {
+		// The input doesn't have to be valid SQL statements!
+		input:  ";create table t1 ;create table t2 (id;",
+		output: "create table t1 ;create table t2 (id",
+	}, {
+		// Ignore quoted semicolon
+		input:  ";create table t1 ';';;;create table t2 (id;",
+		output: "create table t1 ';';create table t2 (id",
+	},
+	}
 
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {

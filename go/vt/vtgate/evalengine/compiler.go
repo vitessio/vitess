@@ -19,6 +19,7 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -38,9 +39,9 @@ type CompilerLog interface {
 }
 
 type compiledCoercion struct {
-	col   collations.Collation
-	left  collations.Coercion
-	right collations.Coercion
+	col   colldata.Collation
+	left  colldata.Coercion
+	right colldata.Coercion
 }
 
 type ctype struct {
@@ -349,7 +350,7 @@ func (c *compiler) compareAsStrings(lt ctype, rt ctype) error {
 		return err
 	}
 	if coerceLeft == nil && coerceRight == nil {
-		c.asm.CmpString_collate(merged.Collation.Get())
+		c.asm.CmpString_collate(colldata.Lookup(merged.Collation))
 	} else {
 		if coerceLeft == nil {
 			coerceLeft = func(dst, in []byte) ([]byte, error) { return in, nil }
@@ -358,7 +359,7 @@ func (c *compiler) compareAsStrings(lt ctype, rt ctype) error {
 			coerceRight = func(dst, in []byte) ([]byte, error) { return in, nil }
 		}
 		c.asm.CmpString_coerce(&compiledCoercion{
-			col:   merged.Collation.Get(),
+			col:   colldata.Lookup(merged.Collation),
 			left:  coerceLeft,
 			right: coerceRight,
 		})
@@ -367,7 +368,7 @@ func (c *compiler) compareAsStrings(lt ctype, rt ctype) error {
 }
 
 func isEncodingJSONSafe(col collations.ID) bool {
-	switch col.Get().Charset().(type) {
+	switch colldata.Lookup(col).Charset().(type) {
 	case charset.Charset_utf8mb4, charset.Charset_utf8mb3, charset.Charset_binary:
 		return true
 	default:

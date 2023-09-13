@@ -265,7 +265,7 @@ func TestMarshalJSONToSQL(t *testing.T) {
 		{
 			name:     "null",
 			data:     []byte{},
-			expected: "CAST(null as JSON)",
+			expected: "CAST(_utf8mb4'null' as JSON)",
 		},
 		{
 			name:     `object {"a": "b"}`,
@@ -330,17 +330,17 @@ func TestMarshalJSONToSQL(t *testing.T) {
 		{
 			name:     `true`,
 			data:     []byte{4, 1},
-			expected: `CAST(true as JSON)`,
+			expected: `CAST(_utf8mb4'true' as JSON)`,
 		},
 		{
 			name:     `false`,
 			data:     []byte{4, 2},
-			expected: `CAST(false as JSON)`,
+			expected: `CAST(_utf8mb4'false' as JSON)`,
 		},
 		{
 			name:     `null`,
 			data:     []byte{4, 0},
-			expected: `CAST(null as JSON)`,
+			expected: `CAST(_utf8mb4'null' as JSON)`,
 		},
 		{
 			name:     `-1`,

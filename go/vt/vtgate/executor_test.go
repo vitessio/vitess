@@ -377,7 +377,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, "select id from main1", nil)
 	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{TargetString: "@primary", InTransaction: true, FoundRows: 1, RowCount: -1}
-	testSession := proto.Clone(session.Session).(*vtgatepb.Session)
+	testSession := session.Session.CloneVT()
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=0")
 
@@ -418,7 +418,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, "update main1 set id=1", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@primary", FoundRows: 0, RowCount: 1}
-	testSession = proto.Clone(session.Session).(*vtgatepb.Session)
+	testSession = session.Session.CloneVT()
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=1")
 	if got, want := sbclookup.CommitCount.Load(), startCount; got != want {
@@ -667,7 +667,7 @@ func TestExecutorShow(t *testing.T) {
 				append(buildVarCharRow(
 					"utf8mb4",
 					"UTF-8 Unicode",
-					collations.Default().Get().Name()),
+					collations.Local().LookupName(collations.Default())),
 					sqltypes.NewUint32(4)),
 			},
 		}
@@ -712,7 +712,7 @@ func TestExecutorShow(t *testing.T) {
 				append(buildVarCharRow(
 					"utf8mb4",
 					"UTF-8 Unicode",
-					collations.Default().Get().Name()),
+					collations.Local().LookupName(collations.Default())),
 					sqltypes.NewUint32(4)),
 			},
 		}
@@ -1897,7 +1897,7 @@ func TestPassthroughDDL(t *testing.T) {
 		TargetString: "TestExecutor",
 	}
 
-	alterDDL := "/* leading */ alter table passthrough_ddl add columne col bigint default 123 /* trailing */"
+	alterDDL := "/* leading */ alter table passthrough_ddl add column col bigint default 123 /* trailing */"
 	_, err := executorExec(ctx, executor, session, alterDDL, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{

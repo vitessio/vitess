@@ -140,10 +140,11 @@ func TestUpdateWithFK(t *testing.T) {
 	utils.Exec(t, conn, `insert into u_t2(id, col2) values (342, 123), (19, 1234)`)
 	utils.Exec(t, conn, `insert into u_t3(id, col3) values (32, 123), (1, 12)`)
 
-	t.Run("Cascade update with a new value", func(t *testing.T) {
-		t.Skip("This doesn't work right now. We are able to only cascade updates for which the data already exists in the parent table")
-		_ = utils.Exec(t, conn, `update u_t1 set col1 = 2 where id = 100`)
-	})
+	// Cascade update with a new value
+	_ = utils.Exec(t, conn, `update u_t1 set col1 = 2 where id = 100`)
+	// Verify the result in u_t2 and u_t3 as well.
+	utils.AssertMatches(t, conn, `select * from u_t2 order by id`, `[[INT64(19) INT64(1234)] [INT64(342) NULL]]`)
+	utils.AssertMatches(t, conn, `select * from u_t3 order by id`, `[[INT64(1) INT64(12)] [INT64(32) INT64(2)]]`)
 
 	// Update u_t1 which has a foreign key constraint to u_t2 with SET NULL type, and to u_t3 with CASCADE type.
 	qr = utils.Exec(t, conn, `update u_t1 set col1 = 13 where id = 100`)
