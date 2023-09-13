@@ -79,7 +79,7 @@ type VttabletProcess struct {
 	Charset                     string
 	ConsolidationsURL           string
 
-	//Extra Args to be set before starting the vttablet process
+	// Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
 	proc *exec.Cmd
@@ -149,8 +149,9 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		}
 	}()
 
+	time.Sleep(10 * time.Second)
 	if vttablet.ServingStatus != "" {
-		if err = vttablet.WaitForTabletStatus(vttablet.ServingStatus); err != nil {
+		if err = vttablet.WaitForTabletStatus(vttablet.ServingStatus, "SERVING"); err != nil {
 			errFileContent, _ := os.ReadFile(fname)
 			if errFileContent != nil {
 				log.Infof("vttablet error:\n%s\n", string(errFileContent))
@@ -273,8 +274,8 @@ func (vttablet *VttabletProcess) GetTabletType() string {
 }
 
 // WaitForTabletStatus waits for one of the expected statuses to be reached
-func (vttablet *VttabletProcess) WaitForTabletStatus(expectedStatus string) error {
-	return vttablet.WaitForTabletStatusesForTimeout([]string{expectedStatus}, vttabletStateTimeout)
+func (vttablet *VttabletProcess) WaitForTabletStatus(expectedStatus ...string) error {
+	return vttablet.WaitForTabletStatusesForTimeout(expectedStatus, vttabletStateTimeout)
 }
 
 // WaitForTabletStatuses waits for one of expected statuses is reached

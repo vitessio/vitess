@@ -334,13 +334,12 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 	}
 	// Create the keyspace if it doesn't already exist.
 	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
-	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {
 		shard := &Shard{
 			Name: shardName,
 		}
 		log.Infof("Starting shard: %v", shardName)
-		mysqlctlProcessList = []*exec.Cmd{}
+		var mysqlctlProcessList []*exec.Cmd
 		for i := 0; i < totalTabletsRequired; i++ {
 			// instantiate vttablet object with reserved ports
 			tabletUID := cluster.GetAndReserveTabletUID()
