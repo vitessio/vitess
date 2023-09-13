@@ -18,6 +18,7 @@ package main
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/cmd/internal/docgen"
 	"vitess.io/vitess/go/cmd/vtgate/cli"
@@ -31,6 +32,10 @@ func main() {
 			return docgen.GenerateMarkdownTree(cli.Main, dir)
 		},
 	}
+
+	// Here because we inadvertently transfer the required "tablet-types-to-wait"
+	// flag during vtgate/cli's init func.
+	pflag.CommandLine = cmd.Flags()
 
 	cmd.Flags().StringVarP(&dir, "dir", "d", "doc", "output directory to write documentation")
 	_ = cmd.Execute()
