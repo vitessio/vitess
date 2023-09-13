@@ -31,8 +31,7 @@ import (
 
 type (
 	projector struct {
-		cols  []ProjExpr
-		names []*sqlparser.AliasedExpr
+		columns []*ProjExpr
 	}
 )
 
@@ -163,16 +162,6 @@ func pushOrMerge(ctx *plancontext.PlanningContext, outer ops.Operator, inner *Su
 	}
 }
 
-func removeFilterUnderRoute(op *Route, subq *SubQuery) {
-	filter, ok := op.Source.(*Filter)
-	if ok {
-		if filter.Predicates[0] == subq.Original {
-			// we don't need this predicate
-			op.Source = filter.Source
-		}
-	}
-}
-
 // findOrAddColNameBindVarName goes through the JoinColumns and looks for the given colName and returns the argument name if found.
 // if it's not found, a new JoinColumn passing this through will be added
 func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContext, col *sqlparser.ColName) (string, error) {
@@ -274,10 +263,6 @@ func tryPushProjection(
 ) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := p.Source.(type) {
 	case *Route:
-		err := rewriteSubqueryExpressions(ctx, p)
-		if err != nil {
-			return nil, nil, err
-		}
 		return rewrite.Swap(p, src, "push projection under route")
 	case *ApplyJoin:
 		if p.FromAggr || !p.canPushDown(ctx) {
@@ -295,24 +280,29 @@ func tryPushProjection(
 		}
 		return pushProjectionToOuter(ctx, p, src)
 	case *SubQuery:
-		if !ctx.SubqueriesSettled {
+		ap, err := p.GetAliasedProjections()
+		if err != nil {
 			return p, rewrite.SameTree, nil
 		}
+
+		if !ctx.SubqueriesSettled || err != nil {
+			return p, rewrite.SameTree, nil
+		}
+
 		outer := TableID(src.Outer)
-		for _, proj := range p.Projections {
-			_, isOffset := proj.(*Offset)
+		for _, pe := range ap {
+			_, isOffset := pe.Info.(*Offset)
 			if isOffset {
 				continue
 			}
 
-			expr := proj.GetExpr()
-			if !ctx.SemTable.RecursiveDeps(expr).IsSolvedBy(outer) {
+			if !ctx.SemTable.RecursiveDeps(pe.EvalExpr).IsSolvedBy(outer) {
 				return p, rewrite.SameTree, nil
 			}
 
-			se, ok := proj.(*SubQueryExpression)
+			se, ok := pe.Info.(*SubQueryExpression)
 			if ok {
-				rewriteColNameToArgument(se, src)
+				pe.EvalExpr = rewriteColNameToArgument(pe.EvalExpr, se, src)
 			}
 		}
 		// all projections can be pushed to the outer
@@ -323,37 +313,17 @@ func tryPushProjection(
 	}
 }
 
-func rewriteSubqueryExpressions(ctx *plancontext.PlanningContext, p *Projection) error {
-	cols, colsErr := p.GetColumns(ctx)
-	// we wait with checking the error since we don't know if we are going to need the columns or not
-	for idx, expr := range p.Projections {
-		se, ok := expr.(*SubQueryExpression)
-		if !ok || se.Original.Expr == se.E {
-			continue
-		}
-		if colsErr != nil {
-			return colsErr
-		}
-
-		ae := cols[idx]
-		ae.Expr = se.E
-		if !ae.As.IsEmpty() {
-			continue
-		}
-
-		ae.As = sqlparser.NewIdentifierCI(sqlparser.String(se.Original.Expr))
-	}
-	return nil
-}
-
 func pushDownProjectionInVindex(
 	ctx *plancontext.PlanningContext,
 	p *Projection,
 	src *Vindex,
 ) (ops.Operator, *rewrite.ApplyResult, error) {
-	for _, column := range p.Projections {
-		expr := column.GetExpr()
-		_, err := src.AddColumn(ctx, true, false, aeWrap(expr))
+	ap, err := p.GetAliasedProjections()
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, pe := range ap {
+		_, err = src.AddColumn(ctx, true, false, aeWrap(pe.EvalExpr))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -361,9 +331,8 @@ func pushDownProjectionInVindex(
 	return src, rewrite.NewTree("push projection into vindex", p), nil
 }
 
-func (p *projector) add(e ProjExpr, alias *sqlparser.AliasedExpr) {
-	p.cols = append(p.cols, e)
-	p.names = append(p.names, alias)
+func (p *projector) add(pe *ProjExpr) {
+	p.columns = append(p.columns, pe)
 }
 
 // pushDownProjectionInApplyJoin pushes down a projection operation into an ApplyJoin operation.
@@ -375,7 +344,7 @@ func pushDownProjectionInApplyJoin(
 	p *Projection,
 	src *ApplyJoin,
 ) (ops.Operator, *rewrite.ApplyResult, error) {
-	columns, err := p.GetColumns(ctx)
+	ap, err := p.GetAliasedProjections()
 	if src.LeftJoin || err != nil {
 		// we can't push down expression evaluation to the rhs if we are not sure if it will even be executed
 		return p, rewrite.SameTree, nil
@@ -383,8 +352,8 @@ func pushDownProjectionInApplyJoin(
 	lhs, rhs := &projector{}, &projector{}
 
 	src.JoinColumns = nil
-	for idx := 0; idx < len(p.Projections); idx++ {
-		err := splitProjectionAcrossJoin(ctx, src, lhs, rhs, p.Projections[idx], columns[idx])
+	for _, pe := range ap {
+		err := splitProjectionAcrossJoin(ctx, src, lhs, rhs, pe)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -417,26 +386,24 @@ func splitProjectionAcrossJoin(
 	ctx *plancontext.PlanningContext,
 	join *ApplyJoin,
 	lhs, rhs *projector,
-	in ProjExpr,
-	column *sqlparser.AliasedExpr,
+	pe *ProjExpr,
 ) error {
-	expr := in.GetExpr()
 
 	// Check if the current expression can reuse an existing column in the ApplyJoin.
-	if _, found := canReuseColumn(ctx, join.JoinColumns, expr, joinColumnToExpr); found {
+	if _, found := canReuseColumn(ctx, join.JoinColumns, pe.EvalExpr, joinColumnToExpr); found {
 		return nil
 	}
 
 	var col JoinColumn
 	var err error
 
-	switch expr := in.(type) {
-	case *UnexploredExpression:
-		col, err = splitUnexploredExpression(ctx, join, lhs, rhs, expr, column)
+	switch expr := pe.Info.(type) {
+	case nil:
+		col, err = splitUnexploredExpression(ctx, join, lhs, rhs, pe)
 	case *SubQueryExpression:
-		col, err = splitSubqueryExpression(ctx, join, lhs, rhs, expr, column)
+		col, err = splitSubqueryExpression(ctx, join, lhs, rhs, pe, expr)
 	default:
-		err = vterrors.VT13001(fmt.Sprintf("%T can't be split", in))
+		err = vterrors.VT13001(fmt.Sprintf("%T can't be split", pe.Info))
 	}
 	if err != nil {
 		return err
@@ -447,43 +414,14 @@ func splitProjectionAcrossJoin(
 	return nil
 }
 
-func splitSubqueryExpression(
-	ctx *plancontext.PlanningContext,
-	join *ApplyJoin,
-	lhs, rhs *projector,
-	in *SubQueryExpression,
-	originalAE *sqlparser.AliasedExpr,
-) (JoinColumn, error) {
-	ae := &sqlparser.AliasedExpr{Expr: in.E, As: originalAE.As}
-	col, err := join.getJoinColumnFor(ctx, ae, false)
-	if err != nil {
-		return JoinColumn{}, err
-	}
-	// Update the left and right child columns and names based on the JoinColumn type.
-	switch {
-	case col.IsPureLeft():
-		lhs.add(in, ae)
-	case col.IsPureRight():
-		rhs.add(in, ae)
-	case col.IsMixedLeftAndRight():
-		for _, lhsExpr := range col.LHSExprs {
-			lhs.add(&UnexploredExpression{E: lhsExpr}, aeWrap(lhsExpr))
-		}
-		rhsExpr := &sqlparser.AliasedExpr{Expr: col.RHSExpr, As: originalAE.As}
-		rhs.add(&UnexploredExpression{E: col.RHSExpr}, rhsExpr)
-	}
-	return col, nil
-}
-
 func splitUnexploredExpression(
 	ctx *plancontext.PlanningContext,
 	join *ApplyJoin,
 	lhs, rhs *projector,
-	in ProjExpr,
-	colName *sqlparser.AliasedExpr,
+	pe *ProjExpr,
 ) (JoinColumn, error) {
 	// Get a JoinColumn for the current expression.
-	col, err := join.getJoinColumnFor(ctx, colName, false)
+	col, err := join.getJoinColumnFor(ctx, pe.Original, pe.EvalExpr, false)
 	if err != nil {
 		return JoinColumn{}, err
 	}
@@ -491,14 +429,39 @@ func splitUnexploredExpression(
 	// Update the left and right child columns and names based on the JoinColumn type.
 	switch {
 	case col.IsPureLeft():
-		lhs.add(in, colName)
+		lhs.add(pe)
 	case col.IsPureRight():
-		rhs.add(in, colName)
+		rhs.add(pe)
 	case col.IsMixedLeftAndRight():
 		for _, lhsExpr := range col.LHSExprs {
-			lhs.add(&UnexploredExpression{E: lhsExpr}, aeWrap(lhsExpr))
+			lhs.add(newProjExpr(aeWrap(lhsExpr)))
 		}
-		rhs.add(&UnexploredExpression{E: col.RHSExpr}, &sqlparser.AliasedExpr{Expr: col.RHSExpr, As: colName.As})
+		innerPE := newProjExprWithInner(pe.Original, col.RHSExpr)
+		innerPE.ColExpr = col.RHSExpr
+		rhs.add(innerPE)
+	}
+	return col, nil
+}
+
+func splitSubqueryExpression(
+	ctx *plancontext.PlanningContext,
+	join *ApplyJoin,
+	lhs, rhs *projector,
+	pe *ProjExpr,
+	in *SubQueryExpression,
+) (JoinColumn, error) {
+	col, err := join.getJoinColumnFor(ctx, pe.Original, pe.EvalExpr, false)
+	if err != nil {
+		return JoinColumn{}, err
+	}
+	// Update the left and right child columns and names based on the JoinColumn type.
+	switch {
+	case col.IsPureLeft():
+		lhs.add(pe)
+	case col.IsPureRight():
+		rhs.add(pe)
+	case col.IsMixedLeftAndRight():
+		panic("subquery expression should not be mixed")
 	}
 	return col, nil
 }
@@ -541,7 +504,7 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 
 			alias := sqlparser.UnescapedString(out)
 			predicate.LHSExprs[idx] = sqlparser.NewColNameWithQualifier(alias, derivedTblName)
-			lhs.add(&UnexploredExpression{E: out}, &sqlparser.AliasedExpr{Expr: out, As: sqlparser.NewIdentifierCI(alias)})
+			lhs.add(newProjExprWithInner(&sqlparser.AliasedExpr{Expr: out, As: sqlparser.NewIdentifierCI(alias)}, out))
 		}
 	}
 	return nil
@@ -566,15 +529,14 @@ func createProjectionWithTheseColumns(
 	tableID *semantics.TableSet,
 	alias string,
 ) (ops.Operator, error) {
-	if len(p.cols) == 0 {
+	if len(p.columns) == 0 {
 		return src, nil
 	}
 	proj, err := createProjection(ctx, src)
 	if err != nil {
 		return nil, err
 	}
-	proj.Columns = AliasedProjections(p.names)
-	proj.Projections = p.cols
+	proj.Columns = AliasedProjections(p.columns)
 	proj.TableID = tableID
 	proj.Alias = alias
 	return proj, nil

@@ -88,7 +88,12 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		return nil, nil, err
 	}
 
-	extracted := []string{"Projection"}
+	var extracted []string
+	if qp.HasAggr {
+		extracted = append(extracted, "Aggregation")
+	} else {
+		extracted = append(extracted, "Projection")
+	}
 
 	if qp.NeedsDistinct() {
 		op = &Distinct{
@@ -209,11 +214,11 @@ func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) (
 		if err != nil {
 			return nil, err
 		}
-		p.Columns, err = p.Columns.AddColumn(ae)
+
+		_, err = p.addProjExpr(newProjExpr(ae))
 		if err != nil {
 			return nil, err
 		}
-		p.Projections = append(p.Projections, &UnexploredExpression{E: ae.Expr})
 	}
 	for i, by := range a.Grouping {
 		a.Grouping[i].ColOffset = len(a.Columns)
@@ -239,7 +244,18 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 	if err != nil {
 		// if we have unexpanded expressions, we take this shortcut and hope we don't need any offsets from this plan
 		cols := sqlparser.SelectExprs{}
+
 		for _, expr := range qp.SelectExprs {
+			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				_, isSubQ := node.(*sqlparser.Subquery)
+				if !isSubQ {
+					return true, nil
+				}
+				return false, vterrors.VT09015()
+			})
+			if err != nil {
+				return nil, err
+			}
 			cols = append(cols, expr.Col)
 		}
 		return newStarProjection(src, cols), nil
@@ -249,6 +265,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 	sqc := &SubQueryContainer{}
 	outerID := TableID(src)
 	for _, ae := range aes {
+		org := sqlparser.CloneRefOfAliasedExpr(ae)
 		expr := ae.Expr
 		newExpr, subqs, err := sqc.handleSubqueries(ctx, expr, outerID)
 		if err != nil {
@@ -256,12 +273,12 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 		}
 		if newExpr == nil {
 			// there was no subquery in this expression
-			_, err := proj.addUnexploredExpr(ae, expr)
+			_, err := proj.addUnexploredExpr(org, expr)
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			err := proj.addSubqueryExpr(ae, newExpr, subqs...)
+			err := proj.addSubqueryExpr(org, newExpr, subqs...)
 			if err != nil {
 				return nil, err
 			}

@@ -252,31 +252,30 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		return useSimpleProjection(ctx, op, cols, src)
 	}
 
-	expressions := slice.Map(op.Projections, func(from operators.ProjExpr) sqlparser.Expr {
-		return from.GetExpr()
-	})
-
-	failed := false
-	evalengineExprs := slice.Map(op.Projections, func(from operators.ProjExpr) evalengine.Expr {
-		switch e := from.(type) {
-		case *operators.Eval:
-			return e.EExpr
-		case *operators.Offset:
-			typ, col, _ := ctx.SemTable.TypeForExpr(e.Expr)
-			return evalengine.NewColumn(e.Offset, typ, col)
-		default:
-			failed = true
-			return nil
-		}
-	})
-	var primitive *engine.Projection
-	cols, err := op.GetColumns(ctx)
+	ap, err := op.GetAliasedProjections()
 	if err != nil {
 		return nil, err
 	}
-	columnNames := slice.Map(cols, func(from *sqlparser.AliasedExpr) string {
-		return from.ColumnName()
-	})
+
+	var exprs []sqlparser.Expr
+	var evalengineExprs []evalengine.Expr
+	var columnNames []string
+	failed := false
+	for _, pe := range ap {
+		switch e := pe.Info.(type) {
+		case *operators.EvalEngine:
+			evalengineExprs = append(evalengineExprs, e.EExpr)
+		case *operators.Offset:
+			typ, col, _ := ctx.SemTable.TypeForExpr(pe.EvalExpr)
+			evalengineExprs = append(evalengineExprs, evalengine.NewColumn(e.Offset, typ, col))
+		default:
+			return nil, vterrors.VT13001("project not planned for: %s", pe.String())
+		}
+		exprs = append(exprs, pe.EvalExpr)
+		columnNames = append(columnNames, pe.Original.ColumnName())
+	}
+
+	var primitive *engine.Projection
 
 	if !failed {
 		primitive = &engine.Projection{
@@ -288,7 +287,7 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 	return &projection{
 		source:      src,
 		columnNames: columnNames,
-		columns:     expressions,
+		columns:     exprs,
 		primitive:   primitive,
 	}, nil
 }

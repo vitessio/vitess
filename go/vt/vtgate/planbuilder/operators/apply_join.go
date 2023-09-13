@@ -196,24 +196,23 @@ func joinColumnToExpr(column JoinColumn) sqlparser.Expr {
 	return column.Original.Expr
 }
 
-func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (col JoinColumn, err error) {
+func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sqlparser.AliasedExpr, e sqlparser.Expr, addToGroupBy bool) (col JoinColumn, err error) {
 	defer func() {
-		col.Original = e
+		col.Original = orig
 	}()
 	lhs := TableID(a.LHS)
 	rhs := TableID(a.RHS)
 	both := lhs.Merge(rhs)
-	expr := e.Expr
-	deps := ctx.SemTable.RecursiveDeps(expr)
+	deps := ctx.SemTable.RecursiveDeps(e)
 	col.GroupBy = addToGroupBy
 
 	switch {
 	case deps.IsSolvedBy(lhs):
-		col.LHSExprs = []sqlparser.Expr{expr}
+		col.LHSExprs = []sqlparser.Expr{e}
 	case deps.IsSolvedBy(rhs):
-		col.RHSExpr = expr
+		col.RHSExpr = e
 	case deps.IsSolvedBy(both):
-		col, err = BreakExpressionInLHSandRHS(ctx, expr, TableID(a.LHS))
+		col, err = BreakExpressionInLHSandRHS(ctx, e, TableID(a.LHS))
 		if err != nil {
 			return JoinColumn{}, err
 		}
@@ -247,7 +246,7 @@ func (a *ApplyJoin) AddColumn(
 			return offset, nil
 		}
 	}
-	col, err := a.getJoinColumnFor(ctx, expr, groupBy)
+	col, err := a.getJoinColumnFor(ctx, expr, expr.Expr, groupBy)
 	if err != nil {
 		return 0, err
 	}

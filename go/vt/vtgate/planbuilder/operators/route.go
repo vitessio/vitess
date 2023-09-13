@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -589,7 +590,7 @@ type selectExpressions interface {
 // It will return a bool indicating whether the addition was succesful or not, and an offset to where the column can be found
 func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Operator, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) (ops.Operator, bool, []int) {
 	switch op := operator.(type) {
-	//case *SubQuery:
+	// case *SubQuery:
 	//	src, added, offset := addMultipleColumnsToInput(ctx, op.LHS, reuse, addToGroupBy, exprs)
 	//	if added {
 	//		op.LHS = src
@@ -633,11 +634,10 @@ func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Op
 			return op, false, nil
 		}
 		proj := &Projection{
-			Source:      op,
-			Columns:     AliasedProjections(unionColumns),
-			Projections: nil,
-			TableID:     &tableID,
-			Alias:       "dt",
+			Source:  op,
+			Columns: AliasedProjections(slice.Map(unionColumns, newProjExpr)),
+			TableID: &tableID,
+			Alias:   "dt",
 		}
 		return addMultipleColumnsToInput(ctx, proj, reuse, addToGroupBy, exprs)
 	default:

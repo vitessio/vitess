@@ -37,7 +37,7 @@ type SubQuery struct {
 	Outer             ops.Operator         // Outer query operator.
 	Subquery          ops.Operator         // Subquery operator.
 	FilterType        opcode.PulloutOpcode // Type of subquery filter.
-	Original          sqlparser.Expr       // Original comparison or EXISTS expression.
+	MergeExpression   sqlparser.Expr       // This is the expression we should use if we can merge the inner to the outer
 	_sq               *sqlparser.Subquery  // Subquery representation, e.g., (SELECT foo from user LIMIT 1).
 	Predicates        sqlparser.Exprs      // Predicates joining outer and inner queries. Empty for uncorrelated subqueries.
 	OuterPredicate    sqlparser.Expr       // This is the predicate that is using the subquery expression. It will not be empty for projections
@@ -246,7 +246,7 @@ func (sj *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Ope
 		}
 		cursor.Replace(arg)
 	}
-	rhsPred := sqlparser.CopyOnRewrite(sj.Original, dontEnterSubqueries, post, ctx.SemTable.CopyDependenciesOnSQLNodes).(sqlparser.Expr)
+	rhsPred := sqlparser.CopyOnRewrite(sj.MergeExpression, dontEnterSubqueries, post, ctx.SemTable.CopyDependenciesOnSQLNodes).(sqlparser.Expr)
 
 	var predicates []sqlparser.Expr
 	switch sj.FilterType {

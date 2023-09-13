@@ -865,7 +865,6 @@
   {
     "comment": "Field query should work for joins select bind vars",
     "query": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
@@ -1223,7 +1222,6 @@
   {
     "comment": "top level subquery in select",
     "query": "select a, (select col from user) from unsharded",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select a, (select col from user) from unsharded",
@@ -1299,8 +1297,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select a, 1 + :__sq1 from unsharded where 1 != 1",
-            "Query": "select a, 1 + :__sq1 from unsharded",
+            "FieldQuery": "select a, 1 + :__sq1 as `1 + (select col from ``user``)` from unsharded where 1 != 1",
+            "Query": "select a, 1 + :__sq1 as `1 + (select col from ``user``)` from unsharded",
             "Table": "unsharded"
           }
         ]
@@ -1911,7 +1909,6 @@
   {
     "comment": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
     "query": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
@@ -2545,8 +2542,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :user_extra_col + `user`.col from `user` where 1 != 1",
-            "Query": "select :user_extra_col + `user`.col from `user` where `user`.id = :user_extra_id",
+            "FieldQuery": "select :user_extra_col + `user`.col as `user_extra.col + ``user``.col` from `user` where 1 != 1",
+            "Query": "select :user_extra_col + `user`.col as `user_extra.col + ``user``.col` from `user` where `user`.id = :user_extra_id",
             "Table": "`user`",
             "Values": [
               ":user_extra_id"
@@ -4279,7 +4276,6 @@
   {
     "comment": "Earlier columns are in scope in subqueries https://github.com/vitessio/vitess/issues/11246",
     "query": "SELECT 1 as x, (SELECT x)",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT 1 as x, (SELECT x)",

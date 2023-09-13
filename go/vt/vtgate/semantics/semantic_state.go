@@ -532,6 +532,9 @@ func (st *SemTable) AndExpressions(exprs ...sqlparser.Expr) sqlparser.Expr {
 // ASTEquals returns a sqlparser.Comparator that uses the semantic information in this SemTable to
 // explicitly compare column names for equality.
 func (st *SemTable) ASTEquals() *sqlparser.Comparator {
+	if st == nil {
+		return sqlparser.Equals
+	}
 	if st.comparator == nil {
 		st.comparator = &sqlparser.Comparator{
 			RefOfColName_: func(a, b *sqlparser.ColName) bool {

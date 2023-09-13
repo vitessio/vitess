@@ -253,7 +253,7 @@ func createSubquery(
 		Subquery:          opInner,
 		Predicates:        jpc.predicates,
 		OuterPredicate:    predicate,
-		Original:          original,
+		MergeExpression:   original,
 		ReplacedSqColName: rColName,
 		_sq:               subq,
 	}, nil
