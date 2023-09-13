@@ -359,6 +359,9 @@ func TestPickCellPreferenceLocalAlias(t *testing.T) {
 	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
 }
 
+// TestPickUsingCellAsAlias confirms that when the tablet picker is
+// given a cell name that is an alias, it will choose a tablet that
+// exists within a cell that is part of the alias.
 func TestPickUsingCellAsAlias(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
@@ -574,10 +577,10 @@ type pickerTestEnv struct {
 	topoServ *topo.Server
 }
 
-// newPickerTestEnve creates a test environment for tablet picker tests.
-// It creates a cell alias called 'cella' which contains all of the cells.
-// If any optional extraCells are provided, those are NOT added to the
-// cell alias.
+// newPickerTestEnv creates a test environment for TabletPicker tests.
+// It creates a cell alias called 'cella' which contains all of the
+// provided cells. However, if any optional extraCells are provided, those
+// are NOT added to the cell alias.
 func newPickerTestEnv(t *testing.T, ctx context.Context, cells []string, extraCells ...string) *pickerTestEnv {
 	allCells := append(cells, extraCells...)
 	te := &pickerTestEnv{
@@ -587,7 +590,7 @@ func newPickerTestEnv(t *testing.T, ctx context.Context, cells []string, extraCe
 		cells:    cells,
 		topoServ: memorytopo.NewServer(ctx, allCells...),
 	}
-	// create cell alias
+	// Create cell alias containing the cells (but NOT the extraCells).
 	err := te.topoServ.CreateCellsAlias(ctx, "cella", &topodatapb.CellsAlias{
 		Cells: cells,
 	})

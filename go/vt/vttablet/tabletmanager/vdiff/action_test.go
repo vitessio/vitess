@@ -66,8 +66,9 @@ func TestPerformVDiffAction(t *testing.T) {
 					PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{},
 				},
 			},
-			// Add a second cell. The default cells are all cells, so this should then
-			// show up in the created vdiff record.
+			// Add a second cell. The default for source_cell and target_cell is all
+			// available cells, so this additional cell should then show up in the
+			// created vdiff record.
 			preFunc: func() error {
 				return tstenv.TopoServ.CreateCellInfo(ctx, "zone100_test", &topodatapb.CellInfo{})
 			},
@@ -91,8 +92,7 @@ func TestPerformVDiffAction(t *testing.T) {
 					},
 				},
 			},
-			// Add a second cell. The default cells are all cells, so this should then
-			// show up in the created vdiff record.
+			// Add a second cell and create an cell alias that contains it.
 			preFunc: func() error {
 				if err := tstenv.TopoServ.CreateCellInfo(ctx, "zone100_test", &topodatapb.CellInfo{}); err != nil {
 					return err

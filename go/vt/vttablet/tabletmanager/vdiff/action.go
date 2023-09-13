@@ -140,8 +140,7 @@ func (vde *Engine) fixupOptions(options *tabletmanagerdatapb.VDiffOptions) (*tab
 }
 
 // getDefaultCell returns all of the cells in the topo as a comma
-// seperated string.
-// The default value is all cells.
+// separated string as the default value is all available cells.
 func (vde *Engine) getDefaultCell() (string, error) {
 	cells, err := vde.ts.GetCellInfoNames(vde.ctx)
 	if err != nil {
