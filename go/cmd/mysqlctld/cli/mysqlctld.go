@@ -51,9 +51,19 @@ var (
 	Main = &cobra.Command{
 		Use:   "mysqlctld",
 		Short: "mysqlctld is a daemon that starts or initializes mysqld.",
-		Long: `mysqlctld is a daemon that starts or initializes mysqld.
+		Long: "`mysqlctld` is a gRPC server that can be used instead of the `mysqlctl` client tool.\n" +
+			"If the target directories are empty when it is invoked, it automatically performs initialization operations to bootstrap the `mysqld` instance before starting it.\n" +
+			"The `mysqlctld` process can subsequently receive gRPC commands from a `vttablet` to perform housekeeping operations like shutting down and restarting the `mysqld` instance as needed.\n\n" +
 
-It provides an RPC interface for vttablet to stop and start mysqld from a different container without having to restart the container running mysqlctld.`,
+			"{{< warning >}}\n" +
+			"`mysqld_safe` is not used so the `mysqld` process will not be automatically restarted in case of a failure.\n" +
+			"{{</ warning>}}\n\n" +
+			"To enable communication with a `vttablet`, the server must be configured to receive gRPC messages on a unix domain socket.",
+		Example: `mysqlctld \
+	--log_dir=${VTDATAROOT}/logs \
+	--tablet_uid=100 \
+	--mysql_port=17100 \
+	--socket_file=/path/to/socket_file`,
 		Args:    cobra.NoArgs,
 		PreRunE: servenv.CobraPreRunE,
 		RunE:    run,
