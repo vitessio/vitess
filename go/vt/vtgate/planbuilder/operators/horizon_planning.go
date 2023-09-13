@@ -300,7 +300,7 @@ func tryPushProjection(
 				return p, rewrite.SameTree, nil
 			}
 
-			se, ok := pe.Info.(*SubQueryExpression)
+			se, ok := pe.Info.(SubQueryExpression)
 			if ok {
 				pe.EvalExpr = rewriteColNameToArgument(pe.EvalExpr, se, src)
 			}
@@ -400,7 +400,7 @@ func splitProjectionAcrossJoin(
 	switch expr := pe.Info.(type) {
 	case nil:
 		col, err = splitUnexploredExpression(ctx, join, lhs, rhs, pe)
-	case *SubQueryExpression:
+	case SubQueryExpression:
 		col, err = splitSubqueryExpression(ctx, join, lhs, rhs, pe, expr)
 	default:
 		err = vterrors.VT13001(fmt.Sprintf("%T can't be split", pe.Info))
@@ -448,7 +448,7 @@ func splitSubqueryExpression(
 	join *ApplyJoin,
 	lhs, rhs *projector,
 	pe *ProjExpr,
-	in *SubQueryExpression,
+	in SubQueryExpression,
 ) (JoinColumn, error) {
 	col, err := join.getJoinColumnFor(ctx, pe.Original, pe.EvalExpr, false)
 	if err != nil {

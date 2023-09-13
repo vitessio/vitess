@@ -74,18 +74,14 @@ type (
 	}
 
 	// Offset is used when we are only passing through data from an incoming column
-	Offset struct {
-		Offset int
-	}
+	Offset int
 
 	// EvalEngine is used for expressions that have to be evaluated in the vtgate using the evalengine
 	EvalEngine struct {
 		EExpr evalengine.Expr
 	}
 
-	SubQueryExpression struct {
-		sqs []*SubQuery
-	}
+	SubQueryExpression []*SubQuery
 )
 
 func newProjExpr(ae *sqlparser.AliasedExpr) *ProjExpr {
@@ -151,11 +147,11 @@ func (pe *ProjExpr) String() string {
 		expr = fmt.Sprintf("%s|%s", sqlparser.String(pe.EvalExpr), sqlparser.String(pe.ColExpr))
 	}
 	switch pe.Info.(type) {
-	case *Offset:
+	case Offset:
 		info = " [O]"
 	case *EvalEngine:
 		info = " [E]"
-	case *SubQueryExpression:
+	case SubQueryExpression:
 		info = " [SQ]"
 	}
 
@@ -182,7 +178,7 @@ func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjectio
 			return nil, err
 		}
 		expr := newProjExpr(ae)
-		expr.Info = &Offset{Offset: offset}
+		expr.Info = Offset(offset)
 		_, err = p.addProjExpr(expr)
 		if err != nil {
 			return nil, err
@@ -204,7 +200,7 @@ func (p *Projection) canPushDown(ctx *plancontext.PlanningContext) bool {
 		return true
 	}
 	for _, projection := range ap {
-		if _, ok := projection.Info.(*SubQueryExpression); ok {
+		if _, ok := projection.Info.(SubQueryExpression); ok {
 			return false
 		}
 	}
@@ -239,7 +235,7 @@ func (p *Projection) GetAliasedProjections() (AliasedProjections, error) {
 
 func (p *Projection) addSubqueryExpr(ae *sqlparser.AliasedExpr, expr sqlparser.Expr, sqs ...*SubQuery) error {
 	pe := newProjExprWithInner(ae, expr)
-	pe.Info = &SubQueryExpression{sqs: sqs}
+	pe.Info = SubQueryExpression(sqs)
 
 	_, err := p.addProjExpr(pe)
 	return err
@@ -249,7 +245,7 @@ func (p *Projection) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, _ bool
 	return p.addUnexploredExpr(expr, expr.Expr)
 }
 
-func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, _ []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
 	offsets := make([]int, len(exprs))
 	for idx, expr := range exprs {
 		if reuse {
@@ -319,13 +315,13 @@ func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, reuse bool, add
 	}
 
 	pe := newProjExprWithInner(ae, expr)
-	pe.Info = &Offset{Offset: inputOffset}
+	pe.Info = Offset(inputOffset)
 	return p.addProjExpr(pe)
 }
 
-func (po *Offset) expr()             {}
-func (po *EvalEngine) expr()         {}
-func (po *SubQueryExpression) expr() {}
+func (po Offset) expr()             {}
+func (po *EvalEngine) expr()        {}
+func (po SubQueryExpression) expr() {}
 
 func (p *Projection) Clone(inputs []ops.Operator) ops.Operator {
 	return &Projection{
@@ -392,12 +388,12 @@ func (p *Projection) AllOffsets() (cols []int) {
 		return nil
 	}
 	for _, c := range ap {
-		offset, ok := c.Info.(*Offset)
+		offset, ok := c.Info.(Offset)
 		if !ok {
 			return nil
 		}
 
-		cols = append(cols, offset.Offset)
+		cols = append(cols, int(offset))
 	}
 	return
 }
@@ -437,8 +433,8 @@ func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *r
 	// for projections that are not derived tables, we can check if it is safe to remove or not
 	needed := false
 	for i, projection := range ap {
-		e, ok := projection.Info.(*Offset)
-		if !ok || e.Offset != i {
+		e, ok := projection.Info.(Offset)
+		if !ok || int(e) != i {
 			needed = true
 			break
 		}
@@ -467,9 +463,9 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, join *App
 	var newColumnsAST []JoinColumn
 	for _, col := range ap {
 		switch colInfo := col.Info.(type) {
-		case *Offset:
-			newColumns = append(newColumns, join.Columns[colInfo.Offset])
-			newColumnsAST = append(newColumnsAST, join.JoinColumns[colInfo.Offset])
+		case Offset:
+			newColumns = append(newColumns, join.Columns[colInfo])
+			newColumnsAST = append(newColumnsAST, join.JoinColumns[colInfo])
 		case nil:
 			if !ctx.SemTable.EqualsExprWithDeps(col.EvalExpr, col.ColExpr) {
 				// the inner expression is different from what we are presenting to the outside - this means we need to evaluate
@@ -501,8 +497,8 @@ func (p *Projection) compactWithRoute(ctx *plancontext.PlanningContext, rb *Rout
 	}
 
 	for i, col := range ap {
-		offset, ok := col.Info.(*Offset)
-		if !ok || offset.Offset != i {
+		offset, ok := col.Info.(Offset)
+		if !ok || int(offset) != i {
 			return p, rewrite.SameTree, nil
 		}
 	}
@@ -557,7 +553,7 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 		// if we get a pure offset back. No need to do anything else
 		offset, ok := rewritten.(*sqlparser.Offset)
 		if ok {
-			pe.Info = &Offset{Offset: offset.V}
+			pe.Info = Offset(offset.V)
 			continue
 		}
 

@@ -260,28 +260,19 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 	var exprs []sqlparser.Expr
 	var evalengineExprs []evalengine.Expr
 	var columnNames []string
-	failed := false
 	for _, pe := range ap {
-		switch e := pe.Info.(type) {
-		case *operators.EvalEngine:
-			evalengineExprs = append(evalengineExprs, e.EExpr)
-		case *operators.Offset:
-			typ, col, _ := ctx.SemTable.TypeForExpr(pe.EvalExpr)
-			evalengineExprs = append(evalengineExprs, evalengine.NewColumn(e.Offset, typ, col))
-		default:
-			return nil, vterrors.VT13001("project not planned for: %s", pe.String())
+		ee, err := getEvalEngingeExpr(ctx, pe)
+		if err != nil {
+			return nil, err
 		}
+		evalengineExprs = append(evalengineExprs, ee)
 		exprs = append(exprs, pe.EvalExpr)
 		columnNames = append(columnNames, pe.Original.ColumnName())
 	}
 
-	var primitive *engine.Projection
-
-	if !failed {
-		primitive = &engine.Projection{
-			Cols:  columnNames,
-			Exprs: evalengineExprs,
-		}
+	primitive := &engine.Projection{
+		Cols:  columnNames,
+		Exprs: evalengineExprs,
 	}
 
 	return &projection{
@@ -290,6 +281,19 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		columns:     exprs,
 		primitive:   primitive,
 	}, nil
+}
+
+func getEvalEngingeExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr) (evalengine.Expr, error) {
+	switch e := pe.Info.(type) {
+	case *operators.EvalEngine:
+		return e.EExpr, nil
+	case operators.Offset:
+		typ, col, _ := ctx.SemTable.TypeForExpr(pe.EvalExpr)
+		return evalengine.NewColumn(int(e), typ, col), nil
+	default:
+		return nil, vterrors.VT13001("project not planned for: %s", pe.String())
+	}
+
 }
 
 // useSimpleProjection uses nothing at all if the output is already correct,
