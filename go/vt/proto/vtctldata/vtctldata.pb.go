@@ -12202,6 +12202,668 @@ func (x *ValidateVSchemaResponse) GetResultsByShard() map[string]*ValidateShardR
 	return nil
 }
 
+type VDiffCreateRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Workflow                    string                                      `protobuf:"bytes,1,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	TargetKeyspace              string                                      `protobuf:"bytes,2,opt,name=target_keyspace,json=targetKeyspace,proto3" json:"target_keyspace,omitempty"`
+	Uuid                        string                                      `protobuf:"bytes,3,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	SourceCells                 []string                                    `protobuf:"bytes,4,rep,name=source_cells,json=sourceCells,proto3" json:"source_cells,omitempty"`
+	TargetCells                 []string                                    `protobuf:"bytes,5,rep,name=target_cells,json=targetCells,proto3" json:"target_cells,omitempty"`
+	TabletTypes                 []topodata.TabletType                       `protobuf:"varint,6,rep,packed,name=tablet_types,json=tabletTypes,proto3,enum=topodata.TabletType" json:"tablet_types,omitempty"`
+	TabletSelectionPreference   tabletmanagerdata.TabletSelectionPreference `protobuf:"varint,7,opt,name=tablet_selection_preference,json=tabletSelectionPreference,proto3,enum=tabletmanagerdata.TabletSelectionPreference" json:"tablet_selection_preference,omitempty"`
+	Tables                      []string                                    `protobuf:"bytes,8,rep,name=tables,proto3" json:"tables,omitempty"`
+	Limit                       int64                                       `protobuf:"varint,9,opt,name=limit,proto3" json:"limit,omitempty"`
+	FilteredReplicationWaitTime *vttime.Duration                            `protobuf:"bytes,10,opt,name=filtered_replication_wait_time,json=filteredReplicationWaitTime,proto3" json:"filtered_replication_wait_time,omitempty"`
+	DebugQuery                  bool                                        `protobuf:"varint,11,opt,name=debug_query,json=debugQuery,proto3" json:"debug_query,omitempty"`
+	OnlyPKs                     bool                                        `protobuf:"varint,12,opt,name=only_p_ks,json=onlyPKs,proto3" json:"only_p_ks,omitempty"`
+	UpdateTableStats            bool                                        `protobuf:"varint,13,opt,name=update_table_stats,json=updateTableStats,proto3" json:"update_table_stats,omitempty"`
+	MaxExtraRowsToCompare       int64                                       `protobuf:"varint,14,opt,name=max_extra_rows_to_compare,json=maxExtraRowsToCompare,proto3" json:"max_extra_rows_to_compare,omitempty"`
+	Wait                        bool                                        `protobuf:"varint,15,opt,name=wait,proto3" json:"wait,omitempty"`
+	WaitUpdateInterval          *vttime.Duration                            `protobuf:"bytes,16,opt,name=wait_update_interval,json=waitUpdateInterval,proto3" json:"wait_update_interval,omitempty"`
+	AutoRetry                   bool                                        `protobuf:"varint,17,opt,name=auto_retry,json=autoRetry,proto3" json:"auto_retry,omitempty"`
+	Verbose                     bool                                        `protobuf:"varint,18,opt,name=verbose,proto3" json:"verbose,omitempty"`
+}
+
+func (x *VDiffCreateRequest) Reset() {
+	*x = VDiffCreateRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[197]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffCreateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffCreateRequest) ProtoMessage() {}
+
+func (x *VDiffCreateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[197]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffCreateRequest.ProtoReflect.Descriptor instead.
+func (*VDiffCreateRequest) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{197}
+}
+
+func (x *VDiffCreateRequest) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *VDiffCreateRequest) GetTargetKeyspace() string {
+	if x != nil {
+		return x.TargetKeyspace
+	}
+	return ""
+}
+
+func (x *VDiffCreateRequest) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+func (x *VDiffCreateRequest) GetSourceCells() []string {
+	if x != nil {
+		return x.SourceCells
+	}
+	return nil
+}
+
+func (x *VDiffCreateRequest) GetTargetCells() []string {
+	if x != nil {
+		return x.TargetCells
+	}
+	return nil
+}
+
+func (x *VDiffCreateRequest) GetTabletTypes() []topodata.TabletType {
+	if x != nil {
+		return x.TabletTypes
+	}
+	return nil
+}
+
+func (x *VDiffCreateRequest) GetTabletSelectionPreference() tabletmanagerdata.TabletSelectionPreference {
+	if x != nil {
+		return x.TabletSelectionPreference
+	}
+	return tabletmanagerdata.TabletSelectionPreference(0)
+}
+
+func (x *VDiffCreateRequest) GetTables() []string {
+	if x != nil {
+		return x.Tables
+	}
+	return nil
+}
+
+func (x *VDiffCreateRequest) GetLimit() int64 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *VDiffCreateRequest) GetFilteredReplicationWaitTime() *vttime.Duration {
+	if x != nil {
+		return x.FilteredReplicationWaitTime
+	}
+	return nil
+}
+
+func (x *VDiffCreateRequest) GetDebugQuery() bool {
+	if x != nil {
+		return x.DebugQuery
+	}
+	return false
+}
+
+func (x *VDiffCreateRequest) GetOnlyPKs() bool {
+	if x != nil {
+		return x.OnlyPKs
+	}
+	return false
+}
+
+func (x *VDiffCreateRequest) GetUpdateTableStats() bool {
+	if x != nil {
+		return x.UpdateTableStats
+	}
+	return false
+}
+
+func (x *VDiffCreateRequest) GetMaxExtraRowsToCompare() int64 {
+	if x != nil {
+		return x.MaxExtraRowsToCompare
+	}
+	return 0
+}
+
+func (x *VDiffCreateRequest) GetWait() bool {
+	if x != nil {
+		return x.Wait
+	}
+	return false
+}
+
+func (x *VDiffCreateRequest) GetWaitUpdateInterval() *vttime.Duration {
+	if x != nil {
+		return x.WaitUpdateInterval
+	}
+	return nil
+}
+
+func (x *VDiffCreateRequest) GetAutoRetry() bool {
+	if x != nil {
+		return x.AutoRetry
+	}
+	return false
+}
+
+func (x *VDiffCreateRequest) GetVerbose() bool {
+	if x != nil {
+		return x.Verbose
+	}
+	return false
+}
+
+type VDiffCreateResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Uuid string `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+}
+
+func (x *VDiffCreateResponse) Reset() {
+	*x = VDiffCreateResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[198]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffCreateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffCreateResponse) ProtoMessage() {}
+
+func (x *VDiffCreateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[198]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffCreateResponse.ProtoReflect.Descriptor instead.
+func (*VDiffCreateResponse) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{198}
+}
+
+func (x *VDiffCreateResponse) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+type VDiffDeleteRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Workflow       string `protobuf:"bytes,1,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	TargetKeyspace string `protobuf:"bytes,2,opt,name=target_keyspace,json=targetKeyspace,proto3" json:"target_keyspace,omitempty"`
+	Uuid           string `protobuf:"bytes,3,opt,name=uuid,proto3" json:"uuid,omitempty"`
+}
+
+func (x *VDiffDeleteRequest) Reset() {
+	*x = VDiffDeleteRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[199]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffDeleteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffDeleteRequest) ProtoMessage() {}
+
+func (x *VDiffDeleteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[199]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffDeleteRequest.ProtoReflect.Descriptor instead.
+func (*VDiffDeleteRequest) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{199}
+}
+
+func (x *VDiffDeleteRequest) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *VDiffDeleteRequest) GetTargetKeyspace() string {
+	if x != nil {
+		return x.TargetKeyspace
+	}
+	return ""
+}
+
+func (x *VDiffDeleteRequest) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+type VDiffDeleteResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Status string `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+}
+
+func (x *VDiffDeleteResponse) Reset() {
+	*x = VDiffDeleteResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[200]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffDeleteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffDeleteResponse) ProtoMessage() {}
+
+func (x *VDiffDeleteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[200]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffDeleteResponse.ProtoReflect.Descriptor instead.
+func (*VDiffDeleteResponse) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{200}
+}
+
+func (x *VDiffDeleteResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type VDiffResumeRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Workflow       string `protobuf:"bytes,1,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	TargetKeyspace string `protobuf:"bytes,2,opt,name=target_keyspace,json=targetKeyspace,proto3" json:"target_keyspace,omitempty"`
+	Uuid           string `protobuf:"bytes,3,opt,name=uuid,proto3" json:"uuid,omitempty"`
+}
+
+func (x *VDiffResumeRequest) Reset() {
+	*x = VDiffResumeRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[201]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffResumeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffResumeRequest) ProtoMessage() {}
+
+func (x *VDiffResumeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[201]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffResumeRequest.ProtoReflect.Descriptor instead.
+func (*VDiffResumeRequest) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{201}
+}
+
+func (x *VDiffResumeRequest) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *VDiffResumeRequest) GetTargetKeyspace() string {
+	if x != nil {
+		return x.TargetKeyspace
+	}
+	return ""
+}
+
+func (x *VDiffResumeRequest) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+type VDiffResumeResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Status string `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+}
+
+func (x *VDiffResumeResponse) Reset() {
+	*x = VDiffResumeResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[202]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffResumeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffResumeResponse) ProtoMessage() {}
+
+func (x *VDiffResumeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[202]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffResumeResponse.ProtoReflect.Descriptor instead.
+func (*VDiffResumeResponse) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{202}
+}
+
+func (x *VDiffResumeResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type VDiffShowRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Workflow       string `protobuf:"bytes,1,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	TargetKeyspace string `protobuf:"bytes,2,opt,name=target_keyspace,json=targetKeyspace,proto3" json:"target_keyspace,omitempty"`
+	// This will be 'all', 'last', or a UUID.
+	Arg string `protobuf:"bytes,3,opt,name=arg,proto3" json:"arg,omitempty"`
+}
+
+func (x *VDiffShowRequest) Reset() {
+	*x = VDiffShowRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[203]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffShowRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffShowRequest) ProtoMessage() {}
+
+func (x *VDiffShowRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[203]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffShowRequest.ProtoReflect.Descriptor instead.
+func (*VDiffShowRequest) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{203}
+}
+
+func (x *VDiffShowRequest) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *VDiffShowRequest) GetTargetKeyspace() string {
+	if x != nil {
+		return x.TargetKeyspace
+	}
+	return ""
+}
+
+func (x *VDiffShowRequest) GetArg() string {
+	if x != nil {
+		return x.Arg
+	}
+	return ""
+}
+
+type VDiffShowResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *VDiffShowResponse) Reset() {
+	*x = VDiffShowResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[204]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffShowResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffShowResponse) ProtoMessage() {}
+
+func (x *VDiffShowResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[204]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffShowResponse.ProtoReflect.Descriptor instead.
+func (*VDiffShowResponse) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{204}
+}
+
+type VDiffStopRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Workflow       string `protobuf:"bytes,1,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	TargetKeyspace string `protobuf:"bytes,2,opt,name=target_keyspace,json=targetKeyspace,proto3" json:"target_keyspace,omitempty"`
+	Uuid           string `protobuf:"bytes,3,opt,name=uuid,proto3" json:"uuid,omitempty"`
+}
+
+func (x *VDiffStopRequest) Reset() {
+	*x = VDiffStopRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[205]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffStopRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffStopRequest) ProtoMessage() {}
+
+func (x *VDiffStopRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[205]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffStopRequest.ProtoReflect.Descriptor instead.
+func (*VDiffStopRequest) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{205}
+}
+
+func (x *VDiffStopRequest) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *VDiffStopRequest) GetTargetKeyspace() string {
+	if x != nil {
+		return x.TargetKeyspace
+	}
+	return ""
+}
+
+func (x *VDiffStopRequest) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+type VDiffStopResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Status string `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+}
+
+func (x *VDiffStopResponse) Reset() {
+	*x = VDiffStopResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[206]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffStopResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffStopResponse) ProtoMessage() {}
+
+func (x *VDiffStopResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[206]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffStopResponse.ProtoReflect.Descriptor instead.
+func (*VDiffStopResponse) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{206}
+}
+
+func (x *VDiffStopResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
 type WorkflowDeleteRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -12216,7 +12878,7 @@ type WorkflowDeleteRequest struct {
 func (x *WorkflowDeleteRequest) Reset() {
 	*x = WorkflowDeleteRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[197]
+		mi := &file_vtctldata_proto_msgTypes[207]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12229,7 +12891,7 @@ func (x *WorkflowDeleteRequest) String() string {
 func (*WorkflowDeleteRequest) ProtoMessage() {}
 
 func (x *WorkflowDeleteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[197]
+	mi := &file_vtctldata_proto_msgTypes[207]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12242,7 +12904,7 @@ func (x *WorkflowDeleteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowDeleteRequest.ProtoReflect.Descriptor instead.
 func (*WorkflowDeleteRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{197}
+	return file_vtctldata_proto_rawDescGZIP(), []int{207}
 }
 
 func (x *WorkflowDeleteRequest) GetKeyspace() string {
@@ -12285,7 +12947,7 @@ type WorkflowDeleteResponse struct {
 func (x *WorkflowDeleteResponse) Reset() {
 	*x = WorkflowDeleteResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[198]
+		mi := &file_vtctldata_proto_msgTypes[208]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12298,7 +12960,7 @@ func (x *WorkflowDeleteResponse) String() string {
 func (*WorkflowDeleteResponse) ProtoMessage() {}
 
 func (x *WorkflowDeleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[198]
+	mi := &file_vtctldata_proto_msgTypes[208]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12311,7 +12973,7 @@ func (x *WorkflowDeleteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowDeleteResponse.ProtoReflect.Descriptor instead.
 func (*WorkflowDeleteResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{198}
+	return file_vtctldata_proto_rawDescGZIP(), []int{208}
 }
 
 func (x *WorkflowDeleteResponse) GetSummary() string {
@@ -12340,7 +13002,7 @@ type WorkflowStatusRequest struct {
 func (x *WorkflowStatusRequest) Reset() {
 	*x = WorkflowStatusRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[199]
+		mi := &file_vtctldata_proto_msgTypes[209]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12353,7 +13015,7 @@ func (x *WorkflowStatusRequest) String() string {
 func (*WorkflowStatusRequest) ProtoMessage() {}
 
 func (x *WorkflowStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[199]
+	mi := &file_vtctldata_proto_msgTypes[209]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12366,7 +13028,7 @@ func (x *WorkflowStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowStatusRequest.ProtoReflect.Descriptor instead.
 func (*WorkflowStatusRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{199}
+	return file_vtctldata_proto_rawDescGZIP(), []int{209}
 }
 
 func (x *WorkflowStatusRequest) GetKeyspace() string {
@@ -12396,7 +13058,7 @@ type WorkflowStatusResponse struct {
 func (x *WorkflowStatusResponse) Reset() {
 	*x = WorkflowStatusResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[200]
+		mi := &file_vtctldata_proto_msgTypes[210]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12409,7 +13071,7 @@ func (x *WorkflowStatusResponse) String() string {
 func (*WorkflowStatusResponse) ProtoMessage() {}
 
 func (x *WorkflowStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[200]
+	mi := &file_vtctldata_proto_msgTypes[210]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12422,7 +13084,7 @@ func (x *WorkflowStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowStatusResponse.ProtoReflect.Descriptor instead.
 func (*WorkflowStatusResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{200}
+	return file_vtctldata_proto_rawDescGZIP(), []int{210}
 }
 
 func (x *WorkflowStatusResponse) GetTableCopyState() map[string]*WorkflowStatusResponse_TableCopyState {
@@ -12459,7 +13121,7 @@ type WorkflowSwitchTrafficRequest struct {
 func (x *WorkflowSwitchTrafficRequest) Reset() {
 	*x = WorkflowSwitchTrafficRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[201]
+		mi := &file_vtctldata_proto_msgTypes[211]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12472,7 +13134,7 @@ func (x *WorkflowSwitchTrafficRequest) String() string {
 func (*WorkflowSwitchTrafficRequest) ProtoMessage() {}
 
 func (x *WorkflowSwitchTrafficRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[201]
+	mi := &file_vtctldata_proto_msgTypes[211]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12485,7 +13147,7 @@ func (x *WorkflowSwitchTrafficRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowSwitchTrafficRequest.ProtoReflect.Descriptor instead.
 func (*WorkflowSwitchTrafficRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{201}
+	return file_vtctldata_proto_rawDescGZIP(), []int{211}
 }
 
 func (x *WorkflowSwitchTrafficRequest) GetKeyspace() string {
@@ -12572,7 +13234,7 @@ type WorkflowSwitchTrafficResponse struct {
 func (x *WorkflowSwitchTrafficResponse) Reset() {
 	*x = WorkflowSwitchTrafficResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[202]
+		mi := &file_vtctldata_proto_msgTypes[212]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12585,7 +13247,7 @@ func (x *WorkflowSwitchTrafficResponse) String() string {
 func (*WorkflowSwitchTrafficResponse) ProtoMessage() {}
 
 func (x *WorkflowSwitchTrafficResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[202]
+	mi := &file_vtctldata_proto_msgTypes[212]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12598,7 +13260,7 @@ func (x *WorkflowSwitchTrafficResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowSwitchTrafficResponse.ProtoReflect.Descriptor instead.
 func (*WorkflowSwitchTrafficResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{202}
+	return file_vtctldata_proto_rawDescGZIP(), []int{212}
 }
 
 func (x *WorkflowSwitchTrafficResponse) GetSummary() string {
@@ -12643,7 +13305,7 @@ type WorkflowUpdateRequest struct {
 func (x *WorkflowUpdateRequest) Reset() {
 	*x = WorkflowUpdateRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[203]
+		mi := &file_vtctldata_proto_msgTypes[213]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12656,7 +13318,7 @@ func (x *WorkflowUpdateRequest) String() string {
 func (*WorkflowUpdateRequest) ProtoMessage() {}
 
 func (x *WorkflowUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[203]
+	mi := &file_vtctldata_proto_msgTypes[213]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12669,7 +13331,7 @@ func (x *WorkflowUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowUpdateRequest.ProtoReflect.Descriptor instead.
 func (*WorkflowUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{203}
+	return file_vtctldata_proto_rawDescGZIP(), []int{213}
 }
 
 func (x *WorkflowUpdateRequest) GetKeyspace() string {
@@ -12698,7 +13360,7 @@ type WorkflowUpdateResponse struct {
 func (x *WorkflowUpdateResponse) Reset() {
 	*x = WorkflowUpdateResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[204]
+		mi := &file_vtctldata_proto_msgTypes[214]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12711,7 +13373,7 @@ func (x *WorkflowUpdateResponse) String() string {
 func (*WorkflowUpdateResponse) ProtoMessage() {}
 
 func (x *WorkflowUpdateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[204]
+	mi := &file_vtctldata_proto_msgTypes[214]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12724,7 +13386,7 @@ func (x *WorkflowUpdateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowUpdateResponse.ProtoReflect.Descriptor instead.
 func (*WorkflowUpdateResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{204}
+	return file_vtctldata_proto_rawDescGZIP(), []int{214}
 }
 
 func (x *WorkflowUpdateResponse) GetSummary() string {
@@ -12753,7 +13415,7 @@ type Workflow_ReplicationLocation struct {
 func (x *Workflow_ReplicationLocation) Reset() {
 	*x = Workflow_ReplicationLocation{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[206]
+		mi := &file_vtctldata_proto_msgTypes[216]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12766,7 +13428,7 @@ func (x *Workflow_ReplicationLocation) String() string {
 func (*Workflow_ReplicationLocation) ProtoMessage() {}
 
 func (x *Workflow_ReplicationLocation) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[206]
+	mi := &file_vtctldata_proto_msgTypes[216]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12809,7 +13471,7 @@ type Workflow_ShardStream struct {
 func (x *Workflow_ShardStream) Reset() {
 	*x = Workflow_ShardStream{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[207]
+		mi := &file_vtctldata_proto_msgTypes[217]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12822,7 +13484,7 @@ func (x *Workflow_ShardStream) String() string {
 func (*Workflow_ShardStream) ProtoMessage() {}
 
 func (x *Workflow_ShardStream) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[207]
+	mi := &file_vtctldata_proto_msgTypes[217]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12892,7 +13554,7 @@ type Workflow_Stream struct {
 func (x *Workflow_Stream) Reset() {
 	*x = Workflow_Stream{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[208]
+		mi := &file_vtctldata_proto_msgTypes[218]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -12905,7 +13567,7 @@ func (x *Workflow_Stream) String() string {
 func (*Workflow_Stream) ProtoMessage() {}
 
 func (x *Workflow_Stream) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[208]
+	mi := &file_vtctldata_proto_msgTypes[218]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13038,7 +13700,7 @@ type Workflow_Stream_CopyState struct {
 func (x *Workflow_Stream_CopyState) Reset() {
 	*x = Workflow_Stream_CopyState{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[209]
+		mi := &file_vtctldata_proto_msgTypes[219]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -13051,7 +13713,7 @@ func (x *Workflow_Stream_CopyState) String() string {
 func (*Workflow_Stream_CopyState) ProtoMessage() {}
 
 func (x *Workflow_Stream_CopyState) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[209]
+	mi := &file_vtctldata_proto_msgTypes[219]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13099,7 +13761,7 @@ type Workflow_Stream_Log struct {
 func (x *Workflow_Stream_Log) Reset() {
 	*x = Workflow_Stream_Log{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[210]
+		mi := &file_vtctldata_proto_msgTypes[220]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -13112,7 +13774,7 @@ func (x *Workflow_Stream_Log) String() string {
 func (*Workflow_Stream_Log) ProtoMessage() {}
 
 func (x *Workflow_Stream_Log) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[210]
+	mi := &file_vtctldata_proto_msgTypes[220]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13195,7 +13857,7 @@ type GetSrvKeyspaceNamesResponse_NameList struct {
 func (x *GetSrvKeyspaceNamesResponse_NameList) Reset() {
 	*x = GetSrvKeyspaceNamesResponse_NameList{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[218]
+		mi := &file_vtctldata_proto_msgTypes[228]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -13208,7 +13870,7 @@ func (x *GetSrvKeyspaceNamesResponse_NameList) String() string {
 func (*GetSrvKeyspaceNamesResponse_NameList) ProtoMessage() {}
 
 func (x *GetSrvKeyspaceNamesResponse_NameList) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[218]
+	mi := &file_vtctldata_proto_msgTypes[228]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13244,7 +13906,7 @@ type MoveTablesCreateResponse_TabletInfo struct {
 func (x *MoveTablesCreateResponse_TabletInfo) Reset() {
 	*x = MoveTablesCreateResponse_TabletInfo{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[222]
+		mi := &file_vtctldata_proto_msgTypes[232]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -13257,7 +13919,7 @@ func (x *MoveTablesCreateResponse_TabletInfo) String() string {
 func (*MoveTablesCreateResponse_TabletInfo) ProtoMessage() {}
 
 func (x *MoveTablesCreateResponse_TabletInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[222]
+	mi := &file_vtctldata_proto_msgTypes[232]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13300,7 +13962,7 @@ type WorkflowDeleteResponse_TabletInfo struct {
 func (x *WorkflowDeleteResponse_TabletInfo) Reset() {
 	*x = WorkflowDeleteResponse_TabletInfo{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[231]
+		mi := &file_vtctldata_proto_msgTypes[241]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -13313,7 +13975,7 @@ func (x *WorkflowDeleteResponse_TabletInfo) String() string {
 func (*WorkflowDeleteResponse_TabletInfo) ProtoMessage() {}
 
 func (x *WorkflowDeleteResponse_TabletInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[231]
+	mi := &file_vtctldata_proto_msgTypes[241]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13326,7 +13988,7 @@ func (x *WorkflowDeleteResponse_TabletInfo) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use WorkflowDeleteResponse_TabletInfo.ProtoReflect.Descriptor instead.
 func (*WorkflowDeleteResponse_TabletInfo) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{198, 0}
+	return file_vtctldata_proto_rawDescGZIP(), []int{208, 0}
 }
 
 func (x *WorkflowDeleteResponse_TabletInfo) GetTablet() *topodata.TabletAlias {
@@ -13359,7 +14021,7 @@ type WorkflowStatusResponse_TableCopyState struct {
 func (x *WorkflowStatusResponse_TableCopyState) Reset() {
 	*x = WorkflowStatusResponse_TableCopyState{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[232]
+		mi := &file_vtctldata_proto_msgTypes[242]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -13372,7 +14034,7 @@ func (x *WorkflowStatusResponse_TableCopyState) String() string {
 func (*WorkflowStatusResponse_TableCopyState) ProtoMessage() {}
 
 func (x *WorkflowStatusResponse_TableCopyState) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[232]
+	mi := &file_vtctldata_proto_msgTypes[242]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13385,7 +14047,7 @@ func (x *WorkflowStatusResponse_TableCopyState) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use WorkflowStatusResponse_TableCopyState.ProtoReflect.Descriptor instead.
 func (*WorkflowStatusResponse_TableCopyState) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{200, 0}
+	return file_vtctldata_proto_rawDescGZIP(), []int{210, 0}
 }
 
 func (x *WorkflowStatusResponse_TableCopyState) GetRowsCopied() int64 {
@@ -13446,7 +14108,7 @@ type WorkflowStatusResponse_ShardStreamState struct {
 func (x *WorkflowStatusResponse_ShardStreamState) Reset() {
 	*x = WorkflowStatusResponse_ShardStreamState{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[233]
+		mi := &file_vtctldata_proto_msgTypes[243]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -13459,7 +14121,7 @@ func (x *WorkflowStatusResponse_ShardStreamState) String() string {
 func (*WorkflowStatusResponse_ShardStreamState) ProtoMessage() {}
 
 func (x *WorkflowStatusResponse_ShardStreamState) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[233]
+	mi := &file_vtctldata_proto_msgTypes[243]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13472,7 +14134,7 @@ func (x *WorkflowStatusResponse_ShardStreamState) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use WorkflowStatusResponse_ShardStreamState.ProtoReflect.Descriptor instead.
 func (*WorkflowStatusResponse_ShardStreamState) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{200, 1}
+	return file_vtctldata_proto_rawDescGZIP(), []int{210, 1}
 }
 
 func (x *WorkflowStatusResponse_ShardStreamState) GetId() int32 {
@@ -13528,7 +14190,7 @@ type WorkflowStatusResponse_ShardStreams struct {
 func (x *WorkflowStatusResponse_ShardStreams) Reset() {
 	*x = WorkflowStatusResponse_ShardStreams{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[234]
+		mi := &file_vtctldata_proto_msgTypes[244]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -13541,7 +14203,7 @@ func (x *WorkflowStatusResponse_ShardStreams) String() string {
 func (*WorkflowStatusResponse_ShardStreams) ProtoMessage() {}
 
 func (x *WorkflowStatusResponse_ShardStreams) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[234]
+	mi := &file_vtctldata_proto_msgTypes[244]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13554,7 +14216,7 @@ func (x *WorkflowStatusResponse_ShardStreams) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use WorkflowStatusResponse_ShardStreams.ProtoReflect.Descriptor instead.
 func (*WorkflowStatusResponse_ShardStreams) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{200, 2}
+	return file_vtctldata_proto_rawDescGZIP(), []int{210, 2}
 }
 
 func (x *WorkflowStatusResponse_ShardStreams) GetStreams() []*WorkflowStatusResponse_ShardStreamState {
@@ -13578,7 +14240,7 @@ type WorkflowUpdateResponse_TabletInfo struct {
 func (x *WorkflowUpdateResponse_TabletInfo) Reset() {
 	*x = WorkflowUpdateResponse_TabletInfo{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[237]
+		mi := &file_vtctldata_proto_msgTypes[247]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -13591,7 +14253,7 @@ func (x *WorkflowUpdateResponse_TabletInfo) String() string {
 func (*WorkflowUpdateResponse_TabletInfo) ProtoMessage() {}
 
 func (x *WorkflowUpdateResponse_TabletInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[237]
+	mi := &file_vtctldata_proto_msgTypes[247]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13604,7 +14266,7 @@ func (x *WorkflowUpdateResponse_TabletInfo) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use WorkflowUpdateResponse_TabletInfo.ProtoReflect.Descriptor instead.
 func (*WorkflowUpdateResponse_TabletInfo) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{204, 0}
+	return file_vtctldata_proto_rawDescGZIP(), []int{214, 0}
 }
 
 func (x *WorkflowUpdateResponse_TabletInfo) GetTablet() *topodata.TabletAlias {
@@ -15418,169 +16080,259 @@ var file_vtctldata_proto_rawDesc = []byte{
 	0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x20, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c,
 	0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x53, 0x68, 0x61,
 	0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75,
-	0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x9a, 0x01, 0x0a, 0x15, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c,
-	0x6f, 0x77, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
-	0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x77,
-	0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x77,
-	0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x12, 0x1b, 0x0a, 0x09, 0x6b, 0x65, 0x65, 0x70, 0x5f,
-	0x64, 0x61, 0x74, 0x61, 0x18, 0x03, 0x20, 0x01, 0x28, 0x08, 0x52, 0x08, 0x6b, 0x65, 0x65, 0x70,
-	0x44, 0x61, 0x74, 0x61, 0x12, 0x2c, 0x0a, 0x12, 0x6b, 0x65, 0x65, 0x70, 0x5f, 0x72, 0x6f, 0x75,
-	0x74, 0x69, 0x6e, 0x67, 0x5f, 0x72, 0x75, 0x6c, 0x65, 0x73, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08,
-	0x52, 0x10, 0x6b, 0x65, 0x65, 0x70, 0x52, 0x6f, 0x75, 0x74, 0x69, 0x6e, 0x67, 0x52, 0x75, 0x6c,
-	0x65, 0x73, 0x22, 0xd1, 0x01, 0x0a, 0x16, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x44,
-	0x65, 0x6c, 0x65, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a,
-	0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07,
-	0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79, 0x12, 0x46, 0x0a, 0x07, 0x64, 0x65, 0x74, 0x61, 0x69,
-	0x6c, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x2c, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c,
-	0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x44, 0x65, 0x6c,
-	0x65, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x54, 0x61, 0x62, 0x6c,
-	0x65, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x07, 0x64, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x1a,
-	0x55, 0x0a, 0x0a, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x2d, 0x0a,
-	0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e,
-	0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41,
-	0x6c, 0x69, 0x61, 0x73, 0x52, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x12, 0x18, 0x0a, 0x07,
-	0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x64,
-	0x65, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x22, 0x4f, 0x0a, 0x15, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c,
-	0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
-	0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x77,
-	0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x77,
-	0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x22, 0xc1, 0x07, 0x0a, 0x16, 0x57, 0x6f, 0x72, 0x6b,
-	0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x12, 0x5f, 0x0a, 0x10, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x63, 0x6f, 0x70, 0x79,
-	0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x35, 0x2e, 0x76,
-	0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f,
-	0x77, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e,
-	0x54, 0x61, 0x62, 0x6c, 0x65, 0x43, 0x6f, 0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65, 0x45, 0x6e,
-	0x74, 0x72, 0x79, 0x52, 0x0e, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x43, 0x6f, 0x70, 0x79, 0x53, 0x74,
-	0x61, 0x74, 0x65, 0x12, 0x58, 0x0a, 0x0d, 0x73, 0x68, 0x61, 0x72, 0x64, 0x5f, 0x73, 0x74, 0x72,
-	0x65, 0x61, 0x6d, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x33, 0x2e, 0x76, 0x74, 0x63,
-	0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53,
-	0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x53, 0x68,
-	0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52,
-	0x0c, 0x73, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x1a, 0xe8, 0x01,
-	0x0a, 0x0e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x43, 0x6f, 0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65,
-	0x12, 0x1f, 0x0a, 0x0b, 0x72, 0x6f, 0x77, 0x73, 0x5f, 0x63, 0x6f, 0x70, 0x69, 0x65, 0x64, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0a, 0x72, 0x6f, 0x77, 0x73, 0x43, 0x6f, 0x70, 0x69, 0x65,
-	0x64, 0x12, 0x1d, 0x0a, 0x0a, 0x72, 0x6f, 0x77, 0x73, 0x5f, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x18,
-	0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x09, 0x72, 0x6f, 0x77, 0x73, 0x54, 0x6f, 0x74, 0x61, 0x6c,
-	0x12, 0x27, 0x0a, 0x0f, 0x72, 0x6f, 0x77, 0x73, 0x5f, 0x70, 0x65, 0x72, 0x63, 0x65, 0x6e, 0x74,
-	0x61, 0x67, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x02, 0x52, 0x0e, 0x72, 0x6f, 0x77, 0x73, 0x50,
-	0x65, 0x72, 0x63, 0x65, 0x6e, 0x74, 0x61, 0x67, 0x65, 0x12, 0x21, 0x0a, 0x0c, 0x62, 0x79, 0x74,
-	0x65, 0x73, 0x5f, 0x63, 0x6f, 0x70, 0x69, 0x65, 0x64, 0x18, 0x04, 0x20, 0x01, 0x28, 0x03, 0x52,
-	0x0b, 0x62, 0x79, 0x74, 0x65, 0x73, 0x43, 0x6f, 0x70, 0x69, 0x65, 0x64, 0x12, 0x1f, 0x0a, 0x0b,
-	0x62, 0x79, 0x74, 0x65, 0x73, 0x5f, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x18, 0x05, 0x20, 0x01, 0x28,
-	0x03, 0x52, 0x0a, 0x62, 0x79, 0x74, 0x65, 0x73, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x12, 0x29, 0x0a,
-	0x10, 0x62, 0x79, 0x74, 0x65, 0x73, 0x5f, 0x70, 0x65, 0x72, 0x63, 0x65, 0x6e, 0x74, 0x61, 0x67,
-	0x65, 0x18, 0x06, 0x20, 0x01, 0x28, 0x02, 0x52, 0x0f, 0x62, 0x79, 0x74, 0x65, 0x73, 0x50, 0x65,
-	0x72, 0x63, 0x65, 0x6e, 0x74, 0x61, 0x67, 0x65, 0x1a, 0xbc, 0x01, 0x0a, 0x10, 0x53, 0x68, 0x61,
-	0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x0e, 0x0a,
-	0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x02, 0x69, 0x64, 0x12, 0x2d, 0x0a,
-	0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e,
-	0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41,
-	0x6c, 0x69, 0x61, 0x73, 0x52, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x12, 0x21, 0x0a, 0x0c,
-	0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x5f, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x03, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x0b, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x12,
-	0x1a, 0x0a, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x04, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x16, 0x0a, 0x06, 0x73,
-	0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x73, 0x74, 0x61,
-	0x74, 0x75, 0x73, 0x12, 0x12, 0x0a, 0x04, 0x69, 0x6e, 0x66, 0x6f, 0x18, 0x06, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x04, 0x69, 0x6e, 0x66, 0x6f, 0x1a, 0x5c, 0x0a, 0x0c, 0x53, 0x68, 0x61, 0x72, 0x64,
-	0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x12, 0x4c, 0x0a, 0x07, 0x73, 0x74, 0x72, 0x65, 0x61,
-	0x6d, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x32, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c,
-	0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61,
-	0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x53, 0x68, 0x61, 0x72,
-	0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x07, 0x73, 0x74,
-	0x72, 0x65, 0x61, 0x6d, 0x73, 0x1a, 0x73, 0x0a, 0x13, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x43, 0x6f,
-	0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03,
-	0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x46,
-	0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x30, 0x2e,
-	0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c,
-	0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x43, 0x6f, 0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52,
-	0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x1a, 0x6f, 0x0a, 0x11, 0x53, 0x68,
-	0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12,
-	0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65,
-	0x79, 0x12, 0x44, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b,
-	0x32, 0x2e, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72,
-	0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f,
-	0x6e, 0x73, 0x65, 0x2e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73,
-	0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0xd7, 0x03, 0x0a, 0x1c,
-	0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x77, 0x69, 0x74, 0x63, 0x68, 0x54, 0x72,
-	0x61, 0x66, 0x66, 0x69, 0x63, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08,
-	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08,
-	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x77, 0x6f, 0x72, 0x6b,
-	0x66, 0x6c, 0x6f, 0x77, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x77, 0x6f, 0x72, 0x6b,
-	0x66, 0x6c, 0x6f, 0x77, 0x12, 0x14, 0x0a, 0x05, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x18, 0x03, 0x20,
-	0x03, 0x28, 0x09, 0x52, 0x05, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x12, 0x37, 0x0a, 0x0c, 0x74, 0x61,
-	0x62, 0x6c, 0x65, 0x74, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0e,
-	0x32, 0x14, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c,
-	0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x52, 0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79,
-	0x70, 0x65, 0x73, 0x12, 0x4f, 0x0a, 0x1b, 0x6d, 0x61, 0x78, 0x5f, 0x72, 0x65, 0x70, 0x6c, 0x69,
-	0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x6c, 0x61, 0x67, 0x5f, 0x61, 0x6c, 0x6c, 0x6f, 0x77,
-	0x65, 0x64, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x76, 0x74, 0x74, 0x69, 0x6d,
-	0x65, 0x2e, 0x44, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x18, 0x6d, 0x61, 0x78, 0x52,
-	0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x4c, 0x61, 0x67, 0x41, 0x6c, 0x6c,
-	0x6f, 0x77, 0x65, 0x64, 0x12, 0x3c, 0x0a, 0x1a, 0x65, 0x6e, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x72,
-	0x65, 0x76, 0x65, 0x72, 0x73, 0x65, 0x5f, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69,
-	0x6f, 0x6e, 0x18, 0x06, 0x20, 0x01, 0x28, 0x08, 0x52, 0x18, 0x65, 0x6e, 0x61, 0x62, 0x6c, 0x65,
-	0x52, 0x65, 0x76, 0x65, 0x72, 0x73, 0x65, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69,
-	0x6f, 0x6e, 0x12, 0x1c, 0x0a, 0x09, 0x64, 0x69, 0x72, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x18,
-	0x07, 0x20, 0x01, 0x28, 0x05, 0x52, 0x09, 0x64, 0x69, 0x72, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e,
-	0x12, 0x2a, 0x0a, 0x07, 0x74, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x18, 0x08, 0x20, 0x01, 0x28,
+	0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x95, 0x06, 0x0a, 0x12, 0x56, 0x44, 0x69, 0x66, 0x66, 0x43,
+	0x72, 0x65, 0x61, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08,
+	0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08,
+	0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x12, 0x27, 0x0a, 0x0f, 0x74, 0x61, 0x72, 0x67,
+	0x65, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x0e, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x04, 0x75, 0x75, 0x69, 0x64, 0x12, 0x21, 0x0a, 0x0c, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x5f,
+	0x63, 0x65, 0x6c, 0x6c, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x09, 0x52, 0x0b, 0x73, 0x6f, 0x75,
+	0x72, 0x63, 0x65, 0x43, 0x65, 0x6c, 0x6c, 0x73, 0x12, 0x21, 0x0a, 0x0c, 0x74, 0x61, 0x72, 0x67,
+	0x65, 0x74, 0x5f, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x18, 0x05, 0x20, 0x03, 0x28, 0x09, 0x52, 0x0b,
+	0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x43, 0x65, 0x6c, 0x6c, 0x73, 0x12, 0x37, 0x0a, 0x0c, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x73, 0x18, 0x06, 0x20, 0x03, 0x28,
+	0x0e, 0x32, 0x14, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62,
+	0x6c, 0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x52, 0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54,
+	0x79, 0x70, 0x65, 0x73, 0x12, 0x6c, 0x0a, 0x1b, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x73,
+	0x65, 0x6c, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x70, 0x72, 0x65, 0x66, 0x65, 0x72, 0x65,
+	0x6e, 0x63, 0x65, 0x18, 0x07, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x2c, 0x2e, 0x74, 0x61, 0x62, 0x6c,
+	0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61,
+	0x62, 0x6c, 0x65, 0x74, 0x53, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x50, 0x72, 0x65,
+	0x66, 0x65, 0x72, 0x65, 0x6e, 0x63, 0x65, 0x52, 0x19, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x53,
+	0x65, 0x6c, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x50, 0x72, 0x65, 0x66, 0x65, 0x72, 0x65, 0x6e,
+	0x63, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x18, 0x08, 0x20, 0x03,
+	0x28, 0x09, 0x52, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x12, 0x14, 0x0a, 0x05, 0x6c, 0x69,
+	0x6d, 0x69, 0x74, 0x18, 0x09, 0x20, 0x01, 0x28, 0x03, 0x52, 0x05, 0x6c, 0x69, 0x6d, 0x69, 0x74,
+	0x12, 0x55, 0x0a, 0x1e, 0x66, 0x69, 0x6c, 0x74, 0x65, 0x72, 0x65, 0x64, 0x5f, 0x72, 0x65, 0x70,
+	0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x77, 0x61, 0x69, 0x74, 0x5f, 0x74, 0x69,
+	0x6d, 0x65, 0x18, 0x0a, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x76, 0x74, 0x74, 0x69, 0x6d,
+	0x65, 0x2e, 0x44, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x1b, 0x66, 0x69, 0x6c, 0x74,
+	0x65, 0x72, 0x65, 0x64, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x57,
+	0x61, 0x69, 0x74, 0x54, 0x69, 0x6d, 0x65, 0x12, 0x1f, 0x0a, 0x0b, 0x64, 0x65, 0x62, 0x75, 0x67,
+	0x5f, 0x71, 0x75, 0x65, 0x72, 0x79, 0x18, 0x0b, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0a, 0x64, 0x65,
+	0x62, 0x75, 0x67, 0x51, 0x75, 0x65, 0x72, 0x79, 0x12, 0x1a, 0x0a, 0x09, 0x6f, 0x6e, 0x6c, 0x79,
+	0x5f, 0x70, 0x5f, 0x6b, 0x73, 0x18, 0x0c, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x6f, 0x6e, 0x6c,
+	0x79, 0x50, 0x4b, 0x73, 0x12, 0x2c, 0x0a, 0x12, 0x75, 0x70, 0x64, 0x61, 0x74, 0x65, 0x5f, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x73, 0x18, 0x0d, 0x20, 0x01, 0x28, 0x08,
+	0x52, 0x10, 0x75, 0x70, 0x64, 0x61, 0x74, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x53, 0x74, 0x61,
+	0x74, 0x73, 0x12, 0x38, 0x0a, 0x19, 0x6d, 0x61, 0x78, 0x5f, 0x65, 0x78, 0x74, 0x72, 0x61, 0x5f,
+	0x72, 0x6f, 0x77, 0x73, 0x5f, 0x74, 0x6f, 0x5f, 0x63, 0x6f, 0x6d, 0x70, 0x61, 0x72, 0x65, 0x18,
+	0x0e, 0x20, 0x01, 0x28, 0x03, 0x52, 0x15, 0x6d, 0x61, 0x78, 0x45, 0x78, 0x74, 0x72, 0x61, 0x52,
+	0x6f, 0x77, 0x73, 0x54, 0x6f, 0x43, 0x6f, 0x6d, 0x70, 0x61, 0x72, 0x65, 0x12, 0x12, 0x0a, 0x04,
+	0x77, 0x61, 0x69, 0x74, 0x18, 0x0f, 0x20, 0x01, 0x28, 0x08, 0x52, 0x04, 0x77, 0x61, 0x69, 0x74,
+	0x12, 0x42, 0x0a, 0x14, 0x77, 0x61, 0x69, 0x74, 0x5f, 0x75, 0x70, 0x64, 0x61, 0x74, 0x65, 0x5f,
+	0x69, 0x6e, 0x74, 0x65, 0x72, 0x76, 0x61, 0x6c, 0x18, 0x10, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10,
+	0x2e, 0x76, 0x74, 0x74, 0x69, 0x6d, 0x65, 0x2e, 0x44, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e,
+	0x52, 0x12, 0x77, 0x61, 0x69, 0x74, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x49, 0x6e, 0x74, 0x65,
+	0x72, 0x76, 0x61, 0x6c, 0x12, 0x1d, 0x0a, 0x0a, 0x61, 0x75, 0x74, 0x6f, 0x5f, 0x72, 0x65, 0x74,
+	0x72, 0x79, 0x18, 0x11, 0x20, 0x01, 0x28, 0x08, 0x52, 0x09, 0x61, 0x75, 0x74, 0x6f, 0x52, 0x65,
+	0x74, 0x72, 0x79, 0x12, 0x18, 0x0a, 0x07, 0x76, 0x65, 0x72, 0x62, 0x6f, 0x73, 0x65, 0x18, 0x12,
+	0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x76, 0x65, 0x72, 0x62, 0x6f, 0x73, 0x65, 0x22, 0x29, 0x0a,
+	0x13, 0x56, 0x44, 0x69, 0x66, 0x66, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x22, 0x6d, 0x0a, 0x12, 0x56, 0x44, 0x69, 0x66,
+	0x66, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a,
+	0x0a, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x12, 0x27, 0x0a, 0x0f, 0x74, 0x61,
+	0x72, 0x67, 0x65, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x0e, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70,
+	0x61, 0x63, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x22, 0x2d, 0x0a, 0x13, 0x56, 0x44, 0x69, 0x66, 0x66,
+	0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x16,
+	0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06,
+	0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x22, 0x6d, 0x0a, 0x12, 0x56, 0x44, 0x69, 0x66, 0x66, 0x52,
+	0x65, 0x73, 0x75, 0x6d, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08,
+	0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08,
+	0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x12, 0x27, 0x0a, 0x0f, 0x74, 0x61, 0x72, 0x67,
+	0x65, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x0e, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x04, 0x75, 0x75, 0x69, 0x64, 0x22, 0x2d, 0x0a, 0x13, 0x56, 0x44, 0x69, 0x66, 0x66, 0x52, 0x65,
+	0x73, 0x75, 0x6d, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x16, 0x0a, 0x06,
+	0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x73, 0x74,
+	0x61, 0x74, 0x75, 0x73, 0x22, 0x69, 0x0a, 0x10, 0x56, 0x44, 0x69, 0x66, 0x66, 0x53, 0x68, 0x6f,
+	0x77, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x77, 0x6f, 0x72, 0x6b,
+	0x66, 0x6c, 0x6f, 0x77, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x77, 0x6f, 0x72, 0x6b,
+	0x66, 0x6c, 0x6f, 0x77, 0x12, 0x27, 0x0a, 0x0f, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x5f, 0x6b,
+	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0e, 0x74,
+	0x61, 0x72, 0x67, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x10, 0x0a,
+	0x03, 0x61, 0x72, 0x67, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x61, 0x72, 0x67, 0x22,
+	0x13, 0x0a, 0x11, 0x56, 0x44, 0x69, 0x66, 0x66, 0x53, 0x68, 0x6f, 0x77, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x22, 0x6b, 0x0a, 0x10, 0x56, 0x44, 0x69, 0x66, 0x66, 0x53, 0x74, 0x6f,
+	0x70, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x77, 0x6f, 0x72, 0x6b,
+	0x66, 0x6c, 0x6f, 0x77, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x77, 0x6f, 0x72, 0x6b,
+	0x66, 0x6c, 0x6f, 0x77, 0x12, 0x27, 0x0a, 0x0f, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x5f, 0x6b,
+	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0e, 0x74,
+	0x61, 0x72, 0x67, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x12, 0x0a,
+	0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69,
+	0x64, 0x22, 0x2b, 0x0a, 0x11, 0x56, 0x44, 0x69, 0x66, 0x66, 0x53, 0x74, 0x6f, 0x70, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x22, 0x9a,
+	0x01, 0x0a, 0x15, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x44, 0x65, 0x6c, 0x65, 0x74,
+	0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73,
+	0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73,
+	0x70, 0x61, 0x63, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77,
+	0x12, 0x1b, 0x0a, 0x09, 0x6b, 0x65, 0x65, 0x70, 0x5f, 0x64, 0x61, 0x74, 0x61, 0x18, 0x03, 0x20,
+	0x01, 0x28, 0x08, 0x52, 0x08, 0x6b, 0x65, 0x65, 0x70, 0x44, 0x61, 0x74, 0x61, 0x12, 0x2c, 0x0a,
+	0x12, 0x6b, 0x65, 0x65, 0x70, 0x5f, 0x72, 0x6f, 0x75, 0x74, 0x69, 0x6e, 0x67, 0x5f, 0x72, 0x75,
+	0x6c, 0x65, 0x73, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x10, 0x6b, 0x65, 0x65, 0x70, 0x52,
+	0x6f, 0x75, 0x74, 0x69, 0x6e, 0x67, 0x52, 0x75, 0x6c, 0x65, 0x73, 0x22, 0xd1, 0x01, 0x0a, 0x16,
+	0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72,
+	0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79,
+	0x12, 0x46, 0x0a, 0x07, 0x64, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28,
+	0x0b, 0x32, 0x2c, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f,
+	0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x52,
+	0x07, 0x64, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x1a, 0x55, 0x0a, 0x0a, 0x54, 0x61, 0x62, 0x6c,
+	0x65, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x2d, 0x0a, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74,
+	0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x06, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x64,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x22,
+	0x4f, 0x0a, 0x15, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75,
+	0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73,
+	0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73,
+	0x70, 0x61, 0x63, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77,
+	0x22, 0xc1, 0x07, 0x0a, 0x16, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61,
+	0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x5f, 0x0a, 0x10, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x5f, 0x63, 0x6f, 0x70, 0x79, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18,
+	0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x35, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74,
+	0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x43, 0x6f,
+	0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0e, 0x74, 0x61,
+	0x62, 0x6c, 0x65, 0x43, 0x6f, 0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x58, 0x0a, 0x0d,
+	0x73, 0x68, 0x61, 0x72, 0x64, 0x5f, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x18, 0x02, 0x20,
+	0x03, 0x28, 0x0b, 0x32, 0x33, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e,
+	0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65,
+	0x61, 0x6d, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0c, 0x73, 0x68, 0x61, 0x72, 0x64, 0x53,
+	0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x1a, 0xe8, 0x01, 0x0a, 0x0e, 0x54, 0x61, 0x62, 0x6c, 0x65,
+	0x43, 0x6f, 0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x1f, 0x0a, 0x0b, 0x72, 0x6f, 0x77,
+	0x73, 0x5f, 0x63, 0x6f, 0x70, 0x69, 0x65, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0a,
+	0x72, 0x6f, 0x77, 0x73, 0x43, 0x6f, 0x70, 0x69, 0x65, 0x64, 0x12, 0x1d, 0x0a, 0x0a, 0x72, 0x6f,
+	0x77, 0x73, 0x5f, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x09,
+	0x72, 0x6f, 0x77, 0x73, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x12, 0x27, 0x0a, 0x0f, 0x72, 0x6f, 0x77,
+	0x73, 0x5f, 0x70, 0x65, 0x72, 0x63, 0x65, 0x6e, 0x74, 0x61, 0x67, 0x65, 0x18, 0x03, 0x20, 0x01,
+	0x28, 0x02, 0x52, 0x0e, 0x72, 0x6f, 0x77, 0x73, 0x50, 0x65, 0x72, 0x63, 0x65, 0x6e, 0x74, 0x61,
+	0x67, 0x65, 0x12, 0x21, 0x0a, 0x0c, 0x62, 0x79, 0x74, 0x65, 0x73, 0x5f, 0x63, 0x6f, 0x70, 0x69,
+	0x65, 0x64, 0x18, 0x04, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0b, 0x62, 0x79, 0x74, 0x65, 0x73, 0x43,
+	0x6f, 0x70, 0x69, 0x65, 0x64, 0x12, 0x1f, 0x0a, 0x0b, 0x62, 0x79, 0x74, 0x65, 0x73, 0x5f, 0x74,
+	0x6f, 0x74, 0x61, 0x6c, 0x18, 0x05, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0a, 0x62, 0x79, 0x74, 0x65,
+	0x73, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x12, 0x29, 0x0a, 0x10, 0x62, 0x79, 0x74, 0x65, 0x73, 0x5f,
+	0x70, 0x65, 0x72, 0x63, 0x65, 0x6e, 0x74, 0x61, 0x67, 0x65, 0x18, 0x06, 0x20, 0x01, 0x28, 0x02,
+	0x52, 0x0f, 0x62, 0x79, 0x74, 0x65, 0x73, 0x50, 0x65, 0x72, 0x63, 0x65, 0x6e, 0x74, 0x61, 0x67,
+	0x65, 0x1a, 0xbc, 0x01, 0x0a, 0x10, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61,
+	0x6d, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x05, 0x52, 0x02, 0x69, 0x64, 0x12, 0x2d, 0x0a, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74,
+	0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x06, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x74, 0x12, 0x21, 0x0a, 0x0c, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x5f,
+	0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x73, 0x6f, 0x75,
+	0x72, 0x63, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x6f, 0x73, 0x69,
+	0x74, 0x69, 0x6f, 0x6e, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x73, 0x69,
+	0x74, 0x69, 0x6f, 0x6e, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x05,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x12, 0x0a, 0x04,
+	0x69, 0x6e, 0x66, 0x6f, 0x18, 0x06, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x69, 0x6e, 0x66, 0x6f,
+	0x1a, 0x5c, 0x0a, 0x0c, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73,
+	0x12, 0x4c, 0x0a, 0x07, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28,
+	0x0b, 0x32, 0x32, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f,
+	0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d,
+	0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x07, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x1a, 0x73,
+	0x0a, 0x13, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x43, 0x6f, 0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65,
+	0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x46, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x30, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61,
+	0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74, 0x61, 0x74, 0x75,
+	0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x43,
+	0x6f, 0x70, 0x79, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a,
+	0x02, 0x38, 0x01, 0x1a, 0x6f, 0x0a, 0x11, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x74, 0x72, 0x65,
+	0x61, 0x6d, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x44, 0x0a, 0x05, 0x76, 0x61,
+	0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x2e, 0x2e, 0x76, 0x74, 0x63, 0x74,
+	0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x74,
+	0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x53, 0x68, 0x61,
+	0x72, 0x64, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x73, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65,
+	0x3a, 0x02, 0x38, 0x01, 0x22, 0xd7, 0x03, 0x0a, 0x1c, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f,
+	0x77, 0x53, 0x77, 0x69, 0x74, 0x63, 0x68, 0x54, 0x72, 0x61, 0x66, 0x66, 0x69, 0x63, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x12, 0x1a, 0x0a, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x12, 0x14, 0x0a,
+	0x05, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x52, 0x05, 0x63, 0x65,
+	0x6c, 0x6c, 0x73, 0x12, 0x37, 0x0a, 0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x74, 0x79,
+	0x70, 0x65, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0e, 0x32, 0x14, 0x2e, 0x74, 0x6f, 0x70, 0x6f,
+	0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x52,
+	0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x73, 0x12, 0x4f, 0x0a, 0x1b,
+	0x6d, 0x61, 0x78, 0x5f, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x5f,
+	0x6c, 0x61, 0x67, 0x5f, 0x61, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x64, 0x18, 0x05, 0x20, 0x01, 0x28,
 	0x0b, 0x32, 0x10, 0x2e, 0x76, 0x74, 0x74, 0x69, 0x6d, 0x65, 0x2e, 0x44, 0x75, 0x72, 0x61, 0x74,
-	0x69, 0x6f, 0x6e, 0x52, 0x07, 0x74, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x12, 0x17, 0x0a, 0x07,
-	0x64, 0x72, 0x79, 0x5f, 0x72, 0x75, 0x6e, 0x18, 0x09, 0x20, 0x01, 0x28, 0x08, 0x52, 0x06, 0x64,
-	0x72, 0x79, 0x52, 0x75, 0x6e, 0x12, 0x3e, 0x0a, 0x1b, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x61, 0x6c,
-	0x69, 0x7a, 0x65, 0x5f, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x5f, 0x73, 0x65, 0x71, 0x75, 0x65,
-	0x6e, 0x63, 0x65, 0x73, 0x18, 0x0a, 0x20, 0x01, 0x28, 0x08, 0x52, 0x19, 0x69, 0x6e, 0x69, 0x74,
-	0x69, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x53, 0x65, 0x71, 0x75,
-	0x65, 0x6e, 0x63, 0x65, 0x73, 0x22, 0xa7, 0x01, 0x0a, 0x1d, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c,
-	0x6f, 0x77, 0x53, 0x77, 0x69, 0x74, 0x63, 0x68, 0x54, 0x72, 0x61, 0x66, 0x66, 0x69, 0x63, 0x52,
-	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61,
-	0x72, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72,
-	0x79, 0x12, 0x1f, 0x0a, 0x0b, 0x73, 0x74, 0x61, 0x72, 0x74, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65,
-	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x73, 0x74, 0x61, 0x72, 0x74, 0x53, 0x74, 0x61,
-	0x74, 0x65, 0x12, 0x23, 0x0a, 0x0d, 0x63, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x5f, 0x73, 0x74,
-	0x61, 0x74, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0c, 0x63, 0x75, 0x72, 0x72, 0x65,
-	0x6e, 0x74, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x26, 0x0a, 0x0f, 0x64, 0x72, 0x79, 0x5f, 0x72,
-	0x75, 0x6e, 0x5f, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x09,
-	0x52, 0x0d, 0x64, 0x72, 0x79, 0x52, 0x75, 0x6e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x22,
-	0x90, 0x01, 0x0a, 0x15, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x55, 0x70, 0x64, 0x61,
-	0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79,
-	0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79,
-	0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x5b, 0x0a, 0x0e, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f,
-	0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x34, 0x2e,
-	0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64, 0x61, 0x74,
-	0x61, 0x2e, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x56, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61,
-	0x74, 0x69, 0x6f, 0x6e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x52, 0x65, 0x71, 0x75,
-	0x65, 0x73, 0x74, 0x52, 0x0d, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65,
-	0x73, 0x74, 0x22, 0xd1, 0x01, 0x0a, 0x16, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x55,
-	0x70, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a,
-	0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07,
-	0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79, 0x12, 0x46, 0x0a, 0x07, 0x64, 0x65, 0x74, 0x61, 0x69,
-	0x6c, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x2c, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c,
-	0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x55, 0x70, 0x64,
-	0x61, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x54, 0x61, 0x62, 0x6c,
-	0x65, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x07, 0x64, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x1a,
-	0x55, 0x0a, 0x0a, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x2d, 0x0a,
-	0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e,
-	0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41,
-	0x6c, 0x69, 0x61, 0x73, 0x52, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x12, 0x18, 0x0a, 0x07,
-	0x63, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x63,
-	0x68, 0x61, 0x6e, 0x67, 0x65, 0x64, 0x2a, 0x4a, 0x0a, 0x15, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69,
-	0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x49, 0x6e, 0x74, 0x65, 0x6e, 0x74, 0x12,
-	0x0a, 0x0a, 0x06, 0x43, 0x55, 0x53, 0x54, 0x4f, 0x4d, 0x10, 0x00, 0x12, 0x0e, 0x0a, 0x0a, 0x4d,
-	0x4f, 0x56, 0x45, 0x54, 0x41, 0x42, 0x4c, 0x45, 0x53, 0x10, 0x01, 0x12, 0x15, 0x0a, 0x11, 0x43,
-	0x52, 0x45, 0x41, 0x54, 0x45, 0x4c, 0x4f, 0x4f, 0x4b, 0x55, 0x50, 0x49, 0x4e, 0x44, 0x45, 0x58,
-	0x10, 0x02, 0x2a, 0x38, 0x0a, 0x0d, 0x51, 0x75, 0x65, 0x72, 0x79, 0x4f, 0x72, 0x64, 0x65, 0x72,
-	0x69, 0x6e, 0x67, 0x12, 0x08, 0x0a, 0x04, 0x4e, 0x4f, 0x4e, 0x45, 0x10, 0x00, 0x12, 0x0d, 0x0a,
-	0x09, 0x41, 0x53, 0x43, 0x45, 0x4e, 0x44, 0x49, 0x4e, 0x47, 0x10, 0x01, 0x12, 0x0e, 0x0a, 0x0a,
-	0x44, 0x45, 0x53, 0x43, 0x45, 0x4e, 0x44, 0x49, 0x4e, 0x47, 0x10, 0x02, 0x42, 0x28, 0x5a, 0x26,
-	0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73,
-	0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x76, 0x74, 0x63,
-	0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x69, 0x6f, 0x6e, 0x52, 0x18, 0x6d, 0x61, 0x78, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74,
+	0x69, 0x6f, 0x6e, 0x4c, 0x61, 0x67, 0x41, 0x6c, 0x6c, 0x6f, 0x77, 0x65, 0x64, 0x12, 0x3c, 0x0a,
+	0x1a, 0x65, 0x6e, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x72, 0x65, 0x76, 0x65, 0x72, 0x73, 0x65, 0x5f,
+	0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x06, 0x20, 0x01, 0x28,
+	0x08, 0x52, 0x18, 0x65, 0x6e, 0x61, 0x62, 0x6c, 0x65, 0x52, 0x65, 0x76, 0x65, 0x72, 0x73, 0x65,
+	0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x1c, 0x0a, 0x09, 0x64,
+	0x69, 0x72, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x07, 0x20, 0x01, 0x28, 0x05, 0x52, 0x09,
+	0x64, 0x69, 0x72, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x2a, 0x0a, 0x07, 0x74, 0x69, 0x6d,
+	0x65, 0x6f, 0x75, 0x74, 0x18, 0x08, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x76, 0x74, 0x74,
+	0x69, 0x6d, 0x65, 0x2e, 0x44, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x07, 0x74, 0x69,
+	0x6d, 0x65, 0x6f, 0x75, 0x74, 0x12, 0x17, 0x0a, 0x07, 0x64, 0x72, 0x79, 0x5f, 0x72, 0x75, 0x6e,
+	0x18, 0x09, 0x20, 0x01, 0x28, 0x08, 0x52, 0x06, 0x64, 0x72, 0x79, 0x52, 0x75, 0x6e, 0x12, 0x3e,
+	0x0a, 0x1b, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x5f, 0x74, 0x61, 0x72,
+	0x67, 0x65, 0x74, 0x5f, 0x73, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x73, 0x18, 0x0a, 0x20,
+	0x01, 0x28, 0x08, 0x52, 0x19, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x54,
+	0x61, 0x72, 0x67, 0x65, 0x74, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x73, 0x22, 0xa7,
+	0x01, 0x0a, 0x1d, 0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x53, 0x77, 0x69, 0x74, 0x63,
+	0x68, 0x54, 0x72, 0x61, 0x66, 0x66, 0x69, 0x63, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x12, 0x18, 0x0a, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79, 0x12, 0x1f, 0x0a, 0x0b, 0x73, 0x74,
+	0x61, 0x72, 0x74, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x0a, 0x73, 0x74, 0x61, 0x72, 0x74, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x23, 0x0a, 0x0d, 0x63,
+	0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x03, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x0c, 0x63, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x53, 0x74, 0x61, 0x74, 0x65,
+	0x12, 0x26, 0x0a, 0x0f, 0x64, 0x72, 0x79, 0x5f, 0x72, 0x75, 0x6e, 0x5f, 0x72, 0x65, 0x73, 0x75,
+	0x6c, 0x74, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x09, 0x52, 0x0d, 0x64, 0x72, 0x79, 0x52, 0x75,
+	0x6e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x22, 0x90, 0x01, 0x0a, 0x15, 0x57, 0x6f, 0x72,
+	0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x5b,
+	0x0a, 0x0e, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x34, 0x2e, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x6d,
+	0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x55, 0x70, 0x64, 0x61, 0x74,
+	0x65, 0x56, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x57, 0x6f, 0x72,
+	0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x52, 0x0d, 0x74, 0x61,
+	0x62, 0x6c, 0x65, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0xd1, 0x01, 0x0a, 0x16,
+	0x57, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72,
+	0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x73, 0x75, 0x6d, 0x6d, 0x61, 0x72, 0x79,
+	0x12, 0x46, 0x0a, 0x07, 0x64, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28,
+	0x0b, 0x32, 0x2c, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x57, 0x6f,
+	0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x52,
+	0x07, 0x64, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x1a, 0x55, 0x0a, 0x0a, 0x54, 0x61, 0x62, 0x6c,
+	0x65, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x2d, 0x0a, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74,
+	0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x06, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x63, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x64,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x63, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x64, 0x2a,
+	0x4a, 0x0a, 0x15, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69,
+	0x6f, 0x6e, 0x49, 0x6e, 0x74, 0x65, 0x6e, 0x74, 0x12, 0x0a, 0x0a, 0x06, 0x43, 0x55, 0x53, 0x54,
+	0x4f, 0x4d, 0x10, 0x00, 0x12, 0x0e, 0x0a, 0x0a, 0x4d, 0x4f, 0x56, 0x45, 0x54, 0x41, 0x42, 0x4c,
+	0x45, 0x53, 0x10, 0x01, 0x12, 0x15, 0x0a, 0x11, 0x43, 0x52, 0x45, 0x41, 0x54, 0x45, 0x4c, 0x4f,
+	0x4f, 0x4b, 0x55, 0x50, 0x49, 0x4e, 0x44, 0x45, 0x58, 0x10, 0x02, 0x2a, 0x38, 0x0a, 0x0d, 0x51,
+	0x75, 0x65, 0x72, 0x79, 0x4f, 0x72, 0x64, 0x65, 0x72, 0x69, 0x6e, 0x67, 0x12, 0x08, 0x0a, 0x04,
+	0x4e, 0x4f, 0x4e, 0x45, 0x10, 0x00, 0x12, 0x0d, 0x0a, 0x09, 0x41, 0x53, 0x43, 0x45, 0x4e, 0x44,
+	0x49, 0x4e, 0x47, 0x10, 0x01, 0x12, 0x0e, 0x0a, 0x0a, 0x44, 0x45, 0x53, 0x43, 0x45, 0x4e, 0x44,
+	0x49, 0x4e, 0x47, 0x10, 0x02, 0x42, 0x28, 0x5a, 0x26, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e,
+	0x69, 0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x62,
+	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -15596,7 +16348,7 @@ func file_vtctldata_proto_rawDescGZIP() []byte {
 }
 
 var file_vtctldata_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_vtctldata_proto_msgTypes = make([]protoimpl.MessageInfo, 238)
+var file_vtctldata_proto_msgTypes = make([]protoimpl.MessageInfo, 248)
 var file_vtctldata_proto_goTypes = []interface{}{
 	(MaterializationIntent)(0),                   // 0: vtctldata.MaterializationIntent
 	(QueryOrdering)(0),                           // 1: vtctldata.QueryOrdering
@@ -15799,280 +16551,294 @@ var file_vtctldata_proto_goTypes = []interface{}{
 	(*ValidateVersionShardResponse)(nil),         // 198: vtctldata.ValidateVersionShardResponse
 	(*ValidateVSchemaRequest)(nil),               // 199: vtctldata.ValidateVSchemaRequest
 	(*ValidateVSchemaResponse)(nil),              // 200: vtctldata.ValidateVSchemaResponse
-	(*WorkflowDeleteRequest)(nil),                // 201: vtctldata.WorkflowDeleteRequest
-	(*WorkflowDeleteResponse)(nil),               // 202: vtctldata.WorkflowDeleteResponse
-	(*WorkflowStatusRequest)(nil),                // 203: vtctldata.WorkflowStatusRequest
-	(*WorkflowStatusResponse)(nil),               // 204: vtctldata.WorkflowStatusResponse
-	(*WorkflowSwitchTrafficRequest)(nil),         // 205: vtctldata.WorkflowSwitchTrafficRequest
-	(*WorkflowSwitchTrafficResponse)(nil),        // 206: vtctldata.WorkflowSwitchTrafficResponse
-	(*WorkflowUpdateRequest)(nil),                // 207: vtctldata.WorkflowUpdateRequest
-	(*WorkflowUpdateResponse)(nil),               // 208: vtctldata.WorkflowUpdateResponse
-	nil,                                          // 209: vtctldata.Workflow.ShardStreamsEntry
-	(*Workflow_ReplicationLocation)(nil),         // 210: vtctldata.Workflow.ReplicationLocation
-	(*Workflow_ShardStream)(nil),                 // 211: vtctldata.Workflow.ShardStream
-	(*Workflow_Stream)(nil),                      // 212: vtctldata.Workflow.Stream
-	(*Workflow_Stream_CopyState)(nil),            // 213: vtctldata.Workflow.Stream.CopyState
-	(*Workflow_Stream_Log)(nil),                  // 214: vtctldata.Workflow.Stream.Log
-	nil,                                          // 215: vtctldata.ApplySchemaResponse.RowsAffectedByShardEntry
-	nil,                                          // 216: vtctldata.CancelSchemaMigrationResponse.RowsAffectedByShardEntry
-	nil,                                          // 217: vtctldata.CleanupSchemaMigrationResponse.RowsAffectedByShardEntry
-	nil,                                          // 218: vtctldata.CompleteSchemaMigrationResponse.RowsAffectedByShardEntry
-	nil,                                          // 219: vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
-	nil,                                          // 220: vtctldata.GetCellsAliasesResponse.AliasesEntry
-	nil,                                          // 221: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
-	(*GetSrvKeyspaceNamesResponse_NameList)(nil), // 222: vtctldata.GetSrvKeyspaceNamesResponse.NameList
-	nil, // 223: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
-	nil, // 224: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
-	nil, // 225: vtctldata.LaunchSchemaMigrationResponse.RowsAffectedByShardEntry
-	(*MoveTablesCreateResponse_TabletInfo)(nil), // 226: vtctldata.MoveTablesCreateResponse.TabletInfo
-	nil, // 227: vtctldata.RetrySchemaMigrationResponse.RowsAffectedByShardEntry
-	nil, // 228: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
-	nil, // 229: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
-	nil, // 230: vtctldata.ValidateResponse.ResultsByKeyspaceEntry
-	nil, // 231: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
-	nil, // 232: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
-	nil, // 233: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
-	nil, // 234: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
-	(*WorkflowDeleteResponse_TabletInfo)(nil),       // 235: vtctldata.WorkflowDeleteResponse.TabletInfo
-	(*WorkflowStatusResponse_TableCopyState)(nil),   // 236: vtctldata.WorkflowStatusResponse.TableCopyState
-	(*WorkflowStatusResponse_ShardStreamState)(nil), // 237: vtctldata.WorkflowStatusResponse.ShardStreamState
-	(*WorkflowStatusResponse_ShardStreams)(nil),     // 238: vtctldata.WorkflowStatusResponse.ShardStreams
-	nil, // 239: vtctldata.WorkflowStatusResponse.TableCopyStateEntry
-	nil, // 240: vtctldata.WorkflowStatusResponse.ShardStreamsEntry
-	(*WorkflowUpdateResponse_TabletInfo)(nil),                   // 241: vtctldata.WorkflowUpdateResponse.TabletInfo
-	(*logutil.Event)(nil),                                       // 242: logutil.Event
-	(tabletmanagerdata.TabletSelectionPreference)(0),            // 243: tabletmanagerdata.TabletSelectionPreference
-	(*topodata.Keyspace)(nil),                                   // 244: topodata.Keyspace
-	(*vttime.Time)(nil),                                         // 245: vttime.Time
-	(*topodata.TabletAlias)(nil),                                // 246: topodata.TabletAlias
-	(*vttime.Duration)(nil),                                     // 247: vttime.Duration
-	(*topodata.Shard)(nil),                                      // 248: topodata.Shard
-	(*topodata.CellInfo)(nil),                                   // 249: topodata.CellInfo
-	(*vschema.RoutingRules)(nil),                                // 250: vschema.RoutingRules
-	(*vschema.ShardRoutingRules)(nil),                           // 251: vschema.ShardRoutingRules
-	(*vtrpc.CallerID)(nil),                                      // 252: vtrpc.CallerID
-	(*vschema.Keyspace)(nil),                                    // 253: vschema.Keyspace
-	(topodata.TabletType)(0),                                    // 254: topodata.TabletType
-	(*topodata.Tablet)(nil),                                     // 255: topodata.Tablet
-	(*topodata.Keyspace_ServedFrom)(nil),                        // 256: topodata.Keyspace.ServedFrom
-	(topodata.KeyspaceType)(0),                                  // 257: topodata.KeyspaceType
-	(*query.QueryResult)(nil),                                   // 258: query.QueryResult
-	(*tabletmanagerdata.ExecuteHookRequest)(nil),                // 259: tabletmanagerdata.ExecuteHookRequest
-	(*tabletmanagerdata.ExecuteHookResponse)(nil),               // 260: tabletmanagerdata.ExecuteHookResponse
-	(*mysqlctl.BackupInfo)(nil),                                 // 261: mysqlctl.BackupInfo
-	(*replicationdata.FullStatus)(nil),                          // 262: replicationdata.FullStatus
-	(*tabletmanagerdata.Permissions)(nil),                       // 263: tabletmanagerdata.Permissions
-	(*tabletmanagerdata.SchemaDefinition)(nil),                  // 264: tabletmanagerdata.SchemaDefinition
-	(*topodata.ThrottledAppRule)(nil),                           // 265: topodata.ThrottledAppRule
-	(*vschema.SrvVSchema)(nil),                                  // 266: vschema.SrvVSchema
-	(*topodata.ShardReplicationError)(nil),                      // 267: topodata.ShardReplicationError
-	(*topodata.KeyRange)(nil),                                   // 268: topodata.KeyRange
-	(*topodata.CellsAlias)(nil),                                 // 269: topodata.CellsAlias
-	(*tabletmanagerdata.UpdateVReplicationWorkflowRequest)(nil), // 270: tabletmanagerdata.UpdateVReplicationWorkflowRequest
-	(*topodata.Shard_TabletControl)(nil),                        // 271: topodata.Shard.TabletControl
-	(*binlogdata.BinlogSource)(nil),                             // 272: binlogdata.BinlogSource
-	(*topodata.SrvKeyspace)(nil),                                // 273: topodata.SrvKeyspace
-	(*replicationdata.Status)(nil),                              // 274: replicationdata.Status
+	(*VDiffCreateRequest)(nil),                   // 201: vtctldata.VDiffCreateRequest
+	(*VDiffCreateResponse)(nil),                  // 202: vtctldata.VDiffCreateResponse
+	(*VDiffDeleteRequest)(nil),                   // 203: vtctldata.VDiffDeleteRequest
+	(*VDiffDeleteResponse)(nil),                  // 204: vtctldata.VDiffDeleteResponse
+	(*VDiffResumeRequest)(nil),                   // 205: vtctldata.VDiffResumeRequest
+	(*VDiffResumeResponse)(nil),                  // 206: vtctldata.VDiffResumeResponse
+	(*VDiffShowRequest)(nil),                     // 207: vtctldata.VDiffShowRequest
+	(*VDiffShowResponse)(nil),                    // 208: vtctldata.VDiffShowResponse
+	(*VDiffStopRequest)(nil),                     // 209: vtctldata.VDiffStopRequest
+	(*VDiffStopResponse)(nil),                    // 210: vtctldata.VDiffStopResponse
+	(*WorkflowDeleteRequest)(nil),                // 211: vtctldata.WorkflowDeleteRequest
+	(*WorkflowDeleteResponse)(nil),               // 212: vtctldata.WorkflowDeleteResponse
+	(*WorkflowStatusRequest)(nil),                // 213: vtctldata.WorkflowStatusRequest
+	(*WorkflowStatusResponse)(nil),               // 214: vtctldata.WorkflowStatusResponse
+	(*WorkflowSwitchTrafficRequest)(nil),         // 215: vtctldata.WorkflowSwitchTrafficRequest
+	(*WorkflowSwitchTrafficResponse)(nil),        // 216: vtctldata.WorkflowSwitchTrafficResponse
+	(*WorkflowUpdateRequest)(nil),                // 217: vtctldata.WorkflowUpdateRequest
+	(*WorkflowUpdateResponse)(nil),               // 218: vtctldata.WorkflowUpdateResponse
+	nil,                                          // 219: vtctldata.Workflow.ShardStreamsEntry
+	(*Workflow_ReplicationLocation)(nil),         // 220: vtctldata.Workflow.ReplicationLocation
+	(*Workflow_ShardStream)(nil),                 // 221: vtctldata.Workflow.ShardStream
+	(*Workflow_Stream)(nil),                      // 222: vtctldata.Workflow.Stream
+	(*Workflow_Stream_CopyState)(nil),            // 223: vtctldata.Workflow.Stream.CopyState
+	(*Workflow_Stream_Log)(nil),                  // 224: vtctldata.Workflow.Stream.Log
+	nil,                                          // 225: vtctldata.ApplySchemaResponse.RowsAffectedByShardEntry
+	nil,                                          // 226: vtctldata.CancelSchemaMigrationResponse.RowsAffectedByShardEntry
+	nil,                                          // 227: vtctldata.CleanupSchemaMigrationResponse.RowsAffectedByShardEntry
+	nil,                                          // 228: vtctldata.CompleteSchemaMigrationResponse.RowsAffectedByShardEntry
+	nil,                                          // 229: vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
+	nil,                                          // 230: vtctldata.GetCellsAliasesResponse.AliasesEntry
+	nil,                                          // 231: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
+	(*GetSrvKeyspaceNamesResponse_NameList)(nil), // 232: vtctldata.GetSrvKeyspaceNamesResponse.NameList
+	nil, // 233: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
+	nil, // 234: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
+	nil, // 235: vtctldata.LaunchSchemaMigrationResponse.RowsAffectedByShardEntry
+	(*MoveTablesCreateResponse_TabletInfo)(nil), // 236: vtctldata.MoveTablesCreateResponse.TabletInfo
+	nil, // 237: vtctldata.RetrySchemaMigrationResponse.RowsAffectedByShardEntry
+	nil, // 238: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
+	nil, // 239: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
+	nil, // 240: vtctldata.ValidateResponse.ResultsByKeyspaceEntry
+	nil, // 241: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
+	nil, // 242: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
+	nil, // 243: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
+	nil, // 244: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
+	(*WorkflowDeleteResponse_TabletInfo)(nil),       // 245: vtctldata.WorkflowDeleteResponse.TabletInfo
+	(*WorkflowStatusResponse_TableCopyState)(nil),   // 246: vtctldata.WorkflowStatusResponse.TableCopyState
+	(*WorkflowStatusResponse_ShardStreamState)(nil), // 247: vtctldata.WorkflowStatusResponse.ShardStreamState
+	(*WorkflowStatusResponse_ShardStreams)(nil),     // 248: vtctldata.WorkflowStatusResponse.ShardStreams
+	nil, // 249: vtctldata.WorkflowStatusResponse.TableCopyStateEntry
+	nil, // 250: vtctldata.WorkflowStatusResponse.ShardStreamsEntry
+	(*WorkflowUpdateResponse_TabletInfo)(nil),                   // 251: vtctldata.WorkflowUpdateResponse.TabletInfo
+	(*logutil.Event)(nil),                                       // 252: logutil.Event
+	(tabletmanagerdata.TabletSelectionPreference)(0),            // 253: tabletmanagerdata.TabletSelectionPreference
+	(*topodata.Keyspace)(nil),                                   // 254: topodata.Keyspace
+	(*vttime.Time)(nil),                                         // 255: vttime.Time
+	(*topodata.TabletAlias)(nil),                                // 256: topodata.TabletAlias
+	(*vttime.Duration)(nil),                                     // 257: vttime.Duration
+	(*topodata.Shard)(nil),                                      // 258: topodata.Shard
+	(*topodata.CellInfo)(nil),                                   // 259: topodata.CellInfo
+	(*vschema.RoutingRules)(nil),                                // 260: vschema.RoutingRules
+	(*vschema.ShardRoutingRules)(nil),                           // 261: vschema.ShardRoutingRules
+	(*vtrpc.CallerID)(nil),                                      // 262: vtrpc.CallerID
+	(*vschema.Keyspace)(nil),                                    // 263: vschema.Keyspace
+	(topodata.TabletType)(0),                                    // 264: topodata.TabletType
+	(*topodata.Tablet)(nil),                                     // 265: topodata.Tablet
+	(*topodata.Keyspace_ServedFrom)(nil),                        // 266: topodata.Keyspace.ServedFrom
+	(topodata.KeyspaceType)(0),                                  // 267: topodata.KeyspaceType
+	(*query.QueryResult)(nil),                                   // 268: query.QueryResult
+	(*tabletmanagerdata.ExecuteHookRequest)(nil),                // 269: tabletmanagerdata.ExecuteHookRequest
+	(*tabletmanagerdata.ExecuteHookResponse)(nil),               // 270: tabletmanagerdata.ExecuteHookResponse
+	(*mysqlctl.BackupInfo)(nil),                                 // 271: mysqlctl.BackupInfo
+	(*replicationdata.FullStatus)(nil),                          // 272: replicationdata.FullStatus
+	(*tabletmanagerdata.Permissions)(nil),                       // 273: tabletmanagerdata.Permissions
+	(*tabletmanagerdata.SchemaDefinition)(nil),                  // 274: tabletmanagerdata.SchemaDefinition
+	(*topodata.ThrottledAppRule)(nil),                           // 275: topodata.ThrottledAppRule
+	(*vschema.SrvVSchema)(nil),                                  // 276: vschema.SrvVSchema
+	(*topodata.ShardReplicationError)(nil),                      // 277: topodata.ShardReplicationError
+	(*topodata.KeyRange)(nil),                                   // 278: topodata.KeyRange
+	(*topodata.CellsAlias)(nil),                                 // 279: topodata.CellsAlias
+	(*tabletmanagerdata.UpdateVReplicationWorkflowRequest)(nil), // 280: tabletmanagerdata.UpdateVReplicationWorkflowRequest
+	(*topodata.Shard_TabletControl)(nil),                        // 281: topodata.Shard.TabletControl
+	(*binlogdata.BinlogSource)(nil),                             // 282: binlogdata.BinlogSource
+	(*topodata.SrvKeyspace)(nil),                                // 283: topodata.SrvKeyspace
+	(*replicationdata.Status)(nil),                              // 284: replicationdata.Status
 }
 var file_vtctldata_proto_depIdxs = []int32{
-	242, // 0: vtctldata.ExecuteVtctlCommandResponse.event:type_name -> logutil.Event
+	252, // 0: vtctldata.ExecuteVtctlCommandResponse.event:type_name -> logutil.Event
 	6,   // 1: vtctldata.MaterializeSettings.table_settings:type_name -> vtctldata.TableMaterializeSettings
 	0,   // 2: vtctldata.MaterializeSettings.materialization_intent:type_name -> vtctldata.MaterializationIntent
-	243, // 3: vtctldata.MaterializeSettings.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	244, // 4: vtctldata.Keyspace.keyspace:type_name -> topodata.Keyspace
+	253, // 3: vtctldata.MaterializeSettings.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	254, // 4: vtctldata.Keyspace.keyspace:type_name -> topodata.Keyspace
 	2,   // 5: vtctldata.SchemaMigration.strategy:type_name -> vtctldata.SchemaMigration.Strategy
-	245, // 6: vtctldata.SchemaMigration.added_at:type_name -> vttime.Time
-	245, // 7: vtctldata.SchemaMigration.requested_at:type_name -> vttime.Time
-	245, // 8: vtctldata.SchemaMigration.ready_at:type_name -> vttime.Time
-	245, // 9: vtctldata.SchemaMigration.started_at:type_name -> vttime.Time
-	245, // 10: vtctldata.SchemaMigration.liveness_timestamp:type_name -> vttime.Time
-	245, // 11: vtctldata.SchemaMigration.completed_at:type_name -> vttime.Time
-	245, // 12: vtctldata.SchemaMigration.cleaned_up_at:type_name -> vttime.Time
+	255, // 6: vtctldata.SchemaMigration.added_at:type_name -> vttime.Time
+	255, // 7: vtctldata.SchemaMigration.requested_at:type_name -> vttime.Time
+	255, // 8: vtctldata.SchemaMigration.ready_at:type_name -> vttime.Time
+	255, // 9: vtctldata.SchemaMigration.started_at:type_name -> vttime.Time
+	255, // 10: vtctldata.SchemaMigration.liveness_timestamp:type_name -> vttime.Time
+	255, // 11: vtctldata.SchemaMigration.completed_at:type_name -> vttime.Time
+	255, // 12: vtctldata.SchemaMigration.cleaned_up_at:type_name -> vttime.Time
 	3,   // 13: vtctldata.SchemaMigration.status:type_name -> vtctldata.SchemaMigration.Status
-	246, // 14: vtctldata.SchemaMigration.tablet:type_name -> topodata.TabletAlias
-	247, // 15: vtctldata.SchemaMigration.artifact_retention:type_name -> vttime.Duration
-	245, // 16: vtctldata.SchemaMigration.last_throttled_at:type_name -> vttime.Time
-	245, // 17: vtctldata.SchemaMigration.cancelled_at:type_name -> vttime.Time
-	245, // 18: vtctldata.SchemaMigration.reviewed_at:type_name -> vttime.Time
-	245, // 19: vtctldata.SchemaMigration.ready_to_complete_at:type_name -> vttime.Time
-	248, // 20: vtctldata.Shard.shard:type_name -> topodata.Shard
-	210, // 21: vtctldata.Workflow.source:type_name -> vtctldata.Workflow.ReplicationLocation
-	210, // 22: vtctldata.Workflow.target:type_name -> vtctldata.Workflow.ReplicationLocation
-	209, // 23: vtctldata.Workflow.shard_streams:type_name -> vtctldata.Workflow.ShardStreamsEntry
-	249, // 24: vtctldata.AddCellInfoRequest.cell_info:type_name -> topodata.CellInfo
-	250, // 25: vtctldata.ApplyRoutingRulesRequest.routing_rules:type_name -> vschema.RoutingRules
-	251, // 26: vtctldata.ApplyShardRoutingRulesRequest.shard_routing_rules:type_name -> vschema.ShardRoutingRules
-	247, // 27: vtctldata.ApplySchemaRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	252, // 28: vtctldata.ApplySchemaRequest.caller_id:type_name -> vtrpc.CallerID
-	215, // 29: vtctldata.ApplySchemaResponse.rows_affected_by_shard:type_name -> vtctldata.ApplySchemaResponse.RowsAffectedByShardEntry
-	253, // 30: vtctldata.ApplyVSchemaRequest.v_schema:type_name -> vschema.Keyspace
-	253, // 31: vtctldata.ApplyVSchemaResponse.v_schema:type_name -> vschema.Keyspace
-	246, // 32: vtctldata.BackupRequest.tablet_alias:type_name -> topodata.TabletAlias
-	246, // 33: vtctldata.BackupResponse.tablet_alias:type_name -> topodata.TabletAlias
-	242, // 34: vtctldata.BackupResponse.event:type_name -> logutil.Event
-	216, // 35: vtctldata.CancelSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CancelSchemaMigrationResponse.RowsAffectedByShardEntry
-	246, // 36: vtctldata.ChangeTabletTypeRequest.tablet_alias:type_name -> topodata.TabletAlias
-	254, // 37: vtctldata.ChangeTabletTypeRequest.db_type:type_name -> topodata.TabletType
-	255, // 38: vtctldata.ChangeTabletTypeResponse.before_tablet:type_name -> topodata.Tablet
-	255, // 39: vtctldata.ChangeTabletTypeResponse.after_tablet:type_name -> topodata.Tablet
-	217, // 40: vtctldata.CleanupSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CleanupSchemaMigrationResponse.RowsAffectedByShardEntry
-	218, // 41: vtctldata.CompleteSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CompleteSchemaMigrationResponse.RowsAffectedByShardEntry
-	256, // 42: vtctldata.CreateKeyspaceRequest.served_froms:type_name -> topodata.Keyspace.ServedFrom
-	257, // 43: vtctldata.CreateKeyspaceRequest.type:type_name -> topodata.KeyspaceType
-	245, // 44: vtctldata.CreateKeyspaceRequest.snapshot_time:type_name -> vttime.Time
+	256, // 14: vtctldata.SchemaMigration.tablet:type_name -> topodata.TabletAlias
+	257, // 15: vtctldata.SchemaMigration.artifact_retention:type_name -> vttime.Duration
+	255, // 16: vtctldata.SchemaMigration.last_throttled_at:type_name -> vttime.Time
+	255, // 17: vtctldata.SchemaMigration.cancelled_at:type_name -> vttime.Time
+	255, // 18: vtctldata.SchemaMigration.reviewed_at:type_name -> vttime.Time
+	255, // 19: vtctldata.SchemaMigration.ready_to_complete_at:type_name -> vttime.Time
+	258, // 20: vtctldata.Shard.shard:type_name -> topodata.Shard
+	220, // 21: vtctldata.Workflow.source:type_name -> vtctldata.Workflow.ReplicationLocation
+	220, // 22: vtctldata.Workflow.target:type_name -> vtctldata.Workflow.ReplicationLocation
+	219, // 23: vtctldata.Workflow.shard_streams:type_name -> vtctldata.Workflow.ShardStreamsEntry
+	259, // 24: vtctldata.AddCellInfoRequest.cell_info:type_name -> topodata.CellInfo
+	260, // 25: vtctldata.ApplyRoutingRulesRequest.routing_rules:type_name -> vschema.RoutingRules
+	261, // 26: vtctldata.ApplyShardRoutingRulesRequest.shard_routing_rules:type_name -> vschema.ShardRoutingRules
+	257, // 27: vtctldata.ApplySchemaRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	262, // 28: vtctldata.ApplySchemaRequest.caller_id:type_name -> vtrpc.CallerID
+	225, // 29: vtctldata.ApplySchemaResponse.rows_affected_by_shard:type_name -> vtctldata.ApplySchemaResponse.RowsAffectedByShardEntry
+	263, // 30: vtctldata.ApplyVSchemaRequest.v_schema:type_name -> vschema.Keyspace
+	263, // 31: vtctldata.ApplyVSchemaResponse.v_schema:type_name -> vschema.Keyspace
+	256, // 32: vtctldata.BackupRequest.tablet_alias:type_name -> topodata.TabletAlias
+	256, // 33: vtctldata.BackupResponse.tablet_alias:type_name -> topodata.TabletAlias
+	252, // 34: vtctldata.BackupResponse.event:type_name -> logutil.Event
+	226, // 35: vtctldata.CancelSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CancelSchemaMigrationResponse.RowsAffectedByShardEntry
+	256, // 36: vtctldata.ChangeTabletTypeRequest.tablet_alias:type_name -> topodata.TabletAlias
+	264, // 37: vtctldata.ChangeTabletTypeRequest.db_type:type_name -> topodata.TabletType
+	265, // 38: vtctldata.ChangeTabletTypeResponse.before_tablet:type_name -> topodata.Tablet
+	265, // 39: vtctldata.ChangeTabletTypeResponse.after_tablet:type_name -> topodata.Tablet
+	227, // 40: vtctldata.CleanupSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CleanupSchemaMigrationResponse.RowsAffectedByShardEntry
+	228, // 41: vtctldata.CompleteSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CompleteSchemaMigrationResponse.RowsAffectedByShardEntry
+	266, // 42: vtctldata.CreateKeyspaceRequest.served_froms:type_name -> topodata.Keyspace.ServedFrom
+	267, // 43: vtctldata.CreateKeyspaceRequest.type:type_name -> topodata.KeyspaceType
+	255, // 44: vtctldata.CreateKeyspaceRequest.snapshot_time:type_name -> vttime.Time
 	8,   // 45: vtctldata.CreateKeyspaceResponse.keyspace:type_name -> vtctldata.Keyspace
 	8,   // 46: vtctldata.CreateShardResponse.keyspace:type_name -> vtctldata.Keyspace
 	10,  // 47: vtctldata.CreateShardResponse.shard:type_name -> vtctldata.Shard
 	10,  // 48: vtctldata.DeleteShardsRequest.shards:type_name -> vtctldata.Shard
-	246, // 49: vtctldata.DeleteTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
-	246, // 50: vtctldata.EmergencyReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
-	246, // 51: vtctldata.EmergencyReparentShardRequest.ignore_replicas:type_name -> topodata.TabletAlias
-	247, // 52: vtctldata.EmergencyReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	246, // 53: vtctldata.EmergencyReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
-	242, // 54: vtctldata.EmergencyReparentShardResponse.events:type_name -> logutil.Event
-	246, // 55: vtctldata.ExecuteFetchAsAppRequest.tablet_alias:type_name -> topodata.TabletAlias
-	258, // 56: vtctldata.ExecuteFetchAsAppResponse.result:type_name -> query.QueryResult
-	246, // 57: vtctldata.ExecuteFetchAsDBARequest.tablet_alias:type_name -> topodata.TabletAlias
-	258, // 58: vtctldata.ExecuteFetchAsDBAResponse.result:type_name -> query.QueryResult
-	246, // 59: vtctldata.ExecuteHookRequest.tablet_alias:type_name -> topodata.TabletAlias
-	259, // 60: vtctldata.ExecuteHookRequest.tablet_hook_request:type_name -> tabletmanagerdata.ExecuteHookRequest
-	260, // 61: vtctldata.ExecuteHookResponse.hook_result:type_name -> tabletmanagerdata.ExecuteHookResponse
-	219, // 62: vtctldata.FindAllShardsInKeyspaceResponse.shards:type_name -> vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
-	261, // 63: vtctldata.GetBackupsResponse.backups:type_name -> mysqlctl.BackupInfo
-	249, // 64: vtctldata.GetCellInfoResponse.cell_info:type_name -> topodata.CellInfo
-	220, // 65: vtctldata.GetCellsAliasesResponse.aliases:type_name -> vtctldata.GetCellsAliasesResponse.AliasesEntry
-	246, // 66: vtctldata.GetFullStatusRequest.tablet_alias:type_name -> topodata.TabletAlias
-	262, // 67: vtctldata.GetFullStatusResponse.status:type_name -> replicationdata.FullStatus
+	256, // 49: vtctldata.DeleteTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
+	256, // 50: vtctldata.EmergencyReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
+	256, // 51: vtctldata.EmergencyReparentShardRequest.ignore_replicas:type_name -> topodata.TabletAlias
+	257, // 52: vtctldata.EmergencyReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	256, // 53: vtctldata.EmergencyReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
+	252, // 54: vtctldata.EmergencyReparentShardResponse.events:type_name -> logutil.Event
+	256, // 55: vtctldata.ExecuteFetchAsAppRequest.tablet_alias:type_name -> topodata.TabletAlias
+	268, // 56: vtctldata.ExecuteFetchAsAppResponse.result:type_name -> query.QueryResult
+	256, // 57: vtctldata.ExecuteFetchAsDBARequest.tablet_alias:type_name -> topodata.TabletAlias
+	268, // 58: vtctldata.ExecuteFetchAsDBAResponse.result:type_name -> query.QueryResult
+	256, // 59: vtctldata.ExecuteHookRequest.tablet_alias:type_name -> topodata.TabletAlias
+	269, // 60: vtctldata.ExecuteHookRequest.tablet_hook_request:type_name -> tabletmanagerdata.ExecuteHookRequest
+	270, // 61: vtctldata.ExecuteHookResponse.hook_result:type_name -> tabletmanagerdata.ExecuteHookResponse
+	229, // 62: vtctldata.FindAllShardsInKeyspaceResponse.shards:type_name -> vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
+	271, // 63: vtctldata.GetBackupsResponse.backups:type_name -> mysqlctl.BackupInfo
+	259, // 64: vtctldata.GetCellInfoResponse.cell_info:type_name -> topodata.CellInfo
+	230, // 65: vtctldata.GetCellsAliasesResponse.aliases:type_name -> vtctldata.GetCellsAliasesResponse.AliasesEntry
+	256, // 66: vtctldata.GetFullStatusRequest.tablet_alias:type_name -> topodata.TabletAlias
+	272, // 67: vtctldata.GetFullStatusResponse.status:type_name -> replicationdata.FullStatus
 	8,   // 68: vtctldata.GetKeyspacesResponse.keyspaces:type_name -> vtctldata.Keyspace
 	8,   // 69: vtctldata.GetKeyspaceResponse.keyspace:type_name -> vtctldata.Keyspace
-	246, // 70: vtctldata.GetPermissionsRequest.tablet_alias:type_name -> topodata.TabletAlias
-	263, // 71: vtctldata.GetPermissionsResponse.permissions:type_name -> tabletmanagerdata.Permissions
-	250, // 72: vtctldata.GetRoutingRulesResponse.routing_rules:type_name -> vschema.RoutingRules
-	246, // 73: vtctldata.GetSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
-	264, // 74: vtctldata.GetSchemaResponse.schema:type_name -> tabletmanagerdata.SchemaDefinition
+	256, // 70: vtctldata.GetPermissionsRequest.tablet_alias:type_name -> topodata.TabletAlias
+	273, // 71: vtctldata.GetPermissionsResponse.permissions:type_name -> tabletmanagerdata.Permissions
+	260, // 72: vtctldata.GetRoutingRulesResponse.routing_rules:type_name -> vschema.RoutingRules
+	256, // 73: vtctldata.GetSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
+	274, // 74: vtctldata.GetSchemaResponse.schema:type_name -> tabletmanagerdata.SchemaDefinition
 	3,   // 75: vtctldata.GetSchemaMigrationsRequest.status:type_name -> vtctldata.SchemaMigration.Status
-	247, // 76: vtctldata.GetSchemaMigrationsRequest.recent:type_name -> vttime.Duration
+	257, // 76: vtctldata.GetSchemaMigrationsRequest.recent:type_name -> vttime.Duration
 	1,   // 77: vtctldata.GetSchemaMigrationsRequest.order:type_name -> vtctldata.QueryOrdering
 	9,   // 78: vtctldata.GetSchemaMigrationsResponse.migrations:type_name -> vtctldata.SchemaMigration
 	10,  // 79: vtctldata.GetShardResponse.shard:type_name -> vtctldata.Shard
-	251, // 80: vtctldata.GetShardRoutingRulesResponse.shard_routing_rules:type_name -> vschema.ShardRoutingRules
-	221, // 81: vtctldata.GetSrvKeyspaceNamesResponse.names:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
-	223, // 82: vtctldata.GetSrvKeyspacesResponse.srv_keyspaces:type_name -> vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
-	265, // 83: vtctldata.UpdateThrottlerConfigRequest.throttled_app:type_name -> topodata.ThrottledAppRule
-	266, // 84: vtctldata.GetSrvVSchemaResponse.srv_v_schema:type_name -> vschema.SrvVSchema
-	224, // 85: vtctldata.GetSrvVSchemasResponse.srv_v_schemas:type_name -> vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
-	246, // 86: vtctldata.GetTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
-	255, // 87: vtctldata.GetTabletResponse.tablet:type_name -> topodata.Tablet
-	246, // 88: vtctldata.GetTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
-	254, // 89: vtctldata.GetTabletsRequest.tablet_type:type_name -> topodata.TabletType
-	255, // 90: vtctldata.GetTabletsResponse.tablets:type_name -> topodata.Tablet
+	261, // 80: vtctldata.GetShardRoutingRulesResponse.shard_routing_rules:type_name -> vschema.ShardRoutingRules
+	231, // 81: vtctldata.GetSrvKeyspaceNamesResponse.names:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
+	233, // 82: vtctldata.GetSrvKeyspacesResponse.srv_keyspaces:type_name -> vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
+	275, // 83: vtctldata.UpdateThrottlerConfigRequest.throttled_app:type_name -> topodata.ThrottledAppRule
+	276, // 84: vtctldata.GetSrvVSchemaResponse.srv_v_schema:type_name -> vschema.SrvVSchema
+	234, // 85: vtctldata.GetSrvVSchemasResponse.srv_v_schemas:type_name -> vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
+	256, // 86: vtctldata.GetTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
+	265, // 87: vtctldata.GetTabletResponse.tablet:type_name -> topodata.Tablet
+	256, // 88: vtctldata.GetTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
+	264, // 89: vtctldata.GetTabletsRequest.tablet_type:type_name -> topodata.TabletType
+	265, // 90: vtctldata.GetTabletsResponse.tablets:type_name -> topodata.Tablet
 	103, // 91: vtctldata.GetTopologyPathResponse.cell:type_name -> vtctldata.TopologyCell
-	246, // 92: vtctldata.GetVersionRequest.tablet_alias:type_name -> topodata.TabletAlias
-	253, // 93: vtctldata.GetVSchemaResponse.v_schema:type_name -> vschema.Keyspace
+	256, // 92: vtctldata.GetVersionRequest.tablet_alias:type_name -> topodata.TabletAlias
+	263, // 93: vtctldata.GetVSchemaResponse.v_schema:type_name -> vschema.Keyspace
 	11,  // 94: vtctldata.GetWorkflowsResponse.workflows:type_name -> vtctldata.Workflow
-	246, // 95: vtctldata.InitShardPrimaryRequest.primary_elect_tablet_alias:type_name -> topodata.TabletAlias
-	247, // 96: vtctldata.InitShardPrimaryRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	242, // 97: vtctldata.InitShardPrimaryResponse.events:type_name -> logutil.Event
-	225, // 98: vtctldata.LaunchSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.LaunchSchemaMigrationResponse.RowsAffectedByShardEntry
-	254, // 99: vtctldata.MoveTablesCreateRequest.tablet_types:type_name -> topodata.TabletType
-	243, // 100: vtctldata.MoveTablesCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	226, // 101: vtctldata.MoveTablesCreateResponse.details:type_name -> vtctldata.MoveTablesCreateResponse.TabletInfo
-	246, // 102: vtctldata.PingTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
-	246, // 103: vtctldata.PlannedReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
-	246, // 104: vtctldata.PlannedReparentShardRequest.avoid_primary:type_name -> topodata.TabletAlias
-	247, // 105: vtctldata.PlannedReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	246, // 106: vtctldata.PlannedReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
-	242, // 107: vtctldata.PlannedReparentShardResponse.events:type_name -> logutil.Event
-	246, // 108: vtctldata.RefreshStateRequest.tablet_alias:type_name -> topodata.TabletAlias
-	246, // 109: vtctldata.ReloadSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
-	242, // 110: vtctldata.ReloadSchemaKeyspaceResponse.events:type_name -> logutil.Event
-	242, // 111: vtctldata.ReloadSchemaShardResponse.events:type_name -> logutil.Event
-	246, // 112: vtctldata.ReparentTabletRequest.tablet:type_name -> topodata.TabletAlias
-	246, // 113: vtctldata.ReparentTabletResponse.primary:type_name -> topodata.TabletAlias
-	254, // 114: vtctldata.ReshardCreateRequest.tablet_types:type_name -> topodata.TabletType
-	243, // 115: vtctldata.ReshardCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	246, // 116: vtctldata.RestoreFromBackupRequest.tablet_alias:type_name -> topodata.TabletAlias
-	245, // 117: vtctldata.RestoreFromBackupRequest.backup_time:type_name -> vttime.Time
-	245, // 118: vtctldata.RestoreFromBackupRequest.restore_to_timestamp:type_name -> vttime.Time
-	246, // 119: vtctldata.RestoreFromBackupResponse.tablet_alias:type_name -> topodata.TabletAlias
-	242, // 120: vtctldata.RestoreFromBackupResponse.event:type_name -> logutil.Event
-	227, // 121: vtctldata.RetrySchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.RetrySchemaMigrationResponse.RowsAffectedByShardEntry
-	246, // 122: vtctldata.RunHealthCheckRequest.tablet_alias:type_name -> topodata.TabletAlias
-	244, // 123: vtctldata.SetKeyspaceDurabilityPolicyResponse.keyspace:type_name -> topodata.Keyspace
-	254, // 124: vtctldata.SetKeyspaceServedFromRequest.tablet_type:type_name -> topodata.TabletType
-	244, // 125: vtctldata.SetKeyspaceServedFromResponse.keyspace:type_name -> topodata.Keyspace
-	244, // 126: vtctldata.SetKeyspaceShardingInfoResponse.keyspace:type_name -> topodata.Keyspace
-	248, // 127: vtctldata.SetShardIsPrimaryServingResponse.shard:type_name -> topodata.Shard
-	254, // 128: vtctldata.SetShardTabletControlRequest.tablet_type:type_name -> topodata.TabletType
-	248, // 129: vtctldata.SetShardTabletControlResponse.shard:type_name -> topodata.Shard
-	246, // 130: vtctldata.SetWritableRequest.tablet_alias:type_name -> topodata.TabletAlias
-	246, // 131: vtctldata.ShardReplicationAddRequest.tablet_alias:type_name -> topodata.TabletAlias
-	267, // 132: vtctldata.ShardReplicationFixResponse.error:type_name -> topodata.ShardReplicationError
-	228, // 133: vtctldata.ShardReplicationPositionsResponse.replication_statuses:type_name -> vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
-	229, // 134: vtctldata.ShardReplicationPositionsResponse.tablet_map:type_name -> vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
-	246, // 135: vtctldata.ShardReplicationRemoveRequest.tablet_alias:type_name -> topodata.TabletAlias
-	246, // 136: vtctldata.SleepTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
-	247, // 137: vtctldata.SleepTabletRequest.duration:type_name -> vttime.Duration
-	268, // 138: vtctldata.SourceShardAddRequest.key_range:type_name -> topodata.KeyRange
-	248, // 139: vtctldata.SourceShardAddResponse.shard:type_name -> topodata.Shard
-	248, // 140: vtctldata.SourceShardDeleteResponse.shard:type_name -> topodata.Shard
-	246, // 141: vtctldata.StartReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
-	246, // 142: vtctldata.StopReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
-	246, // 143: vtctldata.TabletExternallyReparentedRequest.tablet:type_name -> topodata.TabletAlias
-	246, // 144: vtctldata.TabletExternallyReparentedResponse.new_primary:type_name -> topodata.TabletAlias
-	246, // 145: vtctldata.TabletExternallyReparentedResponse.old_primary:type_name -> topodata.TabletAlias
-	249, // 146: vtctldata.UpdateCellInfoRequest.cell_info:type_name -> topodata.CellInfo
-	249, // 147: vtctldata.UpdateCellInfoResponse.cell_info:type_name -> topodata.CellInfo
-	269, // 148: vtctldata.UpdateCellsAliasRequest.cells_alias:type_name -> topodata.CellsAlias
-	269, // 149: vtctldata.UpdateCellsAliasResponse.cells_alias:type_name -> topodata.CellsAlias
-	230, // 150: vtctldata.ValidateResponse.results_by_keyspace:type_name -> vtctldata.ValidateResponse.ResultsByKeyspaceEntry
-	231, // 151: vtctldata.ValidateKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
-	232, // 152: vtctldata.ValidateSchemaKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
-	233, // 153: vtctldata.ValidateVersionKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
-	234, // 154: vtctldata.ValidateVSchemaResponse.results_by_shard:type_name -> vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
-	235, // 155: vtctldata.WorkflowDeleteResponse.details:type_name -> vtctldata.WorkflowDeleteResponse.TabletInfo
-	239, // 156: vtctldata.WorkflowStatusResponse.table_copy_state:type_name -> vtctldata.WorkflowStatusResponse.TableCopyStateEntry
-	240, // 157: vtctldata.WorkflowStatusResponse.shard_streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamsEntry
-	254, // 158: vtctldata.WorkflowSwitchTrafficRequest.tablet_types:type_name -> topodata.TabletType
-	247, // 159: vtctldata.WorkflowSwitchTrafficRequest.max_replication_lag_allowed:type_name -> vttime.Duration
-	247, // 160: vtctldata.WorkflowSwitchTrafficRequest.timeout:type_name -> vttime.Duration
-	270, // 161: vtctldata.WorkflowUpdateRequest.tablet_request:type_name -> tabletmanagerdata.UpdateVReplicationWorkflowRequest
-	241, // 162: vtctldata.WorkflowUpdateResponse.details:type_name -> vtctldata.WorkflowUpdateResponse.TabletInfo
-	211, // 163: vtctldata.Workflow.ShardStreamsEntry.value:type_name -> vtctldata.Workflow.ShardStream
-	212, // 164: vtctldata.Workflow.ShardStream.streams:type_name -> vtctldata.Workflow.Stream
-	271, // 165: vtctldata.Workflow.ShardStream.tablet_controls:type_name -> topodata.Shard.TabletControl
-	246, // 166: vtctldata.Workflow.Stream.tablet:type_name -> topodata.TabletAlias
-	272, // 167: vtctldata.Workflow.Stream.binlog_source:type_name -> binlogdata.BinlogSource
-	245, // 168: vtctldata.Workflow.Stream.transaction_timestamp:type_name -> vttime.Time
-	245, // 169: vtctldata.Workflow.Stream.time_updated:type_name -> vttime.Time
-	213, // 170: vtctldata.Workflow.Stream.copy_states:type_name -> vtctldata.Workflow.Stream.CopyState
-	214, // 171: vtctldata.Workflow.Stream.logs:type_name -> vtctldata.Workflow.Stream.Log
-	245, // 172: vtctldata.Workflow.Stream.Log.created_at:type_name -> vttime.Time
-	245, // 173: vtctldata.Workflow.Stream.Log.updated_at:type_name -> vttime.Time
-	10,  // 174: vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry.value:type_name -> vtctldata.Shard
-	269, // 175: vtctldata.GetCellsAliasesResponse.AliasesEntry.value:type_name -> topodata.CellsAlias
-	222, // 176: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry.value:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NameList
-	273, // 177: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry.value:type_name -> topodata.SrvKeyspace
-	266, // 178: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry.value:type_name -> vschema.SrvVSchema
-	246, // 179: vtctldata.MoveTablesCreateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
-	274, // 180: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry.value:type_name -> replicationdata.Status
-	255, // 181: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry.value:type_name -> topodata.Tablet
-	190, // 182: vtctldata.ValidateResponse.ResultsByKeyspaceEntry.value:type_name -> vtctldata.ValidateKeyspaceResponse
-	194, // 183: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	194, // 184: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	194, // 185: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	194, // 186: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	246, // 187: vtctldata.WorkflowDeleteResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
-	246, // 188: vtctldata.WorkflowStatusResponse.ShardStreamState.tablet:type_name -> topodata.TabletAlias
-	237, // 189: vtctldata.WorkflowStatusResponse.ShardStreams.streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamState
-	236, // 190: vtctldata.WorkflowStatusResponse.TableCopyStateEntry.value:type_name -> vtctldata.WorkflowStatusResponse.TableCopyState
-	238, // 191: vtctldata.WorkflowStatusResponse.ShardStreamsEntry.value:type_name -> vtctldata.WorkflowStatusResponse.ShardStreams
-	246, // 192: vtctldata.WorkflowUpdateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
-	193, // [193:193] is the sub-list for method output_type
-	193, // [193:193] is the sub-list for method input_type
-	193, // [193:193] is the sub-list for extension type_name
-	193, // [193:193] is the sub-list for extension extendee
-	0,   // [0:193] is the sub-list for field type_name
+	256, // 95: vtctldata.InitShardPrimaryRequest.primary_elect_tablet_alias:type_name -> topodata.TabletAlias
+	257, // 96: vtctldata.InitShardPrimaryRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	252, // 97: vtctldata.InitShardPrimaryResponse.events:type_name -> logutil.Event
+	235, // 98: vtctldata.LaunchSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.LaunchSchemaMigrationResponse.RowsAffectedByShardEntry
+	264, // 99: vtctldata.MoveTablesCreateRequest.tablet_types:type_name -> topodata.TabletType
+	253, // 100: vtctldata.MoveTablesCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	236, // 101: vtctldata.MoveTablesCreateResponse.details:type_name -> vtctldata.MoveTablesCreateResponse.TabletInfo
+	256, // 102: vtctldata.PingTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
+	256, // 103: vtctldata.PlannedReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
+	256, // 104: vtctldata.PlannedReparentShardRequest.avoid_primary:type_name -> topodata.TabletAlias
+	257, // 105: vtctldata.PlannedReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	256, // 106: vtctldata.PlannedReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
+	252, // 107: vtctldata.PlannedReparentShardResponse.events:type_name -> logutil.Event
+	256, // 108: vtctldata.RefreshStateRequest.tablet_alias:type_name -> topodata.TabletAlias
+	256, // 109: vtctldata.ReloadSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
+	252, // 110: vtctldata.ReloadSchemaKeyspaceResponse.events:type_name -> logutil.Event
+	252, // 111: vtctldata.ReloadSchemaShardResponse.events:type_name -> logutil.Event
+	256, // 112: vtctldata.ReparentTabletRequest.tablet:type_name -> topodata.TabletAlias
+	256, // 113: vtctldata.ReparentTabletResponse.primary:type_name -> topodata.TabletAlias
+	264, // 114: vtctldata.ReshardCreateRequest.tablet_types:type_name -> topodata.TabletType
+	253, // 115: vtctldata.ReshardCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	256, // 116: vtctldata.RestoreFromBackupRequest.tablet_alias:type_name -> topodata.TabletAlias
+	255, // 117: vtctldata.RestoreFromBackupRequest.backup_time:type_name -> vttime.Time
+	255, // 118: vtctldata.RestoreFromBackupRequest.restore_to_timestamp:type_name -> vttime.Time
+	256, // 119: vtctldata.RestoreFromBackupResponse.tablet_alias:type_name -> topodata.TabletAlias
+	252, // 120: vtctldata.RestoreFromBackupResponse.event:type_name -> logutil.Event
+	237, // 121: vtctldata.RetrySchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.RetrySchemaMigrationResponse.RowsAffectedByShardEntry
+	256, // 122: vtctldata.RunHealthCheckRequest.tablet_alias:type_name -> topodata.TabletAlias
+	254, // 123: vtctldata.SetKeyspaceDurabilityPolicyResponse.keyspace:type_name -> topodata.Keyspace
+	264, // 124: vtctldata.SetKeyspaceServedFromRequest.tablet_type:type_name -> topodata.TabletType
+	254, // 125: vtctldata.SetKeyspaceServedFromResponse.keyspace:type_name -> topodata.Keyspace
+	254, // 126: vtctldata.SetKeyspaceShardingInfoResponse.keyspace:type_name -> topodata.Keyspace
+	258, // 127: vtctldata.SetShardIsPrimaryServingResponse.shard:type_name -> topodata.Shard
+	264, // 128: vtctldata.SetShardTabletControlRequest.tablet_type:type_name -> topodata.TabletType
+	258, // 129: vtctldata.SetShardTabletControlResponse.shard:type_name -> topodata.Shard
+	256, // 130: vtctldata.SetWritableRequest.tablet_alias:type_name -> topodata.TabletAlias
+	256, // 131: vtctldata.ShardReplicationAddRequest.tablet_alias:type_name -> topodata.TabletAlias
+	277, // 132: vtctldata.ShardReplicationFixResponse.error:type_name -> topodata.ShardReplicationError
+	238, // 133: vtctldata.ShardReplicationPositionsResponse.replication_statuses:type_name -> vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
+	239, // 134: vtctldata.ShardReplicationPositionsResponse.tablet_map:type_name -> vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
+	256, // 135: vtctldata.ShardReplicationRemoveRequest.tablet_alias:type_name -> topodata.TabletAlias
+	256, // 136: vtctldata.SleepTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
+	257, // 137: vtctldata.SleepTabletRequest.duration:type_name -> vttime.Duration
+	278, // 138: vtctldata.SourceShardAddRequest.key_range:type_name -> topodata.KeyRange
+	258, // 139: vtctldata.SourceShardAddResponse.shard:type_name -> topodata.Shard
+	258, // 140: vtctldata.SourceShardDeleteResponse.shard:type_name -> topodata.Shard
+	256, // 141: vtctldata.StartReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
+	256, // 142: vtctldata.StopReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
+	256, // 143: vtctldata.TabletExternallyReparentedRequest.tablet:type_name -> topodata.TabletAlias
+	256, // 144: vtctldata.TabletExternallyReparentedResponse.new_primary:type_name -> topodata.TabletAlias
+	256, // 145: vtctldata.TabletExternallyReparentedResponse.old_primary:type_name -> topodata.TabletAlias
+	259, // 146: vtctldata.UpdateCellInfoRequest.cell_info:type_name -> topodata.CellInfo
+	259, // 147: vtctldata.UpdateCellInfoResponse.cell_info:type_name -> topodata.CellInfo
+	279, // 148: vtctldata.UpdateCellsAliasRequest.cells_alias:type_name -> topodata.CellsAlias
+	279, // 149: vtctldata.UpdateCellsAliasResponse.cells_alias:type_name -> topodata.CellsAlias
+	240, // 150: vtctldata.ValidateResponse.results_by_keyspace:type_name -> vtctldata.ValidateResponse.ResultsByKeyspaceEntry
+	241, // 151: vtctldata.ValidateKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
+	242, // 152: vtctldata.ValidateSchemaKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
+	243, // 153: vtctldata.ValidateVersionKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
+	244, // 154: vtctldata.ValidateVSchemaResponse.results_by_shard:type_name -> vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
+	264, // 155: vtctldata.VDiffCreateRequest.tablet_types:type_name -> topodata.TabletType
+	253, // 156: vtctldata.VDiffCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	257, // 157: vtctldata.VDiffCreateRequest.filtered_replication_wait_time:type_name -> vttime.Duration
+	257, // 158: vtctldata.VDiffCreateRequest.wait_update_interval:type_name -> vttime.Duration
+	245, // 159: vtctldata.WorkflowDeleteResponse.details:type_name -> vtctldata.WorkflowDeleteResponse.TabletInfo
+	249, // 160: vtctldata.WorkflowStatusResponse.table_copy_state:type_name -> vtctldata.WorkflowStatusResponse.TableCopyStateEntry
+	250, // 161: vtctldata.WorkflowStatusResponse.shard_streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamsEntry
+	264, // 162: vtctldata.WorkflowSwitchTrafficRequest.tablet_types:type_name -> topodata.TabletType
+	257, // 163: vtctldata.WorkflowSwitchTrafficRequest.max_replication_lag_allowed:type_name -> vttime.Duration
+	257, // 164: vtctldata.WorkflowSwitchTrafficRequest.timeout:type_name -> vttime.Duration
+	280, // 165: vtctldata.WorkflowUpdateRequest.tablet_request:type_name -> tabletmanagerdata.UpdateVReplicationWorkflowRequest
+	251, // 166: vtctldata.WorkflowUpdateResponse.details:type_name -> vtctldata.WorkflowUpdateResponse.TabletInfo
+	221, // 167: vtctldata.Workflow.ShardStreamsEntry.value:type_name -> vtctldata.Workflow.ShardStream
+	222, // 168: vtctldata.Workflow.ShardStream.streams:type_name -> vtctldata.Workflow.Stream
+	281, // 169: vtctldata.Workflow.ShardStream.tablet_controls:type_name -> topodata.Shard.TabletControl
+	256, // 170: vtctldata.Workflow.Stream.tablet:type_name -> topodata.TabletAlias
+	282, // 171: vtctldata.Workflow.Stream.binlog_source:type_name -> binlogdata.BinlogSource
+	255, // 172: vtctldata.Workflow.Stream.transaction_timestamp:type_name -> vttime.Time
+	255, // 173: vtctldata.Workflow.Stream.time_updated:type_name -> vttime.Time
+	223, // 174: vtctldata.Workflow.Stream.copy_states:type_name -> vtctldata.Workflow.Stream.CopyState
+	224, // 175: vtctldata.Workflow.Stream.logs:type_name -> vtctldata.Workflow.Stream.Log
+	255, // 176: vtctldata.Workflow.Stream.Log.created_at:type_name -> vttime.Time
+	255, // 177: vtctldata.Workflow.Stream.Log.updated_at:type_name -> vttime.Time
+	10,  // 178: vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry.value:type_name -> vtctldata.Shard
+	279, // 179: vtctldata.GetCellsAliasesResponse.AliasesEntry.value:type_name -> topodata.CellsAlias
+	232, // 180: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry.value:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NameList
+	283, // 181: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry.value:type_name -> topodata.SrvKeyspace
+	276, // 182: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry.value:type_name -> vschema.SrvVSchema
+	256, // 183: vtctldata.MoveTablesCreateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
+	284, // 184: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry.value:type_name -> replicationdata.Status
+	265, // 185: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry.value:type_name -> topodata.Tablet
+	190, // 186: vtctldata.ValidateResponse.ResultsByKeyspaceEntry.value:type_name -> vtctldata.ValidateKeyspaceResponse
+	194, // 187: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	194, // 188: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	194, // 189: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	194, // 190: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	256, // 191: vtctldata.WorkflowDeleteResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
+	256, // 192: vtctldata.WorkflowStatusResponse.ShardStreamState.tablet:type_name -> topodata.TabletAlias
+	247, // 193: vtctldata.WorkflowStatusResponse.ShardStreams.streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamState
+	246, // 194: vtctldata.WorkflowStatusResponse.TableCopyStateEntry.value:type_name -> vtctldata.WorkflowStatusResponse.TableCopyState
+	248, // 195: vtctldata.WorkflowStatusResponse.ShardStreamsEntry.value:type_name -> vtctldata.WorkflowStatusResponse.ShardStreams
+	256, // 196: vtctldata.WorkflowUpdateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
+	197, // [197:197] is the sub-list for method output_type
+	197, // [197:197] is the sub-list for method input_type
+	197, // [197:197] is the sub-list for extension type_name
+	197, // [197:197] is the sub-list for extension extendee
+	0,   // [0:197] is the sub-list for field type_name
 }
 
 func init() { file_vtctldata_proto_init() }
@@ -18446,7 +19212,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[197].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowDeleteRequest); i {
+			switch v := v.(*VDiffCreateRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -18458,7 +19224,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[198].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowDeleteResponse); i {
+			switch v := v.(*VDiffCreateResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -18470,7 +19236,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[199].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowStatusRequest); i {
+			switch v := v.(*VDiffDeleteRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -18482,7 +19248,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[200].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowStatusResponse); i {
+			switch v := v.(*VDiffDeleteResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -18494,7 +19260,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[201].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowSwitchTrafficRequest); i {
+			switch v := v.(*VDiffResumeRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -18506,7 +19272,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[202].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowSwitchTrafficResponse); i {
+			switch v := v.(*VDiffResumeResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -18518,7 +19284,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[203].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowUpdateRequest); i {
+			switch v := v.(*VDiffShowRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -18530,7 +19296,19 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[204].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*WorkflowUpdateResponse); i {
+			switch v := v.(*VDiffShowResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[205].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*VDiffStopRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -18542,7 +19320,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[206].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Workflow_ReplicationLocation); i {
+			switch v := v.(*VDiffStopResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -18554,7 +19332,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[207].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Workflow_ShardStream); i {
+			switch v := v.(*WorkflowDeleteRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -18566,7 +19344,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[208].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Workflow_Stream); i {
+			switch v := v.(*WorkflowDeleteResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -18578,7 +19356,7 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[209].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Workflow_Stream_CopyState); i {
+			switch v := v.(*WorkflowStatusRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -18590,7 +19368,79 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[210].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Workflow_Stream_Log); i {
+			switch v := v.(*WorkflowStatusResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[211].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*WorkflowSwitchTrafficRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[212].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*WorkflowSwitchTrafficResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[213].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*WorkflowUpdateRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[214].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*WorkflowUpdateResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[216].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Workflow_ReplicationLocation); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[217].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Workflow_ShardStream); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -18602,6 +19452,42 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[218].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Workflow_Stream); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[219].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Workflow_Stream_CopyState); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[220].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Workflow_Stream_Log); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[228].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetSrvKeyspaceNamesResponse_NameList); i {
 			case 0:
 				return &v.state
@@ -18613,7 +19499,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[222].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[232].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*MoveTablesCreateResponse_TabletInfo); i {
 			case 0:
 				return &v.state
@@ -18625,7 +19511,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[231].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[241].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*WorkflowDeleteResponse_TabletInfo); i {
 			case 0:
 				return &v.state
@@ -18637,7 +19523,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[232].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[242].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*WorkflowStatusResponse_TableCopyState); i {
 			case 0:
 				return &v.state
@@ -18649,7 +19535,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[233].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[243].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*WorkflowStatusResponse_ShardStreamState); i {
 			case 0:
 				return &v.state
@@ -18661,7 +19547,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[234].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[244].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*WorkflowStatusResponse_ShardStreams); i {
 			case 0:
 				return &v.state
@@ -18673,7 +19559,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[237].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[247].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*WorkflowUpdateResponse_TabletInfo); i {
 			case 0:
 				return &v.state
@@ -18692,7 +19578,7 @@ func file_vtctldata_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_vtctldata_proto_rawDesc,
 			NumEnums:      4,
-			NumMessages:   238,
+			NumMessages:   248,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

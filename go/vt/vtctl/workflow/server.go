@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -50,11 +51,13 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/workflow/vexec"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -87,6 +90,13 @@ type sequenceMetadata struct {
 	usingTableDBName string
 	// The using table definition.
 	usingTableDefinition *vschemapb.Table
+}
+
+type VDiffOutput struct {
+	mu        sync.Mutex
+	Request   *tabletmanagerdata.VDiffRequest
+	Responses map[string]*tabletmanagerdata.VDiffResponse
+	Err       error
 }
 
 const (
@@ -1290,6 +1300,85 @@ func (s *Server) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCrea
 		log.Warningf("Streams will not be started since --auto-start is set to false")
 	}
 	return nil, nil
+}
+
+// VDiffCreate is part of the vtctlservicepb.VtctldServer interface.
+// It passes on the request to the target primary tablets that are
+// participating in the given workflow and VDiff.
+func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRequest) (*vtctldatapb.VDiffCreateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffCreate")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("source_cells", req.SourceCells)
+	span.Annotate("target_cells", req.TargetCells)
+	span.Annotate("tablet_types", req.TabletTypes)
+	span.Annotate("tables", req.Tables)
+	span.Annotate("auto_retry", req.AutoRetry)
+
+	tabletTypesStr := topoproto.MakeStringTypeCSV(req.TabletTypes)
+	if req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
+		tabletTypesStr = discovery.InOrderHint + tabletTypesStr
+	}
+
+	options := &tabletmanagerdatapb.VDiffOptions{
+		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
+			TabletTypes: tabletTypesStr,
+			SourceCell:  strings.Join(req.SourceCells, ","),
+			TargetCell:  strings.Join(req.TargetCells, ","),
+		},
+		CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{
+			Tables:                strings.Join(req.Tables, ","),
+			AutoRetry:             req.AutoRetry,
+			MaxRows:               req.MaxExtraRowsToCompare,
+			TimeoutSeconds:        req.FilteredReplicationWaitTime.Seconds,
+			MaxExtraRowsToCompare: req.MaxExtraRowsToCompare,
+			UpdateTableStats:      req.UpdateTableStats,
+		},
+		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
+			OnlyPks:    req.OnlyPKs,
+			DebugQuery: req.DebugQuery,
+		},
+	}
+
+	tabletreq := &tabletmanagerdata.VDiffRequest{
+		Keyspace:  req.TargetKeyspace,
+		Workflow:  req.Workflow,
+		Action:    string(vdiff.CreateAction),
+		Options:   options,
+		VdiffUuid: req.Uuid,
+	}
+	output := &VDiffOutput{
+		Request:   tabletreq,
+		Responses: make(map[string]*tabletmanagerdata.VDiffResponse),
+		Err:       nil,
+	}
+
+	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
+	if err != nil {
+		return nil, err
+	}
+	if ts.frozen {
+		return nil, fmt.Errorf("invalid VDiff run: writes have been already been switched for workflow %s.%s",
+			req.TargetKeyspace, req.Workflow)
+	}
+
+	output.Err = ts.ForAllTargets(func(target *MigrationTarget) error {
+		resp, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
+		output.mu.Lock()
+		defer output.mu.Unlock()
+		output.Responses[target.GetShard().ShardName()] = resp
+		return err
+	})
+	if output.Err != nil {
+		log.Errorf("Error executing action %s: %v", vdiff.CreateAction, output.Err)
+		return nil, output.Err
+	}
+
+	return &vtctldatapb.VDiffCreateResponse{
+		Uuid: req.Uuid,
+	}, nil
 }
 
 // WorkflowDelete is part of the vtctlservicepb.VtctldServer interface.

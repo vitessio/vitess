@@ -1577,6 +1577,71 @@ message ValidateVSchemaResponse {
   map<string, ValidateShardResponse> results_by_shard = 2;
 }
 
+message VDiffCreateRequest {
+  string workflow = 1;
+  string target_keyspace = 2;
+  string uuid = 3;
+  repeated string source_cells = 4;
+  repeated string target_cells = 5;
+  repeated topodata.TabletType tablet_types = 6;
+  tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 7;
+  repeated string tables = 8;
+  int64 limit = 9;
+  vttime.Duration filtered_replication_wait_time = 10;
+  bool debug_query = 11;
+  bool only_p_ks = 12;
+  bool update_table_stats = 13;
+  int64 max_extra_rows_to_compare = 14;
+  bool wait = 15;
+  vttime.Duration wait_update_interval = 16;
+  bool auto_retry = 17;
+  bool verbose = 18;
+}
+
+message VDiffCreateResponse {
+  string uuid = 1;
+}
+
+message VDiffDeleteRequest {
+  string workflow = 1;
+  string target_keyspace = 2;
+  string uuid = 3;
+}
+
+message VDiffDeleteResponse {
+  string status = 1;
+}
+
+message VDiffResumeRequest {
+  string workflow = 1;
+  string target_keyspace = 2;
+  string uuid = 3;
+}
+
+message VDiffResumeResponse {
+  string status = 1;
+}
+
+message VDiffShowRequest {
+  string workflow = 1;
+  string target_keyspace = 2;
+  // This will be 'all', 'last', or a UUID.
+  string arg = 3;
+}
+
+message VDiffShowResponse {
+}
+
+message VDiffStopRequest {
+  string workflow = 1;
+  string target_keyspace = 2;
+  string uuid = 3;
+}
+
+message VDiffStopResponse {
+  string status = 1;
+}
+
 message WorkflowDeleteRequest {
   string keyspace = 1;
   string workflow = 2;

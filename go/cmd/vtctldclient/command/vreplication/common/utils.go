@@ -79,7 +79,7 @@ func RegisterCommands(root *cobra.Command) {
 
 type SubCommandsOpts struct {
 	SubCommand string
-	Workflow   string // used to specify an example workflow name for the Examples section of the help output.
+	Workflow   string // Used to specify an example workflow name for the Examples section of the help output.
 }
 
 func SetClient(c vtctldclient.VtctldClient) {
@@ -172,11 +172,11 @@ func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format strin
 }
 
 func AddCommonFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&BaseOptions.TargetKeyspace, "target-keyspace", "", "Target keyspace for this workflow exists (required).")
+	cmd.PersistentFlags().StringVar(&BaseOptions.TargetKeyspace, "target-keyspace", "", "Target keyspace for this workflow (required).")
 	cmd.MarkFlagRequired("target-keyspace")
-	cmd.Flags().StringVarP(&BaseOptions.Workflow, "workflow", "w", "", "The workflow you want to perform the command on (required).")
+	cmd.PersistentFlags().StringVarP(&BaseOptions.Workflow, "workflow", "w", "", "The workflow you want to perform the command on (required).")
 	cmd.MarkFlagRequired("workflow")
-	cmd.Flags().StringVar(&BaseOptions.Format, "format", "text", "The format of the output; supported formats are: text,json.")
+	cmd.PersistentFlags().StringVar(&BaseOptions.Format, "format", "text", "The format of the output; supported formats are: text,json.")
 }
 
 func AddCommonCreateFlags(cmd *cobra.Command) {

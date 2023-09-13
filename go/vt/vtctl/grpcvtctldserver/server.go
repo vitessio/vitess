@@ -4688,6 +4688,20 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 	return resp, err
 }
 
+// VDiffCreate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRequest) (resp *vtctldatapb.VDiffCreateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffCreate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+
+	resp, err = s.ws.VDiffCreate(ctx, req)
+	return resp, err
+}
+
 // WorkflowDelete is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDeleteRequest) (resp *vtctldatapb.WorkflowDeleteResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowDelete")
