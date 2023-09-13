@@ -48,7 +48,7 @@ func gen4UpdateStmtPlanner(
 	}
 
 	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
-		if fkManagementNotRequiredForUpdate(ctx, vschema, tables, updStmt.Exprs) {
+		if fkManagementNotRequiredForUpdate(ctx, tables, updStmt.Exprs) {
 			plan := updateUnshardedShortcut(updStmt, ks, tables)
 			plan = pushCommentDirectivesOnPlan(plan, updStmt)
 			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
@@ -86,12 +86,12 @@ func gen4UpdateStmtPlanner(
 }
 
 // TODO: Handle all this in semantic analysis.
-func fkManagementNotRequiredForUpdate(ctx *plancontext.PlanningContext, vschema plancontext.VSchema, vTables []*vindexes.Table, updateExprs sqlparser.UpdateExprs) bool {
+func fkManagementNotRequiredForUpdate(ctx *plancontext.PlanningContext, vTables []*vindexes.Table, updateExprs sqlparser.UpdateExprs) bool {
 	childFkMap := make(map[string][]vindexes.ChildFKInfo)
 
 	// Find the foreign key mode and check for any managed child foreign keys.
 	for _, vTable := range vTables {
-		ksMode, err := vschema.ForeignKeyMode(vTable.Keyspace.Name)
+		ksMode, err := ctx.VSchema.ForeignKeyMode(vTable.Keyspace.Name)
 		if err != nil {
 			return false
 		}
