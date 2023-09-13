@@ -150,6 +150,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	}()
 
 	if vttablet.ServingStatus != "" {
+		// We wait for any valid status to indicate that the tablet server is running.
 		if err = vttablet.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"}); err != nil {
 			errFileContent, _ := os.ReadFile(fname)
 			if errFileContent != nil {
