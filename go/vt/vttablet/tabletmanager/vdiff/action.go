@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/google/uuid"
@@ -150,6 +151,7 @@ func (vde *Engine) getDefaultCell() (string, error) {
 		// Unreachable
 		return "", fmt.Errorf("there are no cells in the topo")
 	}
+	sort.Strings(cells) // Ensure that the resulting value is deterministic
 	return strings.Join(cells, ","), nil
 }
 
