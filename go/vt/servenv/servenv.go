@@ -516,3 +516,10 @@ func RegisterFlagsForTopoBinaries(registerFlags func(fs *pflag.FlagSet)) {
 		OnParseFor(cmd, registerFlags)
 	}
 }
+
+// TestingEndtoend is true when this Vitess binary is being ran as part of an endtoend test suite
+var TestingEndtoend = false
+
+func init() {
+	TestingEndtoend = os.Getenv("VTTEST") == "endtoend"
+}

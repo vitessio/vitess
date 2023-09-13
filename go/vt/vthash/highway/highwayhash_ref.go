@@ -1,5 +1,8 @@
+//go:build noasm || (!amd64 && !arm64 && !ppc64le)
+// +build noasm !amd64,!arm64,!ppc64le
+
 /*
-Copyright 2019 The Vitess Authors.
+Copyright (c) 2017 Minio Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,23 +17,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cache
+package highway
 
-import (
-	"testing"
+var (
+	useSSE4 = false
+	useAVX2 = false
+	useNEON = false
+	useVMX  = false
 )
 
-func BenchmarkGet(b *testing.B) {
-	cache := NewLRUCache(64*1024*1024, func(val any) int64 {
-		return int64(cap(val.([]byte)))
-	})
-	value := make([]byte, 1000)
-	cache.Set("stuff", value)
-	for i := 0; i < b.N; i++ {
-		val, ok := cache.Get("stuff")
-		if !ok {
-			panic("error")
-		}
-		_ = val
-	}
+func initialize(state *[16]uint64, k []byte) {
+	initializeGeneric(state, k)
+}
+
+func update(state *[16]uint64, msg []byte) {
+	updateGeneric(state, msg)
+}
+
+func finalize(out []byte, state *[16]uint64) {
+	finalizeGeneric(out, state)
 }
