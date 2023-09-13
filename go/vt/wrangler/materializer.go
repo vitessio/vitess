@@ -1108,8 +1108,17 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	if len(targetShards) == 0 {
 		return nil, fmt.Errorf("no target shards specified for workflow %s ", ms.Workflow)
 	}
+
+	sourceTs := wr.ts
+	if ms.ExternalCluster != "" { // when the source is an external mysql cluster mounted using the Mount command
+		externalTopo, err := wr.ts.OpenExternalVitessClusterServer(ctx, ms.ExternalCluster)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open external topo: %v", err)
+		}
+		sourceTs = externalTopo
+	}
 	differentPVs := false
-	sourceVSchema, err := wr.ts.GetVSchema(ctx, ms.SourceKeyspace)
+	sourceVSchema, err := sourceTs.GetVSchema(ctx, ms.SourceKeyspace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get source keyspace vschema: %v", err)
 	}

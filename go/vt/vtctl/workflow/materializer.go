@@ -502,8 +502,17 @@ func (mz *materializer) buildMaterializer() error {
 	if len(targetShards) == 0 {
 		return fmt.Errorf("no target shards specified for workflow %s ", ms.Workflow)
 	}
+
+	sourceTs := mz.ts
+	if ms.ExternalCluster != "" { // when the source is an external mysql cluster mounted using the Mount command
+		externalTopo, err := mz.ts.OpenExternalVitessClusterServer(ctx, ms.ExternalCluster)
+		if err != nil {
+			return fmt.Errorf("failed to open external topo: %v", err)
+		}
+		sourceTs = externalTopo
+	}
 	differentPVs := false
-	sourceVSchema, err := mz.ts.GetVSchema(ctx, ms.SourceKeyspace)
+	sourceVSchema, err := sourceTs.GetVSchema(ctx, ms.SourceKeyspace)
 	if err != nil {
 		return fmt.Errorf("failed to get source keyspace vschema: %v", err)
 	}
