@@ -328,6 +328,8 @@ type VtctldClient interface {
 	// only works if the current replica position matches the last known reparent
 	// action.
 	ReparentTablet(ctx context.Context, in *vtctldata.ReparentTabletRequest, opts ...grpc.CallOption) (*vtctldata.ReparentTabletResponse, error)
+	// ReshardCreate creates a workflow to reshard a keyspace.
+	ReshardCreate(ctx context.Context, in *vtctldata.ReshardCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
 	// RestoreFromBackup stops mysqld for the given tablet and restores a backup.
 	RestoreFromBackup(ctx context.Context, in *vtctldata.RestoreFromBackupRequest, opts ...grpc.CallOption) (Vtctld_RestoreFromBackupClient, error)
 	// RetrySchemaMigration marks a given schema migration for retry.
@@ -1077,6 +1079,15 @@ func (c *vtctldClient) ReparentTablet(ctx context.Context, in *vtctldata.Reparen
 	return out, nil
 }
 
+func (c *vtctldClient) ReshardCreate(ctx context.Context, in *vtctldata.ReshardCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
+	out := new(vtctldata.WorkflowStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ReshardCreate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldata.RestoreFromBackupRequest, opts ...grpc.CallOption) (Vtctld_RestoreFromBackupClient, error) {
 	stream, err := c.cc.NewStream(ctx, &Vtctld_ServiceDesc.Streams[2], "/vtctlservice.Vtctld/RestoreFromBackup", opts...)
 	if err != nil {
@@ -1566,6 +1577,8 @@ type VtctldServer interface {
 	// only works if the current replica position matches the last known reparent
 	// action.
 	ReparentTablet(context.Context, *vtctldata.ReparentTabletRequest) (*vtctldata.ReparentTabletResponse, error)
+	// ReshardCreate creates a workflow to reshard a keyspace.
+	ReshardCreate(context.Context, *vtctldata.ReshardCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
 	// RestoreFromBackup stops mysqld for the given tablet and restores a backup.
 	RestoreFromBackup(*vtctldata.RestoreFromBackupRequest, Vtctld_RestoreFromBackupServer) error
 	// RetrySchemaMigration marks a given schema migration for retry.
@@ -1869,6 +1882,9 @@ func (UnimplementedVtctldServer) RemoveShardCell(context.Context, *vtctldata.Rem
 }
 func (UnimplementedVtctldServer) ReparentTablet(context.Context, *vtctldata.ReparentTabletRequest) (*vtctldata.ReparentTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReparentTablet not implemented")
+}
+func (UnimplementedVtctldServer) ReshardCreate(context.Context, *vtctldata.ReshardCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReshardCreate not implemented")
 }
 func (UnimplementedVtctldServer) RestoreFromBackup(*vtctldata.RestoreFromBackupRequest, Vtctld_RestoreFromBackupServer) error {
 	return status.Errorf(codes.Unimplemented, "method RestoreFromBackup not implemented")
@@ -3167,6 +3183,24 @@ func _Vtctld_ReparentTablet_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_ReshardCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ReshardCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ReshardCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ReshardCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ReshardCreate(ctx, req.(*vtctldata.ReshardCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_RestoreFromBackup_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(vtctldata.RestoreFromBackupRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -3972,6 +4006,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReparentTablet",
 			Handler:    _Vtctld_ReparentTablet_Handler,
+		},
+		{
+			MethodName: "ReshardCreate",
+			Handler:    _Vtctld_ReshardCreate_Handler,
 		},
 		{
 			MethodName: "RetrySchemaMigration",
