@@ -150,7 +150,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	}()
 
 	if vttablet.ServingStatus != "" {
-		if err = vttablet.WaitForTabletStatus(vttablet.ServingStatus, "SERVING"); err != nil {
+		if err = vttablet.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"}); err != nil {
 			errFileContent, _ := os.ReadFile(fname)
 			if errFileContent != nil {
 				log.Infof("vttablet error:\n%s\n", string(errFileContent))
@@ -273,8 +273,8 @@ func (vttablet *VttabletProcess) GetTabletType() string {
 }
 
 // WaitForTabletStatus waits for one of the expected statuses to be reached
-func (vttablet *VttabletProcess) WaitForTabletStatus(expectedStatus ...string) error {
-	return vttablet.WaitForTabletStatusesForTimeout(expectedStatus, vttabletStateTimeout)
+func (vttablet *VttabletProcess) WaitForTabletStatus(expectedStatus string) error {
+	return vttablet.WaitForTabletStatusesForTimeout([]string{expectedStatus}, vttabletStateTimeout)
 }
 
 // WaitForTabletStatuses waits for one of expected statuses is reached
