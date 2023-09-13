@@ -90,19 +90,7 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.
 	}
 
 	// set lock and comments on the route to be set on the sql query on conversion.
-	_ = rewrite.Visit(op, func(op ops.Operator) error {
-		route, ok := op.(*Route)
-		if !ok {
-			return nil
-		}
-		if stmtWithComments, ok := stmt.(sqlparser.Commented); ok {
-			route.Comments = stmtWithComments.GetParsedComments()
-		}
-		if stmtWithLock, ok := stmt.(sqlparser.SelectStatement); ok {
-			route.Lock = stmtWithLock.GetLock()
-		}
-		return nil
-	})
+	setCommentsAndLockOnRoute(op, stmt)
 
 	return op, err
 }
@@ -180,4 +168,20 @@ func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op ops.Oper
 		return from
 	})
 	return selExprs, nil
+}
+
+func setCommentsAndLockOnRoute(op ops.Operator, stmt sqlparser.Statement) {
+	_ = rewrite.Visit(op, func(op ops.Operator) error {
+		route, ok := op.(*Route)
+		if !ok {
+			return nil
+		}
+		if stmtWithComments, ok := stmt.(sqlparser.Commented); ok {
+			route.Comments = stmtWithComments.GetParsedComments()
+		}
+		if stmtWithLock, ok := stmt.(sqlparser.SelectStatement); ok {
+			route.Lock = stmtWithLock.GetLock()
+		}
+		return nil
+	})
 }

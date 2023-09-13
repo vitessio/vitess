@@ -45,11 +45,11 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	// Check single unsharded. Even if the table is for single unsharded but sequence table is used.
 	// We cannot shortcut here as sequence column needs additional planning.
 	ks, tables := ctx.SemTable.SingleUnshardedKeyspace()
-	FkPlanNeeded := false
+	fkPlanNeeded := false
 	if ks != nil {
 		noAutoInc := tables[0].AutoIncrement == nil
-		FkPlanNeeded = fkManagementRequiredForInsert(ctx, tables[0], sqlparser.UpdateExprs(insStmt.OnDup), insStmt.Action == sqlparser.ReplaceAct)
-		if noAutoInc && !FkPlanNeeded {
+		fkPlanNeeded = fkManagementRequiredForInsert(ctx, tables[0], sqlparser.UpdateExprs(insStmt.OnDup), insStmt.Action == sqlparser.ReplaceAct)
+		if noAutoInc && !fkPlanNeeded {
 			plan := insertUnshardedShortcut(insStmt, ks, tables)
 			plan = pushCommentDirectivesOnPlan(plan, insStmt)
 			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
@@ -61,7 +61,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 		return nil, err
 	}
 
-	if err = errOutIfPlanCannotBeConstructed(ctx, tblInfo.GetVindexTable(), insStmt, FkPlanNeeded); err != nil {
+	if err = errOutIfPlanCannotBeConstructed(ctx, tblInfo.GetVindexTable(), insStmt, fkPlanNeeded); err != nil {
 		return nil, err
 	}
 
