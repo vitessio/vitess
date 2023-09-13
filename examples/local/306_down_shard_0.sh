@@ -17,7 +17,7 @@
 
 source ../common/env.sh
 
-vtctlclient Reshard Complete customer.cust2cust
+vtctldclient Reshard --workflow cust2cust --target-keyspace customer complete
 
 for i in 200 201 202; do
 	CELL=zone1 TABLET_UID=$i ../common/scripts/vttablet-down.sh

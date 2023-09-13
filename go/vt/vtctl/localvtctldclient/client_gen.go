@@ -446,6 +446,11 @@ func (client *localVtctldClient) ReparentTablet(ctx context.Context, in *vtctlda
 	return client.s.ReparentTablet(ctx, in)
 }
 
+// ReshardCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ReshardCreate(ctx context.Context, in *vtctldatapb.ReshardCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowStatusResponse, error) {
+	return client.s.ReshardCreate(ctx, in)
+}
+
 type restoreFromBackupStreamAdapter struct {
 	*grpcshim.BidiStream
 	ch chan *vtctldatapb.RestoreFromBackupResponse
