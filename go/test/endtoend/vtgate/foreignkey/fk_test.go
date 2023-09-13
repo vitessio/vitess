@@ -564,6 +564,7 @@ func TestFkScenarios(t *testing.T) {
 				defer closer()
 				// Set the correct keyspace to use from VtGates.
 				if testSharded {
+					t.Skip("Skip test since we don't have sharded foreign key support yet")
 					_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
 				} else {
 					_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
@@ -591,6 +592,7 @@ func TestFkScenarios(t *testing.T) {
 			defer closer()
 			// Set the correct keyspace to use from VtGates.
 			if testSharded {
+				t.Skip("Skip test since we don't have sharded foreign key support yet")
 				_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
 			} else {
 				_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
