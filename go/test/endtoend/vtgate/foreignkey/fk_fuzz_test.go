@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -167,7 +168,7 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, sharded bool, fuzzerThreadId int
 			}
 		} else {
 			// When we are running concurrent threads, then we run all the queries on Vitess.
-			_ = utils.Exec(t, mcmp.VtConn, query)
+			_, _ = utils.ExecAllowError(t, mcmp.VtConn, query)
 		}
 	}
 }
@@ -256,6 +257,15 @@ func (fz *fuzzer) stop() {
 func TestFkFuzzTest(t *testing.T) {
 	// Wait for schema-tracking to be complete.
 	waitForSchemaTrackingForFkTables(t)
+	// Remove all the foreign key constraints for all the replicas.
+	// We can then verify that the replica, and the primary have the same data, to ensure
+	// that none of the queries ever lead to cascades/updates on MySQL level.
+	for _, ks := range []string{shardedKs, unshardedKs} {
+		replicas := getReplicaTablets(ks)
+		for _, replica := range replicas {
+			removeAllForeignKeyConstraints(t, replica, ks)
+		}
+	}
 
 	testcases := []struct {
 		name           string
@@ -276,7 +286,8 @@ func TestFkFuzzTest(t *testing.T) {
 			insertShare:    100,
 			deleteShare:    0,
 			updateShare:    0,
-		}, {
+		},
+		{
 			name:           "Single Thread - Balanced Inserts and Deletes",
 			concurrency:    1,
 			timeForTesting: 5 * time.Second,
@@ -285,7 +296,8 @@ func TestFkFuzzTest(t *testing.T) {
 			insertShare:    50,
 			deleteShare:    50,
 			updateShare:    0,
-		}, {
+		},
+		{
 			name:           "Single Thread - Balanced Inserts and Updates",
 			concurrency:    1,
 			timeForTesting: 5 * time.Second,
@@ -293,6 +305,26 @@ func TestFkFuzzTest(t *testing.T) {
 			maxValForId:    10,
 			insertShare:    50,
 			deleteShare:    0,
+			updateShare:    50,
+		},
+		{
+			name:           "Single Thread - Balanced Inserts, Updates and Deletes",
+			concurrency:    1,
+			timeForTesting: 5 * time.Second,
+			maxValForCol:   5,
+			maxValForId:    10,
+			insertShare:    50,
+			deleteShare:    50,
+			updateShare:    50,
+		},
+		{
+			name:           "Multi Thread - Balanced Inserts, Updates and Deletes",
+			concurrency:    30,
+			timeForTesting: 5 * time.Second,
+			maxValForCol:   5,
+			maxValForId:    30,
+			insertShare:    50,
+			deleteShare:    50,
 			updateShare:    50,
 		},
 	}
@@ -331,14 +363,14 @@ func TestFkFuzzTest(t *testing.T) {
 				}
 
 				// Verify the consistency of the data.
-				verifyDataIsCorrect(mcmp, tt.concurrency)
+				verifyDataIsCorrect(t, mcmp, tt.concurrency)
 			})
 		}
 	}
 }
 
 // verifyDataIsCorrect verifies that the data in MySQL database matches the data in the Vitess database.
-func verifyDataIsCorrect(mcmp utils.MySQLCompare, concurrency int) {
+func verifyDataIsCorrect(t *testing.T, mcmp utils.MySQLCompare, concurrency int) {
 	// For single concurrent thread, we run all the queries on both MySQL and Vitess, so we can verify correctness
 	// by just checking if the data in MySQL and Vitess match.
 	if concurrency == 1 {
@@ -346,10 +378,49 @@ func verifyDataIsCorrect(mcmp utils.MySQLCompare, concurrency int) {
 			query := fmt.Sprintf("SELECT * FROM %v ORDER BY id", table)
 			mcmp.Exec(query)
 		}
+	} else {
+		// For higher concurrency, we don't have MySQL data to verify everything is fine,
+		// so we'll have to do something different.
+		// We run LEFT JOIN queries on all the parent and child tables linked by foreign keys
+		// to make sure that nothing is broken in the database.
+		for _, reference := range fkReferences {
+			query := fmt.Sprintf("select %v.id from %v left join %v on (%v.col = %v.col) where %v.col is null and %v.col is not null", reference.childTable, reference.childTable, reference.parentTable, reference.parentTable, reference.childTable, reference.parentTable, reference.childTable)
+			res, err := mcmp.VtConn.ExecuteFetch(query, 1000, false)
+			require.NoError(t, err)
+			require.Zerof(t, len(res.Rows), "Query %v gave non-empty results", query)
+		}
 	}
-	// For higher concurrency, we don't have MySQL data to verify everything is fine,
-	// so we'll have to do something different.
-	// TODO: Do something different.
+	// We also verify that the results in Primary and Replica table match as is.
+	for _, keyspace := range clusterInstance.Keyspaces {
+		for _, shard := range keyspace.Shards {
+			var primaryTab, replicaTab *cluster.Vttablet
+			for _, vttablet := range shard.Vttablets {
+				if vttablet.Type == "primary" {
+					primaryTab = vttablet
+				} else {
+					replicaTab = vttablet
+				}
+			}
+			require.NotNil(t, primaryTab)
+			require.NotNil(t, replicaTab)
+			primaryConn, err := utils.GetMySQLConn(primaryTab, fmt.Sprintf("vt_%v", keyspace.Name))
+			require.NoError(t, err)
+			replicaConn, err := utils.GetMySQLConn(replicaTab, fmt.Sprintf("vt_%v", keyspace.Name))
+			require.NoError(t, err)
+			primaryRes := collectFkTablesState(primaryConn)
+			replicaRes := collectFkTablesState(replicaConn)
+			verifyDataMatches(t, primaryRes, replicaRes)
+		}
+	}
+}
+
+// verifyDataMatches verifies that the two list of results are the same.
+func verifyDataMatches(t *testing.T, resOne []*sqltypes.Result, resTwo []*sqltypes.Result) {
+	require.EqualValues(t, len(resTwo), len(resOne), "Res 1 - %v, Res 2 - %v", resOne, resTwo)
+	for idx, resultOne := range resOne {
+		resultTwo := resTwo[idx]
+		require.True(t, resultOne.Equal(resultTwo), "Rows 1 - %v, Rows 2 - %v", resultOne.Rows, resultTwo.Rows)
+	}
 }
 
 // collectFkTablesState collects the data stored in the foreign key tables for the given connection.

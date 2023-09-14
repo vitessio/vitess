@@ -17,10 +17,12 @@ limitations under the License.
 package foreignkey
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
@@ -46,5 +48,41 @@ func waitForSchemaTrackingForFkTables(t *testing.T) {
 	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedKs, "fk_t18", "col")
 	require.NoError(t, err)
 	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedKs, "fk_t11", "col")
+	require.NoError(t, err)
+}
+
+// getReplicaTablets gets all the replica tablets.
+func getReplicaTablets(keyspace string) []*cluster.Vttablet {
+	var replicaTablets []*cluster.Vttablet
+	for _, ks := range clusterInstance.Keyspaces {
+		if ks.Name != keyspace {
+			continue
+		}
+		for _, shard := range ks.Shards {
+			for _, vttablet := range shard.Vttablets {
+				if vttablet.Type != "primary" {
+					replicaTablets = append(replicaTablets, vttablet)
+				}
+			}
+		}
+	}
+	return replicaTablets
+}
+
+// removeAllForeignKeyConstraints removes all the foreign key constraints from the given tablet.
+func removeAllForeignKeyConstraints(t *testing.T, vttablet *cluster.Vttablet, keyspace string) {
+	getAllFksQuery := `SELECT RefCons.table_name, RefCons.constraint_name FROM information_schema.referential_constraints RefCons;`
+	res, err := utils.RunSQL(t, getAllFksQuery, vttablet, "")
+	require.NoError(t, err)
+	var queries []string
+	queries = append(queries, "set global super_read_only=0")
+	for _, row := range res.Rows {
+		tableName := row[0].ToString()
+		constraintName := row[1].ToString()
+		removeFkQuery := fmt.Sprintf("ALTER TABLE %v DROP CONSTRAINT %v", tableName, constraintName)
+		queries = append(queries, removeFkQuery)
+	}
+	queries = append(queries, "set global super_read_only=1")
+	err = utils.RunSQLs(t, queries, vttablet, fmt.Sprintf("vt_%v", keyspace))
 	require.NoError(t, err)
 }

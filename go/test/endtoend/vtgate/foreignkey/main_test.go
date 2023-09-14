@@ -52,7 +52,28 @@ var (
 
 	fkTables = []string{"fk_t1", "fk_t2", "fk_t3", "fk_t4", "fk_t5", "fk_t6", "fk_t7",
 		"fk_t10", "fk_t11", "fk_t12", "fk_t13", "fk_t15", "fk_t16", "fk_t17", "fk_t18", "fk_t19"}
+	fkReferences = []fkReference{
+		{parentTable: "fk_t1", childTable: "fk_t2"},
+		{parentTable: "fk_t2", childTable: "fk_t7"},
+		{parentTable: "fk_t2", childTable: "fk_t3"},
+		{parentTable: "fk_t3", childTable: "fk_t4"},
+		{parentTable: "fk_t3", childTable: "fk_t6"},
+		{parentTable: "fk_t4", childTable: "fk_t5"},
+		{parentTable: "fk_t10", childTable: "fk_t11"},
+		{parentTable: "fk_t11", childTable: "fk_t12"},
+		{parentTable: "fk_t11", childTable: "fk_t13"},
+		{parentTable: "fk_t15", childTable: "fk_t16"},
+		{parentTable: "fk_t16", childTable: "fk_t17"},
+		{parentTable: "fk_t17", childTable: "fk_t18"},
+		{parentTable: "fk_t17", childTable: "fk_t19"},
+	}
 )
+
+// fkReference stores a foreign key reference from one table to another.
+type fkReference struct {
+	parentTable string
+	childTable  string
+}
 
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
@@ -75,7 +96,7 @@ func TestMain(m *testing.M) {
 			VSchema:   shardedVSchema,
 		}
 
-		err = clusterInstance.StartKeyspace(*sKs, []string{"-80", "80-"}, 0, false)
+		err = clusterInstance.StartKeyspace(*sKs, []string{"-80", "80-"}, 1, false)
 		if err != nil {
 			return 1
 		}
@@ -85,7 +106,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: unshardedSchemaSQL,
 			VSchema:   unshardedVSchema,
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*uKs, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*uKs, 1, false)
 		if err != nil {
 			return 1
 		}
