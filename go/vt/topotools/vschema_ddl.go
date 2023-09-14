@@ -254,7 +254,7 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, alterVschema *sqlpar
 		}
 
 		if table.AutoIncrement == nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema does not contain auto inc %v on table %s in keyspace %s", table.AutoIncrement, name, ksName)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema does not contain auto increment %v on table %s in keyspace %s", table.AutoIncrement, name, ksName)
 		}
 
 		table.AutoIncrement = nil
