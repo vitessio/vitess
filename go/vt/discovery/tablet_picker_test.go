@@ -25,10 +25,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestPickSimple(t *testing.T) {
@@ -194,7 +195,6 @@ func TestPickMultiCell(t *testing.T) {
 	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
 }
 
-<<<<<<< HEAD
 func TestPickPrimary(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
 	want := addTablet(te, 100, topodatapb.TabletType_PRIMARY, "cell", true, true)
@@ -205,49 +205,6 @@ func TestPickPrimary(t *testing.T) {
 		si.PrimaryAlias = want.Alias
 		return nil
 	})
-=======
-// TestPickUsingCellAsAlias confirms that when the tablet picker is
-// given a cell name that is an alias, it will choose a tablet that
-// exists within a cell that is part of the alias.
-func TestPickUsingCellAsAlias(t *testing.T) {
-	ctx := utils.LeakCheckContext(t)
-
-	// The test env puts all cells into an alias called "cella".
-	// We're also going to specify an optional extraCell that is NOT
-	// added to the alias.
-	te := newPickerTestEnv(t, ctx, []string{"cell1", "cell2", "cell3"}, "xtracell")
-	// Specify the alias as the cell.
-	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"cella"}, "cell1", te.keyspace, te.shard, "replica", TabletPickerOptions{})
-	require.NoError(t, err)
-
-	// Create a tablet in one of the main cells, it should be
-	// picked as it is part of the cella alias. This tablet is
-	// NOT part of the talbet picker's local cell (cell1) so it
-	// will not be given local preference.
-	want := addTablet(ctx, te, 101, topodatapb.TabletType_REPLICA, "cell2", true, true)
-	defer deleteTablet(t, te, want)
-	// Create a tablet in an extra cell which is thus NOT part of
-	// the cella alias so it should NOT be picked.
-	noWant := addTablet(ctx, te, 102, topodatapb.TabletType_REPLICA, "xtracell", true, true)
-	defer deleteTablet(t, te, noWant)
-	// Try it many times to be sure we don't ever pick the wrong one.
-	for i := 0; i < 100; i++ {
-		tablet, err := tp.PickForStreaming(ctx)
-		require.NoError(t, err)
-		assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
-	}
-}
-
-func TestPickUsingCellAliasOnlySpecified(t *testing.T) {
-	ctx := utils.LeakCheckContextTimeout(t, 200*time.Millisecond)
-
-	// test env puts all cells into an alias called "cella"
-	te := newPickerTestEnv(t, ctx, []string{"cell", "otherCell"})
-	want1 := addTablet(ctx, te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(t, te, want1)
-
-	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPreference: "OnlySpecified"})
->>>>>>> fd9662b1d9 (VDiff: correct handling of default source and target cells (#13969))
 	require.NoError(t, err)
 
 	tp, err := NewTabletPicker(te.topoServ, []string{"otherCell"}, te.keyspace, te.shard, "primary")
@@ -408,6 +365,38 @@ func TestPickUsingCellAlias(t *testing.T) {
 	assert.True(t, picked2)
 }
 
+// TestPickUsingCellAsAlias confirms that when the tablet picker is
+// given a cell name that is an alias, it will choose a tablet that
+// exists within a cell that is part of the alias.
+func TestPickUsingCellAsAlias(t *testing.T) {
+	ctx := context.Background()
+
+	// The test env puts all cells into an alias called "cella".
+	// We're also going to specify an optional extraCell that is NOT
+	// added to the alias.
+	te := newPickerTestEnv(t, []string{"cell1", "cell2", "cell3"}, "xtracell")
+	// Specify the alias as the cell.
+	tp, err := NewTabletPicker(te.topoServ, []string{"cella"}, te.keyspace, te.shard, "replica")
+	require.NoError(t, err)
+
+	// Create a tablet in one of the main cells, it should be
+	// picked as it is part of the cella alias. This tablet is
+	// NOT part of the talbet picker's local cell (cell1) so it
+	// will not be given local preference.
+	want := addTablet(te, 101, topodatapb.TabletType_REPLICA, "cell2", true, true)
+	defer deleteTablet(t, te, want)
+	// Create a tablet in an extra cell which is thus NOT part of
+	// the cella alias so it should NOT be picked.
+	noWant := addTablet(te, 102, topodatapb.TabletType_REPLICA, "xtracell", true, true)
+	defer deleteTablet(t, te, noWant)
+	// Try it many times to be sure we don't ever pick the wrong one.
+	for i := 0; i < 100; i++ {
+		tablet, err := tp.PickForStreaming(ctx)
+		require.NoError(t, err)
+		assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
+	}
+}
+
 func TestTabletAppearsDuringSleep(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
@@ -472,28 +461,20 @@ type pickerTestEnv struct {
 	topoServ *topo.Server
 }
 
-<<<<<<< HEAD
-func newPickerTestEnv(t *testing.T, cells []string) *pickerTestEnv {
-	ctx := context.Background()
-
-=======
 // newPickerTestEnv creates a test environment for TabletPicker tests.
 // It creates a cell alias called 'cella' which contains all of the
 // provided cells. However, if any optional extraCells are provided, those
 // are NOT added to the cell alias.
-func newPickerTestEnv(t *testing.T, ctx context.Context, cells []string, extraCells ...string) *pickerTestEnv {
+func newPickerTestEnv(t *testing.T, cells []string, extraCells ...string) *pickerTestEnv {
+	ctx := context.Background()
 	allCells := append(cells, extraCells...)
->>>>>>> fd9662b1d9 (VDiff: correct handling of default source and target cells (#13969))
+
 	te := &pickerTestEnv{
 		t:        t,
 		keyspace: "ks",
 		shard:    "0",
 		cells:    cells,
-<<<<<<< HEAD
-		topoServ: memorytopo.NewServer(cells...),
-=======
-		topoServ: memorytopo.NewServer(ctx, allCells...),
->>>>>>> fd9662b1d9 (VDiff: correct handling of default source and target cells (#13969))
+		topoServ: memorytopo.NewServer(allCells...),
 	}
 	// Create cell alias containing the cells (but NOT the extraCells).
 	err := te.topoServ.CreateCellsAlias(ctx, "cella", &topodatapb.CellsAlias{
