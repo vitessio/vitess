@@ -27,7 +27,6 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/discovery"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
@@ -67,8 +66,11 @@ func TestStreamSQLSharded(t *testing.T) {
 		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 	}
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
-	executor := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
+	plans := DefaultPlanCache()
+
+	executor := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4)
+	executor.SetQueryLogger(queryLogger)
+
 	defer executor.Close()
 
 	sql := "stream * from sharded_user_msgs"

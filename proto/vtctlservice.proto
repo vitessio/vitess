@@ -223,6 +223,8 @@ service Vtctld {
   // only works if the current replica position matches the last known reparent
   // action.
   rpc ReparentTablet(vtctldata.ReparentTabletRequest) returns (vtctldata.ReparentTabletResponse) {};
+  // ReshardCreate creates a workflow to reshard a keyspace.
+  rpc ReshardCreate(vtctldata.ReshardCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};
   // RestoreFromBackup stops mysqld for the given tablet and restores a backup.
   rpc RestoreFromBackup(vtctldata.RestoreFromBackupRequest) returns (stream vtctldata.RestoreFromBackupResponse) {};
   // RetrySchemaMigration marks a given schema migration for retry.

@@ -70,7 +70,7 @@ func doVDiff1(t *testing.T, ksWorkflow, cells string) {
 		diffReports := make(map[string]*wrangler.DiffReport)
 		t.Logf("vdiff1 output: %s", output)
 		err = json.Unmarshal([]byte(output), &diffReports)
-		require.NoError(t, err)
+		require.NoErrorf(t, err, "full output: %s", output)
 		if len(diffReports) < 1 {
 			t.Fatal("VDiff did not return a valid json response " + output + "\n")
 		}

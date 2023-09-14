@@ -4313,7 +4313,6 @@
   {
     "comment": "sharded update with sub query where the sources can be merged into a single query",
     "query": "update user set col = (select count(*) from user_extra where user_extra.user_id = 5) where id = 5",
-    "skip": true,
     "plan": {
       "QueryType": "UPDATE",
       "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = 5) where id = 5",

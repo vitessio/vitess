@@ -1050,6 +1050,11 @@ func (node *Select) GetLimit() *Limit {
 	return node.Limit
 }
 
+// GetLock returns the lock clause
+func (node *Select) GetLock() Lock {
+	return node.Lock
+}
+
 // SetLock sets the lock clause
 func (node *Select) SetLock(lock Lock) {
 	node.Lock = lock
@@ -1194,6 +1199,11 @@ func (node *Union) GetLimit() *Limit {
 // GetColumns gets the columns
 func (node *Union) GetColumns() SelectExprs {
 	return node.Left.GetColumns()
+}
+
+// GetLock returns the lock clause
+func (node *Union) GetLock() Lock {
+	return node.Lock
 }
 
 // SetLock sets the lock clause
@@ -2480,13 +2490,22 @@ func (v *visitor) visitAllSelects(in SelectStatement, f func(p *Select, idx int)
 	panic("switch should be exhaustive")
 }
 
-func IsNonLiteral(updExprs UpdateExprs) bool {
-	for _, updateExpr := range updExprs {
-		switch updateExpr.Expr.(type) {
-		case *Argument, *NullVal, BoolVal, *Literal:
-		default:
-			return true
-		}
+// IsRestrict returns true if the reference action is of restrict type.
+func (ra ReferenceAction) IsRestrict() bool {
+	switch ra {
+	case Restrict, NoAction, DefaultAction:
+		return true
+	default:
+		return false
 	}
-	return false
+}
+
+// IsLiteral returns true if the expression is of a literal type.
+func IsLiteral(expr Expr) bool {
+	switch expr.(type) {
+	case *Argument, *NullVal, BoolVal, *Literal:
+		return true
+	default:
+		return false
+	}
 }

@@ -28,9 +28,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
@@ -177,8 +178,15 @@ func createExecutorEnv(t testing.TB) (executor *Executor, sbc1, sbc2, sbclookup 
 	_ = hc.AddTestTablet(cell, "2", 3, KsTestUnsharded, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
-	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
+
+	// All these vtgate tests expect plans to be immediately cached after first use;
+	// this is not the actual behavior of the system in a production context because we use a doorkeeper
+	// that sometimes can cause a plan to not be cached the very first time it's seen, to prevent
+	// one-off queries from thrashing the cache. Disable the doorkeeper in the tests to prevent flakiness.
+	plans := theine.NewStore[PlanCacheKey, *engine.Plan](queryPlanCacheMemory, false)
+
+	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4)
+	executor.SetQueryLogger(queryLogger)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 
@@ -209,8 +217,9 @@ func createCustomExecutor(t testing.TB, vschema string) (executor *Executor, sbc
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
-	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
+	plans := DefaultPlanCache()
+	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4)
+	executor.SetQueryLogger(queryLogger)
 
 	t.Cleanup(func() {
 		defer utils.EnsureNoLeaks(t)
@@ -246,8 +255,9 @@ func createCustomExecutorSetValues(t testing.TB, vschema string, values []*sqlty
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
-	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
+	plans := DefaultPlanCache()
+	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4)
+	executor.SetQueryLogger(queryLogger)
 
 	t.Cleanup(func() {
 		defer utils.EnsureNoLeaks(t)

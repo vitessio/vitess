@@ -233,6 +233,14 @@ func (vschema *VSchema) AddForeignKey(ksname, childTableName string, fkConstrain
 	if !ok {
 		return fmt.Errorf("child table %s not found in keyspace %s", childTableName, ksname)
 	}
+	pKsName := fkConstraint.ReferenceDefinition.ReferencedTable.Qualifier.String()
+	if pKsName != "" {
+		ks, ok = vschema.Keyspaces[pKsName]
+		if !ok {
+			return fmt.Errorf("keyspace %s not found in vschema", pKsName)
+		}
+		ksname = pKsName
+	}
 	parentTableName := fkConstraint.ReferenceDefinition.ReferencedTable.Name.String()
 	pTbl, ok := ks.Tables[parentTableName]
 	if !ok {

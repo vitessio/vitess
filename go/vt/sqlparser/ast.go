@@ -63,6 +63,7 @@ type (
 		GetOrderBy() OrderBy
 		GetLimit() *Limit
 		SetLimit(*Limit)
+		GetLock() Lock
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
 		SetWith(with *With)

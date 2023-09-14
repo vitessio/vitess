@@ -267,7 +267,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 	for _, ae := range aes {
 		org := sqlparser.CloneRefOfAliasedExpr(ae)
 		expr := ae.Expr
-		newExpr, subqs, err := sqc.handleSubqueries(ctx, expr, outerID)
+		newExpr, subqs, err := sqc.pullOutValueSubqueries(ctx, expr, outerID)
 		if err != nil {
 			return nil, err
 		}
@@ -301,7 +301,7 @@ type subqueryExtraction struct {
 	cols []*sqlparser.ColName
 }
 
-func (sq *SubQueryContainer) handleSubqueries(
+func (sq *SubQueryContainer) pullOutValueSubqueries(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	outerID semantics.TableSet,
