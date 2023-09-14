@@ -58,6 +58,7 @@ type VttabletProcess struct {
 	Shard                       string
 	CommonArg                   VtctlProcess
 	LogDir                      string
+	ErrorLog                    string
 	TabletHostname              string
 	Keyspace                    string
 	TabletType                  string
@@ -130,6 +131,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	fname := path.Join(vttablet.LogDir, vttablet.TabletPath+"-vttablet-stderr.txt")
 	errFile, _ := os.Create(fname)
 	vttablet.proc.Stderr = errFile
+	vttablet.ErrorLog = errFile.Name()
 
 	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
 
@@ -297,6 +299,11 @@ func (vttablet *VttabletProcess) WaitForTabletStatusesForTimeout(expectedStatuse
 		}
 		select {
 		case err := <-vttablet.exit:
+			errBytes, ferr := os.ReadFile(vttablet.ErrorLog)
+			if ferr != nil {
+				log.Errorf("Failed to read the vttablet error log file %q: %v", vttablet.ErrorLog, ferr)
+			}
+			log.Errorf("vttablet error log contents:\n%s", string(errBytes))
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
 		default:
 			time.Sleep(300 * time.Millisecond)

@@ -35,6 +35,7 @@ type MysqlctldProcess struct {
 	Name               string
 	Binary             string
 	LogDirectory       string
+	ErrorLog           string
 	Password           string
 	TabletUID          int
 	MySQLPort          int
@@ -97,6 +98,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	tempProcess.Env = append(tempProcess.Env, os.Environ()...)
 	tempProcess.Stdout = os.Stdout
 	tempProcess.Stderr = os.Stderr
+	mysqlctld.ErrorLog = errFile.Name()
 
 	log.Infof("%v", strings.Join(tempProcess.Args, " "))
 
@@ -111,6 +113,11 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	go func(mysqlctld *MysqlctldProcess) {
 		err := mysqlctld.process.Wait()
 		if !mysqlctld.exitSignalReceived {
+			errBytes, ferr := os.ReadFile(mysqlctld.ErrorLog)
+			if ferr != nil {
+				log.Errorf("Failed to read the mysqlctld error log file %q: %v", mysqlctld.ErrorLog, ferr)
+			}
+			log.Errorf("mysqlctld error log contents:\n%s", string(errBytes))
 			fmt.Printf("mysqlctld stopped unexpectedly, tabletUID %v, mysql port %v, PID %v\n", mysqlctld.TabletUID, mysqlctld.MySQLPort, mysqlctld.process.Process.Pid)
 		}
 		mysqlctld.process = nil
