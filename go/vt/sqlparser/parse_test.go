@@ -368,6 +368,8 @@ var (
 		}, {
 			input: "select /* for update */ 1 from t for update",
 		}, {
+			input: "select /* skip locked */ 1 from t for update skip locked",
+		}, {
 			input: "select /* lock in share mode */ 1 from t lock in share mode",
 		}, {
 			input: "select /* select list */ 1, 2 from t",
