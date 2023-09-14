@@ -59,16 +59,24 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 		return nil, err
 	}
 
-	if sel.Where == nil {
-		return newHorizon(op, sel), nil
+	if sel.Where != nil {
+		op, err = addWherePredicates(ctx, sel.Where.Expr, op)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	src, err := addWherePredicates(ctx, sel.Where.Expr, op)
-	if err != nil {
-		return nil, err
+	op = newHorizon(op, sel)
+
+	if sel.Comments != nil || sel.Lock != sqlparser.NoLock {
+		op = &LockAndComment{
+			Source:   op,
+			Comments: sel.Comments,
+			Lock:     sel.Lock,
+		}
 	}
 
-	return newHorizon(src, sel), nil
+	return op, nil
 }
 
 func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (ops.Operator, error) {

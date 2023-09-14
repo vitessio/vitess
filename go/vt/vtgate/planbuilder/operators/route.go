@@ -621,6 +621,13 @@ func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Op
 		}
 		return op, added, offset
 
+	case *LockAndComment:
+		src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
+		if added {
+			op.Source = src
+		}
+		return op, added, offset
+
 	case selectExpressions:
 		if op.isDerived() {
 			// if the only thing we can push to is a derived table,
@@ -773,8 +780,15 @@ func (r *Route) ShortDescription() string {
 		}
 		ordering = " order by " + strings.Join(oo, ",")
 	}
-
-	return first + ordering
+	comments := ""
+	if r.Comments != nil {
+		comments = " comments: " + sqlparser.String(r.Comments)
+	}
+	lock := ""
+	if r.Lock != sqlparser.NoLock {
+		lock = " lock: " + r.Lock.ToString()
+	}
+	return first + ordering + comments + lock
 }
 
 func (r *Route) setTruncateColumnCount(offset int) {

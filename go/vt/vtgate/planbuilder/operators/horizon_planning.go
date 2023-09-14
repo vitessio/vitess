@@ -136,12 +136,38 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 			return pushOrMergeSubQueryContainer(ctx, in)
 		case *QueryGraph:
 			return optimizeQueryGraph(ctx, in)
+		case *LockAndComment:
+			return pushDownLockAndComment(in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
 	}
 
 	return rewrite.FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
+}
+
+func pushDownLockAndComment(l *LockAndComment) (ops.Operator, *rewrite.ApplyResult, error) {
+	switch src := l.Source.(type) {
+	case *Horizon, *QueryGraph:
+		// we want to wait until the horizons have been pushed under a route or expanded
+		// that way we know that we've replaced the QueryGraphs with Routes
+		return nil, rewrite.SameTree, nil
+	case *Route:
+		src.Comments = l.Comments
+		src.Lock = l.Lock
+		return src, rewrite.NewTree("put lock and comment into route", l), nil
+	default:
+		inputs := src.Inputs()
+		for i, op := range inputs {
+			inputs[i] = &LockAndComment{
+				Source:   op,
+				Comments: l.Comments,
+				Lock:     l.Lock,
+			}
+		}
+		src.SetInputs(inputs)
+		return src, rewrite.NewTree("pushed down lock and comments", l), nil
+	}
 }
 
 func pushOrMerge(ctx *plancontext.PlanningContext, outer ops.Operator, inner *SubQuery) (ops.Operator, *rewrite.ApplyResult, error) {
