@@ -64,7 +64,12 @@ var (
 	countPendingRecoveries = stats.NewGauge("PendingRecoveries", "Count of the number of pending recoveries")
 
 	// detectedProblemsCounter is used to count the number of detected problems.
-	detectedProblemsCounter = stats.NewCountersWithSingleLabel("DetectedProblems", "Count of the different detected problems", "AnalysisCode", inst.AnalysisCodes()...)
+	detectedProblemsCounter = stats.NewCountersWithMultiLabels("DetectedProblems", "Count of the different detected problems", []string{
+		"AnalysisCode",
+		"TabletAlias",
+		"Keyspace",
+		"Shard",
+	})
 
 	// recoveriesCounter counts the number of recoveries that VTOrc has performed
 	recoveriesCounter = stats.NewCountersWithSingleLabel("RecoveriesCount", "Count of the different recoveries performed", "RecoveryType", actionableRecoveriesNames...)
@@ -585,7 +590,12 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	// the problems counter with the analysis entry unless it indicates there's
 	// no problem.
 	if code := analysisEntry.Analysis; code != inst.NoProblem {
-		detectedProblemsCounter.Add(string(code), 1)
+		detectedProblemsCounter.Add([]string{
+			string(code),
+			analysisEntry.AnalyzedInstanceAlias,
+			analysisEntry.AnalyzedKeyspace,
+			analysisEntry.AnalyzedShard,
+		}, 1)
 	}
 
 	checkAndRecoverFunctionCode := getCheckAndRecoverFunctionCode(analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
