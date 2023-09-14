@@ -233,7 +233,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 
 	}
 
-	callbacks["OTHER.*Copy Done"] = func() {
+	callbacks["COPY_COMPLETED"] = func() {
 		log.Info("Copy done, inserting events to stream")
 		insertRow(t, "t1", 1, numInitialRows+4)
 		insertRow(t, "t2", 2, numInitialRows+3)
@@ -252,7 +252,7 @@ commit;"
 	}
 
 	numCopyEvents := 3 /*t1,t2,t3*/ * (numInitialRows + 1 /*FieldEvent*/ + 1 /*LastPKEvent*/ + 1 /*TestEvent: Copy Start*/ + 2 /*begin,commit*/ + 3 /* LastPK Completed*/)
-	numCopyEvents += 2                                    /* GTID + Test event after all copy is done */
+	numCopyEvents += 2                                    /* GTID + Event after all copy is done */
 	numCatchupEvents := 3 * 5                             /* 2 t1, 1 t2 : BEGIN+FIELD+ROW+GTID+COMMIT */
 	numFastForwardEvents := 5                             /*t1:FIELD+ROW*/
 	numMisc := 1                                          /* t2 insert during t1 catchup that comes in t2 copy */
@@ -539,7 +539,7 @@ var expectedEvents = []string{
 	"type:BEGIN",
 	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t3\"} completed:true}",
 	"type:COMMIT",
-	"type:OTHER gtid:\"Copy Done\"",
+	"type:COPY_COMPLETED",
 	"type:BEGIN",
 	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"}}",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"14140\"}}}",
