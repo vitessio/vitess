@@ -481,7 +481,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
-		"select @@foreign_key_checks",
+		"select @@foreign_key_checks;",
 		// Create the list of tables to copy and transition to Copying state.
 		"begin",
 		"/insert into _vt.copy_state",
