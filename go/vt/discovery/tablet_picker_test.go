@@ -359,6 +359,38 @@ func TestPickCellPreferenceLocalAlias(t *testing.T) {
 	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
 }
 
+// TestPickUsingCellAsAlias confirms that when the tablet picker is
+// given a cell name that is an alias, it will choose a tablet that
+// exists within a cell that is part of the alias.
+func TestPickUsingCellAsAlias(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	// The test env puts all cells into an alias called "cella".
+	// We're also going to specify an optional extraCell that is NOT
+	// added to the alias.
+	te := newPickerTestEnv(t, ctx, []string{"cell1", "cell2", "cell3"}, "xtracell")
+	// Specify the alias as the cell.
+	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"cella"}, "cell1", te.keyspace, te.shard, "replica", TabletPickerOptions{})
+	require.NoError(t, err)
+
+	// Create a tablet in one of the main cells, it should be
+	// picked as it is part of the cella alias. This tablet is
+	// NOT part of the talbet picker's local cell (cell1) so it
+	// will not be given local preference.
+	want := addTablet(ctx, te, 101, topodatapb.TabletType_REPLICA, "cell2", true, true)
+	defer deleteTablet(t, te, want)
+	// Create a tablet in an extra cell which is thus NOT part of
+	// the cella alias so it should NOT be picked.
+	noWant := addTablet(ctx, te, 102, topodatapb.TabletType_REPLICA, "xtracell", true, true)
+	defer deleteTablet(t, te, noWant)
+	// Try it many times to be sure we don't ever pick the wrong one.
+	for i := 0; i < 100; i++ {
+		tablet, err := tp.PickForStreaming(ctx)
+		require.NoError(t, err)
+		assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
+	}
+}
+
 func TestPickUsingCellAliasOnlySpecified(t *testing.T) {
 	ctx := utils.LeakCheckContextTimeout(t, 200*time.Millisecond)
 
@@ -545,15 +577,20 @@ type pickerTestEnv struct {
 	topoServ *topo.Server
 }
 
-func newPickerTestEnv(t *testing.T, ctx context.Context, cells []string) *pickerTestEnv {
+// newPickerTestEnv creates a test environment for TabletPicker tests.
+// It creates a cell alias called 'cella' which contains all of the
+// provided cells. However, if any optional extraCells are provided, those
+// are NOT added to the cell alias.
+func newPickerTestEnv(t *testing.T, ctx context.Context, cells []string, extraCells ...string) *pickerTestEnv {
+	allCells := append(cells, extraCells...)
 	te := &pickerTestEnv{
 		t:        t,
 		keyspace: "ks",
 		shard:    "0",
 		cells:    cells,
-		topoServ: memorytopo.NewServer(ctx, cells...),
+		topoServ: memorytopo.NewServer(ctx, allCells...),
 	}
-	// create cell alias
+	// Create cell alias containing the cells (but NOT the extraCells).
 	err := te.topoServ.CreateCellsAlias(ctx, "cella", &topodatapb.CellsAlias{
 		Cells: cells,
 	})
