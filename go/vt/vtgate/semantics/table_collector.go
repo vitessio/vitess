@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -31,6 +32,7 @@ type tableCollector struct {
 	si        SchemaInformation
 	currentDb string
 	org       originable
+	unionInfo map[*sqlparser.Union]unionInfo
 }
 
 func newTableCollector(scoper *scoper, si SchemaInformation, currentDb string) *tableCollector {
@@ -38,44 +40,60 @@ func newTableCollector(scoper *scoper, si SchemaInformation, currentDb string) *
 		scoper:    scoper,
 		si:        si,
 		currentDb: currentDb,
+		unionInfo: map[*sqlparser.Union]unionInfo{},
 	}
 }
 
 func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
-	node, ok := cursor.Node().(*sqlparser.AliasedTableExpr)
-	if !ok {
-		return nil
+	switch node := cursor.Node().(type) {
+	case *sqlparser.AliasedTableExpr:
+		return tc.visitAliasedTableExpr(node)
+	case *sqlparser.Union:
+		firstSelect := sqlparser.GetFirstSelect(node)
+		expanded, selectExprs := getColumnNames(firstSelect.SelectExprs)
+		info := unionInfo{
+			isAuthoritative: expanded,
+			exprs:           selectExprs,
+		}
+		tc.unionInfo[node] = info
+		if !expanded {
+			return nil
+		}
+
+		size := len(firstSelect.SelectExprs)
+		info.recursive = make([]TableSet, size)
+		info.types = make([]*Type, size)
+
+		_ = sqlparser.VisitAllSelects(node, func(s *sqlparser.Select, idx int) error {
+			for i, expr := range s.SelectExprs {
+				ae, ok := expr.(*sqlparser.AliasedExpr)
+				if !ok {
+					continue
+				}
+				_, recursiveDeps, qt := tc.org.depsForExpr(ae.Expr)
+				info.recursive[i] = info.recursive[i].Merge(recursiveDeps)
+				if idx == 0 {
+					// TODO: we probably should coerce these types together somehow, but I'm not sure how
+					info.types[i] = qt
+				}
+			}
+			return nil
+		})
+		tc.unionInfo[node] = info
 	}
+
+	return nil
+}
+
+func (tc *tableCollector) visitAliasedTableExpr(node *sqlparser.AliasedTableExpr) error {
 	switch t := node.Expr.(type) {
 	case *sqlparser.DerivedTable:
 		switch sel := t.Select.(type) {
 		case *sqlparser.Select:
-			tables := tc.scoper.wScope[sel]
-			tableInfo := createDerivedTableForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs, node.Columns, tables.tables, tc.org)
-			if err := tableInfo.checkForDuplicates(); err != nil {
-				return err
-			}
-
-			tableInfo.ASTNode = node
-			tableInfo.tableName = node.As.String()
-
-			tc.Tables = append(tc.Tables, tableInfo)
-			scope := tc.scoper.currentScope()
-			return scope.addTable(tableInfo)
+			return tc.addSelectDerivedTable(sel, node)
 
 		case *sqlparser.Union:
-			firstSelect := sqlparser.GetFirstSelect(sel)
-			tables := tc.scoper.wScope[firstSelect]
-			tableInfo := createDerivedTableForExpressions(firstSelect.SelectExprs, node.Columns, tables.tables, tc.org)
-			if err := tableInfo.checkForDuplicates(); err != nil {
-				return err
-			}
-			tableInfo.ASTNode = node
-			tableInfo.tableName = node.As.String()
-
-			tc.Tables = append(tc.Tables, tableInfo)
-			scope := tc.scoper.currentScope()
-			return scope.addTable(tableInfo)
+			return tc.addUnionDerivedTable(sel, node)
 
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %T in a derived table", sel)
@@ -104,14 +122,62 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
+func (tc *tableCollector) addSelectDerivedTable(sel *sqlparser.Select, node *sqlparser.AliasedTableExpr) error {
+	tables := tc.scoper.wScope[sel]
+	size := len(sel.SelectExprs)
+	deps := make([]TableSet, size)
+	types := make([]*Type, size)
+	expanded := true
+	for i, expr := range sel.SelectExprs {
+		ae, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			expanded = false
+			continue
+		}
+		_, deps[i], types[i] = tc.org.depsForExpr(ae.Expr)
+	}
+
+	tableInfo := createDerivedTableForExpressions(sel.SelectExprs, node.Columns, tables.tables, tc.org, expanded, deps, types)
+	if err := tableInfo.checkForDuplicates(); err != nil {
+		return err
+	}
+
+	tableInfo.ASTNode = node
+	tableInfo.tableName = node.As.String()
+
+	tc.Tables = append(tc.Tables, tableInfo)
+	scope := tc.scoper.currentScope()
+	return scope.addTable(tableInfo)
+}
+
+func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sqlparser.AliasedTableExpr) error {
+	firstSelect := sqlparser.GetFirstSelect(union)
+	tables := tc.scoper.wScope[firstSelect]
+	info, found := tc.unionInfo[union]
+	if !found {
+		return vterrors.VT13001("information about union is not available")
+	}
+
+	tableInfo := createDerivedTableForExpressions(info.exprs, node.Columns, tables.tables, tc.org, info.isAuthoritative, info.recursive, info.types)
+	if err := tableInfo.checkForDuplicates(); err != nil {
+		return err
+	}
+	tableInfo.ASTNode = node
+	tableInfo.tableName = node.As.String()
+
+	tc.Tables = append(tc.Tables, tableInfo)
+	scope := tc.scoper.currentScope()
+	return scope.addTable(tableInfo)
+}
+
 func newVindexTable(t sqlparser.IdentifierCS) *vindexes.Table {
 	vindexCols := []vindexes.Column{
-		{Name: sqlparser.NewIdentifierCI("id")},
-		{Name: sqlparser.NewIdentifierCI("keyspace_id")},
-		{Name: sqlparser.NewIdentifierCI("range_start")},
-		{Name: sqlparser.NewIdentifierCI("range_end")},
-		{Name: sqlparser.NewIdentifierCI("hex_keyspace_id")},
-		{Name: sqlparser.NewIdentifierCI("shard")},
+		{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARBINARY},
+		{Name: sqlparser.NewIdentifierCI("keyspace_id"), Type: querypb.Type_VARBINARY},
+		{Name: sqlparser.NewIdentifierCI("range_start"), Type: querypb.Type_VARBINARY},
+		{Name: sqlparser.NewIdentifierCI("range_end"), Type: querypb.Type_VARBINARY},
+		{Name: sqlparser.NewIdentifierCI("hex_keyspace_id"), Type: querypb.Type_VARBINARY},
+		{Name: sqlparser.NewIdentifierCI("shard"), Type: querypb.Type_VARBINARY},
 	}
 
 	return &vindexes.Table{

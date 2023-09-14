@@ -17,27 +17,20 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"path"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// SaveVSchema first validates the VSchema, then saves it.
+// SaveVSchema saves a Vschema. A valid Vschema should be passed in. It does not verify its correctness.
 // If the VSchema is empty, just remove it.
 func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error {
-	err := vindexes.ValidateKeyspace(vschema)
-	if err != nil {
-		return err
-	}
-
 	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
 	data, err := vschema.MarshalVT()
 	if err != nil {

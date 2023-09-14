@@ -54,5 +54,5 @@ func TestSimpleOrderBy(t *testing.T) {
 
 	mcmp.Exec("insert into user(id, name) values (0,'Apa'),(1,'Banan'),(3,'Ceasar'),(4,'David')")
 	mcmp.AssertMatches(`SELECT name FROM user WHERE id in (0,4) ORDER BY name ASC`,
-		`[[VARCHAR("Apa")] [VARCHAR("David)]]`)
+		`[[VARCHAR("Apa")] [VARCHAR("David")]]`)
 }

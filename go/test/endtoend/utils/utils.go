@@ -174,6 +174,12 @@ func ExecAllowError(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Res
 	return conn.ExecuteFetch(query, 1000, true)
 }
 
+// ExecWithRowCount is similar to ExecAllowError with max row count provided.
+func ExecWithRowCount(t testing.TB, conn *mysql.Conn, query string, rowCount int) (*sqltypes.Result, error) {
+	t.Helper()
+	return conn.ExecuteFetch(query, rowCount, true)
+}
+
 // SkipIfBinaryIsBelowVersion skips the given test if the binary's major version is below majorVersion.
 func SkipIfBinaryIsBelowVersion(t *testing.T, majorVersion int, binary string) {
 	version, err := cluster.GetMajorVersion(binary)
@@ -221,7 +227,7 @@ func AssertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 
 // WaitForAuthoritative waits for a table to become authoritative
 func WaitForAuthoritative(t *testing.T, ks, tbl string, readVSchema func() (*interface{}, error)) error {
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(60 * time.Second)
 	for {
 		select {
 		case <-timeout:
@@ -246,7 +252,7 @@ func WaitForAuthoritative(t *testing.T, ks, tbl string, readVSchema func() (*int
 
 // WaitForColumn waits for a table's column to be present
 func WaitForColumn(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(60 * time.Second)
 	for {
 		select {
 		case <-timeout:

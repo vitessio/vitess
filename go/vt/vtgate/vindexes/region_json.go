@@ -25,8 +25,6 @@ import (
 	"os"
 	"strconv"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -128,7 +126,7 @@ func (rv *RegionJSON) Map(ctx context.Context, vcursor VCursor, rowsColValues []
 			continue
 		}
 		// Compute hash.
-		hn, err := evalengine.ToUint64(row[0])
+		hn, err := row[0].ToCastUint64()
 		if err != nil {
 			destinations = append(destinations, key.DestinationNone{})
 			continue

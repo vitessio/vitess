@@ -17,15 +17,12 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -89,7 +86,7 @@ type TwoPC struct {
 // NewTwoPC creates a TwoPC variable.
 func NewTwoPC(readPool *connpool.Pool) *TwoPC {
 	tpc := &TwoPC{readPool: readPool}
-	dbname := sidecardb.GetIdentifier()
+	dbname := sidecar.GetIdentifier()
 	tpc.insertRedoTx = sqlparser.BuildParsedQuery(
 		"insert into %s.redo_state(dtid, state, time_created) values (%a, %a, %a)",
 		dbname, ":dtid", ":state", ":time_created")
@@ -229,12 +226,12 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*tx.Prepa
 			// Initialize the new element.
 			// A failure in time parsing will show up as a very old time,
 			// which is harmless.
-			tm, _ := evalengine.ToInt64(row[2])
+			tm, _ := row[2].ToCastInt64()
 			curTx = &tx.PreparedTx{
 				Dtid: dtid,
 				Time: time.Unix(0, tm),
 			}
-			st, err := evalengine.ToInt64(row[1])
+			st, err := row[1].ToCastInt64()
 			if err != nil {
 				log.Errorf("Error parsing state for dtid %s: %v.", dtid, err)
 			}
@@ -271,7 +268,7 @@ func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.T
 	if len(qr.Rows) < 1 {
 		return 0, nil
 	}
-	v, _ := evalengine.ToInt64(qr.Rows[0][0])
+	v, _ := qr.Rows[0][0].ToCastInt64()
 	return v, nil
 }
 
@@ -358,7 +355,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 		return result, nil
 	}
 	result.Dtid = qr.Rows[0][0].ToString()
-	st, err := evalengine.ToInt64(qr.Rows[0][1])
+	st, err := qr.Rows[0][1].ToCastInt64()
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "error parsing state for dtid %s", dtid)
 	}
@@ -368,7 +365,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	}
 	// A failure in time parsing will show up as a very old time,
 	// which is harmless.
-	tm, _ := evalengine.ToInt64(qr.Rows[0][2])
+	tm, _ := qr.Rows[0][2].ToCastInt64()
 	result.TimeCreated = tm
 
 	qr, err = tpc.read(ctx, conn, tpc.readParticipants, bindVars)
@@ -405,7 +402,7 @@ func (tpc *TwoPC) ReadAbandoned(ctx context.Context, abandonTime time.Time) (map
 	}
 	txs := make(map[string]time.Time, len(qr.Rows))
 	for _, row := range qr.Rows {
-		t, err := evalengine.ToInt64(row[1])
+		t, err := row[1].ToCastInt64()
 		if err != nil {
 			return nil, err
 		}
@@ -435,8 +432,8 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*tx.DistributedTx,
 			// Initialize the new element.
 			// A failure in time parsing will show up as a very old time,
 			// which is harmless.
-			tm, _ := evalengine.ToInt64(row[2])
-			st, err := evalengine.ToInt64(row[1])
+			tm, _ := row[2].ToCastInt64()
+			st, err := row[1].ToCastInt64()
 			// Just log on error and continue. The state will show up as UNKNOWN
 			// on the display.
 			if err != nil {

@@ -70,9 +70,7 @@ func (c *counters) ZeroAll() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for k := range c.counts {
-		c.counts[k] = 0
-	}
+	clear(c.counts)
 }
 
 // Counts returns a copy of the Counters' map.

@@ -19,17 +19,16 @@ package operators
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
-	"golang.org/x/exp/slices"
-
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -110,27 +109,21 @@ type (
 	}
 )
 
-func (aggr Aggr) NeedWeightString(ctx *plancontext.PlanningContext) bool {
-	switch aggr.OpCode {
-	case opcode.AggregateCountDistinct, opcode.AggregateSumDistinct:
-		return ctx.SemTable.NeedsWeightString(aggr.Func.GetArg())
-	case opcode.AggregateMin, opcode.AggregateMax:
-		// currently this returns false, as aggregation engine primitive does not support the usage of weight_string
-		// for comparison. If Min/Max column is non-comparable then it will fail at runtime.
-		return false
-	}
-	return false
+func (aggr Aggr) NeedsWeightString(ctx *plancontext.PlanningContext) bool {
+	return aggr.OpCode.NeedsComparableValues() && ctx.SemTable.NeedsWeightString(aggr.Func.GetArg())
 }
 
-func (aggr Aggr) GetCollation(ctx *plancontext.PlanningContext) collations.ID {
+func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) (sqltypes.Type, collations.ID) {
 	if aggr.Func == nil {
-		return collations.Unknown
+		return sqltypes.Unknown, collations.Unknown
 	}
 	switch aggr.OpCode {
 	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
-		return ctx.SemTable.CollationForExpr(aggr.Func.GetArg())
+		typ, col, _ := ctx.SemTable.TypeForExpr(aggr.Func.GetArg())
+		return typ, col
+
 	}
-	return collations.Unknown
+	return sqltypes.Unknown, collations.Unknown
 }
 
 // NewGroupBy creates a new group by from the given fields.
@@ -208,8 +201,8 @@ func (s SelectExpr) GetAliasedExpr() (*sqlparser.AliasedExpr, error) {
 	}
 }
 
-// CreateQPFromSelect creates the QueryProjection for the input *sqlparser.Select
-func CreateQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (*QueryProjection, error) {
+// createQPFromSelect creates the QueryProjection for the input *sqlparser.Select
+func createQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (*QueryProjection, error) {
 	qp := &QueryProjection{
 		Distinct: sel.Distinct,
 	}
@@ -316,8 +309,8 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 	return nil
 }
 
-// CreateQPFromUnion creates the QueryProjection for the input *sqlparser.Union
-func CreateQPFromUnion(ctx *plancontext.PlanningContext, union *sqlparser.Union) (*QueryProjection, error) {
+// createQPFromUnion creates the QueryProjection for the input *sqlparser.Union
+func createQPFromUnion(ctx *plancontext.PlanningContext, union *sqlparser.Union) (*QueryProjection, error) {
 	qp := &QueryProjection{}
 
 	sel := sqlparser.GetFirstSelect(union)
@@ -458,6 +451,9 @@ func (qp *QueryProjection) isExprInGroupByExprs(ctx *plancontext.PlanningContext
 
 // GetSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
 func (qp *QueryProjection) GetSimplifiedExpr(e sqlparser.Expr) sqlparser.Expr {
+	if qp == nil {
+		return e
+	}
 	// If the ORDER BY is against a column alias, we need to remember the expression
 	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
 	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
@@ -659,7 +655,7 @@ orderBy:
 				return nil, false, err
 			}
 			if !qp.isExprInGroupByExprs(ctx, getExpr) {
-				aggr := NewAggr(opcode.AggregateRandom, nil, aliasedExpr, aliasedExpr.ColumnName())
+				aggr := NewAggr(opcode.AggregateAnyValue, nil, aliasedExpr, aliasedExpr.ColumnName())
 				aggr.Index = &idxCopy
 				out = append(out, aggr)
 			}
@@ -690,7 +686,7 @@ orderBy:
 				return true
 			}
 			if !qp.isExprInGroupByExprs(ctx, ex) {
-				aggr := NewAggr(opcode.AggregateRandom, nil, aeWrap(ex), "")
+				aggr := NewAggr(opcode.AggregateAnyValue, nil, aeWrap(ex), "")
 				aggr.Index = &idxCopy
 				out = append(out, aggr)
 			}
@@ -701,7 +697,7 @@ orderBy:
 }
 
 func createAggrFromAggrFunc(fnc sqlparser.AggrFunc, aliasedExpr *sqlparser.AliasedExpr) Aggr {
-	code := opcode.SupportedAggregates[strings.ToLower(fnc.AggrName())]
+	code := opcode.SupportedAggregates[fnc.AggrName()]
 
 	if code == opcode.AggregateCount {
 		if _, isStar := fnc.(*sqlparser.CountStar); isStar {
@@ -709,7 +705,8 @@ func createAggrFromAggrFunc(fnc sqlparser.AggrFunc, aliasedExpr *sqlparser.Alias
 		}
 	}
 
-	if fnc.IsDistinct() {
+	distinct := sqlparser.IsDistinct(fnc)
+	if distinct {
 		switch code {
 		case opcode.AggregateCount:
 			code = opcode.AggregateCountDistinct
@@ -719,7 +716,7 @@ func createAggrFromAggrFunc(fnc sqlparser.AggrFunc, aliasedExpr *sqlparser.Alias
 	}
 
 	aggr := NewAggr(code, fnc, aliasedExpr, aliasedExpr.ColumnName())
-	aggr.Distinct = fnc.IsDistinct()
+	aggr.Distinct = distinct
 	return aggr
 }
 
@@ -792,6 +789,9 @@ func (qp *QueryProjection) OldAlignGroupByAndOrderBy(ctx *plancontext.PlanningCo
 // We are also free to add more ORDER BY columns than the user asked for which we leverage,
 // so the input is already ordered according to the GROUP BY columns used
 func (qp *QueryProjection) AlignGroupByAndOrderBy(ctx *plancontext.PlanningContext) bool {
+	if qp == nil {
+		return false
+	}
 	if qp.hasCheckedAlignment {
 		return false
 	}
@@ -831,19 +831,6 @@ func (qp *QueryProjection) GetColumnCount() int {
 	return len(qp.SelectExprs) - qp.AddedColumn
 }
 
-// checkAggregationSupported checks if the aggregation is supported on the given operator tree or not.
-// We don't currently support planning for operators having derived tables.
-func checkAggregationSupported(op ops.Operator) error {
-	return rewrite.Visit(op, func(operator ops.Operator) error {
-		_, isDerived := operator.(*Derived)
-		projection, isProjection := operator.(*Projection)
-		if isDerived || (isProjection && projection.TableID != nil) {
-			return errHorizonNotPlanned()
-		}
-		return nil
-	})
-}
-
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		if _, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
@@ -880,4 +867,14 @@ func CompareRefInt(a *int, b *int) bool {
 		return true
 	}
 	return *a < *b
+}
+
+func CreateQPFromSelectStatement(ctx *plancontext.PlanningContext, stmt sqlparser.SelectStatement) (*QueryProjection, error) {
+	switch sel := stmt.(type) {
+	case *sqlparser.Select:
+		return createQPFromSelect(ctx, sel)
+	case *sqlparser.Union:
+		return createQPFromUnion(ctx, sel)
+	}
+	return nil, vterrors.VT13001("can only create query projection from Union and Select statements")
 }

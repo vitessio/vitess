@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -66,7 +66,7 @@ func MarshalTabletAWK(t *topodatapb.Tablet) string {
 	// special case for old primary that hasn't been updated in the topo
 	// yet.
 	if t.PrimaryTermStartTime != nil && t.PrimaryTermStartTime.Seconds > 0 {
-		mtst = logutil.ProtoToTime(t.PrimaryTermStartTime).Format(time.RFC3339)
+		mtst = protoutil.TimeFromProto(t.PrimaryTermStartTime).UTC().Format(time.RFC3339)
 	}
 
 	return fmt.Sprintf("%v %v %v %v %v %v %v %v", topoproto.TabletAliasString(t.Alias), keyspace, shard, topoproto.TabletTypeLString(t.Type), ti.Addr(), ti.MysqlAddr(), MarshalMapAWK(t.Tags), mtst)

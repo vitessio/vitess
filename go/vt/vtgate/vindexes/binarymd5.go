@@ -33,15 +33,15 @@ var (
 
 // BinaryMD5 is a vindex that hashes binary bits to a keyspace id.
 type BinaryMD5 struct {
-	name   string
-	params map[string]string
+	name          string
+	unknownParams []string
 }
 
 // newBinaryMD5 creates a new BinaryMD5.
 func newBinaryMD5(name string, params map[string]string) (Vindex, error) {
 	return &BinaryMD5{
-		name:   name,
-		params: params,
+		name:          name,
+		unknownParams: FindUnknownParams(params, nil),
 	}, nil
 }
 
@@ -101,7 +101,7 @@ func (vind *BinaryMD5) Hash(id sqltypes.Value) ([]byte, error) {
 
 // UnknownParams implements the ParamValidating interface.
 func (vind *BinaryMD5) UnknownParams() []string {
-	return FindUnknownParams(vind.params, nil)
+	return vind.unknownParams
 }
 
 func vMD5Hash(source []byte) []byte {

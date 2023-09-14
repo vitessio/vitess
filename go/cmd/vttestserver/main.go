@@ -93,9 +93,9 @@ func registerFlags(fs *pflag.FlagSet) {
 			" vttestserver as a database container in local developer environments. Note"+
 			" that db migration files (--schema_dir option) and seeding of"+
 			" random data (--initialize_with_random_data option) will only run during"+
-			" cluster startup if the data directory does not already exist. vschema"+
-			" migrations are run every time the cluster starts, since persistence"+
-			" for the topology server has not been implemented yet")
+			" cluster startup if the data directory does not already exist. "+
+			" Changes to VSchema are persisted across cluster restarts using a simple"+
+			" watcher if the --data_dir argument is specified.")
 
 	fs.BoolVar(&doSeed, "initialize_with_random_data", false,
 		"If this flag is each table-shard will be initialized"+
@@ -141,7 +141,7 @@ func registerFlags(fs *pflag.FlagSet) {
 
 	fs.StringVar(&config.Charset, "charset", "utf8mb4", "MySQL charset")
 
-	fs.StringVar(&config.PlannerVersion, "planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, V3Insert, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the new gen4 planner and falls back to the V3 planner if the gen4 fails.")
+	fs.StringVar(&config.PlannerVersion, "planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right")
 
 	fs.StringVar(&config.SnapshotFile, "snapshot_file", "",
 		"A MySQL DB snapshot file")
@@ -268,6 +268,7 @@ func parseFlags() (env vttest.Environment, err error) {
 
 func main() {
 	cluster, err := runCluster()
+	servenv.Init()
 	if err != nil {
 		log.Fatal(err)
 	}

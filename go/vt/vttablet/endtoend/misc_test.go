@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"reflect"
 	"strings"
@@ -943,4 +944,122 @@ func TestHexAndBitBindVar(t *testing.T) {
 	qr, err = client.Execute("select 1 + :vtg1, 1 + :vtg2, 1 + :vtg3, 1 + :vtg4", bv)
 	require.NoError(t, err)
 	assert.Equal(t, `[[INT64(10) UINT64(10) INT64(2480) UINT64(2480)]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+// Test will validate drop view ddls.
+func TestShowTablesWithSizes(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	setupQueries := []string{
+		`drop view if exists show_tables_with_sizes_v1`,
+		`drop table if exists show_tables_with_sizes_t1`,
+		`drop table if exists show_tables_with_sizes_employees`,
+		`create table show_tables_with_sizes_t1 (id int primary key)`,
+		`create view show_tables_with_sizes_v1 as select * from show_tables_with_sizes_t1`,
+		`CREATE TABLE show_tables_with_sizes_employees (id INT NOT NULL, store_id INT) PARTITION BY HASH(store_id) PARTITIONS 4`,
+	}
+
+	defer func() {
+		_, _ = conn.ExecuteFetch(`drop view if exists show_tables_with_sizes_v1`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists show_tables_with_sizes_t1`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists show_tables_with_sizes_employees`, 1, false)
+	}()
+	for _, query := range setupQueries {
+		_, err := conn.ExecuteFetch(query, 1, false)
+		require.NoError(t, err)
+	}
+	expectTables := map[string]([]string){ // TABLE_TYPE, TABLE_COMMENT
+		"show_tables_with_sizes_t1":        {"BASE TABLE", ""},
+		"show_tables_with_sizes_v1":        {"VIEW", "VIEW"},
+		"show_tables_with_sizes_employees": {"BASE TABLE", ""},
+	}
+
+	rs, err := conn.ExecuteFetch(conn.BaseShowTablesWithSizes(), math.MaxInt, false)
+	require.NoError(t, err)
+	require.NotEmpty(t, rs.Rows)
+
+	assert.GreaterOrEqual(t, len(rs.Rows), len(expectTables))
+	matchedTables := map[string]bool{}
+	for _, row := range rs.Rows {
+		tableName := row[0].ToString()
+		vals, ok := expectTables[tableName]
+		if ok {
+			assert.Equal(t, vals[0], row[1].ToString()) // TABLE_TYPE
+			assert.Equal(t, vals[1], row[3].ToString()) // TABLE_COMMENT
+			matchedTables[tableName] = true
+		}
+	}
+	assert.Equalf(t, len(expectTables), len(matchedTables), "%v", matchedTables)
+}
+
+// TestTuple tests that bind variables having tuple values work with vttablet.
+func TestTuple(t *testing.T) {
+	client := framework.NewClient()
+	_, err := client.Execute(`insert into vitess_a (eid, id) values (100, 103), (193, 235)`, nil)
+	require.NoError(t, err)
+
+	bv := map[string]*querypb.BindVariable{
+		"__vals": {
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{
+				{
+					Type: querypb.Type_TUPLE,
+					Values: []*querypb.Value{
+						{Type: querypb.Type_INT64, Value: []byte("100")},
+						{Type: querypb.Type_INT64, Value: []byte("103")},
+					},
+				},
+				{
+					Type: querypb.Type_TUPLE,
+					Values: []*querypb.Value{
+						{Type: querypb.Type_INT64, Value: []byte("87")},
+						{Type: querypb.Type_INT64, Value: []byte("4473")},
+					},
+				},
+			},
+		},
+	}
+	res, err := client.Execute("select * from vitess_a where (eid, id) in ::__vals", bv)
+	require.NoError(t, err)
+	assert.Equal(t, `[[INT64(100) INT32(103) NULL NULL]]`, fmt.Sprintf("%v", res.Rows))
+
+	res, err = client.Execute("update vitess_a set name = 'a' where (eid, id) in ::__vals", bv)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, res.RowsAffected)
+
+	res, err = client.Execute("select * from vitess_a where (eid, id) in ::__vals", bv)
+	require.NoError(t, err)
+	assert.Equal(t, `[[INT64(100) INT32(103) VARCHAR("a") NULL]]`, fmt.Sprintf("%v", res.Rows))
+
+	bv = map[string]*querypb.BindVariable{
+		"__vals": {
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{
+				{
+					Type: querypb.Type_TUPLE,
+					Values: []*querypb.Value{
+						{Type: querypb.Type_INT64, Value: []byte("100")},
+						{Type: querypb.Type_INT64, Value: []byte("103")},
+					},
+				},
+				{
+					Type: querypb.Type_TUPLE,
+					Values: []*querypb.Value{
+						{Type: querypb.Type_INT64, Value: []byte("193")},
+						{Type: querypb.Type_INT64, Value: []byte("235")},
+					},
+				},
+			},
+		},
+	}
+	res, err = client.Execute("delete from vitess_a where (eid, id) in ::__vals", bv)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, res.RowsAffected)
+
+	res, err = client.Execute("select * from vitess_a where (eid, id) in ::__vals", bv)
+	require.NoError(t, err)
+	require.Zero(t, len(res.Rows))
 }

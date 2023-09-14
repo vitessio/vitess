@@ -128,11 +128,7 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 			return err
 		}
 
-		vindexTable, err := upd.GetSingleTable()
-		if err != nil {
-			return err
-		}
-		for _, colVindex := range vindexTable.ColumnVindexes {
+		for _, colVindex := range upd.Vindexes {
 			// Skip this vindex if no rows are being changed
 			updColValues, ok := upd.ChangedVindexValues[colVindex.Name]
 			if !ok {
@@ -141,7 +137,7 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 
 			offset := updColValues.Offset
 			if !row[offset].IsNull() {
-				val, err := evalengine.ToInt64(row[offset])
+				val, err := row[offset].ToCastInt64()
 				if err != nil {
 					return err
 				}
@@ -161,7 +157,7 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 					if err != nil {
 						return err
 					}
-					vindexColumnKeys = append(vindexColumnKeys, resolvedVal.Value())
+					vindexColumnKeys = append(vindexColumnKeys, resolvedVal.Value(vcursor.ConnCollation()))
 				} else {
 					// Set the column value to original as this column in vindex is not updated.
 					vindexColumnKeys = append(vindexColumnKeys, origColValue)

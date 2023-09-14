@@ -20,7 +20,7 @@ import (
 	"context"
 	"path"
 
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/event"
@@ -233,7 +233,7 @@ func (ts *Server) GetSidecarDBName(ctx context.Context, keyspace string) (string
 	if keyspaceInfo.SidecarDbName != "" {
 		return keyspaceInfo.SidecarDbName, nil
 	}
-	return sidecardb.DefaultName, nil
+	return sidecar.DefaultName, nil
 }
 
 func (ts *Server) GetThrottlerConfig(ctx context.Context, keyspace string) (*topodatapb.ThrottlerConfig, error) {

@@ -71,3 +71,5 @@ func (n *nullCache) SetCapacity(_ int64) {}
 func (n *nullCache) Evictions() int64 {
 	return 0
 }
+
+func (n *nullCache) Close() {}

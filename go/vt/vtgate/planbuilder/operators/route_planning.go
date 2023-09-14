@@ -52,15 +52,16 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 			return optimizeQueryGraph(ctx, op)
 		case *Join:
 			return optimizeJoin(ctx, op)
-		case *Derived:
-			return pushDownDerived(ctx, op)
+		case *Horizon:
+			if op.TableId != nil {
+				return pushDownDerived(ctx, op)
+			}
 		case *SubQuery:
 			return optimizeSubQuery(ctx, op, ts)
 		case *Filter:
 			return pushDownFilter(op)
-		default:
-			return operator, rewrite.SameTree, nil
 		}
+		return operator, rewrite.SameTree, nil
 	})
 
 	if err != nil {
@@ -79,7 +80,7 @@ func pushDownFilter(op *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
 	return op, rewrite.SameTree, nil
 }
 
-func pushDownDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operator, *rewrite.ApplyResult, error) {
+func pushDownDerived(ctx *plancontext.PlanningContext, op *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
 	innerRoute, ok := op.Source.(*Route)
 	if !ok {
 		return op, rewrite.SameTree, nil
@@ -389,9 +390,9 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op ops.Operator) b
 	required := false
 
 	_ = rewrite.Visit(op, func(current ops.Operator) error {
-		derived, isDerived := current.(*Derived)
+		horizon, isHorizon := current.(*Horizon)
 
-		if isDerived && !derived.IsMergeable(ctx) {
+		if isHorizon && horizon.IsDerived() && !horizon.IsMergeable(ctx) {
 			required = true
 			return io.EOF
 		}
@@ -403,7 +404,7 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op ops.Operator) b
 }
 
 func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, inner bool) (ops.Operator, *rewrite.ApplyResult, error) {
-	newPlan, err := Merge(ctx, lhs, rhs, joinPredicates, newJoinMerge(ctx, joinPredicates, inner))
+	newPlan, err := mergeJoinInputs(ctx, lhs, rhs, joinPredicates, newJoinMerge(ctx, joinPredicates, inner))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -500,11 +501,11 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a ops.Operator, exp sqlp
 		deps := ctx.SemTable.RecursiveDeps(expr)
 
 		_ = rewrite.Visit(a, func(rel ops.Operator) error {
-			to, isTableOp := rel.(TableIDIntroducer)
+			to, isTableOp := rel.(tableIDIntroducer)
 			if !isTableOp {
 				return nil
 			}
-			id := to.Introduces()
+			id := to.introducesTableID()
 			if deps.IsSolvedBy(id) {
 				tableInfo, err := ctx.SemTable.TableInfoFor(id)
 				if err != nil {
@@ -547,8 +548,9 @@ func unwrapDerivedTables(ctx *plancontext.PlanningContext, exp sqlparser.Expr) s
 		}
 
 		exp = semantics.RewriteDerivedTableExpression(exp, tbl)
-		exp = getColName(exp)
-		if exp == nil {
+		if col := getColName(exp); col != nil {
+			exp = col
+		} else {
 			return nil
 		}
 	}

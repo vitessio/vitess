@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/test"
@@ -43,6 +42,7 @@ var (
 		`INSERT INTO vitess_tablet VALUES('zone1-0000000101','localhost',6714,'ks','0','zone1',1,'2022-12-28 07:23:25.129898+00:00',X'616c6961733a7b63656c6c3a227a6f6e653122207569643a3130317d20686f73746e616d653a226c6f63616c686f73742220706f72745f6d61703a7b6b65793a2267727063222076616c75653a363731337d20706f72745f6d61703a7b6b65793a227674222076616c75653a363731327d206b657973706163653a226b73222073686172643a22302220747970653a5052494d415259206d7973716c5f686f73746e616d653a226c6f63616c686f737422206d7973716c5f706f72743a36373134207072696d6172795f7465726d5f73746172745f74696d653a7b7365636f6e64733a31363732323132323035206e616e6f7365636f6e64733a3132393839383030307d2064625f7365727665725f76657273696f6e3a22382e302e3331222064656661756c745f636f6e6e5f636f6c6c6174696f6e3a3435');`,
 		`INSERT INTO vitess_tablet VALUES('zone1-0000000112','localhost',6747,'ks','0','zone1',3,'0001-01-01 00:00:00+00:00',X'616c6961733a7b63656c6c3a227a6f6e653122207569643a3131327d20686f73746e616d653a226c6f63616c686f73742220706f72745f6d61703a7b6b65793a2267727063222076616c75653a363734367d20706f72745f6d61703a7b6b65793a227674222076616c75653a363734357d206b657973706163653a226b73222073686172643a22302220747970653a52444f4e4c59206d7973716c5f686f73746e616d653a226c6f63616c686f737422206d7973716c5f706f72743a363734372064625f7365727665725f76657273696f6e3a22382e302e3331222064656661756c745f636f6e6e5f636f6c6c6174696f6e3a3435');`,
 		`INSERT INTO vitess_tablet VALUES('zone2-0000000200','localhost',6756,'ks','0','zone2',2,'0001-01-01 00:00:00+00:00',X'616c6961733a7b63656c6c3a227a6f6e653222207569643a3230307d20686f73746e616d653a226c6f63616c686f73742220706f72745f6d61703a7b6b65793a2267727063222076616c75653a363735357d20706f72745f6d61703a7b6b65793a227674222076616c75653a363735347d206b657973706163653a226b73222073686172643a22302220747970653a5245504c494341206d7973716c5f686f73746e616d653a226c6f63616c686f737422206d7973716c5f706f72743a363735362064625f7365727665725f76657273696f6e3a22382e302e3331222064656661756c745f636f6e6e5f636f6c6c6174696f6e3a3435');`,
+		`INSERT INTO vitess_shard VALUES('ks','0','zone1-0000000101','2022-12-28 07:23:25.129898+00:00');`,
 		`INSERT INTO vitess_keyspace VALUES('ks',0,'semi_sync');`,
 	}
 )
@@ -77,6 +77,25 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
 			codeWanted:     ClusterHasNoPrimary,
+		}, {
+			name: "PrimaryTabletDeleted",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				ShardPrimaryTermTimestamp: "2022-12-28 07:23:25.129898+00:00",
+				DurabilityPolicy:          "none",
+				LastCheckValid:            1,
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     PrimaryTabletDeleted,
 		}, {
 			name: "DeadPrimary",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -566,6 +585,148 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
+			codeWanted:     InvalidReplica,
+		}, {
+			name: "DeadPrimary when VTOrc is starting up",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy: "none",
+				IsInvalid:        1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				LastCheckValid:     1,
+				ReplicationStopped: 1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 103},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6710,
+				},
+				LastCheckValid:     1,
+				ReplicationStopped: 1,
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     DeadPrimary,
+		}, {
+			name: "Invalid Primary",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy: "none",
+				IsInvalid:        1,
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     InvalidPrimary,
+		}, {
+			name: "ErrantGTID",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy:              "none",
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 3,
+				CountValidOracleGTIDReplicas:  4,
+				CountLoggingReplicas:          2,
+				IsPrimary:                     1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy: "none",
+				ErrantGTID:       "some errant GTID",
+				PrimaryTabletInfo: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+				},
+				LastCheckValid: 1,
+				ReadOnly:       1,
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     ErrantGTIDDetected,
+		}, {
+			name: "ErrantGTID on a non-replica",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy:              "none",
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 3,
+				CountValidOracleGTIDReplicas:  4,
+				CountLoggingReplicas:          2,
+				IsPrimary:                     1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_DRAINED,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy: "none",
+				ErrantGTID:       "some errant GTID",
+				PrimaryTabletInfo: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+				},
+				LastCheckValid: 1,
+				ReadOnly:       1,
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
 			codeWanted:     NoProblem,
 		},
 	}
@@ -624,7 +785,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				// This query removes the primary tablet's vitess_tablet record
 				`delete from vitess_tablet where port = 6714`,
 			},
-			codeWanted:     ClusterHasNoPrimary,
+			codeWanted:     PrimaryTabletDeleted,
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
 		}, {
@@ -635,9 +796,10 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			},
 			// As long as we have the vitess record stating that this tablet is the primary
 			// It would be incorrect to run a PRS.
-			// This situation only happens when we haven't been able to read the MySQL information even once for this tablet.
-			// So it is likely a new tablet.
-			codeWanted: NoProblem,
+			// We should still flag this tablet as Invalid.
+			codeWanted:     InvalidPrimary,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
 		}, {
 			name: "Removing Replica Tablet's MySQL record",
 			sql: []string{
@@ -648,7 +810,9 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			// We should wait for the MySQL information to be refreshed once.
 			// This situation only happens when we haven't been able to read the MySQL information even once for this tablet.
 			// So it is likely a new tablet.
-			codeWanted: NoProblem,
+			codeWanted:     InvalidReplica,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
 		},
 	}
 
@@ -746,6 +910,163 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 				require.NoError(t, err)
 				require.EqualValues(t, upd.writeCounterExpectation, analysisChangeWriteCounter.Count())
 			}
+		})
+	}
+}
+
+// TestPostProcessAnalyses tests the functionality of the postProcessAnalyses function.
+func TestPostProcessAnalyses(t *testing.T) {
+	ks0 := ClusterInfo{
+		Keyspace:       "ks",
+		Shard:          "0",
+		CountInstances: 4,
+	}
+	ks80 := ClusterInfo{
+		Keyspace:       "ks",
+		Shard:          "80-",
+		CountInstances: 3,
+	}
+	clusters := map[string]*clusterAnalysis{
+		getKeyspaceShardName(ks0.Keyspace, ks0.Shard): {
+			totalTablets: int(ks0.CountInstances),
+		},
+		getKeyspaceShardName(ks80.Keyspace, ks80.Shard): {
+			totalTablets: int(ks80.CountInstances),
+		},
+	}
+
+	tests := []struct {
+		name     string
+		analyses []*ReplicationAnalysis
+		want     []*ReplicationAnalysis
+	}{
+		{
+			name: "No processing needed",
+			analyses: []*ReplicationAnalysis{
+				{
+					Analysis:       ReplicationStopped,
+					TabletType:     topodatapb.TabletType_REPLICA,
+					LastCheckValid: true,
+					ClusterDetails: ks0,
+				}, {
+					Analysis:       ReplicaSemiSyncMustBeSet,
+					LastCheckValid: true,
+					TabletType:     topodatapb.TabletType_REPLICA,
+					ClusterDetails: ks0,
+				}, {
+					Analysis:       PrimaryHasPrimary,
+					LastCheckValid: true,
+					TabletType:     topodatapb.TabletType_REPLICA,
+					ClusterDetails: ks0,
+				},
+			},
+		}, {
+			name: "Conversion of InvalidPrimary to DeadPrimary",
+			analyses: []*ReplicationAnalysis{
+				{
+					Analysis:              InvalidPrimary,
+					AnalyzedInstanceAlias: "zone1-100",
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              NoProblem,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-202",
+					TabletType:            topodatapb.TabletType_RDONLY,
+					ClusterDetails:        ks80,
+				}, {
+					Analysis:              ConnectedToWrongPrimary,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-101",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					ReplicationStopped:    true,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              ReplicationStopped,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-102",
+					TabletType:            topodatapb.TabletType_RDONLY,
+					ReplicationStopped:    true,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              InvalidReplica,
+					AnalyzedInstanceAlias: "zone1-108",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					LastCheckValid:        false,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              NoProblem,
+					AnalyzedInstanceAlias: "zone1-302",
+					LastCheckValid:        true,
+					TabletType:            topodatapb.TabletType_REPLICA,
+					ClusterDetails:        ks80,
+				},
+			},
+			want: []*ReplicationAnalysis{
+				{
+					Analysis:              DeadPrimary,
+					AnalyzedInstanceAlias: "zone1-100",
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              NoProblem,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-202",
+					TabletType:            topodatapb.TabletType_RDONLY,
+					ClusterDetails:        ks80,
+				}, {
+					Analysis:              NoProblem,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-302",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					ClusterDetails:        ks80,
+				},
+			},
+		},
+		{
+			name: "Unable to convert InvalidPrimary to DeadPrimary",
+			analyses: []*ReplicationAnalysis{
+				{
+					Analysis:              InvalidPrimary,
+					AnalyzedInstanceAlias: "zone1-100",
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              NoProblem,
+					AnalyzedInstanceAlias: "zone1-202",
+					LastCheckValid:        true,
+					TabletType:            topodatapb.TabletType_RDONLY,
+					ClusterDetails:        ks80,
+				}, {
+					Analysis:              NoProblem,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-101",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              ReplicationStopped,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-102",
+					TabletType:            topodatapb.TabletType_RDONLY,
+					ReplicationStopped:    true,
+					ClusterDetails:        ks0,
+				}, {
+					Analysis:              NoProblem,
+					LastCheckValid:        true,
+					AnalyzedInstanceAlias: "zone1-302",
+					TabletType:            topodatapb.TabletType_REPLICA,
+					ClusterDetails:        ks80,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.want == nil {
+				tt.want = tt.analyses
+			}
+			result := postProcessAnalyses(tt.analyses, clusters)
+			require.ElementsMatch(t, tt.want, result)
 		})
 	}
 }

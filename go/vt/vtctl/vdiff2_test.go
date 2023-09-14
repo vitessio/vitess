@@ -35,7 +35,9 @@ var (
 )
 
 func TestVDiff2Unsharded(t *testing.T) {
-	env := newTestVDiffEnv(t, []string{"0"}, []string{"0"}, "", nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestVDiffEnv(t, ctx, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
 	UUID := uuid.New().String()
@@ -275,7 +277,9 @@ func TestVDiff2Unsharded(t *testing.T) {
 }
 
 func TestVDiff2Sharded(t *testing.T) {
-	env := newTestVDiffEnv(t, []string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestVDiffEnv(t, ctx, []string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
 		"-80": "MySQL56/0e45e704-7cb9-11ed-a1eb-0242ac120002:1-890",
 		"80-": "MySQL56/1497ddb0-7cb9-11ed-a1eb-0242ac120002:1-891",
 	})
@@ -473,7 +477,7 @@ func TestBuildProgressReport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			buildProgressReport(tt.args.summary, tt.args.rowsToCompare)
 			// We always check the percentage
-			require.Equal(t, tt.want.Percentage, tt.args.summary.Progress.Percentage)
+			require.Equal(t, int(tt.want.Percentage), int(tt.args.summary.Progress.Percentage))
 
 			// We only check the ETA if there is one
 			if tt.want.ETA != "" {

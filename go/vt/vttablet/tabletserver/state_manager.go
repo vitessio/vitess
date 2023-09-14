@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"golang.org/x/sync/semaphore"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
@@ -90,7 +89,7 @@ type stateManager struct {
 	wantTabletType topodatapb.TabletType
 	state          servingState
 	target         *querypb.Target
-	terTimestamp   time.Time
+	ptsTimestamp   time.Time
 	retrying       bool
 	replHealthy    bool
 	lameduck       bool
@@ -192,7 +191,7 @@ type (
 
 // Init performs the second phase of initialization.
 func (sm *stateManager) Init(env tabletenv.Env, target *querypb.Target) {
-	sm.target = proto.Clone(target).(*querypb.Target)
+	sm.target = target.CloneVT()
 	sm.transitioning = semaphore.NewWeighted(1)
 	sm.checkMySQLThrottler = semaphore.NewWeighted(1)
 	sm.timebombDuration = env.Config().OltpReadPool.TimeoutSeconds.Get() * 10
@@ -209,7 +208,7 @@ func (sm *stateManager) Init(env tabletenv.Env, target *querypb.Target) {
 // be honored.
 // If sm is already in the requested state, it returns stateChanged as
 // false.
-func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, state servingState, reason string) error {
+func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, ptsTimestamp time.Time, state servingState, reason string) error {
 	defer sm.ExitLameduck()
 
 	sm.hs.Open()
@@ -219,8 +218,8 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTime
 		state = StateNotConnected
 	}
 
-	log.Infof("Starting transition to %v %v, timestamp: %v", tabletType, state, terTimestamp)
-	if sm.mustTransition(tabletType, terTimestamp, state, reason) {
+	log.Infof("Starting transition to %v %v, primary term start timestamp: %v", tabletType, state, ptsTimestamp)
+	if sm.mustTransition(tabletType, ptsTimestamp, state, reason) {
 		return sm.execTransition(tabletType, state)
 	}
 	return nil
@@ -230,7 +229,7 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTime
 // state. If so, it acquires the semaphore and returns true. If a transition is
 // already in progress, it waits. If the desired state is already reached, it
 // returns false without acquiring the semaphore.
-func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, terTimestamp time.Time, state servingState, reason string) bool {
+func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, ptsTimestamp time.Time, state servingState, reason string) bool {
 	if sm.transitioning.Acquire(context.Background(), 1) != nil {
 		return false
 	}
@@ -239,7 +238,7 @@ func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, terTime
 
 	sm.wantTabletType = tabletType
 	sm.wantState = state
-	sm.terTimestamp = terTimestamp
+	sm.ptsTimestamp = ptsTimestamp
 	sm.reason = reason
 	if sm.target.TabletType == tabletType && sm.state == state {
 		sm.transitioning.Release(1)
@@ -639,7 +638,7 @@ func (sm *stateManager) stateStringLocked(tabletType topodatapb.TabletType, stat
 	if tabletType != topodatapb.TabletType_PRIMARY {
 		return fmt.Sprintf("%v: %v", tabletType, state)
 	}
-	return fmt.Sprintf("%v: %v, %v", tabletType, state, sm.terTimestamp.Local().Format("Jan 2, 2006 at 15:04:05 (MST)"))
+	return fmt.Sprintf("%v: %v, %v", tabletType, state, sm.ptsTimestamp.Local().Format("Jan 2, 2006 at 15:04:05 (MST)"))
 }
 
 func (sm *stateManager) handleGracePeriod(tabletType topodatapb.TabletType) {
@@ -674,7 +673,7 @@ func (sm *stateManager) Broadcast() {
 	defer sm.mu.Unlock()
 
 	lag, err := sm.refreshReplHealthLocked()
-	sm.hs.ChangeState(sm.target.TabletType, sm.terTimestamp, lag, err, sm.isServingLocked())
+	sm.hs.ChangeState(sm.target.TabletType, sm.ptsTimestamp, lag, err, sm.isServingLocked())
 }
 
 func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
@@ -806,7 +805,7 @@ func (sm *stateManager) State() servingState {
 func (sm *stateManager) Target() *querypb.Target {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	return proto.Clone(sm.target).(*querypb.Target)
+	return sm.target.CloneVT()
 }
 
 // IsServingString returns the name of the current TabletServer state.

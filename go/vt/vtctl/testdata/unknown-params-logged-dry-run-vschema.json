@@ -1,0 +1,18 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash_vdx" : {
+      "type": "hash",
+      "params": {
+        "foo": "bar",
+        "hello": "world"
+      }
+    },
+    "binary_vdx": {
+      "type": "binary",
+      "params": {
+        "hello": "world"
+      }
+    }
+  }
+}

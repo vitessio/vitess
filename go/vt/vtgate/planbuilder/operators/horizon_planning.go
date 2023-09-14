@@ -33,17 +33,12 @@ type (
 		cols  []ProjExpr
 		names []*sqlparser.AliasedExpr
 	}
-
-	// horizonLike should be removed. we should use Horizon for both these cases
-	horizonLike interface {
-		ops.Operator
-		selectStatement() sqlparser.SelectStatement
-		src() ops.Operator
-		getQP(ctx *plancontext.PlanningContext) (*QueryProjection, error)
-	}
 )
 
 func errHorizonNotPlanned() error {
+	if rewrite.DebugOperatorTree {
+		fmt.Println("ERROR! Falling back on the old horizon planner")
+	}
 	return _errHorizonNotPlanned
 }
 
@@ -82,12 +77,17 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 		return nil, err
 	}
 
-	output, err = makeSureOutputIsCorrect(ctx, root, output)
+	if rewrite.DebugOperatorTree {
+		fmt.Println("After offset planning:")
+		fmt.Println(ops.ToTree(output))
+	}
+
+	output, err = compact(ctx, output)
 	if err != nil {
 		return nil, err
 	}
 
-	return
+	return addTruncationOrProjectionToReturnOutput(ctx, root, output)
 }
 
 // planHorizons is the process of figuring out how to perform the operations in the Horizon
@@ -112,6 +112,11 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.O
 		if err != nil {
 			return nil, err
 		}
+
+		op, err = compact(ctx, op)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return addGroupByOnRHSOfJoin(op)
@@ -120,7 +125,7 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.O
 func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		switch in := in.(type) {
-		case horizonLike:
+		case *Horizon:
 			return pushOrExpandHorizon(ctx, in)
 		case *Projection:
 			return tryPushingDownProjection(ctx, in)
@@ -134,38 +139,27 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 			return tryPushingDownFilter(ctx, in)
 		case *Distinct:
 			return tryPushingDownDistinct(in)
+		case *Union:
+			return tryPushDownUnion(ctx, in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
 	}
 
-	newOp, err := rewrite.FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
-	if err != nil {
-		if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
-			// we encountered a bug. let's try to back out
-			return nil, errHorizonNotPlanned()
-		}
-		return nil, err
-	}
-
-	return newOp, nil
+	return rewrite.FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
 }
 
-func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.Operator, *rewrite.ApplyResult, error) {
-	if derived, ok := in.(*Derived); ok {
-		if len(derived.ColumnAliases) > 0 {
-			return nil, nil, errHorizonNotPlanned()
-		}
+func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
+	if len(in.ColumnAliases) > 0 {
+		return nil, nil, errHorizonNotPlanned()
 	}
+
 	rb, isRoute := in.src().(*Route)
 	if isRoute && rb.IsSingleShard() {
 		return rewrite.Swap(in, rb, "push horizon into route")
 	}
 
 	sel, isSel := in.selectStatement().(*sqlparser.Select)
-	if !isSel {
-		return nil, nil, errHorizonNotPlanned()
-	}
 
 	qp, err := in.getQP(ctx)
 	if err != nil {
@@ -173,7 +167,14 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.
 	}
 
 	needsOrdering := len(qp.OrderExprs) > 0
-	canPushDown := isRoute && sel.Having == nil && !needsOrdering && !qp.NeedsAggregation() && !sel.Distinct && sel.Limit == nil
+	hasHaving := isSel && sel.Having != nil
+
+	canPushDown := isRoute &&
+		!hasHaving &&
+		!needsOrdering &&
+		!qp.NeedsAggregation() &&
+		!in.selectStatement().IsDistinct() &&
+		in.selectStatement().GetLimit() == nil
 
 	if canPushDown {
 		return rewrite.Swap(in, rb, "push horizon into route")
@@ -208,7 +209,7 @@ func pushDownProjectionInVindex(
 ) (ops.Operator, *rewrite.ApplyResult, error) {
 	for _, column := range p.Projections {
 		expr := column.GetExpr()
-		_, _, err := src.AddColumn(ctx, aeWrap(expr), true, false)
+		_, err := src.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(expr)})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -236,7 +237,7 @@ func pushDownProjectionInApplyJoin(
 	}
 	lhs, rhs := &projector{}, &projector{}
 
-	src.ColumnsAST = nil
+	src.JoinColumns = nil
 	for idx := 0; idx < len(p.Projections); idx++ {
 		err := splitProjectionAcrossJoin(ctx, src, lhs, rhs, p.Projections[idx], p.Columns[idx])
 		if err != nil {
@@ -254,12 +255,12 @@ func pushDownProjectionInApplyJoin(
 	var err error
 
 	// Create and update the Projection operators for the left and right children, if needed.
-	src.LHS, err = createProjectionWithTheseColumns(src.LHS, lhs, p.TableID, p.Alias)
+	src.LHS, err = createProjectionWithTheseColumns(ctx, src.LHS, lhs, p.TableID, p.Alias)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	src.RHS, err = createProjectionWithTheseColumns(src.RHS, rhs, p.TableID, p.Alias)
+	src.RHS, err = createProjectionWithTheseColumns(ctx, src.RHS, rhs, p.TableID, p.Alias)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -279,7 +280,7 @@ func splitProjectionAcrossJoin(
 	expr := in.GetExpr()
 
 	// Check if the current expression can reuse an existing column in the ApplyJoin.
-	if _, found := canReuseColumn(ctx, join.ColumnsAST, expr, joinColumnToExpr); found {
+	if _, found := canReuseColumn(ctx, join.JoinColumns, expr, joinColumnToExpr); found {
 		return nil
 	}
 
@@ -302,8 +303,8 @@ func splitProjectionAcrossJoin(
 		rhs.add(&UnexploredExpression{E: col.RHSExpr}, &sqlparser.AliasedExpr{Expr: col.RHSExpr, As: colName.As})
 	}
 
-	// Add the new JoinColumn to the ApplyJoin's ColumnsAST.
-	join.ColumnsAST = append(join.ColumnsAST, col)
+	// Add the new JoinColumn to the ApplyJoin's JoinColumns.
+	join.JoinColumns = append(join.JoinColumns, col)
 	return nil
 }
 
@@ -341,10 +342,7 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 			}
 
 			expr = semantics.RewriteDerivedTableExpression(expr, derivedTbl)
-			out, err := prefixColNames(tblName, expr)
-			if err != nil {
-				return err
-			}
+			out := prefixColNames(tblName, expr)
 
 			alias := sqlparser.UnescapedString(out)
 			predicate.LHSExprs[idx] = sqlparser.NewColNameWithQualifier(alias, derivedTblName)
@@ -356,18 +354,18 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 
 // prefixColNames adds qualifier prefixes to all ColName:s.
 // We want to be more explicit than the user was to make sure we never produce invalid SQL
-func prefixColNames(tblName sqlparser.TableName, e sqlparser.Expr) (out sqlparser.Expr, err error) {
-	out = sqlparser.CopyOnRewrite(e, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+func prefixColNames(tblName sqlparser.TableName, e sqlparser.Expr) sqlparser.Expr {
+	return sqlparser.CopyOnRewrite(e, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		col, ok := cursor.Node().(*sqlparser.ColName)
 		if !ok {
 			return
 		}
 		col.Qualifier = tblName
 	}, nil).(sqlparser.Expr)
-	return
 }
 
 func createProjectionWithTheseColumns(
+	ctx *plancontext.PlanningContext,
 	src ops.Operator,
 	p *projector,
 	tableID *semantics.TableSet,
@@ -376,7 +374,7 @@ func createProjectionWithTheseColumns(
 	if len(p.cols) == 0 {
 		return src, nil
 	}
-	proj, err := createProjection(src)
+	proj, err := createProjection(ctx, src)
 	if err != nil {
 		return nil, err
 	}
@@ -587,48 +585,116 @@ func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter,
 }
 
 func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
-	if in.Pushed {
+	if in.Required && in.PushedPerformance {
 		return in, rewrite.SameTree, nil
 	}
 	switch src := in.Source.(type) {
 	case *Route:
-		if src.IsSingleShard() {
+		if isDistinct(src.Source) && src.IsSingleShard() {
+			return src, rewrite.NewTree("distinct not needed", in), nil
+		}
+		if src.IsSingleShard() || !in.Required {
 			return rewrite.Swap(in, src, "push distinct under route")
 		}
+
+		if isDistinct(src.Source) {
+			return in, rewrite.SameTree, nil
+		}
+
+		src.Source = &Distinct{Source: src.Source}
+		in.PushedPerformance = true
+
+		return in, rewrite.NewTree("added distinct under route - kept original", src), nil
 	case *Distinct:
+		src.Required = false
+		src.PushedPerformance = false
 		return src, rewrite.NewTree("removed double distinct", src), nil
-	case *Aggregator:
-		return in, rewrite.SameTree, nil
+	case *Union:
+		for i := range src.Sources {
+			src.Sources[i] = &Distinct{Source: src.Sources[i]}
+		}
+		in.PushedPerformance = true
+
+		return in, rewrite.NewTree("pushed down DISTINCT under UNION", src), nil
+	case *ApplyJoin:
+		src.LHS = &Distinct{Source: src.LHS}
+		src.RHS = &Distinct{Source: src.RHS}
+		in.PushedPerformance = true
+
+		if in.Required {
+			return in, rewrite.NewTree("pushed distinct under join - kept original", in.Source), nil
+		}
+
+		return in.Source, rewrite.NewTree("pushed distinct under join", in.Source), nil
+	case *Ordering:
+		in.Source = src.Source
+		return in, rewrite.NewTree("removed ordering under distinct", in), nil
 	}
 
-	cols, err := in.Source.GetColumns()
+	return in, rewrite.SameTree, nil
+}
+
+func isDistinct(op ops.Operator) bool {
+	switch op := op.(type) {
+	case *Distinct:
+		return true
+	case *Union:
+		return op.distinct
+	case *Horizon:
+		return op.Query.IsDistinct()
+	case *Limit:
+		return isDistinct(op.Source)
+	default:
+		return false
+	}
+}
+
+func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator, *rewrite.ApplyResult, error) {
+	if res := compactUnion(op); res != rewrite.SameTree {
+		return op, res, nil
+	}
+
+	var sources []ops.Operator
+	var selects []sqlparser.SelectExprs
+	var err error
+
+	if op.distinct {
+		sources, selects, err = mergeUnionInputInAnyOrder(ctx, op)
+	} else {
+		sources, selects, err = mergeUnionInputsInOrder(ctx, op)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
 
-	aggr := &Aggregator{
-		Source:   in.Source,
-		QP:       in.QP,
-		Original: true,
+	if len(sources) == 1 {
+		result := sources[0].(*Route)
+		if result.IsSingleShard() || !op.distinct {
+			return result, rewrite.NewTree("pushed union under route", op), nil
+		}
+
+		return &Distinct{
+			Source:   result,
+			Required: true,
+		}, rewrite.NewTree("pushed union under route", op), nil
 	}
 
-	for _, col := range cols {
-		aggr.addColumnWithoutPushing(col, true)
+	if len(sources) == len(op.Sources) {
+		return op, rewrite.SameTree, nil
 	}
-
-	return aggr, rewrite.NewTree("replace distinct with aggregator", in), nil
+	return newUnion(sources, selects, op.unionColumns, op.distinct), rewrite.NewTree("merged union inputs", op), nil
 }
 
-// makeSureOutputIsCorrect uses the original Horizon to make sure that the output columns line up with what the user asked for
-func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Operator, output ops.Operator) (ops.Operator, error) {
-	cols, err := output.GetColumns()
+// addTruncationOrProjectionToReturnOutput uses the original Horizon to make sure that the output columns line up with what the user asked for
+func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, oldHorizon ops.Operator, output ops.Operator) (ops.Operator, error) {
+	cols, err := output.GetSelectExprs(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	horizon := oldHorizon.(*Horizon)
 
-	sel := sqlparser.GetFirstSelect(horizon.Select)
+	sel := sqlparser.GetFirstSelect(horizon.Query)
 
 	if len(sel.SelectExprs) == len(cols) {
 		return output, nil

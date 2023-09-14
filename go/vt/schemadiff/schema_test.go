@@ -17,9 +17,12 @@ limitations under the License.
 package schemadiff
 
 import (
+	"fmt"
+	"math/rand"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -628,7 +631,7 @@ func TestViewReferences(t *testing.T) {
 				"create table t2(id int primary key, n int, info int)",
 				"create view v1 as select id, c as ch from t1 where id > 0",
 				"create view v2 as select n as num, info from t2",
-				"create view v3 as select num, v1.id, ch from v1 join v2 using (id) where info > 5",
+				"create view v3 as select num, v1.id, ch from v1 join v2 on v1.id = v2.num where info > 5",
 			},
 		},
 		{
@@ -710,4 +713,113 @@ func TestViewReferences(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestMassiveSchema loads thousands of tables into one schema, and thousands of tables, some of which are different, into another schema.
+// It compares the two shemas.
+// The objective of this test is to verify that execution time is _reasonable_. Since this will run in GitHub CI, which is very slow, we allow
+// for 1 minute total for all operations.
+func TestMassiveSchema(t *testing.T) {
+	tableBase := `
+		CREATE TABLE IF NOT EXISTS placeholder
+		(
+				id                    int              NOT NULL AUTO_INCREMENT,
+				workflow              varbinary(1000)  DEFAULT NULL,
+				source                mediumblob       NOT NULL,
+				pos                   varbinary(10000) NOT NULL,
+				stop_pos              varbinary(10000) DEFAULT NULL,
+				max_tps               bigint           NOT NULL,
+				max_replication_lag   bigint           NOT NULL,
+				cell                  varbinary(1000)  DEFAULT NULL,
+				tablet_types          varbinary(100)   DEFAULT NULL,
+				time_updated          bigint           NOT NULL,
+				transaction_timestamp bigint           NOT NULL,
+				state                 varbinary(100)   NOT NULL,
+				message               varbinary(1000)  DEFAULT NULL,
+				db_name               varbinary(255)   NOT NULL,
+				rows_copied           bigint           NOT NULL DEFAULT '0',
+				tags                  varbinary(1024)  NOT NULL DEFAULT '',
+				time_heartbeat        bigint           NOT NULL DEFAULT '0',
+				workflow_type         int              NOT NULL DEFAULT '0',
+				time_throttled        bigint           NOT NULL DEFAULT '0',
+				component_throttled   varchar(255)     NOT NULL DEFAULT '',
+				workflow_sub_type     int              NOT NULL DEFAULT '0',
+				defer_secondary_keys  tinyint(1)       NOT NULL DEFAULT '0',
+				PRIMARY KEY (id),
+				KEY workflow_idx (workflow(64)),
+				KEY time_heartbeat_idx (time_heartbeat)
+		) ENGINE = InnoDB
+	`
+	// Remove a couple columns into a modified table
+	modifiedTable := tableBase
+	for _, s := range []string{
+		"workflow              varbinary(1000)  DEFAULT NULL,\n",
+		"KEY workflow_idx (workflow(64)),\n",
+	} {
+		require.Contains(t, tableBase, s)
+		modifiedTable = strings.Replace(modifiedTable, s, "", -1)
+	}
+	require.NotEqual(t, tableBase, modifiedTable)
+
+	var schema0 *Schema
+	var schema1 *Schema
+	var err error
+	numTables := 8192
+	modifyTables := 500
+	countModifiedTables := 0
+	tableNames := map[string]bool{}
+
+	startTime := time.Now()
+
+	// Load thousands of tables into each schema
+	t.Run(fmt.Sprintf("load %d tables into schemas", numTables), func(t *testing.T) {
+		modifiedTableIndexes := map[int]bool{}
+		for i, index := range rand.Perm(numTables) {
+			if i >= modifyTables {
+				break
+			}
+			modifiedTableIndexes[index] = true
+		}
+		queries0 := make([]string, 0, numTables) // to be loaded into schema0
+		queries1 := make([]string, 0, numTables) // to be loaded into schema1
+		for i := 0; i < numTables; i++ {
+			tableName := fmt.Sprintf("tbl_%05d", i)
+			query := strings.Replace(tableBase, "placeholder", tableName, -1)
+			queries0 = append(queries0, query)
+			if modifiedTableIndexes[i] {
+				// Some tables in schema1 are changed
+				query = strings.Replace(modifiedTable, "placeholder", tableName, -1)
+				countModifiedTables++
+			}
+			queries1 = append(queries1, query)
+			tableNames[tableName] = true
+		}
+		schema0, err = NewSchemaFromQueries(queries0)
+		require.NoError(t, err)
+		schema1, err = NewSchemaFromQueries(queries1)
+		require.NoError(t, err)
+
+		require.Equal(t, countModifiedTables, modifyTables)
+	})
+	t.Run(fmt.Sprintf("validate loaded %d tables", numTables), func(t *testing.T) {
+		for _, schema := range []*Schema{schema0, schema1} {
+			entities := schema.Entities()
+			assert.Equal(t, numTables, len(entities)) // all tables are there
+			for _, e := range entities {
+				_, ok := tableNames[e.Name()]
+				assert.True(t, ok)
+			}
+		}
+	})
+
+	t.Run("evaluating diff", func(t *testing.T) {
+		schemaDiff, err := schema0.SchemaDiff(schema1, &DiffHints{})
+		require.NoError(t, err)
+		diffs := schemaDiff.UnorderedDiffs()
+		require.NotEmpty(t, diffs)
+		require.Equal(t, len(diffs), countModifiedTables)
+	})
+
+	elapsed := time.Since(startTime)
+	assert.Less(t, elapsed, time.Minute)
 }

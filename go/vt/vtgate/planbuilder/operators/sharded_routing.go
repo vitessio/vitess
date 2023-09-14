@@ -17,10 +17,10 @@ limitations under the License.
 package operators
 
 import (
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -67,7 +67,7 @@ func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 		vindex, _ := vindexes.CreateVindex("binary", "binary", nil)
 		routing.Selected = &VindexOption{
 			Ready:       true,
-			Values:      []evalengine.Expr{evalengine.NewLiteralString(vtable.Pinned, collations.TypedCollation{})},
+			Values:      []evalengine.Expr{evalengine.NewLiteralString(vtable.Pinned, collations.SystemCollation)},
 			ValueExprs:  nil,
 			Predicates:  nil,
 			OpCode:      engine.EqualUnique,
@@ -79,6 +79,10 @@ func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 
 	}
 	for _, columnVindex := range vtable.ColumnVindexes {
+		// ignore any backfilling vindexes from vindex selection.
+		if columnVindex.IsBackfilling() {
+			continue
+		}
 		routing.VindexPreds = append(routing.VindexPreds, &VindexPlusPredicates{ColVindex: columnVindex, TableID: id})
 	}
 	return routing
@@ -151,7 +155,7 @@ func (tr *ShardedRouting) Clone() Routing {
 		selected = &t
 	}
 	return &ShardedRouting{
-		VindexPreds: slices2.Map(tr.VindexPreds, func(from *VindexPlusPredicates) *VindexPlusPredicates {
+		VindexPreds: slice.Map(tr.VindexPreds, func(from *VindexPlusPredicates) *VindexPlusPredicates {
 			// we do this to create a copy of the struct
 			p := *from
 			return &p
@@ -553,29 +557,6 @@ func (tr *ShardedRouting) hasVindex(column *sqlparser.ColName) bool {
 	return false
 }
 
-// Reset all vindex predicates on this route and re-build their options from
-// the list of seen routing predicates.
-func (tr *ShardedRouting) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
-	tr.RouteOpCode = engine.Scatter
-	tr.Selected = nil
-	for i, vp := range tr.VindexPreds {
-		tr.VindexPreds[i] = &VindexPlusPredicates{ColVindex: vp.ColVindex, TableID: vp.TableID}
-	}
-
-	var routing Routing = tr
-	for _, predicate := range tr.SeenPredicates {
-		var err error
-		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-		if err != nil {
-			return err
-		}
-	}
-	if routing != tr {
-		return vterrors.VT13001("uh-oh. we ended up with a different type of routing")
-	}
-	return nil
-}
-
 func (tr *ShardedRouting) SelectedVindex() vindexes.Vindex {
 	if tr.Selected == nil {
 		return nil
@@ -590,7 +571,13 @@ func (tr *ShardedRouting) VindexExpressions() []sqlparser.Expr {
 	return tr.Selected.ValueExprs
 }
 
-func tryMergeShardedRouting(ctx *plancontext.PlanningContext, routeA *Route, routeB *Route, m merger, joinPredicates []sqlparser.Expr) (ops.Operator, error) {
+func tryMergeJoinShardedRouting(
+	ctx *plancontext.PlanningContext,
+	routeA *Route,
+	routeB *Route,
+	m merger,
+	joinPredicates []sqlparser.Expr,
+) (ops.Operator, error) {
 	sameKeyspace := routeA.Routing.Keyspace() == routeB.Routing.Keyspace()
 	tblA := routeA.Routing.(*ShardedRouting)
 	tblB := routeB.Routing.(*ShardedRouting)
@@ -604,7 +591,7 @@ func tryMergeShardedRouting(ctx *plancontext.PlanningContext, routeA *Route, rou
 			aExpr := tblA.VindexExpressions()
 			bExpr := tblB.VindexExpressions()
 			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-				return m.mergeTables(tblA, tblB, routeA, routeB)
+				return m.mergeShardedRouting(tblA, tblB, routeA, routeB)
 			}
 		}
 
@@ -628,7 +615,7 @@ func tryMergeShardedRouting(ctx *plancontext.PlanningContext, routeA *Route, rou
 		if !canMerge {
 			return nil, nil
 		}
-		return m.mergeTables(tblA, tblB, routeA, routeB)
+		return m.mergeShardedRouting(tblA, tblB, routeA, routeB)
 	}
 	return nil, nil
 }
@@ -652,7 +639,10 @@ func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) eval
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		ee, _ := evalengine.Translate(expr, &evalengine.Config{Collation: ctx.SemTable.Collation})
+		ee, _ := evalengine.Translate(expr, &evalengine.Config{
+			Collation:   ctx.SemTable.Collation,
+			ResolveType: ctx.SemTable.TypeForExpr,
+		})
 		if ee != nil {
 			return ee
 		}

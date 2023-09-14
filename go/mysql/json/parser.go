@@ -21,12 +21,11 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf16"
-
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/fastparse"
 
@@ -585,8 +584,18 @@ func (o *Object) sort() {
 		return
 	}
 
-	slices.SortStableFunc(o.kvs, func(a, b kv) bool {
-		return a.k < b.k
+	slices.SortStableFunc(o.kvs, func(a, b kv) int {
+		// TODO: switch to cmp.Compare for Go 1.21+.
+		//
+		// https://pkg.go.dev/cmp@master#Compare.
+		switch {
+		case a.k < b.k:
+			return -1
+		case a.k > b.k:
+			return 1
+		default:
+			return 0
+		}
 	})
 	uniq := o.kvs[:1]
 	for _, kv := range o.kvs[1:] {
@@ -704,6 +713,15 @@ func (v *Value) MarshalTime() string {
 	return ""
 }
 
+func (v *Value) marshalFloat(dst []byte) []byte {
+	f, _ := v.Float64()
+	buf := format.FormatFloat(f)
+	if bytes.IndexByte(buf, '.') == -1 && bytes.IndexByte(buf, 'e') == -1 {
+		buf = append(buf, '.', '0')
+	}
+	return append(dst, buf...)
+}
+
 // MarshalTo appends marshaled v to dst and returns the result.
 func (v *Value) MarshalTo(dst []byte) []byte {
 	switch v.t {
@@ -744,12 +762,7 @@ func (v *Value) MarshalTo(dst []byte) []byte {
 		return dst
 	case TypeNumber:
 		if v.NumberType() == NumberTypeFloat {
-			f, _ := v.Float64()
-			buf := format.FormatFloat(f)
-			if bytes.IndexByte(buf, '.') == -1 && bytes.IndexByte(buf, 'e') == -1 {
-				buf = append(buf, '.', '0')
-			}
-			return append(dst, buf...)
+			return v.marshalFloat(dst)
 		}
 		return append(dst, v.s...)
 	case TypeBoolean:

@@ -348,8 +348,8 @@ func RevokeCertAndRegenerateCRL(root, parent, name string) {
 		log.Fatal(err)
 	}
 
-	revoked := crlList.RevokedCertificates
-	revoked = append(revoked, pkix.RevokedCertificate{
+	revoked := crlList.RevokedCertificateEntries
+	revoked = append(revoked, x509.RevocationListEntry{
 		SerialNumber:   certificate.SerialNumber,
 		RevocationTime: time.Now(),
 	})
@@ -365,8 +365,8 @@ func RevokeCertAndRegenerateCRL(root, parent, name string) {
 
 	var crlNumber big.Int
 	newCrl, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
-		RevokedCertificates: revoked,
-		Number:              crlNumber.Add(crlList.Number, big.NewInt(1)),
+		RevokedCertificateEntries: revoked,
+		Number:                    crlNumber.Add(crlList.Number, big.NewInt(1)),
 	}, caCert, caKey.(crypto.Signer))
 	if err != nil {
 		log.Fatal(err)

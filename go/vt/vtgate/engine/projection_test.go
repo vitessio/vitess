@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -119,4 +121,51 @@ func TestHexAndBinaryArgument(t *testing.T) {
 	}, false)
 	require.NoError(t, err)
 	assert.Equal(t, `[[VARBINARY("\t")]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+func TestFields(t *testing.T) {
+	var testCases = []struct {
+		name      string
+		bindVar   *querypb.BindVariable
+		typ       querypb.Type
+		collation collations.ID
+	}{
+		{
+			name:      `integer`,
+			bindVar:   sqltypes.Int64BindVariable(10),
+			typ:       querypb.Type_INT64,
+			collation: collations.CollationBinaryID,
+		},
+		{
+			name:      `string`,
+			bindVar:   sqltypes.StringBindVariable("test"),
+			typ:       querypb.Type_VARCHAR,
+			collation: collations.Default(),
+		},
+		{
+			name:      `binary`,
+			bindVar:   sqltypes.BytesBindVariable([]byte("test")),
+			typ:       querypb.Type_VARBINARY,
+			collation: collations.CollationBinaryID,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			bindExpr, err := evalengine.Translate(sqlparser.NewArgument("vtg1"), nil)
+			require.NoError(t, err)
+			proj := &Projection{
+				Cols:       []string{"col"},
+				Exprs:      []evalengine.Expr{bindExpr},
+				Input:      &SingleRow{},
+				noTxNeeded: noTxNeeded{},
+			}
+			qr, err := proj.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{
+				"vtg1": testCase.bindVar,
+			}, true)
+			require.NoError(t, err)
+			assert.Equal(t, testCase.typ, qr.Fields[0].Type)
+			assert.Equal(t, testCase.collation, collations.ID(qr.Fields[0].Charset))
+		})
+	}
 }

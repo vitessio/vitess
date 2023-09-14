@@ -26,12 +26,55 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.Operator, *rewrite.ApplyResult, error) {
-	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
-	if !isSel {
-		return nil, nil, errHorizonNotPlanned()
+func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
+	statement := horizon.selectStatement()
+	switch sel := statement.(type) {
+	case *sqlparser.Select:
+		return expandSelectHorizon(ctx, horizon, sel)
+	case *sqlparser.Union:
+		return expandUnionHorizon(ctx, horizon, sel)
+	}
+	return nil, nil, vterrors.VT13001(fmt.Sprintf("unexpected statement type %T", statement))
+}
+
+func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, union *sqlparser.Union) (ops.Operator, *rewrite.ApplyResult, error) {
+	op := horizon.Source
+
+	qp, err := horizon.getQP(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
 
+	if len(qp.OrderExprs) > 0 {
+		op = &Ordering{
+			Source: op,
+			Order:  qp.OrderExprs,
+		}
+	}
+
+	if union.Limit != nil {
+		op = &Limit{
+			Source: op,
+			AST:    union.Limit,
+		}
+	}
+
+	if horizon.TableId != nil {
+		op = &Projection{
+			Source:  op,
+			TableID: horizon.TableId,
+			Alias:   horizon.Alias,
+		}
+	}
+
+	if op == horizon.Source {
+		return op, rewrite.NewTree("removed UNION horizon not used", op), nil
+	}
+
+	return op, rewrite.NewTree("expand UNION horizon into smaller components", op), nil
+}
+
+func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel *sqlparser.Select) (ops.Operator, *rewrite.ApplyResult, error) {
 	op, err := createProjectionFromSelect(ctx, horizon)
 	if err != nil {
 		return nil, nil, err
@@ -44,8 +87,9 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 
 	if qp.NeedsDistinct() {
 		op = &Distinct{
-			Source: op,
-			QP:     qp,
+			Required: true,
+			Source:   op,
+			QP:       qp,
 		}
 	}
 
@@ -71,22 +115,10 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 		}
 	}
 
-	return op, rewrite.NewTree("expand horizon into smaller components", op), nil
+	return op, rewrite.NewTree("expand SELECT horizon into smaller components", op), nil
 }
 
-func checkInvalid(aggregations []Aggr, horizon horizonLike) error {
-	for _, aggregation := range aggregations {
-		if aggregation.Distinct {
-			return errHorizonNotPlanned()
-		}
-	}
-	if _, isDerived := horizon.(*Derived); isDerived {
-		return errHorizonNotPlanned()
-	}
-	return nil
-}
-
-func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizonLike) (out ops.Operator, err error) {
+func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out ops.Operator, err error) {
 	qp, err := horizon.getQP(ctx)
 	if err != nil {
 		return nil, err
@@ -97,27 +129,15 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 		if err != nil {
 			return nil, err
 		}
-		if derived, isDerived := horizon.(*Derived); isDerived {
-			id := derived.TableId
-			projX.TableID = &id
-			projX.Alias = derived.Alias
-		}
+		projX.TableID = horizon.TableId
+		projX.Alias = horizon.Alias
 		out = projX
 
 		return out, nil
 	}
 
-	err = checkAggregationSupported(horizon)
-	if err != nil {
-		return nil, err
-	}
-
 	aggregations, complexAggr, err := qp.AggregationExpressions(ctx, true)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := checkInvalid(aggregations, horizon); err != nil {
 		return nil, err
 	}
 
@@ -127,12 +147,8 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 		QP:           qp,
 		Grouping:     qp.GetGrouping(),
 		Aggregations: aggregations,
-	}
-
-	if derived, isDerived := horizon.(*Derived); isDerived {
-		id := derived.TableId
-		a.TableID = &id
-		a.Alias = derived.Alias
+		TableID:      horizon.TableId,
+		Alias:        horizon.Alias,
 	}
 
 	if complexAggr {
@@ -220,7 +236,7 @@ func createProjectionWithoutAggr(qp *QueryProjection, src ops.Operator) (*Projec
 			aggr, ok := expr.(sqlparser.AggrFunc)
 			if !ok {
 				// need to add logic to extract aggregations and pushed them to the top level
-				return nil, errHorizonNotPlanned()
+				return nil, vterrors.VT12001(fmt.Sprintf("unsupported aggregation expression: %s", sqlparser.String(expr)))
 			}
 			expr = aggr.GetArg()
 			if expr == nil {

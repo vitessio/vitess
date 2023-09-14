@@ -23,6 +23,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/replication"
 )
 
 // Sample event data for MySQL 5.6.
@@ -79,25 +81,14 @@ func TestMysql56GTID(t *testing.T) {
 	require.NoError(t, err, "StripChecksum() error: %v", err)
 	require.True(t, input.IsGTID(), "IsGTID() = false, want true")
 
-	want, _ := parseMysql56GTID("439192bd-f37c-11e4-bbeb-0242ac11035a:4")
+	want := replication.Mysql56GTID{
+		Server:   replication.SID{0x43, 0x91, 0x92, 0xbd, 0xf3, 0x7c, 0x11, 0xe4, 0xbb, 0xeb, 0x2, 0x42, 0xac, 0x11, 0x3, 0x5a},
+		Sequence: 4,
+	}
 	got, hasBegin, err := input.GTID(format)
 	require.NoError(t, err, "GTID() error: %v", err)
 	assert.False(t, hasBegin, "GTID() returned hasBegin")
 	assert.Equal(t, want, got, "GTID() = %#v, want %#v", got, want)
-
-}
-
-func TestMysql56ParseGTID(t *testing.T) {
-	input := "00010203-0405-0607-0809-0A0B0C0D0E0F:56789"
-	want := Mysql56GTID{
-		Server:   SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-		Sequence: 56789,
-	}
-
-	got, err := parseMysql56GTID(input)
-	require.NoError(t, err, "unexpected error: %v", err)
-	assert.Equal(t, want, got, "(&mysql56{}).ParseGTID(%#v) = %#v, want %#v", input, got, want)
-
 }
 
 func TestMysql56DecodeTransactionPayload(t *testing.T) {
@@ -148,13 +139,13 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 func TestMysql56ParsePosition(t *testing.T) {
 	input := "00010203-0405-0607-0809-0a0b0c0d0e0f:1-2"
 
-	sid := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	var set GTIDSet = Mysql56GTIDSet{}
-	set = set.AddGTID(Mysql56GTID{Server: sid, Sequence: 1})
-	set = set.AddGTID(Mysql56GTID{Server: sid, Sequence: 2})
-	want := Position{GTIDSet: set}
+	sid := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	var set replication.GTIDSet = replication.Mysql56GTIDSet{}
+	set = set.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 1})
+	set = set.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 2})
+	want := replication.Position{GTIDSet: set}
 
-	got, err := ParsePosition(Mysql56FlavorID, input)
+	got, err := replication.ParsePosition(replication.Mysql56FlavorID, input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, got.Equal(want), "(&mysql56{}).ParsePosition(%#v) = %#v, want %#v", input, got, want)
 

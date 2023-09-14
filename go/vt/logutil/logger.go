@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/protoutil"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
 
@@ -73,7 +74,7 @@ func EventToBuffer(event *logutilpb.Event, buf *bytes.Buffer) {
 		return
 	}
 
-	t := ProtoToTime(event.Time)
+	t := protoutil.TimeFromProto(event.Time).UTC()
 	_, month, day := t.Date()
 	hour, minute, second := t.Clock()
 	twoDigits(buf, int(month))
@@ -137,7 +138,7 @@ func NewCallbackLogger(f func(*logutilpb.Event)) *CallbackLogger {
 func (cl *CallbackLogger) InfoDepth(depth int, s string) {
 	file, line := fileAndLine(2 + depth)
 	cl.f(&logutilpb.Event{
-		Time:  TimeToProto(time.Now()),
+		Time:  protoutil.TimeToProto(time.Now()),
 		Level: logutilpb.Level_INFO,
 		File:  file,
 		Line:  line,
@@ -149,7 +150,7 @@ func (cl *CallbackLogger) InfoDepth(depth int, s string) {
 func (cl *CallbackLogger) WarningDepth(depth int, s string) {
 	file, line := fileAndLine(2 + depth)
 	cl.f(&logutilpb.Event{
-		Time:  TimeToProto(time.Now()),
+		Time:  protoutil.TimeToProto(time.Now()),
 		Level: logutilpb.Level_WARNING,
 		File:  file,
 		Line:  line,
@@ -161,7 +162,7 @@ func (cl *CallbackLogger) WarningDepth(depth int, s string) {
 func (cl *CallbackLogger) ErrorDepth(depth int, s string) {
 	file, line := fileAndLine(2 + depth)
 	cl.f(&logutilpb.Event{
-		Time:  TimeToProto(time.Now()),
+		Time:  protoutil.TimeToProto(time.Now()),
 		Level: logutilpb.Level_ERROR,
 		File:  file,
 		Line:  line,
@@ -198,7 +199,7 @@ func (cl *CallbackLogger) Error(err error) {
 func (cl *CallbackLogger) Printf(format string, v ...any) {
 	file, line := fileAndLine(2)
 	cl.f(&logutilpb.Event{
-		Time:  TimeToProto(time.Now()),
+		Time:  protoutil.TimeToProto(time.Now()),
 		Level: logutilpb.Level_CONSOLE,
 		File:  file,
 		Line:  line,

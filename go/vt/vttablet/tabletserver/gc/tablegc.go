@@ -20,13 +20,14 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/rand"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/timer"
@@ -82,10 +83,6 @@ type transitionRequest struct {
 	uuid          string
 }
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
 // TableGC is the main entity in the table garbage collection mechanism.
 // This service "garbage collects" tables:
 // - it checks for magically-named tables (e.g. _vt_EVAC_f6338b2af8af11eaa210f875a4d24e90_20200920063522)
@@ -122,8 +119,7 @@ type Status struct {
 	Keyspace string
 	Shard    string
 
-	isPrimary bool
-	IsOpen    bool
+	IsOpen bool
 
 	purgingTables []string
 }
@@ -474,8 +470,8 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 		if err == nil {
 			return true, nil
 		}
-		if merr, ok := err.(*mysql.SQLError); ok {
-			if merr.Num == mysql.ERSpecifiedAccessDenied {
+		if merr, ok := err.(*sqlerror.SQLError); ok {
+			if merr.Num == sqlerror.ERSpecifiedAccessDenied {
 				// We do not have privileges to disable binary logging. That's fine, we're on best effort,
 				// so we're going to silently ignore this error.
 				return false, nil

@@ -183,7 +183,7 @@ func tryMergeSubqueryWithRoute(
 		return nil, nil
 	}
 
-	merged, err := Merge(ctx, outerOp, subq, joinPredicates, merger)
+	merged, err := mergeJoinInputs(ctx, outerOp, subq, joinPredicates, merger)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +210,7 @@ func tryMergeSubqueryWithRoute(
 		if !ok {
 			return nil, nil
 		}
-		merged, err := merger.mergeTables(outerRouting, innerRouting, outerOp, subqueryRoute)
+		merged, err := merger.mergeShardedRouting(outerRouting, innerRouting, outerOp, subqueryRoute)
 		mergedRouting := merged.Routing.(*ShardedRouting)
 		mergedRouting.PickBestAvailableVindex()
 		return merged, err
@@ -278,7 +278,6 @@ func rewriteColumnsInSubqueryOpForJoin(
 	outerTree *ApplyJoin,
 	subQueryInner *SubQueryInner,
 ) (ops.Operator, error) {
-	resultInnerOp := innerOp
 	var rewriteError error
 	// go over the entire expression in the subquery
 	sqlparser.SafeRewrite(subQueryInner.ExtractedSubquery.Original, nil, func(cursor *sqlparser.Cursor) bool {
@@ -288,7 +287,7 @@ func rewriteColumnsInSubqueryOpForJoin(
 		}
 
 		// check whether the column name belongs to the other side of the join tree
-		if !ctx.SemTable.RecursiveDeps(node).IsSolvedBy(TableID(resultInnerOp)) {
+		if !ctx.SemTable.RecursiveDeps(node).IsSolvedBy(TableID(innerOp)) {
 			return true
 		}
 
@@ -304,24 +303,23 @@ func rewriteColumnsInSubqueryOpForJoin(
 			return true
 		}
 		// if it does not exist, then push this as an output column there and add it to the joinVars
-		newInnerOp, offset, err := resultInnerOp.AddColumn(ctx, aeWrap(node), true, false)
+		offsets, err := innerOp.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(node)})
 		if err != nil {
 			rewriteError = err
 			return false
 		}
-		resultInnerOp = newInnerOp
-		outerTree.Vars[bindVar] = offset
+		outerTree.Vars[bindVar] = offsets[0]
 		return true
 	})
 
 	// update the dependencies for the subquery by removing the dependencies from the innerOp
 	tableSet := ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
-	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(resultInnerOp))
+	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(innerOp))
 	tableSet = ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
-	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(resultInnerOp))
+	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(innerOp))
 
 	// return any error while rewriting
-	return resultInnerOp, rewriteError
+	return innerOp, rewriteError
 }
 
 func createCorrelatedSubqueryOp(
@@ -335,7 +333,6 @@ func createCorrelatedSubqueryOp(
 		return nil, vterrors.VT12001("EXISTS sub-queries are only supported with AND clause")
 	}
 
-	resultOuterOp := newOuter
 	vars := map[string]int{}
 	bindVars := map[*sqlparser.ColName]string{}
 	var lhsCols []*sqlparser.ColName
@@ -348,7 +345,7 @@ func createCorrelatedSubqueryOp(
 			}
 
 			nodeDeps := ctx.SemTable.RecursiveDeps(node)
-			if !nodeDeps.IsSolvedBy(TableID(resultOuterOp)) {
+			if !nodeDeps.IsSolvedBy(TableID(newOuter)) {
 				return true
 			}
 
@@ -370,14 +367,13 @@ func createCorrelatedSubqueryOp(
 			bindVars[node] = bindVar
 
 			// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
-			newOuterOp, offset, err := resultOuterOp.AddColumn(ctx, aeWrap(node), true, false)
+			offsets, err := newOuter.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(node)})
 			if err != nil {
 				rewriteError = err
 				return true
 			}
-			resultOuterOp = newOuterOp
 			lhsCols = append(lhsCols, node)
-			vars[bindVar] = offset
+			vars[bindVar] = offsets[0]
 			return true
 		})
 		if rewriteError != nil {
@@ -390,7 +386,7 @@ func createCorrelatedSubqueryOp(
 		}
 	}
 	return &CorrelatedSubQueryOp{
-		Outer:      resultOuterOp,
+		Outer:      newOuter,
 		Inner:      innerOp,
 		Extracted:  extractedSubquery,
 		Vars:       vars,

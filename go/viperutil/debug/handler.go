@@ -26,7 +26,7 @@ import (
 	"github.com/spf13/viper"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/viperutil/internal/registry"
 )
 
@@ -53,7 +53,7 @@ func HandlerFunc(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case format == "":
 		v.DebugTo(w)
-	case slices2.Any(viper.SupportedExts, func(ext string) bool { return ext == format }):
+	case slice.Any(viper.SupportedExts, func(ext string) bool { return ext == format }):
 		// Got a supported format; write the config to a tempfile in that format,
 		// then copy it to the response.
 		//
@@ -77,6 +77,6 @@ func HandlerFunc(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
-		http.Error(w, fmt.Sprintf("unsupported config format %s", format), http.StatusBadRequest)
+		http.Error(w, "unsupported config format", http.StatusBadRequest)
 	}
 }

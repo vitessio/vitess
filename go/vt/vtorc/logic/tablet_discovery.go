@@ -19,14 +19,14 @@ package logic
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
-
-	"golang.org/x/exp/slices"
 
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -195,8 +195,6 @@ func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, 
 
 func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []any, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
 	// Discover new tablets.
-	// TODO(sougou): enhance this to work with multi-schema,
-	// where each instanceKey can have multiple tablets.
 	latestInstances := make(map[string]bool)
 	var wg sync.WaitGroup
 	for _, tabletInfo := range tablets {
@@ -206,9 +204,6 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 		}
 		tabletAliasString := topoproto.TabletAliasString(tablet.Alias)
 		latestInstances[tabletAliasString] = true
-		if tablet.MysqlHostname == "" {
-			continue
-		}
 		old, err := inst.ReadTablet(tabletAliasString)
 		if err != nil && err != inst.ErrTabletAliasNil {
 			log.Error(err)
@@ -252,14 +247,18 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 	}
 }
 
+func getLockAction(analysedInstance string, code inst.AnalysisCode) string {
+	return fmt.Sprintf("VTOrc Recovery for %v on %v", code, analysedInstance)
+}
+
 // LockShard locks the keyspace-shard preventing others from performing conflicting actions.
-func LockShard(ctx context.Context, tabletAlias string) (context.Context, func(*error), error) {
+func LockShard(ctx context.Context, tabletAlias string, lockAction string) (context.Context, func(*error), error) {
 	if tabletAlias == "" {
-		return nil, nil, errors.New("Can't lock shard: instance is unspecified")
+		return nil, nil, errors.New("can't lock shard: instance is unspecified")
 	}
 	val := atomic.LoadInt32(&hasReceivedSIGTERM)
 	if val > 0 {
-		return nil, nil, errors.New("Can't lock shard: SIGTERM received")
+		return nil, nil, errors.New("can't lock shard: SIGTERM received")
 	}
 
 	tablet, err := inst.ReadTablet(tabletAlias)
@@ -268,7 +267,7 @@ func LockShard(ctx context.Context, tabletAlias string) (context.Context, func(*
 	}
 
 	atomic.AddInt32(&shardsLockCounter, 1)
-	ctx, unlock, err := ts.TryLockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
+	ctx, unlock, err := ts.TryLockShard(ctx, tablet.Keyspace, tablet.Shard, lockAction)
 	if err != nil {
 		atomic.AddInt32(&shardsLockCounter, -1)
 		return nil, nil, err
@@ -287,6 +286,11 @@ func tabletUndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, sem
 // setReadOnly calls the said RPC for the given tablet
 func setReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return tmc.SetReadOnly(ctx, tablet)
+}
+
+// changeTabletType calls the said RPC for the given tablet with the given parameters.
+func changeTabletType(ctx context.Context, tablet *topodatapb.Tablet, tabletType topodatapb.TabletType, semiSync bool) error {
+	return tmc.ChangeType(ctx, tablet, tabletType, semiSync)
 }
 
 // setReplicationSource calls the said RPC with the parameters provided
@@ -345,12 +349,12 @@ func restartReplication(replicaAlias string) error {
 	defer cancel()
 	err = tmc.StopReplication(ctx, replicaTablet)
 	if err != nil {
-		log.Info("Could not stop replication on %v", topoproto.TabletAliasString(replicaTablet.Alias))
+		log.Info("Could not stop replication on %v", replicaAlias)
 		return err
 	}
 	err = tmc.StartReplication(ctx, replicaTablet, reparentutil.IsReplicaSemiSync(durabilityPolicy, primaryTablet, replicaTablet))
 	if err != nil {
-		log.Info("Could not start replication on %v", topoproto.TabletAliasString(replicaTablet.Alias))
+		log.Info("Could not start replication on %v", replicaAlias)
 		return err
 	}
 	return nil

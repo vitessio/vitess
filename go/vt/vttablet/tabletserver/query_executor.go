@@ -24,9 +24,11 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
@@ -120,6 +122,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	defer func(start time.Time) {
 		duration := time.Since(start)
 		qre.tsv.stats.QueryTimings.Add(planName, duration)
+		qre.tsv.stats.QueryTimingsByTabletType.Add(qre.tabletType.String(), duration)
 		qre.recordUserQuery("Execute", int64(duration))
 
 		mysqlTime := qre.logStats.MysqlResponseTime
@@ -131,13 +134,14 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		var errCode string
 		vtErrorCode := vterrors.Code(err)
 		errCode = vtErrorCode.String()
+
 		if reply == nil {
-			qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, qre.options.GetWorkloadName(), 1, duration, mysqlTime, 0, 0, 1, errCode)
+			qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, qre.options.GetWorkloadName(), qre.tabletType, 1, duration, mysqlTime, 0, 0, 1, errCode)
 			qre.plan.AddStats(1, duration, mysqlTime, 0, 0, 1)
 			return
 		}
 
-		qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, qre.options.GetWorkloadName(), 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
+		qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, qre.options.GetWorkloadName(), qre.tabletType, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
 		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
@@ -217,11 +221,11 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 	if qre.options == nil {
 		qre.options = &querypb.ExecuteOptions{}
 	} else {
-		qre.options = proto.Clone(qre.options).(*querypb.ExecuteOptions)
+		qre.options = qre.options.CloneVT()
 	}
 	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
 
-	if qre.tsv.txThrottler.Throttle(qre.tsv.getPriorityFromOptions(qre.options)) {
+	if qre.tsv.txThrottler.Throttle(qre.tsv.getPriorityFromOptions(qre.options), qre.options.GetWorkloadName()) {
 		return nil, errTxThrottled
 	}
 
@@ -236,7 +240,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	if qre.tsv.txThrottler.Throttle(qre.tsv.getPriorityFromOptions(qre.options)) {
+	if qre.tsv.txThrottler.Throttle(qre.tsv.getPriorityFromOptions(qre.options), qre.options.GetWorkloadName()) {
 		return nil, errTxThrottled
 	}
 	conn, beginSQL, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil, qre.setting)
@@ -309,6 +313,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 
 	defer func(start time.Time) {
 		qre.tsv.stats.QueryTimings.Record(qre.plan.PlanID.String(), start)
+		qre.tsv.stats.QueryTimingsByTabletType.Record(qre.tabletType.String(), start)
 		qre.recordUserQuery("Stream", int64(time.Since(start)))
 	}(time.Now())
 
@@ -398,6 +403,7 @@ func (qre *QueryExecutor) MessageStream(callback StreamCallback) error {
 
 	defer func(start time.Time) {
 		qre.tsv.stats.QueryTimings.Record(qre.plan.PlanID.String(), start)
+		qre.tsv.stats.QueryTimingsByTabletType.Record(qre.tabletType.String(), start)
 		qre.recordUserQuery("MessageStream", int64(time.Since(start)))
 	}(time.Now())
 
@@ -552,7 +558,7 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 			// Instead of synchronously recalculating table size stats
 			// after every DDL, let them be outdated until the periodic
 			// schema reload fixes it.
-			if err := qre.tsv.se.ReloadAtEx(qre.ctx, mysql.Position{}, false); err != nil {
+			if err := qre.tsv.se.ReloadAtEx(qre.ctx, replication.Position{}, false); err != nil {
 				log.Errorf("failed to reload schema %v", err)
 			}
 		}()
@@ -611,7 +617,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 		return nil, err
 	}
 	tableName := qre.plan.TableName()
-	v := result.Value()
+	v := result.Value(collations.Default())
 	inc, err := v.ToInt64()
 	if err != nil || inc < 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid increment for sequence %s: %s", tableName, v.String())
@@ -630,7 +636,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if len(qr.Rows) != 1 {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected rows from reading sequence %s (possible mis-route): %d", tableName, len(qr.Rows))
 			}
-			nextID, err := evalengine.ToInt64(qr.Rows[0][0])
+			nextID, err := qr.Rows[0][0].ToCastInt64()
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
@@ -645,7 +651,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				t.SequenceInfo.NextVal = nextID
 				t.SequenceInfo.LastVal = nextID
 			}
-			cache, err := evalengine.ToInt64(qr.Rows[0][1])
+			cache, err := qr.Rows[0][1].ToCastInt64()
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
@@ -847,11 +853,11 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 }
 
 func rewriteOUTParamError(err error) error {
-	sqlErr, ok := err.(*mysql.SQLError)
+	sqlErr, ok := err.(*sqlerror.SQLError)
 	if !ok {
 		return err
 	}
-	if sqlErr.Num == mysql.ErSPNotVarArg {
+	if sqlErr.Num == sqlerror.ErSPNotVarArg {
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "OUT and INOUT parameters are not supported")
 	}
 	return err

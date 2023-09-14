@@ -42,7 +42,7 @@ import (
 //
 // See VEP-4, phase 1 for details: https://github.com/vitessio/enhancements/blob/c766ea905e55409cddeb666d6073cd2ac4c9783e/veps/vep-4.md#phase-1-preparation
 func Parse(fs *flag.FlagSet) {
-	preventGlogVFlagFromClobberingVersionFlagShorthand(fs)
+	PreventGlogVFlagFromClobberingVersionFlagShorthand(fs)
 	fs.AddGoFlagSet(goflag.CommandLine)
 
 	if fs.Lookup("help") == nil {
@@ -115,7 +115,7 @@ func TrickGlog() {
 //
 // IMPORTANT: This must be called prior to AddGoFlagSet in both Parse and
 // ParseFlagsForTest.
-func preventGlogVFlagFromClobberingVersionFlagShorthand(fs *flag.FlagSet) {
+func PreventGlogVFlagFromClobberingVersionFlagShorthand(fs *flag.FlagSet) {
 	// N.B. we use goflag.Lookup instead of this package's Lookup, because we
 	// explicitly want to check only the goflags.
 	if f := goflag.Lookup("v"); f != nil {
@@ -178,7 +178,7 @@ func ParseFlagsForTest() {
 	}
 
 	// parse remaining flags including the log-related ones like --alsologtostderr
-	preventGlogVFlagFromClobberingVersionFlagShorthand(flag.CommandLine)
+	PreventGlogVFlagFromClobberingVersionFlagShorthand(flag.CommandLine)
 	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 	flag.Parse()
 }

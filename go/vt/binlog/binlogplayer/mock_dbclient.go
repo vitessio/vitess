@@ -19,6 +19,7 @@ package binlogplayer
 import (
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ type MockDBClient struct {
 	t             *testing.T
 	UName         string
 	expect        []*mockExpect
+	expectMu      sync.Mutex
 	currentResult int
 	done          chan struct{}
 	invariants    map[string]*sqltypes.Result
@@ -56,6 +58,28 @@ func NewMockDBClient(t *testing.T) *MockDBClient {
 			"CREATE TABLE IF NOT EXISTS _vt.vreplication_log":           {},
 			"select id, type, state, message from _vt.vreplication_log": {},
 			"insert into _vt.vreplication_log":                          {},
+			// The following statements don't have a deterministic order as they are
+			// executed in the normal program flow, but ALSO done in a defer as a protective
+			// measure as they are resetting the values back to the original one. This also
+			// means that the values they set are based on the session defaults, which can
+			// change. So we make these invariants for unit test stability.
+			"select @@foreign_key_checks": sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"@@foreign_key_checks",
+					"int64",
+				),
+				"1",
+			),
+			"set @@session.foreign_key_checks": {},
+			"set foreign_key_checks":           {},
+			"select @@session.sql_mode": sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"sql_mode", "varchar",
+				),
+				"ONLY_FULL_GROUP_BY,NO_AUTO_VALUE_ON_ZERO,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
+			),
+			"set @@session.sql_mode": {},
+			"set sql_mode":           {},
 		},
 	}
 }
@@ -77,6 +101,8 @@ func (dc *MockDBClient) ExpectRequest(query string, result *sqltypes.Result, err
 		dc.done = make(chan struct{})
 	default:
 	}
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
 	dc.expect = append(dc.expect, &mockExpect{
 		query:  query,
 		result: result,
@@ -93,6 +119,8 @@ func (dc *MockDBClient) ExpectRequestRE(queryRE string, result *sqltypes.Result,
 		dc.done = make(chan struct{})
 	default:
 	}
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
 	dc.expect = append(dc.expect, &mockExpect{
 		query:  queryRE,
 		re:     regexp.MustCompile(queryRE),
@@ -152,11 +180,13 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	dc.t.Logf("DBClient query: %v", query)
 
 	for q, result := range dc.invariants {
-		if strings.Contains(query, q) {
+		if strings.Contains(strings.ToLower(query), strings.ToLower(q)) {
 			return result, nil
 		}
 	}
 
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
 	if dc.currentResult >= len(dc.expect) {
 		dc.t.Fatalf("DBClientMock: query: %s, no more requests are expected", query)
 	}

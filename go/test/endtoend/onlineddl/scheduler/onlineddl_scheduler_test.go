@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
@@ -167,6 +168,38 @@ func TestParseTableName(t *testing.T) {
 	}
 }
 
+func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), normalWaitTime)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			readyToComplete := row.AsInt64("ready_to_complete", 0)
+			if expected == (readyToComplete > 0) {
+				// all good. This is what we waited for
+				if expected {
+					// if migration is ready to complete, the nthe timestamp should be non-null
+					assert.False(t, row["ready_to_complete_timestamp"].IsNull())
+				} else {
+					assert.True(t, row["ready_to_complete_timestamp"].IsNull())
+				}
+
+				return
+			}
+		}
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+		}
+		require.NoError(t, ctx.Err())
+	}
+}
+
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
@@ -241,6 +274,9 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("foreign-keys", testForeignKeys)
 	t.Run("summary: validate sequential migration IDs", func(t *testing.T) {
 		onlineddl.ValidateSequentialMigrationIDs(t, &vtParams, shards)
+	})
+	t.Run("summary: validate completed_timestamp", func(t *testing.T) {
+		onlineddl.ValidateCompletedTimestamp(t, &vtParams)
 	})
 }
 
@@ -501,7 +537,7 @@ func testScheduler(t *testing.T) {
 		testTableSequentialTimes(t, t1uuid, t2uuid)
 	})
 
-	t.Run("ALTER both tables, elligible for concurrenct", func(t *testing.T) {
+	t.Run("ALTER both tables, elligible for concurrent", func(t *testing.T) {
 		// ALTER TABLE is allowed to run concurrently when no other ALTER is busy with copy state. Our tables are tiny so we expect to find both migrations running
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true)) // skip wait
 		t2uuid = testOnlineDDLStatement(t, createParams(trivialAlterT2Statement, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true)) // skip wait
@@ -536,9 +572,11 @@ func testScheduler(t *testing.T) {
 		})
 		testTableCompletionTimes(t, t2uuid, t1uuid)
 	})
-	t.Run("ALTER both tables, elligible for concurrenct, with throttling", func(t *testing.T) {
+	t.Run("ALTER both tables, elligible for concurrent, with throttling", func(t *testing.T) {
 		onlineddl.ThrottleAllMigrations(t, &vtParams)
 		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
+
 		// ALTER TABLE is allowed to run concurrently when no other ALTER is busy with copy state. Our tables are tiny so we expect to find both migrations running
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true)) // skip wait
 		t2uuid = testOnlineDDLStatement(t, createParams(trivialAlterT2Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true)) // skip wait
@@ -555,15 +593,10 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
 		})
+
 		t.Run("check ready to complete (before)", func(t *testing.T) {
 			for _, uuid := range []string{t1uuid, t2uuid} {
-				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
-				require.NotNil(t, rs)
-				for _, row := range rs.Named().Rows {
-					readyToComplete := row.AsInt64("ready_to_complete", 0)
-					assert.Equal(t, int64(0), readyToComplete)
-					assert.True(t, row["ready_to_complete_timestamp"].IsNull())
-				}
+				waitForReadyToComplete(t, uuid, false)
 			}
 		})
 		t.Run("unthrottle, expect t2 running", func(t *testing.T) {
@@ -595,21 +628,17 @@ func testScheduler(t *testing.T) {
 		})
 		t.Run("check ready to complete (after)", func(t *testing.T) {
 			for _, uuid := range []string{t1uuid, t2uuid} {
-				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
-				require.NotNil(t, rs)
-				for _, row := range rs.Named().Rows {
-					readyToComplete := row.AsInt64("ready_to_complete", 0)
-					assert.Equal(t, int64(1), readyToComplete)
-					assert.False(t, row["ready_to_complete_timestamp"].IsNull())
-				}
+				waitForReadyToComplete(t, uuid, true)
 			}
 		})
 
 		testTableCompletionTimes(t, t2uuid, t1uuid)
 	})
+	onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
+
 	t.Run("REVERT both tables concurrent, postponed", func(t *testing.T) {
-		t1uuid = testRevertMigration(t, createRevertParams(t1uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true))
-		t2uuid = testRevertMigration(t, createRevertParams(t2uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true))
+		t1uuid = testRevertMigration(t, createRevertParams(t1uuid, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", true))
+		t2uuid = testRevertMigration(t, createRevertParams(t2uuid, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", true))
 
 		testAllowConcurrent(t, "t1", t1uuid, 1)
 		t.Run("expect both migrations to run", func(t *testing.T) {
@@ -617,12 +646,7 @@ func testScheduler(t *testing.T) {
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 		})
 		t.Run("test ready-to-complete", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
-			require.NotNil(t, rs)
-			for _, row := range rs.Named().Rows {
-				readyToComplete := row.AsInt64("ready_to_complete", 0)
-				assert.Equal(t, int64(1), readyToComplete)
-			}
+			waitForReadyToComplete(t, t1uuid, true)
 		})
 		t.Run("complete t2", func(t *testing.T) {
 			// now that both are running, let's unblock t2. We expect it to complete.
@@ -760,12 +784,7 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusReady)
 		})
 		t.Run("t3 ready to complete", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, drop1uuid)
-			require.NotNil(t, rs)
-			for _, row := range rs.Named().Rows {
-				readyToComplete := row.AsInt64("ready_to_complete", 0)
-				assert.Equal(t, int64(1), readyToComplete)
-			}
+			waitForReadyToComplete(t, drop1uuid, true)
 		})
 		t.Run("t3drop complete", func(t *testing.T) {
 			// drop3 migration should not block. It can run concurrently to t1, and does not conflict

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -93,7 +94,7 @@ func TestUpdateEqual(t *testing.T) {
 	})
 
 	// Failure case
-	upd.Values = []evalengine.Expr{evalengine.NewBindVar("aa")}
+	upd.Values = []evalengine.Expr{evalengine.NewBindVar("aa", sqltypes.Unknown, collations.Unknown)}
 	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `query arguments missing for aa`)
 }
@@ -246,10 +247,9 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 				Vindex:   ks.Vindexes["hash"],
 				Values:   []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			},
-			Query: "dummy_update",
-			Table: []*vindexes.Table{
-				ks.Tables["t1"],
-			},
+			Query:            "dummy_update",
+			TableNames:       []string{ks.Tables["t1"].Name.String()},
+			Vindexes:         ks.Tables["t1"].Owned,
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"],
 			KsidLength:       1,
@@ -391,10 +391,9 @@ func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
 				Vindex:   ks.Vindexes["rg_vdx"],
 				Values:   []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
 			},
-			Query: "dummy_update",
-			Table: []*vindexes.Table{
-				ks.Tables["rg_tbl"],
-			},
+			Query:            "dummy_update",
+			TableNames:       []string{ks.Tables["rg_tbl"].Name.String()},
+			Vindexes:         ks.Tables["rg_tbl"].Owned,
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["rg_vdx"],
 			KsidLength:       2,
@@ -512,10 +511,9 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 				Opcode:   Scatter,
 				Keyspace: ks.Keyspace,
 			},
-			Query: "dummy_update",
-			Table: []*vindexes.Table{
-				ks.Tables["t1"],
-			},
+			Query:            "dummy_update",
+			TableNames:       []string{ks.Tables["t1"].Name.String()},
+			Vindexes:         ks.Tables["t1"].Owned,
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"],
 			KsidLength:       1,
@@ -708,10 +706,9 @@ func TestUpdateInChangedVindex(t *testing.T) {
 					evalengine.NewLiteralInt(2),
 				}},
 			},
-			Query: "dummy_update",
-			Table: []*vindexes.Table{
-				ks.Tables["t1"],
-			},
+			Query:            "dummy_update",
+			TableNames:       []string{ks.Tables["t1"].Name.String()},
+			Vindexes:         ks.Tables["t1"].Owned,
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"],
 			KsidLength:       1,
@@ -839,10 +836,9 @@ func TestUpdateInChangedVindexMultiCol(t *testing.T) {
 					evalengine.NewLiteralInt(3),
 				},
 			},
-			Query: "dummy_update",
-			Table: []*vindexes.Table{
-				ks.Tables["rg_tbl"],
-			},
+			Query:            "dummy_update",
+			TableNames:       []string{ks.Tables["rg_tbl"].Name.String()},
+			Vindexes:         ks.Tables["rg_tbl"].Owned,
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["rg_vdx"],
 			KsidLength:       2,

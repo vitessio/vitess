@@ -717,10 +717,10 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		}
 		if ct.Options.Default != nil {
 			buf.astPrintf(ct, " %s", keywordStrings[DEFAULT])
-			if defaultRequiresParens(ct) {
-				buf.astPrintf(ct, " (%v)", ct.Options.Default)
-			} else {
+			if ct.Options.DefaultLiteral {
 				buf.astPrintf(ct, " %v", ct.Options.Default)
+			} else {
+				buf.astPrintf(ct, " (%v)", ct.Options.Default)
 			}
 		}
 		if ct.Options.OnUpdate != nil {
@@ -2250,7 +2250,11 @@ func (node *AlterColumn) Format(buf *TrackedBuffer) {
 	if node.DropDefault {
 		buf.astPrintf(node, " drop default")
 	} else if node.DefaultVal != nil {
-		buf.astPrintf(node, " set default %v", node.DefaultVal)
+		if node.DefaultLiteral {
+			buf.astPrintf(node, " set default %v", node.DefaultVal)
+		} else {
+			buf.astPrintf(node, " set default (%v)", node.DefaultVal)
+		}
 	}
 	if node.Invisible != nil {
 		if *node.Invisible {
@@ -2675,12 +2679,15 @@ func (node *Count) Format(buf *TrackedBuffer) {
 }
 
 func (node *CountStar) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.AggrName())
-	buf.WriteString("*)")
+	buf.WriteString("count(*)")
+}
+
+func (node *AnyValue) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "any_value(%v)", node.Arg)
 }
 
 func (node *Avg) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.AggrName())
+	buf.WriteString("avg(")
 	if node.Distinct {
 		buf.literal(DistinctStr)
 	}
@@ -2688,7 +2695,7 @@ func (node *Avg) Format(buf *TrackedBuffer) {
 }
 
 func (node *Max) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.AggrName())
+	buf.WriteString("max(")
 	if node.Distinct {
 		buf.literal(DistinctStr)
 	}
@@ -2696,7 +2703,7 @@ func (node *Max) Format(buf *TrackedBuffer) {
 }
 
 func (node *Min) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.AggrName())
+	buf.WriteString("min(")
 	if node.Distinct {
 		buf.literal(DistinctStr)
 	}
@@ -2704,7 +2711,7 @@ func (node *Min) Format(buf *TrackedBuffer) {
 }
 
 func (node *Sum) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.AggrName())
+	buf.WriteString("sum(")
 	if node.Distinct {
 		buf.literal(DistinctStr)
 	}
@@ -2712,53 +2719,43 @@ func (node *Sum) Format(buf *TrackedBuffer) {
 }
 
 func (node *BitAnd) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.AggrName())
-	buf.astPrintf(node, "%v)", node.Arg)
+	buf.astPrintf(node, "bit_and(%v)", node.Arg)
 }
 
 func (node *BitOr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.AggrName())
-	buf.astPrintf(node, "%v)", node.Arg)
+	buf.astPrintf(node, "bit_or(%v)", node.Arg)
 }
 
 func (node *BitXor) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.AggrName())
-	buf.astPrintf(node, "%v)", node.Arg)
+	buf.astPrintf(node, "bit_xor(%v)", node.Arg)
 }
 
 func (node *Std) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.AggrName())
-	buf.astPrintf(node, "%v)", node.Arg)
+	buf.astPrintf(node, "std(%v)", node.Arg)
 }
 
 func (node *StdDev) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.AggrName())
-	buf.astPrintf(node, "%v)", node.Arg)
+	buf.astPrintf(node, "stddev(%v)", node.Arg)
 }
 
 func (node *StdPop) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.AggrName())
-	buf.astPrintf(node, "%v)", node.Arg)
+	buf.astPrintf(node, "stddev_pop(%v)", node.Arg)
 }
 
 func (node *StdSamp) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.AggrName())
-	buf.astPrintf(node, "%v)", node.Arg)
+	buf.astPrintf(node, "stddev_samp(%v)", node.Arg)
 }
 
 func (node *VarPop) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.AggrName())
-	buf.astPrintf(node, "%v)", node.Arg)
+	buf.astPrintf(node, "var_pop(%v)", node.Arg)
 }
 
 func (node *VarSamp) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.AggrName())
-	buf.astPrintf(node, "%v)", node.Arg)
+	buf.astPrintf(node, "var_samp(%v)", node.Arg)
 }
 
 func (node *Variance) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.AggrName())
-	buf.astPrintf(node, "%v)", node.Arg)
+	buf.astPrintf(node, "variance(%v)", node.Arg)
 }
 
 // Format formats the node.
@@ -2948,4 +2945,9 @@ func (node *GeomFromGeoJSONExpr) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, ", %v", node.Srid)
 	}
 	buf.WriteByte(')')
+}
+
+// Format formats the kill statement
+func (node *Kill) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "kill %s %d", node.Type.ToString(), node.ProcesslistID)
 }

@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -97,7 +97,7 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
 	}
 	r, err := sc.dbConn.ExecOnce(ctx, query, maxrows, wantfields)
 	if err != nil {
-		if mysql.IsConnErr(err) {
+		if sqlerror.IsConnErr(err) {
 			select {
 			case <-ctx.Done():
 				// If the context is done, the query was killed.

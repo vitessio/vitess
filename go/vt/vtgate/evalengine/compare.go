@@ -19,6 +19,7 @@ package evalengine
 import (
 	"bytes"
 
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -137,9 +138,9 @@ func compareStrings(l, r eval) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	collation := col.Get()
+	collation := colldata.Lookup(col.Collation)
 	if collation == nil {
-		panic("unknown collation after coercion")
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: %d)", col.Collation)
 	}
 	return collation.Collate(l.ToRawBytes(), r.ToRawBytes(), false), nil
 }
@@ -180,7 +181,7 @@ func compareJSONValue(lj, rj *json.Value) (int, error) {
 		}
 		return ld.Cmp(rd), nil
 	case json.TypeString:
-		return collationJSON.Collation.Get().Collate(lj.ToRawBytes(), rj.ToRawBytes(), false), nil
+		return colldata.Lookup(collationJSON.Collation).Collate(lj.ToRawBytes(), rj.ToRawBytes(), false), nil
 	case json.TypeBlob, json.TypeBit, json.TypeOpaque:
 		return bytes.Compare(lj.ToUnencodedBytes(), rj.ToUnencodedBytes()), nil
 	case json.TypeBoolean:

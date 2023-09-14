@@ -31,19 +31,23 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/constants/sidecar"
+
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
+	"vitess.io/vitess/go/event/syslogger"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/sidecardb"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema/schematest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 const baseShowTablesPattern = `SELECT t\.table_name.*`
@@ -204,14 +208,14 @@ func TestOpenAndReload(t *testing.T) {
 	assert.Equal(t, int64(0), se.tableAllocatedSizeGauge.Counts()["msg"])
 	assert.Equal(t, int64(0), se.tableFileSizeGauge.Counts()["msg"])
 
-	//ReloadAt tests
-	pos1, err := mysql.DecodePosition("MariaDB/0-41983-20")
+	// ReloadAt tests
+	pos1, err := replication.DecodePosition("MariaDB/0-41983-20")
 	require.NoError(t, err)
-	pos2, err := mysql.DecodePosition("MariaDB/0-41983-40")
+	pos2, err := replication.DecodePosition("MariaDB/0-41983-40")
 	require.NoError(t, err)
 	se.UnregisterNotifier("test")
 
-	err = se.ReloadAt(context.Background(), mysql.Position{})
+	err = se.ReloadAt(context.Background(), replication.Position{})
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
@@ -426,7 +430,10 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	}
 }
 
-func TestOpenFailedDueToTableErr(t *testing.T) {
+// TestOpenFailedDueToLoadTableErr tests that schema engine load should not fail instead should log the failures.
+func TestOpenFailedDueToLoadTableErr(t *testing.T) {
+	tl := syslogger.NewTestLogger()
+	defer tl.Close()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
@@ -434,27 +441,64 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow("test_table", false, ""),
+			mysql.BaseShowTablesRow("test_view", true, "VIEW"),
 		},
 	})
-	db.MockQueriesForTable("test_table", &sqltypes.Result{
-		// this will cause NewTable error, as it expects zero rows.
-		Fields: []*querypb.Field{
-			{
-				Type: querypb.Type_VARCHAR,
-			},
-		},
-		Rows: [][]sqltypes.Value{
-			{sqltypes.NewVarBinary("")},
-		},
-	})
+	// this will cause NewTable error, as it expects zero rows.
+	db.MockQueriesForTable("test_table", sqltypes.MakeTestResult(sqltypes.MakeTestFields("foo", "varchar"), ""))
+
+	// adding column query for table_view
+	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, "test_view"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), ""))
+	// rejecting the impossible query
+	db.AddRejectedQuery("SELECT * FROM `fakesqldb`.`test_view` WHERE 1 != 1", sqlerror.NewSQLErrorFromError(errors.New("The user specified as a definer ('root'@'%') does not exist (errno 1449) (sqlstate HY000)")))
 
 	AddFakeInnoDBReadRowsResult(db, 0)
 	se := newEngine(10, 1*time.Second, 1*time.Second, 0, db)
 	err := se.Open()
-	want := "Row count exceeded"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("se.Open: %v, want %s", err, want)
-	}
+	// failed load should return an error because of test_table
+	assert.ErrorContains(t, err, "Row count exceeded")
+
+	logs := tl.GetAllLogs()
+	logOutput := strings.Join(logs, ":::")
+	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the view: test_view")
+	assert.Contains(t, logOutput, "The user specified as a definer ('root'@'%') does not exist (errno 1449) (sqlstate HY000)")
+}
+
+// TestOpenNoErrorDueToInvalidViews tests that schema engine load does not fail instead should log the failures for the views
+func TestOpenNoErrorDueToInvalidViews(t *testing.T) {
+	tl := syslogger.NewTestLogger()
+	defer tl.Close()
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("foo_view", true, "VIEW"),
+			mysql.BaseShowTablesRow("bar_view", true, "VIEW"),
+		},
+	})
+
+	// adding column query for table_view
+	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, "foo_view"),
+		&sqltypes.Result{})
+	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, "bar_view"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), "col1", "col2"))
+	// rejecting the impossible query
+	db.AddRejectedQuery("SELECT `col1`, `col2` FROM `fakesqldb`.`bar_view` WHERE 1 != 1", sqlerror.NewSQLError(sqlerror.ERWrongFieldWithGroup, sqlerror.SSClientError, "random error for table bar_view"))
+
+	AddFakeInnoDBReadRowsResult(db, 0)
+	se := newEngine(10, 1*time.Second, 1*time.Second, 0, db)
+	err := se.Open()
+	require.NoError(t, err)
+
+	logs := tl.GetAllLogs()
+	logOutput := strings.Join(logs, ":::")
+	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the view: foo_view")
+	assert.Contains(t, logOutput, "unable to get columns for table fakesqldb.foo_view")
+	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the view: bar_view")
+	assert.Contains(t, logOutput, "random error for table bar_view")
 }
 
 func TestExportVars(t *testing.T) {
@@ -1133,7 +1177,7 @@ func TestEngineReload(t *testing.T) {
 
 	// Detecting view changes.
 	// According to the database, v2, v3, v4, and v5 require updating.
-	db.AddQuery(fmt.Sprintf(detectViewChange, sidecardb.GetIdentifier()), sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
+	db.AddQuery(fmt.Sprintf(detectViewChange, sidecar.GetIdentifier()), sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
 		"v2",
 		"v3",
 		"v4",

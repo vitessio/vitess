@@ -224,6 +224,15 @@ type CommentDirectives struct {
 	m map[string]string
 }
 
+// ResetDirectives sets the _directives member to `nil`, which means the next call to Directives()
+// will re-evaluate it.
+func (c *ParsedComments) ResetDirectives() {
+	if c == nil {
+		return
+	}
+	c._directives = nil
+}
+
 // Directives parses the comment list for any execution directives
 // of the form:
 //
@@ -262,6 +271,13 @@ func (c *ParsedComments) Length() int {
 		return 0
 	}
 	return len(c.comments)
+}
+
+func (c *ParsedComments) GetComments() Comments {
+	if c != nil {
+		return c.comments
+	}
+	return nil
 }
 
 func (c *ParsedComments) Prepend(comment string) Comments {

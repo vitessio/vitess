@@ -45,6 +45,11 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 			newAnalysisCode:  inst.DeadPrimaryAndSomeReplicas,
 			shouldBeEqual:    true,
 		}, {
+			// DeadPrimary and PrimaryTabletDeleted are different recoveries.
+			prevAnalysisCode: inst.DeadPrimary,
+			newAnalysisCode:  inst.PrimaryTabletDeleted,
+			shouldBeEqual:    false,
+		}, {
 			// same codes will always have same recovery
 			prevAnalysisCode: inst.DeadPrimary,
 			newAnalysisCode:  inst.DeadPrimary,
@@ -87,7 +92,7 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 	t.Parallel()
 	for _, tt := range tests {
 		t.Run(string(tt.prevAnalysisCode)+","+string(tt.newAnalysisCode), func(t *testing.T) {
-			res := analysisEntriesHaveSameRecovery(inst.ReplicationAnalysis{Analysis: tt.prevAnalysisCode}, inst.ReplicationAnalysis{Analysis: tt.newAnalysisCode})
+			res := analysisEntriesHaveSameRecovery(&inst.ReplicationAnalysis{Analysis: tt.prevAnalysisCode}, &inst.ReplicationAnalysis{Analysis: tt.newAnalysisCode})
 			require.Equal(t, tt.shouldBeEqual, res)
 		})
 	}
@@ -117,10 +122,13 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	}
 	err = inst.SaveTablet(tablet)
 	require.NoError(t, err)
-	analysisEntry := inst.ReplicationAnalysis{
+	analysisEntry := &inst.ReplicationAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(tablet.Alias),
 	}
-	ts = memorytopo.NewServer("zone1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts = memorytopo.NewServer(ctx, "zone1")
 	recoveryAttempted, _, err := electNewPrimary(context.Background(), analysisEntry)
 	require.True(t, recoveryAttempted)
 	require.Error(t, err)
@@ -172,7 +180,10 @@ func TestDifferentAnalysescHaveDifferentCooldowns(t *testing.T) {
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(replica.Alias),
 		Analysis:              inst.DeadPrimary,
 	}
-	ts = memorytopo.NewServer("zone1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts = memorytopo.NewServer(ctx, "zone1")
 	_, err = AttemptRecoveryRegistration(&replicaAnalysisEntry, false, true)
 	require.Nil(t, err)
 
@@ -184,10 +195,11 @@ func TestDifferentAnalysescHaveDifferentCooldowns(t *testing.T) {
 
 func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 	tests := []struct {
-		name                 string
-		ersEnabled           bool
-		analysisCode         inst.AnalysisCode
-		wantRecoveryFunction recoveryFunction
+		name                         string
+		ersEnabled                   bool
+		convertTabletWithErrantGTIDs bool
+		analysisCode                 inst.AnalysisCode
+		wantRecoveryFunction         recoveryFunction
 	}{
 		{
 			name:                 "DeadPrimary with ERS enabled",
@@ -198,6 +210,16 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			name:                 "DeadPrimary with ERS disabled",
 			ersEnabled:           false,
 			analysisCode:         inst.DeadPrimary,
+			wantRecoveryFunction: noRecoveryFunc,
+		}, {
+			name:                 "PrimaryTabletDeleted with ERS enabled",
+			ersEnabled:           true,
+			analysisCode:         inst.PrimaryTabletDeleted,
+			wantRecoveryFunction: recoverPrimaryTabletDeletedFunc,
+		}, {
+			name:                 "PrimaryTabletDeleted with ERS disabled",
+			ersEnabled:           false,
+			analysisCode:         inst.PrimaryTabletDeleted,
 			wantRecoveryFunction: noRecoveryFunc,
 		}, {
 			name:                 "PrimaryHasPrimary",
@@ -219,6 +241,18 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			ersEnabled:           false,
 			analysisCode:         inst.PrimarySemiSyncMustBeSet,
 			wantRecoveryFunction: fixPrimaryFunc,
+		}, {
+			name:                         "ErrantGTIDDetected",
+			ersEnabled:                   false,
+			convertTabletWithErrantGTIDs: true,
+			analysisCode:                 inst.ErrantGTIDDetected,
+			wantRecoveryFunction:         recoverErrantGTIDDetectedFunc,
+		}, {
+			name:                         "ErrantGTIDDetected with --change-tablets-with-errant-gtid-to-drained false",
+			ersEnabled:                   false,
+			convertTabletWithErrantGTIDs: false,
+			analysisCode:                 inst.ErrantGTIDDetected,
+			wantRecoveryFunction:         noRecoveryFunc,
 		},
 	}
 
@@ -233,6 +267,10 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			prevVal := config.ERSEnabled()
 			config.SetERSEnabled(tt.ersEnabled)
 			defer config.SetERSEnabled(prevVal)
+
+			convertErrantVal := config.ConvertTabletWithErrantGTIDs()
+			config.SetConvertTabletWithErrantGTIDs(tt.convertTabletWithErrantGTIDs)
+			defer config.SetConvertTabletWithErrantGTIDs(convertErrantVal)
 
 			gotFunc := getCheckAndRecoverFunctionCode(tt.analysisCode, "")
 			require.EqualValues(t, tt.wantRecoveryFunction, gotFunc)

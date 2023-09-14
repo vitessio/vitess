@@ -25,27 +25,27 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-
-	vitessmysql "vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/tb"
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/collection"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/metrics/query"
 	"vitess.io/vitess/go/vt/vtorc/util"
-	math "vitess.io/vitess/go/vt/vtorc/util"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -54,12 +54,6 @@ const (
 
 var instanceReadChan = make(chan bool, backendDBConcurrency)
 var instanceWriteChan = make(chan bool, backendDBConcurrency)
-
-var (
-	// Mutex to protect the access of the following variable
-	errantGtidMapMu = sync.Mutex{}
-	errantGtidMap   = make(map[string]string)
-)
 
 var forgetAliases *cache.Cache
 
@@ -71,6 +65,7 @@ var backendWrites = collection.CreateOrReturnCollection("BACKEND_WRITES")
 var writeBufferLatency = stopwatch.NewNamedStopwatch()
 
 var emptyQuotesRegexp = regexp.MustCompile(`^""$`)
+var cacheInitializationCompleted atomic.Bool
 
 func init() {
 	_ = metrics.Register("instance.access_denied", accessDeniedCounter)
@@ -79,11 +74,6 @@ func init() {
 	_ = metrics.Register("instance.write", writeInstanceCounter)
 	_ = writeBufferLatency.AddMany([]string{"wait", "write"})
 	writeBufferLatency.Start("wait")
-	stats.NewStringMapFuncWithMultiLabels("ErrantGtidMap", "Metric to track the errant GTIDs detected by VTOrc", []string{"TabletAlias"}, "ErrantGtid", func() map[string]string {
-		errantGtidMapMu.Lock()
-		defer errantGtidMapMu.Unlock()
-		return errantGtidMap
-	})
 
 	go initializeInstanceDao()
 }
@@ -91,6 +81,7 @@ func init() {
 func initializeInstanceDao() {
 	config.WaitForConfigurationToBeLoaded()
 	forgetAliases = cache.New(time.Duration(config.Config.InstancePollSeconds*3)*time.Second, time.Second)
+	cacheInitializationCompleted.Store(true)
 }
 
 // ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronuously or not
@@ -151,6 +142,14 @@ func logReadTopologyInstanceError(tabletAlias string, hint string, err error) er
 	}
 	log.Errorf(msg)
 	return fmt.Errorf(msg)
+}
+
+// RegisterStats registers stats from the inst package
+func RegisterStats() {
+	stats.NewGaugeFunc("ErrantGtidTabletCount", "Number of tablets with errant GTIDs", func() int64 {
+		instances, _ := ReadInstancesWithErrantGTIds("", "")
+		return int64(len(instances))
+	})
 }
 
 // ReadTopologyInstance collects information on the state of a MySQL
@@ -237,20 +236,20 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		instance.SemiSyncPrimaryStatus = fullStatus.SemiSyncPrimaryStatus
 		instance.SemiSyncReplicaStatus = fullStatus.SemiSyncReplicaStatus
 
-		if (instance.IsOracleMySQL() || instance.IsPercona()) && !instance.IsSmallerMajorVersionByString("5.6") {
-			// Stuff only supported on Oracle MySQL >= 5.6
+		if instance.IsOracleMySQL() || instance.IsPercona() {
+			// Stuff only supported on Oracle / Percona MySQL
 			// ...
-			// @@gtid_mode only available in Orcale MySQL >= 5.6
+			// @@gtid_mode only available in Oracle / Percona MySQL >= 5.6
 			instance.GTIDMode = fullStatus.GtidMode
 			instance.ServerUUID = fullStatus.ServerUuid
 			if fullStatus.PrimaryStatus != nil {
-				GtidExecutedPos, err := vitessmysql.DecodePosition(fullStatus.PrimaryStatus.Position)
+				GtidExecutedPos, err := replication.DecodePosition(fullStatus.PrimaryStatus.Position)
 				errorChan <- err
 				if err == nil && GtidExecutedPos.GTIDSet != nil {
 					instance.ExecutedGtidSet = GtidExecutedPos.GTIDSet.String()
 				}
 			}
-			GtidPurgedPos, err := vitessmysql.DecodePosition(fullStatus.GtidPurged)
+			GtidPurgedPos, err := replication.DecodePosition(fullStatus.GtidPurged)
 			errorChan <- err
 			if err == nil && GtidPurgedPos.GTIDSet != nil {
 				instance.GtidPurged = GtidPurgedPos.GTIDSet.String()
@@ -268,8 +267,8 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	if fullStatus.ReplicationStatus != nil {
 		instance.HasReplicationCredentials = fullStatus.ReplicationStatus.SourceUser != ""
 
-		instance.ReplicationIOThreadState = ReplicationThreadStateFromReplicationState(vitessmysql.ReplicationState(fullStatus.ReplicationStatus.IoState))
-		instance.ReplicationSQLThreadState = ReplicationThreadStateFromReplicationState(vitessmysql.ReplicationState(fullStatus.ReplicationStatus.SqlState))
+		instance.ReplicationIOThreadState = ReplicationThreadStateFromReplicationState(replication.ReplicationState(fullStatus.ReplicationStatus.IoState))
+		instance.ReplicationSQLThreadState = ReplicationThreadStateFromReplicationState(replication.ReplicationState(fullStatus.ReplicationStatus.SqlState))
 		instance.ReplicationIOThreadRuning = instance.ReplicationIOThreadState.IsRunning()
 		instance.ReplicationSQLThreadRuning = instance.ReplicationSQLThreadState.IsRunning()
 
@@ -306,7 +305,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 			instance.SecondsBehindPrimary.Int64 = int64(fullStatus.ReplicationStatus.ReplicationLagSeconds)
 		}
 		if instance.SecondsBehindPrimary.Valid && instance.SecondsBehindPrimary.Int64 < 0 {
-			log.Warningf("Host: %+v, instance.ReplicationLagSeconds < 0 [%+v], correcting to 0", tabletAlias, instance.SecondsBehindPrimary.Int64)
+			log.Warningf("Alias: %+v, instance.SecondsBehindPrimary < 0 [%+v], correcting to 0", tabletAlias, instance.SecondsBehindPrimary.Int64)
 			instance.SecondsBehindPrimary.Int64 = 0
 		}
 		// And until told otherwise:
@@ -379,15 +378,9 @@ Cleanup:
 				redactedPrimaryExecutedGtidSet, _ := NewOracleGtidSet(instance.primaryExecutedGtidSet)
 				redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
 
-				instance.GtidErrant, err = vitessmysql.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
+				instance.GtidErrant, err = replication.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
 			}
 		}
-		// update the errant gtid map
-		go func() {
-			errantGtidMapMu.Lock()
-			defer errantGtidMapMu.Unlock()
-			errantGtidMap[topoproto.TabletAliasString(tablet.Alias)] = instance.GtidErrant
-		}()
 	}
 
 	latency.Stop("instance")
@@ -420,7 +413,7 @@ func getKeyspaceShardName(keyspace, shard string) string {
 }
 
 func getBinlogCoordinatesFromPositionString(position string) (BinlogCoordinates, error) {
-	pos, err := vitessmysql.DecodePosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil || pos.GTIDSet == nil {
 		return BinlogCoordinates{}, err
 	}
@@ -562,7 +555,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 		instance.Problems = append(instance.Problems, "not_recently_checked")
 	} else if instance.ReplicationThreadsExist() && !instance.ReplicaRunning() {
 		instance.Problems = append(instance.Problems, "not_replicating")
-	} else if instance.ReplicationLagSeconds.Valid && math.AbsInt64(instance.ReplicationLagSeconds.Int64-int64(instance.SQLDelay)) > int64(config.Config.ReasonableReplicationLagSeconds) {
+	} else if instance.ReplicationLagSeconds.Valid && util.AbsInt64(instance.ReplicationLagSeconds.Int64-int64(instance.SQLDelay)) > int64(config.Config.ReasonableReplicationLagSeconds) {
 		instance.Problems = append(instance.Problems, "replication_lag")
 	}
 	if instance.GtidErrant != "" {
@@ -676,6 +669,18 @@ func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) 
 		`
 
 	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.Config.InstancePollSeconds*5, config.Config.ReasonableReplicationLagSeconds, config.Config.ReasonableReplicationLagSeconds)
+	return readInstancesByCondition(condition, args, "")
+}
+
+// ReadInstancesWithErrantGTIds reads all instances with errant GTIDs
+func ReadInstancesWithErrantGTIds(keyspace string, shard string) ([]*Instance, error) {
+	condition := `
+			keyspace LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
+			and shard LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
+			and gtid_errant != ''
+		`
+
+	args := sqlutils.Args(keyspace, keyspace, shard, shard)
 	return readInstancesByCondition(condition, args, "")
 }
 
@@ -964,7 +969,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, updateLastSeen bool) error {
 	writeInstances := [](*Instance){}
 	for _, instance := range instances {
-		if InstanceIsForgotten(instance.InstanceAlias) && !instance.IsSeed() {
+		if InstanceIsForgotten(instance.InstanceAlias) {
 			continue
 		}
 		writeInstances = append(writeInstances, instance)
@@ -1089,7 +1094,7 @@ func ForgetInstance(tabletAlias string) error {
 		return err
 	}
 	if rows == 0 {
-		errMsg := fmt.Sprintf("ForgetInstance(): instance %+v not found", tabletAlias)
+		errMsg := fmt.Sprintf("ForgetInstance(): tablet %+v not found", tabletAlias)
 		log.Errorf(errMsg)
 		return fmt.Errorf(errMsg)
 	}
@@ -1115,7 +1120,9 @@ func ForgetLongUnseenInstances() error {
 		log.Error(err)
 		return err
 	}
-	_ = AuditOperation("forget-unseen", "", fmt.Sprintf("Forgotten instances: %d", rows))
+	if rows > 0 {
+		_ = AuditOperation("forget-unseen", "", fmt.Sprintf("Forgotten instances: %d", rows))
+	}
 	return err
 }
 

@@ -217,6 +217,7 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 		strippedCol := sqlparser.CloneRefOfColumnDefinition(col)
 		if stripDefault {
 			strippedCol.Type.Options.Default = nil
+			strippedCol.Type.Options.DefaultLiteral = false
 		}
 		if stripEnum {
 			strippedCol.Type.EnumValues = nil

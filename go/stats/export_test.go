@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func clear() {
+func clearStats() {
 	defaultVarGroup.vars = make(map[string]expvar.Var)
 	defaultVarGroup.newVarHook = nil
 	combineDimensions = ""
@@ -34,7 +34,7 @@ func clear() {
 }
 
 func TestNoHook(t *testing.T) {
-	clear()
+	clearStats()
 	v := NewCounter("plainint", "help")
 	v.Add(1)
 	if v.String() != "1" {
@@ -45,7 +45,7 @@ func TestNoHook(t *testing.T) {
 func TestString(t *testing.T) {
 	var gotname string
 	var gotv *String
-	clear()
+	clearStats()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*String)
@@ -82,7 +82,7 @@ func (m *Mystr) String() string {
 func TestPublish(t *testing.T) {
 	var gotname string
 	var gotv expvar.Var
-	clear()
+	clearStats()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*Mystr)
@@ -110,7 +110,7 @@ func (f expvarFunc) String() string {
 func TestPublishFunc(t *testing.T) {
 	var gotname string
 	var gotv expvarFunc
-	clear()
+	clearStats()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(expvarFunc)
@@ -125,7 +125,7 @@ func TestPublishFunc(t *testing.T) {
 }
 
 func TestDropVariable(t *testing.T) {
-	clear()
+	clearStats()
 	dropVariables = "dropTest"
 
 	// This should not panic.
@@ -161,7 +161,7 @@ func TestParseCommonTags(t *testing.T) {
 }
 
 func TestStringMapWithMultiLabels(t *testing.T) {
-	clear()
+	clearStats()
 	c := NewStringMapFuncWithMultiLabels("stringMap1", "help", []string{"aaa", "bbb"}, "ccc", func() map[string]string {
 		m := make(map[string]string)
 		m["c1a.c1b"] = "1"

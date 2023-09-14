@@ -29,12 +29,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/constants/sidecar"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -150,9 +151,9 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		Target: &querypb.Target{
 			TabletType: topodatapb.TabletType_PRIMARY,
 		},
-		TabletAlias:                         alias,
-		Serving:                             true,
-		TabletExternallyReparentedTimestamp: now.Unix(),
+		TabletAlias:               alias,
+		Serving:                   true,
+		PrimaryTermStartTimestamp: now.Unix(),
 		RealtimeStats: &querypb.RealtimeStats{
 			FilteredReplicationLagSeconds: 1,
 			BinlogPlayersCount:            2,
@@ -209,6 +210,8 @@ func TestReloadSchema(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			db := fakesqldb.New(t)
 			defer db.Close()
 			config := newConfig(db)
@@ -227,8 +230,8 @@ func TestReloadSchema(t *testing.T) {
 			target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 			configs := config.DB
 
-			db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
-			db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
+			db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecar.GetIdentifier()).Query+".*", &sqltypes.Result{})
+			db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecar.GetIdentifier()).Query+".*", &sqltypes.Result{})
 			db.AddQueryPattern("SELECT UNIX_TIMESTAMP()"+".*", sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
 					"UNIX_TIMESTAMP(now())",
@@ -324,6 +327,8 @@ func TestReloadSchema(t *testing.T) {
 
 // TestReloadView tests that the health streamer tracks view changes correctly
 func TestReloadView(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	config := newConfig(db)
@@ -339,8 +344,8 @@ func TestReloadView(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
-	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
-	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
+	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecar.GetIdentifier()).Query+".*", &sqltypes.Result{})
+	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecar.GetIdentifier()).Query+".*", &sqltypes.Result{})
 	db.AddQueryPattern("SELECT UNIX_TIMESTAMP()"+".*", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"UNIX_TIMESTAMP(now())",

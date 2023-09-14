@@ -18,9 +18,7 @@ package main
 
 import (
 	"context"
-	"math/rand"
 	"strings"
-	"time"
 
 	"github.com/spf13/pflag"
 
@@ -48,7 +46,7 @@ var (
 func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&cell, "cell", cell, "cell to use")
 	fs.Var((*topoproto.TabletTypeListFlag)(&tabletTypesToWait), "tablet_types_to_wait", "Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.")
-	fs.StringVar(&plannerName, "planner-version", plannerName, "Sets the default planner to use when the session has not changed it. Valid values are: V3, V3Insert, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
+	fs.StringVar(&plannerName, "planner-version", plannerName, "Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right")
 
 	acl.RegisterFlags(fs)
 }
@@ -56,7 +54,6 @@ func registerFlags(fs *pflag.FlagSet) {
 var resilientServer *srvtopo.ResilientServer
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterFlags()
 	servenv.RegisterGRPCServerFlags()
@@ -130,7 +127,7 @@ func main() {
 	ts := topo.Open()
 	defer ts.Close()
 
-	resilientServer = srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
+	resilientServer = srvtopo.NewResilientServer(context.Background(), ts, "ResilientSrvTopoServer")
 
 	tabletTypes := make([]topodatapb.TabletType, 0, 1)
 	if len(tabletTypesToWait) != 0 {

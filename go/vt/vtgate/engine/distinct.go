@@ -40,6 +40,7 @@ type (
 	CheckCol struct {
 		Col       int
 		WsCol     *int
+		Type      sqltypes.Type
 		Collation collations.ID
 	}
 	probeTable struct {
@@ -245,8 +246,8 @@ func (d *Distinct) NeedsTransaction() bool {
 }
 
 // Inputs implements the Primitive interface
-func (d *Distinct) Inputs() []Primitive {
-	return []Primitive{d.Source}
+func (d *Distinct) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{d.Source}, nil
 }
 
 func (d *Distinct) description() PrimitiveDescription {
@@ -274,15 +275,15 @@ func (cc CheckCol) SwitchToWeightString() CheckCol {
 	return CheckCol{
 		Col:       *cc.WsCol,
 		WsCol:     nil,
+		Type:      sqltypes.VarBinary,
 		Collation: collations.CollationBinaryID,
 	}
 }
 
 func (cc CheckCol) String() string {
-	coll := cc.Collation.Get()
 	var collation string
-	if coll != nil {
-		collation = ": " + coll.Name()
+	if sqltypes.IsText(cc.Type) && cc.Collation != collations.Unknown {
+		collation = ": " + collations.Local().LookupName(cc.Collation)
 	}
 
 	var column string
