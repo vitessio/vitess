@@ -94,9 +94,9 @@ type sequenceMetadata struct {
 
 type VDiffOutput struct {
 	mu        sync.Mutex
-	Request   *tabletmanagerdata.VDiffRequest
-	Responses map[string]*tabletmanagerdata.VDiffResponse
-	Err       error
+	request   *tabletmanagerdata.VDiffRequest
+	responses map[string]*tabletmanagerdata.VDiffResponse
+	err       error
 }
 
 const (
@@ -1349,11 +1349,6 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 		Options:   options,
 		VdiffUuid: req.Uuid,
 	}
-	output := &VDiffOutput{
-		Request:   tabletreq,
-		Responses: make(map[string]*tabletmanagerdata.VDiffResponse),
-		Err:       nil,
-	}
 
 	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
 	if err != nil {
@@ -1364,16 +1359,13 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 			req.TargetKeyspace, req.Workflow)
 	}
 
-	output.Err = ts.ForAllTargets(func(target *MigrationTarget) error {
-		resp, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
-		output.mu.Lock()
-		defer output.mu.Unlock()
-		output.Responses[target.GetShard().ShardName()] = resp
+	err = ts.ForAllTargets(func(target *MigrationTarget) error {
+		_, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
 		return err
 	})
-	if output.Err != nil {
-		log.Errorf("Error executing action %s: %v", vdiff.CreateAction, output.Err)
-		return nil, output.Err
+	if err != nil {
+		log.Errorf("Error executing action %s: %v", vdiff.CreateAction, err)
+		return nil, err
 	}
 
 	return &vtctldatapb.VDiffCreateResponse{

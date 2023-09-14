@@ -137,6 +137,7 @@ func commandVDiffCreate(cmd *cobra.Command, args []string) error {
 	resp, err := common.GetClient().VDiffCreate(common.GetCommandCtx(), &vtctldatapb.VDiffCreateRequest{
 		Workflow:                    common.BaseOptions.Workflow,
 		TargetKeyspace:              common.BaseOptions.TargetKeyspace,
+		Uuid:                        vDiffCreateOptions.UUID.String(),
 		SourceCells:                 vDiffCreateOptions.SourceCells,
 		TargetCells:                 vDiffCreateOptions.TargetCells,
 		TabletTypes:                 vDiffCreateOptions.TabletTypes,
@@ -164,6 +165,8 @@ func commandVDiffCreate(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+	} else {
+		data = []byte(fmt.Sprintf("VDiff %s scheduled on target shards, use show to view progress", resp.Uuid))
 	}
 
 	fmt.Printf("%s\n", data)
