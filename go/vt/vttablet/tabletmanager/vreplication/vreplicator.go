@@ -1013,9 +1013,9 @@ func (vr *vreplicator) setExistingRowsCopied() {
 	}
 }
 
-func (vr *vreplicator) readExistingRowsCopied(id int32) (int64, error) {
+func (vr *vreplicator) readExistingRowsCopied(id uint32) (int64, error) {
 	query, err := sqlparser.ParseAndBind(`SELECT rows_copied FROM _vt.vreplication WHERE id=%a`,
-		sqltypes.Int32BindVariable(id),
+		sqltypes.Uint32BindVariable(id),
 	)
 	if err != nil {
 		return 0, err

@@ -648,11 +648,10 @@ func TestResumingFromPreviousWorkflowKeepingRowsCopied(t *testing.T) {
 	// The test env uses the same factory for both dba and
 	// filtered connections.
 	dbconfigs.GlobalDBConfigs.Filtered.User = "vt_dba"
-	id := int32(1)
+	id := uint32(1)
 
 	vsclient := newTabletConnector(tablet)
 	stats := binlogplayer.NewStats()
-	defer stats.Stop()
 
 	dbaconn := playerEngine.dbClientFactoryDba()
 	err := dbaconn.Connect()

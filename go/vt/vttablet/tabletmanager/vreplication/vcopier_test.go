@@ -478,12 +478,8 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 	expectDBClientQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
-<<<<<<< HEAD
-		"select @@foreign_key_checks;",
-=======
 		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
-		"select @@foreign_key_checks",
->>>>>>> a159f18719 (copy over existing vreplication rows copied to local counter if resuming from another tablet (#13949))
+		"select @@foreign_key_checks;",
 		// Create the list of tables to copy and transition to Copying state.
 		"begin",
 		"/insert into _vt.copy_state",
@@ -1411,114 +1407,6 @@ func testPlayerCopyTablesStopAfterCopy(t *testing.T) {
 	})
 }
 
-<<<<<<< HEAD
-=======
-// TestPlayerCopyTablesGIPK tests the flow when the source table has a generated invisible primary key, for when
-// the target table also has a gipk and also when the gipk column is visible, for example, in a sharded keyspace.
-// The test also confirms that the copy_state has the gipk.
-func TestPlayerCopyTablesGIPK(t *testing.T) {
-	testVcopierTestCases(t, testPlayerCopyTablesGIPK, commonVcopierTestCases())
-}
-
-func testPlayerCopyTablesGIPK(t *testing.T) {
-	if !env.HasCapability(testenv.ServerCapabilityGeneratedInvisiblePrimaryKey) {
-		t.Skip("skipping test as server does not support generated invisible primary keys")
-	}
-	defer deleteTablet(addTablet(100))
-
-	execStatements(t, []string{
-		"SET @@session.sql_generate_invisible_primary_key=ON;",
-		"create table src1(val varbinary(128))",
-		"insert into src1 values('aaa'), ('bbb')",
-		"create table src2(val varbinary(128))",
-		"insert into src2 values('aaa'), ('bbb')",
-		fmt.Sprintf("create table %s.dst1(val varbinary(128))", vrepldb),
-		"SET @@session.sql_generate_invisible_primary_key=OFF;",
-		fmt.Sprintf("create table %s.dst2(my_row_id int, val varbinary(128), primary key(my_row_id))", vrepldb),
-	})
-	defer execStatements(t, []string{
-		"drop table src1",
-		fmt.Sprintf("drop table %s.dst1", vrepldb),
-		"drop table src2",
-		fmt.Sprintf("drop table %s.dst2", vrepldb),
-	})
-	env.SchemaEngine.Reload(context.Background())
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "dst1",
-			Filter: "select * from src1",
-		}, {
-			Match:  "dst2",
-			Filter: "select * from src2",
-		}},
-	}
-
-	bls := &binlogdatapb.BinlogSource{
-		Keyspace:      env.KeyspaceName,
-		Shard:         env.ShardName,
-		Filter:        filter,
-		OnDdl:         binlogdatapb.OnDDLAction_IGNORE,
-		StopAfterCopy: true,
-	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
-	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
-		expectDeleteQueries(t)
-	}()
-
-	expectDBClientQueries(t, qh.Expect(
-		"/insert into _vt.vreplication",
-		"/update _vt.vreplication set message='Picked source tablet.*",
-		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
-		// Create the list of tables to copy and transition to Copying state.
-		"begin",
-		"/insert into _vt.copy_state",
-		"/update _vt.vreplication set state='Copying'",
-		"commit",
-		// The first fast-forward has no starting point. So, it just saves the current position.
-		"/update _vt.vreplication set pos=",
-	).Then(qh.Eventually(
-		"begin",
-		"insert into dst1(my_row_id,val) values (1,'aaa'), (2,'bbb')",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"my_row_id\\" type:UINT64 charset:63 flags:49699} rows:{lengths:1 values:\\"2\\"}'.*`,
-		"commit",
-	)).Then(qh.Immediately(
-		// copy of dst1 is done: delete from copy_state.
-		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
-	)).Then(qh.Eventually(
-		"begin",
-		"/update _vt.vreplication set pos=",
-		"commit",
-		"begin",
-		"insert into dst2(my_row_id,val) values (1,'aaa'), (2,'bbb')",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"my_row_id\\" type:UINT64 charset:63 flags:49699} rows:{lengths:1 values:\\"2\\"}'.*`,
-		"commit",
-	)).Then(qh.Immediately(
-		// copy of dst2 is done: delete from copy_state.
-		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst2",
-		// All tables copied. Stop vreplication because we requested it.
-		"/update _vt.vreplication set state='Stopped'",
-	)))
-
-	expectData(t, "dst1", [][]string{
-		{"aaa"},
-		{"bbb"},
-	})
-	expectData(t, "dst2", [][]string{
-		{"1", "aaa"},
-		{"2", "bbb"},
-	})
-}
-
->>>>>>> a159f18719 (copy over existing vreplication rows copied to local counter if resuming from another tablet (#13949))
 func TestPlayerCopyTableCancel(t *testing.T) {
 	testVcopierTestCases(t, testPlayerCopyTableCancel, commonVcopierTestCases())
 }
