@@ -49,6 +49,9 @@ var (
 
 	//go:embed unsharded_vschema.json
 	unshardedVSchema string
+
+	fkTables = []string{"fk_t1", "fk_t2", "fk_t3", "fk_t4", "fk_t5", "fk_t6", "fk_t7",
+		"fk_t10", "fk_t11", "fk_t12", "fk_t13", "fk_t15", "fk_t16", "fk_t17", "fk_t18", "fk_t19"}
 )
 
 func TestMain(m *testing.M) {
@@ -121,9 +124,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll := func() {
 		_ = utils.Exec(t, mcmp.VtConn, "use `ks/-80`")
 		tables := []string{"t4", "t3", "t2", "t1", "multicol_tbl2", "multicol_tbl1"}
-		for i := 20; i > 0; i-- {
-			tables = append(tables, fmt.Sprintf("fk_t%v", i))
-		}
+		tables = append(tables, fkTables...)
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -133,9 +134,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 		}
 		_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
 		tables = []string{"u_t1", "u_t2", "u_t3"}
-		for i := 20; i > 0; i-- {
-			tables = append(tables, fmt.Sprintf("fk_t%v", i))
-		}
+		tables = append(tables, fkTables...)
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
