@@ -1,5 +1,4 @@
-VTGate is a stateless proxy responsible for accepting requests from applications and routing them to the appropriate tablet server(s) for query execution.
-It speaks both the MySQL Protocol and a gRPC protocol.
+VTGate is a stateless proxy responsible for accepting requests from applications and routing them to the appropriate tablet server(s) for query execution. It speaks both the MySQL Protocol and a gRPC protocol.
 
 ### Key Options
 
@@ -10,7 +9,6 @@ Usage:
   vtgate [flags]
 
 Examples:
-
 vtgate \
 	--topo_implementation etcd2 \
 	--topo_global_server_address localhost:2379 \

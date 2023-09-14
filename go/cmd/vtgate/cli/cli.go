@@ -51,8 +51,8 @@ var (
 
 ### Key Options
 ` +
-			"`--srv_topo_cache_ttl`: There may be instances where you will need to increase the cached TTL from the default of 1 second to a higher number:\n" +
-			`* You may want to increase this option if you see that your topo leader goes down and keeps your queries waiting for a few seconds.`,
+			"\n* `--srv_topo_cache_ttl`: There may be instances where you will need to increase the cached TTL from the default of 1 second to a higher number:\n" +
+			`	* You may want to increase this option if you see that your topo leader goes down and keeps your queries waiting for a few seconds.`,
 		Example: `vtgate \
 	--topo_implementation etcd2 \
 	--topo_global_server_address localhost:2379 \
