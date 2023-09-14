@@ -26,7 +26,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // fuzzer runs threads that runs queries against the databases.
@@ -44,12 +47,15 @@ type fuzzer struct {
 	shouldStop atomic.Bool
 	// wg is an internal state variable, that used to know whether the fuzzer threads are running or not.
 	wg sync.WaitGroup
-	// idCollisionMap is used to make sure that we don't end up running two queries from two threads that are running on the same table
-	// on the same primary column. This is going to be a challenge, because lets say we run two inserts on the same primary col value,
-	// In this case, the two queries will race with each other, and Vitess and MySQL might end up breaking ties in differnt ways, causing
-	// the data to be different in them. mu is the set of mutexes, protecting access to the map.
-	mu             []sync.Mutex
-	idCollisionMap []map[int]bool
+	// firstFailureInfo stores the information about the database state after the first failure occurs.
+	firstFailureInfo *debugInfo
+}
+
+// debugInfo stores the debugging information we can collect after a failure happens.
+type debugInfo struct {
+	queryToFail string
+	vitessState []*sqltypes.Result
+	mysqlState  []*sqltypes.Result
 }
 
 // newFuzzer creates a new fuzzer struct.
@@ -65,28 +71,26 @@ func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare i
 	}
 	// Initially the fuzzer thread is stopped.
 	fz.shouldStop.Store(true)
-	// Initialize the map and mutexes.
-	for range fkTables {
-		fz.mu = append(fz.mu, sync.Mutex{})
-		fz.idCollisionMap = append(fz.idCollisionMap, map[int]bool{})
-	}
 	return fz
 }
 
 // generateQuery generates a query from the parameters for the fuzzer.
-func (fz *fuzzer) generateQuery(tableId, idValue, colValue int) string {
+func (fz *fuzzer) generateQuery() string {
 	val := rand.Intn(fz.insertShare + fz.updateShare + fz.deleteShare)
 	if val < fz.insertShare {
-		return fz.generateInsertQuery(tableId, idValue, colValue)
+		return fz.generateInsertQuery()
 	}
 	if val < fz.insertShare+fz.updateShare {
-		return fz.generateUpdateQuery(tableId, idValue, colValue)
+		return fz.generateUpdateQuery()
 	}
-	return fz.generateDeleteQuery(tableId, idValue)
+	return fz.generateDeleteQuery()
 }
 
 // generateInsertQuery generates an INSERT query from the parameters for the fuzzer.
-func (fz *fuzzer) generateInsertQuery(tableId, idValue, colValue int) string {
+func (fz *fuzzer) generateInsertQuery() string {
+	tableId := rand.Intn(len(fkTables))
+	idValue := 1 + rand.Intn(fz.maxValForId)
+	colValue := rand.Intn(1 + fz.maxValForCol)
 	query := fmt.Sprintf("insert into %v (id, col) values (%v, %v)", fkTables[tableId], idValue, colValue)
 	if colValue == 0 {
 		query = fmt.Sprintf("insert into %v (id, col) values (%v, NULL)", fkTables[tableId], idValue)
@@ -95,7 +99,10 @@ func (fz *fuzzer) generateInsertQuery(tableId, idValue, colValue int) string {
 }
 
 // generateUpdateQuery generates an UPDATE query from the parameters for the fuzzer.
-func (fz *fuzzer) generateUpdateQuery(tableId, idValue, colValue int) string {
+func (fz *fuzzer) generateUpdateQuery() string {
+	tableId := rand.Intn(len(fkTables))
+	idValue := 1 + rand.Intn(fz.maxValForId)
+	colValue := rand.Intn(1 + fz.maxValForCol)
 	query := fmt.Sprintf("update %v set col = %v where id = %v", fkTables[tableId], colValue, idValue)
 	if colValue == 0 {
 		query = fmt.Sprintf("update %v set col = NULL where id = %v", fkTables[tableId], idValue)
@@ -104,7 +111,9 @@ func (fz *fuzzer) generateUpdateQuery(tableId, idValue, colValue int) string {
 }
 
 // generateDeleteQuery generates a DELETE query from the parameters for the fuzzer.
-func (fz *fuzzer) generateDeleteQuery(tableId, idValue int) string {
+func (fz *fuzzer) generateDeleteQuery() string {
+	tableId := rand.Intn(len(fkTables))
+	idValue := 1 + rand.Intn(fz.maxValForId)
 	query := fmt.Sprintf("delete from %v where id = %v", fkTables[tableId], idValue)
 	return query
 }
@@ -141,17 +150,25 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, sharded bool, fuzzerThreadId int
 		if fz.shouldStop.Load() == true {
 			return
 		}
-		tableId := rand.Intn(len(fkTables))
-		idValue := 1 + rand.Intn(fz.maxValForId)
-		colValue := rand.Intn(1 + fz.maxValForCol)
-		safeToUse := fz.checkAndMarkValue(tableId, idValue)
-		if !safeToUse {
-			continue
-		}
 		// Get a query and execute it.
-		query := fz.generateQuery(tableId, idValue, colValue)
-		_, _ = mcmp.ExecAllowAndCompareError(query)
-		fz.freeValue(tableId, idValue)
+		query := fz.generateQuery()
+		// When the concurrency is 1, then we run the query both on MySQL and Vitess.
+		if fz.concurrency == 1 {
+			_, _ = mcmp.ExecAllowAndCompareError(query)
+			// If t is marked failed, we have encountered our first failure.
+			// Lets collect the required information and finish execution.
+			if t.Failed() {
+				fz.firstFailureInfo = &debugInfo{
+					queryToFail: query,
+					mysqlState:  collectFkTablesState(mcmp.MySQLConn),
+					vitessState: collectFkTablesState(mcmp.VtConn),
+				}
+				return
+			}
+		} else {
+			// When we are running concurrent threads, then we run all the queries on Vitess.
+			_ = utils.Exec(t, mcmp.VtConn, query)
+		}
 	}
 }
 
@@ -161,27 +178,6 @@ func (fz *fuzzer) stop() {
 	fz.shouldStop.Store(true)
 	// Wait for the fuzzer thread to stop.
 	fz.wg.Wait()
-}
-
-// checkAndMarkValue checks if a concurrent query is currently running on the given tableId and idValue.
-// If not, then it marks it in the map and returns that it is safe to continue with this query.
-func (fz *fuzzer) checkAndMarkValue(tableId int, idValue int) bool {
-	fz.mu[tableId].Lock()
-	defer fz.mu[tableId].Unlock()
-
-	if !fz.idCollisionMap[tableId][idValue] {
-		fz.idCollisionMap[tableId][idValue] = true
-		return true
-	}
-	return false
-}
-
-// freeValue frees the value for the given table and id pair. This can now be used by other running threads.
-func (fz *fuzzer) freeValue(tableId int, idValue int) {
-	fz.mu[tableId].Lock()
-	defer fz.mu[tableId].Unlock()
-
-	fz.idCollisionMap[tableId][idValue] = false
 }
 
 // TestFkFuzzTest is a fuzzer test that works by querying the database concurrently.
@@ -280,6 +276,24 @@ func TestFkFuzzTest(t *testing.T) {
 			insertShare:    100,
 			deleteShare:    0,
 			updateShare:    0,
+		}, {
+			name:           "Single Thread - Balanced Inserts and Deletes",
+			concurrency:    1,
+			timeForTesting: 5 * time.Second,
+			maxValForCol:   5,
+			maxValForId:    10,
+			insertShare:    50,
+			deleteShare:    50,
+			updateShare:    0,
+		}, {
+			name:           "Single Thread - Balanced Inserts and Updates",
+			concurrency:    1,
+			timeForTesting: 5 * time.Second,
+			maxValForCol:   5,
+			maxValForId:    10,
+			insertShare:    50,
+			deleteShare:    0,
+			updateShare:    50,
 		},
 	}
 
@@ -307,17 +321,44 @@ func TestFkFuzzTest(t *testing.T) {
 
 				fz.stop()
 
-				// Verify that the data in the MySQL database and Vitess database matches exactly.
-				verifyDataIsCorrect(mcmp)
+				// We encountered an error while running the fuzzer. Let's print out the information!
+				if fz.firstFailureInfo != nil {
+					log.Errorf("Failing query - %v", fz.firstFailureInfo.queryToFail)
+					for idx, table := range fkTables {
+						log.Errorf("MySQL data for %v -\n%v", table, fz.firstFailureInfo.mysqlState[idx].Rows)
+						log.Errorf("Vitess data for %v -\n%v", table, fz.firstFailureInfo.vitessState[idx].Rows)
+					}
+				}
+
+				// Verify the consistency of the data.
+				verifyDataIsCorrect(mcmp, tt.concurrency)
 			})
 		}
 	}
 }
 
 // verifyDataIsCorrect verifies that the data in MySQL database matches the data in the Vitess database.
-func verifyDataIsCorrect(mcmp utils.MySQLCompare) {
+func verifyDataIsCorrect(mcmp utils.MySQLCompare, concurrency int) {
+	// For single concurrent thread, we run all the queries on both MySQL and Vitess, so we can verify correctness
+	// by just checking if the data in MySQL and Vitess match.
+	if concurrency == 1 {
+		for _, table := range fkTables {
+			query := fmt.Sprintf("SELECT * FROM %v ORDER BY id", table)
+			mcmp.Exec(query)
+		}
+	}
+	// For higher concurrency, we don't have MySQL data to verify everything is fine,
+	// so we'll have to do something different.
+	// TODO: Do something different.
+}
+
+// collectFkTablesState collects the data stored in the foreign key tables for the given connection.
+func collectFkTablesState(conn *mysql.Conn) []*sqltypes.Result {
+	var tablesData []*sqltypes.Result
 	for _, table := range fkTables {
 		query := fmt.Sprintf("SELECT * FROM %v ORDER BY id", table)
-		mcmp.Exec(query)
+		res, _ := conn.ExecuteFetch(query, 10000, true)
+		tablesData = append(tablesData, res)
 	}
+	return tablesData
 }
