@@ -49,46 +49,35 @@ func TestAppend(t *testing.T) {
 }
 
 func TestSelect(t *testing.T) {
-	tree, err := Parse("select * from t where a = 1")
+	e1, err := ParseExpr("a = 1")
 	require.NoError(t, err)
-	expr := tree.(*Select).Where.Expr
-
-	sel := &Select{}
-	sel.AddWhere(expr)
-	buf := NewTrackedBuffer(nil)
-	sel.Where.Format(buf)
-	assert.Equal(t, " where a = 1", buf.String())
-	sel.AddWhere(expr)
-	buf = NewTrackedBuffer(nil)
-	sel.Where.Format(buf)
-	assert.Equal(t, " where a = 1", buf.String())
-
-	sel = &Select{}
-	sel.AddHaving(expr)
-	buf = NewTrackedBuffer(nil)
-	sel.Having.Format(buf)
-	assert.Equal(t, " having a = 1", buf.String())
-
-	sel.AddHaving(expr)
-	buf = NewTrackedBuffer(nil)
-	sel.Having.Format(buf)
-	assert.Equal(t, " having a = 1", buf.String())
-
-	tree, err = Parse("select * from t where a = 1 or b = 1")
+	e2, err := ParseExpr("b = 2")
 	require.NoError(t, err)
-	expr = tree.(*Select).Where.Expr
-	sel = &Select{}
-	sel.AddWhere(expr)
-	buf = NewTrackedBuffer(nil)
-	sel.Where.Format(buf)
-	assert.Equal(t, " where a = 1 or b = 1", buf.String())
+	t.Run("single predicate where", func(t *testing.T) {
+		sel := &Select{}
+		sel.AddWhere(e1)
+		assert.Equal(t, " where a = 1", String(sel.Where))
+	})
 
-	sel = &Select{}
-	sel.AddHaving(expr)
-	buf = NewTrackedBuffer(nil)
-	sel.Having.Format(buf)
-	assert.Equal(t, " having a = 1 or b = 1", buf.String())
+	t.Run("single predicate having", func(t *testing.T) {
+		sel := &Select{}
+		sel.AddHaving(e1)
+		assert.Equal(t, " having a = 1", String(sel.Having))
+	})
 
+	t.Run("double predicate where", func(t *testing.T) {
+		sel := &Select{}
+		sel.AddWhere(e1)
+		sel.AddWhere(e2)
+		assert.Equal(t, " where a = 1 and b = 2", String(sel.Where))
+	})
+
+	t.Run("double predicate having", func(t *testing.T) {
+		sel := &Select{}
+		sel.AddHaving(e1)
+		sel.AddHaving(e2)
+		assert.Equal(t, " having a = 1 and b = 2", String(sel.Having))
+	})
 }
 
 func TestUpdate(t *testing.T) {
