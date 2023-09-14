@@ -3,6 +3,18 @@ VTOrc is the automated fault detection and repair tool in Vitess.
 Usage:
   vtorc [flags]
 
+Examples:
+vtorc \
+	--topo_implementation etcd2 \
+	--topo_global_server_address localhost:2379 \
+	--topo_global_root /vitess/global \
+	--log_dir $VTDATAROOT/tmp \
+	--port 15000 \
+	--recovery-period-block-duration "10m" \
+	--instance-poll-time "1s" \
+	--topo-information-refresh-duration "30s" \
+	--alsologtostderr
+
 Flags:
       --allow-emergency-reparent                                    Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary (default true)
       --alsologtostderr                                             log to standard error as well as files
