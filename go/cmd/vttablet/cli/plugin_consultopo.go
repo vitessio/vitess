@@ -7,23 +7,17 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreed to in writing, software
+Unless required by applicable law or agreedto in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// vt tablet server: Serves queries and performs housekeeping jobs.
-package main
+package cli
+
+// This plugin imports consultopo to register the consul implementation of TopoServer.
 
 import (
-	"vitess.io/vitess/go/cmd/vttablet/cli"
-	"vitess.io/vitess/go/vt/log"
+	_ "vitess.io/vitess/go/vt/topo/consultopo"
 )
-
-func main() {
-	if err := cli.Main.Execute(); err != nil {
-		log.Exit(err)
-	}
-}

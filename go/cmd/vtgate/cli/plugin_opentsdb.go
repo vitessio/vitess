@@ -14,16 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// vt tablet server: Serves queries and performs housekeeping jobs.
-package main
+package cli
+
+// This plugin imports opentsdb to register the opentsdb stats backend.
 
 import (
-	"vitess.io/vitess/go/cmd/vttablet/cli"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/stats/opentsdb"
 )
 
-func main() {
-	if err := cli.Main.Execute(); err != nil {
-		log.Exit(err)
-	}
+func init() {
+	opentsdb.Init("vtgate")
 }

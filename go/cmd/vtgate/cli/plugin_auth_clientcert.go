@@ -14,16 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// vt tablet server: Serves queries and performs housekeeping jobs.
-package main
+package cli
+
+// This plugin imports clientcert to register the client certificate implementation of AuthServer.
 
 import (
-	"vitess.io/vitess/go/cmd/vttablet/cli"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/vtgate"
 )
 
-func main() {
-	if err := cli.Main.Execute(); err != nil {
-		log.Exit(err)
-	}
+func init() {
+	vtgate.RegisterPluginInitializer(func() { mysql.InitAuthServerClientCert() })
 }
