@@ -620,10 +620,13 @@ const (
 )
 
 // A few interesting character set values.
-// See http://dev.mysql.com/doc/internals/en/character-set.html#packet-Protocol::CharacterSet
+// See https://web.archive.org/web/20221007183051/http://dev.mysql.com/doc/internals/en/character-set.html
 const (
-	// CharacterSetUtf8 is for UTF8. We use this by default.
+	// CharacterSetUtf8 is for UTF8.
 	CharacterSetUtf8 = 33
+
+	// CharacterSetUtf8mb4 is for UTF8MB4.
+	CharacterSetUtf8mb4 = 255
 
 	// CharacterSetBinary is for binary. Use by integer fields for instance.
 	CharacterSetBinary = 63
@@ -661,7 +664,6 @@ var CharacterSetMap = map[string]uint8{
 	"macroman": 39,
 	"cp852":    40,
 	"latin7":   41,
-	"utf8mb4":  45,
 	"cp1251":   51,
 	"utf16":    54,
 	"utf16le":  56,
@@ -672,6 +674,8 @@ var CharacterSetMap = map[string]uint8{
 	"geostd8":  92,
 	"cp932":    95,
 	"eucjpms":  97,
+	"gb18030":  248,
+	"utf8mb4":  CharacterSetUtf8mb4,
 }
 
 // IsNum returns true if a MySQL type is a numeric value.
