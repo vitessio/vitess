@@ -480,12 +480,8 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 	expectDBClientQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
-<<<<<<< HEAD
-		"select @@foreign_key_checks;",
-=======
 		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"select @@foreign_key_checks",
->>>>>>> a159f18719 (copy over existing vreplication rows copied to local counter if resuming from another tablet (#13949))
 		// Create the list of tables to copy and transition to Copying state.
 		"begin",
 		"/insert into _vt.copy_state",
