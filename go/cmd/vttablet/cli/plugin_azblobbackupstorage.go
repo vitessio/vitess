@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2020 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,16 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// vt tablet server: Serves queries and performs housekeeping jobs.
-package main
+package cli
 
 import (
-	"vitess.io/vitess/go/cmd/vttablet/cli"
-	"vitess.io/vitess/go/vt/log"
+	_ "vitess.io/vitess/go/vt/mysqlctl/azblobbackupstorage"
 )
-
-func main() {
-	if err := cli.Main.Execute(); err != nil {
-		log.Exit(err)
-	}
-}

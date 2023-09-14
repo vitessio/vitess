@@ -14,16 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// vt tablet server: Serves queries and performs housekeeping jobs.
-package main
+package cli
+
+// This plugin imports etcd2topo to register the etcd2 implementation of TopoServer.
 
 import (
-	"vitess.io/vitess/go/cmd/vttablet/cli"
-	"vitess.io/vitess/go/vt/log"
+	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
 )
-
-func main() {
-	if err := cli.Main.Execute(); err != nil {
-		log.Exit(err)
-	}
-}

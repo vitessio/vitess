@@ -14,16 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// vt tablet server: Serves queries and performs housekeeping jobs.
-package main
+package cli
+
+// This plugin imports Prometheus to allow for instrumentation
+// with the Prometheus client library
 
 import (
-	"vitess.io/vitess/go/cmd/vttablet/cli"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/stats/prometheusbackend"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
-func main() {
-	if err := cli.Main.Execute(); err != nil {
-		log.Exit(err)
-	}
+func init() {
+	servenv.OnRun(func() {
+		prometheusbackend.Init("vttablet")
+	})
 }

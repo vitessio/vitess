@@ -14,16 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// vt tablet server: Serves queries and performs housekeeping jobs.
-package main
+package cli
+
+// Imports and register the gRPC queryservice server
 
 import (
-	"vitess.io/vitess/go/cmd/vttablet/cli"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 )
 
-func main() {
-	if err := cli.Main.Execute(); err != nil {
-		log.Exit(err)
-	}
+func init() {
+	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, func(qsc tabletserver.Controller) {
+		if servenv.GRPCCheckServiceMap("queryservice") {
+			grpcqueryservice.Register(servenv.GRPCServer, qsc.QueryService())
+		}
+	})
 }
