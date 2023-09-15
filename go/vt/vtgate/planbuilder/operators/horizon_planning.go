@@ -487,7 +487,13 @@ func splitSubqueryExpression(
 	case col.IsPureRight():
 		rhs.add(pe)
 	case col.IsMixedLeftAndRight():
-		panic("subquery expression should not be mixed")
+		for _, expr := range col.LHSExprs {
+			lhs.add(newProjExpr(aeWrap(expr)))
+		}
+		inner := newProjExprWithInner(pe.Original, col.RHSExpr)
+		inner.Info = pe.Info
+		inner.ColExpr = col.RHSExpr
+		rhs.add(inner)
 	}
 	return col, nil
 }

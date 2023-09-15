@@ -865,7 +865,6 @@
   {
     "comment": "Field query should work for joins select bind vars",
     "query": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
