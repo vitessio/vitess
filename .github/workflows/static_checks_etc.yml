@@ -218,3 +218,4 @@ jobs:
           echo 'Running `go run ./go/tools/releases/releases.go` on CI yields the following changes:'
           echo "$output"
           echo ""
+          exit 1
