@@ -328,7 +328,7 @@
             "Cols": [
               0
             ],
-            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ('bar')",
+            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in (('bar'))",
             "Table": "u_tbl3"
           },
           {
@@ -439,7 +439,7 @@
             "Cols": [
               0
             ],
-            "Query": "update tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (t4col4) not in ('foo')",
+            "Query": "update tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (t4col4) not in (('foo'))",
             "Table": "tbl4"
           },
           {
@@ -693,7 +693,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ('foo')",
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in (('foo'))",
                 "Table": "u_tbl3"
               },
               {
@@ -727,7 +727,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ('foo') for update",
+                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in (('foo')) for update",
                 "Table": "u_tbl9"
               },
               {
@@ -755,7 +755,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ('foo')",
+                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in (('foo'))",
                 "Table": "u_tbl9"
               }
             ]
@@ -832,7 +832,7 @@
             "Cols": [
               0
             ],
-            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in (2)",
+            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((2))",
             "Table": "u_tbl3"
           },
           {
@@ -909,7 +909,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in (2)",
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((2))",
                 "Table": "u_tbl3"
               },
               {
@@ -943,7 +943,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in (2) for update",
+                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((2)) for update",
                 "Table": "u_tbl9"
               },
               {
@@ -971,7 +971,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in (2)",
+                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((2))",
                 "Table": "u_tbl9"
               }
             ]
@@ -1295,5 +1295,99 @@
     "comment": "replace with fk reference unsupported",
     "query": "replace into u_tbl1 (id, col1) values (1, 2)",
     "plan": "VT12001: unsupported: REPLACE INTO with foreign keys"
+  },
+  {
+    "comment": "update on a multicol foreign key that set nulls and then cascades",
+    "query": "update u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
+      "Instructions": {
+        "OperatorType": "FkCascade",
+        "Inputs": [
+          {
+            "InputName": "Selection",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select cola, colb from u_multicol_tbl1 where 1 != 1",
+            "Query": "select cola, colb from u_multicol_tbl1 where id = 3 lock in share mode",
+            "Table": "u_multicol_tbl1"
+          },
+          {
+            "InputName": "CascadeChild-1",
+            "OperatorType": "FkCascade",
+            "BvName": "fkc_vals",
+            "Cols": [
+              0,
+              1
+            ],
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select cola, colb from u_multicol_tbl2 where 1 != 1",
+                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2)) for update",
+                "Table": "u_multicol_tbl2"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals1",
+                "Cols": [
+                  0,
+                  1
+                ],
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = null, colb = null where (cola, colb) in ::fkc_vals1",
+                "Table": "u_multicol_tbl3"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2))",
+                "Table": "u_multicol_tbl2"
+              }
+            ]
+          },
+          {
+            "InputName": "Parent",
+            "OperatorType": "Update",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "update u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
+            "Table": "u_multicol_tbl1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_multicol_tbl1",
+        "unsharded_fk_allow.u_multicol_tbl2",
+        "unsharded_fk_allow.u_multicol_tbl3"
+      ]
+    }
   }
 ]

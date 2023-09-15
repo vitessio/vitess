@@ -428,7 +428,7 @@ func buildChildUpdOpForSetNull(ctx *plancontext.PlanningContext, fk vindexes.Chi
 	if !colSetToNull {
 		childWhereExpr = &sqlparser.AndExpr{
 			Left:  childWhereExpr,
-			Right: sqlparser.NewComparisonExpr(sqlparser.NotInOp, valTuple, updateValues, nil),
+			Right: sqlparser.NewComparisonExpr(sqlparser.NotInOp, valTuple, sqlparser.ValTuple{updateValues}, nil),
 		}
 	}
 	childUpdStmt := &sqlparser.Update{
