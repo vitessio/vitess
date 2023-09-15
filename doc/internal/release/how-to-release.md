@@ -3,7 +3,7 @@
 In this section we describe our current release process. Below is a summary of this document.
 
 - [**Pre-requisite for the release team**](#pre-requisites)
-- [**0verview**](#overview)
+- [**Overview**](#overview)
 - [**Pre-Release**](#pre-release)
 - [**Release**](#release)
 - [**Post-Release**](#post-release)
@@ -58,6 +58,7 @@ That includes:
 - **Making sure the people doing the release have access to all the tools and infrastructure needed to do the release.**
   > - This includes write access to the Vitess repository and to the Maven repository.
 - **Preparing and cleaning the release notes summary.**
+  > - If the release does not contain significant change (i.e. a small patch release) then this step can be skipped
   > - One or more Pull Requests have to be submitted in advance to create and update the release summary.
   > - The summary files are located in: `./changelog/*.0/*.*.*/summary.md`.
   > - The summary file for a release candidate is the same as the one for the GA release.
@@ -77,19 +78,15 @@ That includes:
   > - While the Vitess Operator is located in a different repository, we also need to do a release for it.
   > - The Operator follows the same cycle: RC1 -> GA -> Patches.
   > - Documentation for the pre-release of the Vitess Operator is available [here](https://github.com/planetscale/vitess-operator/blob/main/docs/release-process.md#prepare-for-release).
-- **Update the release notes on `main`.**
-  > - One Pull Request against `main` must be created, it will contain the new release notes that we are adding in the Release Pull Request.
-  > - We open this Pull Request now to avoid waiting on the CI during release day.
-  > - All future changes to the release notes during the code freeze will need to be ported to both PRs: the one on `main` and the Release Pull Request.
 - **Update the website documentation.**
   > - We want to open a preparatory **draft** Pull Request to update the documentation.
   > - There are several pages we want to update:
-      >   - [The releases page](https://vitess.io/docs/releases/), we must add the new release to the list with all its information and link. The links can be broken (404 error) while we are preparing for the release, this is fine.
-  >   - [The local install page](https://vitess.io/docs/get-started/local/), we must use the proper version increment for this guide and the proper SHA. The SHA will have to be modified once the Release Pull Request and the release is tagged is merged.
+  >  - [The releases page](https://vitess.io/docs/releases/), we must add the new release to the list with all its information and link. The links can be broken (404 error) while we are preparing for the release, this is fine.
+  >  - [The local install page](https://vitess.io/docs/get-started/local/), we must use the proper version increment for this guide and the proper SHA. The SHA will have to be modified once the Release Pull Request and the release is tagged is merged.
   > - If we are doing a GA or RC release follow the instructions below:
-      >  - There are two scripts in the website repository in `./tools/{ga|rc}_release.sh`, use them to update the website documentation. The scripts automate:
-           >    - For an RC, we need to create a new version in the sidebar and mark the current version as RC.
-  >    - For a GA, we need to mark the version we are releasing as "Stable" and the next one as "Development".
+  >  - There are two scripts in the website repository in `./tools/{ga|rc}_release.sh`, use them to update the website documentation. The scripts automate:
+  >  - For an RC, we need to create a new version in the sidebar and mark the current version as RC.
+  >  - For a GA, we need to mark the version we are releasing as "Stable" and the next one as "Development".
 
 -----
 
@@ -102,7 +99,7 @@ On the release day, there are several things to do:
 - **Tag the Vitess release.**
   > - A guide on how to tag a version is available in the [How To Release Vitess](#how-to-release-vitess) section.
 - **Update the release notes on `main`.**
-  > - During the code freeze, we created a Pull Request against `main` to update the release notes. It must be merged.
+  > - One Pull Request against `main` must be created, it will contain the new release notes that we are adding in the Release Pull Request.
 - **Create the corresponding Vitess operator release.**
   > - Applies only to versions greater or equal to `v14.0.0`.
   > - If we are doing an RC release, then we will need to create the Vitess Operator RC too. If we are doing a GA release, we're also doing a GA release in the Operator.
@@ -125,10 +122,10 @@ On the release day, there are several things to do:
   > - The benchmarks need to complete before announcing the blog posts or before they get cross-posted.
 - **Go back to dev mode on the release branch.**
   > - The version constants across the codebase must be updated to `SNAPSHOT`.
-- **Build k8s Docker images and publish them**
+- **Build k8s Docker images and publish them.**
   > - The docker image for `base`, `lite`, etc are built automatically by DockerHub. The k8s images however are dependent on these images and are required to be built manually.
   > - These images should be built after the `base` image has been built and available on DockerHub.
-  > - To build and publish these images, run `./release.sh` from the directory `vitess/docker`.
+  > - To build and publish these images, checkout to the new `git tag` and run `./release.sh` from the directory `vitess/docker`.
 
 -----
 
