@@ -34,14 +34,14 @@ import (
 // outer query through a join.
 type SubQuery struct {
 	// Fields filled in at the time of construction:
-	Outer             ops.Operator         // Outer query operator.
-	Subquery          ops.Operator         // Subquery operator.
-	FilterType        opcode.PulloutOpcode // Type of subquery filter.
-	MergeExpression   sqlparser.Expr       // This is the expression we should use if we can merge the inner to the outer
-	_sq               *sqlparser.Subquery  // Subquery representation, e.g., (SELECT foo from user LIMIT 1).
-	Predicates        sqlparser.Exprs      // Predicates joining outer and inner queries. Empty for uncorrelated subqueries.
-	OuterPredicate    sqlparser.Expr       // This is the predicate that is using the subquery expression. It will not be empty for projections
-	ReplacedSqColName *sqlparser.ColName
+	Outer           ops.Operator         // Outer query operator.
+	Subquery        ops.Operator         // Subquery operator.
+	FilterType      opcode.PulloutOpcode // Type of subquery filter.
+	MergeExpression sqlparser.Expr       // This is the expression we should use if we can merge the inner to the outer
+	_sq             *sqlparser.Subquery  // Subquery representation, e.g., (SELECT foo from user LIMIT 1).
+	Predicates      sqlparser.Exprs      // Predicates joining outer and inner queries. Empty for uncorrelated subqueries.
+	OuterPredicate  sqlparser.Expr       // This is the predicate that is using the subquery expression. It will not be empty for projections
+	ArgName         string               // This is the name of the ColName or Argument used to replace the subquery
 
 	// Fields filled in at the subquery settling phase:
 	JoinColumns       []JoinColumn         // Broken up join predicates.
@@ -52,10 +52,8 @@ type SubQuery struct {
 	// Fields related to correlated subqueries:
 	Vars    map[string]int // Arguments copied from outer to inner, set during offset planning.
 	outerID semantics.TableSet
-}
 
-func (sj *SubQuery) IsProjection() bool {
-	return sj.ReplacedSqColName != nil
+	IsProjection bool
 }
 
 func (sj *SubQuery) planOffsets(ctx *plancontext.PlanningContext) error {
@@ -158,7 +156,7 @@ func (sj *SubQuery) SetInputs(inputs []ops.Operator) {
 
 func (sj *SubQuery) ShortDescription() string {
 	var typ string
-	if sj.IsProjection() {
+	if sj.IsProjection {
 		typ = "PROJ"
 	} else {
 		typ = "FILTER"
@@ -204,12 +202,12 @@ func (sj *SubQuery) GetMergePredicates() []sqlparser.Expr {
 }
 
 func (sj *SubQuery) settle(ctx *plancontext.PlanningContext, outer ops.Operator) (ops.Operator, error) {
-	if sj.IsProjection() {
+	if sj.IsProjection {
 		if sj.OuterPredicate != nil || len(sj.Predicates) > 0 {
 			// this means that we have a correlated subquery on our hands
 			return nil, correlatedSubqueryErr
 		}
-		sj.SubqueryValueName = sj.ReplacedSqColName.Name.String()
+		sj.SubqueryValueName = sj.ArgName
 		return outer, nil
 	}
 	return sj.settleFilter(ctx, outer)

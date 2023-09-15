@@ -85,23 +85,28 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Op
 			}
 
 			for _, pe := range ap {
-				se, ok := pe.Info.(SubQueryExpression)
-				if !ok {
-					continue
-				}
-				newExpr, rewritten := rewriteMergedSubqueryExpr(ctx, se, pe.EvalExpr)
-				if rewritten {
-					pe.Info = nil
-					pe.EvalExpr = newExpr
-				}
+				mergeSubqueryExpr(ctx, pe)
 			}
-			return op, rewrite.SameTree, nil
-		default:
-			return op, rewrite.SameTree, nil
+		case *Update:
+			for _, setExpr := range op.Assignments {
+				mergeSubqueryExpr(ctx, setExpr.Expr)
+			}
 		}
+		return op, rewrite.SameTree, nil
 	}
 	ctx.SubqueriesSettled = true
 	return rewrite.BottomUp(op, TableID, visit, nil)
+}
+
+func mergeSubqueryExpr(ctx *plancontext.PlanningContext, pe *ProjExpr) {
+	se, ok := pe.Info.(SubQueryExpression)
+	if !ok {
+		return
+	}
+	newExpr, rewritten := rewriteMergedSubqueryExpr(ctx, se, pe.EvalExpr)
+	if rewritten {
+		pe.EvalExpr = newExpr
+	}
 }
 
 func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpression, expr sqlparser.Expr) (sqlparser.Expr, bool) {
@@ -112,11 +117,11 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 				expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
 					switch expr := cursor.Node().(type) {
 					case *sqlparser.ColName:
-						if expr.Name.String() != sq.ReplacedSqColName.Name.String() {
+						if expr.Name.String() != sq.ArgName { // TODO systay 2023.09.15 - This is not safe enough. We should figure out a better way.
 							return true
 						}
 					case *sqlparser.Argument:
-						if expr.Name != sq.ReplacedSqColName.Name.String() {
+						if expr.Name != sq.ArgName {
 							return true
 						}
 					default:
@@ -308,11 +313,11 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, src 
 }
 
 func rewriteColNameToArgument(in sqlparser.Expr, se SubQueryExpression, subqueries ...*SubQuery) sqlparser.Expr {
-	cols := make(map[*sqlparser.ColName]any)
+	cols := make(map[string]any)
 	for _, sq1 := range se {
 		for _, sq2 := range subqueries {
-			if sq1.ReplacedSqColName == sq2.ReplacedSqColName && sq1.ReplacedSqColName != nil {
-				cols[sq1.ReplacedSqColName] = nil
+			if sq1.ArgName == sq2.ArgName {
+				cols[sq1.ArgName] = nil
 			}
 		}
 	}
@@ -323,10 +328,10 @@ func rewriteColNameToArgument(in sqlparser.Expr, se SubQueryExpression, subqueri
 	// replace the ColNames with Argument inside the subquery
 	result := sqlparser.Rewrite(in, nil, func(cursor *sqlparser.Cursor) bool {
 		col, ok := cursor.Node().(*sqlparser.ColName)
-		if !ok {
+		if !ok || !col.Qualifier.IsEmpty() {
 			return true
 		}
-		if _, ok := cols[col]; !ok {
+		if _, ok := cols[col.Name.String()]; !ok {
 			return true
 		}
 		arg := sqlparser.NewArgument(col.Name.String())
@@ -427,7 +432,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	if op == nil {
 		return outer, rewrite.SameTree, nil
 	}
-	if !subQuery.IsProjection() {
+	if !subQuery.IsProjection {
 		op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.MergeExpression}}
 	}
 	ctx.MergedSubqueries = append(ctx.MergedSubqueries, subQuery._sq)
@@ -448,7 +453,7 @@ func (s *subqueryRouteMerger) merge(old1, old2 *Route, r Routing) (*Route, error
 	mergedWith := append(old1.MergedWith, old1, old2)
 	mergedWith = append(mergedWith, old2.MergedWith...)
 	src := s.outer.Source
-	if !s.subq.IsProjection() {
+	if !s.subq.IsProjection {
 		src = &Filter{
 			Source:     s.outer.Source,
 			Predicates: []sqlparser.Expr{s.original},

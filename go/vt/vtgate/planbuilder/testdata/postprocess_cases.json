@@ -120,8 +120,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
+          "__sq_has_values2",
+          "__sq2"
         ],
         "Inputs": [
           {
@@ -145,10 +145,10 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where :__sq_has_values1 and id in ::__vals",
+            "Query": "select id from `user` where :__sq_has_values2 and id in ::__vals",
             "Table": "`user`",
             "Values": [
-              "::__sq1"
+              "::__sq2"
             ],
             "Vindex": "user_index"
           }
@@ -414,8 +414,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
+          "__sq_has_values2",
+          "__sq2"
         ],
         "Inputs": [
           {
@@ -440,7 +440,7 @@
             },
             "FieldQuery": "select col from `user` where 1 != 1",
             "OrderBy": "0 ASC",
-            "Query": "select col from `user` where :__sq_has_values1 and col in ::__sq1 order by col asc",
+            "Query": "select col from `user` where :__sq_has_values2 and col in ::__sq2 order by col asc",
             "Table": "`user`"
           }
         ]
@@ -619,8 +619,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
+          "__sq_has_values2",
+          "__sq2"
         ],
         "Inputs": [
           {
@@ -644,7 +644,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user` where :__sq_has_values1 and col in ::__sq1",
+            "Query": "select col from `user` where :__sq_has_values2 and col in ::__sq2",
             "Table": "`user`"
           }
         ]
@@ -739,8 +739,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
+          "__sq_has_values2",
+          "__sq2"
         ],
         "Inputs": [
           {
@@ -764,7 +764,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user` where :__sq_has_values1 and col in ::__sq1 order by rand()",
+            "Query": "select col from `user` where :__sq_has_values2 and col in ::__sq2 order by rand()",
             "Table": "`user`"
           }
         ]
@@ -1263,8 +1263,8 @@
             "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutIn",
             "PulloutVars": [
-              "__sq_has_values1",
-              "__sq1"
+              "__sq_has_values2",
+              "__sq2"
             ],
             "Inputs": [
               {
@@ -1288,7 +1288,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select col from `user` where 1 != 1",
-                "Query": "select col from `user` where :__sq_has_values1 and col in ::__sq1",
+                "Query": "select col from `user` where :__sq_has_values2 and col in ::__sq2",
                 "Table": "`user`"
               }
             ]

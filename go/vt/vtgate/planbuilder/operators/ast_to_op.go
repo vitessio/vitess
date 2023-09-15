@@ -110,8 +110,8 @@ func (sq *SubQueryContainer) handleSubquery(
 	if subq == nil {
 		return nil, nil
 	}
-
-	sqInner, err := createSubqueryOp(ctx, parentExpr, subq, outerID)
+	argName := ctx.ReservedVars.ReserveSubQuery()
+	sqInner, err := createSubqueryOp(ctx, parentExpr, subq, outerID, argName)
 	if err != nil {
 		return nil, err
 	}
@@ -154,23 +154,23 @@ func getSubQuery(expr sqlparser.Expr) (subqueryExprExists *sqlparser.Subquery, p
 	return
 }
 
-func createSubqueryOp(ctx *plancontext.PlanningContext, expr sqlparser.Expr, subq *sqlparser.Subquery, outerID semantics.TableSet) (*SubQuery, error) {
+func createSubqueryOp(ctx *plancontext.PlanningContext, expr sqlparser.Expr, subq *sqlparser.Subquery, outerID semantics.TableSet, name string) (*SubQuery, error) {
 	switch expr := expr.(type) {
 	case *sqlparser.NotExpr:
 		switch inner := expr.Expr.(type) {
 		case *sqlparser.ExistsExpr:
-			return createSubquery(ctx, expr, subq, outerID, nil, nil, opcode.PulloutNotExists)
+			return createSubquery(ctx, expr, subq, outerID, nil, name, opcode.PulloutNotExists, false)
 		case *sqlparser.ComparisonExpr:
 			cmp := *inner
 			cmp.Operator = sqlparser.Inverse(cmp.Operator)
-			return createComparisonSubQuery(ctx, &cmp, subq, outerID)
+			return createComparisonSubQuery(ctx, &cmp, subq, outerID, name)
 		}
 	case *sqlparser.ExistsExpr:
-		return createSubquery(ctx, expr, subq, outerID, nil, nil, opcode.PulloutExists)
+		return createSubquery(ctx, expr, subq, outerID, nil, name, opcode.PulloutExists, false)
 	case *sqlparser.ComparisonExpr:
-		return createComparisonSubQuery(ctx, expr, subq, outerID)
+		return createComparisonSubQuery(ctx, expr, subq, outerID, name)
 	}
-	return createSubquery(ctx, expr, subq, outerID, nil, nil, opcode.PulloutValue)
+	return createSubquery(ctx, expr, subq, outerID, nil, name, opcode.PulloutValue, false)
 }
 
 // cloneASTAndSemState clones the AST and the semantic state of the input node.
@@ -191,8 +191,9 @@ func createSubquery(
 	subq *sqlparser.Subquery,
 	outerID semantics.TableSet,
 	predicate sqlparser.Expr,
-	rColName *sqlparser.ColName,
+	argName string,
 	filterType opcode.PulloutOpcode,
+	isProjection bool,
 ) (*SubQuery, error) {
 	original = cloneASTAndSemState(ctx, original)
 
@@ -253,15 +254,15 @@ func createSubquery(
 	opInner = sqc.getRootOperator(opInner)
 
 	return &SubQuery{
-		FilterType:        filterType,
-		Subquery:          opInner,
-		Predicates:        jpc.predicates,
-		OuterPredicate:    predicate,
-		MergeExpression:   original,
-		ReplacedSqColName: rColName,
-		_sq:               subq,
+		FilterType:      filterType,
+		Subquery:        opInner,
+		Predicates:      jpc.predicates,
+		OuterPredicate:  predicate,
+		MergeExpression: original,
+		ArgName:         argName,
+		_sq:             subq,
+		IsProjection:    isProjection,
 	}, nil
-
 }
 
 func createComparisonSubQuery(
@@ -269,6 +270,7 @@ func createComparisonSubQuery(
 	original *sqlparser.ComparisonExpr,
 	subFromOutside *sqlparser.Subquery,
 	outerID semantics.TableSet,
+	name string,
 ) (*SubQuery, error) {
 	subq, outside := semantics.GetSubqueryAndOtherSide(original)
 	if outside == nil || subq != subFromOutside {
@@ -295,7 +297,7 @@ func createComparisonSubQuery(
 		filterType = opcode.PulloutNotIn
 	}
 
-	return createSubquery(ctx, original, subq, outerID, predicate, nil, filterType)
+	return createSubquery(ctx, original, subq, outerID, predicate, name, filterType, false)
 }
 
 type joinPredicateCollector struct {
@@ -513,7 +515,14 @@ func addColumnEquality(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 // createSelectionOp creates the selection operator to select the parent columns for the foreign key constraints.
 // The Select statement looks something like this - `SELECT <parent_columns_in_fk for all the foreign key constraints> FROM <parent_table> WHERE <where_clause_of_update>`
 // TODO (@Harshit, @GuptaManan100): Compress the columns in the SELECT statement, if there are multiple foreign key constraints using the same columns.
-func createSelectionOp(ctx *plancontext.PlanningContext, selectExprs []sqlparser.SelectExpr, tableExprs sqlparser.TableExprs, where *sqlparser.Where, limit *sqlparser.Limit, lock sqlparser.Lock) (ops.Operator, error) {
+func createSelectionOp(
+	ctx *plancontext.PlanningContext,
+	selectExprs []sqlparser.SelectExpr,
+	tableExprs sqlparser.TableExprs,
+	where *sqlparser.Where,
+	limit *sqlparser.Limit,
+	lock sqlparser.Lock,
+) (ops.Operator, error) {
 	selectionStmt := &sqlparser.Select{
 		SelectExprs: selectExprs,
 		From:        tableExprs,

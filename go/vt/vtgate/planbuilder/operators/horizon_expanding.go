@@ -267,7 +267,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 	for _, ae := range aes {
 		org := sqlparser.CloneRefOfAliasedExpr(ae)
 		expr := ae.Expr
-		newExpr, subqs, err := sqc.pullOutValueSubqueries(ctx, expr, outerID)
+		newExpr, subqs, err := sqc.pullOutValueSubqueries(ctx, expr, outerID, false)
 		if err != nil {
 			return nil, err
 		}
@@ -298,23 +298,24 @@ func newStarProjection(src ops.Operator, cols sqlparser.SelectExprs) *Projection
 type subqueryExtraction struct {
 	new  sqlparser.Expr
 	subq []*sqlparser.Subquery
-	cols []*sqlparser.ColName
+	cols []string
 }
 
 func (sq *SubQueryContainer) pullOutValueSubqueries(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	outerID semantics.TableSet,
+	isDML bool,
 ) (sqlparser.Expr, []*SubQuery, error) {
 	original := sqlparser.CloneExpr(expr)
-	sqe := extractSubQueries(ctx, expr)
+	sqe := extractSubQueries(ctx, expr, isDML)
 	if sqe == nil {
 		return nil, nil, nil
 	}
 	var newSubqs []*SubQuery
 
 	for idx, subq := range sqe.subq {
-		sqInner, err := createSubquery(ctx, original, subq, outerID, nil, sqe.cols[idx], opcode.PulloutValue)
+		sqInner, err := createSubquery(ctx, original, subq, outerID, nil, sqe.cols[idx], opcode.PulloutValue, true)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -326,7 +327,7 @@ func (sq *SubQueryContainer) pullOutValueSubqueries(
 	return sqe.new, newSubqs, nil
 }
 
-func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr) *subqueryExtraction {
+func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, isDML bool) *subqueryExtraction {
 	sqe := &subqueryExtraction{}
 	expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
 		_, isExists := cursor.Parent().(*sqlparser.ExistsExpr)
@@ -334,11 +335,14 @@ func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr) *s
 			return true
 		}
 		if subq, ok := cursor.Node().(*sqlparser.Subquery); ok {
-			reseveSq := ctx.ReservedVars.ReserveSubQuery()
-			reserveSqColName := sqlparser.NewColName(reseveSq)
-			cursor.Replace(reserveSqColName)
+			sqName := ctx.ReservedVars.ReserveSubQuery()
+			sqe.cols = append(sqe.cols, sqName)
+			if isDML {
+				cursor.Replace(sqlparser.NewArgument(sqName))
+			} else {
+				cursor.Replace(sqlparser.NewColName(sqName))
+			}
 			sqe.subq = append(sqe.subq, subq)
-			sqe.cols = append(sqe.cols, reserveSqColName)
 		}
 		return true
 	}).(sqlparser.Expr)

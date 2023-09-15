@@ -472,7 +472,7 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 		}
 		return buildRouteLogicalPlan(ctx, op, stmt)
 	case *sqlparser.Update:
-		return buildUpdateLogicalPlan(ctx, op, dmlOp)
+		return buildUpdateLogicalPlan(ctx, op, dmlOp, stmt)
 	case *sqlparser.Delete:
 		return buildDeleteLogicalPlan(ctx, op, dmlOp)
 	case *sqlparser.Insert:
@@ -615,6 +615,7 @@ func buildUpdateLogicalPlan(
 	ctx *plancontext.PlanningContext,
 	rb *operators.Route,
 	dmlOp ops.Operator,
+	stmt *sqlparser.Update,
 ) (logicalPlan, error) {
 	upd := dmlOp.(*operators.Update)
 	rp := newRoutingParams(ctx, rb.Routing.OpCode())
@@ -623,7 +624,7 @@ func buildUpdateLogicalPlan(
 		return nil, err
 	}
 	edml := &engine.DML{
-		Query:             generateQuery(upd.AST),
+		Query:             generateQuery(stmt),
 		TableNames:        []string{upd.VTable.Name.String()},
 		Vindexes:          upd.VTable.ColumnVindexes,
 		OwnedVindexQuery:  upd.OwnedVindexQuery,

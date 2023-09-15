@@ -4149,7 +4149,6 @@
   {
     "comment": "unsharded subquery in sharded update, not the same keyspace between outer and inner",
     "query": "update user set col = (select id from unsharded)",
-    "skip": true,
     "plan": {
       "QueryType": "UPDATE",
       "Original": "update user set col = (select id from unsharded)",
@@ -4195,7 +4194,6 @@
   {
     "comment": "sharded subquery in unsharded update, not the same keyspace",
     "query": "update unsharded set col = (select id from user)",
-    "skip": true,
     "plan": {
       "QueryType": "UPDATE",
       "Original": "update unsharded set col = (select id from user)",
@@ -4241,7 +4239,6 @@
   {
     "comment": "sharded join unsharded subqueries in unsharded update",
     "query": "update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)",
-    "skip": true,
     "plan": {
       "QueryType": "UPDATE",
       "Original": "update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)",

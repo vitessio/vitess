@@ -407,7 +407,7 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		}
 		qb.asSelectStatement().MakeDistinct()
 	case *Update:
-		buildDML(op, qb)
+		buildUpdate(op, qb)
 	case *Delete:
 		buildDML(op, qb)
 	case *Insert:
@@ -416,6 +416,35 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		return vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op))
 	}
 	return nil
+}
+
+func buildUpdate(op *Update, qb *queryBuilder) {
+	tblName := sqlparser.NewTableName(op.QTable.Table.Name.String())
+	aTblExpr := &sqlparser.AliasedTableExpr{
+		Expr: tblName,
+		As:   op.QTable.Alias.As,
+	}
+	updExprs := make(sqlparser.UpdateExprs, 0, len(op.Assignments))
+	for _, se := range op.Assignments {
+		updExprs = append(updExprs, &sqlparser.UpdateExpr{
+			Name: se.Name,
+			Expr: se.Expr.EvalExpr,
+		})
+	}
+
+	qb.stmt = &sqlparser.Update{
+		Ignore:     op.Ignore,
+		TableExprs: sqlparser.TableExprs{aTblExpr},
+		Exprs:      updExprs,
+		OrderBy:    op.OrderBy,
+		Limit:      op.Limit,
+	}
+
+	for _, pred := range op.QTable.Predicates {
+		qb.addPredicate(pred)
+	}
+
+	qb.dmlOperator = op
 }
 
 type OpWithAST interface {
