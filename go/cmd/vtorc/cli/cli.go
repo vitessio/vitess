@@ -31,8 +31,18 @@ import (
 var (
 	configFile string
 	Main       = &cobra.Command{
-		Use:     "vtorc",
-		Short:   "VTOrc is the automated fault detection and repair tool in Vitess.",
+		Use:   "vtorc",
+		Short: "VTOrc is the automated fault detection and repair tool in Vitess.",
+		Example: `vtorc \
+	--topo_implementation etcd2 \
+	--topo_global_server_address localhost:2379 \
+	--topo_global_root /vitess/global \
+	--log_dir $VTDATAROOT/tmp \
+	--port 15000 \
+	--recovery-period-block-duration "10m" \
+	--instance-poll-time "1s" \
+	--topo-information-refresh-duration "30s" \
+	--alsologtostderr`,
 		Args:    cobra.NoArgs,
 		Version: servenv.AppVersion.String(),
 		PreRunE: servenv.CobraPreRunE,
