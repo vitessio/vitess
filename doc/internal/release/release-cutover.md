@@ -172,15 +172,10 @@ We need to verify that _arewefastyet_ has finished the benchmark too.
 
        The script will prompt you `Pausing so release notes can be added. Press enter to continue`. We are now going to generate the release notes, continue to the next sub-step.
 
-    2. Run the following command to generate the release notes:
-        1. Release Candidate:
-            ```shell
-            go run ./go/tools/release-notes --from "v14.0.3" --to "HEAD" --version "v15.0.0-rc1" --summary "./changelog/15.0/15.0.0/summary.md" [--threads=[0-9.]]
-            ```
-        2. General Availability:
-            ```shell
-            go run ./go/tools/release-notes --from "v14.0.3" --to "HEAD" --version "v15.0.0" --summary "./changelog/15.0/15.0.0/summary.md" [--threads=[0-9.]]
-            ```
+    2. Run the following command to generate the release notes, please note that you can omit the `--summary` flag if there are no summary.
+        ```shell
+        go run ./go/tools/release-notes --version "v15.0.0" --summary "./changelog/15.0/15.0.0/summary.md"
+        ```
 
        > Important note: The release note generation fetches a lot of data from the GitHub API. You might reach the API request limit.
        In which case you should use the `--threads=` flag and set an integer value lower than 10 (the default).
