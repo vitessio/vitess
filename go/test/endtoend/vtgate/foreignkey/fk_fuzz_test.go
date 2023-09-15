@@ -428,6 +428,8 @@ func verifyDataIsCorrect(t *testing.T, mcmp utils.MySQLCompare, concurrency int)
 			}
 			require.NotNil(t, primaryTab)
 			require.NotNil(t, replicaTab)
+			checkReplicationHealthy(t, replicaTab)
+			cluster.WaitForReplicationPos(t, primaryTab, replicaTab, "localhost", 60.0)
 			primaryConn, err := utils.GetMySQLConn(primaryTab, fmt.Sprintf("vt_%v", keyspace.Name))
 			require.NoError(t, err)
 			replicaConn, err := utils.GetMySQLConn(replicaTab, fmt.Sprintf("vt_%v", keyspace.Name))

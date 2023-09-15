@@ -92,3 +92,21 @@ func removeAllForeignKeyConstraints(t *testing.T, vttablet *cluster.Vttablet, ke
 	err = utils.RunSQLs(t, queries, vttablet, fmt.Sprintf("vt_%v", keyspace))
 	require.NoError(t, err)
 }
+
+// checkReplicationHealthy verifies that the replication on the given vttablet is working as expected.
+func checkReplicationHealthy(t *testing.T, vttablet *cluster.Vttablet) {
+	rs, err := utils.RunSQL(t, "show replica status", vttablet, "")
+	require.NoError(t, err)
+	var ioThreadRunning, sqlThreadRunning string
+	for idx, value := range rs.Rows[0] {
+		fieldName := rs.Fields[idx].Name
+		if fieldName == "Replica_IO_Running" {
+			ioThreadRunning = value.ToString()
+		}
+		if fieldName == "Replica_SQL_Running" {
+			sqlThreadRunning = value.ToString()
+		}
+	}
+	require.Equal(t, "Yes", sqlThreadRunning, "SQL Thread isn't happy on %v, Replica status - %v", vttablet.Alias, rs.Rows)
+	require.Equal(t, "Yes", ioThreadRunning, "IO Thread isn't happy on %v, Replica status - %v", vttablet.Alias, rs.Rows)
+}
