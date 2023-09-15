@@ -273,6 +273,13 @@ func (c *ParsedComments) Length() int {
 	return len(c.comments)
 }
 
+func (c *ParsedComments) GetComments() Comments {
+	if c != nil {
+		return c.comments
+	}
+	return nil
+}
+
 func (c *ParsedComments) Prepend(comment string) Comments {
 	if c == nil {
 		return Comments{comment}

@@ -292,6 +292,7 @@ func NewLocalTestEnvWithDirectory(flavor string, basePort int, directory string)
 		Env: []string{
 			fmt.Sprintf("VTDATAROOT=%s", directory),
 			fmt.Sprintf("MYSQL_FLAVOR=%s", flavor),
+			"VTTEST=endtoend",
 		},
 	}, nil
 }

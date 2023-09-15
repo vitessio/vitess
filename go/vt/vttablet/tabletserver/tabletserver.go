@@ -1730,7 +1730,6 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 // Close shuts down any remaining go routines
 func (tsv *TabletServer) Close(ctx context.Context) error {
 	tsv.sm.closeAll()
-	tsv.qe.Close()
 	tsv.stats.Stop()
 	return nil
 }
@@ -1961,11 +1960,6 @@ func (tsv *TabletServer) TxPoolSize() int {
 	return tsv.te.txPool.scp.Capacity()
 }
 
-// SetQueryPlanCacheCap changes the plan cache capacity to the specified value.
-func (tsv *TabletServer) SetQueryPlanCacheCap(val int) {
-	tsv.qe.SetQueryPlanCacheCap(val)
-}
-
 // QueryPlanCacheCap returns the plan cache capacity
 func (tsv *TabletServer) QueryPlanCacheCap() int {
 	return tsv.qe.QueryPlanCacheCap()
@@ -1974,11 +1968,6 @@ func (tsv *TabletServer) QueryPlanCacheCap() int {
 // QueryPlanCacheLen returns the plan cache length
 func (tsv *TabletServer) QueryPlanCacheLen() int {
 	return tsv.qe.QueryPlanCacheLen()
-}
-
-// QueryPlanCacheWait waits until the query plan cache has processed all recent queries
-func (tsv *TabletServer) QueryPlanCacheWait() {
-	tsv.qe.plans.Wait()
 }
 
 // SetMaxResultSize changes the max result size to the specified value.

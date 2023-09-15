@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
@@ -40,7 +41,7 @@ func validateThrottleParams(alterMigrationType sqlparser.AlterMigrationType, exp
 		// Unthrottling is like throttling with duration=0
 		duration = 0
 	default:
-		duration = time.Hour * 24 * 365 * 100
+		duration = throttle.DefaultAppThrottleDuration
 		if expireString != "" {
 			duration, err = time.ParseDuration(expireString)
 			if err != nil || duration < 0 {

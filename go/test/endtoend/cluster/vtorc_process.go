@@ -133,6 +133,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	orc.proc.Stderr = errFile
 
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
+	orc.proc.Env = append(orc.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Running vtorc with command: %v", strings.Join(orc.proc.Args, " "))
 

@@ -20,15 +20,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/cache"
+	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/tableacl"
 	tacl "vitess.io/vitess/go/vt/tableacl/acl"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vthash"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -122,6 +123,17 @@ func isValid(planType planbuilder.PlanType, hasReservedCon bool, hasSysSettings 
 
 // _______________________________________________
 
+type PlanCacheKey = theine.StringKey
+type PlanCache = theine.Store[PlanCacheKey, *TabletPlan]
+
+type SettingsCacheKey = theine.HashKey256
+type SettingsCache = theine.Store[SettingsCacheKey, *pools.Setting]
+
+type currentSchema struct {
+	tables map[string]*schema.Table
+	epoch  uint32
+}
+
 // QueryEngine implements the core functionality of tabletserver.
 // It assumes that no requests will be sent to it before Open is
 // called and succeeds.
@@ -130,14 +142,17 @@ func isValid(planType planbuilder.PlanType, hasReservedCon bool, hasSysSettings 
 // Close: There should be no more pending queries when this
 // function is called.
 type QueryEngine struct {
-	isOpen bool
+	isOpen atomic.Bool
 	env    tabletenv.Env
 	se     *schema.Engine
 
 	// mu protects the following fields.
-	mu               sync.RWMutex
-	tables           map[string]*schema.Table
-	plans            cache.Cache
+	schemaMu sync.Mutex
+	epoch    uint32
+	schema   atomic.Pointer[currentSchema]
+
+	plans            *PlanCache
+	settings         *SettingsCache
 	queryRuleSources *rules.Map
 
 	// Pools
@@ -186,20 +201,28 @@ type QueryEngine struct {
 // You must call this only once.
 func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	config := env.Config()
-	cacheCfg := &cache.Config{
-		MaxEntries:     int64(config.QueryCacheSize),
-		MaxMemoryUsage: config.QueryCacheMemory,
-		LFU:            config.QueryCacheLFU,
-	}
 
 	qe := &QueryEngine{
 		env:                           env,
 		se:                            se,
-		tables:                        make(map[string]*schema.Table),
-		plans:                         cache.NewDefaultCacheImpl(cacheCfg),
 		queryRuleSources:              rules.NewMap(),
 		enablePerWorkloadTableMetrics: config.EnablePerWorkloadTableMetrics,
 	}
+
+	// Cache for query plans: user configured size with a doorkeeper by default to prevent one-off queries
+	// from thrashing the cache.
+	qe.plans = theine.NewStore[PlanCacheKey, *TabletPlan](config.QueryCacheMemory, config.QueryCacheDoorkeeper)
+
+	// cache for connection settings: default to 1/4th of the size for the query cache and do
+	// not use a doorkeeper because custom connection settings are rarely one-off and we always
+	// want to cache them
+	var settingsCacheMemory = config.QueryCacheMemory / 4
+	qe.settings = theine.NewStore[SettingsCacheKey, *pools.Setting](settingsCacheMemory, false)
+
+	qe.schema.Store(&currentSchema{
+		tables: make(map[string]*schema.Table),
+		epoch:  0,
+	})
 
 	qe.conns = connpool.NewPool(env, "ConnPool", config.OltpReadPool)
 	qe.streamConns = connpool.NewPool(env, "StreamConnPool", config.OlapReadPool)
@@ -248,9 +271,15 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query cache length", func() int64 {
 		return int64(qe.plans.Len())
 	})
-	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query cache size", qe.plans.UsedCapacity)
-	env.Exporter().NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", qe.plans.MaxCapacity)
-	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", qe.plans.Evictions)
+	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query cache size", func() int64 {
+		return int64(qe.plans.UsedCapacity())
+	})
+	env.Exporter().NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", func() int64 {
+		return int64(qe.plans.MaxCapacity())
+	})
+	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", func() int64 {
+		return qe.plans.Metrics.Evicted()
+	})
 
 	labels := []string{"Table", "Plan"}
 	if config.EnablePerWorkloadTableMetrics {
@@ -277,12 +306,14 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 
 // Open must be called before sending requests to QueryEngine.
 func (qe *QueryEngine) Open() error {
-	if qe.isOpen {
+	if qe.isOpen.Load() {
 		return nil
 	}
 	log.Info("Query Engine: opening")
 
-	qe.conns.Open(qe.env.Config().DB.AppWithDB(), qe.env.Config().DB.DbaWithDB(), qe.env.Config().DB.AppDebugWithDB())
+	config := qe.env.Config()
+
+	qe.conns.Open(config.DB.AppWithDB(), config.DB.DbaWithDB(), config.DB.AppDebugWithDB())
 
 	conn, err := qe.conns.Get(tabletenv.LocalContext(), nil)
 	if err != nil {
@@ -299,9 +330,11 @@ func (qe *QueryEngine) Open() error {
 		return err
 	}
 
-	qe.streamConns.Open(qe.env.Config().DB.AppWithDB(), qe.env.Config().DB.DbaWithDB(), qe.env.Config().DB.AppDebugWithDB())
+	qe.streamConns.Open(config.DB.AppWithDB(), config.DB.DbaWithDB(), config.DB.AppDebugWithDB())
 	qe.se.RegisterNotifier("qe", qe.schemaChanged, true)
-	qe.isOpen = true
+	qe.plans.EnsureOpen()
+	qe.settings.EnsureOpen()
+	qe.isOpen.Store(true)
 	return nil
 }
 
@@ -309,63 +342,69 @@ func (qe *QueryEngine) Open() error {
 // You must ensure that no more queries will be sent
 // before calling Close.
 func (qe *QueryEngine) Close() {
-	if !qe.isOpen {
+	if !qe.isOpen.Swap(false) {
 		return
 	}
 	// Close in reverse order of Open.
 	qe.se.UnregisterNotifier("qe")
+
 	qe.plans.Close()
-	qe.tables = make(map[string]*schema.Table)
+	qe.settings.Close()
+
 	qe.streamConns.Close()
 	qe.conns.Close()
-	qe.isOpen = false
 	log.Info("Query Engine: closed")
 }
 
-// GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.
-func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
-	span, _ := trace.NewSpan(ctx, "QueryEngine.GetPlan")
-	defer span.Finish()
-	if !skipQueryPlanCache {
-		if plan := qe.getQuery(sql); plan != nil {
-			logStats.CachedPlan = true
-			return plan, nil
-		}
-	}
-	// Obtain read lock to prevent schema from changing while
-	// we build a plan. The read lock allows multiple identical
-	// queries to build the same plan. One of them will win by
-	// updating the query cache and prevent future races. Due to
-	// this, query stats reporting may not be accurate, but it's
-	// acceptable because those numbers are best effort.
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
+var errNoCache = errors.New("plan should not be cached")
+
+func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string) (*TabletPlan, error) {
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
-	splan, err := planbuilder.Build(statement, qe.tables, qe.env.Config().DB.DBName, qe.env.Config().EnableViews)
+	splan, err := planbuilder.Build(statement, curSchema.tables, qe.env.Config().DB.DBName, qe.env.Config().EnableViews)
 	if err != nil {
 		return nil, err
 	}
 	plan := &TabletPlan{Plan: splan, Original: sql}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableNames()...)
 	plan.buildAuthorized()
-	if plan.PlanID == planbuilder.PlanDDL || plan.PlanID == planbuilder.PlanSet {
-		return plan, nil
+	if plan.PlanID == planbuilder.PlanDDL || plan.PlanID == planbuilder.PlanSet || sqlparser.SkipQueryPlanCacheDirective(statement) {
+		return plan, errNoCache
 	}
-	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) {
-		qe.plans.Set(sql, plan)
-	}
+
 	return plan, nil
+}
+
+// GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.
+func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
+	span, _ := trace.NewSpan(ctx, "QueryEngine.GetPlan")
+	defer span.Finish()
+
+	var plan *TabletPlan
+	var err error
+
+	curSchema := qe.schema.Load()
+
+	if skipQueryPlanCache {
+		plan, err = qe.getPlan(curSchema, sql)
+	} else {
+		plan, logStats.CachedPlan, err = qe.plans.GetOrLoad(PlanCacheKey(sql), curSchema.epoch, func() (*TabletPlan, error) {
+			return qe.getPlan(curSchema, sql)
+		})
+	}
+
+	if errors.Is(err, errNoCache) {
+		err = nil
+	}
+	return plan, err
 }
 
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache
 // and doesn't enforce a limit. It just returns the parsed query.
 func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
-	splan, err := planbuilder.BuildStreaming(sql, qe.tables)
+	splan, err := planbuilder.BuildStreaming(sql, qe.schema.Load().tables)
 	if err != nil {
 		return nil, err
 	}
@@ -377,9 +416,7 @@ func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
 
 // GetMessageStreamPlan builds a plan for Message streaming.
 func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
-	splan, err := planbuilder.BuildMessageStreaming(name, qe.tables)
+	splan, err := planbuilder.BuildMessageStreaming(name, qe.schema.Load().tables)
 	if err != nil {
 		return nil, err
 	}
@@ -394,33 +431,44 @@ func (qe *QueryEngine) GetConnSetting(ctx context.Context, settings []string) (*
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetConnSetting")
 	defer span.Finish()
 
-	var keyBuilder strings.Builder
+	hasher := vthash.New256()
 	for _, q := range settings {
-		keyBuilder.WriteString(q)
+		_, _ = hasher.WriteString(q)
 	}
 
-	// try to get the connSetting from the cache
-	cacheKey := keyBuilder.String()
-	if plan := qe.getConnSetting(cacheKey); plan != nil {
-		return plan, nil
-	}
+	var cacheKey SettingsCacheKey
+	hasher.Sum(cacheKey[:0])
 
-	// build the setting queries
-	query, resetQuery, err := planbuilder.BuildSettingQuery(settings)
-	if err != nil {
-		return nil, err
-	}
-	connSetting := pools.NewSetting(query, resetQuery)
-
-	// store the connSetting in the cache
-	qe.plans.Set(cacheKey, connSetting)
-
-	return connSetting, nil
+	connSetting, _, err := qe.settings.GetOrLoad(cacheKey, 0, func() (*pools.Setting, error) {
+		// build the setting queries
+		query, resetQuery, err := planbuilder.BuildSettingQuery(settings)
+		if err != nil {
+			return nil, err
+		}
+		return pools.NewSetting(query, resetQuery), nil
+	})
+	return connSetting, err
 }
 
 // ClearQueryPlanCache should be called if query plan cache is potentially obsolete
 func (qe *QueryEngine) ClearQueryPlanCache() {
-	qe.plans.Clear()
+	qe.schemaMu.Lock()
+	defer qe.schemaMu.Unlock()
+
+	qe.epoch++
+
+	current := qe.schema.Load()
+	qe.schema.Store(&currentSchema{
+		tables: current.tables,
+		epoch:  qe.epoch,
+	})
+}
+
+func (qe *QueryEngine) ForEachPlan(each func(plan *TabletPlan) bool) {
+	curSchema := qe.schema.Load()
+	qe.plans.Range(curSchema.epoch, func(_ PlanCacheKey, plan *TabletPlan) bool {
+		return each(plan)
+	})
 }
 
 // IsMySQLReachable returns an error if it cannot connect to MySQL.
@@ -438,56 +486,31 @@ func (qe *QueryEngine) IsMySQLReachable() error {
 }
 
 func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []*schema.Table) {
-	qe.mu.Lock()
-	defer qe.mu.Unlock()
-	qe.tables = tables
+	qe.schemaMu.Lock()
+	defer qe.schemaMu.Unlock()
+
 	if len(altered) != 0 || len(dropped) != 0 {
-		qe.plans.Clear()
+		qe.epoch++
 	}
-}
 
-// getQuery fetches the plan and makes it the most recent.
-func (qe *QueryEngine) getQuery(sql string) *TabletPlan {
-	cacheResult, ok := qe.plans.Get(sql)
-	if !ok {
-		return nil
-	}
-	plan, ok := cacheResult.(*TabletPlan)
-	if ok {
-		return plan
-	}
-	return nil
-}
-
-func (qe *QueryEngine) getConnSetting(key string) *pools.Setting {
-	cacheResult, ok := qe.plans.Get(key)
-	if !ok {
-		return nil
-	}
-	plan, ok := cacheResult.(*pools.Setting)
-	if ok {
-		return plan
-	}
-	return nil
-}
-
-// SetQueryPlanCacheCap sets the query plan cache capacity.
-func (qe *QueryEngine) SetQueryPlanCacheCap(size int) {
-	if size <= 0 {
-		size = 1
-	}
-	qe.plans.SetCapacity(int64(size))
+	qe.schema.Store(&currentSchema{
+		tables: tables,
+		epoch:  qe.epoch,
+	})
 }
 
 // QueryPlanCacheCap returns the capacity of the query cache.
 func (qe *QueryEngine) QueryPlanCacheCap() int {
-	return int(qe.plans.MaxCapacity())
+	return qe.plans.MaxCapacity()
 }
 
 // QueryPlanCacheLen returns the length (size in entries) of the query cache
-func (qe *QueryEngine) QueryPlanCacheLen() int {
-	qe.plans.Wait()
-	return qe.plans.Len()
+func (qe *QueryEngine) QueryPlanCacheLen() (count int) {
+	qe.ForEachPlan(func(plan *TabletPlan) bool {
+		count++
+		return true
+	})
+	return
 }
 
 // AddStats adds the given stats for the planName.tableName
@@ -547,8 +570,7 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 	}
 
 	response.Header().Set("Content-Type", "text/plain")
-	qe.plans.ForEach(func(value any) bool {
-		plan := value.(*TabletPlan)
+	qe.ForEachPlan(func(plan *TabletPlan) bool {
 		response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(plan.Original))))
 		if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
 			response.Write([]byte(err.Error()))
@@ -567,9 +589,7 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 	}
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	var qstats []perQueryStats
-	qe.plans.ForEach(func(value any) bool {
-		plan := value.(*TabletPlan)
-
+	qe.ForEachPlan(func(plan *TabletPlan) bool {
 		var pqstats perQueryStats
 		pqstats.Query = unicoded(sqlparser.TruncateForUI(plan.Original))
 		pqstats.Table = plan.TableName().String()

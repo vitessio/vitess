@@ -146,6 +146,9 @@ func NewTabletPicker(
 	options TabletPickerOptions,
 ) (*TabletPicker, error) {
 	// Keep inOrder parsing here for backward compatability until TabletPickerTabletOrder is fully adopted.
+	if tabletTypesStr == "" {
+		tabletTypesStr = "replica,rdonly,primary"
+	}
 	tabletTypes, inOrder, err := ParseTabletTypesAndOrder(tabletTypesStr)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to parse list of tablet types: %v", tabletTypesStr)

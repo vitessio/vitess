@@ -57843,6 +57843,169 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a ReshardCreateRequest. */
+    interface IReshardCreateRequest {
+
+        /** ReshardCreateRequest workflow */
+        workflow?: (string|null);
+
+        /** ReshardCreateRequest keyspace */
+        keyspace?: (string|null);
+
+        /** ReshardCreateRequest source_shards */
+        source_shards?: (string[]|null);
+
+        /** ReshardCreateRequest target_shards */
+        target_shards?: (string[]|null);
+
+        /** ReshardCreateRequest cells */
+        cells?: (string[]|null);
+
+        /** ReshardCreateRequest tablet_types */
+        tablet_types?: (topodata.TabletType[]|null);
+
+        /** ReshardCreateRequest tablet_selection_preference */
+        tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
+
+        /** ReshardCreateRequest skip_schema_copy */
+        skip_schema_copy?: (boolean|null);
+
+        /** ReshardCreateRequest on_ddl */
+        on_ddl?: (string|null);
+
+        /** ReshardCreateRequest stop_after_copy */
+        stop_after_copy?: (boolean|null);
+
+        /** ReshardCreateRequest defer_secondary_keys */
+        defer_secondary_keys?: (boolean|null);
+
+        /** ReshardCreateRequest auto_start */
+        auto_start?: (boolean|null);
+    }
+
+    /** Represents a ReshardCreateRequest. */
+    class ReshardCreateRequest implements IReshardCreateRequest {
+
+        /**
+         * Constructs a new ReshardCreateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IReshardCreateRequest);
+
+        /** ReshardCreateRequest workflow. */
+        public workflow: string;
+
+        /** ReshardCreateRequest keyspace. */
+        public keyspace: string;
+
+        /** ReshardCreateRequest source_shards. */
+        public source_shards: string[];
+
+        /** ReshardCreateRequest target_shards. */
+        public target_shards: string[];
+
+        /** ReshardCreateRequest cells. */
+        public cells: string[];
+
+        /** ReshardCreateRequest tablet_types. */
+        public tablet_types: topodata.TabletType[];
+
+        /** ReshardCreateRequest tablet_selection_preference. */
+        public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
+
+        /** ReshardCreateRequest skip_schema_copy. */
+        public skip_schema_copy: boolean;
+
+        /** ReshardCreateRequest on_ddl. */
+        public on_ddl: string;
+
+        /** ReshardCreateRequest stop_after_copy. */
+        public stop_after_copy: boolean;
+
+        /** ReshardCreateRequest defer_secondary_keys. */
+        public defer_secondary_keys: boolean;
+
+        /** ReshardCreateRequest auto_start. */
+        public auto_start: boolean;
+
+        /**
+         * Creates a new ReshardCreateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReshardCreateRequest instance
+         */
+        public static create(properties?: vtctldata.IReshardCreateRequest): vtctldata.ReshardCreateRequest;
+
+        /**
+         * Encodes the specified ReshardCreateRequest message. Does not implicitly {@link vtctldata.ReshardCreateRequest.verify|verify} messages.
+         * @param message ReshardCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IReshardCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReshardCreateRequest message, length delimited. Does not implicitly {@link vtctldata.ReshardCreateRequest.verify|verify} messages.
+         * @param message ReshardCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IReshardCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReshardCreateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReshardCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ReshardCreateRequest;
+
+        /**
+         * Decodes a ReshardCreateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReshardCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ReshardCreateRequest;
+
+        /**
+         * Verifies a ReshardCreateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReshardCreateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReshardCreateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ReshardCreateRequest;
+
+        /**
+         * Creates a plain object from a ReshardCreateRequest message. Also converts values to other types if specified.
+         * @param message ReshardCreateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ReshardCreateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReshardCreateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReshardCreateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a RestoreFromBackupRequest. */
     interface IRestoreFromBackupRequest {
 

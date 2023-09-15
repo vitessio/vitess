@@ -67,6 +67,8 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator) (
 		return transformDistinct(ctx, op)
 	case *operators.FkCascade:
 		return transformFkCascade(ctx, op)
+	case *operators.FkVerify:
+		return transformFkVerify(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
@@ -108,6 +110,33 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 	}
 
 	return newFkCascade(parentLP, selLP, children), nil
+}
+
+// transformFkVerify transforms a FkVerify operator into a logical plan.
+func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify) (logicalPlan, error) {
+	inputLP, err := transformToLogicalPlan(ctx, fkv.Input)
+	if err != nil {
+		return nil, err
+	}
+
+	// Once we have the input logical plan, we can create the primitives for the verification operators.
+	// For all of these, we don't need the semTable anymore. We set it to nil, to avoid using an incorrect one.
+	ctx.SemTable = nil
+
+	// Go over the children and convert them to Primitives too.
+	var verify []*verifyLP
+	for _, v := range fkv.Verify {
+		lp, err := transformToLogicalPlan(ctx, v.Op)
+		if err != nil {
+			return nil, err
+		}
+		verify = append(verify, &verifyLP{
+			verify: lp,
+			typ:    v.Typ,
+		})
+	}
+
+	return newFkVerify(inputLP, verify), nil
 }
 
 func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (logicalPlan, error) {
@@ -408,8 +437,15 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 
 	replaceSubQuery(ctx, stmt)
 
+	if stmtWithComments, ok := stmt.(sqlparser.Commented); ok && op.Comments != nil {
+		stmtWithComments.SetComments(op.Comments.GetComments())
+	}
+
 	switch stmt := stmt.(type) {
 	case sqlparser.SelectStatement:
+		if op.Lock != sqlparser.NoLock {
+			stmt.SetLock(op.Lock)
+		}
 		return buildRouteLogicalPlan(ctx, op, stmt)
 	case *sqlparser.Update:
 		return buildUpdateLogicalPlan(ctx, op, dmlOp, stmt)
