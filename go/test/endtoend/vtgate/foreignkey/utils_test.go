@@ -18,6 +18,7 @@ package foreignkey
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -32,6 +33,11 @@ func getTestName(testName string, testSharded bool) string {
 		return "Sharded - " + testName
 	}
 	return "Unsharded - " + testName
+}
+
+// isMultiColFkTable tells if the table is a multicol table or not.
+func isMultiColFkTable(tableName string) bool {
+	return strings.Contains(tableName, "multicol")
 }
 
 // waitForSchemaTrackingForFkTables waits for schema tracking to have run and seen the tables used

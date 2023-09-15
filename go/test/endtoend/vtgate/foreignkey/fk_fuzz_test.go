@@ -91,24 +91,46 @@ func (fz *fuzzer) generateQuery() string {
 func (fz *fuzzer) generateInsertQuery() string {
 	tableId := rand.Intn(len(fkTables))
 	idValue := 1 + rand.Intn(fz.maxValForId)
-	colValue := rand.Intn(1 + fz.maxValForCol)
-	query := fmt.Sprintf("insert into %v (id, col) values (%v, %v)", fkTables[tableId], idValue, colValue)
-	if colValue == 0 {
-		query = fmt.Sprintf("insert into %v (id, col) values (%v, NULL)", fkTables[tableId], idValue)
+	tableName := fkTables[tableId]
+	if tableName == "fk_t20" {
+		colValue := rand.Intn(1 + fz.maxValForCol)
+		col2Value := rand.Intn(1 + fz.maxValForCol)
+		return fmt.Sprintf("insert into %v (id, col, col2) values (%v, %v, %v)", tableName, idValue, convertColValueToString(colValue), convertColValueToString(col2Value))
+	} else if isMultiColFkTable(tableName) {
+		colaValue := rand.Intn(1 + fz.maxValForCol)
+		colbValue := rand.Intn(1 + fz.maxValForCol)
+		return fmt.Sprintf("insert into %v (id, cola, colb) values (%v, %v, %v)", tableName, idValue, convertColValueToString(colaValue), convertColValueToString(colbValue))
+	} else {
+		colValue := rand.Intn(1 + fz.maxValForCol)
+		return fmt.Sprintf("insert into %v (id, col) values (%v, %v)", tableName, idValue, convertColValueToString(colValue))
 	}
-	return query
+}
+
+// convertColValueToString converts the given value to a string
+func convertColValueToString(value int) string {
+	if value == 0 {
+		return "NULL"
+	}
+	return fmt.Sprintf("%d", value)
 }
 
 // generateUpdateQuery generates an UPDATE query from the parameters for the fuzzer.
 func (fz *fuzzer) generateUpdateQuery() string {
 	tableId := rand.Intn(len(fkTables))
 	idValue := 1 + rand.Intn(fz.maxValForId)
-	colValue := rand.Intn(1 + fz.maxValForCol)
-	query := fmt.Sprintf("update %v set col = %v where id = %v", fkTables[tableId], colValue, idValue)
-	if colValue == 0 {
-		query = fmt.Sprintf("update %v set col = NULL where id = %v", fkTables[tableId], idValue)
+	tableName := fkTables[tableId]
+	if tableName == "fk_t20" {
+		colValue := rand.Intn(1 + fz.maxValForCol)
+		col2Value := rand.Intn(1 + fz.maxValForCol)
+		return fmt.Sprintf("update %v set col = %v, col2 = %v where id = %v", tableName, convertColValueToString(colValue), convertColValueToString(col2Value), idValue)
+	} else if isMultiColFkTable(tableName) {
+		colaValue := rand.Intn(1 + fz.maxValForCol)
+		colbValue := rand.Intn(1 + fz.maxValForCol)
+		return fmt.Sprintf("update %v set cola = %v, colb = %v where id = %v", tableName, convertColValueToString(colaValue), convertColValueToString(colbValue), idValue)
+	} else {
+		colValue := rand.Intn(1 + fz.maxValForCol)
+		return fmt.Sprintf("update %v set col = %v where id = %v", tableName, convertColValueToString(colValue), idValue)
 	}
-	return query
 }
 
 // generateDeleteQuery generates a DELETE query from the parameters for the fuzzer.
@@ -385,6 +407,9 @@ func verifyDataIsCorrect(t *testing.T, mcmp utils.MySQLCompare, concurrency int)
 		// to make sure that nothing is broken in the database.
 		for _, reference := range fkReferences {
 			query := fmt.Sprintf("select %v.id from %v left join %v on (%v.col = %v.col) where %v.col is null and %v.col is not null", reference.childTable, reference.childTable, reference.parentTable, reference.parentTable, reference.childTable, reference.parentTable, reference.childTable)
+			if isMultiColFkTable(reference.childTable) {
+				query = fmt.Sprintf("select %v.id from %v left join %v on (%v.cola = %v.cola and %v.colb = %v.colb) where %v.cola is null and %v.cola is not null and %v.colb is not null", reference.childTable, reference.childTable, reference.parentTable, reference.parentTable, reference.childTable, reference.parentTable, reference.childTable, reference.parentTable, reference.childTable, reference.childTable)
+			}
 			res, err := mcmp.VtConn.ExecuteFetch(query, 1000, false)
 			require.NoError(t, err)
 			require.Zerof(t, len(res.Rows), "Query %v gave non-empty results", query)
@@ -419,7 +444,7 @@ func verifyDataMatches(t *testing.T, resOne []*sqltypes.Result, resTwo []*sqltyp
 	require.EqualValues(t, len(resTwo), len(resOne), "Res 1 - %v, Res 2 - %v", resOne, resTwo)
 	for idx, resultOne := range resOne {
 		resultTwo := resTwo[idx]
-		require.True(t, resultOne.Equal(resultTwo), "Rows 1 - %v, Rows 2 - %v", resultOne.Rows, resultTwo.Rows)
+		require.True(t, resultOne.Equal(resultTwo), "Data for %v doesn't match\nRows 1\n%v\nRows 2\n%v", fkTables[idx], resultOne.Rows, resultTwo.Rows)
 	}
 }
 
