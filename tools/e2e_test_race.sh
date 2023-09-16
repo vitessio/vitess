@@ -42,7 +42,7 @@ set -exo pipefail
 
 # Run all endtoend tests.
 echo "$all_e2e_tests" | xargs go test $VT_GO_PARALLEL -race 2>&1 | tee $temp_log_file
-if [ ${PIPESTATUS[0]} -ne 0 ]; then
+if [ ${PIPESTATUS[1]} -ne 0 ]; then
   if grep "WARNING: DATA RACE" -q $temp_log_file; then
     echo
     echo "ERROR: go test -race found a data race. See log above."
