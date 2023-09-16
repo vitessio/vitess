@@ -58,7 +58,7 @@ That includes:
 - **Making sure the people doing the release have access to all the tools and infrastructure needed to do the release.**
   > - This includes write access to the Vitess repository and to the Maven repository.
 - **Preparing and cleaning the release notes summary.**
-  > - If the release does not contain significant change (i.e. a small patch release) then this step can be skipped
+  > - If the release does not contain significant changes (i.e. a small patch release) then this step can be skipped
   > - One or more Pull Requests have to be submitted in advance to create and update the release summary.
   > - The summary files are located in: `./changelog/*.0/*.*.*/summary.md`.
   > - The summary file for a release candidate is the same as the one for the GA release.
@@ -81,8 +81,8 @@ That includes:
 - **Update the website documentation.**
   > - We want to open a preparatory **draft** Pull Request to update the documentation.
   > - There are several pages we want to update:
-  >  - [The releases page](https://vitess.io/docs/releases/), we must add the new release to the list with all its information and link. The links can be broken (404 error) while we are preparing for the release, this is fine.
-  >  - [The local install page](https://vitess.io/docs/get-started/local/), we must use the proper version increment for this guide and the proper SHA. The SHA will have to be modified once the Release Pull Request and the release is tagged is merged.
+  >  - [The releases page](https://vitess.io/docs/releases/): we must add the new release to the list with all its information and link. The links can be broken (404 error) while we are preparing for the release, this is fine.
+  >  - [The local install page](https://vitess.io/docs/get-started/local/): we must use the proper version increment for this guide and the proper SHA. The SHA will have to be modified once the Release Pull Request and the release is tagged is merged.
   > - If we are doing a GA or RC release follow the instructions below:
   >  - There are two scripts in the website repository in `./tools/{ga|rc}_release.sh`, use them to update the website documentation. The scripts automate:
   >  - For an RC, we need to create a new version in the sidebar and mark the current version as RC.
@@ -169,7 +169,7 @@ We need to verify that _arewefastyet_ has finished the benchmark too.
 
        The script will prompt you `Pausing so release notes can be added. Press enter to continue`. We are now going to generate the release notes, continue to the next sub-step.
 
-    2. Run the following command to generate the release notes, please note that you can omit the `--summary` flag if there are no summary.
+    2. Run the following command to generate the release notes. Note that you can omit the `--summary` flag if there are no summary.
         ```shell
         go run ./go/tools/release-notes --version "v15.0.0" --summary "./changelog/15.0/15.0.0/summary.md"
         ```
