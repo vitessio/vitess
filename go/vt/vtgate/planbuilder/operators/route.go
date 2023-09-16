@@ -584,7 +584,7 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 
 type selectExpressions interface {
 	ops.Operator
-	addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error)
+	addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error)
 	addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error)
 	isDerived() bool
 }

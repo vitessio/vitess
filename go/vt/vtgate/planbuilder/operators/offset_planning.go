@@ -120,7 +120,7 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root ops.Operator) (ops
 		found := func(expr sqlparser.Expr, i int) {}
 		notFound := func(e sqlparser.Expr) error {
 			_, addToGroupBy := e.(*sqlparser.ColName)
-			_, err := proj.addColumnWithoutPushing(aeWrap(e), addToGroupBy)
+			_, err := proj.addColumnWithoutPushing(ctx, aeWrap(e), addToGroupBy)
 			if err != nil {
 				return err
 			}

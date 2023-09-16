@@ -207,62 +207,12 @@ func (p *Projection) canPushDown(ctx *plancontext.PlanningContext) bool {
 	return true
 }
 
-func (p *Projection) addProjExpr(pe *ProjExpr) (int, error) {
-	ap, err := p.GetAliasedProjections()
-	if err != nil {
-		return 0, err
-	}
-
-	offset := len(ap)
-	ap = append(ap, pe)
-	p.Columns = ap
-
-	return offset, nil
-
-}
-
-func (p *Projection) addUnexploredExpr(ae *sqlparser.AliasedExpr, e sqlparser.Expr) (int, error) {
-	return p.addProjExpr(newProjExprWithInner(ae, e))
-}
-
 func (p *Projection) GetAliasedProjections() (AliasedProjections, error) {
 	ap, ok := p.Columns.(AliasedProjections)
 	if !ok {
 		return nil, vterrors.VT09015()
 	}
 	return ap, nil
-}
-
-func (p *Projection) addSubqueryExpr(ae *sqlparser.AliasedExpr, expr sqlparser.Expr, sqs ...*SubQuery) error {
-	pe := newProjExprWithInner(ae, expr)
-	pe.Info = SubQueryExpression(sqs)
-
-	_, err := p.addProjExpr(pe)
-	return err
-}
-
-func (p *Projection) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, _ bool) (int, error) {
-	return p.addUnexploredExpr(expr, expr.Expr)
-}
-
-func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, _ []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
-	offsets := make([]int, len(exprs))
-	for idx, expr := range exprs {
-		if reuse {
-			offset, _ := p.FindCol(ctx, expr.Expr, true)
-			if offset != -1 {
-				offsets[idx] = offset
-				continue
-			}
-		}
-		offset, err := p.addUnexploredExpr(expr, expr.Expr)
-		if err != nil {
-			return nil, err
-		}
-		offsets[idx] = offset
-
-	}
-	return offsets, nil
 }
 
 func (p *Projection) isDerived() bool {
@@ -288,7 +238,58 @@ func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return -1, nil
 }
 
+func (p *Projection) addProjExpr(pe *ProjExpr) (int, error) {
+	ap, err := p.GetAliasedProjections()
+	if err != nil {
+		return 0, err
+	}
+
+	offset := len(ap)
+	ap = append(ap, pe)
+	p.Columns = ap
+
+	return offset, nil
+}
+
+func (p *Projection) addUnexploredExpr(ae *sqlparser.AliasedExpr, e sqlparser.Expr) (int, error) {
+	return p.addProjExpr(newProjExprWithInner(ae, e))
+}
+
+func (p *Projection) addSubqueryExpr(ae *sqlparser.AliasedExpr, expr sqlparser.Expr, sqs ...*SubQuery) error {
+	pe := newProjExprWithInner(ae, expr)
+	pe.Info = SubQueryExpression(sqs)
+
+	_, err := p.addProjExpr(pe)
+	return err
+}
+
+func (p *Projection) addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _ bool) (int, error) {
+	return p.addColumn(ctx, true, false, expr, false)
+}
+
+func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, _ []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+	offsets := make([]int, len(exprs))
+	for idx, expr := range exprs {
+		offset, err := p.addColumn(ctx, reuse, false, expr, false)
+		if err != nil {
+			return nil, err
+		}
+		offsets[idx] = offset
+	}
+	return offsets, nil
+}
+
 func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) (int, error) {
+	return p.addColumn(ctx, reuse, addToGroupBy, ae, true)
+}
+
+func (p *Projection) addColumn(
+	ctx *plancontext.PlanningContext,
+	reuse bool,
+	addToGroupBy bool,
+	ae *sqlparser.AliasedExpr,
+	pushDown bool,
+) (int, error) {
 	expr := ae.Expr
 	if p.isDerived() {
 		tableInfo, err := ctx.SemTable.TableInfoFor(*p.TableID)
@@ -308,15 +309,20 @@ func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, reuse bool, add
 		}
 	}
 
-	// we need to plan this column
+	if !pushDown {
+		return p.addUnexploredExpr(ae, expr)
+	}
+
+	// we need to push down this column to our input
 	inputOffset, err := p.Source.AddColumn(ctx, true, addToGroupBy, ae)
 	if err != nil {
 		return 0, err
 	}
 
 	pe := newProjExprWithInner(ae, expr)
-	pe.Info = Offset(inputOffset)
+	pe.Info = Offset(inputOffset) // since we already know the offset, let's save the information
 	return p.addProjExpr(pe)
+
 }
 
 func (po Offset) expr()             {}

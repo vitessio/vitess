@@ -88,7 +88,7 @@ func pushDownAggregationThroughSubquery(
 			if idx >= 0 {
 				continue
 			}
-			_, err := pushedAggr.addColumnWithoutPushing(aeWrap(colName), true)
+			_, err := pushedAggr.addColumnWithoutPushing(ctx, aeWrap(colName), true)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -246,7 +246,7 @@ withNextColumn:
 				continue withNextColumn
 			}
 		}
-		_, err := pushedAggr.addColumnWithoutPushing(aeWrap(col), true)
+		_, err := pushedAggr.addColumnWithoutPushing(ctx, aeWrap(col), true)
 		if err != nil {
 			return nil, nil, err
 		}
