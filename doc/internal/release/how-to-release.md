@@ -85,7 +85,7 @@ That includes:
   >  - [The local install page](https://vitess.io/docs/get-started/local/): we must use the proper version increment for this guide and the proper SHA. The SHA will have to be modified once the Release Pull Request and the release is tagged is merged.
   > - If we are doing a GA or RC release follow the instructions below:
   >  - There are two scripts in the website repository in `./tools/{ga|rc}_release.sh`, use them to update the website documentation. The scripts automate:
-  >  - For an RC, we need to create a new version in the sidebar and mark the current version as RC.
+  >  - For an RC, we need to create a new entry in the sidebar which represents the next version on `main` and mark the version we are releasing as RC.
   >  - For a GA, we need to mark the version we are releasing as "Stable" and the next one as "Development".
 
 -----
