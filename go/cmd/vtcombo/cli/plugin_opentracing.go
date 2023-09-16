@@ -14,17 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
 import (
+	"vitess.io/vitess/go/trace"
+
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtctl/grpcvtctlserver"
 )
 
 func init() {
 	servenv.OnRun(func() {
-		if servenv.GRPCCheckServiceMap("vtctl") {
-			grpcvtctlserver.StartServer(servenv.GRPCServer, ts)
-		}
+		closer := trace.StartTracing("vtcombo")
+		servenv.OnClose(trace.LogErrorsWhenClosing(closer))
 	})
 }

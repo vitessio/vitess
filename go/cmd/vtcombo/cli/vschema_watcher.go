@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
 import (
 	"context"
@@ -23,10 +23,11 @@ import (
 	"path"
 
 	"vitess.io/vitess/go/vt/log"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
 func startVschemaWatcher(vschemaPersistenceDir string, keyspaces []*vttestpb.Keyspace, ts *topo.Server) {
@@ -100,11 +101,11 @@ func persistNewSrvVSchema(srvVSchema *vschemapb.SrvVSchema) {
 			continue
 		}
 
-		err = os.WriteFile(path.Join(*vschemaPersistenceDir, ksName+".json"), jsonBytes, 0644)
+		err = os.WriteFile(path.Join(vschemaPersistenceDir, ksName+".json"), jsonBytes, 0644)
 		if err != nil {
 			log.Errorf("Error writing keyspace file: %v", err)
 		}
-		log.Infof("Persisted keyspace %v to %v", ksName, *vschemaPersistenceDir)
+		log.Infof("Persisted keyspace %v to %v", ksName, vschemaPersistenceDir)
 	}
 }
 

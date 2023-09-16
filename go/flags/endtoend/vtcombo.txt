@@ -1,4 +1,15 @@
-Usage of vtcombo:
+vtcombo is a single binary containing several vitess components.
+
+In particular, it contains:
+- A ZK topology server based on an in-memory map.
+- One vtgate instance.
+- Many vttablet instances.
+- A vtctld instance so it's easy to see the topology.
+
+Usage:
+  vtcombo [flags]
+
+Flags:
       --action_timeout duration                                          time to wait for an action before resorting to force (default 1m0s)
       --allow-kill-statement                                             Allows the execution of kill statement
       --allowed_tablet_types strings                                     Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.
@@ -128,6 +139,8 @@ Usage of vtcombo:
       --gc_check_interval duration                                       Interval between garbage collection checks (default 1h0m0s)
       --gc_purge_check_interval duration                                 Interval between purge discovery checks (default 1m0s)
       --gh-ost-path string                                               override default gh-ost binary full path
+      --grpc-use-effective-groups                                        If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.
+      --grpc-use-static-authentication-callerid                          If set, will set the immediate caller id to the username authenticated by the static auth plugin.
       --grpc_auth_mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc_auth_static_password_file string                            JSON File to read the users/passwords from.
@@ -147,13 +160,14 @@ Usage of vtcombo:
       --grpc_server_initial_window_size int                              gRPC server initial window size
       --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
       --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
+      --grpc_use_effective_callerid                                      If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.
       --health_check_interval duration                                   Interval between health checks (default 20s)
       --healthcheck_retry_delay duration                                 health check retry delay (default 2ms)
       --healthcheck_timeout duration                                     the health check timeout period (default 1m0s)
       --heartbeat_enable                                                 If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the sidecar database's heartbeat table. The result is used to inform the serving state of the vttablet via healthchecks.
       --heartbeat_interval duration                                      How frequently to read and write replication heartbeat. (default 1s)
       --heartbeat_on_demand_duration duration                            If non-zero, heartbeats are only written upon consumer request, and only run for up to given duration following the request. Frequent requests can keep the heartbeat running consistently; when requests are infrequent heartbeat may completely stop between requests
-  -h, --help                                                             display usage and exit
+  -h, --help                                                             help for vtcombo
       --hot_row_protection_concurrent_transactions int                   Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect. (default 5)
       --hot_row_protection_max_global_queue_size int                     Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded. (default 1000)
       --hot_row_protection_max_queue_size int                            Maximum number of BeginExecute RPCs which will be queued for the same row (range). (default 20)

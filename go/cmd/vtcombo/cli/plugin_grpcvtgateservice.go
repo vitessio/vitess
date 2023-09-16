@@ -14,24 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// vtcombo: a single binary that contains:
-// - a ZK topology server based on an in-memory map.
-// - one vtgate instance.
-// - many vttablet instances.
-// - a vtctld instance so it's easy to see the topology.
-package main
+package cli
+
+// Imports and register the gRPC vtgateservice server
 
 import (
-	"vitess.io/vitess/go/cmd/vtcombo/cli"
-	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/log"
+	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
+	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
 )
-
-func main() {
-	defer exit.Recover()
-
-	if err := cli.Main.Execute(); err != nil {
-		log.Error(err)
-		exit.Return(1)
-	}
-}
