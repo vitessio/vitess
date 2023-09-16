@@ -1,4 +1,9 @@
-Usage of vtaclcheck:
+vtaclcheck checks that the access-control list (ACL) rules in a given file are valid.
+
+Usage:
+  vtaclcheck [flags]
+
+Flags:
       --acl-file string                                             The path of the JSON ACL file to check
       --alsologtostderr                                             log to standard error as well as files
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
@@ -7,7 +12,7 @@ Usage of vtaclcheck:
       --config-path strings                                         Paths to search for config files in. (default [{{ .Workdir }}])
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
-  -h, --help                                                        display usage and exit
+  -h, --help                                                        help for vtaclcheck
       --keep_logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
       --log_backtrace_at traceLocation                              when logging hits line file:N, emit a stack trace (default :0)
