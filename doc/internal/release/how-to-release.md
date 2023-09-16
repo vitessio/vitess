@@ -125,7 +125,7 @@ On the release day, there are several things to do:
 - **Build k8s Docker images and publish them.**
   > - The docker image for `base`, `lite`, etc are built automatically by DockerHub. The k8s images however are dependent on these images and are required to be built manually.
   > - These images should be built after the `base` image has been built and available on DockerHub.
-  > - To build and publish these images, checkout the new release tag that was just created and run `./release.sh` from the directory `./docker.
+  > - To build and publish these images, checkout the new release tag that was just created and run `./release.sh` from the directory `./docker`.
 
 -----
 
