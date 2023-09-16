@@ -174,6 +174,8 @@ We need to verify that _arewefastyet_ has finished the benchmark too.
         go run ./go/tools/release-notes --version "v15.0.0" --summary "./changelog/15.0/15.0.0/summary.md"
         ```
 
+       > Make sure to also run `go run ./go/tools/releases/releases.go` to update the `./changelog` directory.
+
        > Important note: The release note generation fetches a lot of data from the GitHub API. You might reach the API request limit.
        In which case you should use the `--threads=` flag and set an integer value lower than 10 (the default).
 
