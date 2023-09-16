@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
 import (
 	"fmt"
@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vttest"
 
@@ -120,15 +120,16 @@ func TestVtclient(t *testing.T) {
 		},
 	}
 
-	// Change ErrorHandling from ExitOnError to panicking.
-	pflag.CommandLine.Init("vtclient_test.go", pflag.PanicOnError)
 	for _, q := range queries {
 		// Run main function directly and not as external process. To achieve this,
 		// overwrite os.Args which is used by pflag.Parse().
-		os.Args = []string{"vtclient_test.go", "--server", vtgateAddr}
-		os.Args = append(os.Args, q.args...)
+		args := []string{"--server", vtgateAddr}
+		args = append(args, q.args...)
 
-		results, err := run()
+		err := Main.ParseFlags(args)
+		require.NoError(t, err)
+
+		results, err := _run(Main, args)
 		if q.errMsg != "" {
 			if got, want := err.Error(), q.errMsg; !strings.Contains(got, want) {
 				t.Fatalf("vtclient %v returned wrong error: got = %v, want contains = %v", os.Args[1:], got, want)
@@ -137,7 +138,7 @@ func TestVtclient(t *testing.T) {
 		}
 
 		if err != nil {
-			t.Fatalf("vtclient %v failed: %v", os.Args[1:], err)
+			t.Fatalf("vtclient %v failed: %v", args[1:], err)
 		}
 		if got, want := results.rowsAffected, q.rowsAffected; got != want {
 			t.Fatalf("wrong rows affected for query: %v got = %v, want = %v", os.Args[1:], got, want)
