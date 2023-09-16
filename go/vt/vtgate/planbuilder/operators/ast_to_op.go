@@ -185,6 +185,19 @@ func cloneASTAndSemState[T sqlparser.SQLNode](ctx *plancontext.PlanningContext, 
 	}, ctx.SemTable.CopyDependenciesOnSQLNodes).(T)
 }
 
+func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNode) (result semantics.TableSet) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		t, ok := node.(*sqlparser.AliasedTableExpr)
+		if !ok {
+			return true, nil
+		}
+		ts := ctx.SemTable.TableSetFor(t)
+		result = result.Merge(ts)
+		return true, nil
+	}, node)
+	return
+}
+
 func createSubquery(
 	ctx *plancontext.PlanningContext,
 	original sqlparser.Expr,
@@ -202,7 +215,7 @@ func createSubquery(
 		return nil, vterrors.VT13001("yucki unions")
 	}
 
-	subqID := ctx.SemTable.StatementIDs[innerSel]
+	subqID := findTablesContained(ctx, innerSel)
 	totalID := subqID.Merge(outerID)
 	jpc := &joinPredicateCollector{
 		totalID: totalID,

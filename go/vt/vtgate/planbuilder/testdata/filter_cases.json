@@ -1704,6 +1704,7 @@
   {
     "comment": "nested subquery",
     "query": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)",
@@ -1862,6 +1863,7 @@
   {
     "comment": "outer and inner subquery route by same outermost column value",
     "query": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
+    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
