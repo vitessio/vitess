@@ -292,6 +292,7 @@ func (p *Projection) addColumn(
 ) (int, error) {
 	expr := ae.Expr
 	if p.isDerived() {
+		// For derived tables we rewrite the expression before searching for it and/or pushing it down
 		tableInfo, err := ctx.SemTable.TableInfoFor(*p.TableID)
 		if err != nil {
 			return 0, err
@@ -309,8 +310,25 @@ func (p *Projection) addColumn(
 		}
 	}
 
+	// ok, we need to add the expression. let's check if we should rewrite a ws expression first
+	ws, ok := expr.(*sqlparser.WeightStringFuncExpr)
+	if ok {
+		cols, ok := p.Columns.(AliasedProjections)
+		if !ok {
+			return 0, vterrors.VT09015()
+		}
+		for _, projExpr := range cols {
+			if ctx.SemTable.EqualsExprWithDeps(ws.Expr, projExpr.ColExpr) {
+				// if someone is asking for the ws of something we are projecting,
+				// we need push down the ws of the eval expression
+				ws.Expr = projExpr.EvalExpr
+			}
+		}
+	}
+
+	pe := newProjExprWithInner(ae, expr)
 	if !pushDown {
-		return p.addUnexploredExpr(ae, expr)
+		return p.addProjExpr(pe)
 	}
 
 	// we need to push down this column to our input
@@ -319,10 +337,8 @@ func (p *Projection) addColumn(
 		return 0, err
 	}
 
-	pe := newProjExprWithInner(ae, expr)
 	pe.Info = Offset(inputOffset) // since we already know the offset, let's save the information
 	return p.addProjExpr(pe)
-
 }
 
 func (po Offset) expr()             {}

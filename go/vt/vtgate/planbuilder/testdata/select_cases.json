@@ -2023,14 +2023,13 @@
   {
     "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
     "query": "select (select col from user limit 1) as a from user join user_extra order by a",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1",
+        "JoinColumnIndexes": "L:0",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -2066,9 +2065,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select :__sq1 as a, (select col from `user` where 1 != 1), weight_string((select col from `user` where 1 != 1)) from `user` where 1 != 1",
-                "OrderBy": "(1|2) ASC",
-                "Query": "select :__sq1 as a, (select col from `user` limit 1), weight_string((select col from `user` limit 1)) from `user` order by a asc",
+                "FieldQuery": "select :__sq1 as a, weight_string(:__sq1) from `user` where 1 != 1",
+                "OrderBy": "(0|1) ASC",
+                "Query": "select :__sq1 as a, weight_string(:__sq1) from `user` order by a asc",
                 "Table": "`user`"
               }
             ]
@@ -2695,7 +2694,6 @@
   {
     "comment": "select (select id from user order by id limit 1) from user_extra",
     "query": "select (select id from user order by id limit 1) from user_extra",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select (select id from user order by id limit 1) from user_extra",
@@ -2733,8 +2731,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :__sq1 from user_extra where 1 != 1",
-            "Query": "select :__sq1 from user_extra",
+            "FieldQuery": "select :__sq1 as `(select id from ``user`` order by id asc limit 1)` from user_extra where 1 != 1",
+            "Query": "select :__sq1 as `(select id from ``user`` order by id asc limit 1)` from user_extra",
             "Table": "user_extra"
           }
         ]
