@@ -201,13 +201,7 @@ func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContex
 				// this is a ColName that was not being sent to the RHS, so it has no bindvar name.
 				// let's add one.
 				expr := thisCol.LHSExprs[idx]
-				var bvname string
-				if col, ok := expr.(*sqlparser.ColName); ok {
-					bvname = ctx.ReservedVars.ReserveColName(col)
-				} else {
-					bvname = ctx.ReservedVars.ReserveVariable(sqlparser.String(expr))
-				}
-
+				bvname := ctx.GetReservedArgumentFor(expr)
 				thisCol.BvNames = append(thisCol.BvNames, bvname)
 				aj.JoinColumns[i] = thisCol
 			}
@@ -223,7 +217,7 @@ func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContex
 		}
 	}
 	// we didn't find it, so we need to add it
-	bvName := ctx.ReservedVars.ReserveColName(col)
+	bvName := ctx.GetReservedArgumentFor(col)
 	aj.JoinColumns = append(aj.JoinColumns, JoinColumn{
 		Original: aeWrap(col),
 		BvNames:  []string{bvName},
@@ -669,6 +663,44 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operat
 		}
 		src.Outer, in.Source = in, src.Outer
 		return src, rewrite.NewTree("push ordering into outer side of subquery", in), nil
+	case *SubQuery:
+		outerTableID := TableID(src.Outer)
+		for _, order := range in.Order {
+			deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
+			if !deps.IsSolvedBy(outerTableID) {
+				return in, rewrite.SameTree, nil
+			}
+		}
+		src.Outer, in.Source = in, src.Outer
+		return src, rewrite.NewTree("push ordering into outer side of subquery", in), nil
+		// ap, err := in.GetAliasedProjections()
+		// if err != nil {
+		// 	return p, rewrite.SameTree, nil
+		// }
+		//
+		// if !ctx.SubqueriesSettled || err != nil {
+		// 	return p, rewrite.SameTree, nil
+		// }
+		//
+		// outer := TableID(src.Outer)
+		// for _, pe := range ap {
+		// 	_, isOffset := pe.Info.(*Offset)
+		// 	if isOffset {
+		// 		continue
+		// 	}
+		//
+		// 	if !ctx.SemTable.RecursiveDeps(pe.EvalExpr).IsSolvedBy(outer) {
+		// 		return p, rewrite.SameTree, nil
+		// 	}
+		//
+		// 	se, ok := pe.Info.(SubQueryExpression)
+		// 	if ok {
+		// 		pe.EvalExpr = rewriteColNameToArgument(pe.EvalExpr, se, src)
+		// 	}
+		// }
+		// // all projections can be pushed to the outer
+		// src.Outer, p.Source = p, src.Outer
+		// return src, rewrite.NewTree("push projection into outer side of subquery", p), nil
 	}
 	return in, rewrite.SameTree, nil
 }

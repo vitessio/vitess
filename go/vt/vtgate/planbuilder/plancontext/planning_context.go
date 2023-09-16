@@ -90,6 +90,26 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 	}, nil
 }
 
+func (ctx *PlanningContext) GetReservedArgumentFor(expr sqlparser.Expr) string {
+	for key, name := range ctx.ReservedArguments {
+		if ctx.SemTable.EqualsExpr(key, expr) {
+			return name
+		}
+	}
+	var bvName string
+	switch expr := expr.(type) {
+	case *sqlparser.ColName:
+		bvName = ctx.ReservedVars.ReserveColName(expr)
+	case *sqlparser.Subquery:
+		bvName = ctx.ReservedVars.ReserveSubQuery()
+	default:
+		bvName = ctx.ReservedVars.ReserveVariable(sqlparser.CompliantString(expr))
+	}
+	ctx.ReservedArguments[expr] = bvName
+
+	return bvName
+}
+
 func (ctx *PlanningContext) GetArgumentFor(expr sqlparser.Expr, f func() string) string {
 	for key, name := range ctx.ReservedArguments {
 		if ctx.SemTable.EqualsExpr(key, expr) {

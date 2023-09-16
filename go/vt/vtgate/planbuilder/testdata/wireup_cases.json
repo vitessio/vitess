@@ -610,8 +610,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values2",
-          "__sq2"
+          "__sq_has_values",
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -663,10 +663,10 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user` where :__sq_has_values2 and id in ::__vals",
+            "Query": "select 1 from `user` where :__sq_has_values and id in ::__vals",
             "Table": "`user`",
             "Values": [
-              "::__sq2"
+              "::__sq1"
             ],
             "Vindex": "user_index"
           }

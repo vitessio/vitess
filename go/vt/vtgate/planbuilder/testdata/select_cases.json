@@ -873,7 +873,7 @@
         "Variant": "Join",
         "JoinColumnIndexes": "L:0,R:0",
         "JoinVars": {
-          "user_id2": 0
+          "user_id": 0
         },
         "TableName": "`user`_unsharded",
         "Inputs": [
@@ -895,8 +895,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select (select :user_id2 + outm.m + unsharded.m from unsharded where 1 != 1) as `(select ``user``.id + outm.m + unsharded.m from unsharded)` from unsharded as outm where 1 != 1",
-            "Query": "select (select :user_id2 + outm.m + unsharded.m from unsharded) as `(select ``user``.id + outm.m + unsharded.m from unsharded)` from unsharded as outm",
+            "FieldQuery": "select (select :user_id + outm.m + unsharded.m from unsharded where 1 != 1) as `(select ``user``.id + outm.m + unsharded.m from unsharded)` from unsharded as outm where 1 != 1",
+            "Query": "select (select :user_id + outm.m + unsharded.m from unsharded) as `(select ``user``.id + outm.m + unsharded.m from unsharded)` from unsharded as outm",
             "Table": "unsharded"
           }
         ]
@@ -3505,8 +3505,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values2",
-          "__sq2"
+          "__sq_has_values",
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -3539,10 +3539,10 @@
               "Sharded": true
             },
             "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values2 and music.id in ::__vals",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              "::__sq2"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -3563,8 +3563,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values2",
-          "__sq2"
+          "__sq_has_values",
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -3594,10 +3594,10 @@
               "Sharded": true
             },
             "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values2 and music.id in ::__vals",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              "::__sq2"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -3618,8 +3618,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values2",
-          "__sq2"
+          "__sq_has_values",
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -3647,10 +3647,10 @@
               "Sharded": true
             },
             "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values2 and music.id in ::__vals",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              "::__sq2"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -3671,8 +3671,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values2",
-          "__sq2"
+          "__sq_has_values",
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -3707,10 +3707,10 @@
               "Sharded": true
             },
             "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values2 and music.id in ::__vals",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              "::__sq2"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -3731,8 +3731,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values2",
-          "__sq2"
+          "__sq_has_values",
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -3760,10 +3760,10 @@
               "Sharded": true
             },
             "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values2 and music.id in ::__vals",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              "::__sq2"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -3784,8 +3784,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values2",
-          "__sq2"
+          "__sq_has_values",
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -3813,10 +3813,10 @@
               "Sharded": true
             },
             "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values2 and music.id in ::__vals",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              "::__sq2"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }

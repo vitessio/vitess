@@ -1892,8 +1892,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values2",
-          "__sq2"
+          "__sq_has_values",
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -1917,10 +1917,10 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where :__sq_has_values2 and id in ::__vals",
+            "Query": "select id from `user` where :__sq_has_values and id in ::__vals",
             "Table": "`user`",
             "Values": [
-              "::__sq2"
+              "::__sq1"
             ],
             "Vindex": "user_index"
           }
@@ -1941,8 +1941,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutNotIn",
         "PulloutVars": [
-          "__sq_has_values2",
-          "__sq2"
+          "__sq_has_values",
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -1966,7 +1966,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where not :__sq_has_values2 and id not in ::__sq2",
+            "Query": "select id from `user` where not :__sq_has_values and id not in ::__sq1",
             "Table": "`user`"
           }
         ]
@@ -1986,7 +1986,7 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutExists",
         "PulloutVars": [
-          "__sq_has_values2"
+          "__sq_has_values"
         ],
         "Inputs": [
           {
@@ -2010,7 +2010,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where :__sq_has_values2",
+            "Query": "select id from `user` where :__sq_has_values",
             "Table": "`user`"
           }
         ]
@@ -2030,7 +2030,7 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
-          "__sq2"
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -2054,10 +2054,10 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where id = :__sq2",
+            "Query": "select id from `user` where id = :__sq1",
             "Table": "`user`",
             "Values": [
-              ":__sq2"
+              ":__sq1"
             ],
             "Vindex": "user_index"
           }
@@ -2078,7 +2078,7 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
-          "__sq4"
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -2086,8 +2086,8 @@
             "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutIn",
             "PulloutVars": [
-              "__sq_has_values3",
-              "__sq3"
+              "__sq_has_values",
+              "__sq2"
             ],
             "Inputs": [
               {
@@ -2111,7 +2111,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id2 from `user` where 1 != 1",
-                "Query": "select id2 from `user` where :__sq_has_values3 and id2 in ::__sq3",
+                "Query": "select id2 from `user` where :__sq_has_values and id2 in ::__sq2",
                 "Table": "`user`"
               }
             ]
@@ -2125,10 +2125,10 @@
               "Sharded": true
             },
             "FieldQuery": "select id1 from `user` where 1 != 1",
-            "Query": "select id1 from `user` where id = :__sq4",
+            "Query": "select id1 from `user` where id = :__sq1",
             "Table": "`user`",
             "Values": [
-              ":__sq4"
+              ":__sq1"
             ],
             "Vindex": "user_index"
           }
@@ -2171,7 +2171,7 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
-          "__sq2"
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -2195,10 +2195,10 @@
               "Sharded": true
             },
             "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user` where id = :__sq2",
+            "Query": "select col from `user` where id = :__sq1",
             "Table": "`user`",
             "Values": [
-              ":__sq2"
+              ":__sq1"
             ],
             "Vindex": "user_index"
           }
@@ -2449,8 +2449,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values4",
-          "__sq4"
+          "__sq_has_values1",
+          "__sq2"
         ],
         "Inputs": [
           {
@@ -2474,8 +2474,8 @@
             "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutNotIn",
             "PulloutVars": [
-              "__sq_has_values3",
-              "__sq3"
+              "__sq_has_values",
+              "__sq1"
             ],
             "Inputs": [
               {
@@ -2503,10 +2503,10 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from `user` where 1 != 1",
-                "Query": "select id from `user` where not :__sq_has_values3 and id not in ::__sq3 and :__sq_has_values4 and id in ::__vals",
+                "Query": "select id from `user` where not :__sq_has_values and id not in ::__sq1 and :__sq_has_values1 and id in ::__vals",
                 "Table": "`user`",
                 "Values": [
-                  "::__sq4"
+                  "::__sq2"
                 ],
                 "Vindex": "user_index"
               }
@@ -2627,8 +2627,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values2",
-          "__sq2"
+          "__sq_has_values",
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -2652,10 +2652,10 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where :__sq_has_values2 and id in ::__vals",
+            "Query": "select id from `user` where :__sq_has_values and id in ::__vals",
             "Table": "`user`",
             "Values": [
-              "::__sq2"
+              "::__sq1"
             ],
             "Vindex": "user_index"
           }
@@ -2819,7 +2819,7 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutExists",
         "PulloutVars": [
-          "__sq_has_values2"
+          "__sq_has_values"
         ],
         "Inputs": [
           {
@@ -2847,7 +2847,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
-            "Query": "select u1.col from `user` as u1 where not :__sq_has_values2",
+            "Query": "select u1.col from `user` as u1 where not :__sq_has_values",
             "Table": "`user`"
           }
         ]
@@ -2867,8 +2867,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values3",
-          "__sq3"
+          "__sq_has_values",
+          "__sq2"
         ],
         "Inputs": [
           {
@@ -2896,7 +2896,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where id = 5 and id not in (select user_extra.col from user_extra where user_extra.user_id = 5) and :__sq_has_values3 and id in ::__sq3",
+            "Query": "select id from `user` where id = 5 and id not in (select user_extra.col from user_extra where user_extra.user_id = 5) and :__sq_has_values and id in ::__sq2",
             "Table": "`user`",
             "Values": [
               "INT64(5)"
@@ -2921,8 +2921,8 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutNotIn",
         "PulloutVars": [
-          "__sq_has_values3",
-          "__sq3"
+          "__sq_has_values",
+          "__sq1"
         ],
         "Inputs": [
           {
@@ -2950,7 +2950,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where id = 5 and id in (select user_extra.col from user_extra where user_extra.user_id = 5) and not :__sq_has_values3 and id not in ::__sq3",
+            "Query": "select id from `user` where id = 5 and id in (select user_extra.col from user_extra where user_extra.user_id = 5) and not :__sq_has_values and id not in ::__sq1",
             "Table": "`user`",
             "Values": [
               "INT64(5)"
@@ -3228,8 +3228,8 @@
             "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutIn",
             "PulloutVars": [
-              "__sq_has_values2",
-              "__sq2"
+              "__sq_has_values",
+              "__sq1"
             ],
             "Inputs": [
               {
@@ -3253,7 +3253,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where :__sq_has_values2 and `user`.col in ::__sq2",
+                "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where :__sq_has_values and `user`.col in ::__sq1",
                 "Table": "`user`"
               }
             ]

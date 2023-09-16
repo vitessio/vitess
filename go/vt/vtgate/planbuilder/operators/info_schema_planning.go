@@ -78,7 +78,7 @@ func (isr *InfoSchemaRouting) Clone() Routing {
 }
 
 func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
-	isTableSchema, bvName, out := extractInfoSchemaRoutingPredicate(expr, ctx.ReservedVars)
+	isTableSchema, bvName, out := extractInfoSchemaRoutingPredicate(ctx, expr)
 	if out == nil {
 		return isr, nil
 	}
@@ -116,7 +116,7 @@ func (isr *InfoSchemaRouting) Keyspace() *vindexes.Keyspace {
 	return nil
 }
 
-func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, sqlparser.Expr) {
+func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlparser.Expr) (bool, string, sqlparser.Expr) {
 	cmp, ok := in.(*sqlparser.ComparisonExpr)
 	if !ok || cmp.Operator != sqlparser.EqualOp {
 		return false, "", nil
@@ -144,7 +144,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 	if isSchemaName {
 		name = sqltypes.BvSchemaName
 	} else {
-		name = reservedVars.ReserveColName(col)
+		name = ctx.GetReservedArgumentFor(col)
 	}
 	cmp.Right = sqlparser.NewTypedArgument(name, sqltypes.VarChar)
 	return isSchemaName, name, rhs

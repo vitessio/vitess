@@ -335,7 +335,7 @@ func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, is
 			return true
 		}
 		if subq, ok := cursor.Node().(*sqlparser.Subquery); ok {
-			sqName := ctx.ReservedVars.ReserveSubQuery()
+			sqName := ctx.GetReservedArgumentFor(subq)
 			sqe.cols = append(sqe.cols, sqName)
 			if isDML {
 				cursor.Replace(sqlparser.NewArgument(sqName))

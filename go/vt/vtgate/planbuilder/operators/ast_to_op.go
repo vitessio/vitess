@@ -110,7 +110,7 @@ func (sq *SubQueryContainer) handleSubquery(
 	if subq == nil {
 		return nil, nil
 	}
-	argName := ctx.ReservedVars.ReserveSubQuery()
+	argName := ctx.GetReservedArgumentFor(subq)
 	sqInner, err := createSubqueryOp(ctx, parentExpr, subq, outerID, argName)
 	if err != nil {
 		return nil, err
@@ -242,7 +242,7 @@ func createSubquery(
 		if deps.IsSolvedBy(subqID) {
 			return
 		}
-		rsv := ctx.ReservedVars.ReserveColName(colname)
+		rsv := ctx.GetReservedArgumentFor(colname)
 		cursor.Replace(sqlparser.NewArgument(rsv))
 		predicate = sqlparser.AndExpressions(predicate, colname)
 	}, nil).(*sqlparser.Select)

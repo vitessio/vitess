@@ -31,12 +31,10 @@ func BreakExpressionInLHSandRHS(
 	lhs semantics.TableSet,
 ) (col JoinColumn, err error) {
 	rewrittenExpr := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-		node := cursor.Node()
-		reservedName := getReservedBVName(node)
-		if reservedName == "" {
+		nodeExpr := shouldExtract(cursor.Node())
+		if nodeExpr == nil {
 			return
 		}
-		nodeExpr := node.(sqlparser.Expr)
 		deps := ctx.SemTable.RecursiveDeps(nodeExpr)
 		if deps.IsEmpty() {
 			err = vterrors.VT13001("unknown column. has the AST been copied?")
@@ -47,11 +45,8 @@ func BreakExpressionInLHSandRHS(
 			return
 		}
 
+		bvName := ctx.GetReservedArgumentFor(nodeExpr)
 		col.LHSExprs = append(col.LHSExprs, nodeExpr)
-		bvName := ctx.GetArgumentFor(nodeExpr, func() string {
-			return ctx.ReservedVars.ReserveVariable(reservedName)
-		})
-
 		col.BvNames = append(col.BvNames, bvName)
 		arg := sqlparser.NewArgument(bvName)
 		// we are replacing one of the sides of the comparison with an argument,
@@ -77,4 +72,13 @@ func getReservedBVName(node sqlparser.SQLNode) string {
 		return sqlparser.CompliantString(node)
 	}
 	return ""
+}
+
+func shouldExtract(node sqlparser.SQLNode) sqlparser.Expr {
+	switch node.(type) {
+	case *sqlparser.ColName, sqlparser.AggrFunc:
+		return node.(sqlparser.Expr)
+	default:
+		return nil
+	}
 }

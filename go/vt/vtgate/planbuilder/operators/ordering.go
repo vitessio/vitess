@@ -108,7 +108,7 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 
 func (o *Ordering) ShortDescription() string {
 	ordering := slice.Map(o.Order, func(o ops.OrderBy) string {
-		return sqlparser.String(o.Inner)
+		return sqlparser.String(o.SimplifiedExpr)
 	})
 	return strings.Join(ordering, ", ")
 }

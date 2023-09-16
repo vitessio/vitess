@@ -704,16 +704,11 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 		return err
 	}
 
-	columns, err := r.Source.GetColumns(ctx)
-	if err != nil {
-		return err
-	}
-
 	for _, order := range ordering {
 		if isSpecialOrderBy(order) {
 			continue
 		}
-		offset, err := r.getOffsetFor(ctx, order, columns)
+		offset, err := r.getOffsetFor(ctx, order.SimplifiedExpr)
 		if err != nil {
 			return err
 		}
@@ -728,8 +723,8 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 			Direction: order.Inner.Direction,
 		}
 		if ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
-			wrap := aeWrap(weightStringFor(order.SimplifiedExpr))
-			offset, err := r.AddColumn(ctx, true, false, wrap)
+			ws := weightStringFor(order.SimplifiedExpr)
+			offset, err := r.getOffsetFor(ctx, ws)
 			if err != nil {
 				return err
 			}
@@ -745,18 +740,15 @@ func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
 	return &sqlparser.WeightStringFuncExpr{Expr: expr}
 }
 
-func (r *Route) getOffsetFor(ctx *plancontext.PlanningContext, order ops.OrderBy, columns []*sqlparser.AliasedExpr) (int, error) {
-	for idx, column := range columns {
-		if sqlparser.Equals.Expr(order.SimplifiedExpr, column.Expr) {
-			return idx, nil
-		}
-	}
-
-	offset, err := r.AddColumn(ctx, true, false, aeWrap(order.Inner.Expr))
+func (r *Route) getOffsetFor(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+	offset, err := r.Source.FindCol(ctx, expr, true)
 	if err != nil {
 		return 0, err
 	}
-	return offset, nil
+	if offset != -1 {
+		return offset, nil
+	}
+	return r.AddColumn(ctx, true, false, aeWrap(expr))
 }
 
 func (r *Route) ShortDescription() string {

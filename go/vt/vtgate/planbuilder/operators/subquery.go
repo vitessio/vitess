@@ -223,7 +223,11 @@ func (sj *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Ope
 		return sj.settleExistSubquery(ctx, outer)
 	}
 
-	resultArg, hasValuesArg := ctx.ReservedVars.ReserveSubQueryWithHasValues()
+	hasValuesArg := func() string {
+		s := ctx.ReservedVars.ReserveVariable(string(sqlparser.HasValueSubQueryBaseName))
+		sj.HasValuesName = s
+		return s
+	}
 	dontEnterSubqueries := func(node, _ sqlparser.SQLNode) bool {
 		if _, ok := node.(*sqlparser.Subquery); ok {
 			return false
@@ -238,9 +242,9 @@ func (sj *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Ope
 
 		var arg sqlparser.Expr
 		if sj.FilterType == opcode.PulloutIn || sj.FilterType == opcode.PulloutNotIn {
-			arg = sqlparser.NewListArg(resultArg)
+			arg = sqlparser.NewListArg(sj.ArgName)
 		} else {
-			arg = sqlparser.NewArgument(resultArg)
+			arg = sqlparser.NewArgument(sj.ArgName)
 		}
 		cursor.Replace(arg)
 	}
@@ -249,23 +253,19 @@ func (sj *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Ope
 	var predicates []sqlparser.Expr
 	switch sj.FilterType {
 	case opcode.PulloutExists:
-		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg))
-		sj.HasValuesName = hasValuesArg
+		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg()))
 	case opcode.PulloutNotExists:
 		sj.FilterType = opcode.PulloutExists // it's the same pullout as EXISTS, just with a NOT in front of the predicate
-		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg)))
-		sj.HasValuesName = hasValuesArg
+		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())))
 	case opcode.PulloutIn:
-		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg), rhsPred)
-		sj.HasValuesName = hasValuesArg
-		sj.SubqueryValueName = resultArg
+		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg()), rhsPred)
+		sj.SubqueryValueName = sj.ArgName
 	case opcode.PulloutNotIn:
-		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg)), rhsPred)
-		sj.HasValuesName = hasValuesArg
-		sj.SubqueryValueName = resultArg
+		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())), rhsPred)
+		sj.SubqueryValueName = sj.ArgName
 	case opcode.PulloutValue:
 		predicates = append(predicates, rhsPred)
-		sj.SubqueryValueName = resultArg
+		sj.SubqueryValueName = sj.ArgName
 	}
 	return &Filter{
 		Source:     outer,
