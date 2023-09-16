@@ -757,7 +757,10 @@
         "u_tbl7": {},
         "u_tbl8": {},
         "u_tbl9": {},
-        "u_tbl": {}
+        "u_tbl": {},
+        "u_multicol_tbl1": {},
+        "u_multicol_tbl2": {},
+        "u_multicol_tbl3": {}
       }
     }
   }
