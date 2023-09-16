@@ -78,13 +78,6 @@ func genSubsets(args []string, subsetLen int, yield func([]string)) {
 	genSubsets1(args, subset, 0, 0, yield)
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func mustJSON(j string) sqltypes.Value {
 	v, err := sqltypes.NewJSON(j)
 	if err != nil {

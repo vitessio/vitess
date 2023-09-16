@@ -517,10 +517,11 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 }
 
 func TestStateManagerValidations(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	sm := newTestStateManager(t)
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	sm.target = proto.Clone(target).(*querypb.Target)
-
+	sm.target = target.CloneVT()
 	err := sm.StartRequest(ctx, target, false)
 	assert.Contains(t, err.Error(), "operation not allowed")
 
@@ -579,6 +580,8 @@ func TestStateManagerValidations(t *testing.T) {
 }
 
 func TestStateManagerWaitForRequests(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	sm := newTestStateManager(t)
 	defer sm.StopService()
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}

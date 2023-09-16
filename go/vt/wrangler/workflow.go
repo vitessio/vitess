@@ -55,10 +55,12 @@ type VReplicationWorkflowParams struct {
 	OnDDL                             string
 
 	// MoveTables/Migrate specific
-	SourceKeyspace, Tables  string
-	AllTables, RenameTables bool
-	SourceTimeZone          string
-	DropForeignKeys         bool
+	SourceKeyspace, Tables    string
+	AllTables, RenameTables   bool
+	SourceTimeZone            string
+	DropForeignKeys           bool
+	InitializeTargetSequences bool
+	AtomicCopy                bool
 
 	// Reshard specific
 	SourceShards, TargetShards []string
@@ -70,6 +72,9 @@ type VReplicationWorkflowParams struct {
 
 	// Migrate specific
 	ExternalCluster string
+
+	// MoveTables only
+	NoRoutingRules bool
 }
 
 // VReplicationWorkflow stores various internal objects for a workflow
@@ -432,7 +437,8 @@ func (vrw *VReplicationWorkflow) initMoveTables() error {
 	return vrw.wr.MoveTables(vrw.ctx, vrw.params.Workflow, vrw.params.SourceKeyspace, vrw.params.TargetKeyspace,
 		vrw.params.Tables, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AllTables, vrw.params.ExcludeTables,
 		vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.ExternalCluster, vrw.params.DropForeignKeys,
-		vrw.params.DeferSecondaryKeys, vrw.params.SourceTimeZone, vrw.params.OnDDL, vrw.params.SourceShards)
+		vrw.params.DeferSecondaryKeys, vrw.params.SourceTimeZone, vrw.params.OnDDL, vrw.params.SourceShards,
+		vrw.params.NoRoutingRules, vrw.params.AtomicCopy)
 }
 
 func (vrw *VReplicationWorkflow) initReshard() error {
@@ -476,7 +482,8 @@ func (vrw *VReplicationWorkflow) switchWrites() (*[]string, error) {
 		log.Infof("In VReplicationWorkflow.switchWrites(reverse) for %+v", vrw)
 	}
 	journalID, dryRunResults, err = vrw.wr.SwitchWrites(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, vrw.params.Timeout,
-		false, vrw.params.Direction == workflow.DirectionBackward, vrw.params.EnableReverseReplication, vrw.params.DryRun)
+		false, vrw.params.Direction == workflow.DirectionBackward, vrw.params.EnableReverseReplication, vrw.params.DryRun,
+		vrw.params.InitializeTargetSequences)
 	if err != nil {
 		return nil, err
 	}

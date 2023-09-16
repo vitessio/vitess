@@ -25,13 +25,13 @@ package vtctlclienttest
 //       zookeeper) won't be drawn into production binaries as well.
 
 import (
+	"context"
 	"io"
 	"strings"
 	"testing"
 	"time"
 
-	"context"
-
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -51,8 +51,8 @@ func init() {
 }
 
 // CreateTopoServer returns the test topo server properly configured
-func CreateTopoServer(t *testing.T) *topo.Server {
-	return memorytopo.NewServer("cell1")
+func CreateTopoServer(t *testing.T, ctx context.Context) *topo.Server {
+	return memorytopo.NewServer(ctx, "cell1")
 }
 
 // TestSuite runs the test suite on the given topo server and client
@@ -67,7 +67,7 @@ func TestSuite(t *testing.T, ts *topo.Server, client vtctlclient.VtctlClient) {
 		PortMap: map[string]int32{
 			"vt": 3333,
 		},
-		PrimaryTermStartTime: logutil.TimeToProto(time.Date(1970, 1, 1, 1, 1, 1, 1, time.UTC)),
+		PrimaryTermStartTime: protoutil.TimeToProto(time.Date(1970, 1, 1, 1, 1, 1, 1, time.UTC)),
 		Tags:                 map[string]string{"tag": "value"},
 		Keyspace:             "test_keyspace",
 		Type:                 topodatapb.TabletType_PRIMARY,

@@ -438,26 +438,6 @@ func (tc *tableCollector) getTables() []string {
 	return tableNames
 }
 
-func (tc *tableCollector) addVindexTable(t *vindexes.Table) {
-	if t == nil {
-		return
-	}
-	ks, tbl := "", t.Name.String()
-	if t.Keyspace != nil {
-		ks = t.Keyspace.Name
-	}
-	tc.addTable(ks, tbl)
-}
-
-func (tc *tableCollector) addAllTables(tables []string) {
-	if tc.tables == nil {
-		tc.tables = map[string]any{}
-	}
-	for _, tbl := range tables {
-		tc.tables[tbl] = nil
-	}
-}
-
 func newFlushStmt(stmt *sqlparser.Flush, tables sqlparser.TableNames) *sqlparser.Flush {
 	return &sqlparser.Flush{
 		IsLocal:    stmt.IsLocal,

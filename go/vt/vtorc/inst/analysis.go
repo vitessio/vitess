@@ -58,6 +58,7 @@ const (
 	PrimaryWithoutReplicas                 AnalysisCode = "PrimaryWithoutReplicas"
 	BinlogServerFailingToConnectToPrimary  AnalysisCode = "BinlogServerFailingToConnectToPrimary"
 	GraceFulPrimaryTakeover                AnalysisCode = "GracefulPrimaryTakeover"
+	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
 )
 
 const (
@@ -118,6 +119,7 @@ type ReplicationAnalysis struct {
 	ReplicationDepth                          uint
 	IsFailingToConnectToPrimary               bool
 	ReplicationStopped                        bool
+	ErrantGTID                                string
 	Analysis                                  AnalysisCode
 	Description                               string
 	StructureAnalysis                         []StructureAnalysisCode

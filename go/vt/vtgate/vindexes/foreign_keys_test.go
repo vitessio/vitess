@@ -72,6 +72,8 @@ func TestTable_CrossShardParentFKs(t *testing.T) {
 		name                   string
 		table                  *Table
 		wantCrossShardFKTables []string
+		verifyAllFKs           bool
+		fkToIgnore             string
 	}{{
 		name: "No Parent FKs",
 		table: &Table{
@@ -88,12 +90,39 @@ func TestTable_CrossShardParentFKs(t *testing.T) {
 		},
 		wantCrossShardFKTables: []string{},
 	}, {
+		name:         "Unsharded keyspace with verify all FKs",
+		verifyAllFKs: true,
+		table: &Table{
+			ColumnVindexes:    []*ColumnVindex{col1Vindex},
+			Keyspace:          uks2,
+			ParentForeignKeys: []ParentFKInfo{pkInfo(unshardedTbl, []string{"col4"}, []string{"col1"})},
+		},
+		wantCrossShardFKTables: []string{"t1"},
+	}, {
 		name: "Keyspaces don't match", // parent table is on uks2
 		table: &Table{
 			Keyspace:          uks,
 			ParentForeignKeys: []ParentFKInfo{pkInfo(unshardedTbl, []string{"col4"}, []string{"col1"})},
 		},
 		wantCrossShardFKTables: []string{"t1"},
+	}, {
+		name:       "Keyspaces don't match with ignore fk", // parent table is on uks2
+		fkToIgnore: "uks.col1uks2.t1col4",
+		table: &Table{
+			Keyspace:          uks,
+			ParentForeignKeys: []ParentFKInfo{pkInfo(unshardedTbl, []string{"col4"}, []string{"col1"})},
+		},
+		wantCrossShardFKTables: []string{},
+	}, {
+		name:         "Unsharded keyspace with verify all FKs and fk to ignore",
+		verifyAllFKs: true,
+		fkToIgnore:   "uks2.col1uks2.t1col4",
+		table: &Table{
+			ColumnVindexes:    []*ColumnVindex{col1Vindex},
+			Keyspace:          uks2,
+			ParentForeignKeys: []ParentFKInfo{pkInfo(unshardedTbl, []string{"col4"}, []string{"col1"})},
+		},
+		wantCrossShardFKTables: []string{},
 	}, {
 		name: "Column Vindexes don't match", // primary vindexes on different vindex type
 		table: &Table{
@@ -137,7 +166,7 @@ func TestTable_CrossShardParentFKs(t *testing.T) {
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			crossShardFks := tt.table.CrossShardParentFKs()
+			crossShardFks := tt.table.ParentFKsNeedsHandling(tt.verifyAllFKs, tt.fkToIgnore)
 			var crossShardFkTables []string
 			for _, fk := range crossShardFks {
 				crossShardFkTables = append(crossShardFkTables, fk.Table.Name.String())
@@ -152,5 +181,134 @@ func pkInfo(parentTable *Table, pCols []string, cCols []string) ParentFKInfo {
 		Table:         parentTable,
 		ParentColumns: sqlparser.MakeColumns(pCols...),
 		ChildColumns:  sqlparser.MakeColumns(cCols...),
+	}
+}
+
+// TestChildFKs tests the ChildFKsNeedsHandling method is provides the child foreign key table whose
+// rows needs to be managed by vitess.
+func TestChildFKs(t *testing.T) {
+	col1Vindex := &ColumnVindex{
+		Name:    "v1",
+		Vindex:  binVindex,
+		Columns: sqlparser.MakeColumns("col1"),
+	}
+	col4DiffVindex := &ColumnVindex{
+		Name:    "v2",
+		Vindex:  binOnlyVindex,
+		Columns: sqlparser.MakeColumns("col4"),
+	}
+
+	unshardedTbl := &Table{
+		Name:     sqlparser.NewIdentifierCS("t1"),
+		Keyspace: uks2,
+	}
+	shardedSingleColTbl := &Table{
+		Name:           sqlparser.NewIdentifierCS("t1"),
+		Keyspace:       sks,
+		ColumnVindexes: []*ColumnVindex{col1Vindex},
+	}
+	shardedSingleColTblWithDiffVindex := &Table{
+		Name:           sqlparser.NewIdentifierCS("t1"),
+		Keyspace:       sks,
+		ColumnVindexes: []*ColumnVindex{col4DiffVindex},
+	}
+
+	tests := []struct {
+		verifyAllFKs bool
+		name         string
+		table        *Table
+		expChildTbls []string
+	}{{
+		name: "No Parent FKs",
+		table: &Table{
+			ColumnVindexes: []*ColumnVindex{col1Vindex},
+			Keyspace:       sks,
+		},
+		expChildTbls: []string{},
+	}, {
+		name: "restrict unsharded",
+		table: &Table{
+			ColumnVindexes:   []*ColumnVindex{col1Vindex},
+			Keyspace:         uks2,
+			ChildForeignKeys: []ChildFKInfo{ckInfo(unshardedTbl, []string{"col4"}, []string{"col1"}, sqlparser.Restrict)},
+		},
+		expChildTbls: []string{},
+	}, {
+		name:         "restrict unsharded with verify all fks",
+		verifyAllFKs: true,
+		table: &Table{
+			ColumnVindexes:   []*ColumnVindex{col1Vindex},
+			Keyspace:         uks2,
+			ChildForeignKeys: []ChildFKInfo{ckInfo(unshardedTbl, []string{"col4"}, []string{"col1"}, sqlparser.Restrict)},
+		},
+		expChildTbls: []string{"t1"},
+	}, {
+		name: "restrict shard scoped",
+		table: &Table{
+			ColumnVindexes:   []*ColumnVindex{col1Vindex},
+			Keyspace:         sks,
+			ChildForeignKeys: []ChildFKInfo{ckInfo(shardedSingleColTbl, []string{"col1"}, []string{"col1"}, sqlparser.Restrict)},
+		},
+		expChildTbls: []string{},
+	}, {
+		name:         "restrict shard scoped with verify all fks",
+		verifyAllFKs: true,
+		table: &Table{
+			ColumnVindexes:   []*ColumnVindex{col1Vindex},
+			Keyspace:         sks,
+			ChildForeignKeys: []ChildFKInfo{ckInfo(shardedSingleColTbl, []string{"col1"}, []string{"col1"}, sqlparser.Restrict)},
+		},
+		expChildTbls: []string{"t1"},
+	}, {
+		name: "restrict Keyspaces don't match",
+		table: &Table{
+			Keyspace:         uks,
+			ChildForeignKeys: []ChildFKInfo{ckInfo(shardedSingleColTbl, []string{"col1"}, []string{"col1"}, sqlparser.Restrict)},
+		},
+		expChildTbls: []string{"t1"},
+	}, {
+		name: "restrict cross shard",
+		table: &Table{
+			Keyspace:         sks,
+			ColumnVindexes:   []*ColumnVindex{col1Vindex},
+			ChildForeignKeys: []ChildFKInfo{ckInfo(shardedSingleColTblWithDiffVindex, []string{"col4"}, []string{"col1"}, sqlparser.Restrict)},
+		},
+		expChildTbls: []string{"t1"},
+	}, {
+		name: "cascade unsharded",
+		table: &Table{
+			Keyspace:         uks2,
+			ColumnVindexes:   []*ColumnVindex{col1Vindex},
+			ChildForeignKeys: []ChildFKInfo{ckInfo(unshardedTbl, []string{"col4"}, []string{"col1"}, sqlparser.Cascade)},
+		},
+		expChildTbls: []string{"t1"},
+	}, {
+		name: "cascade cross shard",
+		table: &Table{
+			Keyspace:         sks,
+			ColumnVindexes:   []*ColumnVindex{col1Vindex},
+			ChildForeignKeys: []ChildFKInfo{ckInfo(shardedSingleColTblWithDiffVindex, []string{"col4"}, []string{"col1"}, sqlparser.Cascade)},
+		},
+		expChildTbls: []string{"t1"},
+	}}
+	deleteAction := func(fk ChildFKInfo) sqlparser.ReferenceAction { return fk.OnDelete }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			childFks := tt.table.ChildFKsNeedsHandling(tt.verifyAllFKs, deleteAction)
+			var actualChildTbls []string
+			for _, fk := range childFks {
+				actualChildTbls = append(actualChildTbls, fk.Table.Name.String())
+			}
+			require.ElementsMatch(t, tt.expChildTbls, actualChildTbls)
+		})
+	}
+}
+
+func ckInfo(cTable *Table, pCols []string, cCols []string, refAction sqlparser.ReferenceAction) ChildFKInfo {
+	return ChildFKInfo{
+		Table:         cTable,
+		ParentColumns: sqlparser.MakeColumns(pCols...),
+		ChildColumns:  sqlparser.MakeColumns(cCols...),
+		OnDelete:      refAction,
 	}
 }

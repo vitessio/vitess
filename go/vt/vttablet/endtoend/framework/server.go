@@ -58,7 +58,7 @@ var (
 // StartCustomServer starts the server and initializes
 // all the global variables. This function should only be called
 // once at the beginning of the test.
-func StartCustomServer(connParams, connAppDebugParams mysql.ConnParams, dbName string, config *tabletenv.TabletConfig) error {
+func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnParams, dbName string, config *tabletenv.TabletConfig) error {
 	// Setup a fake vtgate server.
 	protocol := "resolveTest"
 	vtgateconn.SetVTGateProtocol(protocol)
@@ -75,9 +75,9 @@ func StartCustomServer(connParams, connAppDebugParams mysql.ConnParams, dbName s
 		Shard:      "0",
 		TabletType: topodatapb.TabletType_PRIMARY,
 	}
-	TopoServer = memorytopo.NewServer("")
+	TopoServer = memorytopo.NewServer(ctx, "")
 
-	Server = tabletserver.NewTabletServer("", config, TopoServer, &topodatapb.TabletAlias{})
+	Server = tabletserver.NewTabletServer(ctx, "", config, TopoServer, &topodatapb.TabletAlias{})
 	Server.Register()
 	err := Server.StartService(Target, dbcfgs, nil /* mysqld */)
 	if err != nil {
@@ -110,7 +110,7 @@ func StartCustomServer(connParams, connAppDebugParams mysql.ConnParams, dbName s
 // StartServer starts the server and initializes
 // all the global variables. This function should only be called
 // once at the beginning of the test.
-func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string) error {
+func StartServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnParams, dbName string) error {
 	config := tabletenv.NewDefaultConfig()
 	config.StrictTableACL = true
 	config.TwoPCEnable = true
@@ -124,9 +124,10 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	_ = config.Oltp.TxTimeoutSeconds.Set("5s")
 	_ = config.Olap.TxTimeoutSeconds.Set("5s")
 	config.EnableViews = true
+	config.QueryCacheDoorkeeper = false
 	gotBytes, _ := yaml2.Marshal(config)
 	log.Infof("Config:\n%s", gotBytes)
-	return StartCustomServer(connParams, connAppDebugParams, dbName, config)
+	return StartCustomServer(ctx, connParams, connAppDebugParams, dbName, config)
 }
 
 // StopServer must be called once all the tests are done.

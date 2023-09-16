@@ -86,7 +86,7 @@ message MaterializeSettings {
   // MaterializationIntent is used to identify the reason behind the materialization workflow: eg. MoveTables, CreateLookupVindex
   MaterializationIntent materialization_intent = 9;
   // SourceTimeZone is the time zone in which datetimes on the source were stored, provided as an option in MoveTable
-  string source_time_zone =10;
+  string source_time_zone = 10;
   // TargetTimeZone is not currently specifiable by the user, defaults to UTC for the forward workflows
   // and to the SourceTimeZone in reverse workflows
   string target_time_zone = 11;
@@ -96,6 +96,7 @@ message MaterializeSettings {
   // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table copy finishes.
   bool defer_secondary_keys = 14;
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 15;
+  bool atomic_copy = 16;
 }
 
 /* Data types for VtctldServer */
@@ -103,6 +104,98 @@ message MaterializeSettings {
 message Keyspace {
   string name = 1;
   topodata.Keyspace keyspace = 2;
+}
+
+enum QueryOrdering {
+  NONE = 0;
+  ASCENDING = 1;
+  DESCENDING = 2;
+}
+
+// SchemaMigration represents a row in the schema_migrations sidecar table.
+message SchemaMigration {
+  string uuid = 1;
+  string keyspace = 2;
+  string shard = 3;
+  string schema = 4;
+  string table = 5;
+  string migration_statement = 6;
+  Strategy strategy = 7;
+  string options = 8;
+  vttime.Time added_at = 9;
+  vttime.Time requested_at = 10;
+  vttime.Time ready_at = 11;
+  vttime.Time started_at = 12;
+  vttime.Time liveness_timestamp = 13;
+  vttime.Time completed_at = 14;
+  vttime.Time cleaned_up_at = 15;
+  Status status = 16;
+  string log_path = 17;
+  string artifacts = 18;
+  uint64 retries = 19;
+  topodata.TabletAlias tablet = 20;
+  bool tablet_failure = 21;
+  float progress = 22;
+  string migration_context = 23;
+  string ddl_action = 24;
+  string message = 25;
+  int64 eta_seconds = 26;
+  uint64 rows_copied = 27;
+  int64 table_rows = 28;
+  uint32 added_unique_keys = 29;
+  uint32 removed_unique_keys = 30;
+  string log_file = 31;
+  vttime.Duration artifact_retention = 32;
+  bool postpone_completion = 33;
+  string removed_unique_key_names = 34;
+  string dropped_no_default_column_names = 35;
+  string expanded_column_names = 36;
+  string revertible_notes = 37;
+  bool allow_concurrent = 38;
+  string reverted_uuid = 39;
+  bool is_view = 40;
+  bool ready_to_complete = 41;
+  int64 vitess_liveness_indicator = 42;
+  float user_throttle_ratio = 43;
+  string special_plan = 44;
+  vttime.Time last_throttled_at = 45;
+  string component_throttled = 46;
+  vttime.Time cancelled_at = 47;
+  bool postpone_launch = 48;
+  string stage = 49; // enum?
+  uint32 cutover_attempts = 50;
+  bool is_immediate_operation = 51;
+  vttime.Time reviewed_at = 52;
+  vttime.Time ready_to_complete_at = 53;
+
+  enum Strategy {
+    option allow_alias = true;
+    // SchemaMigration_VITESS uses vreplication to run the schema migration. It is
+    // the default strategy for OnlineDDL requests.
+    //
+    // SchemaMigration_VITESS was also formerly called "ONLINE".
+    VITESS = 0;
+    ONLINE = 0;
+    GHOST = 1;
+    PTOSC = 2;
+    // SchemaMigration_DIRECT runs the migration directly against MySQL (e.g. `ALTER TABLE ...`),
+    // meaning it is not actually an "online" DDL migration.
+    DIRECT = 3;
+    // SchemaMigration_MYSQL is a managed migration (queued and executed by the
+    // scheduler) but runs through a MySQL `ALTER TABLE`.
+    MYSQL = 4;
+  }
+
+  enum Status {
+    UNKNOWN = 0;
+    REQUESTED = 1;
+    CANCELLED = 2;
+    QUEUED = 3;
+    READY = 4;
+    RUNNING = 5;
+    COMPLETE = 6;
+    FAILED = 7;
+  }
 }
 
 message Shard {
@@ -251,6 +344,7 @@ message ApplySchemaRequest {
 
 message ApplySchemaResponse {
   repeated string uuid_list = 1;
+  map<string, uint64> rows_affected_by_shard = 2;
 }
 
 message ApplyVSchemaRequest {
@@ -309,6 +403,15 @@ message BackupShardRequest {
   string incremental_from_pos = 6;
 }
 
+message CancelSchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message CancelSchemaMigrationResponse {
+  map<string, uint64> rows_affected_by_shard = 1;
+}
+
 message ChangeTabletTypeRequest {
   topodata.TabletAlias tablet_alias = 1;
   topodata.TabletType db_type = 2;
@@ -319,6 +422,25 @@ message ChangeTabletTypeResponse {
   topodata.Tablet before_tablet = 1;
   topodata.Tablet after_tablet = 2;
   bool was_dry_run = 3;
+}
+
+message CleanupSchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message CleanupSchemaMigrationResponse {
+  map<string, uint64> rows_affected_by_shard = 1;
+}
+
+
+message CompleteSchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message CompleteSchemaMigrationResponse {
+  map<string, uint64> rows_affected_by_shard = 1;
 }
 
 message CreateKeyspaceRequest {
@@ -654,6 +776,41 @@ message GetSchemaResponse {
   tabletmanagerdata.SchemaDefinition schema = 1;
 }
 
+// GetSchemaMigrationsRequest controls the behavior of the GetSchemaMigrations
+// rpc.
+//
+// Keyspace is a required field, while all other fields are optional.
+//
+// If UUID is set, other optional fields will be ignored, since there will be at
+// most one migration with that UUID. Furthermore, if no migration with that
+// UUID exists, an empty response, not an error, is returned.
+//
+// MigrationContext, Status, and Recent are mutually exclusive.
+message GetSchemaMigrationsRequest {
+  string keyspace = 1;
+  // Uuid, if set, will cause GetSchemaMigrations to return exactly 1 migration,
+  // namely the one with that UUID. If no migration exists, the response will
+  // be an empty slice, not an error.
+  //
+  // If this field is set, other fields (status filters, limit, skip, order) are
+  // ignored.
+  string uuid = 2;
+
+  string migration_context = 3;
+  SchemaMigration.Status status = 4;
+  // Recent, if set, returns migrations requested between now and the provided
+  // value.
+  vttime.Duration recent = 5;
+
+  QueryOrdering order = 6;
+  uint64 limit = 7;
+  uint64 skip = 8;
+}
+
+message GetSchemaMigrationsResponse {
+  repeated SchemaMigration migrations = 1;
+}
+
 message GetShardRequest {
   string keyspace = 1;
   string shard_name = 2;
@@ -829,6 +986,15 @@ message InitShardPrimaryResponse {
   repeated logutil.Event events = 1;
 }
 
+message LaunchSchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message LaunchSchemaMigrationResponse {
+  map<string, uint64> rows_affected_by_shard = 1;
+}
+
 message MoveTablesCreateRequest {
   // The necessary info gets passed on to each primary tablet involved
   // in the workflow via the CreateVReplicationWorkflow tabletmanager RPC.
@@ -856,6 +1022,10 @@ message MoveTablesCreateRequest {
   bool defer_secondary_keys = 16;
   // Start the workflow after creating it.
   bool auto_start = 17;
+  // NoRoutingRules is set to true if routing rules should not be created on the target when the workflow is created.
+  bool no_routing_rules = 18;
+  // Run a single copy phase for the entire database.
+  bool atomic_copy = 19;
 }
 
 message MoveTablesCreateResponse {
@@ -1059,6 +1229,27 @@ message ReparentTabletResponse {
   topodata.TabletAlias primary = 3;
 }
 
+message ReshardCreateRequest {
+  string workflow = 1;
+  string keyspace = 2;
+  repeated string source_shards = 3;
+  repeated string target_shards = 4;
+  repeated string cells = 5;
+  repeated topodata.TabletType tablet_types = 6;
+  tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 7;
+  // SkipSchemaCopy specifies if the schema should be copied from the source shard, set false if
+  // schema is already created on the target shard before Reshard is invoked.
+  bool skip_schema_copy = 8;
+  // OnDdl specifies the action to be taken when a DDL is encountered.
+  string on_ddl = 9;
+  // StopAfterCopy specifies if vreplication should be stopped after copying.
+  bool stop_after_copy = 10;
+  // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table copy finishes.
+  bool defer_secondary_keys = 11;
+  // Start the workflow after creating it.
+  bool auto_start = 12;
+}
+
 message RestoreFromBackupRequest {
   topodata.TabletAlias tablet_alias = 1;
   // BackupTime, if set, will use the backup taken most closely at or before
@@ -1081,6 +1272,15 @@ message RestoreFromBackupResponse {
   string keyspace = 2;
   string shard = 3;
   logutil.Event event = 4;
+}
+
+message RetrySchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message RetrySchemaMigrationResponse {
+  map<string, uint64> rows_affected_by_shard = 1;
 }
 
 message RunHealthCheckRequest {
@@ -1434,6 +1634,7 @@ message WorkflowSwitchTrafficRequest {
   int32 direction = 7;
   vttime.Duration timeout = 8;
   bool dry_run = 9;
+  bool initialize_target_sequences = 10;
 }
 
 message WorkflowSwitchTrafficResponse {

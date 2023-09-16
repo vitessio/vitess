@@ -222,8 +222,9 @@ type (
 		TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
 		TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
 
-		// Inputs is a slice containing the inputs to this Primitive
-		Inputs() []Primitive
+		// Inputs is a slice containing the inputs to this Primitive.
+		// The returned map has additional information about the inputs, that is used in the description.
+		Inputs() ([]Primitive, []map[string]any)
 
 		// description is the description, sans the inputs, of this Primitive.
 		// to get the plan description with all children, use PrimitiveToPlanDescription()
@@ -245,7 +246,8 @@ func Find(isMatch Match, start Primitive) Primitive {
 	if isMatch(start) {
 		return start
 	}
-	for _, input := range start.Inputs() {
+	inputs, _ := start.Inputs()
+	for _, input := range inputs {
 		result := Find(isMatch, input)
 		if result != nil {
 			return result
@@ -260,8 +262,8 @@ func Exists(m Match, p Primitive) bool {
 }
 
 // Inputs implements no inputs
-func (noInputs) Inputs() []Primitive {
-	return nil
+func (noInputs) Inputs() ([]Primitive, []map[string]any) {
+	return nil, nil
 }
 
 func (noTxNeeded) NeedsTransaction() bool {

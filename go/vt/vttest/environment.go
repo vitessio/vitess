@@ -22,7 +22,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"time"
 
 	"vitess.io/vitess/go/vt/proto/vttest"
 
@@ -293,16 +292,13 @@ func NewLocalTestEnvWithDirectory(flavor string, basePort int, directory string)
 		Env: []string{
 			fmt.Sprintf("VTDATAROOT=%s", directory),
 			fmt.Sprintf("MYSQL_FLAVOR=%s", flavor),
+			"VTTEST=endtoend",
 		},
 	}, nil
 }
 
 func defaultEnvFactory() (Environment, error) {
 	return NewLocalTestEnv("", 0)
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }
 
 // NewDefaultEnv is an user-configurable callback that returns a new Environment

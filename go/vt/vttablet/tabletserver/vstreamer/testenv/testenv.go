@@ -61,22 +61,21 @@ type Env struct {
 }
 
 // Init initializes an Env.
-func Init() (*Env, error) {
+func Init(ctx context.Context) (*Env, error) {
 	te := &Env{
 		KeyspaceName: "vttest",
 		ShardName:    "0",
 		Cells:        []string{"cell1"},
 	}
 
-	ctx := context.Background()
-	te.TopoServ = memorytopo.NewServer(te.Cells...)
+	te.TopoServ = memorytopo.NewServer(ctx, te.Cells...)
 	if err := te.TopoServ.CreateKeyspace(ctx, te.KeyspaceName, &topodatapb.Keyspace{}); err != nil {
 		return nil, err
 	}
 	if err := te.TopoServ.CreateShard(ctx, te.KeyspaceName, te.ShardName); err != nil {
 		panic(err)
 	}
-	te.SrvTopo = srvtopo.NewResilientServer(te.TopoServ, "TestTopo")
+	te.SrvTopo = srvtopo.NewResilientServer(ctx, te.TopoServ, "TestTopo")
 
 	cfg := vttest.Config{
 		Topology: &vttestpb.VTTestTopology{

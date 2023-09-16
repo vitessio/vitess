@@ -342,10 +342,7 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 			}
 
 			expr = semantics.RewriteDerivedTableExpression(expr, derivedTbl)
-			out, err := prefixColNames(tblName, expr)
-			if err != nil {
-				return err
-			}
+			out := prefixColNames(tblName, expr)
 
 			alias := sqlparser.UnescapedString(out)
 			predicate.LHSExprs[idx] = sqlparser.NewColNameWithQualifier(alias, derivedTblName)
@@ -357,15 +354,14 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 
 // prefixColNames adds qualifier prefixes to all ColName:s.
 // We want to be more explicit than the user was to make sure we never produce invalid SQL
-func prefixColNames(tblName sqlparser.TableName, e sqlparser.Expr) (out sqlparser.Expr, err error) {
-	out = sqlparser.CopyOnRewrite(e, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+func prefixColNames(tblName sqlparser.TableName, e sqlparser.Expr) sqlparser.Expr {
+	return sqlparser.CopyOnRewrite(e, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		col, ok := cursor.Node().(*sqlparser.ColName)
 		if !ok {
 			return
 		}
 		col.Qualifier = tblName
 	}, nil).(sqlparser.Expr)
-	return
 }
 
 func createProjectionWithTheseColumns(
@@ -654,6 +650,10 @@ func isDistinct(op ops.Operator) bool {
 }
 
 func tryPushDownUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator, *rewrite.ApplyResult, error) {
+	if res := compactUnion(op); res != rewrite.SameTree {
+		return op, res, nil
+	}
+
 	var sources []ops.Operator
 	var selects []sqlparser.SelectExprs
 	var err error

@@ -22,10 +22,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
-
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -148,5 +147,5 @@ func TestMySQLGolden(t *testing.T) {
 func TestDebug1(t *testing.T) {
 	// Debug
 	eval, err := testSingle(t, `SELECT  _latin1 0xFF regexp _latin1 '[[:lower:]]' COLLATE latin1_bin`)
-	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, eval.Collation().Get().Name())
+	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, collations.Local().LookupName(eval.Collation()))
 }

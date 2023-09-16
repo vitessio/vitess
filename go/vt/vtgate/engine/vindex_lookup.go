@@ -136,12 +136,12 @@ func (vr *VindexLookup) TryStreamExecute(ctx context.Context, vcursor VCursor, b
 }
 
 // Inputs implements the Primitive interface
-func (vr *VindexLookup) Inputs() []Primitive {
+func (vr *VindexLookup) Inputs() ([]Primitive, []map[string]any) {
 	if vr.Lookup != nil {
-		return []Primitive{vr.Lookup, vr.SendTo}
+		return []Primitive{vr.Lookup, vr.SendTo}, nil
 	}
 
-	return []Primitive{vr.SendTo}
+	return []Primitive{vr.SendTo}, nil
 }
 
 // description implements the Primitive interface

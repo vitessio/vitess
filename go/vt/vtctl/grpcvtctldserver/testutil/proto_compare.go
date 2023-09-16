@@ -23,10 +23,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/test/utils"
-
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -37,11 +35,9 @@ import (
 // respective Events field in the comparison.
 func AssertEmergencyReparentShardResponsesEqual(t *testing.T, expected *vtctldatapb.EmergencyReparentShardResponse, actual *vtctldatapb.EmergencyReparentShardResponse, msgAndArgs ...any) {
 	t.Helper()
-
-	expected = proto.Clone(expected).(*vtctldatapb.EmergencyReparentShardResponse)
+	expected = expected.CloneVT()
 	expected.Events = nil
-
-	actual = proto.Clone(actual).(*vtctldatapb.EmergencyReparentShardResponse)
+	actual = actual.CloneVT()
 	actual.Events = nil
 
 	utils.MustMatch(t, expected, actual)
@@ -104,11 +100,9 @@ func clearEvents(events []*logutilpb.Event, f func(*logutilpb.Event) *logutilpb.
 // respective Events field in the comparison.
 func AssertPlannedReparentShardResponsesEqual(t *testing.T, expected *vtctldatapb.PlannedReparentShardResponse, actual *vtctldatapb.PlannedReparentShardResponse) {
 	t.Helper()
-
-	expected = proto.Clone(expected).(*vtctldatapb.PlannedReparentShardResponse)
+	expected = expected.CloneVT()
 	expected.Events = nil
-
-	actual = proto.Clone(actual).(*vtctldatapb.PlannedReparentShardResponse)
+	actual = actual.CloneVT()
 	actual.Events = nil
 
 	utils.MustMatch(t, expected, actual)

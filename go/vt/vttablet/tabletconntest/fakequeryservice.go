@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"testing"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -681,7 +682,7 @@ func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*quer
 	if shr == nil {
 		shr = TestStreamHealthStreamHealthResponse
 	}
-	if err := callback(shr); err != nil {
+	if err := callback(shr); err != nil && err != io.EOF {
 		f.t.Logf("StreamHealth callback failed: %v", err)
 	}
 	return nil
@@ -694,6 +695,11 @@ func (f *FakeQueryService) VStream(ctx context.Context, request *binlogdatapb.VS
 
 // VStreamRows is part of the QueryService interface.
 func (f *FakeQueryService) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	panic("not implemented")
+}
+
+// VStreamTables is part of the QueryService interface.
+func (f *FakeQueryService) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(*binlogdatapb.VStreamTablesResponse) error) error {
 	panic("not implemented")
 }
 

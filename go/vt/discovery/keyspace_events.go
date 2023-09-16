@@ -23,15 +23,17 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 // KeyspaceEventWatcher is an auxiliary watcher that watches all availability incidents
@@ -71,7 +73,7 @@ type KeyspaceEvent struct {
 
 type ShardEvent struct {
 	Tablet  *topodatapb.TabletAlias
-	Target  *query.Target
+	Target  *querypb.Target
 	Serving bool
 }
 
@@ -142,18 +144,27 @@ func (kss *keyspaceState) beingResharded(currentShard string) bool {
 	kss.mu.Lock()
 	defer kss.mu.Unlock()
 
-	// if the keyspace is gone, or if it has no known availability events, the keyspace
-	// cannot be in the middle of a resharding operation
-	if kss.deleted || kss.consistent {
+	// If the keyspace is gone, has no known availability events, or is in the middle of a
+	// MoveTables then the keyspace cannot be in the middle of a resharding operation.
+	if kss.deleted || kss.consistent || (kss.moveTablesState != nil && kss.moveTablesState.Typ != MoveTablesType(MoveTablesNone)) {
 		return false
 	}
 
-	// for all the known shards, try to find a primary shard besides the one we're trying to access
-	// and which is currently healthy. if there are other healthy primaries in the keyspace, it means
-	// we're in the middle of a resharding operation
-	// FIXME: probably doesn't work for anything other than 1->2 resharding
+	// If there are unequal and overlapping shards in the keyspace and any of them are
+	// currently serving then we assume that we are in the middle of a Reshard.
+	_, ckr, err := topo.ValidateShardName(currentShard)
+	if err != nil || ckr == nil { // Assume not and avoid potential panic
+		return false
+	}
 	for shard, sstate := range kss.shards {
-		if shard != currentShard && sstate.serving {
+		if !sstate.serving || shard == currentShard {
+			continue
+		}
+		_, skr, err := topo.ValidateShardName(shard)
+		if err != nil || skr == nil { // Assume not and avoid potential panic
+			return false
+		}
+		if key.KeyRangeIntersect(ckr, skr) {
 			return true
 		}
 	}
@@ -162,7 +173,7 @@ func (kss *keyspaceState) beingResharded(currentShard string) bool {
 }
 
 type shardState struct {
-	target               *query.Target
+	target               *querypb.Target
 	serving              bool
 	externallyReparented int64
 	currentPrimary       *topodatapb.TabletAlias
@@ -210,7 +221,7 @@ func (kew *KeyspaceEventWatcher) run(ctx context.Context) {
 				if result == nil {
 					return
 				}
-				kew.processHealthCheck(result)
+				kew.processHealthCheck(ctx, result)
 			}
 		}
 	}()
@@ -223,7 +234,7 @@ func (kew *KeyspaceEventWatcher) run(ctx context.Context) {
 			return
 		}
 		for _, ks := range keyspaces {
-			kew.getKeyspaceStatus(ks)
+			kew.getKeyspaceStatus(ctx, ks)
 		}
 	}()
 }
@@ -533,22 +544,22 @@ func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool
 // newKeyspaceState allocates the internal state required to keep track of availability incidents
 // in this keyspace, and starts up a SrvKeyspace watcher on our topology server which will update
 // our keyspaceState with any topology changes in real time.
-func newKeyspaceState(kew *KeyspaceEventWatcher, cell, keyspace string) *keyspaceState {
+func newKeyspaceState(ctx context.Context, kew *KeyspaceEventWatcher, cell, keyspace string) *keyspaceState {
 	log.Infof("created dedicated watcher for keyspace %s/%s", cell, keyspace)
 	kss := &keyspaceState{
 		kew:      kew,
 		keyspace: keyspace,
 		shards:   make(map[string]*shardState),
 	}
-	kew.ts.WatchSrvKeyspace(context.Background(), cell, keyspace, kss.onSrvKeyspace)
-	kew.ts.WatchSrvVSchema(context.Background(), cell, kss.onSrvVSchema)
+	kew.ts.WatchSrvKeyspace(ctx, cell, keyspace, kss.onSrvKeyspace)
+	kew.ts.WatchSrvVSchema(ctx, cell, kss.onSrvVSchema)
 	return kss
 }
 
 // processHealthCheck is the callback that is called by the global HealthCheck stream that was initiated
 // by this KeyspaceEventWatcher. it redirects the TabletHealth event to the corresponding keyspaceState
-func (kew *KeyspaceEventWatcher) processHealthCheck(th *TabletHealth) {
-	kss := kew.getKeyspaceStatus(th.Target.Keyspace)
+func (kew *KeyspaceEventWatcher) processHealthCheck(ctx context.Context, th *TabletHealth) {
+	kss := kew.getKeyspaceStatus(ctx, th.Target.Keyspace)
 	if kss == nil {
 		return
 	}
@@ -558,12 +569,12 @@ func (kew *KeyspaceEventWatcher) processHealthCheck(th *TabletHealth) {
 
 // getKeyspaceStatus returns the keyspaceState object for the corresponding keyspace, allocating it
 // if we've never seen the keyspace before.
-func (kew *KeyspaceEventWatcher) getKeyspaceStatus(keyspace string) *keyspaceState {
+func (kew *KeyspaceEventWatcher) getKeyspaceStatus(ctx context.Context, keyspace string) *keyspaceState {
 	kew.mu.Lock()
 	defer kew.mu.Unlock()
 	kss := kew.keyspaces[keyspace]
 	if kss == nil {
-		kss = newKeyspaceState(kew, kew.localCell, keyspace)
+		kss = newKeyspaceState(ctx, kew, kew.localCell, keyspace)
 		kew.keyspaces[keyspace] = kss
 	}
 	if kss.deleted {
@@ -585,11 +596,11 @@ func (kew *KeyspaceEventWatcher) getKeyspaceStatus(keyspace string) *keyspaceSta
 // This is not a fully accurate heuristic, but it's good enough that we'd want to buffer the
 // request for the given target under the assumption that the reason why it cannot be completed
 // right now is transitory.
-func (kew *KeyspaceEventWatcher) TargetIsBeingResharded(target *query.Target) bool {
+func (kew *KeyspaceEventWatcher) TargetIsBeingResharded(ctx context.Context, target *querypb.Target) bool {
 	if target.TabletType != topodatapb.TabletType_PRIMARY {
 		return false
 	}
-	ks := kew.getKeyspaceStatus(target.Keyspace)
+	ks := kew.getKeyspaceStatus(ctx, target.Keyspace)
 	if ks == nil {
 		return false
 	}
@@ -606,11 +617,11 @@ func (kew *KeyspaceEventWatcher) TargetIsBeingResharded(target *query.Target) bo
 // to determine that there was a serving primary which now became non serving. This is only possible in a DemotePrimary
 // RPC which are only called from ERS and PRS. So buffering will stop when these operations succeed.
 // We return the tablet alias of the primary if it is serving.
-func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(target *query.Target) (*topodatapb.TabletAlias, bool) {
+func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(ctx context.Context, target *querypb.Target) (*topodatapb.TabletAlias, bool) {
 	if target.TabletType != topodatapb.TabletType_PRIMARY {
 		return nil, false
 	}
-	ks := kew.getKeyspaceStatus(target.Keyspace)
+	ks := kew.getKeyspaceStatus(ctx, target.Keyspace)
 	if ks == nil {
 		return nil, false
 	}

@@ -185,8 +185,7 @@ func TestIntegrityError(t *testing.T) {
 }
 
 func TestTrailingComment(t *testing.T) {
-	vstart := framework.DebugVars()
-	v1 := framework.FetchInt(vstart, "QueryCacheLength")
+	v1 := framework.Server.QueryPlanCacheLen()
 
 	bindVars := map[string]*querypb.BindVariable{"ival": sqltypes.Int64BindVariable(1)}
 	client := framework.NewClient()
@@ -201,7 +200,7 @@ func TestTrailingComment(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		v2 := framework.FetchInt(framework.DebugVars(), "QueryCacheLength")
+		v2 := framework.Server.QueryPlanCacheLen()
 		if v2 != v1+1 {
 			t.Errorf("QueryCacheLength(%s): %d, want %d", query, v2, v1+1)
 		}
@@ -993,4 +992,73 @@ func TestShowTablesWithSizes(t *testing.T) {
 		}
 	}
 	assert.Equalf(t, len(expectTables), len(matchedTables), "%v", matchedTables)
+}
+
+// TestTuple tests that bind variables having tuple values work with vttablet.
+func TestTuple(t *testing.T) {
+	client := framework.NewClient()
+	_, err := client.Execute(`insert into vitess_a (eid, id) values (100, 103), (193, 235)`, nil)
+	require.NoError(t, err)
+
+	bv := map[string]*querypb.BindVariable{
+		"__vals": {
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{
+				{
+					Type: querypb.Type_TUPLE,
+					Values: []*querypb.Value{
+						{Type: querypb.Type_INT64, Value: []byte("100")},
+						{Type: querypb.Type_INT64, Value: []byte("103")},
+					},
+				},
+				{
+					Type: querypb.Type_TUPLE,
+					Values: []*querypb.Value{
+						{Type: querypb.Type_INT64, Value: []byte("87")},
+						{Type: querypb.Type_INT64, Value: []byte("4473")},
+					},
+				},
+			},
+		},
+	}
+	res, err := client.Execute("select * from vitess_a where (eid, id) in ::__vals", bv)
+	require.NoError(t, err)
+	assert.Equal(t, `[[INT64(100) INT32(103) NULL NULL]]`, fmt.Sprintf("%v", res.Rows))
+
+	res, err = client.Execute("update vitess_a set name = 'a' where (eid, id) in ::__vals", bv)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, res.RowsAffected)
+
+	res, err = client.Execute("select * from vitess_a where (eid, id) in ::__vals", bv)
+	require.NoError(t, err)
+	assert.Equal(t, `[[INT64(100) INT32(103) VARCHAR("a") NULL]]`, fmt.Sprintf("%v", res.Rows))
+
+	bv = map[string]*querypb.BindVariable{
+		"__vals": {
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{
+				{
+					Type: querypb.Type_TUPLE,
+					Values: []*querypb.Value{
+						{Type: querypb.Type_INT64, Value: []byte("100")},
+						{Type: querypb.Type_INT64, Value: []byte("103")},
+					},
+				},
+				{
+					Type: querypb.Type_TUPLE,
+					Values: []*querypb.Value{
+						{Type: querypb.Type_INT64, Value: []byte("193")},
+						{Type: querypb.Type_INT64, Value: []byte("235")},
+					},
+				},
+			},
+		},
+	}
+	res, err = client.Execute("delete from vitess_a where (eid, id) in ::__vals", bv)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, res.RowsAffected)
+
+	res, err = client.Execute("select * from vitess_a where (eid, id) in ::__vals", bv)
+	require.NoError(t, err)
+	require.Zero(t, len(res.Rows))
 }

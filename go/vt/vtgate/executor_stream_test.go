@@ -21,9 +21,12 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
 
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/discovery"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
@@ -35,9 +38,9 @@ import (
 )
 
 func TestStreamSQLUnsharded(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
-	logChan := QueryLogger.Subscribe("Test")
-	defer QueryLogger.Unsubscribe(logChan)
+	executor, _, _, _, _ := createExecutorEnv(t)
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
 
 	sql := "stream * from user_msgs"
 	result, err := executorStreamMessages(executor, sql)
@@ -49,18 +52,26 @@ func TestStreamSQLUnsharded(t *testing.T) {
 }
 
 func TestStreamSQLSharded(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := newSandboxForCells([]string{cell})
-	resolver := newTestResolver(hc, serv, cell)
+	u.VSchema = unshardedVSchema
+	serv := newSandboxForCells(ctx, []string{cell})
+	resolver := newTestResolver(ctx, hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	for _, shard := range shards {
 		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_Gen4)
+	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
+	plans := DefaultPlanCache()
+
+	executor := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4)
+	executor.SetQueryLogger(queryLogger)
+
+	defer executor.Close()
 
 	sql := "stream * from sharded_user_msgs"
 	result, err := executorStreamMessages(executor, sql)
@@ -87,11 +98,12 @@ func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result
 	results := make(chan *sqltypes.Result, 100)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
+	session := &vtgatepb.Session{TargetString: "@primary"}
 	err = executor.StreamExecute(
 		ctx,
 		nil,
 		"TestExecuteStream",
-		NewSafeSession(primarySession),
+		NewSafeSession(session),
 		sql,
 		nil,
 		func(qr *sqltypes.Result) error {

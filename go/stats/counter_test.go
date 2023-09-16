@@ -26,7 +26,7 @@ import (
 func TestCounter(t *testing.T) {
 	var gotname string
 	var gotv *Counter
-	clear()
+	clearStats()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*Counter)
@@ -54,7 +54,7 @@ func TestCounter(t *testing.T) {
 func TestGaugeFunc(t *testing.T) {
 	var gotname string
 	var gotv *GaugeFunc
-	clear()
+	clearStats()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*GaugeFunc)
@@ -77,7 +77,7 @@ func TestGaugeFunc(t *testing.T) {
 func TestGaugeFloat64(t *testing.T) {
 	var gotname string
 	var gotv *GaugeFloat64
-	clear()
+	clearStats()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*GaugeFloat64)

@@ -61,8 +61,8 @@ func (e *ExecStmt) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 	return vcursor.StreamExecutePrimitive(ctx, e.Input, bindVars, wantfields, callback)
 }
 
-func (e *ExecStmt) Inputs() []Primitive {
-	return []Primitive{e.Input}
+func (e *ExecStmt) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{e.Input}, nil
 }
 
 func (e *ExecStmt) description() PrimitiveDescription {

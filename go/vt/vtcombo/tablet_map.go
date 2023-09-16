@@ -89,7 +89,7 @@ func CreateTablet(
 	}
 	log.Infof("Creating %v tablet %v for %v/%v", tabletType, topoproto.TabletAliasString(alias), keyspace, shard)
 
-	controller := tabletserver.NewServer(topoproto.TabletAliasString(alias), ts, alias)
+	controller := tabletserver.NewServer(ctx, topoproto.TabletAliasString(alias), ts, alias)
 	initTabletType := tabletType
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		initTabletType = topodatapb.TabletType_REPLICA
@@ -704,6 +704,16 @@ func (itc *internalTabletConn) VStreamRows(
 	send func(*binlogdatapb.VStreamRowsResponse) error,
 ) error {
 	err := itc.tablet.qsc.QueryService().VStreamRows(ctx, request, send)
+	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
+// VStreamTables is part of the QueryService interface.
+func (itc *internalTabletConn) VStreamTables(
+	ctx context.Context,
+	request *binlogdatapb.VStreamTablesRequest,
+	send func(*binlogdatapb.VStreamTablesResponse) error,
+) error {
+	err := itc.tablet.qsc.QueryService().VStreamTables(ctx, request, send)
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 

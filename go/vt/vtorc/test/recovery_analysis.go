@@ -48,6 +48,7 @@ type InfoForRecoveryAnalysis struct {
 	LogPos                                    uint32
 	IsStaleBinlogCoordinates                  int
 	GTIDMode                                  string
+	ErrantGTID                                string
 	LastCheckValid                            int
 	LastCheckPartialSuccess                   int
 	CountReplicas                             uint
@@ -112,6 +113,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["downtime_end_timestamp"] = sqlutils.CellData{String: info.DowntimeEndTimestamp, Valid: true}
 	rowMap["downtime_remaining_seconds"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.DowntimeRemainingSeconds), Valid: true}
 	rowMap["durability_policy"] = sqlutils.CellData{String: info.DurabilityPolicy, Valid: true}
+	rowMap["gtid_errant"] = sqlutils.CellData{String: info.ErrantGTID, Valid: true}
 	rowMap["gtid_mode"] = sqlutils.CellData{String: info.GTIDMode, Valid: true}
 	rowMap["hostname"] = sqlutils.CellData{String: info.Hostname, Valid: true}
 	rowMap["is_binlog_server"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsBinlogServer), Valid: true}

@@ -615,6 +615,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Limit",
             "Count": "INT64(10)",
             "Inputs": [
@@ -654,6 +655,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -694,6 +696,7 @@
             ],
             "Inputs": [
               {
+                "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -705,6 +708,7 @@
                 "Table": "`user`"
               },
               {
+                "InputName": "Outer",
                 "OperatorType": "Join",
                 "Variant": "Join",
                 "JoinColumnIndexes": "L:1,R:0,L:2",

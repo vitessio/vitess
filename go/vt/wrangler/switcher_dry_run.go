@@ -19,10 +19,12 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
@@ -381,5 +383,13 @@ func (dr *switcherDryRun) resetSequences(ctx context.Context) error {
 		return nil
 	}
 	dr.drLog.Log("The sequence caches will be reset on the source since sequence tables are being moved")
+	return nil
+}
+
+func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
+	sortedBackingTableNames := maps2.Keys(sequencesByBackingTable)
+	slices.Sort(sortedBackingTableNames)
+	dr.drLog.Log(fmt.Sprintf("The following sequence backing tables used by tables being moved will be initialized: %s",
+		strings.Join(sortedBackingTableNames, ",")))
 	return nil
 }

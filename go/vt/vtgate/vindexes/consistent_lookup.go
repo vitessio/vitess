@@ -23,15 +23,14 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtgate"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 const (
@@ -336,7 +335,7 @@ func (lu *clCommon) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.
 		}
 		return out, nil
 	}
-	return lu.lkp.VerifyCustom(ctx, vcursor, ids, ksidsToValues(ksids), vtgate.CommitOrder_PRE)
+	return lu.lkp.VerifyCustom(ctx, vcursor, ids, ksidsToValues(ksids), vtgatepb.CommitOrder_PRE)
 }
 
 // Create reserves the id by inserting it into the vindex table.

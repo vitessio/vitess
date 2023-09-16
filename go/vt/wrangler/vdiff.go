@@ -114,9 +114,9 @@ type vdiff struct {
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
-	colIndex  int                  // index of the column in the filter's select
-	collation collations.Collation // is the collation of the column, if any
-	isPK      bool                 // is this column part of the primary key
+	colIndex  int           // index of the column in the filter's select
+	collation collations.ID // is the collation of the column, if any
+	isPK      bool          // is this column part of the primary key
 }
 
 // tableDiffer performs a diff for one table in the workflow.
@@ -530,7 +530,7 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 // getColumnCollations determines the proper collation to use for each
 // column in the table definition leveraging MySQL's collation inheritence
 // rules.
-func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string]collations.Collation, error) {
+func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string]collations.ID, error) {
 	collationEnv := collations.Local()
 	createstmt, err := sqlparser.Parse(table.Schema)
 	if err != nil {
@@ -548,7 +548,7 @@ func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string
 	tableCollation := tableschema.GetCollation()
 	// If no explicit collation is specified for the column then we need
 	// to walk the inheritence tree.
-	getColumnCollation := func(column *sqlparser.ColumnDefinition) collations.Collation {
+	getColumnCollation := func(column *sqlparser.ColumnDefinition) collations.ID {
 		// If there's an explicit collation listed then use that.
 		if column.Type.Options.Collate != "" {
 			return collationEnv.LookupByName(strings.ToLower(column.Type.Options.Collate))
@@ -569,14 +569,14 @@ func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string
 		}
 		// The table is using the global default charset and collation and
 		// we inherite that.
-		return collations.Default().Get()
+		return collations.Default()
 	}
 
-	columnCollations := make(map[string]collations.Collation)
+	columnCollations := make(map[string]collations.ID)
 	for _, column := range tableschema.TableSpec.Columns {
 		// If it's not a character based type then no collation is used.
 		if !sqltypes.IsQuoted(column.Type.SQLType()) {
-			columnCollations[column.Name.Lowered()] = nil
+			columnCollations[column.Name.Lowered()] = collations.Unknown
 			continue
 		}
 		columnCollations[column.Name.Lowered()] = getColumnCollation(column)
@@ -784,10 +784,10 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	for _, cpk := range comparePKs {
 		weightStringCol := -1
 		// if the collation is nil or unknown, use binary collation to compare as bytes
-		if cpk.collation == nil {
+		if cpk.collation == collations.Unknown {
 			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: sqltypes.Unknown, CollationID: collations.CollationBinaryID})
 		} else {
-			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: sqltypes.Unknown, CollationID: cpk.collation.ID()})
+			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: sqltypes.Unknown, CollationID: cpk.collation})
 		}
 	}
 	return &engine.MergeSort{
@@ -1294,10 +1294,9 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 		var err error
 		var collationID collations.ID
 		// if the collation is nil or unknown, use binary collation to compare as bytes
-		if col.collation == nil {
+		collationID = col.collation
+		if col.collation == collations.Unknown {
 			collationID = collations.CollationBinaryID
-		} else {
-			collationID = col.collation.ID()
 		}
 		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], collationID)
 		if err != nil {

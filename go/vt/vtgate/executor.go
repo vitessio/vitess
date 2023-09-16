@@ -17,11 +17,8 @@ limitations under the License.
 package vtgate
 
 import (
-	"bufio"
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,8 +30,11 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/cache/theine"
+	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/vthash"
+
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -103,8 +103,10 @@ type Executor struct {
 	mu           sync.Mutex
 	vschema      *vindexes.VSchema
 	streamSize   int
-	plans        cache.Cache
 	vschemaStats *VSchemaStats
+
+	plans *PlanCache
+	epoch atomic.Uint32
 
 	normalize       bool
 	warnShardedOnly bool
@@ -115,9 +117,8 @@ type Executor struct {
 	// allowScatter will fail planning if set to false and a plan contains any scatter queries
 	allowScatter bool
 
-	// truncateErrorLen truncates errors sent to client if they are above this value
-	// (0 means do not truncate).
-	truncateErrorLen int
+	// queryLogger is passed in for logging from this vtgate executor.
+	queryLogger *streamlog.StreamLogger[*logstats.LogStats]
 }
 
 var executorOnce sync.Once
@@ -125,6 +126,15 @@ var executorOnce sync.Once
 const pathQueryPlans = "/debug/query_plans"
 const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
+
+type PlanCacheKey = theine.HashKey256
+type PlanCache = theine.Store[PlanCacheKey, *engine.Plan]
+
+func DefaultPlanCache() *PlanCache {
+	// when being endtoend tested, disable the doorkeeper to ensure reproducible results
+	doorkeeper := !servenv.TestingEndtoend
+	return theine.NewStore[PlanCacheKey, *engine.Plan](queryPlanCacheMemory, doorkeeper)
+}
 
 // NewExecutor creates a new Executor.
 func NewExecutor(
@@ -134,7 +144,7 @@ func NewExecutor(
 	resolver *Resolver,
 	normalize, warnOnShardedOnly bool,
 	streamSize int,
-	cacheCfg *cache.Config,
+	plans *PlanCache,
 	schemaTracker SchemaInfo,
 	noScatter bool,
 	pv plancontext.PlannerVersion,
@@ -145,13 +155,13 @@ func NewExecutor(
 		resolver:        resolver,
 		scatterConn:     resolver.scatterConn,
 		txConn:          resolver.scatterConn.txConn,
-		plans:           cache.NewDefaultCacheImpl(cacheCfg),
 		normalize:       normalize,
 		warnShardedOnly: warnOnShardedOnly,
 		streamSize:      streamSize,
 		schemaTracker:   schemaTracker,
 		allowScatter:    !noScatter,
 		pv:              pv,
+		plans:           plans,
 	}
 
 	vschemaacl.Init()
@@ -169,19 +179,19 @@ func NewExecutor(
 			return int64(e.plans.Len())
 		})
 		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", func() int64 {
-			return e.plans.UsedCapacity()
+			return int64(e.plans.UsedCapacity())
 		})
 		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", func() int64 {
-			return e.plans.MaxCapacity()
+			return int64(e.plans.MaxCapacity())
 		})
 		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", func() int64 {
-			return e.plans.Evictions()
+			return e.plans.Metrics.Evicted()
 		})
 		stats.NewCounterFunc("QueryPlanCacheHits", "Query plan cache hits", func() int64 {
-			return e.plans.Hits()
+			return e.plans.Metrics.Hits()
 		})
 		stats.NewCounterFunc("QueryPlanCacheMisses", "Query plan cache misses", func() int64 {
-			return e.plans.Misses()
+			return e.plans.Metrics.Hits()
 		})
 		servenv.HTTPHandle(pathQueryPlans, e)
 		servenv.HTTPHandle(pathScatterStats, e)
@@ -215,7 +225,7 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	}
 
 	logStats.SaveEndTime()
-	QueryLogger.Send(logStats)
+	e.queryLogger.Send(logStats)
 	err = vterrors.TruncateError(err, truncateErrorLen)
 	return result, err
 }
@@ -349,7 +359,7 @@ func (e *Executor) StreamExecute(
 	}
 
 	logStats.SaveEndTime()
-	QueryLogger.Send(logStats)
+	e.queryLogger.Send(logStats)
 	return vterrors.TruncateError(err, truncateErrorLen)
 
 }
@@ -974,7 +984,7 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 		e.vschema = vschema
 	}
 	e.vschemaStats = stats
-	e.plans.Clear()
+	e.ClearPlans()
 
 	if vschemaCounters != nil {
 		vschemaCounters.Add("Reload", 1)
@@ -1067,17 +1077,33 @@ func (e *Executor) getPlan(
 	return e.cacheAndBuildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, logStats)
 }
 
-func (e *Executor) hashPlan(ctx context.Context, vcursor *vcursorImpl, query string) string {
-	planHash := sha256.New()
+func (e *Executor) hashPlan(ctx context.Context, vcursor *vcursorImpl, query string) PlanCacheKey {
+	hasher := vthash.New256()
+	vcursor.keyForPlan(ctx, query, hasher)
 
-	{
-		// use a bufio.Writer to accumulate writes instead of writing directly to the hasher
-		buf := bufio.NewWriter(planHash)
-		vcursor.keyForPlan(ctx, query, buf)
-		buf.Flush()
+	var planKey PlanCacheKey
+	hasher.Sum(planKey[:0])
+	return planKey
+}
+
+func (e *Executor) buildStatement(
+	ctx context.Context,
+	vcursor *vcursorImpl,
+	query string,
+	stmt sqlparser.Statement,
+	reservedVars *sqlparser.ReservedVars,
+	bindVarNeeds *sqlparser.BindVarNeeds,
+) (*engine.Plan, error) {
+	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, enableOnlineDDL, enableDirectDDL)
+	if err != nil {
+		return nil, err
 	}
 
-	return hex.EncodeToString(planHash.Sum(nil))
+	plan.Warnings = vcursor.warnings
+	vcursor.warnings = nil
+
+	err = e.checkThatPlanIsValid(stmt, plan)
+	return plan, err
 }
 
 func (e *Executor) cacheAndBuildStatement(
@@ -1089,29 +1115,18 @@ func (e *Executor) cacheAndBuildStatement(
 	bindVarNeeds *sqlparser.BindVarNeeds,
 	logStats *logstats.LogStats,
 ) (*engine.Plan, error) {
-	planKey := e.hashPlan(ctx, vcursor, query)
 	planCachable := sqlparser.CachePlan(stmt) && vcursor.safeSession.cachePlan()
 	if planCachable {
-		if plan, ok := e.plans.Get(planKey); ok {
-			logStats.CachedPlan = true
-			return plan.(*engine.Plan), nil
-		}
-	}
+		planKey := e.hashPlan(ctx, vcursor, query)
 
-	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, enableOnlineDDL, enableDirectDDL)
-	if err != nil {
-		return nil, err
+		var plan *engine.Plan
+		var err error
+		plan, logStats.CachedPlan, err = e.plans.GetOrLoad(planKey, e.epoch.Load(), func() (*engine.Plan, error) {
+			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds)
+		})
+		return plan, err
 	}
-
-	plan.Warnings = vcursor.warnings
-	vcursor.warnings = nil
-
-	err = e.checkThatPlanIsValid(stmt, plan)
-	// Only cache the plan if it is valid (i.e. does not scatter)
-	if err == nil && planCachable {
-		e.plans.Set(planKey, plan)
-	}
-	return plan, err
+	return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds)
 }
 
 func (e *Executor) canNormalizeStatement(stmt sqlparser.Statement, setVarComment string) bool {
@@ -1146,18 +1161,10 @@ func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (strin
 	return strings.TrimSpace(res.String()), nil
 }
 
-type cacheItem struct {
-	Key   string
-	Value *engine.Plan
-}
-
-func (e *Executor) debugCacheEntries() (items []cacheItem) {
-	e.plans.ForEach(func(value any) bool {
-		plan := value.(*engine.Plan)
-		items = append(items, cacheItem{
-			Key:   plan.Original,
-			Value: plan,
-		})
+func (e *Executor) debugCacheEntries() (items map[string]*engine.Plan) {
+	items = make(map[string]*engine.Plan)
+	e.ForEachPlan(func(plan *engine.Plan) bool {
+		items[plan.Original] = plan
 		return true
 	})
 	return
@@ -1195,8 +1202,18 @@ func returnAsJSON(response http.ResponseWriter, stuff any) {
 }
 
 // Plans returns the LRU plan cache
-func (e *Executor) Plans() cache.Cache {
+func (e *Executor) Plans() *PlanCache {
 	return e.plans
+}
+
+func (e *Executor) ForEachPlan(each func(plan *engine.Plan) bool) {
+	e.plans.Range(e.epoch.Load(), func(_ PlanCacheKey, value *engine.Plan) bool {
+		return each(value)
+	})
+}
+
+func (e *Executor) ClearPlans() {
+	e.epoch.Add(1)
 }
 
 func (e *Executor) updateQueryCounts(planType, keyspace, tableName string, shardQueries int64) {
@@ -1267,7 +1284,7 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *Safe
 	// it was a no-op record (i.e. didn't issue any queries)
 	if !(logStats.StmtType == "ROLLBACK" && logStats.ShardQueries == 0) {
 		logStats.SaveEndTime()
-		QueryLogger.Send(logStats)
+		e.queryLogger.Send(logStats)
 	}
 	return fld, vterrors.TruncateError(err, truncateErrorLen)
 }
@@ -1505,4 +1522,14 @@ func (e *Executor) planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, qu
 		return nil, nil, err
 	}
 	return plan, stmt, nil
+}
+
+func (e *Executor) Close() {
+	e.scatterConn.Close()
+	topo, err := e.serv.GetTopoServer()
+	if err != nil {
+		panic(err)
+	}
+	topo.Close()
+	e.plans.Close()
 }

@@ -44,10 +44,11 @@ import (
 // This file uses the sandbox_test framework.
 
 func TestLegacyExecuteFailOnAutocommit(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 
 	createSandbox("TestExecuteFailOnAutocommit")
 	hc := discovery.NewFakeHealthCheck(nil)
-	sc := newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestExecuteFailOnAutocommit", "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestExecuteFailOnAutocommit", "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
@@ -107,8 +108,8 @@ func TestLegacyExecuteFailOnAutocommit(t *testing.T) {
 }
 
 func TestScatterConnExecuteMulti(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnExecuteMultiShard", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
-		res := srvtopo.NewResolver(newSandboxForCells([]string{"aa"}), sc.gateway, "aa")
+	testScatterConnGeneric(t, "TestScatterConnExecuteMultiShard", func(ctx context.Context, sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
+		res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 		rss, err := res.ResolveDestination(ctx, "TestScatterConnExecuteMultiShard", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
 		if err != nil {
 			return nil, err
@@ -128,8 +129,8 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 }
 
 func TestScatterConnStreamExecuteMulti(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnStreamExecuteMulti", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
-		res := srvtopo.NewResolver(newSandboxForCells([]string{"aa"}), sc.gateway, "aa")
+	testScatterConnGeneric(t, "TestScatterConnStreamExecuteMulti", func(ctx context.Context, sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
+		res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 		rss, err := res.ResolveDestination(ctx, "TestScatterConnStreamExecuteMulti", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
 		if err != nil {
 			return nil, err
@@ -155,13 +156,15 @@ func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vt
 	assert.Equal(t, wantCode, vterrors.Code(err))
 }
 
-func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, shards []string) (*sqltypes.Result, error)) {
+func testScatterConnGeneric(t *testing.T, name string, f func(ctx context.Context, sc *ScatterConn, shards []string) (*sqltypes.Result, error)) {
+	ctx := utils.LeakCheckContext(t)
+
 	hc := discovery.NewFakeHealthCheck(nil)
 
 	// no shard
 	s := createSandbox(name)
-	sc := newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
-	qr, err := f(sc, nil)
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
+	qr, err := f(ctx, sc, nil)
 	require.NoError(t, err)
 	if qr.RowsAffected != 0 {
 		t.Errorf("want 0, got %v", qr.RowsAffected)
@@ -169,10 +172,10 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 
 	// single shard
 	s.Reset()
-	sc = newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+	sc = newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	sbc := hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = f(sc, []string{"0"})
+	_, err = f(ctx, sc, []string{"0"})
 	want := fmt.Sprintf("target: %v.0.replica: INVALID_ARGUMENT error", name)
 	// Verify server error string.
 	if err == nil || err.Error() != want {
@@ -186,12 +189,12 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	// two shards
 	s.Reset()
 	hc.Reset()
-	sc = newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+	sc = newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = f(sc, []string{"0", "1"})
+	_, err = f(ctx, sc, []string{"0", "1"})
 	// Verify server errors are consolidated.
 	want = fmt.Sprintf("target: %v.0.replica: INVALID_ARGUMENT error\ntarget: %v.1.replica: INVALID_ARGUMENT error", name, name)
 	verifyScatterConnError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
@@ -206,12 +209,12 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	// two shards with different errors
 	s.Reset()
 	hc.Reset()
-	sc = newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+	sc = newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	sbc1.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1
-	_, err = f(sc, []string{"0", "1"})
+	_, err = f(ctx, sc, []string{"0", "1"})
 	// Verify server errors are consolidated.
 	want = fmt.Sprintf("target: %v.0.replica: INVALID_ARGUMENT error\ntarget: %v.1.replica: RESOURCE_EXHAUSTED error", name, name)
 	// We should only surface the higher priority error code
@@ -227,9 +230,9 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	// duplicate shards
 	s.Reset()
 	hc.Reset()
-	sc = newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+	sc = newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	sbc = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
-	_, _ = f(sc, []string{"0", "0"})
+	_, _ = f(ctx, sc, []string{"0", "0"})
 	// Ensure that we executed only once.
 	if execCount := sbc.ExecCount.Load(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
@@ -238,10 +241,10 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	// no errors
 	s.Reset()
 	hc.Reset()
-	sc = newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+	sc = newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
-	qr, err = f(sc, []string{"0", "1"})
+	qr, err = f(ctx, sc, []string{"0", "1"})
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
@@ -260,17 +263,19 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 }
 
 func TestMaxMemoryRows(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	save := maxMemoryRows
 	maxMemoryRows = 3
 	defer func() { maxMemoryRows = save }()
 
 	createSandbox("TestMaxMemoryRows")
 	hc := discovery.NewFakeHealthCheck(nil)
-	sc := newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestMaxMemoryRows", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestMaxMemoryRows", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 
-	res := srvtopo.NewResolver(newSandboxForCells([]string{"aa"}), sc.gateway, "aa")
+	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 	rss, _, err := res.ResolveDestinations(ctx, "TestMaxMemoryRows", topodatapb.TabletType_REPLICA, nil,
 		[]key.Destination{key.DestinationShard("0"), key.DestinationShard("1")})
 	require.NoError(t, err)
@@ -315,12 +320,13 @@ func TestMaxMemoryRows(t *testing.T) {
 }
 
 func TestLegaceHealthCheckFailsOnReservedConnections(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	keyspace := "keyspace"
 	createSandbox(keyspace)
 	hc := discovery.NewFakeHealthCheck(nil)
-	sc := newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 
-	res := srvtopo.NewResolver(newSandboxForCells([]string{"aa"}), sc.gateway, "aa")
+	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
 	destinations := []key.Destination{key.DestinationShard("0")}
@@ -340,12 +346,12 @@ func TestLegaceHealthCheckFailsOnReservedConnections(t *testing.T) {
 	require.Error(t, vterrors.Aggregate(errs))
 }
 
-func executeOnShards(t *testing.T, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *SafeSession, destinations []key.Destination) {
+func executeOnShards(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *SafeSession, destinations []key.Destination) {
 	t.Helper()
-	require.Empty(t, executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations))
+	require.Empty(t, executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations))
 }
 
-func executeOnShardsReturnsErr(t *testing.T, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *SafeSession, destinations []key.Destination) error {
+func executeOnShardsReturnsErr(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *SafeSession, destinations []key.Destination) error {
 	t.Helper()
 	rss, _, err := res.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_REPLICA, nil, destinations)
 	require.NoError(t, err)
@@ -364,9 +370,10 @@ func executeOnShardsReturnsErr(t *testing.T, res *srvtopo.Resolver, keyspace str
 }
 
 func TestMultiExecs(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	createSandbox("TestMultiExecs")
 	hc := discovery.NewFakeHealthCheck(nil)
-	sc := newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestMultiExecs", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestMultiExecs", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 
@@ -460,15 +467,16 @@ func TestMultiExecs(t *testing.T) {
 }
 
 func TestScatterConnSingleDB(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	createSandbox("TestScatterConnSingleDB")
 	hc := discovery.NewFakeHealthCheck(nil)
 
 	hc.Reset()
-	sc := newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	hc.AddTestTablet("aa", "0", 1, "TestScatterConnSingleDB", "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	hc.AddTestTablet("aa", "1", 1, "TestScatterConnSingleDB", "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
-	res := srvtopo.NewResolver(newSandboxForCells([]string{"aa"}), sc.gateway, "aa")
+	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 	rss0, err := res.ResolveDestination(ctx, "TestScatterConnSingleDB", topodatapb.TabletType_PRIMARY, key.DestinationShard("0"))
 	require.NoError(t, err)
 	rss1, err := res.ResolveDestination(ctx, "TestScatterConnSingleDB", topodatapb.TabletType_PRIMARY, key.DestinationShard("1"))
@@ -553,10 +561,11 @@ func TestAppendResult(t *testing.T) {
 }
 
 func TestReservePrequeries(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	keyspace := "keyspace"
 	createSandbox(keyspace)
 	hc := discovery.NewFakeHealthCheck(nil)
-	sc := newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 
@@ -564,7 +573,7 @@ func TestReservePrequeries(t *testing.T) {
 	sbc0.SetResults([]*sqltypes.Result{{}})
 	sbc1.SetResults([]*sqltypes.Result{{}})
 
-	res := srvtopo.NewResolver(newSandboxForCells([]string{"aa"}), sc.gateway, "aa")
+	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 
 	session := NewSafeSession(&vtgatepb.Session{
 		InTransaction:  false,
@@ -576,11 +585,11 @@ func TestReservePrequeries(t *testing.T) {
 	})
 	destinations := []key.Destination{key.DestinationShard("0")}
 
-	executeOnShards(t, res, keyspace, sc, session, destinations)
+	executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 1+1, len(sbc0.StringQueries()))
 }
 
-func newTestScatterConn(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *ScatterConn {
+func newTestScatterConn(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string) *ScatterConn {
 	// The topo.Server is used to start watching the cells described
 	// in '-cells_to_watch' command line parameter, which is
 	// empty by default. So it's unused in this test, set to nil.
@@ -588,5 +597,3 @@ func newTestScatterConn(hc discovery.HealthCheck, serv srvtopo.Server, cell stri
 	tc := NewTxConn(gw, vtgatepb.TransactionMode_TWOPC)
 	return NewScatterConn("", tc, gw)
 }
-
-var ctx = context.Background()
