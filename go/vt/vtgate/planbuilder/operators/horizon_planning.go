@@ -414,17 +414,7 @@ func splitProjectionAcrossJoin(
 		return nil
 	}
 
-	var col JoinColumn
-	var err error
-
-	switch expr := pe.Info.(type) {
-	case nil:
-		col, err = splitUnexploredExpression(ctx, join, lhs, rhs, pe)
-	case SubQueryExpression:
-		col, err = splitSubqueryExpression(ctx, join, lhs, rhs, pe, expr)
-	default:
-		err = vterrors.VT13001(fmt.Sprintf("%T can't be split", pe.Info))
-	}
+	col, err := splitUnexploredExpression(ctx, join, lhs, rhs, pe)
 	if err != nil {
 		return err
 	}
@@ -441,7 +431,7 @@ func splitUnexploredExpression(
 	pe *ProjExpr,
 ) (JoinColumn, error) {
 	// Get a JoinColumn for the current expression.
-	col, err := join.getJoinColumnFor(ctx, pe.Original, pe.EvalExpr, false)
+	col, err := join.getJoinColumnFor(ctx, pe.Original, pe.ColExpr, false)
 	if err != nil {
 		return JoinColumn{}, err
 	}
@@ -458,36 +448,8 @@ func splitUnexploredExpression(
 		}
 		innerPE := newProjExprWithInner(pe.Original, col.RHSExpr)
 		innerPE.ColExpr = col.RHSExpr
+		innerPE.Info = pe.Info
 		rhs.add(innerPE)
-	}
-	return col, nil
-}
-
-func splitSubqueryExpression(
-	ctx *plancontext.PlanningContext,
-	join *ApplyJoin,
-	lhs, rhs *projector,
-	pe *ProjExpr,
-	in SubQueryExpression,
-) (JoinColumn, error) {
-	col, err := join.getJoinColumnFor(ctx, pe.Original, pe.EvalExpr, false)
-	if err != nil {
-		return JoinColumn{}, err
-	}
-	// Update the left and right child columns and names based on the JoinColumn type.
-	switch {
-	case col.IsPureLeft():
-		lhs.add(pe)
-	case col.IsPureRight():
-		rhs.add(pe)
-	case col.IsMixedLeftAndRight():
-		for _, expr := range col.LHSExprs {
-			lhs.add(newProjExpr(aeWrap(expr)))
-		}
-		inner := newProjExprWithInner(pe.Original, col.RHSExpr)
-		inner.Info = pe.Info
-		inner.ColExpr = col.RHSExpr
-		rhs.add(inner)
 	}
 	return col, nil
 }
