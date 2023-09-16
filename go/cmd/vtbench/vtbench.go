@@ -105,8 +105,6 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&count, "count", count, "Number of queries per thread")
 
 	grpccommon.RegisterFlags(fs)
-	log.RegisterFlags(fs)
-	logutil.RegisterFlags(fs)
 	acl.RegisterFlags(fs)
 	servenv.RegisterMySQLServerFlags(fs)
 }
