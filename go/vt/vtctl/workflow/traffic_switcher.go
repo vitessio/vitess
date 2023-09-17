@@ -439,7 +439,7 @@ func (ts *trafficSwitcher) deleteShardRoutingRules(ctx context.Context) error {
 func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 	return ts.ForAllSources(func(source *MigrationSource) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
+			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
 		}); err != nil {
 			return err
 		}
@@ -668,7 +668,7 @@ func (ts *trafficSwitcher) allowTargetWrites(ctx context.Context) error {
 func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
 	return ts.ForAllTargets(func(target *MigrationTarget) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
+			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
 		}); err != nil {
 			return err
 		}
@@ -950,7 +950,7 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access accessType) error {
 	err := ts.ForAllSources(func(source *MigrationSource) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, access == allowWrites /* remove */, ts.Tables())
+			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, access == allowWrites /* remove */, ts.Tables())
 		}); err != nil {
 			return err
 		}
