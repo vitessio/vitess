@@ -435,6 +435,9 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		original: subQuery.Original,
 		subq:     subQuery,
 	}
+	if !subQuery.TopLevel {
+		return subQuery, nil, nil
+	}
 	op, err := mergeJoinInputs(ctx, inner, outer, exprs, merger)
 	if err != nil {
 		return nil, nil, err
