@@ -101,7 +101,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 
 	// Move customer table from unsharded product keyspace to
 	// sharded customer keyspace.
-	createMoveTablesWorkflow(t, "customer,loadtest")
+	createMoveTablesWorkflow(t, "customer,loadtest,customer2")
 	tstWorkflowSwitchReadsAndWrites(t)
 	tstWorkflowComplete(t)
 
