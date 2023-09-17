@@ -1,8 +1,14 @@
 [
   {
-    "comment": "union operations in subqueries (expressions)",
+    "comment": "unexpanded expressions invalid also inside subqueries",
     "query": "select * from user where id in (select * from user union select * from user_extra)",
-    "plan": "VT13001: [BUG] should return uncorrelated subquery here",
+    "plan": "VT09015: schema tracking required",
+    "skip": true
+  },
+  {
+    "comment": "union operations in subqueries (expressions)",
+    "query": "select col from user u where id in (select bar from user where user.x = u.z union select * from user_extra)",
+    "plan": "VT09015: schema tracking required",
     "skip": true
   },
   {

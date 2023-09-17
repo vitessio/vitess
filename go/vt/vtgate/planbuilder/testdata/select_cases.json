@@ -4014,8 +4014,7 @@
   {
     "comment": "`None` subquery nested inside `OR` expression - outer query keeps routing information",
     "query": "SELECT music.id FROM music WHERE (music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5)",
-    "plan": "VT12001: unsupported: subquery: music.id in (select music.id from music where music.user_id in (null)) or music.user_id = 5",
-    "skip": true
+    "plan": "VT12001: unsupported: unmergable subquery can not be inside complex expression"
   },
   {
     "comment": "Joining with a subquery that uses an aggregate column and an `EqualUnique` route can be merged together",

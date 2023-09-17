@@ -202,6 +202,23 @@ func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNod
 	return
 }
 
+func inspectWherePredicates(ctx *plancontext.PlanningContext, sqc *SubQueryContainer, sel *sqlparser.Select) sqlparser.Exprs {
+	newWhere, wherePreds, err := sqc.inspectInnerPredicates(ctx, sel.Where)
+	if err != nil {
+		return nil
+	}
+	sel.Where = newWhere
+
+	newHaving, havingPreds, err := sqc.inspectInnerPredicates(ctx, sel.Having)
+	if err != nil {
+		return nil
+	}
+	sel.Having = newHaving
+
+	// TODO: we need to look at join conditions as well
+
+	return append(wherePreds, havingPreds...)
+}
 func createSubquery(
 	ctx *plancontext.PlanningContext,
 	original sqlparser.Expr,
@@ -215,28 +232,44 @@ func createSubquery(
 	topLevel := ctx.SemTable.EqualsExpr(original, parent)
 	original = cloneASTAndSemState(ctx, original)
 
-	innerSel, ok := subq.Select.(*sqlparser.Select)
-	if !ok {
+	subqID := findTablesContained(ctx, subq.Select)
+	totalID := subqID.Merge(outerID)
+	sqc := &SubQueryContainer{totalID: totalID, subqID: subqID, outerID: outerID}
+
+	var predicates sqlparser.Exprs
+	switch stmt := subq.Select.(type) {
+	case *sqlparser.Select:
+		predicates = inspectWherePredicates(ctx, sqc, stmt)
+	case *sqlparser.Union:
 		return nil, vterrors.VT13001("yucki unions")
 	}
 
-	subqID := findTablesContained(ctx, innerSel)
-	totalID := subqID.Merge(outerID)
-
-	sqc := &SubQueryContainer{totalID: totalID, subqID: subqID, outerID: outerID}
-	newWhere, wherePreds, err := sqc.inspectInnerPredicates(ctx, innerSel.Where)
+	stmt := rewriteRemainingColumns(ctx, subq, subqID, parent)
+	opInner, err := translateQueryToOp(ctx, stmt)
 	if err != nil {
 		return nil, err
 	}
-	innerSel.Where = newWhere
 
-	newHaving, havingPreds, err := sqc.inspectInnerPredicates(ctx, innerSel.Having)
-	if err != nil {
-		return nil, err
-	}
-	innerSel.Having = newHaving
+	opInner = sqc.getRootOperator(opInner)
+	return &SubQuery{
+		FilterType:   filterType,
+		Subquery:     opInner,
+		Predicates:   predicates,
+		Original:     original,
+		ArgName:      argName,
+		_sq:          subq,
+		IsProjection: isProjection,
+		TopLevel:     topLevel,
+	}, nil
+}
 
-	innerSel = sqlparser.CopyOnRewrite(innerSel, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+func rewriteRemainingColumns(
+	ctx *plancontext.PlanningContext,
+	subq *sqlparser.Subquery,
+	subqID semantics.TableSet,
+	parent sqlparser.Expr,
+) sqlparser.SelectStatement {
+	return sqlparser.CopyOnRewrite(subq.Select, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		colname, isColname := cursor.Node().(*sqlparser.ColName)
 		if !isColname {
 			return
@@ -248,23 +281,7 @@ func createSubquery(
 		rsv := ctx.GetReservedArgumentFor(colname)
 		cursor.Replace(sqlparser.NewArgument(rsv))
 		parent = sqlparser.AndExpressions(parent, colname)
-	}, nil).(*sqlparser.Select)
-	opInner, err := translateQueryToOp(ctx, innerSel)
-	if err != nil {
-		return nil, err
-	}
-
-	opInner = sqc.getRootOperator(opInner)
-	return &SubQuery{
-		FilterType:   filterType,
-		Subquery:     opInner,
-		Predicates:   append(wherePreds, havingPreds...),
-		Original:     original,
-		ArgName:      argName,
-		_sq:          subq,
-		IsProjection: isProjection,
-		TopLevel:     topLevel,
-	}, nil
+	}, nil).(sqlparser.SelectStatement)
 }
 
 func (sqc *SubQueryContainer) inspectInnerPredicates(

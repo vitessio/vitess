@@ -161,6 +161,11 @@ func (st *SemTable) SelectExprs(sel sqlparser.SelectStatement) sqlparser.SelectE
 		if found {
 			return exprs
 		}
+		for stmt, exprs := range st.columns {
+			if sqlparser.Equals.SelectStatement(stmt, sel) {
+				return exprs
+			}
+		}
 		panic("BUG: union not found in semantic table for select expressions")
 	}
 	panic(fmt.Sprintf("BUG: unexpected select statement type %T", sel))
