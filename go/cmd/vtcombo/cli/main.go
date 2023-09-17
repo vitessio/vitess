@@ -183,8 +183,6 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	servenv.Init()
-	defer servenv.Close()
-
 	tabletenv.Init()
 
 	var (
