@@ -28,12 +28,18 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
-func testCancel(t *testing.T) bool {
+// testCancel() starts and cancels a partial MoveTables for one of the shards which will be actually moved later on.
+// Before canceling, we first switch traffic to the target keyspace and then reverse it back to the source keyspace.
+// This tests that artifacts are being properly cleaned up when a MoveTables ia canceled.
+func testCancel(t *testing.T) {
 	wfName := "partial80DashForCancel"
 	sourceKs := "customer"
 	targetKs := "customer2"
 	shard := "80-"
 	ksWf := fmt.Sprintf("%s.%s", targetKs, wfName)
+	// We use a different table in this MoveTables than the subsequent one, so that setting up of the artifacts
+	// while creating MoveTables do not paper over any issues with cleaning up artifacts when MoveTables is canceled.
+	// Ref: https://github.com/vitessio/vitess/issues/13998
 	table := "customer2"
 	// start the partial movetables for 80-
 	err := tstWorkflowExec(t, defaultCellName, wfName, sourceKs, targetKs,
@@ -63,7 +69,6 @@ func testCancel(t *testing.T) bool {
 	require.NoError(t, tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionCancel, "", "", "", false))
 	validateTableInDenyList(t, vc, "customer2:80-", table, false)
 	validateTableInDenyList(t, vc, "customer:80-", table, false)
-	return true
 }
 
 // TestPartialMoveTablesBasic tests partial move tables by moving each
@@ -96,7 +101,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 
 	// Move customer table from unsharded product keyspace to
 	// sharded customer keyspace.
-	createMoveTablesWorkflow(t, "customer,loadtest,customer2")
+	createMoveTablesWorkflow(t, "customer,loadtest")
 	tstWorkflowSwitchReadsAndWrites(t)
 	tstWorkflowComplete(t)
 
@@ -120,10 +125,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	defaultRdonly = 0
 	setupCustomer2Keyspace(t)
 
-	ret := testCancel(t)
-	if ret {
-		return
-	}
+	testCancel(t)
 
 	currentWorkflowType = wrangler.MoveTablesWorkflow
 	wfName := "partial80Dash"
