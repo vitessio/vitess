@@ -31,7 +31,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -192,6 +191,9 @@ func run(cmd *cobra.Command, args []string) (err error) {
 
 	if startMysql {
 		mysqld.Mysqld, cnf, err = startMysqld(1)
+		if err != nil {
+			return err
+		}
 		servenv.OnClose(func() {
 			mysqld.Shutdown(context.TODO(), cnf, true)
 		})
@@ -287,7 +289,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	// vtctld configuration and init
 	err = vtctld.InitVtctld(ts)
 	if err != nil {
-		exit.Return(1)
+		return err
 	}
 
 	if vschemaPersistenceDir != "" && !externalTopoServer {
