@@ -47,6 +47,8 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		handleOrderBy(r, cursor, node)
 	case *sqlparser.OrExpr:
 		rewriteOrExpr(cursor, node)
+	case *sqlparser.NotExpr:
+		rewriteNotExpr(cursor, node)
 	case sqlparser.GroupBy:
 		r.clause = "group statement"
 	case *sqlparser.Literal:
@@ -57,6 +59,14 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		return handleComparisonExpr(cursor, node)
 	}
 	return nil
+}
+
+func rewriteNotExpr(cursor *sqlparser.Cursor, node *sqlparser.NotExpr) {
+	switch expr := node.Expr.(type) {
+	case *sqlparser.ComparisonExpr:
+		expr.Operator = sqlparser.Inverse(expr.Operator)
+		cursor.Replace(expr)
+	}
 }
 
 func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
