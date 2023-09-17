@@ -327,9 +327,9 @@ func (jpc *joinPredicateCollector) inspectPredicate(
 	predicate sqlparser.Expr,
 ) {
 	deps := ctx.SemTable.RecursiveDeps(predicate)
-	// if neither of the two sides of the predicate is enough, but together we have all we need,
+	// if the subquery is not enough, but together we have all we need,
 	// then we can use this predicate to connect the subquery to the outer query
-	if !deps.IsSolvedBy(jpc.subqID) && !deps.IsSolvedBy(jpc.outerID) && deps.IsSolvedBy(jpc.totalID) {
+	if !deps.IsSolvedBy(jpc.subqID) && deps.IsSolvedBy(jpc.totalID) {
 		jpc.predicates = append(jpc.predicates, predicate)
 	} else {
 		jpc.remainingPredicates = append(jpc.remainingPredicates, predicate)

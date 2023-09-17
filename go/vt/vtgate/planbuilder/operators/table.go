@@ -128,5 +128,15 @@ func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.
 }
 
 func (to *Table) ShortDescription() string {
-	return to.VTable.String()
+	tbl := to.VTable.String()
+	var alias, where string
+	if !to.QTable.Alias.As.IsEmpty() {
+		alias = " AS " + to.QTable.Alias.As.String()
+	}
+
+	if len(to.QTable.Predicates) > 0 {
+		where = " WHERE " + sqlparser.String(sqlparser.AndExpressions(to.QTable.Predicates...))
+	}
+
+	return tbl + alias + where
 }
