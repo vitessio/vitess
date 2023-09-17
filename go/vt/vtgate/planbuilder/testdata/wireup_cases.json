@@ -681,7 +681,6 @@
   {
     "comment": "Wire-up in underlying primitive after pullout",
     "query": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
@@ -690,57 +689,57 @@
         "Count": "INT64(10)",
         "Inputs": [
           {
-            "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutValue",
-            "PulloutVars": [
-              "__sq1"
-            ],
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,R:0,L:1",
+            "JoinVars": {
+              "u_col": 2
+            },
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "InputName": "SubQuery",
+                "OperatorType": "UncorrelatedSubquery",
+                "Variant": "PulloutValue",
+                "PulloutVars": [
+                  "__sq1"
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "SubQuery",
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select col from `user` where 1 != 1",
+                    "Query": "select col from `user`",
+                    "Table": "`user`"
+                  },
+                  {
+                    "InputName": "Outer",
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.id, :__sq1 as `(select col from ``user``)`, u.col from `user` as u where 1 != 1",
+                    "Query": "select u.id, :__sq1 as `(select col from ``user``)`, u.col from `user` as u",
+                    "Table": "`user`"
+                  }
+                ]
+              },
+              {
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select col from `user` where 1 != 1",
-                "Query": "select col from `user`",
-                "Table": "`user`"
-              },
-              {
-                "InputName": "Outer",
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:1,R:0,L:2",
-                "JoinVars": {
-                  "u_col": 0
-                },
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select u.col, u.id, :__sq1 from `user` as u where 1 != 1",
-                    "Query": "select u.col, u.id, :__sq1 from `user` as u",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select e.id from user_extra as e where 1 != 1",
-                    "Query": "select e.id from user_extra as e where e.id = :u_col",
-                    "Table": "user_extra"
-                  }
-                ]
+                "FieldQuery": "select e.id from user_extra as e where 1 != 1",
+                "Query": "select e.id from user_extra as e where e.id = :u_col",
+                "Table": "user_extra"
               }
             ]
           }

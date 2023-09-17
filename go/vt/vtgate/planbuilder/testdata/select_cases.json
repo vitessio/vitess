@@ -3396,10 +3396,9 @@
   {
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes, but not a top level predicate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) OR music.user_id = 5",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select music.id from music where music.id in (select music.id from music where music.user_id in (1, 2, 3)) or music.user_id = 5",
+      "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) OR music.user_id = 5",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "IN",
@@ -3408,7 +3407,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (1, 2, 3)) OR music.user_id = 5",
+        "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (1, 2, 3)) or music.user_id = 5",
         "Table": "music",
         "Values": [
           "(INT64(1), INT64(2), INT64(3))"
@@ -3879,7 +3878,6 @@
   {
     "comment": "Unmergeable subquery with multiple levels of derived statements, using a multi value `IN` predicate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5, 6) LIMIT 10) subquery_for_limit) subquery_for_limit)",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5, 6) LIMIT 10) subquery_for_limit) subquery_for_limit)",
@@ -3887,7 +3885,7 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
@@ -3903,8 +3901,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select music.id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1",
-                "Query": "select music.id from (select music.id from music where music.user_id in ::__vals) as subquery_for_limit limit :__upper_limit",
+                "FieldQuery": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
+                "Query": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where music.user_id in ::__vals) as subquery_for_limit limit :__upper_limit) as subquery_for_limit limit :__upper_limit",
                 "Table": "music",
                 "Values": [
                   "(INT64(5), INT64(6))"
@@ -3922,7 +3920,7 @@
               "Sharded": true
             },
             "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 and music.id in ::__vals",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
             "Table": "music",
             "Values": [
               "::__sq1"
@@ -3934,12 +3932,10 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
-  },
+    }  },
   {
     "comment": "Unmergeable subquery with multiple levels of derived statements",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music LIMIT 10) subquery_for_limit) subquery_for_limit)",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music LIMIT 10) subquery_for_limit) subquery_for_limit)",
@@ -3947,7 +3943,7 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
@@ -3963,8 +3959,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select music.id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1",
-                "Query": "select music.id from (select music.id from music) as subquery_for_limit limit :__upper_limit",
+                "FieldQuery": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
+                "Query": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music) as subquery_for_limit limit :__upper_limit) as subquery_for_limit limit :__upper_limit",
                 "Table": "music"
               }
             ]
@@ -3978,7 +3974,7 @@
               "Sharded": true
             },
             "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 and music.id in ::__vals",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
             "Table": "music",
             "Values": [
               "::__sq1"
@@ -3990,8 +3986,7 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
-  },
+    }  },
   {
     "comment": "`None` subquery as top level predicate - outer query changes from `Scatter` to `None` on merge",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL))",

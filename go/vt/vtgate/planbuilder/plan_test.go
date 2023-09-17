@@ -110,6 +110,19 @@ func TestForeignKeyPlanning(t *testing.T) {
 	testFile(t, "foreignkey_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
+func TestOneForeignKey(t *testing.T) {
+	reset := oprewriters.EnableDebugPrinting()
+	defer reset()
+
+	lv := loadSchema(t, "vschemas/schema.json", true)
+	setFks(t, lv)
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V: lv,
+	}
+
+	testFile(t, "onecase.json", "", vschema, false)
+}
+
 func setFks(t *testing.T, vschema *vindexes.VSchema) {
 	if vschema.Keyspaces["sharded_fk_allow"] != nil {
 		// FK from multicol_tbl2 referencing multicol_tbl1 that is shard scoped.

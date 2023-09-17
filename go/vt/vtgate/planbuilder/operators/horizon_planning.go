@@ -298,39 +298,45 @@ func tryPushProjection(
 		if !p.canPushDown(ctx) {
 			return p, rewrite.SameTree, nil
 		}
-		return pushProjectionToOuter(ctx, p, src)
+		return pushProjectionToOuterContainer(ctx, p, src)
 	case *SubQuery:
-		ap, err := p.GetAliasedProjections()
-		if err != nil {
-			return p, rewrite.SameTree, nil
-		}
-
-		if !ctx.SubqueriesSettled || err != nil {
-			return p, rewrite.SameTree, nil
-		}
-
-		outer := TableID(src.Outer)
-		for _, pe := range ap {
-			_, isOffset := pe.Info.(*Offset)
-			if isOffset {
-				continue
-			}
-
-			if !ctx.SemTable.RecursiveDeps(pe.EvalExpr).IsSolvedBy(outer) {
-				return p, rewrite.SameTree, nil
-			}
-
-			se, ok := pe.Info.(SubQueryExpression)
-			if ok {
-				pe.EvalExpr = rewriteColNameToArgument(pe.EvalExpr, se, src)
-			}
-		}
-		// all projections can be pushed to the outer
-		src.Outer, p.Source = p, src.Outer
-		return src, rewrite.NewTree("push projection into outer side of subquery", p), nil
+		return pushProjectionToOuter(ctx, p, src)
+	case *Limit:
+		return rewrite.Swap(p, src, "push projection under limit")
 	default:
 		return p, rewrite.SameTree, nil
 	}
+}
+
+func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *SubQuery) (ops.Operator, *rewrite.ApplyResult, error) {
+	ap, err := p.GetAliasedProjections()
+	if err != nil {
+		return p, rewrite.SameTree, nil
+	}
+
+	if !ctx.SubqueriesSettled || err != nil {
+		return p, rewrite.SameTree, nil
+	}
+
+	outer := TableID(sq.Outer)
+	for _, pe := range ap {
+		_, isOffset := pe.Info.(*Offset)
+		if isOffset {
+			continue
+		}
+
+		if !ctx.SemTable.RecursiveDeps(pe.EvalExpr).IsSolvedBy(outer) {
+			return p, rewrite.SameTree, nil
+		}
+
+		se, ok := pe.Info.(SubQueryExpression)
+		if ok {
+			pe.EvalExpr = rewriteColNameToArgument(pe.EvalExpr, se, sq)
+		}
+	}
+	// all projections can be pushed to the outer
+	sq.Outer, p.Source = p, sq.Outer
+	return sq, rewrite.NewTree("push projection into outer side of subquery", p), nil
 }
 
 func pushDownProjectionInVindex(
@@ -534,8 +540,6 @@ func tryPushLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := in.Source.(type) {
 	case *Route:
 		return tryPushingDownLimitInRoute(in, src)
-	case *Projection:
-		return rewrite.Swap(in, src, "push limit under projection")
 	case *Aggregator:
 		return in, rewrite.SameTree, nil
 	default:

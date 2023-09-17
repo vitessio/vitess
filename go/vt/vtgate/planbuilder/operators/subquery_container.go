@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
@@ -29,17 +30,21 @@ type (
 	SubQueryContainer struct {
 		Outer ops.Operator
 		Inner []*SubQuery
+
+		totalID,
+		subqID,
+		outerID semantics.TableSet
 	}
 )
 
 var _ ops.Operator = (*SubQueryContainer)(nil)
 
 // Clone implements the Operator interface
-func (s *SubQueryContainer) Clone(inputs []ops.Operator) ops.Operator {
+func (sqc *SubQueryContainer) Clone(inputs []ops.Operator) ops.Operator {
 	result := &SubQueryContainer{
 		Outer: inputs[0],
 	}
-	for idx := range s.Inner {
+	for idx := range sqc.Inner {
 		inner, ok := inputs[idx+1].(*SubQuery)
 		if !ok {
 			panic("got bad input")
@@ -49,46 +54,46 @@ func (s *SubQueryContainer) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
-func (s *SubQueryContainer) GetOrdering() ([]ops.OrderBy, error) {
-	return s.Outer.GetOrdering()
+func (sqc *SubQueryContainer) GetOrdering() ([]ops.OrderBy, error) {
+	return sqc.Outer.GetOrdering()
 }
 
 // Inputs implements the Operator interface
-func (s *SubQueryContainer) Inputs() []ops.Operator {
-	operators := []ops.Operator{s.Outer}
-	for _, inner := range s.Inner {
+func (sqc *SubQueryContainer) Inputs() []ops.Operator {
+	operators := []ops.Operator{sqc.Outer}
+	for _, inner := range sqc.Inner {
 		operators = append(operators, inner)
 	}
 	return operators
 }
 
 // SetInputs implements the Operator interface
-func (s *SubQueryContainer) SetInputs(ops []ops.Operator) {
-	s.Outer = ops[0]
+func (sqc *SubQueryContainer) SetInputs(ops []ops.Operator) {
+	sqc.Outer = ops[0]
 }
 
-func (s *SubQueryContainer) ShortDescription() string {
+func (sqc *SubQueryContainer) ShortDescription() string {
 	return ""
 }
 
-func (sq *SubQueryContainer) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := sq.Outer.AddPredicate(ctx, expr)
-	sq.Outer = newSrc
-	return sq, err
+func (sqc *SubQueryContainer) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+	newSrc, err := sqc.Outer.AddPredicate(ctx, expr)
+	sqc.Outer = newSrc
+	return sqc, err
 }
 
-func (sq *SubQueryContainer) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) (int, error) {
-	return sq.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
+func (sqc *SubQueryContainer) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) (int, error) {
+	return sqc.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
 }
 
-func (sq *SubQueryContainer) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
-	return sq.Outer.FindCol(ctx, expr, underRoute)
+func (sqc *SubQueryContainer) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+	return sqc.Outer.FindCol(ctx, expr, underRoute)
 }
 
-func (sq *SubQueryContainer) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
-	return sq.Outer.GetColumns(ctx)
+func (sqc *SubQueryContainer) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return sqc.Outer.GetColumns(ctx)
 }
 
-func (sq *SubQueryContainer) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
-	return sq.Outer.GetSelectExprs(ctx)
+func (sqc *SubQueryContainer) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return sqc.Outer.GetSelectExprs(ctx)
 }

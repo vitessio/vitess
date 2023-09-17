@@ -34,14 +34,15 @@ import (
 // outer query through a join.
 type SubQuery struct {
 	// Fields filled in at the time of construction:
-	Outer           ops.Operator         // Outer query operator.
-	Subquery        ops.Operator         // Subquery operator.
-	FilterType      opcode.PulloutOpcode // Type of subquery filter.
-	MergeExpression sqlparser.Expr       // This is the expression we should use if we can merge the inner to the outer
-	_sq             *sqlparser.Subquery  // Subquery representation, e.g., (SELECT foo from user LIMIT 1).
-	Predicates      sqlparser.Exprs      // Predicates joining outer and inner queries. Empty for uncorrelated subqueries.
-	OuterPredicate  sqlparser.Expr       // This is the predicate that is using the subquery expression. It will not be empty for projections
-	ArgName         string               // This is the name of the ColName or Argument used to replace the subquery
+	Outer          ops.Operator         // Outer query operator.
+	Subquery       ops.Operator         // Subquery operator.
+	FilterType     opcode.PulloutOpcode // Type of subquery filter.
+	Original       sqlparser.Expr       // This is the expression we should use if we can merge the inner to the outer
+	_sq            *sqlparser.Subquery  // Subquery representation, e.g., (SELECT foo from user LIMIT 1).
+	Predicates     sqlparser.Exprs      // Predicates joining outer and inner queries. Empty for uncorrelated subqueries.
+	OuterPredicate sqlparser.Expr       // This is the predicate that is using the subquery expression. It will not be empty for projections
+	ArgName        string               // This is the name of the ColName or Argument used to replace the subquery
+	TopLevel       bool                 // will be false if the subquery is deeply nested
 
 	// Fields filled in at the subquery settling phase:
 	JoinColumns       []JoinColumn         // Broken up join predicates.
@@ -56,22 +57,22 @@ type SubQuery struct {
 	IsProjection bool
 }
 
-func (sj *SubQuery) planOffsets(ctx *plancontext.PlanningContext) error {
-	sj.Vars = make(map[string]int)
-	for _, jc := range sj.JoinColumns {
+func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) error {
+	sq.Vars = make(map[string]int)
+	for _, jc := range sq.JoinColumns {
 		for i, lhsExpr := range jc.LHSExprs {
-			offset, err := sj.Outer.AddColumn(ctx, true, false, aeWrap(lhsExpr))
+			offset, err := sq.Outer.AddColumn(ctx, true, false, aeWrap(lhsExpr))
 			if err != nil {
 				return err
 			}
-			sj.Vars[jc.BvNames[i]] = offset
+			sq.Vars[jc.BvNames[i]] = offset
 		}
 	}
 	return nil
 }
 
-func (sj *SubQuery) OuterExpressionsNeeded(ctx *plancontext.PlanningContext, outer ops.Operator) ([]*sqlparser.ColName, error) {
-	joinColumns, err := sj.GetJoinColumns(ctx, outer)
+func (sq *SubQuery) OuterExpressionsNeeded(ctx *plancontext.PlanningContext, outer ops.Operator) ([]*sqlparser.ColName, error) {
+	joinColumns, err := sq.GetJoinColumns(ctx, outer)
 	if err != nil {
 		return nil, err
 	}
@@ -81,37 +82,37 @@ func (sj *SubQuery) OuterExpressionsNeeded(ctx *plancontext.PlanningContext, out
 			if !ok {
 				return nil, vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(lhsExpr))
 			}
-			sj.LHSColumns = append(sj.LHSColumns, col)
+			sq.LHSColumns = append(sq.LHSColumns, col)
 		}
 	}
-	return sj.LHSColumns, nil
+	return sq.LHSColumns, nil
 }
 
-func (sj *SubQuery) GetJoinColumns(ctx *plancontext.PlanningContext, outer ops.Operator) ([]JoinColumn, error) {
+func (sq *SubQuery) GetJoinColumns(ctx *plancontext.PlanningContext, outer ops.Operator) ([]JoinColumn, error) {
 	if outer == nil {
 		return nil, vterrors.VT13001("outer operator cannot be nil")
 	}
 	outerID := TableID(outer)
-	if sj.JoinColumns != nil {
-		if sj.outerID == outerID {
-			return sj.JoinColumns, nil
+	if sq.JoinColumns != nil {
+		if sq.outerID == outerID {
+			return sq.JoinColumns, nil
 		}
 	}
-	sj.outerID = outerID
+	sq.outerID = outerID
 	mapper := func(in sqlparser.Expr) (JoinColumn, error) {
 		return BreakExpressionInLHSandRHS(ctx, in, outerID)
 	}
-	joinPredicates, err := slice.MapWithError(sj.Predicates, mapper)
+	joinPredicates, err := slice.MapWithError(sq.Predicates, mapper)
 	if err != nil {
 		return nil, err
 	}
-	sj.JoinColumns = joinPredicates
-	return sj.JoinColumns, nil
+	sq.JoinColumns = joinPredicates
+	return sq.JoinColumns, nil
 }
 
 // Clone implements the Operator interface
-func (sj *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
-	klone := *sj
+func (sq *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
+	klone := *sq
 	switch len(inputs) {
 	case 1:
 		klone.Subquery = inputs[0]
@@ -121,111 +122,115 @@ func (sj *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
 	default:
 		panic("wrong number of inputs")
 	}
-	klone.JoinColumns = slices.Clone(sj.JoinColumns)
-	klone.LHSColumns = slices.Clone(sj.LHSColumns)
-	klone.Vars = maps.Clone(sj.Vars)
-	klone.Predicates = sqlparser.CloneExprs(sj.Predicates)
+	klone.JoinColumns = slices.Clone(sq.JoinColumns)
+	klone.LHSColumns = slices.Clone(sq.LHSColumns)
+	klone.Vars = maps.Clone(sq.Vars)
+	klone.Predicates = sqlparser.CloneExprs(sq.Predicates)
 	return &klone
 }
 
-func (sj *SubQuery) GetOrdering() ([]ops.OrderBy, error) {
-	return sj.Outer.GetOrdering()
+func (sq *SubQuery) GetOrdering() ([]ops.OrderBy, error) {
+	return sq.Outer.GetOrdering()
 }
 
 // Inputs implements the Operator interface
-func (sj *SubQuery) Inputs() []ops.Operator {
-	if sj.Outer == nil {
-		return []ops.Operator{sj.Subquery}
+func (sq *SubQuery) Inputs() []ops.Operator {
+	if sq.Outer == nil {
+		return []ops.Operator{sq.Subquery}
 	}
 
-	return []ops.Operator{sj.Outer, sj.Subquery}
+	return []ops.Operator{sq.Outer, sq.Subquery}
 }
 
 // SetInputs implements the Operator interface
-func (sj *SubQuery) SetInputs(inputs []ops.Operator) {
+func (sq *SubQuery) SetInputs(inputs []ops.Operator) {
 	switch len(inputs) {
 	case 1:
-		sj.Subquery = inputs[0]
+		sq.Subquery = inputs[0]
 	case 2:
-		sj.Outer = inputs[0]
-		sj.Subquery = inputs[1]
+		sq.Outer = inputs[0]
+		sq.Subquery = inputs[1]
 	default:
 		panic("wrong number of inputs")
 	}
 }
 
-func (sj *SubQuery) ShortDescription() string {
+func (sq *SubQuery) ShortDescription() string {
 	var typ string
-	if sj.IsProjection {
+	if sq.IsProjection {
 		typ = "PROJ"
 	} else {
 		typ = "FILTER"
 	}
 	var pred string
-	if len(sj.Predicates) > 0 {
-		pred = " WHERE " + sqlparser.String(sj.Predicates)
+	if len(sq.Predicates) > 0 {
+		pred = " WHERE " + sqlparser.String(sq.Predicates)
 	}
-	return fmt.Sprintf("%s %v%s", typ, sj.FilterType.String(), pred)
+	return fmt.Sprintf("%s %v%s", typ, sq.FilterType.String(), pred)
 }
 
-func (sj *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newOuter, err := sj.Outer.AddPredicate(ctx, expr)
+func (sq *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+	newOuter, err := sq.Outer.AddPredicate(ctx, expr)
 	if err != nil {
 		return nil, err
 	}
-	sj.Outer = newOuter
-	return sj, nil
+	sq.Outer = newOuter
+	return sq, nil
 }
 
-func (sj *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) (int, error) {
-	return sj.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
+func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) (int, error) {
+	return sq.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
 }
 
-func (sj *SubQuery) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
-	return sj.Outer.FindCol(ctx, expr, underRoute)
+func (sq *SubQuery) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+	return sq.Outer.FindCol(ctx, expr, underRoute)
 }
 
-func (sj *SubQuery) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
-	return sj.Outer.GetColumns(ctx)
+func (sq *SubQuery) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return sq.Outer.GetColumns(ctx)
 }
 
-func (sj *SubQuery) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
-	return sj.Outer.GetSelectExprs(ctx)
+func (sq *SubQuery) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return sq.Outer.GetSelectExprs(ctx)
 }
 
 // GetMergePredicates returns the predicates that we can use to try to merge this subquery with the outer query.
-func (sj *SubQuery) GetMergePredicates() []sqlparser.Expr {
-	if sj.OuterPredicate != nil {
-		return append(sj.Predicates, sj.OuterPredicate)
+func (sq *SubQuery) GetMergePredicates() []sqlparser.Expr {
+	if sq.OuterPredicate != nil {
+		return append(sq.Predicates, sq.OuterPredicate)
 	}
-	return sj.Predicates
+	return sq.Predicates
 }
 
-func (sj *SubQuery) settle(ctx *plancontext.PlanningContext, outer ops.Operator) (ops.Operator, error) {
-	if sj.IsProjection {
-		if sj.OuterPredicate != nil || len(sj.Predicates) > 0 {
+func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer ops.Operator) (ops.Operator, error) {
+	if !sq.TopLevel {
+		return nil, subqueryNotAtTopErr
+	}
+	if sq.IsProjection {
+		if len(sq.GetMergePredicates()) > 0 {
 			// this means that we have a correlated subquery on our hands
 			return nil, correlatedSubqueryErr
 		}
-		sj.SubqueryValueName = sj.ArgName
+		sq.SubqueryValueName = sq.ArgName
 		return outer, nil
 	}
-	return sj.settleFilter(ctx, outer)
+	return sq.settleFilter(ctx, outer)
 }
 
 var correlatedSubqueryErr = vterrors.VT12001("correlated subquery is only supported for EXISTS")
+var subqueryNotAtTopErr = vterrors.VT12001("unmergable subquery can not be inside complex expression")
 
-func (sj *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Operator) (ops.Operator, error) {
-	if len(sj.Predicates) > 0 {
-		if sj.FilterType != opcode.PulloutExists {
+func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Operator) (ops.Operator, error) {
+	if len(sq.Predicates) > 0 {
+		if sq.FilterType != opcode.PulloutExists {
 			return nil, correlatedSubqueryErr
 		}
-		return sj.settleExistSubquery(ctx, outer)
+		return sq.settleExistSubquery(ctx, outer)
 	}
 
 	hasValuesArg := func() string {
 		s := ctx.ReservedVars.ReserveVariable(string(sqlparser.HasValueSubQueryBaseName))
-		sj.HasValuesName = s
+		sq.HasValuesName = s
 		return s
 	}
 	dontEnterSubqueries := func(node, _ sqlparser.SQLNode) bool {
@@ -241,31 +246,31 @@ func (sj *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Ope
 		}
 
 		var arg sqlparser.Expr
-		if sj.FilterType == opcode.PulloutIn || sj.FilterType == opcode.PulloutNotIn {
-			arg = sqlparser.NewListArg(sj.ArgName)
+		if sq.FilterType == opcode.PulloutIn || sq.FilterType == opcode.PulloutNotIn {
+			arg = sqlparser.NewListArg(sq.ArgName)
 		} else {
-			arg = sqlparser.NewArgument(sj.ArgName)
+			arg = sqlparser.NewArgument(sq.ArgName)
 		}
 		cursor.Replace(arg)
 	}
-	rhsPred := sqlparser.CopyOnRewrite(sj.MergeExpression, dontEnterSubqueries, post, ctx.SemTable.CopyDependenciesOnSQLNodes).(sqlparser.Expr)
+	rhsPred := sqlparser.CopyOnRewrite(sq.Original, dontEnterSubqueries, post, ctx.SemTable.CopyDependenciesOnSQLNodes).(sqlparser.Expr)
 
 	var predicates []sqlparser.Expr
-	switch sj.FilterType {
+	switch sq.FilterType {
 	case opcode.PulloutExists:
 		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg()))
 	case opcode.PulloutNotExists:
-		sj.FilterType = opcode.PulloutExists // it's the same pullout as EXISTS, just with a NOT in front of the predicate
+		sq.FilterType = opcode.PulloutExists // it's the same pullout as EXISTS, just with a NOT in front of the predicate
 		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())))
 	case opcode.PulloutIn:
 		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg()), rhsPred)
-		sj.SubqueryValueName = sj.ArgName
+		sq.SubqueryValueName = sq.ArgName
 	case opcode.PulloutNotIn:
 		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())), rhsPred)
-		sj.SubqueryValueName = sj.ArgName
+		sq.SubqueryValueName = sq.ArgName
 	case opcode.PulloutValue:
 		predicates = append(predicates, rhsPred)
-		sj.SubqueryValueName = sj.ArgName
+		sq.SubqueryValueName = sq.ArgName
 	}
 	return &Filter{
 		Source:     outer,
@@ -273,14 +278,14 @@ func (sj *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Ope
 	}, nil
 }
 
-func (sj *SubQuery) settleExistSubquery(ctx *plancontext.PlanningContext, outer ops.Operator) (ops.Operator, error) {
-	jcs, err := sj.GetJoinColumns(ctx, outer)
+func (sq *SubQuery) settleExistSubquery(ctx *plancontext.PlanningContext, outer ops.Operator) (ops.Operator, error) {
+	jcs, err := sq.GetJoinColumns(ctx, outer)
 	if err != nil {
 		return nil, err
 	}
 
-	sj.Subquery = &Filter{
-		Source:     sj.Subquery,
+	sq.Subquery = &Filter{
+		Source:     sq.Subquery,
 		Predicates: slice.Map(jcs, func(col JoinColumn) sqlparser.Expr { return col.RHSExpr }),
 	}
 
@@ -289,6 +294,6 @@ func (sj *SubQuery) settleExistSubquery(ctx *plancontext.PlanningContext, outer 
 	return outer, nil
 }
 
-func (sj *SubQuery) isMerged(ctx *plancontext.PlanningContext) bool {
-	return slices.Index(ctx.MergedSubqueries, sj._sq) >= 0
+func (sq *SubQuery) isMerged(ctx *plancontext.PlanningContext) bool {
+	return slices.Index(ctx.MergedSubqueries, sq._sq) >= 0
 }

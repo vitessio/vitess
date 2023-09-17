@@ -301,7 +301,7 @@ type subqueryExtraction struct {
 	cols []string
 }
 
-func (sq *SubQueryContainer) pullOutValueSubqueries(
+func (sqc *SubQueryContainer) pullOutValueSubqueries(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	outerID semantics.TableSet,
@@ -315,14 +315,14 @@ func (sq *SubQueryContainer) pullOutValueSubqueries(
 	var newSubqs []*SubQuery
 
 	for idx, subq := range sqe.subq {
-		sqInner, err := createSubquery(ctx, original, subq, outerID, nil, sqe.cols[idx], opcode.PulloutValue, true)
+		sqInner, err := createSubquery(ctx, original, subq, outerID, original, sqe.cols[idx], opcode.PulloutValue, true)
 		if err != nil {
 			return nil, nil, err
 		}
 		newSubqs = append(newSubqs, sqInner)
 	}
 
-	sq.Inner = append(sq.Inner, newSubqs...)
+	sqc.Inner = append(sqc.Inner, newSubqs...)
 
 	return sqe.new, newSubqs, nil
 }

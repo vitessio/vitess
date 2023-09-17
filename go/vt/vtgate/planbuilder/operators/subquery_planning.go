@@ -150,16 +150,6 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner *SubQuery
 	}
 	deps = deps.Remove(innerID)
 
-	if deps.IsSolvedBy(lhs) {
-		// we can safely push down the subquery on the LHS
-		outer.LHS = addSubQuery(outer.LHS, inner)
-		return outer, rewrite.NewTree("push subquery into LHS of join", inner), nil
-	}
-
-	if outer.LeftJoin {
-		return nil, rewrite.SameTree, nil
-	}
-
 	// in general, we don't want to push down uncorrelated subqueries into the RHS of a join,
 	// since this side is executed once per row from the LHS, so we would unnecessarily execute
 	// the subquery multiple times. The exception is if we can merge the subquery with the RHS of the join.
@@ -169,6 +159,25 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner *SubQuery
 	}
 	if merged != nil {
 		return merged, result, nil
+	}
+
+	_, ok := inner.Subquery.(*Projection)
+	if ok {
+		// This is a little hacky, but I could not find a better solution for it.
+		// Projections are easy to push down, so if this is still at the top,
+		// it means we have not tried pushing it yet.
+		// Let's give it a chance to push down before we push it on the left
+		return nil, rewrite.SameTree, nil
+	}
+
+	if deps.IsSolvedBy(lhs) {
+		// we can safely push down the subquery on the LHS
+		outer.LHS = addSubQuery(outer.LHS, inner)
+		return outer, rewrite.NewTree("push subquery into LHS of join", inner), nil
+	}
+
+	if outer.LeftJoin {
+		return nil, rewrite.SameTree, nil
 	}
 
 	if len(inner.Predicates) == 0 {
@@ -197,8 +206,8 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner *SubQuery
 			updatedPred = append(updatedPred, col.RHSExpr)
 			for idx, expr := range col.LHSExprs {
 				argName := col.BvNames[idx]
-				newOrg := replaceSingleExpr(ctx, inner.MergeExpression, expr, sqlparser.NewArgument(argName))
-				inner.MergeExpression = newOrg
+				newOrg := replaceSingleExpr(ctx, inner.Original, expr, sqlparser.NewArgument(argName))
+				inner.Original = newOrg
 			}
 		}
 		inner.Predicates = updatedPred
@@ -222,7 +231,7 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 		return nil, nil, nil
 	}
 
-	newExpr, err := rewriteOriginalPushedToRHS(ctx, inner.MergeExpression, outer)
+	newExpr, err := rewriteOriginalPushedToRHS(ctx, inner.Original, outer)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -286,7 +295,7 @@ func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sql
 	return result.(sqlparser.Expr), nil
 }
 
-func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, src *SubQueryContainer) (ops.Operator, *rewrite.ApplyResult, error) {
+func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Projection, src *SubQueryContainer) (ops.Operator, *rewrite.ApplyResult, error) {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
 		return p, rewrite.SameTree, nil
@@ -387,7 +396,7 @@ func tryMergeSubqueriesRecursively(
 	exprs := subQuery.GetMergePredicates()
 	merger := &subqueryRouteMerger{
 		outer:    outer,
-		original: subQuery.MergeExpression,
+		original: subQuery.Original,
 		subq:     subQuery,
 	}
 	op, err := mergeJoinInputs(ctx, inner.Outer, outer, exprs, merger)
@@ -414,7 +423,8 @@ func tryMergeSubqueriesRecursively(
 		finalResult = finalResult.Merge(res)
 	}
 
-	op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.MergeExpression}}
+	// TODO: this is not correct
+	op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.Original}}
 	return op, finalResult.Merge(rewrite.NewTree("merge outer of two subqueries", subQuery)), nil
 }
 
@@ -422,7 +432,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	exprs := subQuery.GetMergePredicates()
 	merger := &subqueryRouteMerger{
 		outer:    outer,
-		original: subQuery.MergeExpression,
+		original: subQuery.Original,
 		subq:     subQuery,
 	}
 	op, err := mergeJoinInputs(ctx, inner, outer, exprs, merger)
@@ -433,7 +443,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		return outer, rewrite.SameTree, nil
 	}
 	if !subQuery.IsProjection {
-		op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.MergeExpression}}
+		op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.Original}}
 	}
 	ctx.MergedSubqueries = append(ctx.MergedSubqueries, subQuery._sq)
 	return op, rewrite.NewTree("merged subquery with outer", subQuery), nil

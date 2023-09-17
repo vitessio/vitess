@@ -101,7 +101,7 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 	return sqc.getRootOperator(op), nil
 }
 
-func (sq *SubQueryContainer) handleSubquery(
+func (sqc *SubQueryContainer) handleSubquery(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	outerID semantics.TableSet,
@@ -111,22 +111,22 @@ func (sq *SubQueryContainer) handleSubquery(
 		return nil, nil
 	}
 	argName := ctx.GetReservedArgumentFor(subq)
-	sqInner, err := createSubqueryOp(ctx, parentExpr, subq, outerID, argName)
+	sqInner, err := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, argName)
 	if err != nil {
 		return nil, err
 	}
-	sq.Inner = append(sq.Inner, sqInner)
+	sqc.Inner = append(sqc.Inner, sqInner)
 
 	return sqInner, nil
 }
 
-func (sq *SubQueryContainer) getRootOperator(op ops.Operator) ops.Operator {
-	if len(sq.Inner) == 0 {
+func (sqc *SubQueryContainer) getRootOperator(op ops.Operator) ops.Operator {
+	if len(sqc.Inner) == 0 {
 		return op
 	}
 
-	sq.Outer = op
-	return sq
+	sqc.Outer = op
+	return sqc
 }
 
 func getSubQuery(expr sqlparser.Expr) (subqueryExprExists *sqlparser.Subquery, parentExpr sqlparser.Expr) {
@@ -154,23 +154,27 @@ func getSubQuery(expr sqlparser.Expr) (subqueryExprExists *sqlparser.Subquery, p
 	return
 }
 
-func createSubqueryOp(ctx *plancontext.PlanningContext, expr sqlparser.Expr, subq *sqlparser.Subquery, outerID semantics.TableSet, name string) (*SubQuery, error) {
-	switch expr := expr.(type) {
+func createSubqueryOp(
+	ctx *plancontext.PlanningContext,
+	parent, original sqlparser.Expr,
+	subq *sqlparser.Subquery,
+	outerID semantics.TableSet,
+	name string,
+) (*SubQuery, error) {
+	switch parent := parent.(type) {
 	case *sqlparser.NotExpr:
-		switch inner := expr.Expr.(type) {
+		switch parent.Expr.(type) {
 		case *sqlparser.ExistsExpr:
-			return createSubquery(ctx, expr, subq, outerID, nil, name, opcode.PulloutNotExists, false)
+			return createSubquery(ctx, original, subq, outerID, parent, name, opcode.PulloutNotExists, false)
 		case *sqlparser.ComparisonExpr:
-			cmp := *inner
-			cmp.Operator = sqlparser.Inverse(cmp.Operator)
-			return createComparisonSubQuery(ctx, &cmp, subq, outerID, name)
+			panic("should have been rewritten")
 		}
 	case *sqlparser.ExistsExpr:
-		return createSubquery(ctx, expr, subq, outerID, nil, name, opcode.PulloutExists, false)
+		return createSubquery(ctx, original, subq, outerID, parent, name, opcode.PulloutExists, false)
 	case *sqlparser.ComparisonExpr:
-		return createComparisonSubQuery(ctx, expr, subq, outerID, name)
+		return createComparisonSubQuery(ctx, parent, original, subq, outerID, name)
 	}
-	return createSubquery(ctx, expr, subq, outerID, nil, name, opcode.PulloutValue, false)
+	return createSubquery(ctx, original, subq, outerID, parent, name, opcode.PulloutValue, false)
 }
 
 // cloneASTAndSemState clones the AST and the semantic state of the input node.
@@ -203,11 +207,12 @@ func createSubquery(
 	original sqlparser.Expr,
 	subq *sqlparser.Subquery,
 	outerID semantics.TableSet,
-	predicate sqlparser.Expr,
+	parent sqlparser.Expr,
 	argName string,
 	filterType opcode.PulloutOpcode,
 	isProjection bool,
 ) (*SubQuery, error) {
+	topLevel := ctx.SemTable.EqualsExpr(original, parent)
 	original = cloneASTAndSemState(ctx, original)
 
 	innerSel, ok := subq.Select.(*sqlparser.Select)
@@ -217,34 +222,19 @@ func createSubquery(
 
 	subqID := findTablesContained(ctx, innerSel)
 	totalID := subqID.Merge(outerID)
-	jpc := &joinPredicateCollector{
-		totalID: totalID,
-		subqID:  subqID,
-		outerID: outerID,
-	}
 
-	sqc := &SubQueryContainer{}
-
-	// we can have connecting predicates both on the inside of the subquery, and in the comparison to the outer query
-	if innerSel.Where != nil {
-		for _, predicate := range sqlparser.SplitAndExpression(nil, innerSel.Where.Expr) {
-			sqlparser.RemoveKeyspaceFromColName(predicate)
-			subq, err := sqc.handleSubquery(ctx, predicate, totalID)
-			if err != nil {
-				return nil, err
-			}
-			if subq != nil {
-				continue
-			}
-			jpc.inspectPredicate(ctx, predicate)
-		}
+	sqc := &SubQueryContainer{totalID: totalID, subqID: subqID, outerID: outerID}
+	newWhere, wherePreds, err := sqc.inspectInnerPredicates(ctx, innerSel.Where)
+	if err != nil {
+		return nil, err
 	}
+	innerSel.Where = newWhere
 
-	if len(jpc.remainingPredicates) == 0 {
-		innerSel.Where = nil
-	} else {
-		innerSel.Where.Expr = sqlparser.AndExpressions(jpc.remainingPredicates...)
+	newHaving, havingPreds, err := sqc.inspectInnerPredicates(ctx, innerSel.Having)
+	if err != nil {
+		return nil, err
 	}
+	innerSel.Having = newHaving
 
 	innerSel = sqlparser.CopyOnRewrite(innerSel, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		colname, isColname := cursor.Node().(*sqlparser.ColName)
@@ -257,7 +247,7 @@ func createSubquery(
 		}
 		rsv := ctx.GetReservedArgumentFor(colname)
 		cursor.Replace(sqlparser.NewArgument(rsv))
-		predicate = sqlparser.AndExpressions(predicate, colname)
+		parent = sqlparser.AndExpressions(parent, colname)
 	}, nil).(*sqlparser.Select)
 	opInner, err := translateQueryToOp(ctx, innerSel)
 	if err != nil {
@@ -265,52 +255,87 @@ func createSubquery(
 	}
 
 	opInner = sqc.getRootOperator(opInner)
-
 	return &SubQuery{
-		FilterType:      filterType,
-		Subquery:        opInner,
-		Predicates:      jpc.predicates,
-		OuterPredicate:  predicate,
-		MergeExpression: original,
-		ArgName:         argName,
-		_sq:             subq,
-		IsProjection:    isProjection,
+		FilterType:   filterType,
+		Subquery:     opInner,
+		Predicates:   append(wherePreds, havingPreds...),
+		Original:     original,
+		ArgName:      argName,
+		_sq:          subq,
+		IsProjection: isProjection,
+		TopLevel:     topLevel,
 	}, nil
+}
+
+func (sqc *SubQueryContainer) inspectInnerPredicates(
+	ctx *plancontext.PlanningContext,
+	in *sqlparser.Where,
+) (*sqlparser.Where, sqlparser.Exprs, error) {
+	if in == nil {
+		return nil, nil, nil
+	}
+	jpc := &joinPredicateCollector{
+		totalID: sqc.totalID,
+		subqID:  sqc.subqID,
+		outerID: sqc.outerID,
+	}
+	for _, predicate := range sqlparser.SplitAndExpression(nil, in.Expr) {
+		sqlparser.RemoveKeyspaceFromColName(predicate)
+		subq, err := sqc.handleSubquery(ctx, predicate, sqc.totalID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if subq != nil {
+			continue
+		}
+		jpc.inspectPredicate(ctx, predicate)
+	}
+
+	if len(jpc.remainingPredicates) == 0 {
+		return nil, jpc.predicates, nil
+	} else {
+		in.Expr = sqlparser.AndExpressions(jpc.remainingPredicates...)
+		return in, jpc.predicates, nil
+	}
 }
 
 func createComparisonSubQuery(
 	ctx *plancontext.PlanningContext,
-	original *sqlparser.ComparisonExpr,
+	parent *sqlparser.ComparisonExpr,
+	original sqlparser.Expr,
 	subFromOutside *sqlparser.Subquery,
 	outerID semantics.TableSet,
 	name string,
 ) (*SubQuery, error) {
-	subq, outside := semantics.GetSubqueryAndOtherSide(original)
+	subq, outside := semantics.GetSubqueryAndOtherSide(parent)
 	if outside == nil || subq != subFromOutside {
 		panic("uh oh")
 	}
-	original = cloneASTAndSemState(ctx, original)
-
-	var predicate sqlparser.Expr
-	ae, ok := subq.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
-	if ok {
-		// this is a predicate that will only be used to check if we can merge the subquery with the outer query
-		predicate = &sqlparser.ComparisonExpr{
-			Operator: sqlparser.EqualOp,
-			Left:     outside,
-			Right:    ae.Expr,
-		}
-	}
 
 	filterType := opcode.PulloutValue
-	switch original.Operator {
+	switch parent.Operator {
 	case sqlparser.InOp:
 		filterType = opcode.PulloutIn
 	case sqlparser.NotInOp:
 		filterType = opcode.PulloutNotIn
 	}
 
-	return createSubquery(ctx, original, subq, outerID, predicate, name, filterType, false)
+	subquery, err := createSubquery(ctx, original, subq, outerID, parent, name, filterType, false)
+	if err != nil {
+		return nil, err
+	}
+
+	// if we are comparing with a column from the inner subquery,
+	// we add this extra predicate to check if the two sides are mergable or not
+	if ae, ok := subq.Select.GetColumns()[0].(*sqlparser.AliasedExpr); ok {
+		subquery.OuterPredicate = &sqlparser.ComparisonExpr{
+			Operator: sqlparser.EqualOp,
+			Left:     outside,
+			Right:    ae.Expr,
+		}
+	}
+
+	return subquery, err
 }
 
 type joinPredicateCollector struct {

@@ -426,8 +426,6 @@ func (p *Projection) ShortDescription() string {
 		result = append(result, "derived["+p.Alias+"]")
 	}
 
-	var types string
-
 	switch columns := p.Columns.(type) {
 	case StarProjections:
 		for _, se := range columns {
@@ -439,7 +437,7 @@ func (p *Projection) ShortDescription() string {
 		}
 	}
 
-	return strings.Join(result, ", ") + " " + types
+	return strings.Join(result, ", ")
 }
 
 func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
