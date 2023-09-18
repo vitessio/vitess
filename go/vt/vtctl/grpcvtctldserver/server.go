@@ -4706,6 +4706,21 @@ func (s *VtctldServer) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCr
 	return resp, err
 }
 
+// VDiffDelete is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VDiffDelete(ctx context.Context, req *vtctldatapb.VDiffDeleteRequest) (resp *vtctldatapb.VDiffDeleteResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffDelete")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("argument", req.Arg)
+
+	resp, err = s.ws.VDiffDelete(ctx, req)
+	return resp, err
+}
+
 // VDiffShow is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowRequest) (resp *vtctldatapb.VDiffShowResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffShow")

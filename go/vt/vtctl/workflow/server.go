@@ -1371,6 +1371,47 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 	}, nil
 }
 
+// VDiffDelete is part of the vtctlservicepb.VtctldServer interface.
+func (s *Server) VDiffDelete(ctx context.Context, req *vtctldatapb.VDiffDeleteRequest) (*vtctldatapb.VDiffDeleteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffDelete")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("argument", req.Arg)
+
+	tabletreq := &tabletmanagerdatapb.VDiffRequest{
+		Keyspace:  req.TargetKeyspace,
+		Workflow:  req.Workflow,
+		Action:    string(vdiff.DeleteAction),
+		ActionArg: req.Arg,
+	}
+
+	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
+	if err != nil {
+		return nil, err
+	}
+
+	err = ts.ForAllTargets(func(target *MigrationTarget) error {
+		_, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
+		return err
+	})
+	if err != nil {
+		log.Errorf("Error executing action %s: %v", vdiff.CreateAction, err)
+		return nil, err
+	}
+	var status string
+	if req.Arg == "all" {
+		status = "Deleted all VDiffs"
+	} else {
+		status = fmt.Sprintf("Deleted VDiff %s", req.Arg)
+	}
+
+	return &vtctldatapb.VDiffDeleteResponse{
+		Status: status,
+	}, nil
+}
+
 // VDiffShow is part of the vtctlservicepb.VtctldServer interface.
 func (s *Server) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowRequest) (*vtctldatapb.VDiffShowResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffShow")

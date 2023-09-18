@@ -4466,7 +4466,7 @@ func (m *VDiffDeleteRequest) CloneVT() *VDiffDeleteRequest {
 	r := &VDiffDeleteRequest{
 		Workflow:       m.Workflow,
 		TargetKeyspace: m.TargetKeyspace,
-		Uuid:           m.Uuid,
+		Arg:            m.Arg,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -16696,10 +16696,10 @@ func (m *VDiffDeleteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Uuid) > 0 {
-		i -= len(m.Uuid)
-		copy(dAtA[i:], m.Uuid)
-		i = encodeVarint(dAtA, i, uint64(len(m.Uuid)))
+	if len(m.Arg) > 0 {
+		i -= len(m.Arg)
+		copy(dAtA[i:], m.Arg)
+		i = encodeVarint(dAtA, i, uint64(len(m.Arg)))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -22299,7 +22299,7 @@ func (m *VDiffDeleteRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	l = len(m.Uuid)
+	l = len(m.Arg)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -51377,7 +51377,7 @@ func (m *VDiffDeleteRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Uuid", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Arg", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -51405,7 +51405,7 @@ func (m *VDiffDeleteRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Uuid = string(dAtA[iNdEx:postIndex])
+			m.Arg = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

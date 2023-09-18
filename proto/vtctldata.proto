@@ -1605,7 +1605,8 @@ message VDiffCreateResponse {
 message VDiffDeleteRequest {
   string workflow = 1;
   string target_keyspace = 2;
-  string uuid = 3;
+  // This will be 'all' or a UUID.
+  string arg = 3;
 }
 
 message VDiffDeleteResponse {

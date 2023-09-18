@@ -64079,8 +64079,8 @@ export namespace vtctldata {
         /** VDiffDeleteRequest target_keyspace */
         target_keyspace?: (string|null);
 
-        /** VDiffDeleteRequest uuid */
-        uuid?: (string|null);
+        /** VDiffDeleteRequest arg */
+        arg?: (string|null);
     }
 
     /** Represents a VDiffDeleteRequest. */
@@ -64098,8 +64098,8 @@ export namespace vtctldata {
         /** VDiffDeleteRequest target_keyspace. */
         public target_keyspace: string;
 
-        /** VDiffDeleteRequest uuid. */
-        public uuid: string;
+        /** VDiffDeleteRequest arg. */
+        public arg: string;
 
         /**
          * Creates a new VDiffDeleteRequest instance using the specified properties.

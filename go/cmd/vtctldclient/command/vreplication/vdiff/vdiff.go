@@ -65,6 +65,10 @@ var (
 		AutoRetry                   bool
 	}{}
 
+	vDiffDeleteOptions = struct {
+		Arg string
+	}{}
+
 	vDiffShowOptions = struct {
 		Arg     string
 		Verbose bool
@@ -123,6 +127,30 @@ See the --help output for each command for more details.`,
 		Args:                  cobra.MaximumNArgs(1),
 		PreRunE:               parseAndValidateCreate,
 		RunE:                  commandVDiffCreate,
+	}
+
+	// vDiffShow makes a VDiffDelete gRPC call to a vtctld.
+	vDiffDelete = &cobra.Command{
+		Use:   "delete",
+		Short: "Delete VDiffs.",
+		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace delete a037a9e2-5628-11ee-8c99-0242ac120002
+vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace delete all`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Delete"},
+		Args:                  cobra.ExactArgs(1),
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			larg := strings.ToLower(args[0])
+			switch larg {
+			case "all":
+			default:
+				if _, err := uuid.Parse(args[0]); err != nil {
+					return fmt.Errorf("invalid UUID provided: %v", err)
+				}
+			}
+			vDiffDeleteOptions.Arg = larg
+			return nil
+		},
+		RunE: commandVDiffDelete,
 	}
 
 	// vDiffShow makes a VDiffShow gRPC call to a vtctld.
@@ -191,6 +219,38 @@ func commandVDiffCreate(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		data = []byte(fmt.Sprintf("VDiff %s scheduled on target shards, use show to view progress", resp.Uuid))
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
+func commandVDiffDelete(cmd *cobra.Command, args []string) error {
+	format, err := common.GetOutputFormat(cmd)
+	if err != nil {
+		return err
+	}
+	cli.FinishedParsing(cmd)
+
+	resp, err := common.GetClient().VDiffDelete(common.GetCommandCtx(), &vtctldatapb.VDiffDeleteRequest{
+		Workflow:       common.BaseOptions.Workflow,
+		TargetKeyspace: common.BaseOptions.TargetKeyspace,
+		Arg:            vDiffDeleteOptions.Arg,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	var data []byte
+	if format == "json" {
+		data, err = cli.MarshalJSON(resp)
+		if err != nil {
+			return err
+		}
+	} else {
+		data = []byte(resp.Status)
 	}
 
 	fmt.Printf("%s\n", data)
@@ -665,6 +725,8 @@ func registerVDiffCommands(root *cobra.Command) {
 	vDiffCreate.Flags().StringSliceVar(&vDiffCreateOptions.Tables, "tables", nil, "Only run vdiff for these tables in the workflow")
 	vDiffCreate.Flags().Uint32Var(&vDiffCreateOptions.MaxExtraRowsToCompare, "max-extra-rows-to-compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 	vDiff.AddCommand(vDiffCreate)
+
+	vDiff.AddCommand(vDiffDelete)
 
 	vDiffShow.Flags().BoolVar(&vDiffShowOptions.Verbose, "verbose", false, "Show verbose output in summaries")
 	vDiff.AddCommand(vDiffShow)
