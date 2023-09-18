@@ -1362,7 +1362,7 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 		return err
 	})
 	if err != nil {
-		log.Errorf("Error executing action %s: %v", vdiff.CreateAction, err)
+		log.Errorf("Error executing vdiff create action: %v", err)
 		return nil, err
 	}
 
@@ -1397,7 +1397,7 @@ func (s *Server) VDiffDelete(ctx context.Context, req *vtctldatapb.VDiffDeleteRe
 		return err
 	})
 	if err != nil {
-		log.Errorf("Error executing action %s: %v", vdiff.CreateAction, err)
+		log.Errorf("Error executing vdiff delete action: %v", err)
 		return nil, err
 	}
 	var status string
@@ -1409,6 +1409,41 @@ func (s *Server) VDiffDelete(ctx context.Context, req *vtctldatapb.VDiffDeleteRe
 
 	return &vtctldatapb.VDiffDeleteResponse{
 		Status: status,
+	}, nil
+}
+
+// VDiffResume is part of the vtctlservicepb.VtctldServer interface.
+func (s *Server) VDiffResume(ctx context.Context, req *vtctldatapb.VDiffResumeRequest) (*vtctldatapb.VDiffResumeResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffResume")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("uuid", req.Uuid)
+
+	tabletreq := &tabletmanagerdatapb.VDiffRequest{
+		Keyspace:  req.TargetKeyspace,
+		Workflow:  req.Workflow,
+		Action:    string(vdiff.ResumeAction),
+		VdiffUuid: req.Uuid,
+	}
+
+	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
+	if err != nil {
+		return nil, err
+	}
+
+	err = ts.ForAllTargets(func(target *MigrationTarget) error {
+		_, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
+		return err
+	})
+	if err != nil {
+		log.Errorf("Error executing vdiff resume action: %v", err)
+		return nil, err
+	}
+
+	return &vtctldatapb.VDiffResumeResponse{
+		Status: fmt.Sprintf("Resumed VDiff %s", req.Uuid),
 	}, nil
 }
 
@@ -1445,7 +1480,7 @@ func (s *Server) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowReques
 		return err
 	})
 	if output.err != nil {
-		log.Errorf("Error executing show action: %v", output.err)
+		log.Errorf("Error executing vdiff show action: %v", output.err)
 		return nil, output.err
 	}
 

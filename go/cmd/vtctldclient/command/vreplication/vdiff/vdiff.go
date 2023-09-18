@@ -34,11 +34,13 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 )
 
 var (
@@ -67,6 +69,10 @@ var (
 
 	vDiffDeleteOptions = struct {
 		Arg string
+	}{}
+
+	vDiffResumeOptions = struct {
+		UUID uuid.UUID
 	}{}
 
 	vDiffShowOptions = struct {
@@ -153,6 +159,25 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 		RunE: commandVDiffDelete,
 	}
 
+	// vDiffResume makes a VDiffResume gRPC call to a vtctld.
+	vDiffResume = &cobra.Command{
+		Use:                   "resume",
+		Short:                 "Resume a VDiff.",
+		Example:               `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace resume a037a9e2-5628-11ee-8c99-0242ac120002`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Resume"},
+		Args:                  cobra.ExactArgs(1),
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			uuid, err := uuid.Parse(args[0])
+			if err != nil {
+				return fmt.Errorf("invalid UUID provided: %v", err)
+			}
+			vDiffResumeOptions.UUID = uuid
+			return nil
+		},
+		RunE: commandVDiffResume,
+	}
+
 	// vDiffShow makes a VDiffShow gRPC call to a vtctld.
 	vDiffShow = &cobra.Command{
 		Use:   "show",
@@ -211,17 +236,46 @@ func commandVDiffCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	var data []byte
-	if format == "json" {
-		data, err = cli.MarshalJSON(resp)
-		if err != nil {
-			return err
+	if vDiffCreateOptions.Wait {
+		tkr := time.NewTicker(vDiffCreateOptions.WaitUpdateInterval)
+		defer tkr.Stop()
+		var state vdiff.VDiffState
+		ctx := common.GetCommandCtx()
+		vtctldClient := common.GetClient()
+		uuidStr := vDiffCreateOptions.UUID.String()
+		for {
+			select {
+			case <-ctx.Done():
+				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+			case <-tkr.C:
+				resp, err := vtctldClient.VDiffShow(ctx, &vtctldatapb.VDiffShowRequest{
+					Workflow:       common.BaseOptions.Workflow,
+					TargetKeyspace: common.BaseOptions.TargetKeyspace,
+					Arg:            uuidStr,
+				})
+				if err != nil {
+					return err
+				}
+				if state, err = displayVDiff2ShowSingleSummary(format, common.BaseOptions.TargetKeyspace, common.BaseOptions.Workflow, uuidStr, resp, false); err != nil {
+					return err
+				}
+				if state == vdiff.CompletedState {
+					return nil
+				}
+			}
 		}
 	} else {
-		data = []byte(fmt.Sprintf("VDiff %s scheduled on target shards, use show to view progress", resp.Uuid))
+		var data []byte
+		if format == "json" {
+			data, err = cli.MarshalJSON(resp)
+			if err != nil {
+				return err
+			}
+		} else {
+			data = []byte(fmt.Sprintf("VDiff %s scheduled on target shards, use show to view progress", resp.Uuid))
+		}
+		fmt.Printf("%s\n", data)
 	}
-
-	fmt.Printf("%s\n", data)
 
 	return nil
 }
@@ -237,6 +291,38 @@ func commandVDiffDelete(cmd *cobra.Command, args []string) error {
 		Workflow:       common.BaseOptions.Workflow,
 		TargetKeyspace: common.BaseOptions.TargetKeyspace,
 		Arg:            vDiffDeleteOptions.Arg,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	var data []byte
+	if format == "json" {
+		data, err = cli.MarshalJSON(resp)
+		if err != nil {
+			return err
+		}
+	} else {
+		data = []byte(resp.Status)
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
+func commandVDiffResume(cmd *cobra.Command, args []string) error {
+	format, err := common.GetOutputFormat(cmd)
+	if err != nil {
+		return err
+	}
+	cli.FinishedParsing(cmd)
+
+	resp, err := common.GetClient().VDiffResume(common.GetCommandCtx(), &vtctldatapb.VDiffResumeRequest{
+		Workflow:       common.BaseOptions.Workflow,
+		TargetKeyspace: common.BaseOptions.TargetKeyspace,
+		Uuid:           vDiffResumeOptions.UUID.String(),
 	})
 
 	if err != nil {
@@ -284,8 +370,7 @@ type vdiffSummary struct {
 	Progress           *vdiff.ProgressReport                  `json:"Progress,omitempty"`
 }
 
-const (
-	summaryTextTemplate = `
+const summaryTextTemplate = `
 VDiff Summary for {{.Keyspace}}.{{.Workflow}} ({{.UUID}})
 State:        {{.State}}
 {{if .Errors}}
@@ -310,7 +395,6 @@ Table {{$table.TableName}}:
  
 Use "--format=json" for more detailed output.
 `
-)
 
 type VDiffListing struct {
 	UUID, Workflow, Keyspace, Shard, State string
@@ -724,9 +808,13 @@ func registerVDiffCommands(root *cobra.Command) {
 	vDiffCreate.Flags().BoolVar(&vDiffCreateOptions.OnlyPKs, "only-pks", false, "When reporting missing rows, only show primary keys in the report.")
 	vDiffCreate.Flags().StringSliceVar(&vDiffCreateOptions.Tables, "tables", nil, "Only run vdiff for these tables in the workflow")
 	vDiffCreate.Flags().Uint32Var(&vDiffCreateOptions.MaxExtraRowsToCompare, "max-extra-rows-to-compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
+	vDiffCreate.Flags().BoolVar(&vDiffCreateOptions.Wait, "wait", false, "When creating or resuming a vdiff, wait for it to finish before exiting")
+	vDiffCreate.Flags().DurationVar(&vDiffCreateOptions.WaitUpdateInterval, "wait-update-interval", time.Duration(1*time.Minute), "When waiting on a vdiff to finish, check and display the current status this often")
 	vDiff.AddCommand(vDiffCreate)
 
 	vDiff.AddCommand(vDiffDelete)
+
+	vDiff.AddCommand(vDiffResume)
 
 	vDiffShow.Flags().BoolVar(&vDiffShowOptions.Verbose, "verbose", false, "Show verbose output in summaries")
 	vDiff.AddCommand(vDiffShow)

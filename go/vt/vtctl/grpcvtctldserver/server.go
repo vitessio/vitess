@@ -4721,6 +4721,21 @@ func (s *VtctldServer) VDiffDelete(ctx context.Context, req *vtctldatapb.VDiffDe
 	return resp, err
 }
 
+// VDiffResume is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VDiffResume(ctx context.Context, req *vtctldatapb.VDiffResumeRequest) (resp *vtctldatapb.VDiffResumeResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffResume")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("uuid", req.Uuid)
+
+	resp, err = s.ws.VDiffResume(ctx, req)
+	return resp, err
+}
+
 // VDiffShow is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowRequest) (resp *vtctldatapb.VDiffShowResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffShow")
