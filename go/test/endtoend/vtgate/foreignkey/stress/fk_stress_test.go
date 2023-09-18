@@ -574,24 +574,25 @@ func TestStressFK(t *testing.T) {
 
 	runOnlineDDL := false
 
-	for _, action := range referenceActions {
-		tcase := &testCase{
-			workload:       false,
-			onDeleteAction: action,
-			onUpdateAction: action,
+	// Without workload ; with workload
+	for _, workload := range []bool{false, true} {
+		// For any type of ON DELETE action
+		for _, actionDelete := range referenceActions {
+			// For any type of ON UPDATE action
+			for _, actionUpdate := range referenceActions {
+				tcase := &testCase{
+					workload:       workload,
+					onDeleteAction: actionDelete,
+					onUpdateAction: actionUpdate,
+				}
+				ExecuteFKTest(t, tcase)
+			}
 		}
-		ExecuteFKTest(t, tcase)
-	}
-	for _, action := range referenceActions {
-		tcase := &testCase{
-			workload:       true,
-			onDeleteAction: action,
-			onUpdateAction: action,
-		}
-		ExecuteFKTest(t, tcase)
 	}
 
 	if runOnlineDDL {
+		// Running Online DDL on all test tables. We don't use all of the combinations
+		// presented above; we will run with workload, and suffice with same ON DELETE - ON UPDATE actions.
 		for _, action := range referenceActions {
 			for _, table := range tableNames {
 				tcase := &testCase{
