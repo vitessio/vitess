@@ -816,6 +816,8 @@ func isFKError(err error) bool {
 		return false
 	case sqlerror.ERQueryInterrupted: // cancelled due to context expiration
 		return false
+	case sqlerror.ERLockDeadlock:
+		return false // bummer, but deadlocks can happen, it's a legit error.
 	case sqlerror.ERNoReferencedRow,
 		sqlerror.ERRowIsReferenced,
 		sqlerror.ERRowIsReferenced2,
