@@ -301,6 +301,6 @@ func TestLeftJoinUsingUnsharded(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	utils.Exec(t, mcmp.VtConn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
-	utils.Exec(t, mcmp.VtConn, "select * from uks.unsharded as A left join uks.unsharded as B using(id1)")
+	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
+	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from uks.unsharded as A left join uks.unsharded as B using(id1)")
 }
