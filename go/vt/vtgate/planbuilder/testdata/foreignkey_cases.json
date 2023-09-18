@@ -82,7 +82,7 @@
               "Sharded": true
             },
             "FieldQuery": "select colb, cola, y, colc, x from multicol_tbl1 where 1 != 1",
-            "Query": "select colb, cola, y, colc, x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 lock in share mode",
+            "Query": "select colb, cola, y, colc, x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update",
             "Table": "multicol_tbl1",
             "Values": [
               "INT64(1)",
@@ -155,7 +155,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col5, t5col5 from tbl5 where 1 != 1",
-            "Query": "select col5, t5col5 from tbl5 lock in share mode",
+            "Query": "select col5, t5col5 from tbl5 for update",
             "Table": "tbl5"
           },
           {
@@ -233,7 +233,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-            "Query": "select col9 from u_tbl9 where col9 = 5 lock in share mode",
+            "Query": "select col9 from u_tbl9 where col9 = 5 for update",
             "Table": "u_tbl9"
           },
           {
@@ -312,7 +312,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-            "Query": "select col2 from u_tbl2 where id = 1 lock in share mode",
+            "Query": "select col2 from u_tbl2 where id = 1 for update",
             "Table": "u_tbl2"
           },
           {
@@ -423,7 +423,7 @@
               "Sharded": true
             },
             "FieldQuery": "select t5col5 from tbl5 where 1 != 1",
-            "Query": "select t5col5 from tbl5 lock in share mode",
+            "Query": "select t5col5 from tbl5 for update",
             "Table": "tbl5"
           },
           {
@@ -592,7 +592,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col9 from tbl9 where 1 != 1",
-            "Query": "select col9 from tbl9 where col9 = 34 lock in share mode",
+            "Query": "select col9 from tbl9 where col9 = 34 for update",
             "Table": "tbl9",
             "Values": [
               "INT64(34)"
@@ -657,7 +657,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col1, col1 from u_tbl1 where 1 != 1",
-            "Query": "select col1, col1 from u_tbl1 lock in share mode",
+            "Query": "select col1, col1 from u_tbl1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -816,7 +816,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-            "Query": "select col2 from u_tbl2 where id = 1 lock in share mode",
+            "Query": "select col2 from u_tbl2 where id = 1 for update",
             "Table": "u_tbl2"
           },
           {
@@ -873,7 +873,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col1, col1 from u_tbl1 where 1 != 1",
-            "Query": "select col1, col1 from u_tbl1 where id = 1 lock in share mode",
+            "Query": "select col1, col1 from u_tbl1 where id = 1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -1112,7 +1112,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col6 from u_tbl6 where 1 != 1",
-            "Query": "select col6 from u_tbl6 lock in share mode",
+            "Query": "select col6 from u_tbl6 for update",
             "Table": "u_tbl6"
           },
           {
@@ -1188,7 +1188,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col7 from u_tbl7 where 1 != 1",
-            "Query": "select col7 from u_tbl7 lock in share mode",
+            "Query": "select col7 from u_tbl7 for update",
             "Table": "u_tbl7"
           },
           {
@@ -1314,7 +1314,7 @@
               "Sharded": false
             },
             "FieldQuery": "select cola, colb from u_multicol_tbl1 where 1 != 1",
-            "Query": "select cola, colb from u_multicol_tbl1 where id = 3 lock in share mode",
+            "Query": "select cola, colb from u_multicol_tbl1 where id = 3 for update",
             "Table": "u_multicol_tbl1"
           },
           {

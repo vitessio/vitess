@@ -102,6 +102,7 @@ jobs:
             release_notes:
               - 'changelog/**'
               - './go/tools/releases/**'
+              - '.github/workflows/static_checks_etc.yml'
 
       - name: Set up Go
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
@@ -218,3 +219,4 @@ jobs:
           echo 'Running `go run ./go/tools/releases/releases.go` on CI yields the following changes:'
           echo "$output"
           echo ""
+          exit 1

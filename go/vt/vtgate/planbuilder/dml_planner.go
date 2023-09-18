@@ -60,7 +60,9 @@ func setLockOnAllSelect(plan logicalPlan) {
 	_, _ = visit(plan, func(plan logicalPlan) (bool, logicalPlan, error) {
 		switch node := plan.(type) {
 		case *route:
-			node.Select.SetLock(sqlparser.ShareModeLock)
+			if node.Select.GetLock() == sqlparser.NoLock {
+				node.Select.SetLock(sqlparser.ShareModeLock)
+			}
 			return true, node, nil
 		}
 		return true, plan, nil
