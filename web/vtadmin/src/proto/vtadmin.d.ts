@@ -64593,6 +64593,9 @@ export namespace vtctldata {
 
     /** Properties of a VDiffShowResponse. */
     interface IVDiffShowResponse {
+
+        /** VDiffShowResponse tablet_responses */
+        tablet_responses?: ({ [k: string]: tabletmanagerdata.IVDiffResponse }|null);
     }
 
     /** Represents a VDiffShowResponse. */
@@ -64603,6 +64606,9 @@ export namespace vtctldata {
          * @param [properties] Properties to set
          */
         constructor(properties?: vtctldata.IVDiffShowResponse);
+
+        /** VDiffShowResponse tablet_responses. */
+        public tablet_responses: { [k: string]: tabletmanagerdata.IVDiffResponse };
 
         /**
          * Creates a new VDiffShowResponse instance using the specified properties.

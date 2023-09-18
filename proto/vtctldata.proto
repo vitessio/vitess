@@ -1630,6 +1630,8 @@ message VDiffShowRequest {
 }
 
 message VDiffShowResponse {
+  // The key is keyspace/shard.
+  map<string, tabletmanagerdata.VDiffResponse> tablet_responses = 1;
 }
 
 message VDiffStopRequest {

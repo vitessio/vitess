@@ -94,7 +94,6 @@ type sequenceMetadata struct {
 
 type VDiffOutput struct {
 	mu        sync.Mutex
-	request   *tabletmanagerdata.VDiffRequest
 	responses map[string]*tabletmanagerdata.VDiffResponse
 	err       error
 }
@@ -1370,6 +1369,51 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 
 	return &vtctldatapb.VDiffCreateResponse{
 		Uuid: req.Uuid,
+	}, nil
+}
+
+// VDiffShow is part of the vtctlservicepb.VtctldServer interface.
+func (s *Server) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowRequest) (*vtctldatapb.VDiffShowResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffShow")
+	defer span.Finish()
+
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("PANIC: %v", r)
+		}
+	}()
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("argument", req.Arg)
+
+	tabletreq := &tabletmanagerdata.VDiffRequest{
+		Keyspace:  req.TargetKeyspace,
+		Workflow:  req.Workflow,
+		Action:    string(vdiff.ShowAction),
+		ActionArg: req.Arg,
+	}
+
+	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
+	if err != nil {
+		return nil, err
+	}
+
+	output := &VDiffOutput{}
+	output.err = ts.ForAllTargets(func(target *MigrationTarget) error {
+		resp, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
+		output.mu.Lock()
+		defer output.mu.Unlock()
+		output.responses[target.GetShard().ShardName()] = resp
+		return err
+	})
+	if output.err != nil {
+		log.Errorf("Error executing show action: %v", output.err)
+		return nil, output.err
+	}
+
+	return &vtctldatapb.VDiffShowResponse{
+		TabletResponses: output.responses,
 	}, nil
 }
 

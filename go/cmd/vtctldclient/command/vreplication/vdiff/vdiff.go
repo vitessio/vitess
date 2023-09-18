@@ -17,21 +17,28 @@ limitations under the License.
 package vdiff
 
 import (
+	"encoding/json"
 	"fmt"
+	"html/template"
 	"math"
+	"reflect"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/bndr/gotabulate"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/sqltypes"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 )
 
 var (
@@ -56,7 +63,11 @@ var (
 		Wait                        bool
 		WaitUpdateInterval          time.Duration
 		AutoRetry                   bool
-		Verbose                     bool
+	}{}
+
+	vDiffShowOptions = struct {
+		Arg     string
+		Verbose bool
 	}{}
 
 	parseAndValidateCreate = func(cmd *cobra.Command, args []string) error {
@@ -101,7 +112,7 @@ See the --help output for each command for more details.`,
 		Args:                  cobra.NoArgs,
 	}
 
-	// vDiffCreate makes a vDiffCreate gRPC call to a vtctld.
+	// vDiffCreate makes a VDiffCreate gRPC call to a vtctld.
 	vDiffCreate = &cobra.Command{
 		Use:                   "create",
 		Short:                 "Create and run a VDiff to compare the tables involved in a VReplication workflow between the source and target.",
@@ -114,15 +125,29 @@ See the --help output for each command for more details.`,
 		RunE:                  commandVDiffCreate,
 	}
 
-	// vDiffShow makes a vDiffShow gRPC call to a vtctld.
+	// vDiffShow makes a VDiffShow gRPC call to a vtctld.
 	vDiffShow = &cobra.Command{
-		Use:                   "show",
-		Short:                 "Show the status of a VDiff.",
-		Example:               `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace show last`,
+		Use:   "show",
+		Short: "Show the status of a VDiff.",
+		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace show last
+vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace show a037a9e2-5628-11ee-8c99-0242ac120002
+vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace show all`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Show"},
 		Args:                  cobra.ExactArgs(1),
-		RunE:                  commandVDiffShow,
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			larg := strings.ToLower(args[0])
+			switch larg {
+			case "last", "all":
+			default:
+				if _, err := uuid.Parse(args[0]); err != nil {
+					return fmt.Errorf("invalid UUID provided: %v", err)
+				}
+			}
+			vDiffShowOptions.Arg = larg
+			return nil
+		},
+		RunE: commandVDiffShow,
 	}
 )
 
@@ -152,7 +177,6 @@ func commandVDiffCreate(cmd *cobra.Command, args []string) error {
 		Wait:                        vDiffCreateOptions.Wait,
 		WaitUpdateInterval:          protoutil.DurationToProto(vDiffCreateOptions.WaitUpdateInterval),
 		AutoRetry:                   vDiffCreateOptions.AutoRetry,
-		Verbose:                     vDiffCreateOptions.Verbose,
 	})
 
 	if err != nil {
@@ -174,7 +198,456 @@ func commandVDiffCreate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// Summary aggregates/selects the current state of the vdiff from all shards.
+type vdiffTableSummary struct {
+	TableName       string
+	State           vdiff.VDiffState
+	RowsCompared    int64
+	MatchingRows    int64
+	MismatchedRows  int64
+	ExtraRowsSource int64
+	ExtraRowsTarget int64
+	LastUpdated     string `json:"LastUpdated,omitempty"`
+}
+type vdiffSummary struct {
+	Workflow, Keyspace string
+	State              vdiff.VDiffState
+	UUID               string
+	RowsCompared       int64
+	HasMismatch        bool
+	Shards             string
+	StartedAt          string                                 `json:"StartedAt,omitempty"`
+	CompletedAt        string                                 `json:"CompletedAt,omitempty"`
+	TableSummaryMap    map[string]vdiffTableSummary           `json:"TableSummary,omitempty"`
+	Reports            map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`
+	Errors             map[string]string                      `json:"Errors,omitempty"`
+	Progress           *vdiff.ProgressReport                  `json:"Progress,omitempty"`
+}
+
+const (
+	summaryTextTemplate = `
+VDiff Summary for {{.Keyspace}}.{{.Workflow}} ({{.UUID}})
+State:        {{.State}}
+{{if .Errors}}
+{{- range $shard, $error := .Errors}}
+              Error: (shard {{$shard}}) {{$error}}
+{{- end}}
+{{end}}
+RowsCompared: {{.RowsCompared}}
+HasMismatch:  {{.HasMismatch}}
+StartedAt:    {{.StartedAt}}
+{{if (eq .State "started")}}Progress:     {{printf "%.2f" .Progress.Percentage}}%%{{if .Progress.ETA}}, ETA: {{.Progress.ETA}}{{end}}{{end}}
+{{if .CompletedAt}}CompletedAt:  {{.CompletedAt}}{{end}}
+{{range $table := .TableSummaryMap}} 
+Table {{$table.TableName}}:
+	State:            {{$table.State}}
+	ProcessedRows:    {{$table.RowsCompared}}
+	MatchingRows:     {{$table.MatchingRows}}
+{{if $table.MismatchedRows}}	MismatchedRows:   {{$table.MismatchedRows}}{{end}}
+{{if $table.ExtraRowsSource}}	ExtraRowsSource:  {{$table.ExtraRowsSource}}{{end}}
+{{if $table.ExtraRowsTarget}}	ExtraRowsTarget:  {{$table.ExtraRowsTarget}}{{end}}
+{{end}}
+ 
+Use "--format=json" for more detailed output.
+`
+)
+
+type VDiffListing struct {
+	UUID, Workflow, Keyspace, Shard, State string
+}
+
+func (vdl *VDiffListing) String() string {
+	str := fmt.Sprintf("UUID: %s, Workflow: %s, Keyspace: %s, Shard: %s, State: %s",
+		vdl.UUID, vdl.Workflow, vdl.Keyspace, vdl.Shard, vdl.State)
+	return str
+}
+
+func getStructFieldNames(s any) []string {
+	t := reflect.TypeOf(s)
+
+	names := make([]string, t.NumField())
+	for i := range names {
+		names[i] = t.Field(i).Name
+	}
+
+	return names
+}
+
+func displayListings(listings []*VDiffListing) string {
+	var strArray2 [][]string
+	var strArray []string
+	str := ""
+
+	if len(listings) == 0 {
+		return ""
+	}
+	fields := getStructFieldNames(VDiffListing{})
+	strArray = append(strArray, fields...)
+	strArray2 = append(strArray2, strArray)
+	for _, listing := range listings {
+		strArray = nil
+		v := reflect.ValueOf(*listing)
+		for _, field := range fields {
+			strArray = append(strArray, v.FieldByName(field).String())
+		}
+		strArray2 = append(strArray2, strArray)
+	}
+	t := gotabulate.Create(strArray2)
+	str = t.Render("grid")
+	return str
+}
+
+func displayVDiff2ShowResponse(format, keyspace, workflowName, actionArg string, res *vtctldatapb.VDiffShowResponse, verbose bool) error {
+	var vdiffUUID uuid.UUID
+	var err error
+	switch actionArg {
+	case vdiff.AllActionArg:
+		return displayVDiff2ShowRecent(format, keyspace, workflowName, actionArg, res)
+	case vdiff.LastActionArg:
+		for _, resp := range res.TabletResponses {
+			vdiffUUID, err = uuid.Parse(resp.VdiffUuid)
+			if err != nil {
+				if format == "json" {
+					fmt.Printf("{}\n")
+				} else {
+					fmt.Printf("No previous vdiff found for %s.%s\n", keyspace, workflowName)
+				}
+				return nil
+			}
+			break
+		}
+		fallthrough
+	default:
+		if vdiffUUID == uuid.Nil { // Then it must be passed as the action arg
+			vdiffUUID, err = uuid.Parse(actionArg)
+			if err != nil {
+				return err
+			}
+		}
+		if len(res.TabletResponses) == 0 {
+			return fmt.Errorf("no response received for vdiff show of %s.%s(%s)", keyspace, workflowName, vdiffUUID.String())
+		}
+		_, err := displayVDiff2ShowSingleSummary(format, keyspace, workflowName, vdiffUUID.String(), res, verbose)
+		return err
+	}
+}
+
+func displayVDiff2ShowRecent(format, keyspace, workflowName, subCommand string, res *vtctldatapb.VDiffShowResponse) error {
+	str := ""
+	recent, err := buildVDiff2Recent(res)
+	if err != nil {
+		return err
+	}
+	if format == "json" {
+		jsonText, err := json.MarshalIndent(recent, "", "\t")
+		if err != nil {
+			return err
+		}
+		str = string(jsonText)
+		if str == "null" {
+			str = "[]"
+		}
+	} else {
+		str = displayListings(recent)
+		if str == "" {
+			str = fmt.Sprintf("No vdiffs found for %s.%s", keyspace, workflowName)
+		}
+	}
+	fmt.Printf(str + "\n")
+	return nil
+}
+
+func buildVDiff2Recent(res *vtctldatapb.VDiffShowResponse) ([]*VDiffListing, error) {
+	var listings []*VDiffListing
+	for _, resp := range res.TabletResponses {
+		if resp != nil && resp.Output != nil {
+			qr := sqltypes.Proto3ToResult(resp.Output)
+			for _, row := range qr.Named().Rows {
+				listings = append(listings, &VDiffListing{
+					UUID:     row["vdiff_uuid"].ToString(),
+					Workflow: row["workflow"].ToString(),
+					Keyspace: row["keyspace"].ToString(),
+					Shard:    row["shard"].ToString(),
+					State:    row["state"].ToString(),
+				})
+			}
+		}
+	}
+	return listings, nil
+}
+
+func displayVDiff2ShowSingleSummary(format, keyspace, workflowName, uuid string, res *vtctldatapb.VDiffShowResponse, verbose bool) (vdiff.VDiffState, error) {
+	state := vdiff.UnknownState
+	str := ""
+	summary, err := buildVDiff2SingleSummary(keyspace, workflowName, uuid, res, verbose)
+	if err != nil {
+		return state, err
+	}
+	state = summary.State
+	if format == "json" {
+		jsonText, err := json.MarshalIndent(summary, "", "  ")
+		if err != nil {
+			return state, err
+		}
+		str = string(jsonText)
+	} else {
+		tmpl, err := template.New("test").Parse(summaryTextTemplate)
+		if err != nil {
+			return state, err
+		}
+		sb := new(strings.Builder)
+		err = tmpl.Execute(sb, summary)
+		if err != nil {
+			return state, err
+		}
+		str = sb.String()
+		for {
+			str2 := strings.Replace(str, "\n\n", "\n", -1)
+			if str == str2 {
+				break
+			}
+			str = str2
+		}
+	}
+	fmt.Printf(str + "\n")
+	return state, nil
+}
+func buildVDiff2SingleSummary(keyspace, workflow, uuid string, res *vtctldatapb.VDiffShowResponse, verbose bool) (*vdiffSummary, error) {
+	summary := &vdiffSummary{
+		Workflow:     workflow,
+		Keyspace:     keyspace,
+		UUID:         uuid,
+		State:        vdiff.UnknownState,
+		RowsCompared: 0,
+		StartedAt:    "",
+		CompletedAt:  "",
+		HasMismatch:  false,
+		Shards:       "",
+		Reports:      make(map[string]map[string]vdiff.DiffReport),
+		Errors:       make(map[string]string),
+		Progress:     nil,
+	}
+
+	var tableSummaryMap map[string]vdiffTableSummary
+	var reports map[string]map[string]vdiff.DiffReport
+	// Keep a tally of the states across all tables in all shards.
+	tableStateCounts := map[vdiff.VDiffState]int{
+		vdiff.UnknownState:   0,
+		vdiff.PendingState:   0,
+		vdiff.StartedState:   0,
+		vdiff.StoppedState:   0,
+		vdiff.ErrorState:     0,
+		vdiff.CompletedState: 0,
+	}
+	// Keep a tally of the summary states across all shards.
+	shardStateCounts := map[vdiff.VDiffState]int{
+		vdiff.UnknownState:   0,
+		vdiff.PendingState:   0,
+		vdiff.StartedState:   0,
+		vdiff.StoppedState:   0,
+		vdiff.ErrorState:     0,
+		vdiff.CompletedState: 0,
+	}
+	// Keep a tally of the approximate total rows to process as we'll use this for our progress
+	// report.
+	totalRowsToCompare := int64(0)
+	var shards []string
+	for shard, resp := range res.TabletResponses {
+		first := true
+		if resp != nil && resp.Output != nil {
+			shards = append(shards, shard)
+			qr := sqltypes.Proto3ToResult(resp.Output)
+			if tableSummaryMap == nil {
+				tableSummaryMap = make(map[string]vdiffTableSummary, 0)
+				reports = make(map[string]map[string]vdiff.DiffReport, 0)
+			}
+			for _, row := range qr.Named().Rows {
+				// Update the global VDiff summary based on the per shard level summary.
+				// Since these values will be the same for all subsequent rows we only use the
+				// first row.
+				if first {
+					first = false
+					// Our timestamps are strings in `2022-06-26 20:43:25` format so we sort them
+					// lexicographically.
+					// We should use the earliest started_at across all shards.
+					if sa := row.AsString("started_at", ""); summary.StartedAt == "" || sa < summary.StartedAt {
+						summary.StartedAt = sa
+					}
+					// And we should use the latest completed_at across all shards.
+					if ca := row.AsString("completed_at", ""); summary.CompletedAt == "" || ca > summary.CompletedAt {
+						summary.CompletedAt = ca
+					}
+					// If we had an error on the shard, then let's add that to the summary.
+					if le := row.AsString("last_error", ""); le != "" {
+						summary.Errors[shard] = le
+					}
+					// Keep track of how many shards are marked as a specific state. We check
+					// this combined with the shard.table states to determine the VDiff summary
+					// state.
+					shardStateCounts[vdiff.VDiffState(strings.ToLower(row.AsString("vdiff_state", "")))]++
+				}
+
+				// Global VDiff summary updates that take into account the per table details
+				// per shard.
+				{
+					summary.RowsCompared += row.AsInt64("rows_compared", 0)
+					totalRowsToCompare += row.AsInt64("table_rows", 0)
+
+					// If we had a mismatch on any table on any shard then the global VDiff
+					// summary does too.
+					if mm, _ := row.ToBool("has_mismatch"); mm {
+						summary.HasMismatch = true
+					}
+				}
+
+				// Table summary information that must be accounted for across all shards.
+				{
+					table := row.AsString("table_name", "")
+					// Create the global VDiff table summary object if it doesn't exist.
+					if _, ok := tableSummaryMap[table]; !ok {
+						tableSummaryMap[table] = vdiffTableSummary{
+							TableName: table,
+							State:     vdiff.UnknownState,
+						}
+
+					}
+					ts := tableSummaryMap[table]
+					// This is the shard level VDiff table state.
+					sts := vdiff.VDiffState(strings.ToLower(row.AsString("table_state", "")))
+					tableStateCounts[sts]++
+
+					// The error state must be sticky, and we should not override any other
+					// known state with completed.
+					switch sts {
+					case vdiff.CompletedState:
+						if ts.State == vdiff.UnknownState {
+							ts.State = sts
+						}
+					case vdiff.ErrorState:
+						ts.State = sts
+					default:
+						if ts.State != vdiff.ErrorState {
+							ts.State = sts
+						}
+					}
+
+					diffReport := row.AsString("report", "")
+					dr := vdiff.DiffReport{}
+					if diffReport != "" {
+						err := json.Unmarshal([]byte(diffReport), &dr)
+						if err != nil {
+							return nil, err
+						}
+						ts.RowsCompared += dr.ProcessedRows
+						ts.MismatchedRows += dr.MismatchedRows
+						ts.MatchingRows += dr.MatchingRows
+						ts.ExtraRowsTarget += dr.ExtraRowsTarget
+						ts.ExtraRowsSource += dr.ExtraRowsSource
+					}
+					if _, ok := reports[table]; !ok {
+						reports[table] = make(map[string]vdiff.DiffReport)
+					}
+
+					reports[table][shard] = dr
+					tableSummaryMap[table] = ts
+				}
+			}
+		}
+	}
+
+	// The global VDiff summary should progress from pending->started->completed with
+	// stopped for any shard and error for any table being sticky for the global summary.
+	// We should only consider the VDiff to be complete if it's completed for every table
+	// on every shard.
+	if shardStateCounts[vdiff.StoppedState] > 0 {
+		summary.State = vdiff.StoppedState
+	} else if shardStateCounts[vdiff.ErrorState] > 0 || tableStateCounts[vdiff.ErrorState] > 0 {
+		summary.State = vdiff.ErrorState
+	} else if tableStateCounts[vdiff.StartedState] > 0 {
+		summary.State = vdiff.StartedState
+	} else if tableStateCounts[vdiff.PendingState] > 0 {
+		summary.State = vdiff.PendingState
+	} else if tableStateCounts[vdiff.CompletedState] == (len(tableSummaryMap) * len(shards)) {
+		// When doing shard consolidations/merges, we cannot rely solely on the
+		// vdiff_table state as there are N sources that we process rows from sequentially
+		// with each one writing to the shared _vt.vdiff_table record for the target shard.
+		// So we only mark the vdiff for the shard as completed when we've finished
+		// processing rows from all of the sources -- which is recorded by marking the
+		// vdiff done for the shard by setting _vt.vdiff.state = completed.
+		if shardStateCounts[vdiff.CompletedState] == len(shards) {
+			summary.State = vdiff.CompletedState
+		} else {
+			summary.State = vdiff.StartedState
+		}
+	} else {
+		summary.State = vdiff.UnknownState
+	}
+
+	// If the vdiff has been started then we can calculate the progress.
+	if summary.State == vdiff.StartedState {
+		buildProgressReport(summary, totalRowsToCompare)
+	}
+
+	sort.Strings(shards) // sort for predictable output
+	summary.Shards = strings.Join(shards, ",")
+	summary.TableSummaryMap = tableSummaryMap
+	summary.Reports = reports
+	if !summary.HasMismatch && !verbose {
+		summary.Reports = nil
+		summary.TableSummaryMap = nil
+	}
+	// If we haven't completed the global VDiff then be sure to reflect that with no
+	// CompletedAt value.
+	if summary.State != vdiff.CompletedState {
+		summary.CompletedAt = ""
+	}
+	return summary, nil
+}
+
+func buildProgressReport(summary *vdiffSummary, rowsToCompare int64) {
+	report := &vdiff.ProgressReport{}
+	if summary.RowsCompared >= 1 {
+		// Round to 2 decimal points.
+		report.Percentage = math.Round(math.Min((float64(summary.RowsCompared)/float64(rowsToCompare))*100, 100.00)*100) / 100
+	}
+	if math.IsNaN(report.Percentage) {
+		report.Percentage = 0
+	}
+	pctToGo := math.Abs(report.Percentage - 100.00)
+	startTime, _ := time.Parse(vdiff.TimestampFormat, summary.StartedAt)
+	curTime := time.Now().UTC()
+	runTime := curTime.Unix() - startTime.Unix()
+	if report.Percentage >= 1 {
+		// Calculate how long 1% took, on avg, and multiply that by the % left.
+		eta := time.Unix(((int64(runTime)/int64(report.Percentage))*int64(pctToGo))+curTime.Unix(), 1).UTC()
+		// Cap the ETA at 1 year out to prevent providing nonsensical ETAs.
+		if eta.Before(time.Now().UTC().AddDate(1, 0, 0)) {
+			report.ETA = eta.Format(vdiff.TimestampFormat)
+		}
+	}
+	summary.Progress = report
+}
+
 func commandVDiffShow(cmd *cobra.Command, args []string) error {
+	format, err := common.GetOutputFormat(cmd)
+	if err != nil {
+		return err
+	}
+	cli.FinishedParsing(cmd)
+
+	resp, err := common.GetClient().VDiffShow(common.GetCommandCtx(), &vtctldatapb.VDiffShowRequest{
+		Workflow:       common.BaseOptions.Workflow,
+		TargetKeyspace: common.BaseOptions.TargetKeyspace,
+		Arg:            vDiffShowOptions.Arg,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if err := displayVDiff2ShowResponse(format, common.BaseOptions.TargetKeyspace, common.BaseOptions.Workflow, vDiffShowOptions.Arg, resp, vDiffShowOptions.Verbose); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -193,6 +666,7 @@ func registerVDiffCommands(root *cobra.Command) {
 	vDiffCreate.Flags().Uint32Var(&vDiffCreateOptions.MaxExtraRowsToCompare, "max-extra-rows-to-compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 	vDiff.AddCommand(vDiffCreate)
 
+	vDiffShow.Flags().BoolVar(&vDiffShowOptions.Verbose, "verbose", false, "Show verbose output in summaries")
 	vDiff.AddCommand(vDiffShow)
 }
 
