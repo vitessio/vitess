@@ -44,7 +44,7 @@ func TestFuzzAggregations(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	noOfRows := rand.Intn(20)
+	noOfRows := rand.Intn(20) + 1
 	var values []string
 	for i := 0; i < noOfRows; i++ {
 		values = append(values, fmt.Sprintf("(%d, 'name%d', 'value%d', %d)", i, i, i, i))
@@ -160,10 +160,10 @@ func createAggregations(tables []tableT, maxAggrs int, randomCol func(tblIdx int
 	aggregations := []func(string) string{
 		func(_ string) string { return "count(*)" },
 		func(e string) string { return fmt.Sprintf("count(%s)", e) },
-		//func(e string) string { return fmt.Sprintf("sum(%s)", e) },
-		//func(e string) string { return fmt.Sprintf("avg(%s)", e) },
-		//func(e string) string { return fmt.Sprintf("min(%s)", e) },
-		//func(e string) string { return fmt.Sprintf("max(%s)", e) },
+		// func(e string) string { return fmt.Sprintf("sum(%s)", e) },
+		// func(e string) string { return fmt.Sprintf("avg(%s)", e) },
+		// func(e string) string { return fmt.Sprintf("min(%s)", e) },
+		// func(e string) string { return fmt.Sprintf("max(%s)", e) },
 	}
 
 	noOfAggrs := rand.Intn(maxAggrs) + 1
