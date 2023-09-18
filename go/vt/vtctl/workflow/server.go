@@ -1489,6 +1489,41 @@ func (s *Server) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowReques
 	}, nil
 }
 
+// VDiffStop is part of the vtctlservicepb.VtctldServer interface.
+func (s *Server) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopRequest) (*vtctldatapb.VDiffStopResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffStop")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("uuid", req.Uuid)
+
+	tabletreq := &tabletmanagerdatapb.VDiffRequest{
+		Keyspace:  req.TargetKeyspace,
+		Workflow:  req.Workflow,
+		Action:    string(vdiff.StopAction),
+		VdiffUuid: req.Uuid,
+	}
+
+	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
+	if err != nil {
+		return nil, err
+	}
+
+	err = ts.ForAllTargets(func(target *MigrationTarget) error {
+		_, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
+		return err
+	})
+	if err != nil {
+		log.Errorf("Error executing vdiff stop action: %v", err)
+		return nil, err
+	}
+
+	return &vtctldatapb.VDiffStopResponse{
+		Status: fmt.Sprintf("Stopped VDiff %s", req.Uuid),
+	}, nil
+}
+
 // WorkflowDelete is part of the vtctlservicepb.VtctldServer interface.
 // It passes on the request to the target primary tablets that are
 // participating in the given workflow.

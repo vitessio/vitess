@@ -80,6 +80,10 @@ var (
 		Verbose bool
 	}{}
 
+	vDiffStopOptions = struct {
+		UUID uuid.UUID
+	}{}
+
 	parseAndValidateCreate = func(cmd *cobra.Command, args []string) error {
 		var err error
 		if len(args) == 1 { // Validate UUID if provided
@@ -135,7 +139,7 @@ See the --help output for each command for more details.`,
 		RunE:                  commandVDiffCreate,
 	}
 
-	// vDiffShow makes a VDiffDelete gRPC call to a vtctld.
+	// vDiffDelete makes a VDiffDelete gRPC call to a vtctld.
 	vDiffDelete = &cobra.Command{
 		Use:   "delete",
 		Short: "Delete VDiffs.",
@@ -201,6 +205,25 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 			return nil
 		},
 		RunE: commandVDiffShow,
+	}
+
+	// vDiffStop makes a VDiffStop gRPC call to a vtctld.
+	vDiffStop = &cobra.Command{
+		Use:                   "stop",
+		Short:                 "Stop a running VDiff.",
+		Example:               `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace stop a037a9e2-5628-11ee-8c99-0242ac120002`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Stop"},
+		Args:                  cobra.ExactArgs(1),
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			uuid, err := uuid.Parse(args[0])
+			if err != nil {
+				return fmt.Errorf("invalid UUID provided: %v", err)
+			}
+			vDiffStopOptions.UUID = uuid
+			return nil
+		},
+		RunE: commandVDiffStop,
 	}
 )
 
@@ -795,6 +818,38 @@ func commandVDiffShow(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandVDiffStop(cmd *cobra.Command, args []string) error {
+	format, err := common.GetOutputFormat(cmd)
+	if err != nil {
+		return err
+	}
+	cli.FinishedParsing(cmd)
+
+	resp, err := common.GetClient().VDiffStop(common.GetCommandCtx(), &vtctldatapb.VDiffStopRequest{
+		Workflow:       common.BaseOptions.Workflow,
+		TargetKeyspace: common.BaseOptions.TargetKeyspace,
+		Uuid:           vDiffStopOptions.UUID.String(),
+	})
+
+	if err != nil {
+		return err
+	}
+
+	var data []byte
+	if format == "json" {
+		data, err = cli.MarshalJSON(resp)
+		if err != nil {
+			return err
+		}
+	} else {
+		data = []byte(resp.Status)
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
 func registerVDiffCommands(root *cobra.Command) {
 	common.AddCommonFlags(vDiff)
 	root.AddCommand(vDiff)
@@ -818,6 +873,8 @@ func registerVDiffCommands(root *cobra.Command) {
 
 	vDiffShow.Flags().BoolVar(&vDiffShowOptions.Verbose, "verbose", false, "Show verbose output in summaries")
 	vDiff.AddCommand(vDiffShow)
+
+	vDiff.AddCommand(vDiffStop)
 }
 
 func init() {
