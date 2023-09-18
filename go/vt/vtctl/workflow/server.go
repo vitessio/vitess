@@ -57,7 +57,6 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -94,7 +93,7 @@ type sequenceMetadata struct {
 
 type VDiffOutput struct {
 	mu        sync.Mutex
-	responses map[string]*tabletmanagerdata.VDiffResponse
+	responses map[string]*tabletmanagerdatapb.VDiffResponse
 	err       error
 }
 
@@ -1341,7 +1340,7 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 		},
 	}
 
-	tabletreq := &tabletmanagerdata.VDiffRequest{
+	tabletreq := &tabletmanagerdatapb.VDiffRequest{
 		Keyspace:  req.TargetKeyspace,
 		Workflow:  req.Workflow,
 		Action:    string(vdiff.CreateAction),
@@ -1377,17 +1376,11 @@ func (s *Server) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowReques
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffShow")
 	defer span.Finish()
 
-	defer func() {
-		if r := recover(); r != nil {
-			log.Errorf("PANIC: %v", r)
-		}
-	}()
-
 	span.Annotate("keyspace", req.TargetKeyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("argument", req.Arg)
 
-	tabletreq := &tabletmanagerdata.VDiffRequest{
+	tabletreq := &tabletmanagerdatapb.VDiffRequest{
 		Keyspace:  req.TargetKeyspace,
 		Workflow:  req.Workflow,
 		Action:    string(vdiff.ShowAction),
@@ -1399,7 +1392,10 @@ func (s *Server) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowReques
 		return nil, err
 	}
 
-	output := &VDiffOutput{}
+	output := &VDiffOutput{
+		responses: make(map[string]*tabletmanagerdatapb.VDiffResponse, len(ts.targets)),
+		err:       nil,
+	}
 	output.err = ts.ForAllTargets(func(target *MigrationTarget) error {
 		resp, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
 		output.mu.Lock()
