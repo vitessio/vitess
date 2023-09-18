@@ -73,7 +73,7 @@ func TestTabletReshuffle(t *testing.T) {
 
 	// SupportsBackup=False prevents vttablet from trying to restore
 	// Start vttablet process
-	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = clusterInstance.StartVttablet(rTablet, false, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 
 	sql := "select value from t1"
@@ -106,7 +106,7 @@ func TestHealthCheck(t *testing.T) {
 	defer replicaConn.Close()
 
 	// start vttablet process, should be in SERVING state as we already have a primary
-	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = clusterInstance.StartVttablet(rTablet, true, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
@@ -227,7 +227,7 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 		clusterInstance.VtTabletExtraArgs = oldArgs
 	}()
 	// start vttablet process, should be in SERVING state as we already have a primary.
-	err = clusterInstance.StartVttablet(tempTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = clusterInstance.StartVttablet(tempTablet, false, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 
 	defer func() {
@@ -381,7 +381,7 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	// - the second tablet will be set to 'drained' and we expect that
 	// - the query service won't be shutdown
 
-	//Wait if tablet is not in service state
+	// Wait if tablet is not in service state
 	defer cluster.PanicHandler(t)
 	clusterInstance.DisableVTOrcRecoveries(t)
 	defer clusterInstance.EnableVTOrcRecoveries(t)
