@@ -223,8 +223,26 @@ func filterResultWhenRunsForCoverage(input string) string {
 	return result
 }
 
+func ValidateReplicationIsHealthy(t *testing.T, tablet *Vttablet) bool {
+	query := "show replica status"
+	rs, err := tablet.VttabletProcess.QueryTablet(query, "", true)
+	assert.NoError(t, err)
+	row := rs.Named().Row()
+	require.NotNil(t, row)
+
+	ioRunning := row.AsString("Replica_IO_Running", "")
+	require.NotEmpty(t, ioRunning)
+	ioHealthy := assert.Equalf(t, "Yes", ioRunning, "Replication is broken. Replication status: %v", row)
+	sqlRunning := row.AsString("Replica_SQL_Running", "")
+	require.NotEmpty(t, sqlRunning)
+	sqlHealthy := assert.Equalf(t, "Yes", sqlRunning, "Replication is broken. Replication status: %v", row)
+
+	return ioHealthy && sqlHealthy
+}
+
 // WaitForReplicationPos will wait for replication position to catch-up
-func WaitForReplicationPos(t *testing.T, tabletA *Vttablet, tabletB *Vttablet, hostname string, timeout time.Duration) {
+func WaitForReplicationPos(t *testing.T, tabletA *Vttablet, tabletB *Vttablet, validateReplication bool, timeout time.Duration) {
+	hostname := "localhost"
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	ticker := time.NewTicker(10 * time.Millisecond)
@@ -232,6 +250,14 @@ func WaitForReplicationPos(t *testing.T, tabletA *Vttablet, tabletB *Vttablet, h
 
 	replicationPosA, _ := GetPrimaryPosition(t, *tabletA, hostname)
 	for {
+		if validateReplication {
+			if !ValidateReplicationIsHealthy(t, tabletB) {
+				assert.FailNowf(t, "Replication broken on tablet %v. Will not wait for position", tabletB.Alias)
+			}
+			if t.Failed() {
+				return
+			}
+		}
 		replicationPosB, _ := GetPrimaryPosition(t, *tabletB, hostname)
 		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
 			return
@@ -239,7 +265,7 @@ func WaitForReplicationPos(t *testing.T, tabletA *Vttablet, tabletB *Vttablet, h
 		msg := fmt.Sprintf("%s's replication position to catch up to %s's;currently at: %s, waiting to catch up to: %s", tabletB.Alias, tabletA.Alias, replicationPosB, replicationPosA)
 		select {
 		case <-ctx.Done():
-			t.Errorf("timeout waiting for condition '%s'", msg)
+			assert.FailNowf(t, "Timeout waiting for condition '%s'", msg)
 			return
 		case <-ticker.C:
 		}
