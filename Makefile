@@ -41,15 +41,12 @@ ifndef VTROOT
 export VTROOT=${PWD}
 endif
 
+
 # We now have CGO code in the build which throws warnings with newer gcc builds.
 # See: https://github.com/mattn/go-sqlite3/issues/803
 # Work around by dropping optimization level from default -O2.
 # Safe, since this code isn't performance critical.
 export CGO_CFLAGS := -O1
-
-# regenerate rice-box.go when any of the .cnf files change
-embed_config:
-	cd go/vt/mysqlctl && go run github.com/GeertJohan/go.rice/rice embed-go && go build .
 
 # build the vitess binaries with dynamic dependency on libc
 build-dyn:
@@ -57,8 +54,7 @@ ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
-	go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
-	(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=../../../bin/vttablet)
+	CGO_ENABLED=0 go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 
 # build the vitess binaries statically
 build:
@@ -66,10 +62,8 @@ ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
-	# build all the binaries by default with CGO disabled
+	# build all the binaries by default with CGO disabled.
 	CGO_ENABLED=0 go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
-	# embed local resources in the vttablet executable
-	(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=../../../bin/vttablet)
 
 # cross-build can be used to cross-compile Vitess client binaries
 # Outside of select client binaries (namely vtctlclient & vtexplain), cross-compiled Vitess Binaries are not recommended for production deployments
@@ -83,12 +77,9 @@ endif
 	export GOBIN=""
 	# For the specified GOOS + GOARCH, build all the binaries by default with CGO disabled
 	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
-	# unset GOOS and embed local resources in the vttablet executable
-	if [ -d /go/bin ]; then
-		# Probably in the bootstrap container
-		(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=/go/bin/${GOOS}_${GOARCH}/vttablet)
-	else
-		(cd go/cmd/vttablet && unset GOOS && unset GOARCH && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=$${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet)
+
+	if [ ! -x "${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet" ]; then \
+		echo "Missing vttablet at: ${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet" && exit; \
 	fi
 
 debug:
@@ -252,7 +243,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mariadb mariadb103 mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=10.2
+BOOTSTRAP_VERSION=19
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -421,7 +412,7 @@ web_bootstrap:
 
 # Do a production build of the vtctld UI.
 # This target needs to be manually run every time any file within web/vtctld2/app
-# is modified to regenerate rice-box.go
+# is modified to regenerate assets.
 web_build: web_bootstrap
 	./tools/web_build.sh
 

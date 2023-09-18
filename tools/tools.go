@@ -22,7 +22,6 @@ package tools
 // These imports ensure that "go mod tidy" won't remove deps
 // for build-time dependencies like linters and code generators
 import (
-	_ "github.com/GeertJohan/go.rice/rice"
 	_ "github.com/golang/mock/mockgen"
 	_ "github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto"
 	_ "golang.org/x/lint"

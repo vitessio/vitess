@@ -32,9 +32,9 @@ type MaxReplicationLagModuleConfig struct {
 	*throttlerdatapb.Configuration
 }
 
-func (cfg MaxReplicationLagModuleConfig) Clone() MaxReplicationLagModuleConfig {
+func (c MaxReplicationLagModuleConfig) Clone() MaxReplicationLagModuleConfig {
 	return MaxReplicationLagModuleConfig{
-		proto.Clone(cfg.Configuration).(*throttlerdatapb.Configuration),
+		proto.Clone(c.Configuration).(*throttlerdatapb.Configuration),
 	}
 }
 

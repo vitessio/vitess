@@ -42,7 +42,7 @@ import (
 
 const discoveryMetricsName = "DISCOVERY_METRICS"
 
-// TODO(sougou): see if this can be rice-boxed.
+// TODO(sougou): see if this can be embedded.
 var webDir = flag.String("orc_web_dir", "web/orchestrator", "Orchestrator http file location")
 
 var sslPEMPassword []byte
