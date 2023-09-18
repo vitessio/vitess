@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -108,6 +110,9 @@ func (vde *Engine) getVDiffSummary(vdiffID int64, dbClient binlogplayer.DBClient
 // Validate vdiff options. Also setup defaults where applicable.
 func (vde *Engine) fixupOptions(options *tabletmanagerdatapb.VDiffOptions) (*tabletmanagerdatapb.VDiffOptions, error) {
 	// Assign defaults to sourceCell and targetCell if not specified.
+	if options == nil {
+		options = &tabletmanagerdatapb.VDiffOptions{}
+	}
 	sourceCell := options.PickerOptions.SourceCell
 	targetCell := options.PickerOptions.TargetCell
 	var defaultCell string
@@ -118,10 +123,10 @@ func (vde *Engine) fixupOptions(options *tabletmanagerdatapb.VDiffOptions) (*tab
 			return nil, err
 		}
 	}
-	if sourceCell == "" {
+	if sourceCell == "" { // Default is all cells
 		sourceCell = defaultCell
 	}
-	if targetCell == "" {
+	if targetCell == "" { // Default is all cells
 		targetCell = defaultCell
 	}
 	options.PickerOptions.SourceCell = sourceCell
@@ -130,6 +135,8 @@ func (vde *Engine) fixupOptions(options *tabletmanagerdatapb.VDiffOptions) (*tab
 	return options, nil
 }
 
+// getDefaultCell returns all of the cells in the topo as a comma
+// separated string as the default value is all available cells.
 func (vde *Engine) getDefaultCell() (string, error) {
 	cells, err := vde.ts.GetCellInfoNames(vde.ctx)
 	if err != nil {
@@ -139,7 +146,8 @@ func (vde *Engine) getDefaultCell() (string, error) {
 		// Unreachable
 		return "", fmt.Errorf("there are no cells in the topo")
 	}
-	return cells[0], nil
+	sort.Strings(cells) // Ensure that the resulting value is deterministic
+	return strings.Join(cells, ","), nil
 }
 
 func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {

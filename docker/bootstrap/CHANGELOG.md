@@ -74,6 +74,10 @@ List of changes between bootstrap image versions.
 ### Changes
 - Update build to golang 1.20.5
 
-## [14.6] - 2023-09-06
+## [14.6] - 2023-09-07
+### Changes
+- Update build to golang 1.20.8
+
+## [14.7] - 2023-09-06
 ### Changes
 - Use Debian Bullseye as base bootstrap image in order to continue upgrading the Golang version
