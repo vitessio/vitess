@@ -71,6 +71,7 @@ type VttabletProcess struct {
 	QueryzURL                   string
 	StatusDetailsURL            string
 	SupportsBackup              bool
+	ExplicitServingStatus       bool
 	ServingStatus               string
 	DbPassword                  string
 	DbPort                      int
@@ -150,8 +151,15 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	}()
 
 	if vttablet.ServingStatus != "" {
-		// We wait for any valid status to indicate that the tablet server is running.
-		if err = vttablet.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"}); err != nil {
+		// If the tablet has an explicit serving status we use the serving status
+		// otherwise we wait for any serving status to show up in the healthcheck.
+		var servingStatus []string
+		if vttablet.ExplicitServingStatus {
+			servingStatus = append(servingStatus, vttablet.ServingStatus)
+		} else {
+			servingStatus = append(servingStatus, "SERVING", "NOT_SERVING")
+		}
+		if err = vttablet.WaitForTabletStatuses(servingStatus); err != nil {
 			errFileContent, _ := os.ReadFile(fname)
 			if errFileContent != nil {
 				log.Infof("vttablet error:\n%s\n", string(errFileContent))

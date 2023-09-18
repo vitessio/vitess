@@ -1262,8 +1262,16 @@ func (cluster *LocalProcessCluster) VtprocessInstanceFromVttablet(tablet *Vttabl
 }
 
 // StartVttablet starts a new tablet
-func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatus string,
-	supportBackup bool, cell string, keyspaceName string, hostname string, shardName string) error {
+func (cluster *LocalProcessCluster) StartVttablet(
+	tablet *Vttablet,
+	explicitServingStatus bool,
+	servingStatus string,
+	supportBackup bool,
+	cell string,
+	keyspaceName string,
+	hostname string,
+	shardName string,
+) error {
 	tablet.VttabletProcess = VttabletProcessInstance(
 		tablet.HTTPPort,
 		tablet.GrpcPort,
@@ -1281,6 +1289,7 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 
 	tablet.VttabletProcess.SupportsBackup = supportBackup
 	tablet.VttabletProcess.ServingStatus = servingStatus
+	tablet.VttabletProcess.ExplicitServingStatus = explicitServingStatus
 	return tablet.VttabletProcess.Setup()
 }
 
