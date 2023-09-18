@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -186,14 +187,15 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 				vde.thisTablet.Alias, err)
 		}
 	}
-	if options, err = vde.fixupOptions(options); err != nil {
-		return err
-	}
-	optionsJSON, err := json.Marshal(options)
-	if err != nil {
-		return err
-	}
 	if action == CreateAction {
+		// Use options created from the command.
+		if options, err = vde.fixupOptions(options); err != nil {
+			return err
+		}
+		optionsJSON, err := json.Marshal(options)
+		if err != nil {
+			return err
+		}
 		query, err := sqlparser.ParseAndBind(sqlNewVDiff,
 			sqltypes.StringBindVariable(req.Keyspace),
 			sqltypes.StringBindVariable(req.Workflow),
@@ -216,7 +218,6 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 		resp.Id = int64(qr.InsertID)
 	} else {
 		query, err := sqlparser.ParseAndBind(sqlResumeVDiff,
-			sqltypes.StringBindVariable(string(optionsJSON)),
 			sqltypes.StringBindVariable(req.VdiffUuid),
 		)
 		if err != nil {
@@ -240,9 +241,23 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 	if err != nil {
 		return err
 	}
+	vdiffRecord := qr.Named().Row()
+	if vdiffRecord == nil {
+		return fmt.Errorf("unable to resume vdiff for UUID %s as it was not found on tablet %v (%w)",
+			req.VdiffUuid, vde.thisTablet.Alias, err)
+	}
+	if action == ResumeAction {
+		// Use existing options for the vdiff.
+		options = vDiffOptionsZeroVal
+		err = protojson.Unmarshal(vdiffRecord.AsBytes("options", []byte{}), options)
+		if err != nil {
+			return err
+		}
+	}
+
 	vde.mu.Lock()
 	defer vde.mu.Unlock()
-	if err := vde.addController(qr.Named().Row(), options); err != nil {
+	if err := vde.addController(vdiffRecord, options); err != nil {
 		return err
 	}
 
