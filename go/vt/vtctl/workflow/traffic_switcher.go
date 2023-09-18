@@ -450,6 +450,20 @@ func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 	})
 }
 
+func (ts *trafficSwitcher) dropTargetDeniedTables(ctx context.Context) error {
+	return ts.ForAllTargets(func(target *MigrationTarget) error {
+		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
+			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
+		}); err != nil {
+			return err
+		}
+		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+		defer cancel()
+		_, _, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
+		return err
+	})
+}
+
 func (ts *trafficSwitcher) validateWorkflowHasCompleted(ctx context.Context) error {
 	return doValidateWorkflowHasCompleted(ctx, ts)
 }
