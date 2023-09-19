@@ -18,6 +18,7 @@ package tablegc
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -413,4 +414,20 @@ func TestPurgeView(t *testing.T) {
 	// table still untouched
 	validateTableExists(t, "t1")
 	validateAnyState(t, 1024, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
+}
+
+func TestDropView(t *testing.T) {
+	viewName, err := schema.GenerateGCTableName(schema.DropTableGCState, time.Now().Add(tableTransitionExpiration)) // way in the past
+	require.NoError(t, err)
+	createStatement := fmt.Sprintf("create or replace view %s as select 1", viewName)
+
+	_, err = primaryTablet.VttabletProcess.QueryTablet(createStatement, keyspaceName, true)
+	require.NoError(t, err)
+
+	// view should be there
+	validateTableExists(t, viewName)
+
+	time.Sleep(tableTransitionExpiration / 2)
+	// View was created with an old timestamp, so it should have been dropped by now
+	validateTableDoesNotExist(t, viewName)
 }
