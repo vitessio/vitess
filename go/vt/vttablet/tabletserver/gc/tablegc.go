@@ -257,11 +257,11 @@ func (collector *TableGC) operate(ctx context.Context) {
 		case <-tableCheckTicker.C:
 			{
 				log.Info("TableGC: tableCheckTicker")
-				gcTables, err := collector.readTables(ctx)
-				if err != nil {
+				if gcTables, err := collector.readTables(ctx); err != nil {
 					log.Errorf("TableGC: error while reading tables: %+v", err)
+				} else {
+					_ = collector.checkTables(ctx, gcTables, dropTablesChan, transitionRequestsChan)
 				}
-				_ = collector.checkTables(ctx, gcTables, dropTablesChan, transitionRequestsChan)
 			}
 		case <-purgeReentranceTicker.C:
 			{
@@ -380,13 +380,13 @@ func (collector *TableGC) shouldTransitionTable(tableName string) (shouldTransit
 
 // readTables reads the list of _vt_% tables from the database
 func (collector *TableGC) readTables(ctx context.Context) (gcTables []*gcTable, err error) {
+	log.Infof("TableGC: read tables")
+
 	conn, err := collector.pool.Get(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
-
-	log.Infof("TableGC: read tables")
 
 	res, err := conn.Exec(ctx, sqlShowVtTables, math.MaxInt32, true)
 	if err != nil {
