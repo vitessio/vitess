@@ -3784,8 +3784,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestStreamJoinQuery(t *testing.T) {
-	ctx := utils.LeakCheckContext(t)
-
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
@@ -3793,17 +3791,16 @@ func TestStreamJoinQuery(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	u.VSchema = unshardedVSchema
-	serv := newSandboxForCells(ctx, []string{cell})
-	resolver := newTestResolver(ctx, hc, serv, cell)
+	serv := newSandboxForCells([]string{cell})
+	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	for _, shard := range shards {
 		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 	}
-	executor := createExecutor(ctx, serv, cell, resolver)
-	defer executor.Close()
+	executor := createExecutor(serv, cell, resolver)
 
 	sql := "select u.foo, u.apa, ue.bar, ue.apa from user u join user_extra ue on u.foo = ue.bar"
-	result, err := executorStream(ctx, executor, sql)
+	result, err := executorStream(executor, sql)
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
 		Fields: append(sandboxconn.SingleRowResult.Fields, sandboxconn.SingleRowResult.Fields...),
