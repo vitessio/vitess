@@ -120,7 +120,11 @@ func transformSubQueryFilter(ctx *plancontext.PlanningContext, op *operators.Sub
 		return nil, err
 	}
 
-	if len(op.JoinColumns) == 0 {
+	cols, err := op.GetJoinColumns(ctx, op.Outer)
+	if err != nil {
+		return nil, err
+	}
+	if len(cols) == 0 {
 		// no correlation, so uncorrelated it is
 		return newUncorrelatedSubquery(op.FilterType, op.SubqueryValueName, op.HasValuesName, inner, outer), nil
 	}

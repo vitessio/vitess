@@ -59,7 +59,11 @@ type SubQuery struct {
 
 func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) error {
 	sq.Vars = make(map[string]int)
-	for _, jc := range sq.JoinColumns {
+	columns, err := sq.GetJoinColumns(ctx, sq.Outer)
+	if err != nil {
+		return err
+	}
+	for _, jc := range columns {
 		for i, lhsExpr := range jc.LHSExprs {
 			offset, err := sq.Outer.AddColumn(ctx, true, false, aeWrap(lhsExpr))
 			if err != nil {
