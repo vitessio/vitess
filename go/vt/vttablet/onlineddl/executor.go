@@ -4634,6 +4634,11 @@ func (e *Executor) SubmitMigration(
 
 	revertedUUID, _ := onlineDDL.GetRevertUUID() // Empty value if the migration is not actually a REVERT. Safe to ignore error.
 	retainArtifactsSeconds := int64((retainOnlineDDLTables).Seconds())
+	if retainArtifacts, _ := onlineDDL.StrategySetting().RetainArtifactsDuration(); retainArtifacts != 0 {
+		// Explicit retention indicated by `--retain-artifact` DDL strategy flag for this migration. Override!
+		retainArtifactsSeconds = int64((retainArtifacts).Seconds())
+	}
+
 	_, allowConcurrentMigration := e.allowConcurrentMigration(onlineDDL)
 	submitQuery, err := sqlparser.ParseAndBind(sqlInsertMigration,
 		sqltypes.StringBindVariable(onlineDDL.UUID),
