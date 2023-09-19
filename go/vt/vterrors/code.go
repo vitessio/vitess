@@ -92,6 +92,7 @@ var (
 	VT14003 = errorWithoutState("VT14003", vtrpcpb.Code_UNAVAILABLE, "no connection for tablet %v", "No connection for the given tablet.")
 	VT14004 = errorWithoutState("VT14004", vtrpcpb.Code_UNAVAILABLE, "cannot find keyspace for: %s", "The specified keyspace could not be found.")
 	VT14005 = errorWithoutState("VT14005", vtrpcpb.Code_UNAVAILABLE, "cannot lookup sidecar database for keyspace: %s", "Failed to read sidecar database identifier.")
+	VT14006 = errorWithoutState("VT14006", vtrpcpb.Code_UNAVAILABLE, "dummy error", "dummy error")
 
 	Errors = []func(args ...any) *VitessError{
 		VT03001,
@@ -154,6 +155,7 @@ var (
 		VT14003,
 		VT14004,
 		VT14005,
+		VT14006,
 	}
 )
 
