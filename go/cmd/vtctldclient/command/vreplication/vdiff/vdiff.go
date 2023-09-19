@@ -128,9 +128,10 @@ See the --help output for each command for more details.`,
 
 	// vDiffCreate makes a VDiffCreate gRPC call to a vtctld.
 	vDiffCreate = &cobra.Command{
-		Use:                   "create",
-		Short:                 "Create and run a VDiff to compare the tables involved in a VReplication workflow between the source and target.",
-		Example:               `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer create b3f59678-5241-11ee-be56-0242ac120002`,
+		Use:   "create",
+		Short: "Create and run a VDiff to compare the tables involved in a VReplication workflow between the source and target.",
+		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer
+vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer create b3f59678-5241-11ee-be56-0242ac120002`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Create"},
@@ -279,7 +280,7 @@ func commandVDiffCreate(cmd *cobra.Command, args []string) error {
 				if err != nil {
 					return err
 				}
-				if state, err = displayVDiff2ShowSingleSummary(format, common.BaseOptions.TargetKeyspace, common.BaseOptions.Workflow, uuidStr, resp, false); err != nil {
+				if state, err = displayShowSingleSummary(format, common.BaseOptions.TargetKeyspace, common.BaseOptions.Workflow, uuidStr, resp, false); err != nil {
 					return err
 				}
 				if state == vdiff.CompletedState {
@@ -464,14 +465,14 @@ func displayListings(listings []*VDiffListing) string {
 	return str
 }
 
-func displayVDiff2ShowResponse(format, keyspace, workflowName, actionArg string, res *vtctldatapb.VDiffShowResponse, verbose bool) error {
+func displayShowResponse(format, keyspace, workflowName, actionArg string, resp *vtctldatapb.VDiffShowResponse, verbose bool) error {
 	var vdiffUUID uuid.UUID
 	var err error
 	switch actionArg {
 	case vdiff.AllActionArg:
-		return displayVDiff2ShowRecent(format, keyspace, workflowName, actionArg, res)
+		return displayShowRecent(format, keyspace, workflowName, actionArg, resp)
 	case vdiff.LastActionArg:
-		for _, resp := range res.TabletResponses {
+		for _, resp := range resp.TabletResponses {
 			vdiffUUID, err = uuid.Parse(resp.VdiffUuid)
 			if err != nil {
 				if format == "json" {
@@ -491,22 +492,22 @@ func displayVDiff2ShowResponse(format, keyspace, workflowName, actionArg string,
 				return err
 			}
 		}
-		if len(res.TabletResponses) == 0 {
-			return fmt.Errorf("no response received for vdiff show of %s.%s(%s)", keyspace, workflowName, vdiffUUID.String())
+		if len(resp.TabletResponses) == 0 {
+			return fmt.Errorf("no response received for vdiff show of %s.%s (%s)", keyspace, workflowName, vdiffUUID.String())
 		}
-		_, err := displayVDiff2ShowSingleSummary(format, keyspace, workflowName, vdiffUUID.String(), res, verbose)
+		_, err := displayShowSingleSummary(format, keyspace, workflowName, vdiffUUID.String(), resp, verbose)
 		return err
 	}
 }
 
-func displayVDiff2ShowRecent(format, keyspace, workflowName, subCommand string, res *vtctldatapb.VDiffShowResponse) error {
+func displayShowRecent(format, keyspace, workflowName, subCommand string, resp *vtctldatapb.VDiffShowResponse) error {
 	str := ""
-	recent, err := buildVDiff2Recent(res)
+	recent, err := buildRecent(resp)
 	if err != nil {
 		return err
 	}
 	if format == "json" {
-		jsonText, err := json.MarshalIndent(recent, "", "\t")
+		jsonText, err := json.MarshalIndent(recent, cli.JSONprefix, cli.JSONindent)
 		if err != nil {
 			return err
 		}
@@ -524,9 +525,9 @@ func displayVDiff2ShowRecent(format, keyspace, workflowName, subCommand string, 
 	return nil
 }
 
-func buildVDiff2Recent(res *vtctldatapb.VDiffShowResponse) ([]*VDiffListing, error) {
+func buildRecent(resp *vtctldatapb.VDiffShowResponse) ([]*VDiffListing, error) {
 	var listings []*VDiffListing
-	for _, resp := range res.TabletResponses {
+	for _, resp := range resp.TabletResponses {
 		if resp != nil && resp.Output != nil {
 			qr := sqltypes.Proto3ToResult(resp.Output)
 			for _, row := range qr.Named().Rows {
@@ -543,16 +544,16 @@ func buildVDiff2Recent(res *vtctldatapb.VDiffShowResponse) ([]*VDiffListing, err
 	return listings, nil
 }
 
-func displayVDiff2ShowSingleSummary(format, keyspace, workflowName, uuid string, res *vtctldatapb.VDiffShowResponse, verbose bool) (vdiff.VDiffState, error) {
+func displayShowSingleSummary(format, keyspace, workflowName, uuid string, resp *vtctldatapb.VDiffShowResponse, verbose bool) (vdiff.VDiffState, error) {
 	state := vdiff.UnknownState
 	str := ""
-	summary, err := buildVDiff2SingleSummary(keyspace, workflowName, uuid, res, verbose)
+	summary, err := buildSingleSummary(keyspace, workflowName, uuid, resp, verbose)
 	if err != nil {
 		return state, err
 	}
 	state = summary.State
 	if format == "json" {
-		jsonText, err := json.MarshalIndent(summary, "", "  ")
+		jsonText, err := json.MarshalIndent(summary, cli.JSONprefix, cli.JSONindent)
 		if err != nil {
 			return state, err
 		}
@@ -579,7 +580,7 @@ func displayVDiff2ShowSingleSummary(format, keyspace, workflowName, uuid string,
 	fmt.Printf(str + "\n")
 	return state, nil
 }
-func buildVDiff2SingleSummary(keyspace, workflow, uuid string, res *vtctldatapb.VDiffShowResponse, verbose bool) (*vdiffSummary, error) {
+func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiffShowResponse, verbose bool) (*vdiffSummary, error) {
 	summary := &vdiffSummary{
 		Workflow:     workflow,
 		Keyspace:     keyspace,
@@ -619,7 +620,7 @@ func buildVDiff2SingleSummary(keyspace, workflow, uuid string, res *vtctldatapb.
 	// report.
 	totalRowsToCompare := int64(0)
 	var shards []string
-	for shard, resp := range res.TabletResponses {
+	for shard, resp := range resp.TabletResponses {
 		first := true
 		if resp != nil && resp.Output != nil {
 			shards = append(shards, shard)
@@ -812,7 +813,7 @@ func commandVDiffShow(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := displayVDiff2ShowResponse(format, common.BaseOptions.TargetKeyspace, common.BaseOptions.Workflow, vDiffShowOptions.Arg, resp, vDiffShowOptions.Verbose); err != nil {
+	if err := displayShowResponse(format, common.BaseOptions.TargetKeyspace, common.BaseOptions.Workflow, vDiffShowOptions.Arg, resp, vDiffShowOptions.Verbose); err != nil {
 		return err
 	}
 	return nil
