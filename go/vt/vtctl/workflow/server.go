@@ -61,6 +61,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
@@ -91,6 +92,8 @@ type sequenceMetadata struct {
 	usingTableDefinition *vschemapb.Table
 }
 
+// vdiffOutput holds the data from all shards that is needed to generate
+// the full summary results of the vdiff in the vdiff show command output.
 type vdiffOutput struct {
 	mu        sync.Mutex
 	responses map[string]*tabletmanagerdatapb.VDiffResponse
@@ -279,7 +282,7 @@ func (s *Server) GetCellsWithTableReadsSwitched(
 	getKeyspace := func(ruleTarget string) (string, error) {
 		arr := strings.Split(ruleTarget, ".")
 		if len(arr) != 2 {
-			return "", fmt.Errorf("rule target is not correctly formatted: %s", ruleTarget)
+			return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "rule target is not correctly formatted: %s", ruleTarget)
 		}
 
 		return arr[0], nil
@@ -534,13 +537,13 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		targetShardsByWorkflow[workflow.Name].Insert(tablet.Shard)
 
 		if ks, ok := sourceKeyspaceByWorkflow[workflow.Name]; ok && ks != stream.BinlogSource.Keyspace {
-			return fmt.Errorf("%w: workflow = %v, ks1 = %v, ks2 = %v", ErrMultipleSourceKeyspaces, workflow.Name, ks, stream.BinlogSource.Keyspace)
+			return vterrors.Wrapf(ErrMultipleSourceKeyspaces, "workflow = %v, ks1 = %v, ks2 = %v", workflow.Name, ks, stream.BinlogSource.Keyspace)
 		}
 
 		sourceKeyspaceByWorkflow[workflow.Name] = stream.BinlogSource.Keyspace
 
 		if ks, ok := targetKeyspaceByWorkflow[workflow.Name]; ok && ks != tablet.Keyspace {
-			return fmt.Errorf("%w: workflow = %v, ks1 = %v, ks2 = %v", ErrMultipleTargetKeyspaces, workflow.Name, ks, tablet.Keyspace)
+			return vterrors.Wrapf(ErrMultipleTargetKeyspaces, "workflow = %v, ks1 = %v, ks2 = %v", workflow.Name, ks, tablet.Keyspace)
 		}
 
 		targetKeyspaceByWorkflow[workflow.Name] = tablet.Keyspace
@@ -749,27 +752,27 @@ ORDER BY
 	for name, workflow := range workflowsMap {
 		sourceShards, ok := sourceShardsByWorkflow[name]
 		if !ok {
-			return nil, fmt.Errorf("%w: %s has no source shards", ErrInvalidWorkflow, name)
+			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no source shards", name)
 		}
 
 		sourceKeyspace, ok := sourceKeyspaceByWorkflow[name]
 		if !ok {
-			return nil, fmt.Errorf("%w: %s has no source keyspace", ErrInvalidWorkflow, name)
+			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no source keyspace", name)
 		}
 
 		targetShards, ok := targetShardsByWorkflow[name]
 		if !ok {
-			return nil, fmt.Errorf("%w: %s has no target shards", ErrInvalidWorkflow, name)
+			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no target shards", name)
 		}
 
 		targetKeyspace, ok := targetKeyspaceByWorkflow[name]
 		if !ok {
-			return nil, fmt.Errorf("%w: %s has no target keyspace", ErrInvalidWorkflow, name)
+			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no target keyspace", name)
 		}
 
 		maxVReplicationLag, ok := maxVReplicationLagByWorkflow[name]
 		if !ok {
-			return nil, fmt.Errorf("%w: %s has no tracked vreplication lag", ErrInvalidWorkflow, name)
+			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no tracked vreplication lag", name)
 		}
 
 		workflow.Source = &vtctldatapb.Workflow_ReplicationLocation{
@@ -849,7 +852,7 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 
 		// We assume a consistent state, so only choose routing rule for one table.
 		if len(ts.Tables()) == 0 {
-			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", targetKeyspace, workflowName)
+			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no tables in workflow %s.%s", targetKeyspace, workflowName)
 
 		}
 		table := ts.Tables()[0]
@@ -995,7 +998,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		return nil, err
 	}
 	if vschema == nil {
-		return nil, fmt.Errorf("no vschema found for target keyspace %s", targetKeyspace)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no vschema found for target keyspace %s", targetKeyspace)
 	}
 	ksTables, err := getTablesInKeyspace(ctx, sourceTopo, s.tmc, sourceKeyspace)
 	if err != nil {
@@ -1010,7 +1013,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		if req.AllTables {
 			tables = ksTables
 		} else {
-			return nil, fmt.Errorf("no tables to move")
+			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no tables to move")
 		}
 	}
 	if len(req.ExcludeTables) > 0 {
@@ -1027,7 +1030,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	}
 	tables = tables2
 	if len(tables) == 0 {
-		return nil, fmt.Errorf("no tables to move")
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no tables to move")
 	}
 	log.Infof("Found tables to move: %s", strings.Join(tables, ","))
 
@@ -1178,7 +1181,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 				migrationID, strings.Join(tablets, ","))
 			msg += fmt.Sprintf("please review and delete it before proceeding and then start the workflow using: MoveTables --workflow %s --target-keyspace %s start",
 				req.Workflow, req.TargetKeyspace)
-			return nil, fmt.Errorf(msg)
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, msg)
 		}
 	}
 
@@ -1353,7 +1356,7 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 		return nil, err
 	}
 	if ts.frozen {
-		return nil, fmt.Errorf("invalid VDiff run: writes have been already been switched for workflow %s.%s",
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "invalid VDiff run: writes have been already been switched for workflow %s.%s",
 			req.TargetKeyspace, req.Workflow)
 	}
 
@@ -1550,7 +1553,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	}
 
 	if len(res) == 0 {
-		return nil, fmt.Errorf("the %s workflow does not exist in the %s keyspace", req.Workflow, req.Keyspace)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "the %s workflow does not exist in the %s keyspace", req.Workflow, req.Keyspace)
 	}
 
 	response := &vtctldatapb.WorkflowDeleteResponse{}
@@ -1749,7 +1752,7 @@ func (s *Server) GetCopyProgress(ctx context.Context, ts *trafficSwitcher, state
 		break
 	}
 	if sourceDbName == "" {
-		return nil, fmt.Errorf("no sources found for workflow %s.%s", state.TargetKeyspace, state.Workflow)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no sources found for workflow %s.%s", state.TargetKeyspace, state.Workflow)
 	}
 	targetDbName := ""
 	for _, tsTarget := range ts.targets {
@@ -1757,7 +1760,7 @@ func (s *Server) GetCopyProgress(ctx context.Context, ts *trafficSwitcher, state
 		break
 	}
 	if sourceDbName == "" || targetDbName == "" {
-		return nil, fmt.Errorf("workflow %s.%s is incorrectly configured", state.TargetKeyspace, state.Workflow)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "workflow %s.%s is incorrectly configured", state.TargetKeyspace, state.Workflow)
 	}
 	sort.Strings(tableList) // sort list for repeatability for mocking in tests
 	tablesStr := strings.Join(tableList, ",")
@@ -1823,7 +1826,7 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	}
 
 	if len(res) == 0 {
-		return nil, fmt.Errorf("the %s workflow does not exist in the %s keyspace", req.TabletRequest.Workflow, req.Keyspace)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "the %s workflow does not exist in the %s keyspace", req.TabletRequest.Workflow, req.Keyspace)
 	}
 
 	response := &vtctldatapb.WorkflowUpdateResponse{}
@@ -1861,7 +1864,7 @@ func (s *Server) validateSourceTablesExist(ctx context.Context, sourceKeyspace s
 		}
 	}
 	if len(missingTables) > 0 {
-		return fmt.Errorf("table(s) not found in source keyspace %s: %s", sourceKeyspace, strings.Join(missingTables, ","))
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "table(s) not found in source keyspace %s: %s", sourceKeyspace, strings.Join(missingTables, ","))
 	}
 	return nil
 }
@@ -2161,7 +2164,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 					ts.externalTopo = externalTopo
 				}
 			} else if ts.sourceKeyspace != bls.Keyspace {
-				return nil, fmt.Errorf("source keyspaces are mismatched across streams: %v vs %v", ts.sourceKeyspace, bls.Keyspace)
+				return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "source keyspaces are mismatched across streams: %v vs %v", ts.sourceKeyspace, bls.Keyspace)
 			}
 
 			if ts.tables == nil {
@@ -2176,7 +2179,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 				}
 				sort.Strings(tables)
 				if !reflect.DeepEqual(ts.tables, tables) {
-					return nil, fmt.Errorf("table lists are mismatched across streams: %v vs %v", ts.tables, tables)
+					return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "table lists are mismatched across streams: %v vs %v", ts.tables, tables)
 				}
 			}
 
@@ -2188,7 +2191,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 				return nil, err
 			}
 			if sourcesi.PrimaryAlias == nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "source shard %s/%s currently has no primary tablet",
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "source shard %s/%s currently has no primary tablet",
 					bls.Keyspace, bls.Shard)
 			}
 			sourcePrimary, err := sourceTopo.GetTablet(ctx, sourcesi.PrimaryAlias)
@@ -2352,7 +2355,7 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 	// Check the Serving map for the shard, we don't want to
 	// remove a serving shard if not absolutely sure.
 	if !evenIfServing && len(servingCells) > 0 {
-		return fmt.Errorf("shard %v/%v is still serving, cannot delete it, use the even-if-serving flag if needed", keyspace, shard)
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shard %v/%v is still serving, cannot delete it, use the even-if-serving flag if needed", keyspace, shard)
 	}
 
 	cells, err := s.ts.GetCellInfoNames(ctx)
@@ -2376,7 +2379,7 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 			// try to delete them.
 			aliases, err = s.ts.GetTabletAliasesByCell(ctx, cell)
 			if err != nil {
-				return fmt.Errorf("GetTabletsByCell(%v) failed: %v", cell, err)
+				return vterrors.Errorf(vtrpc.Code_INTERNAL, "GetTabletsByCell(%v) failed: %v", cell, err)
 			}
 		case err == nil:
 			// We found a ShardReplication object. We
@@ -2386,7 +2389,7 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 				aliases[i] = n.TabletAlias
 			}
 		default:
-			return fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
 		}
 
 		// Get the corresponding Tablet records. Note
@@ -2395,7 +2398,7 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 		// still referenced.
 		tabletMap, err := s.ts.GetTabletMap(ctx, aliases)
 		if err != nil {
-			return fmt.Errorf("GetTabletMap() failed: %v", err)
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "GetTabletMap() failed: %v", err)
 		}
 
 		// Remove the tablets that don't belong to our
@@ -2409,7 +2412,7 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 		// Now see if we need to DeleteTablet, and if we can, do it.
 		if len(tabletMap) > 0 {
 			if !recursive {
-				return fmt.Errorf("shard %v/%v still has %v tablets in cell %v; use --recursive or remove them manually", keyspace, shard, len(tabletMap), cell)
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shard %v/%v still has %v tablets in cell %v; use --recursive or remove them manually", keyspace, shard, len(tabletMap), cell)
 			}
 
 			log.Infof("Deleting all tablets in shard %v/%v cell %v", keyspace, shard, cell)
@@ -2427,7 +2430,7 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 					//
 					// If the problem is temporary, or resolved externally, re-running
 					// DeleteShard will skip over tablets that were already deleted.
-					return fmt.Errorf("can't delete tablet %v: %v", tabletAlias, err)
+					return vterrors.Errorf(vtrpc.Code_INTERNAL, "can't delete tablet %v: %v", tabletAlias, err)
 				}
 			}
 		}
@@ -2538,7 +2541,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	}
 
 	if startState.WorkflowType == TypeMigrate {
-		return nil, fmt.Errorf("invalid action for Migrate workflow: SwitchTraffic")
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid action for Migrate workflow: SwitchTraffic")
 	}
 
 	maxReplicationLagAllowed, set, err := protoutil.DurationFromProto(req.MaxReplicationLagAllowed)
@@ -2561,7 +2564,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		return nil, err
 	}
 	if reason != "" {
-		return nil, fmt.Errorf("cannot switch traffic for workflow %s at this time: %s", startState.Workflow, reason)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot switch traffic for workflow %s at this time: %s", startState.Workflow, reason)
 	}
 	hasReplica, hasRdonly, hasPrimary, err = parseTabletTypes(req.TabletTypes)
 	if err != nil {
@@ -2643,14 +2646,14 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 
 	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, ts.optCells, state.String())
 	if !switchReplica && !switchRdonly {
-		return handleError("invalid tablet types", fmt.Errorf("tablet types must be REPLICA or RDONLY: %s", roTypesToSwitchStr))
+		return handleError("invalid tablet types", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "tablet types must be REPLICA or RDONLY: %s", roTypesToSwitchStr))
 	}
 	if !ts.isPartialMigration { // shard level traffic switching is all or nothing
 		if direction == DirectionBackward && switchReplica && len(state.ReplicaCellsSwitched) == 0 {
-			return handleError("invalid request", fmt.Errorf("requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched"))
+			return handleError("invalid request", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched"))
 		}
 		if direction == DirectionBackward && switchRdonly && len(state.RdonlyCellsSwitched) == 0 {
-			return handleError("invalid request", fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
+			return handleError("invalid request", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
 		}
 	}
 	var cells = req.Cells
@@ -2860,7 +2863,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 	} else {
 		if cancel {
-			return handleError("invalid cancel", fmt.Errorf("traffic switching has reached the point of no return, cannot cancel"))
+			return handleError("invalid cancel", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "traffic switching has reached the point of no return, cannot cancel"))
 		}
 		ts.Logger().Infof("Journals were found. Completing the left over steps.")
 		// Need to gather positions in case all journals were not created.
@@ -2980,16 +2983,16 @@ func (s *Server) VReplicationExec(ctx context.Context, tabletAlias *topodatapb.T
 func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool) error {
 	destShardInfo, err := s.ts.GetShard(ctx, destKeyspace, destShard)
 	if err != nil {
-		return fmt.Errorf("GetShard(%v, %v) failed: %v", destKeyspace, destShard, err)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "GetShard(%v, %v) failed: %v", destKeyspace, destShard, err)
 	}
 
 	if destShardInfo.PrimaryAlias == nil {
-		return fmt.Errorf("no primary in shard record %v/%v. Consider running 'vtctl InitShardPrimary' in case of a new shard or reparenting the shard to fix the topology data", destKeyspace, destShard)
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no primary in shard record %v/%v. Consider running 'vtctl InitShardPrimary' in case of a new shard or reparenting the shard to fix the topology data", destKeyspace, destShard)
 	}
 
 	diffs, err := schematools.CompareSchemas(ctx, s.ts, s.tmc, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
 	if err != nil {
-		return fmt.Errorf("CopySchemaShard failed because schemas could not be compared initially: %v", err)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "CopySchemaShard failed because schemas could not be compared initially: %v", err)
 	}
 	if diffs == nil {
 		// Return early because dest has already the same schema as source.
@@ -2999,19 +3002,19 @@ func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodat
 	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: tables, ExcludeTables: excludeTables, IncludeViews: includeViews}
 	sourceSd, err := schematools.GetSchema(ctx, s.ts, s.tmc, sourceTabletAlias, req)
 	if err != nil {
-		return fmt.Errorf("GetSchema(%v, %v, %v, %v) failed: %v", sourceTabletAlias, tables, excludeTables, includeViews, err)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "GetSchema(%v, %v, %v, %v) failed: %v", sourceTabletAlias, tables, excludeTables, includeViews, err)
 	}
 
 	createSQLstmts := tmutils.SchemaDefinitionToSQLStrings(sourceSd)
 
 	destTabletInfo, err := s.ts.GetTablet(ctx, destShardInfo.PrimaryAlias)
 	if err != nil {
-		return fmt.Errorf("GetTablet(%v) failed: %v", destShardInfo.PrimaryAlias, err)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "GetTablet(%v) failed: %v", destShardInfo.PrimaryAlias, err)
 	}
 	for _, createSQL := range createSQLstmts {
 		err = s.applySQLShard(ctx, destTabletInfo, createSQL)
 		if err != nil {
-			return fmt.Errorf("creating a table failed."+
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "creating a table failed."+
 				" Most likely some tables already exist on the destination and differ from the source."+
 				" Please remove all to be copied tables from the destination manually and run this command again."+
 				" Full error: %v", err)
@@ -3021,7 +3024,7 @@ func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodat
 	// Remember the replication position after all the above were applied.
 	destPrimaryPos, err := s.tmc.PrimaryPosition(ctx, destTabletInfo.Tablet)
 	if err != nil {
-		return fmt.Errorf("CopySchemaShard: can't get replication position after schema applied: %v", err)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "CopySchemaShard: can't get replication position after schema applied: %v", err)
 	}
 
 	// Although the copy was successful, we have to verify it to catch the case
@@ -3032,10 +3035,10 @@ func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodat
 	if !skipVerify {
 		diffs, err = schematools.CompareSchemas(ctx, s.ts, s.tmc, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
 		if err != nil {
-			return fmt.Errorf("CopySchemaShard failed because schemas could not be compared finally: %v", err)
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "CopySchemaShard failed because schemas could not be compared finally: %v", err)
 		}
 		if diffs != nil {
-			return fmt.Errorf("CopySchemaShard was not successful because the schemas between the two tablets %v and %v differ: %v", sourceTabletAlias, destShardInfo.PrimaryAlias, diffs)
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "CopySchemaShard was not successful because the schemas between the two tablets %v and %v differ: %v", sourceTabletAlias, destShardInfo.PrimaryAlias, diffs)
 		}
 	}
 
@@ -3044,7 +3047,7 @@ func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodat
 	defer cancel()
 	_, ok := schematools.ReloadShard(reloadCtx, s.ts, s.tmc, logutil.NewMemoryLogger(), destKeyspace, destShard, destPrimaryPos, nil, true)
 	if !ok {
-		log.Error(fmt.Errorf("CopySchemaShard: failed to reload schema on all replicas"))
+		log.Error(vterrors.Errorf(vtrpc.Code_INTERNAL, "CopySchemaShard: failed to reload schema on all replicas"))
 	}
 
 	return err
@@ -3060,7 +3063,7 @@ func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodat
 func (s *Server) applySQLShard(ctx context.Context, tabletInfo *topo.TabletInfo, change string) error {
 	filledChange, err := fillStringTemplate(change, map[string]string{"DatabaseName": tabletInfo.DbName()})
 	if err != nil {
-		return fmt.Errorf("fillStringTemplate failed: %v", err)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "fillStringTemplate failed: %v", err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
