@@ -322,7 +322,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		} else {
 			data = []byte(fmt.Sprintf("VDiff %s scheduled on target shards, use show to view progress", resp.Uuid))
 		}
-		fmt.Printf("%s\n", data)
+		fmt.Println(data)
 	}
 
 	return nil
@@ -585,6 +585,7 @@ func displayShowSingleSummary(format, keyspace, workflowName, uuid string, resp 
 	fmt.Println(output)
 	return state, nil
 }
+
 func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiffShowResponse, verbose bool) (*summary, error) {
 	summary := &summary{
 		Workflow:     workflow,
