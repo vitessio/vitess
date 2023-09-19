@@ -253,9 +253,6 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 
 	SetupReplica3Tablet = func(extraArgs []string) (*cluster.Vttablet, error) {
 		replica3.VttabletProcess.ExtraArgs = append(replica3.VttabletProcess.ExtraArgs, extraArgs...)
-		if err := localCluster.VtctlclientProcess.InitTablet(replica3, cell, keyspaceName, hostname, shard.Name); err != nil {
-			return replica3, err
-		}
 		if err := replica3.VttabletProcess.Setup(); err != nil {
 			return replica3, err
 		}
