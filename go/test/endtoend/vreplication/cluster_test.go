@@ -248,19 +248,32 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 	if _, err := os.Stat(file); err == nil {
 		return nil
 	}
-	resp, err := client.Get(url)
-	if err != nil {
-		return fmt.Errorf("error downloading contents of %s to %s. Error: %v", url, file, err)
+	downloadFile := func() error {
+		resp, err := client.Get(url)
+		if err != nil {
+			return fmt.Errorf("error downloading contents of %s to %s. Error: %v", url, file, err)
+		}
+		defer resp.Body.Close()
+		out, err := os.Create(file)
+		if err != nil {
+			return fmt.Errorf("error creating file %s to save the contents of %s. Error: %v", file, url, err)
+		}
+		defer out.Close()
+		_, err = io.Copy(out, resp.Body)
+		if err != nil {
+			return fmt.Errorf("error saving contents of %s to %s. Error: %v", url, file, err)
+		}
+		return nil
 	}
-	defer resp.Body.Close()
-	out, err := os.Create(file)
-	if err != nil {
-		return fmt.Errorf("error creating file %s to save the contents of %s. Error: %v", file, url, err)
+	retries := 5
+	var downloadErr error
+	for i := 0; i <= retries; i++ {
+		if downloadErr = downloadFile(); downloadErr == nil {
+			break
+		}
 	}
-	defer out.Close()
-	_, err = io.Copy(out, resp.Body)
-	if err != nil {
-		return fmt.Errorf("error saving contents of %s to %s. Error: %v", url, file, err)
+	if downloadErr != nil {
+		return downloadErr
 	}
 
 	untarCmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("tar xvf %s -C %s --strip-components=1", file, path))
