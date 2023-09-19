@@ -5,7 +5,6 @@
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [Local examples now use etcd v3 storage and API](#local-examples-etcd-v3)
-    - [VTBackup stat `DurationByPhase` removed](#remove-vtbackup-stat-duration-by-phase)
   - **[New command line flags and behavior](#new-flag)**
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
     - [VTOrc flag `--change-tablets-with-errant-gtid-to-drained`](#new-flag-errant-gtid-convert)
@@ -17,6 +16,7 @@
     - [Deleted `V3` planner](#deleted-v3)
     - [Deleted `k8stopo`](#deleted-k8stopo)
     - [Deleted `vtgr`](#deleted-vtgr)
+    - [Deprecated VTBackup stat `DurationByPhase`](#deprecated-vtbackup-stat-duration-by-phase)
   - **[New stats](#new-stats)**
     - [VTGate Vindex unknown parameters](#vtgate-vindex-unknown-parameters)
     - [VTBackup stat `Phase`](#vtbackup-stat-phase)
@@ -40,10 +40,6 @@ removed this legacy etcd usage and instead use the new (default) etcd v3 storage
 [PR #13791](https://github.com/vitessio/vitess/pull/13791) for additional info. If you are using the local
 examples in any sort of long-term non-testing capacity, then you will need to explicitly use the v2 storage
 and API mode or [migrate your existing data from v2 to v3](https://etcd.io/docs/v3.5/tutorials/how-to-migrate/).
-
-#### <a id="remove-vtbackup-stat-duration-by-phase"/>VTbackup stat `DurationByPhase` removed
-
-VTBackup stat `DurationByPhase` is removed. Use the binary-valued `Phase` stat instead.
 
 ### <a id="new-flag"/>New command line flags and behavior
 
@@ -120,6 +116,10 @@ the `k8stopo` has been removed.
 #### <a id="deleted-vtgr"/>Deleted `vtgr`
 
 The `vtgr` has been deprecated in Vitess 17, also see https://github.com/vitessio/vitess/issues/13300. With Vitess 18 `vtgr` has been removed.
+
+#### <a id="deprecated-vtbackup-stat-duration-by-phase"/>Deprecated VTbackup stat `DurationByPhase`
+
+VTBackup stat `DurationByPhase` is deprecated. Use the binary-valued `Phase` stat instead.
 
 ### <a id="new-stats"/>New stats
 
