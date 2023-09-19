@@ -2788,7 +2788,10 @@ func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodat
 		return fmt.Errorf("GetSchema(%v, %v, %v, %v) failed: %v", sourceTabletAlias, tables, excludeTables, includeViews, err)
 	}
 
-	createSQLstmts := tmutils.SchemaDefinitionToSQLStrings(sourceSd)
+	createSQLstmts, err := tmutils.SchemaDefinitionToSQLStrings(sourceSd)
+	if err != nil {
+		return fmt.Errorf("SchemaDefinitionToSQLStrings(%v) failed: %v", sourceSd, err)
+	}
 
 	destTabletInfo, err := s.ts.GetTablet(ctx, destShardInfo.PrimaryAlias)
 	if err != nil {
