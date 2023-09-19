@@ -100,12 +100,12 @@ const (
 	// forever for things that should be quick.
 	operationTimeout = 1 * time.Minute
 
-	phaseNameCatchUpReplication          = "CatchUpReplication"
+	phaseNameCatchupReplication          = "CatchupReplication"
 	phaseNameInitialBackup               = "InitialBackup"
 	phaseNameRestoreLastBackup           = "RestoreLastBackup"
 	phaseNameTakeNewBackup               = "TakeNewBackup"
-	phaseStatusCatchUpReplicationStalled = "Stalled"
-	phaseStatusCatchUpReplicationStopped = "Stopped"
+	phaseStatusCatchupReplicationStalled = "Stalled"
+	phaseStatusCatchupReplicationStopped = "Stopped"
 )
 
 var (
@@ -154,7 +154,7 @@ var (
 		"phase",
 	)
 	phaseNames = []string{
-		phaseNameCatchUpReplication,
+		phaseNameCatchupReplication,
 		phaseNameInitialBackup,
 		phaseNameRestoreLastBackup,
 		phaseNameTakeNewBackup,
@@ -165,9 +165,9 @@ var (
 		[]string{"phase", "status"},
 	)
 	phaseStatuses = map[string][]string{
-		phaseNameCatchUpReplication: {
-			phaseStatusCatchUpReplicationStalled,
-			phaseStatusCatchUpReplicationStopped,
+		phaseNameCatchupReplication: {
+			phaseStatusCatchupReplicationStalled,
+			phaseStatusCatchupReplicationStopped,
 		},
 	}
 )
@@ -491,8 +491,8 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	backupParams.BackupTime = time.Now()
 
 	// Wait for replication to catch up.
-	phase.Set(phaseNameCatchUpReplication, int64(1))
-	defer phase.Set(phaseNameCatchUpReplication, int64(0))
+	phase.Set(phaseNameCatchupReplication, int64(1))
+	defer phase.Set(phaseNameCatchupReplication, int64(0))
 
 	var (
 		lastStatus replication.ReplicationStatus
@@ -523,22 +523,22 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		}
 		if !lastStatus.Position.IsZero() {
 			if status.Position.Equal(lastStatus.Position) {
-				phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStalled}, 1)
+				phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 1)
 			} else {
-				phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStalled}, 0)
+				phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 0)
 			}
 		}
 		if !status.Healthy() {
 			log.Warning("Replication has stopped before backup could be taken. Trying to restart replication.")
-			phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStopped}, 1)
+			phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 1)
 			if err := startReplication(ctx, mysqld, topoServer); err != nil {
 				log.Warningf("Failed to restart replication: %v", err)
 			}
 		} else {
-			phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStopped}, 0)
+			phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 0)
 		}
 	}
-	phase.Set(phaseNameCatchUpReplication, int64(0))
+	phase.Set(phaseNameCatchupReplication, int64(0))
 
 	// Stop replication and see where we are.
 	if err := mysqld.StopReplication(nil); err != nil {
@@ -554,8 +554,8 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	if !status.Position.AtLeast(primaryPos) && status.Position.Equal(restorePos) {
 		return fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
 	}
-	phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStalled}, 0)
-	phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStopped}, 0)
+	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 0)
+	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 0)
 
 	// Re-enable redo logging.
 	if disabledRedoLog {

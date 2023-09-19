@@ -133,7 +133,7 @@ In v17, the `vtbackup` stat `DurationByPhase` stat was added measuring the time 
 
 `Phase` reports a 1 (active) or a 0 (inactive) for each of the following phases:
 
- * `CatchUpReplication`
+ * `CatchupReplication`
  * `InitialBackup`
  * `RestoreLastBackup`
  * `TakeNewBackup`
@@ -147,7 +147,7 @@ sum_over_time(vtbackup_phase{phase="TakeNewBackup"}) * <interval>
 
 `PhaseStatus` reports a 1 (active) or a 0 (inactive) for each of the following phases and statuses:
 
- * `CatchUpReplication` phase has statuses `Stalled` and `Stopped`.
+ * `CatchupReplication` phase has statuses `Stalled` and `Stopped`.
     * `Stalled` is set to `1` when replication stops advancing.
     * `Stopped` is set to `1` when replication stops before `vtbackup` catches up with the primary.
 
