@@ -177,7 +177,6 @@ func AddCommonFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVarP(&BaseOptions.Workflow, "workflow", "w", "", "The workflow you want to perform the command on.")
 	cmd.MarkPersistentFlagRequired("workflow")
 	cmd.PersistentFlags().StringVar(&BaseOptions.Format, "format", "text", "The format of the output; supported formats are: text,json.")
-	cmd.MarkPersistentFlagRequired("format")
 }
 
 func AddCommonCreateFlags(cmd *cobra.Command) {
