@@ -1610,7 +1610,6 @@ message VDiffDeleteRequest {
 }
 
 message VDiffDeleteResponse {
-  string status = 1;
 }
 
 message VDiffResumeRequest {
@@ -1620,7 +1619,6 @@ message VDiffResumeRequest {
 }
 
 message VDiffResumeResponse {
-  string status = 1;
 }
 
 message VDiffShowRequest {
@@ -1642,7 +1640,6 @@ message VDiffStopRequest {
 }
 
 message VDiffStopResponse {
-  string status = 1;
 }
 
 message WorkflowDeleteRequest {

@@ -64181,9 +64181,6 @@ export namespace vtctldata {
 
     /** Properties of a VDiffDeleteResponse. */
     interface IVDiffDeleteResponse {
-
-        /** VDiffDeleteResponse status */
-        status?: (string|null);
     }
 
     /** Represents a VDiffDeleteResponse. */
@@ -64194,9 +64191,6 @@ export namespace vtctldata {
          * @param [properties] Properties to set
          */
         constructor(properties?: vtctldata.IVDiffDeleteResponse);
-
-        /** VDiffDeleteResponse status. */
-        public status: string;
 
         /**
          * Creates a new VDiffDeleteResponse instance using the specified properties.
@@ -64387,9 +64381,6 @@ export namespace vtctldata {
 
     /** Properties of a VDiffResumeResponse. */
     interface IVDiffResumeResponse {
-
-        /** VDiffResumeResponse status */
-        status?: (string|null);
     }
 
     /** Represents a VDiffResumeResponse. */
@@ -64400,9 +64391,6 @@ export namespace vtctldata {
          * @param [properties] Properties to set
          */
         constructor(properties?: vtctldata.IVDiffResumeResponse);
-
-        /** VDiffResumeResponse status. */
-        public status: string;
 
         /**
          * Creates a new VDiffResumeResponse instance using the specified properties.
@@ -64799,9 +64787,6 @@ export namespace vtctldata {
 
     /** Properties of a VDiffStopResponse. */
     interface IVDiffStopResponse {
-
-        /** VDiffStopResponse status */
-        status?: (string|null);
     }
 
     /** Represents a VDiffStopResponse. */
@@ -64812,9 +64797,6 @@ export namespace vtctldata {
          * @param [properties] Properties to set
          */
         constructor(properties?: vtctldata.IVDiffStopResponse);
-
-        /** VDiffStopResponse status. */
-        public status: string;
 
         /**
          * Creates a new VDiffStopResponse instance using the specified properties.

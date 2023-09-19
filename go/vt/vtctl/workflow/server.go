@@ -91,7 +91,7 @@ type sequenceMetadata struct {
 	usingTableDefinition *vschemapb.Table
 }
 
-type VDiffOutput struct {
+type vdiffOutput struct {
 	mu        sync.Mutex
 	responses map[string]*tabletmanagerdatapb.VDiffResponse
 	err       error
@@ -1400,16 +1400,8 @@ func (s *Server) VDiffDelete(ctx context.Context, req *vtctldatapb.VDiffDeleteRe
 		log.Errorf("Error executing vdiff delete action: %v", err)
 		return nil, err
 	}
-	var status string
-	if req.Arg == "all" {
-		status = "Deleted all VDiffs"
-	} else {
-		status = fmt.Sprintf("Deleted VDiff %s", req.Arg)
-	}
 
-	return &vtctldatapb.VDiffDeleteResponse{
-		Status: status,
-	}, nil
+	return &vtctldatapb.VDiffDeleteResponse{}, nil
 }
 
 // VDiffResume is part of the vtctlservicepb.VtctldServer interface.
@@ -1442,9 +1434,7 @@ func (s *Server) VDiffResume(ctx context.Context, req *vtctldatapb.VDiffResumeRe
 		return nil, err
 	}
 
-	return &vtctldatapb.VDiffResumeResponse{
-		Status: fmt.Sprintf("Resumed VDiff %s", req.Uuid),
-	}, nil
+	return &vtctldatapb.VDiffResumeResponse{}, nil
 }
 
 // VDiffShow is part of the vtctlservicepb.VtctldServer interface.
@@ -1468,7 +1458,7 @@ func (s *Server) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowReques
 		return nil, err
 	}
 
-	output := &VDiffOutput{
+	output := &vdiffOutput{
 		responses: make(map[string]*tabletmanagerdatapb.VDiffResponse, len(ts.targets)),
 		err:       nil,
 	}
@@ -1519,9 +1509,7 @@ func (s *Server) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopReques
 		return nil, err
 	}
 
-	return &vtctldatapb.VDiffStopResponse{
-		Status: fmt.Sprintf("Stopped VDiff %s", req.Uuid),
-	}, nil
+	return &vtctldatapb.VDiffStopResponse{}, nil
 }
 
 // WorkflowDelete is part of the vtctlservicepb.VtctldServer interface.
