@@ -18,6 +18,7 @@
     - [Deleted `vtgr`](#deleted-vtgr)
   - **[New stats](#new-stats)**
     - [VTGate Vindex unknown parameters](#vtgate-vindex-unknown-parameters)
+    - [VTBackup stat `PhaseStatus`](#vtbackup-stat-phase-status)
   - **[VTTablet](#vttablet)**
     - [VTTablet: New ResetSequences RPC](#vttablet-new-rpc-reset-sequences)
   - **[Docker](#docker)**
@@ -119,6 +120,14 @@ The `vtgr` has been deprecated in Vitess 17, also see https://github.com/vitessi
 #### <a id="vtgate-vindex-unknown-parameters"/>VTGate Vindex unknown parameters
 
 The VTGate stat `VindexUnknownParameters` gauges unknown Vindex parameters found in the latest VSchema pulled from the topology.
+
+#### <a id="vtbackup-stat-phase-status"/>VTBackup `PhaseStatus` stat
+
+`PhaseStatus` reports a 1 (active) or a 0 (inactive) for each of the following phases and statuses:
+
+ * `CatchUpReplication` phase has statuses `Stalled` and `Stopped`.
+    * `Stalled` is set to `1` when replication stops advancing.
+    * `Stopped` is set to `1` when replication stops before `vtbackup` catches up with the primary.
 
 ### <a id="vttablet"/>VTTablet
 
