@@ -451,7 +451,17 @@ func checkIfTableExists(t *testing.T, vc *VitessCluster, tabletAlias string, tab
 	return found, nil
 }
 
-func checkIfDenyListExists(t *testing.T, vc *VitessCluster, ksShard string, table string) (bool, error) {
+func validateTableInDenyList(t *testing.T, vc *VitessCluster, ksShard string, table string, mustExist bool) {
+	found, err := isTableInDenyList(t, vc, ksShard, table)
+	require.NoError(t, err)
+	if mustExist {
+		require.True(t, found, "Table %s not found in deny list", table)
+	} else {
+		require.False(t, found, "Table %s found in deny list", table)
+	}
+}
+
+func isTableInDenyList(t *testing.T, vc *VitessCluster, ksShard string, table string) (bool, error) {
 	var output string
 	var err error
 	found := false
