@@ -65,7 +65,7 @@ var (
 
 	// detectedProblemsCounter is used to count the number of detected problems.
 	detectedProblemsCounter = stats.NewCountersWithMultiLabels("DetectedProblems", "Count of the different detected problems", []string{
-		"AnalysisCode",
+		"Analysis",
 		"TabletAlias",
 		"Keyspace",
 		"Shard",
