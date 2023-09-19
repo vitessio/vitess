@@ -372,7 +372,7 @@ func commandResume(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// Summary aggregates/selects the current state of the vdiff from all shards.
+// tableSummary aggregates/selects the current state of the table diff from all shards.
 type tableSummary struct {
 	TableName       string
 	State           vdiff.VDiffState
@@ -383,6 +383,8 @@ type tableSummary struct {
 	ExtraRowsTarget int64
 	LastUpdated     string `json:"LastUpdated,omitempty"`
 }
+
+// summary aggregates/selects the current state of the vdiff from all shards.
 type summary struct {
 	Workflow, Keyspace string
 	State              vdiff.VDiffState
@@ -429,9 +431,8 @@ type listing struct {
 }
 
 func (vdl *listing) String() string {
-	str := fmt.Sprintf("UUID: %s, Workflow: %s, Keyspace: %s, Shard: %s, State: %s",
+	return fmt.Sprintf("UUID: %s, Workflow: %s, Keyspace: %s, Shard: %s, State: %s",
 		vdl.UUID, vdl.Workflow, vdl.Keyspace, vdl.Shard, vdl.State)
-	return str
 }
 
 func getStructFieldNames(s any) []string {
@@ -448,7 +449,7 @@ func getStructFieldNames(s any) []string {
 func displayListings(listings []*listing) string {
 	var strArray2 [][]string
 	var strArray []string
-	str := ""
+	var result string
 
 	if len(listings) == 0 {
 		return ""
@@ -465,8 +466,8 @@ func displayListings(listings []*listing) string {
 		strArray2 = append(strArray2, strArray)
 	}
 	t := gotabulate.Create(strArray2)
-	str = t.Render("grid")
-	return str
+	result = t.Render("grid")
+	return result
 }
 
 func displayShowResponse(format, keyspace, workflowName, actionArg string, resp *vtctldatapb.VDiffShowResponse, verbose bool) error {
@@ -499,14 +500,14 @@ func displayShowResponse(format, keyspace, workflowName, actionArg string, resp 
 		if len(resp.TabletResponses) == 0 {
 			return fmt.Errorf("no response received for vdiff show of %s.%s (%s)", keyspace, workflowName, vdiffUUID.String())
 		}
-		_, err := displayShowSingleSummary(format, keyspace, workflowName, vdiffUUID.String(), resp, verbose)
+		_, err = displayShowSingleSummary(format, keyspace, workflowName, vdiffUUID.String(), resp, verbose)
 		return err
 	}
 }
 
 func displayShowRecent(format, keyspace, workflowName, subCommand string, resp *vtctldatapb.VDiffShowResponse) error {
-	str := ""
-	recent, err := buildRecent(resp)
+	output := ""
+	recent, err := buildRecentListings(resp)
 	if err != nil {
 		return err
 	}
@@ -515,21 +516,21 @@ func displayShowRecent(format, keyspace, workflowName, subCommand string, resp *
 		if err != nil {
 			return err
 		}
-		str = string(jsonText)
-		if str == "null" {
-			str = "[]"
+		output = string(jsonText)
+		if output == "null" {
+			output = "[]"
 		}
 	} else {
-		str = displayListings(recent)
-		if str == "" {
-			str = fmt.Sprintf("No vdiffs found for %s.%s", keyspace, workflowName)
+		output = displayListings(recent)
+		if output == "" {
+			output = fmt.Sprintf("No vdiffs found for %s.%s", keyspace, workflowName)
 		}
 	}
-	fmt.Printf(str + "\n")
+	fmt.Println(output)
 	return nil
 }
 
-func buildRecent(resp *vtctldatapb.VDiffShowResponse) ([]*listing, error) {
+func buildRecentListings(resp *vtctldatapb.VDiffShowResponse) ([]*listing, error) {
 	var listings []*listing
 	for _, resp := range resp.TabletResponses {
 		if resp != nil && resp.Output != nil {
@@ -550,7 +551,7 @@ func buildRecent(resp *vtctldatapb.VDiffShowResponse) ([]*listing, error) {
 
 func displayShowSingleSummary(format, keyspace, workflowName, uuid string, resp *vtctldatapb.VDiffShowResponse, verbose bool) (vdiff.VDiffState, error) {
 	state := vdiff.UnknownState
-	str := ""
+	var output string
 	summary, err := buildSingleSummary(keyspace, workflowName, uuid, resp, verbose)
 	if err != nil {
 		return state, err
@@ -561,7 +562,7 @@ func displayShowSingleSummary(format, keyspace, workflowName, uuid string, resp 
 		if err != nil {
 			return state, err
 		}
-		str = string(jsonText)
+		output = string(jsonText)
 	} else {
 		tmpl, err := template.New("test").Parse(summaryTextTemplate)
 		if err != nil {
@@ -572,16 +573,16 @@ func displayShowSingleSummary(format, keyspace, workflowName, uuid string, resp 
 		if err != nil {
 			return state, err
 		}
-		str = sb.String()
+		output = sb.String()
 		for {
-			str2 := strings.Replace(str, "\n\n", "\n", -1)
-			if str == str2 {
+			str := strings.Replace(output, "\n\n", "\n", -1)
+			if output == str {
 				break
 			}
-			str = str2
+			output = str
 		}
 	}
-	fmt.Printf(str + "\n")
+	fmt.Println(output)
 	return state, nil
 }
 func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiffShowResponse, verbose bool) (*summary, error) {
