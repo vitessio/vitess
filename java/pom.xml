@@ -66,14 +66,14 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- Define versions which are also used by grpc-client/pom.xml. -->
-    <grpc.version>1.44.0</grpc.version>
+    <grpc.version>1.57.1</grpc.version>
     <!-- NOTE Netty handler and boring SSL must be kept compatible with grpc
       https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
-    <netty.handler.version>4.1.72.Final</netty.handler.version>
-    <tcnative.boring.ssl.version>2.0.46.Final</tcnative.boring.ssl.version>
+    <netty.handler.version>4.1.93.Final</netty.handler.version>
+    <tcnative.boring.ssl.version>2.0.61.Final</tcnative.boring.ssl.version>
 
-    <protobuf.java.version>3.19.6</protobuf.java.version>
-    <protobuf.protoc.version>3.19.4</protobuf.protoc.version>
+    <protobuf.java.version>3.24.3</protobuf.java.version>
+    <protobuf.protoc.version>3.24.3</protobuf.protoc.version>
     <checkstyle.plugin.version>3.0.0</checkstyle.plugin.version>
     <log4j2.version>2.17.1</log4j2.version>
   </properties>
@@ -248,6 +248,7 @@
               <outputXML>true</outputXML>
               <ignoredUnusedDeclaredDependencies>
                 <dependency>mysql:mysql-connector-java</dependency>
+                <dependency>io.grpc:grpc-context</dependency>
               </ignoredUnusedDeclaredDependencies>
             </configuration>
           </execution>
@@ -287,7 +288,7 @@
           <plugin>
             <groupId>org.sonatype.plugins</groupId>
             <artifactId>nexus-staging-maven-plugin</artifactId>
-            <version>1.6.8</version>
+            <version>1.6.13</version>
             <extensions>true</extensions>
             <configuration>
               <serverId>ossrh</serverId>
@@ -298,7 +299,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-source-plugin</artifactId>
-            <version>2.2.1</version>
+            <version>2.4</version>
             <executions>
               <execution>
                 <id>attach-sources</id>
@@ -311,7 +312,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-javadoc-plugin</artifactId>
-            <version>2.9.1</version>
+            <version>2.10.4</version>
             <executions>
               <execution>
                 <id>attach-javadocs</id>
@@ -324,7 +325,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-gpg-plugin</artifactId>
-            <version>1.5</version>
+            <version>1.6</version>
             <executions>
               <execution>
                 <id>sign-artifacts</id>
