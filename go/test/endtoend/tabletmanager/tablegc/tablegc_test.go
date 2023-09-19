@@ -417,7 +417,7 @@ func TestPurgeView(t *testing.T) {
 }
 
 func TestDropView(t *testing.T) {
-	viewName, err := schema.GenerateGCTableName(schema.DropTableGCState, time.Now().Add(tableTransitionExpiration)) // way in the past
+	viewName, err := schema.GenerateGCTableName(schema.DropTableGCState, time.Now().Add(tableTransitionExpiration)) // shortly in the future
 	require.NoError(t, err)
 	createStatement := fmt.Sprintf("create or replace view %s as select 1", viewName)
 
