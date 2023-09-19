@@ -424,10 +424,10 @@ func TestDropView(t *testing.T) {
 	_, err = primaryTablet.VttabletProcess.QueryTablet(createStatement, keyspaceName, true)
 	require.NoError(t, err)
 
-	// view should be there
+	// view should be there, because the timestamp hint is still in the near future.
 	validateTableExists(t, viewName)
 
 	time.Sleep(tableTransitionExpiration / 2)
-	// View was created with an old timestamp, so it should have been dropped by now
+	// But by now, after the above sleep, the view's timestamp hint is in the past, and we expect TableGC to have dropped the view.
 	validateTableDoesNotExist(t, viewName)
 }
