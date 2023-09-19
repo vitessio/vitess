@@ -150,7 +150,7 @@ func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format strin
 	var output []byte
 	var err error
 	if format == "json" {
-		output, err = cli.MarshalJSON(resp)
+		output, err = cli.MarshalJSONPretty(resp)
 		if err != nil {
 			return err
 		}

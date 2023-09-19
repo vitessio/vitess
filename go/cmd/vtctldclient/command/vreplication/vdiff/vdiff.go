@@ -291,7 +291,7 @@ func commandVDiffCreate(cmd *cobra.Command, args []string) error {
 	} else {
 		var data []byte
 		if format == "json" {
-			data, err = cli.MarshalJSON(resp)
+			data, err = cli.MarshalJSONPretty(resp)
 			if err != nil {
 				return err
 			}
@@ -323,7 +323,7 @@ func commandVDiffDelete(cmd *cobra.Command, args []string) error {
 
 	var data []byte
 	if format == "json" {
-		data, err = cli.MarshalJSON(resp)
+		data, err = cli.MarshalJSONPretty(resp)
 		if err != nil {
 			return err
 		}
@@ -355,7 +355,7 @@ func commandVDiffResume(cmd *cobra.Command, args []string) error {
 
 	var data []byte
 	if format == "json" {
-		data, err = cli.MarshalJSON(resp)
+		data, err = cli.MarshalJSONPretty(resp)
 		if err != nil {
 			return err
 		}
@@ -507,7 +507,7 @@ func displayShowRecent(format, keyspace, workflowName, subCommand string, resp *
 		return err
 	}
 	if format == "json" {
-		jsonText, err := json.MarshalIndent(recent, cli.JSONprefix, cli.JSONindent)
+		jsonText, err := cli.MarshalJSONPretty(recent)
 		if err != nil {
 			return err
 		}
@@ -553,7 +553,7 @@ func displayShowSingleSummary(format, keyspace, workflowName, uuid string, resp 
 	}
 	state = summary.State
 	if format == "json" {
-		jsonText, err := json.MarshalIndent(summary, cli.JSONprefix, cli.JSONindent)
+		jsonText, err := cli.MarshalJSONPretty(summary)
 		if err != nil {
 			return state, err
 		}
@@ -838,7 +838,7 @@ func commandVDiffStop(cmd *cobra.Command, args []string) error {
 
 	var data []byte
 	if format == "json" {
-		data, err = cli.MarshalJSON(resp)
+		data, err = cli.MarshalJSONPretty(resp)
 		if err != nil {
 			return err
 		}

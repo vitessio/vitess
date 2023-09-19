@@ -60,14 +60,15 @@ func MarshalJSON(obj any) ([]byte, error) {
 	}
 }
 
-// MarshalJSONCompact works the same as MarshalJSON but elides zero value elements.
-func MarshalJSONCompact(obj any) ([]byte, error) {
+// MarshalJSONPretty works the same as MarshalJSON but elides zero value
+// elements and uses ENUM names instead of numbers.
+func MarshalJSONPretty(obj any) ([]byte, error) {
 	switch obj := obj.(type) {
 	case proto.Message:
 		m := protojson.MarshalOptions{
 			Multiline:       true,
 			Indent:          JSONindent,
-			UseEnumNumbers:  true,
+			UseEnumNumbers:  false,
 			UseProtoNames:   true,
 			EmitUnpopulated: false, // elide zero value elements
 		}
