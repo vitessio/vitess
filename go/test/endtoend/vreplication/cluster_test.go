@@ -461,8 +461,8 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	}
 
 	vttablet := cluster.VttabletProcessInstance(
-		vc.ClusterConfig.tabletPortBase+tabletID+rand.Intn(1000),
-		vc.ClusterConfig.tabletGrpcPortBase+tabletID+rand.Intn(1000),
+		vc.ClusterConfig.tabletPortBase+tabletID,
+		vc.ClusterConfig.tabletGrpcPortBase+tabletID,
 		tabletID,
 		cell.Name,
 		shard.Name,
@@ -478,7 +478,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	require.NotNil(t, vttablet)
 	vttablet.SupportsBackup = false
 
-	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tabletID, vc.ClusterConfig.tabletMysqlPortBase+tabletID+rand.Intn(1000), vc.ClusterConfig.tmpDir)
+	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tabletID, vc.ClusterConfig.tabletMysqlPortBase+tabletID, vc.ClusterConfig.tmpDir)
 	require.NoError(t, err)
 	tablet.DbServer = mysqlctlProcess
 	require.NotNil(t, tablet.DbServer)
