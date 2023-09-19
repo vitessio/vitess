@@ -26,8 +26,10 @@ type MysqlCtlClient interface {
 	Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error)
 	RunMysqlUpgrade(ctx context.Context, in *RunMysqlUpgradeRequest, opts ...grpc.CallOption) (*RunMysqlUpgradeResponse, error)
 	ApplyBinlogFile(ctx context.Context, in *ApplyBinlogFileRequest, opts ...grpc.CallOption) (*ApplyBinlogFileResponse, error)
+	ReadBinlogFilesTimestamps(ctx context.Context, in *ReadBinlogFilesTimestampsRequest, opts ...grpc.CallOption) (*ReadBinlogFilesTimestampsResponse, error)
 	ReinitConfig(ctx context.Context, in *ReinitConfigRequest, opts ...grpc.CallOption) (*ReinitConfigResponse, error)
 	RefreshConfig(ctx context.Context, in *RefreshConfigRequest, opts ...grpc.CallOption) (*RefreshConfigResponse, error)
+	VersionString(ctx context.Context, in *VersionStringRequest, opts ...grpc.CallOption) (*VersionStringResponse, error)
 }
 
 type mysqlCtlClient struct {
@@ -74,6 +76,15 @@ func (c *mysqlCtlClient) ApplyBinlogFile(ctx context.Context, in *ApplyBinlogFil
 	return out, nil
 }
 
+func (c *mysqlCtlClient) ReadBinlogFilesTimestamps(ctx context.Context, in *ReadBinlogFilesTimestampsRequest, opts ...grpc.CallOption) (*ReadBinlogFilesTimestampsResponse, error) {
+	out := new(ReadBinlogFilesTimestampsResponse)
+	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/ReadBinlogFilesTimestamps", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mysqlCtlClient) ReinitConfig(ctx context.Context, in *ReinitConfigRequest, opts ...grpc.CallOption) (*ReinitConfigResponse, error) {
 	out := new(ReinitConfigResponse)
 	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/ReinitConfig", in, out, opts...)
@@ -92,6 +103,15 @@ func (c *mysqlCtlClient) RefreshConfig(ctx context.Context, in *RefreshConfigReq
 	return out, nil
 }
 
+func (c *mysqlCtlClient) VersionString(ctx context.Context, in *VersionStringRequest, opts ...grpc.CallOption) (*VersionStringResponse, error) {
+	out := new(VersionStringResponse)
+	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/VersionString", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MysqlCtlServer is the server API for MysqlCtl service.
 // All implementations must embed UnimplementedMysqlCtlServer
 // for forward compatibility
@@ -100,8 +120,10 @@ type MysqlCtlServer interface {
 	Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error)
 	RunMysqlUpgrade(context.Context, *RunMysqlUpgradeRequest) (*RunMysqlUpgradeResponse, error)
 	ApplyBinlogFile(context.Context, *ApplyBinlogFileRequest) (*ApplyBinlogFileResponse, error)
+	ReadBinlogFilesTimestamps(context.Context, *ReadBinlogFilesTimestampsRequest) (*ReadBinlogFilesTimestampsResponse, error)
 	ReinitConfig(context.Context, *ReinitConfigRequest) (*ReinitConfigResponse, error)
 	RefreshConfig(context.Context, *RefreshConfigRequest) (*RefreshConfigResponse, error)
+	VersionString(context.Context, *VersionStringRequest) (*VersionStringResponse, error)
 	mustEmbedUnimplementedMysqlCtlServer()
 }
 
@@ -121,11 +143,17 @@ func (UnimplementedMysqlCtlServer) RunMysqlUpgrade(context.Context, *RunMysqlUpg
 func (UnimplementedMysqlCtlServer) ApplyBinlogFile(context.Context, *ApplyBinlogFileRequest) (*ApplyBinlogFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplyBinlogFile not implemented")
 }
+func (UnimplementedMysqlCtlServer) ReadBinlogFilesTimestamps(context.Context, *ReadBinlogFilesTimestampsRequest) (*ReadBinlogFilesTimestampsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadBinlogFilesTimestamps not implemented")
+}
 func (UnimplementedMysqlCtlServer) ReinitConfig(context.Context, *ReinitConfigRequest) (*ReinitConfigResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReinitConfig not implemented")
 }
 func (UnimplementedMysqlCtlServer) RefreshConfig(context.Context, *RefreshConfigRequest) (*RefreshConfigResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RefreshConfig not implemented")
+}
+func (UnimplementedMysqlCtlServer) VersionString(context.Context, *VersionStringRequest) (*VersionStringResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VersionString not implemented")
 }
 func (UnimplementedMysqlCtlServer) mustEmbedUnimplementedMysqlCtlServer() {}
 
@@ -212,6 +240,24 @@ func _MysqlCtl_ApplyBinlogFile_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MysqlCtl_ReadBinlogFilesTimestamps_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadBinlogFilesTimestampsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MysqlCtlServer).ReadBinlogFilesTimestamps(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mysqlctl.MysqlCtl/ReadBinlogFilesTimestamps",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MysqlCtlServer).ReadBinlogFilesTimestamps(ctx, req.(*ReadBinlogFilesTimestampsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MysqlCtl_ReinitConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReinitConfigRequest)
 	if err := dec(in); err != nil {
@@ -248,6 +294,24 @@ func _MysqlCtl_RefreshConfig_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MysqlCtl_VersionString_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VersionStringRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MysqlCtlServer).VersionString(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mysqlctl.MysqlCtl/VersionString",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MysqlCtlServer).VersionString(ctx, req.(*VersionStringRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MysqlCtl_ServiceDesc is the grpc.ServiceDesc for MysqlCtl service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -272,12 +336,20 @@ var MysqlCtl_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MysqlCtl_ApplyBinlogFile_Handler,
 		},
 		{
+			MethodName: "ReadBinlogFilesTimestamps",
+			Handler:    _MysqlCtl_ReadBinlogFilesTimestamps_Handler,
+		},
+		{
 			MethodName: "ReinitConfig",
 			Handler:    _MysqlCtl_ReinitConfig_Handler,
 		},
 		{
 			MethodName: "RefreshConfig",
 			Handler:    _MysqlCtl_RefreshConfig_Handler,
+		},
+		{
+			MethodName: "VersionString",
+			Handler:    _MysqlCtl_VersionString_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

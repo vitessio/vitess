@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	"vitess.io/vitess/go/vt/vttablet"
@@ -34,7 +35,6 @@ import (
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
@@ -202,6 +202,7 @@ func TestHeartbeatFrequencyFlag(t *testing.T) {
 	}()
 
 	stats := binlogplayer.NewStats()
+	defer stats.Stop()
 	vp := &vplayer{vr: &vreplicator{dbClient: newVDBClient(realDBClientFactory(), stats), stats: stats}}
 
 	type testcount struct {
@@ -524,6 +525,62 @@ func TestPlayerSavepoint(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
+	cancel()
+}
+
+// TestPlayerForeignKeyCheck tests that we can insert a row into a child table without the corresponding foreign key
+// if the foreign_key_checks is not set.
+func TestPlayerForeignKeyCheck(t *testing.T) {
+	doNotLogDBQueries = true
+	defer func() { doNotLogDBQueries = false }()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table parent(id int, name varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.parent(id int, name varchar(128), primary key(id))", vrepldb),
+		"create table child(id int, parent_id int, name varchar(128), primary key(id), foreign key(parent_id) references parent(id) on delete cascade)",
+		fmt.Sprintf("create table %s.child(id int, parent_id int, name varchar(128), primary key(id), foreign key(parent_id) references parent(id) on delete cascade)", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table child",
+		fmt.Sprintf("drop table %s.child", vrepldb),
+		"drop table parent",
+		fmt.Sprintf("drop table %s.parent", vrepldb),
+	})
+
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+
+	testSetForeignKeyQueries = true
+	defer func() {
+		testSetForeignKeyQueries = false
+	}()
+
+	execStatements(t, []string{
+		"insert into parent values(1, 'parent1')",
+		"insert into child values(1, 1, 'child1')",
+		"set foreign_key_checks=0",
+		"insert into child values(2, 100, 'child100')",
+	})
+	expectData(t, "parent", [][]string{
+		{"1", "parent1"},
+	})
+	expectData(t, "child", [][]string{
+		{"1", "1", "child1"},
+		{"2", "100", "child100"},
+	})
 	cancel()
 }
 
@@ -1584,17 +1641,26 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
-		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1,CAST(null as JSON),JSON_OBJECT(),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
+		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1,null,JSON_OBJECT(),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
 		table:  "vitess_json",
 		data: [][]string{
 			{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 		},
 	}, {
-		input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4)",
+		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values ('null', '{\"name\":null}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
+		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (2,CAST(_utf8mb4'null' as JSON),JSON_OBJECT(_utf8mb4'name', null),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
+		table:  "vitess_json",
+		data: [][]string{
+			{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+			{"2", "null", `{"name": null}`, "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+		},
+	}, {
+		input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4) where id=1",
 		output: "update vitess_json set val1=JSON_OBJECT(_utf8mb4'bar', _utf8mb4'foo'), val2=JSON_OBJECT(), val3=CAST(123 as JSON), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
 		table:  "vitess_json",
 		data: [][]string{
 			{"1", `{"bar": "foo"}`, "{}", "123", `{"a": [98, 123]}`, `{}`},
+			{"2", "null", `{"name": null}`, "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 		},
 	}}
 
@@ -1780,13 +1846,13 @@ func TestGTIDCompress(t *testing.T) {
 			require.NotNil(t, qr)
 			require.Equal(t, 1, len(qr.Rows))
 			gotGTID := qr.Rows[0][0].ToString()
-			pos, err := mysql.DecodePosition(gotGTID)
+			pos, err := replication.DecodePosition(gotGTID)
 			if tCase.compress {
 				require.True(t, pos.IsZero())
 				pos, err = binlogplayer.DecodePosition(gotGTID)
 				require.NoError(t, err)
 				require.NotNil(t, pos)
-				tpos, err := mysql.DecodePosition(tCase.gtid)
+				tpos, err := replication.DecodePosition(tCase.gtid)
 				require.NoError(t, err)
 				require.Equal(t, tpos.String(), pos.String())
 			} else {
@@ -1828,7 +1894,7 @@ func TestPlayerStopPos(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
 	startPos := primaryPosition(t)
-	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogplayer.BlpStopped, vrepldb, 0, 0)
+	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogdatapb.VReplicationWorkflowState_Stopped, vrepldb, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -1932,7 +1998,7 @@ func TestPlayerStopAtOther(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogplayer.BlpStopped, vrepldb, 0, 0)
+	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogdatapb.VReplicationWorkflowState_Stopped, vrepldb, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -2733,7 +2799,7 @@ func TestVReplicationLogs(t *testing.T) {
 
 	for _, want := range expected {
 		t.Run("", func(t *testing.T) {
-			err = insertLog(vdbc, LogMessage, 1, "Running", "message1")
+			err = insertLog(vdbc, LogMessage, 1, binlogdatapb.VReplicationWorkflowState_Running.String(), "message1")
 			require.NoError(t, err)
 			qr, err := env.Mysqld.FetchSuperQuery(context.Background(), query)
 			require.NoError(t, err)

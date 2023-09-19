@@ -19,7 +19,7 @@ package cli
 import (
 	"sort"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -83,12 +83,12 @@ func (rts rTablets) Less(i, j int) bool {
 	}
 
 	// then compare replication positions
-	lpos, err := mysql.DecodePosition(l.Status.Position)
+	lpos, err := replication.DecodePosition(l.Status.Position)
 	if err != nil {
 		return true
 	}
 
-	rpos, err := mysql.DecodePosition(r.Status.Position)
+	rpos, err := replication.DecodePosition(r.Status.Position)
 	if err != nil {
 		return false
 	}

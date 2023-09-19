@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
@@ -85,8 +86,17 @@ func (tfe *TestFieldEvent) String() string {
 // TestPlayerNoBlob sets up a new environment with mysql running with binlog_row_image as noblob. It confirms that
 // the VEvents created are correct: that they don't contain the missing columns and that the DataColumns bitmap is sent
 func TestNoBlob(t *testing.T) {
-	newEngine(t, "noblob")
-	defer newEngine(t, "full")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	oldEngine := engine
+	engine = nil
+	oldEnv := env
+	env = nil
+	newEngine(t, ctx, "noblob")
+	defer func() {
+		engine = oldEngine
+		env = oldEnv
+	}()
 	execStatements(t, []string{
 		"create table t1(id int, blb blob, val varchar(4), primary key(id))",
 		"create table t2(id int, txt text, val varchar(4), unique key(id, val))",
@@ -276,6 +286,52 @@ func TestSetStatement(t *testing.T) {
 		}, {
 			`gtid`,
 			`other`,
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
+}
+
+// TestSetForeignKeyCheck confirms that the binlog RowEvent flags are set correctly when foreign_key_checks are on and off.
+func TestSetForeignKeyCheck(t *testing.T) {
+	testRowEventFlags = true
+	defer func() { testRowEventFlags = false }()
+
+	execStatements(t, []string{
+		"create table t1(id int, val binary(4), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values (1, 'aaa')",
+		"set @@session.foreign_key_checks=1",
+		"insert into t1 values (2, 'bbb')",
+		"set @@session.foreign_key_checks=0",
+		"insert into t1 values (3, 'ccc')",
+		"commit",
+	}
+
+	fe := &TestFieldEvent{
+		table: "t1",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
+			{name: "val", dataType: "BINARY", colType: "binary(4)", len: 4, charset: 63},
+		},
+	}
+
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			`begin`,
+			fe.String(),
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 values:"1aaa\x00"}} flags:1}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 values:"2bbb\x00"}} flags:1}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 values:"3ccc\x00"}} flags:3}`,
+			`gtid`,
+			`commit`,
 		}},
 	}}
 	runCases(t, nil, testcases, "current", nil)
@@ -575,7 +631,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id1\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id1\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id2\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id2\" column_length:11 charset:63 column_type:\"int(11)\"}}",
 		"type:GTID",
 		"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:1 values:\"12\"}}}",
-		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t1\" lastpk:{fields:{name:\"id1\" type:INT32} rows:{lengths:1 values:\"1\"}}}}",
+		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t1\" lastpk:{fields:{name:\"id1\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\"1\"}}}}",
 		"type:COMMIT",
 		"type:BEGIN",
 		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t1\"} completed:true}",
@@ -583,7 +639,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		"type:BEGIN",
 		"type:FIELD field_event:{table_name:\"t2a\" fields:{name:\"id1\" type:INT32 table:\"t2a\" org_table:\"t2a\" database:\"vttest\" org_name:\"id1\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id2\" type:INT32 table:\"t2a\" org_table:\"t2a\" database:\"vttest\" org_name:\"id2\" column_length:11 charset:63 column_type:\"int(11)\"}}",
 		"type:ROW row_event:{table_name:\"t2a\" row_changes:{after:{lengths:1 lengths:1 values:\"14\"}}}",
-		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2a\" lastpk:{fields:{name:\"id1\" type:INT32} rows:{lengths:1 values:\"1\"}}}}",
+		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2a\" lastpk:{fields:{name:\"id1\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\"1\"}}}}",
 		"type:COMMIT",
 		"type:BEGIN",
 		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2a\"} completed:true}",
@@ -592,7 +648,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		"type:FIELD field_event:{table_name:\"t2b\" fields:{name:\"id1\" type:VARCHAR table:\"t2b\" org_table:\"t2b\" database:\"vttest\" org_name:\"id1\" column_length:80 charset:45 column_type:\"varchar(20)\"} fields:{name:\"id2\" type:INT32 table:\"t2b\" org_table:\"t2b\" database:\"vttest\" org_name:\"id2\" column_length:11 charset:63 column_type:\"int(11)\"}}",
 		"type:ROW row_event:{table_name:\"t2b\" row_changes:{after:{lengths:1 lengths:1 values:\"a5\"}}}",
 		"type:ROW row_event:{table_name:\"t2b\" row_changes:{after:{lengths:1 lengths:1 values:\"b6\"}}}",
-		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2b\" lastpk:{fields:{name:\"id1\" type:VARCHAR} rows:{lengths:1 values:\"b\"}}}}",
+		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2b\" lastpk:{fields:{name:\"id1\" type:VARCHAR charset:45 flags:20483} rows:{lengths:1 values:\"b\"}}}}",
 		"type:COMMIT",
 		"type:BEGIN",
 		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2b\"} completed:true}",
@@ -1230,7 +1286,7 @@ func TestInKeyRangeMultiColumn(t *testing.T) {
 	execStatements(t, input)
 	expectLog(ctx, t, input, ch, [][]string{{
 		`begin`,
-		`type:FIELD field_event:{table_name:"t1" fields:{name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"region" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"region" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} fields:{name:"keyspace_id" type:VARBINARY}}`,
+		`type:FIELD field_event:{table_name:"t1" fields:{name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"region" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"region" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} fields:{name:"keyspace_id" type:VARBINARY charset:63}}`,
 		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 lengths:9 values:"11aaa\x01\x16k@\xb4J\xbaK\xd6"}}}`,
 		`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:1 lengths:3 lengths:9 values:"11aaa\x01\x16k@\xb4J\xbaK\xd6"} ` +
 			`after:{lengths:1 lengths:1 lengths:3 lengths:9 values:"12aaa\x02\x16k@\xb4J\xbaK\xd6"}}}`,
@@ -1609,7 +1665,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 		// information returned by binlog for val column == varchar (rather than varbinary).
 		output: [][]string{{
 			`begin`,
-			`type:FIELD field_event:{table_name:"vitess_test" fields:{name:"@1" type:INT32} fields:{name:"@2" type:VARCHAR}}`,
+			`type:FIELD field_event:{table_name:"vitess_test" fields:{name:"@1" type:INT32 charset:63} fields:{name:"@2" type:VARCHAR charset:255}}`,
 			`type:ROW row_event:{table_name:"vitess_test" row_changes:{after:{lengths:1 lengths:3 values:"1abc"}}}`,
 			`gtid`,
 			`commit`,
@@ -1927,8 +1983,17 @@ func TestMinimalMode(t *testing.T) {
 		t.Skip()
 	}
 
-	newEngine(t, "minimal")
-	defer newEngine(t, "full")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	oldEngine := engine
+	engine = nil
+	oldEnv := env
+	env = nil
+	newEngine(t, ctx, "minimal")
+	defer func() {
+		engine = oldEngine
+		env = oldEnv
+	}()
 	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil })
 	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }
@@ -2275,6 +2340,9 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 					evs[i].RowEvent.Keyspace = ""
 					evs[i].RowEvent.Shard = ""
 				}
+				if !testRowEventFlags && evs[i].Type == binlogdatapb.VEventType_ROW {
+					evs[i].RowEvent.Flags = 0
+				}
 				want = env.RemoveAnyDeprecatedDisplayWidths(want)
 				if got := fmt.Sprintf("%v", evs[i]); got != want {
 					log.Errorf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
@@ -2361,7 +2429,7 @@ func primaryPosition(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return mysql.EncodePosition(pos)
+	return replication.EncodePosition(pos)
 }
 
 func setVSchema(t *testing.T, vschema string) {

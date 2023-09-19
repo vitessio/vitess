@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/collection"
 	"vitess.io/vitess/go/vt/vtorc/discovery"
@@ -42,6 +41,7 @@ type vtorcAPI struct{}
 
 const (
 	problemsAPI                   = "/api/problems"
+	errantGTIDsAPI                = "/api/errant-gtids"
 	disableGlobalRecoveriesAPI    = "/api/disable-global-recoveries"
 	enableGlobalRecoveriesAPI     = "/api/enable-global-recoveries"
 	replicationAnalysisAPI        = "/api/replication-analysis"
@@ -56,6 +56,7 @@ var (
 	apiHandler    = &vtorcAPI{}
 	vtorcAPIPaths = []string{
 		problemsAPI,
+		errantGTIDsAPI,
 		disableGlobalRecoveriesAPI,
 		enableGlobalRecoveriesAPI,
 		replicationAnalysisAPI,
@@ -67,7 +68,6 @@ var (
 // ServeHTTP implements the http.Handler interface. This is the entry point for all the api commands of VTOrc
 func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	apiPath := request.URL.Path
-	log.Infof("HTTP API Request received: %v", apiPath)
 	if err := acl.CheckAccessHTTP(request, getACLPermissionLevelForAPI(apiPath)); err != nil {
 		acl.SendError(response, err)
 		return
@@ -82,6 +82,8 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 		healthAPIHandler(response, request)
 	case problemsAPI:
 		problemsAPIHandler(response, request)
+	case errantGTIDsAPI:
+		errantGTIDsAPIHandler(response, request)
 	case replicationAnalysisAPI:
 		replicationAnalysisAPIHandler(response, request)
 	case AggregatedDiscoveryMetricsAPI:
@@ -96,7 +98,7 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 // getACLPermissionLevelForAPI returns the acl permission level that is required to run a given API
 func getACLPermissionLevelForAPI(apiEndpoint string) string {
 	switch apiEndpoint {
-	case problemsAPI:
+	case problemsAPI, errantGTIDsAPI:
 		return acl.MONITORING
 	case disableGlobalRecoveriesAPI, enableGlobalRecoveriesAPI:
 		return acl.ADMIN
@@ -139,6 +141,24 @@ func problemsAPIHandler(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	instances, err := inst.ReadProblemInstances(keyspace, shard)
+	if err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	returnAsJSON(response, http.StatusOK, instances)
+}
+
+// errantGTIDsAPIHandler is the handler for the errantGTIDsAPI endpoint
+func errantGTIDsAPIHandler(response http.ResponseWriter, request *http.Request) {
+	// This api also supports filtering by shard and keyspace provided.
+	shard := request.URL.Query().Get("shard")
+	keyspace := request.URL.Query().Get("keyspace")
+	if shard != "" && keyspace == "" {
+		http.Error(response, shardWithoutKeyspaceFilteringErrorStr, http.StatusBadRequest)
+		return
+	}
+
+	instances, err := inst.ReadInstancesWithErrantGTIds(keyspace, shard)
 	if err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return

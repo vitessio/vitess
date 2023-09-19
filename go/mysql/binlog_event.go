@@ -19,6 +19,7 @@ package mysql
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/mysql/replication"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -95,7 +96,7 @@ type BinlogEvent interface {
 	// GTID returns the GTID from the event, and if this event
 	// also serves as a BEGIN statement.
 	// This is only valid if IsGTID() returns true.
-	GTID(BinlogFormat) (GTID, bool, error)
+	GTID(BinlogFormat) (replication.GTID, bool, error)
 	// Query returns a Query struct representing data from a QUERY_EVENT.
 	// This is only valid if IsQuery() returns true.
 	Query(BinlogFormat) (Query, error)
@@ -107,7 +108,7 @@ type BinlogEvent interface {
 	Rand(BinlogFormat) (uint64, uint64, error)
 	// PreviousGTIDs returns the Position from the event.
 	// This is only valid if IsPreviousGTIDs() returns true.
-	PreviousGTIDs(BinlogFormat) (Position, error)
+	PreviousGTIDs(BinlogFormat) (replication.Position, error)
 
 	// TableID returns the table ID for a TableMap, UpdateRows,
 	// WriteRows or DeleteRows event.

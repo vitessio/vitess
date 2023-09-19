@@ -19,6 +19,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 	"testing"
 	"time"
@@ -92,7 +93,7 @@ func TestAPIEndpoints(t *testing.T) {
 
 	// Before we disable recoveries, let us wait until VTOrc has fixed all the issues (if any).
 	_, _ = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
-		return response != "[]"
+		return response != "null"
 	})
 
 	t.Run("Disable Recoveries API", func(t *testing.T) {
@@ -112,7 +113,7 @@ func TestAPIEndpoints(t *testing.T) {
 		// Wait until VTOrc picks up on this issue and verify
 		// that we see a not null result on the api/replication-analysis page
 		status, resp := utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
-			return response == "[]"
+			return response == "null"
 		})
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
@@ -134,7 +135,7 @@ func TestAPIEndpoints(t *testing.T) {
 		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=80-")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
-		assert.Equal(t, "[]", resp)
+		assert.Equal(t, "null", resp)
 
 		// Check that filtering using just the shard fails
 		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?shard=0")
@@ -200,22 +201,59 @@ func TestAPIEndpoints(t *testing.T) {
 		assert.Equal(t, 400, status, resp)
 		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)
 
-		// Also verify that the metric for errant GTIDs is reporting the correct information.
-		_, resp, err = utils.MakeAPICall(t, vtorc, "/debug/vars")
+		// Also verify that we see the tablet in the errant GTIDs API call
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/errant-gtids")
 		require.NoError(t, err)
-		resultMap := make(map[string]any)
-		err = json.Unmarshal([]byte(resp), &resultMap)
-		require.NoError(t, err)
-		errantGTIDMap := reflect.ValueOf(resultMap["ErrantGtidMap"])
-		errantGtidTablets := errantGTIDMap.MapKeys()
-		require.Len(t, errantGtidTablets, 3)
+		assert.Equal(t, 200, status, resp)
+		assert.Contains(t, resp, fmt.Sprintf(`"InstanceAlias": "%v"`, replica.Alias))
 
-		errantGTIDinReplica := ""
-		for _, tabletKey := range errantGtidTablets {
-			if tabletKey.String() == replica.Alias {
-				errantGTIDinReplica = errantGTIDMap.MapIndex(tabletKey).Interface().(string)
-			}
-		}
-		require.NotEmpty(t, errantGTIDinReplica)
+		// Check that filtering using keyspace and shard works
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/errant-gtids?keyspace=ks&shard=0")
+		require.NoError(t, err)
+		assert.Equal(t, 200, status, resp)
+		assert.Contains(t, resp, fmt.Sprintf(`"InstanceAlias": "%v"`, replica.Alias))
+
+		// Check that filtering using keyspace works
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/errant-gtids?keyspace=ks")
+		require.NoError(t, err)
+		assert.Equal(t, 200, status, resp)
+		assert.Contains(t, resp, fmt.Sprintf(`"InstanceAlias": "%v"`, replica.Alias))
+
+		// Check that filtering using keyspace and shard works
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/errant-gtids?keyspace=ks&shard=80-")
+		require.NoError(t, err)
+		assert.Equal(t, 200, status, resp)
+		assert.Equal(t, "null", resp)
+
+		// Check that filtering using just the shard fails
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/errant-gtids?shard=0")
+		require.NoError(t, err)
+		assert.Equal(t, 400, status, resp)
+		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)
+
+		// Also verify that the metric for errant GTIDs is reporting the correct count.
+		waitForErrantGTIDCount(t, vtorc, 1)
 	})
+}
+
+func waitForErrantGTIDCount(t *testing.T, vtorc *cluster.VTOrcProcess, errantGTIDCountWanted int) {
+	timeout := time.After(15 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("Timed out waiting for errant gtid count in the metrics to be %v", errantGTIDCountWanted)
+			return
+		default:
+			_, resp, err := utils.MakeAPICall(t, vtorc, "/debug/vars")
+			require.NoError(t, err)
+			resultMap := make(map[string]any)
+			err = json.Unmarshal([]byte(resp), &resultMap)
+			require.NoError(t, err)
+			errantGTIDTabletsCount := reflect.ValueOf(resultMap["ErrantGtidTabletCount"])
+			if int(math.Round(errantGTIDTabletsCount.Float())) == errantGTIDCountWanted {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
 }

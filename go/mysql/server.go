@@ -25,20 +25,21 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pires/go-proxyproto"
+
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/servenv"
-
-	"vitess.io/vitess/go/sqlescape"
-
-	proxyproto "github.com/pires/go-proxyproto"
-
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -122,7 +123,7 @@ type Handler interface {
 	ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error
 
 	// ComBinlogDumpGTID is called when a connection receives a ComBinlogDumpGTID request
-	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet GTIDSet) error
+	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error
 
 	// WarningCount is called at the end of each query to obtain
 	// the value to be returned to the client in the EOF packet.
@@ -196,6 +197,9 @@ type Listener struct {
 	// connBufferPooling configures if vtgate server pools connection buffers
 	connBufferPooling bool
 
+	// connKeepAlivePeriod is period between tcp keep-alives.
+	connKeepAlivePeriod time.Duration
+
 	// shutdown indicates that Shutdown method was called.
 	shutdown atomic.Bool
 
@@ -218,15 +222,17 @@ func NewFromListener(
 	connReadTimeout time.Duration,
 	connWriteTimeout time.Duration,
 	connBufferPooling bool,
+	keepAlivePeriod time.Duration,
 ) (*Listener, error) {
 	cfg := ListenerConfig{
-		Listener:           l,
-		AuthServer:         authServer,
-		Handler:            handler,
-		ConnReadTimeout:    connReadTimeout,
-		ConnWriteTimeout:   connWriteTimeout,
-		ConnReadBufferSize: connBufferSize,
-		ConnBufferPooling:  connBufferPooling,
+		Listener:            l,
+		AuthServer:          authServer,
+		Handler:             handler,
+		ConnReadTimeout:     connReadTimeout,
+		ConnWriteTimeout:    connWriteTimeout,
+		ConnReadBufferSize:  connBufferSize,
+		ConnBufferPooling:   connBufferPooling,
+		ConnKeepAlivePeriod: keepAlivePeriod,
 	}
 	return NewListenerWithConfig(cfg)
 }
@@ -240,6 +246,7 @@ func NewListener(
 	connWriteTimeout time.Duration,
 	proxyProtocol bool,
 	connBufferPooling bool,
+	keepAlivePeriod time.Duration,
 ) (*Listener, error) {
 	listener, err := net.Listen(protocol, address)
 	if err != nil {
@@ -247,24 +254,25 @@ func NewListener(
 	}
 	if proxyProtocol {
 		proxyListener := &proxyproto.Listener{Listener: listener}
-		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling)
+		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod)
 	}
 
-	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling)
+	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod)
 }
 
 // ListenerConfig should be used with NewListenerWithConfig to specify listener parameters.
 type ListenerConfig struct {
 	// Protocol-Address pair and Listener are mutually exclusive parameters
-	Protocol           string
-	Address            string
-	Listener           net.Listener
-	AuthServer         AuthServer
-	Handler            Handler
-	ConnReadTimeout    time.Duration
-	ConnWriteTimeout   time.Duration
-	ConnReadBufferSize int
-	ConnBufferPooling  bool
+	Protocol            string
+	Address             string
+	Listener            net.Listener
+	AuthServer          AuthServer
+	Handler             Handler
+	ConnReadTimeout     time.Duration
+	ConnWriteTimeout    time.Duration
+	ConnReadBufferSize  int
+	ConnBufferPooling   bool
+	ConnKeepAlivePeriod time.Duration
 }
 
 // NewListenerWithConfig creates new listener using provided config. There are
@@ -282,15 +290,16 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 	}
 
 	return &Listener{
-		authServer:         cfg.AuthServer,
-		handler:            cfg.Handler,
-		listener:           l,
-		ServerVersion:      servenv.AppVersion.MySQLVersion(),
-		connectionID:       1,
-		connReadTimeout:    cfg.ConnReadTimeout,
-		connWriteTimeout:   cfg.ConnWriteTimeout,
-		connReadBufferSize: cfg.ConnReadBufferSize,
-		connBufferPooling:  cfg.ConnBufferPooling,
+		authServer:          cfg.AuthServer,
+		handler:             cfg.Handler,
+		listener:            l,
+		ServerVersion:       servenv.AppVersion.MySQLVersion(),
+		connectionID:        1,
+		connReadTimeout:     cfg.ConnReadTimeout,
+		connWriteTimeout:    cfg.ConnWriteTimeout,
+		connReadBufferSize:  cfg.ConnReadBufferSize,
+		connBufferPooling:   cfg.ConnBufferPooling,
+		connKeepAlivePeriod: cfg.ConnKeepAlivePeriod,
 	}, nil
 }
 
@@ -449,12 +458,12 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		}
 
 		if negotiatedAuthMethod == nil {
-			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "No authentication methods available for authentication.")
+			c.writeErrorPacket(sqlerror.CRServerHandshakeErr, sqlerror.SSUnknownSQLState, "No authentication methods available for authentication.")
 			return
 		}
 
 		if !l.AllowClearTextWithoutTLS.Load() && !c.TLSEnabled() && !negotiatedAuthMethod.AllowClearTextWithoutTLS() {
-			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
+			c.writeErrorPacket(sqlerror.CRServerHandshakeErr, sqlerror.SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
 			return
 		}
 
@@ -525,7 +534,8 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	for {
 		kontinue := c.handleNextCommand(l.handler)
-		if !kontinue {
+		// before going for next command check if the connection should be closed or not.
+		if !kontinue || c.IsMarkedForClose() {
 			return
 		}
 	}

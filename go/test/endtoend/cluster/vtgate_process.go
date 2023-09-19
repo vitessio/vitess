@@ -65,7 +65,7 @@ type VtgateProcess struct {
 	exit chan error
 }
 
-const defaultVtGatePlannerVersion = planbuilder.Gen4CompareV3
+const defaultVtGatePlannerVersion = planbuilder.Gen4
 
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
@@ -127,6 +127,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	vtgate.proc.Stderr = errFile
 
 	vtgate.proc.Env = append(vtgate.proc.Env, os.Environ()...)
+	vtgate.proc.Env = append(vtgate.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Running vtgate with command: %v", strings.Join(vtgate.proc.Args, " "))
 

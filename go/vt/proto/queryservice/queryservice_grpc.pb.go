@@ -79,6 +79,8 @@ type QueryClient interface {
 	VStream(ctx context.Context, in *binlogdata.VStreamRequest, opts ...grpc.CallOption) (Query_VStreamClient, error)
 	// VStreamRows streams rows from the specified starting point.
 	VStreamRows(ctx context.Context, in *binlogdata.VStreamRowsRequest, opts ...grpc.CallOption) (Query_VStreamRowsClient, error)
+	// VStreamTables streams rows from the specified starting point.
+	VStreamTables(ctx context.Context, in *binlogdata.VStreamTablesRequest, opts ...grpc.CallOption) (Query_VStreamTablesClient, error)
 	// VStreamResults streams results along with the gtid of the snapshot.
 	VStreamResults(ctx context.Context, in *binlogdata.VStreamResultsRequest, opts ...grpc.CallOption) (Query_VStreamResultsClient, error)
 	// GetSchema returns the schema information.
@@ -502,8 +504,40 @@ func (x *queryVStreamRowsClient) Recv() (*binlogdata.VStreamRowsResponse, error)
 	return m, nil
 }
 
+func (c *queryClient) VStreamTables(ctx context.Context, in *binlogdata.VStreamTablesRequest, opts ...grpc.CallOption) (Query_VStreamTablesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[8], "/queryservice.Query/VStreamTables", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &queryVStreamTablesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Query_VStreamTablesClient interface {
+	Recv() (*binlogdata.VStreamTablesResponse, error)
+	grpc.ClientStream
+}
+
+type queryVStreamTablesClient struct {
+	grpc.ClientStream
+}
+
+func (x *queryVStreamTablesClient) Recv() (*binlogdata.VStreamTablesResponse, error) {
+	m := new(binlogdata.VStreamTablesResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *queryClient) VStreamResults(ctx context.Context, in *binlogdata.VStreamResultsRequest, opts ...grpc.CallOption) (Query_VStreamResultsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[8], "/queryservice.Query/VStreamResults", opts...)
+	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[9], "/queryservice.Query/VStreamResults", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -535,7 +569,7 @@ func (x *queryVStreamResultsClient) Recv() (*binlogdata.VStreamResultsResponse, 
 }
 
 func (c *queryClient) GetSchema(ctx context.Context, in *query.GetSchemaRequest, opts ...grpc.CallOption) (Query_GetSchemaClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[9], "/queryservice.Query/GetSchema", opts...)
+	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[10], "/queryservice.Query/GetSchema", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -625,6 +659,8 @@ type QueryServer interface {
 	VStream(*binlogdata.VStreamRequest, Query_VStreamServer) error
 	// VStreamRows streams rows from the specified starting point.
 	VStreamRows(*binlogdata.VStreamRowsRequest, Query_VStreamRowsServer) error
+	// VStreamTables streams rows from the specified starting point.
+	VStreamTables(*binlogdata.VStreamTablesRequest, Query_VStreamTablesServer) error
 	// VStreamResults streams results along with the gtid of the snapshot.
 	VStreamResults(*binlogdata.VStreamResultsRequest, Query_VStreamResultsServer) error
 	// GetSchema returns the schema information.
@@ -710,6 +746,9 @@ func (UnimplementedQueryServer) VStream(*binlogdata.VStreamRequest, Query_VStrea
 }
 func (UnimplementedQueryServer) VStreamRows(*binlogdata.VStreamRowsRequest, Query_VStreamRowsServer) error {
 	return status.Errorf(codes.Unimplemented, "method VStreamRows not implemented")
+}
+func (UnimplementedQueryServer) VStreamTables(*binlogdata.VStreamTablesRequest, Query_VStreamTablesServer) error {
+	return status.Errorf(codes.Unimplemented, "method VStreamTables not implemented")
 }
 func (UnimplementedQueryServer) VStreamResults(*binlogdata.VStreamResultsRequest, Query_VStreamResultsServer) error {
 	return status.Errorf(codes.Unimplemented, "method VStreamResults not implemented")
@@ -1204,6 +1243,27 @@ func (x *queryVStreamRowsServer) Send(m *binlogdata.VStreamRowsResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _Query_VStreamTables_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(binlogdata.VStreamTablesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(QueryServer).VStreamTables(m, &queryVStreamTablesServer{stream})
+}
+
+type Query_VStreamTablesServer interface {
+	Send(*binlogdata.VStreamTablesResponse) error
+	grpc.ServerStream
+}
+
+type queryVStreamTablesServer struct {
+	grpc.ServerStream
+}
+
+func (x *queryVStreamTablesServer) Send(m *binlogdata.VStreamTablesResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 func _Query_VStreamResults_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(binlogdata.VStreamResultsRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -1361,6 +1421,11 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "VStreamRows",
 			Handler:       _Query_VStreamRows_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "VStreamTables",
+			Handler:       _Query_VStreamTables_Handler,
 			ServerStreams: true,
 		},
 		{

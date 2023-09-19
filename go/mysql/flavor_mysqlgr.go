@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -57,12 +58,12 @@ func (mysqlGRFlavor) restartReplicationCommands() []string {
 }
 
 // startReplicationUntilAfter is disabled in mysqlGRFlavor
-func (mysqlGRFlavor) startReplicationUntilAfter(pos Position) string {
+func (mysqlGRFlavor) startReplicationUntilAfter(pos replication.Position) string {
 	return ""
 }
 
 // startSQLThreadUntilAfter is disabled in mysqlGRFlavor
-func (mysqlGRFlavor) startSQLThreadUntilAfter(pos Position) string {
+func (mysqlGRFlavor) startSQLThreadUntilAfter(pos replication.Position) string {
 	return ""
 }
 
@@ -99,7 +100,7 @@ func (mysqlGRFlavor) resetReplicationParametersCommands(c *Conn) []string {
 }
 
 // setReplicationPositionCommands is disabled in mysqlGRFlavor
-func (mysqlGRFlavor) setReplicationPositionCommands(pos Position) []string {
+func (mysqlGRFlavor) setReplicationPositionCommands(pos replication.Position) []string {
 	return []string{}
 }
 
@@ -110,8 +111,8 @@ func (mysqlGRFlavor) setReplicationPositionCommands(pos Position) []string {
 // TODO: Right now the GR's lag is defined as the lag between a node processing a txn
 // and the time the txn was committed. We should consider reporting lag between current queueing txn timestamp
 // from replication_connection_status and the current processing txn's commit timestamp
-func (mysqlGRFlavor) status(c *Conn) (ReplicationStatus, error) {
-	res := ReplicationStatus{}
+func (mysqlGRFlavor) status(c *Conn) (replication.ReplicationStatus, error) {
+	res := replication.ReplicationStatus{}
 	// Get primary node information
 	query := `SELECT
 		MEMBER_HOST,
@@ -125,7 +126,7 @@ func (mysqlGRFlavor) status(c *Conn) (ReplicationStatus, error) {
 		return nil
 	})
 	if err != nil {
-		return ReplicationStatus{}, err
+		return replication.ReplicationStatus{}, err
 	}
 
 	query = `SELECT
@@ -148,7 +149,7 @@ func (mysqlGRFlavor) status(c *Conn) (ReplicationStatus, error) {
 		return nil
 	})
 	if err != nil {
-		return ReplicationStatus{}, err
+		return replication.ReplicationStatus{}, err
 	}
 	// if chanel is not set, it means the state is not ONLINE or RECOVERING
 	// return partial result early
@@ -160,26 +161,26 @@ func (mysqlGRFlavor) status(c *Conn) (ReplicationStatus, error) {
 	query = fmt.Sprintf(`SELECT SERVICE_STATE
 		FROM performance_schema.replication_connection_status
 		WHERE CHANNEL_NAME='%s'`, chanel)
-	var connectionState ReplicationState
+	var connectionState replication.ReplicationState
 	err = fetchStatusForGroupReplication(c, query, func(values []sqltypes.Value) error {
-		connectionState = ReplicationStatusToState(values[0].ToString())
+		connectionState = replication.ReplicationStatusToState(values[0].ToString())
 		return nil
 	})
 	if err != nil {
-		return ReplicationStatus{}, err
+		return replication.ReplicationStatus{}, err
 	}
 	res.IOState = connectionState
 	// Populate SQLState from replication_connection_status
-	var applierState ReplicationState
+	var applierState replication.ReplicationState
 	query = fmt.Sprintf(`SELECT SERVICE_STATE
 		FROM performance_schema.replication_applier_status_by_coordinator
 		WHERE CHANNEL_NAME='%s'`, chanel)
 	err = fetchStatusForGroupReplication(c, query, func(values []sqltypes.Value) error {
-		applierState = ReplicationStatusToState(values[0].ToString())
+		applierState = replication.ReplicationStatusToState(values[0].ToString())
 		return nil
 	})
 	if err != nil {
-		return ReplicationStatus{}, err
+		return replication.ReplicationStatus{}, err
 	}
 	res.SQLState = applierState
 
@@ -197,17 +198,17 @@ func (mysqlGRFlavor) status(c *Conn) (ReplicationStatus, error) {
 		return nil
 	})
 	if err != nil {
-		return ReplicationStatus{}, err
+		return replication.ReplicationStatus{}, err
 	}
 	return res, nil
 }
 
-func parsePrimaryGroupMember(res *ReplicationStatus, row []sqltypes.Value) {
+func parsePrimaryGroupMember(res *replication.ReplicationStatus, row []sqltypes.Value) {
 	res.SourceHost = row[0].ToString()   /* MEMBER_HOST */
 	res.SourcePort, _ = row[1].ToInt32() /* MEMBER_PORT */
 }
 
-func parseReplicationApplierLag(res *ReplicationStatus, row []sqltypes.Value) {
+func parseReplicationApplierLag(res *replication.ReplicationStatus, row []sqltypes.Value) {
 	lagSec, err := row[0].ToUint32()
 	// if the error is not nil, ReplicationLagSeconds will remain to be MaxUint32
 	if err == nil {
@@ -234,7 +235,7 @@ func fetchStatusForGroupReplication(c *Conn, query string, onResult func([]sqlty
 
 // primaryStatus returns the result of 'SHOW MASTER STATUS',
 // with parsed executed position.
-func (mysqlGRFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
+func (mysqlGRFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, error) {
 	return mysqlFlavor{}.primaryStatus(c)
 }
 

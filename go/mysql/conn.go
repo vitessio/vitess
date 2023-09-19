@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -29,11 +30,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
-
-	"vitess.io/vitess/go/sqlescape"
-
 	"vitess.io/vitess/go/bucketpool"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -199,6 +199,19 @@ type Conn struct {
 	// enableQueryInfo controls whether we parse the INFO field in QUERY_OK packets
 	// See: ConnParams.EnableQueryInfo
 	enableQueryInfo bool
+
+	// keepAliveOn marks when keep alive is active on the connection.
+	// This is currently used for testing.
+	keepAliveOn bool
+
+	// mu protects the fields below
+	mu sync.Mutex
+	// cancel keep the cancel function for the current executing query.
+	// this is used by `kill [query|connection] ID` command from other connection.
+	cancel context.CancelFunc
+	// this is used to mark the connection to be closed so that the command phase for the connection can be stopped and
+	// the connection gets closed.
+	closing bool
 }
 
 // splitStatementFunciton is the function that is used to split the statement in case of a multi-statement query.
@@ -246,10 +259,21 @@ func newConn(conn net.Conn) *Conn {
 // the server is shutting down, and has the ability to control buffer
 // size for reads.
 func newServerConn(conn net.Conn, listener *Listener) *Conn {
+	// Enable KeepAlive on TCP connections and change keep-alive period if provided.
+	enabledKeepAlive := false
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		if err := setTcpConnProperties(tcpConn, listener.connKeepAlivePeriod); err != nil {
+			log.Errorf("error in setting tcp properties: %v", err)
+		} else {
+			enabledKeepAlive = true
+		}
+	}
+
 	c := &Conn{
 		conn:        conn,
 		listener:    listener,
 		PrepareData: make(map[uint32]*PrepareData),
+		keepAliveOn: enabledKeepAlive,
 	}
 
 	if listener.connReadBufferSize > 0 {
@@ -265,6 +289,22 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	}
 
 	return c
+}
+
+func setTcpConnProperties(conn *net.TCPConn, keepAlivePeriod time.Duration) error {
+	if err := conn.SetKeepAlive(true); err != nil {
+		return vterrors.Wrapf(err, "unable to enable keepalive on tcp connection")
+	}
+
+	if keepAlivePeriod <= 0 {
+		return nil
+	}
+
+	if err := conn.SetKeepAlivePeriod(keepAlivePeriod); err != nil {
+		return vterrors.Wrapf(err, "unable to set keepalive period on tcp connection")
+	}
+
+	return nil
 }
 
 // startWriterBuffering starts using buffered writes. This should
@@ -559,7 +599,7 @@ func (c *Conn) readPacket() ([]byte, error) {
 func (c *Conn) ReadPacket() ([]byte, error) {
 	result, err := c.readPacket()
 	if err != nil {
-		return nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+		return nil, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	return result, err
 }
@@ -683,7 +723,7 @@ func (c *Conn) writeComQuit() error {
 	data, pos := c.startEphemeralPacketWithHeader(1)
 	data[pos] = ComQuit
 	if err := c.writeEphemeralPacket(); err != nil {
-		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
+		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, err.Error())
 	}
 	return nil
 }
@@ -767,7 +807,7 @@ func (c *Conn) writeOKPacketWithHeader(packetOk *PacketOK, headerType byte) erro
 
 	bytes, pos := c.startEphemeralPacketWithHeader(length)
 	data := &coder{data: bytes, pos: pos}
-	data.writeByte(headerType) //header - OK or EOF
+	data.writeByte(headerType) // header - OK or EOF
 	data.writeLenEncInt(packetOk.affectedRows)
 	data.writeLenEncInt(packetOk.lastInsertID)
 	data.writeUint16(packetOk.statusFlags)
@@ -817,10 +857,10 @@ func getLenEncInt(i uint64) []byte {
 }
 
 func (c *Conn) WriteErrorAndLog(format string, args ...interface{}) bool {
-	return c.writeErrorAndLog(ERUnknownComError, SSNetError, format, args...)
+	return c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, format, args...)
 }
 
-func (c *Conn) writeErrorAndLog(errorCode ErrorCode, sqlState string, format string, args ...any) bool {
+func (c *Conn) writeErrorAndLog(errorCode sqlerror.ErrorCode, sqlState string, format string, args ...any) bool {
 	if err := c.writeErrorPacket(errorCode, sqlState, format, args...); err != nil {
 		log.Errorf("Error writing error to %s: %v", c, err)
 		return false
@@ -840,7 +880,7 @@ func (c *Conn) writeErrorPacketFromErrorAndLog(err error) bool {
 // writeErrorPacket writes an error packet.
 // Server -> Client.
 // This method returns a generic error, not a SQLError.
-func (c *Conn) writeErrorPacket(errorCode ErrorCode, sqlState string, format string, args ...any) error {
+func (c *Conn) writeErrorPacket(errorCode sqlerror.ErrorCode, sqlState string, format string, args ...any) error {
 	errorMessage := fmt.Sprintf(format, args...)
 	length := 1 + 2 + 1 + 5 + len(errorMessage)
 	data, pos := c.startEphemeralPacketWithHeader(length)
@@ -848,7 +888,7 @@ func (c *Conn) writeErrorPacket(errorCode ErrorCode, sqlState string, format str
 	pos = writeUint16(data, pos, uint16(errorCode))
 	pos = writeByte(data, pos, '#')
 	if sqlState == "" {
-		sqlState = SSUnknownSQLState
+		sqlState = sqlerror.SSUnknownSQLState
 	}
 	if len(sqlState) != 5 {
 		panic("sqlState has to be 5 characters long")
@@ -862,11 +902,11 @@ func (c *Conn) writeErrorPacket(errorCode ErrorCode, sqlState string, format str
 // writeErrorPacketFromError writes an error packet, from a regular error.
 // See writeErrorPacket for other info.
 func (c *Conn) writeErrorPacketFromError(err error) error {
-	if se, ok := err.(*SQLError); ok {
+	if se, ok := err.(*sqlerror.SQLError); ok {
 		return c.writeErrorPacket(se.Num, se.State, "%v", se.Message)
 	}
 
-	return c.writeErrorPacket(ERUnknownError, SSUnknownSQLState, "unknown error: %v", err)
+	return c.writeErrorPacket(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "unknown error: %v", err)
 }
 
 // writeEOFPacket writes an EOF packet, through the buffer, and
@@ -894,6 +934,10 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		return false
 	}
 	if len(data) == 0 {
+		return false
+	}
+	// before continue to process the packet, check if the connection should be closed or not.
+	if c.IsMarkedForClose() {
 		return false
 	}
 
@@ -931,7 +975,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		return true
 	case ComFieldList:
 		c.recycleReadPacket()
-		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "command handling not implemented yet: %v", data[0]) {
+		if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "command handling not implemented yet: %v", data[0]) {
 			return false
 		}
 	case ComBinlogDump:
@@ -943,7 +987,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
-		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "command handling not implemented yet: %v", data[0]) {
+		if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "command handling not implemented yet: %v", data[0]) {
 			return false
 		}
 	}
@@ -1034,7 +1078,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	c.recycleReadPacket()
 	if !ok {
 		log.Error("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
-		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "error handling packet: %v", data) {
+		if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "error handling packet: %v", data) {
 			return false
 		}
 	}
@@ -1042,7 +1086,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	prepare, ok := c.PrepareData[stmtID]
 	if !ok {
 		log.Error("Commands were executed in an improper order from client %v, packet: %v", c.ConnectionID, data)
-		if !c.writeErrorAndLog(CRCommandsOutOfSync, SSNetError, "commands were executed in an improper order: %v", data) {
+		if !c.writeErrorAndLog(sqlerror.CRCommandsOutOfSync, sqlerror.SSNetError, "commands were executed in an improper order: %v", data) {
 			return false
 		}
 	}
@@ -1152,7 +1196,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	if !fieldSent {
 		// This is just a failsafe. Should never happen.
 		if err == nil || err == io.EOF {
-			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
+			err = sqlerror.NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 		}
 		if !c.writeErrorPacketFromErrorAndLog(err) {
 			return false
@@ -1272,7 +1316,7 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 			c.Capabilities &^= CapabilityClientMultiStatements
 		default:
 			log.Errorf("Got unhandled packet (ComSetOption default) from client %v, returning error: %v", c.ConnectionID, data)
-			if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "error handling packet: %v", data) {
+			if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "error handling packet: %v", data) {
 				return false
 			}
 		}
@@ -1282,7 +1326,7 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 		}
 	} else {
 		log.Errorf("Got unhandled packet (ComSetOption else) from client %v, returning error: %v", c.ConnectionID, data)
-		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "error handling packet: %v", data) {
+		if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "error handling packet: %v", data) {
 			return false
 		}
 	}
@@ -1293,7 +1337,7 @@ func (c *Conn) handleComPing() bool {
 	c.recycleReadPacket()
 	// Return error if listener was shut down and OK otherwise
 	if c.listener.shutdown.Load() {
-		if !c.writeErrorAndLog(ERServerShutdown, SSNetError, "Server shutdown in progress") {
+		if !c.writeErrorAndLog(sqlerror.ERServerShutdown, sqlerror.SSNetError, "Server shutdown in progress") {
 			return false
 		}
 	} else {
@@ -1305,7 +1349,7 @@ func (c *Conn) handleComPing() bool {
 	return true
 }
 
-var errEmptyStatement = NewSQLError(EREmptyQuery, SSClientError, "Query was empty")
+var errEmptyStatement = sqlerror.NewSQLError(sqlerror.EREmptyQuery, sqlerror.SSClientError, "Query was empty")
 
 func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	c.startWriterBuffering()
@@ -1400,7 +1444,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 	if !callbackCalled {
 		// This is just a failsafe. Should never happen.
 		if err == nil || err == io.EOF {
-			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
+			err = sqlerror.NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 		}
 		if !c.writeErrorPacketFromErrorAndLog(err) {
 			return connErr
@@ -1591,7 +1635,7 @@ func ParseErrorPacket(data []byte) error {
 	// Error code is 2 bytes.
 	code, pos, ok := readUint16(data, pos)
 	if !ok {
-		return NewSQLError(CRUnknownError, SSUnknownSQLState, "invalid error packet code: %v", data)
+		return sqlerror.NewSQLError(sqlerror.CRUnknownError, sqlerror.SSUnknownSQLState, "invalid error packet code: %v", data)
 	}
 
 	// '#' marker of the SQL state is 1 byte. Ignored.
@@ -1600,13 +1644,13 @@ func ParseErrorPacket(data []byte) error {
 	// SQL state is 5 bytes
 	sqlState, pos, ok := readBytes(data, pos, 5)
 	if !ok {
-		return NewSQLError(CRUnknownError, SSUnknownSQLState, "invalid error packet sqlState: %v", data)
+		return sqlerror.NewSQLError(sqlerror.CRUnknownError, sqlerror.SSUnknownSQLState, "invalid error packet sqlState: %v", data)
 	}
 
 	// Human readable error message is the rest.
 	msg := string(data[pos:])
 
-	return NewSQLError(ErrorCode(code), string(sqlState), "%v", msg)
+	return sqlerror.NewSQLError(sqlerror.ErrorCode(code), string(sqlState), "%v", msg)
 }
 
 // GetTLSClientCerts gets TLS certificates.
@@ -1631,4 +1675,39 @@ func (c *Conn) IsUnixSocket() bool {
 // GetRawConn returns the raw net.Conn for nefarious purposes.
 func (c *Conn) GetRawConn() net.Conn {
 	return c.conn
+}
+
+// CancelCtx aborts an existing running query
+func (c *Conn) CancelCtx() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.cancel != nil {
+		c.cancel()
+	}
+}
+
+// UpdateCancelCtx updates the cancel function on the connection.
+func (c *Conn) UpdateCancelCtx(cancel context.CancelFunc) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cancel = cancel
+}
+
+// MarkForClose marks the connection for close.
+func (c *Conn) MarkForClose() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closing = true
+}
+
+// IsMarkedForClose return true if the connection should be closed.
+func (c *Conn) IsMarkedForClose() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closing
+}
+
+// GetTestConn returns a conn for testing purpose only.
+func GetTestConn() *Conn {
+	return newConn(testConn{})
 }

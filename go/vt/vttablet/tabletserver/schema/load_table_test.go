@@ -19,10 +19,11 @@ package schema
 import (
 	"context"
 	"errors"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,6 +81,8 @@ func TestLoadView(t *testing.T) {
 	assert.Equal(t, want, table)
 }
 
+// TestLoadTableSequence tests that sequence tables are loaded correctly.
+// It also confirms that a reset of a sequence table works.
 func TestLoadTableSequence(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -93,9 +96,12 @@ func TestLoadTableSequence(t *testing.T) {
 	}
 	table.Fields = nil
 	table.PKColumns = nil
-	if !reflect.DeepEqual(table, want) {
-		t.Errorf("Table:\n%#v, want\n%#v", table, want)
-	}
+	utils.MustMatch(t, want, table)
+
+	table.SequenceInfo.NextVal = 10
+	table.SequenceInfo.LastVal = 5
+	table.SequenceInfo.Reset()
+	utils.MustMatch(t, want, table)
 }
 
 func TestLoadTableMessage(t *testing.T) {

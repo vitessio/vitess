@@ -17,14 +17,13 @@ limitations under the License.
 package repltracker
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
-	"context"
+	"vitess.io/vitess/go/constants/sidecar"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
@@ -32,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -74,14 +72,14 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 	config := env.Config()
 
 	// config.EnableLagThrottler is a feature flag for the throttler; if throttler runs, then heartbeat must also run
-	if config.ReplicationTracker.Mode != tabletenv.Heartbeat && !config.EnableLagThrottler && config.ReplicationTracker.HeartbeatOnDemandSeconds.Get() == 0 {
+	if config.ReplicationTracker.Mode != tabletenv.Heartbeat && config.ReplicationTracker.HeartbeatOnDemandSeconds.Get() == 0 {
 		return &heartbeatWriter{}
 	}
 	heartbeatInterval := config.ReplicationTracker.HeartbeatIntervalSeconds.Get()
 	w := &heartbeatWriter{
 		env:              env,
 		enabled:          true,
-		tabletAlias:      proto.Clone(alias).(*topodatapb.TabletAlias),
+		tabletAlias:      alias.CloneVT(),
 		now:              time.Now,
 		interval:         heartbeatInterval,
 		onDemandDuration: config.ReplicationTracker.HeartbeatOnDemandSeconds.Get(),
@@ -173,7 +171,7 @@ func (w *heartbeatWriter) bindHeartbeatVars(query string) (string, error) {
 		"ts":  sqltypes.Int64BindVariable(w.now().UnixNano()),
 		"uid": sqltypes.Int64BindVariable(int64(w.tabletAlias.Uid)),
 	}
-	parsed := sqlparser.BuildParsedQuery(query, sidecardb.GetIdentifier(), ":ts", ":uid", ":ks")
+	parsed := sqlparser.BuildParsedQuery(query, sidecar.GetIdentifier(), ":ts", ":uid", ":ks")
 	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", err

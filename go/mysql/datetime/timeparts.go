@@ -48,7 +48,7 @@ func (tp *timeparts) toDateTime(prec int) (DateTime, int, bool) {
 	if tp.yday > 0 {
 		return DateTime{}, 0, false
 	} else {
-		if tp.month < 0 {
+		if tp.month < 1 {
 			tp.month = int(time.January)
 		}
 		if tp.day < 0 {

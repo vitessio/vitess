@@ -22,12 +22,11 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/sidecardb"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -43,7 +42,7 @@ const vl = 10
 // trackedSchema has the snapshot of the table at a given pos (reached by ddl)
 type trackedSchema struct {
 	schema      map[string]*binlogdatapb.MinimalTable
-	pos         mysql.Position
+	pos         replication.Position
 	ddl         string
 	timeUpdated int64
 }
@@ -146,7 +145,7 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 	if gtid == "" {
 		return nil, nil
 	}
-	pos, err := mysql.DecodePosition(gtid)
+	pos, err := replication.DecodePosition(gtid)
 	if err != nil {
 		return nil, err
 	}
@@ -172,10 +171,10 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 	var tableData *sqltypes.Result
 	if h.lastID == 0 && h.schemaMaxAgeSeconds > 0 { // only at vttablet start
 		schemaMaxAge := time.Now().UTC().Add(time.Duration(-h.schemaMaxAgeSeconds) * time.Second)
-		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getInitialSchemaVersions, sidecardb.GetIdentifier(),
+		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getInitialSchemaVersions, sidecar.GetIdentifier(),
 			schemaMaxAge.Unix()).Query, 10000, true)
 	} else {
-		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getNextSchemaVersions, sidecardb.GetIdentifier(),
+		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getNextSchemaVersions, sidecar.GetIdentifier(),
 			h.lastID).Query, 10000, true)
 	}
 
@@ -205,12 +204,12 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 
 // readRow converts a row from the schema_version table to a trackedSchema
 func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error) {
-	id, _ := evalengine.ToInt64(row[0])
+	id, _ := row[0].ToCastInt64()
 	rowBytes, err := row[1].ToBytes()
 	if err != nil {
 		return nil, 0, err
 	}
-	pos, err := mysql.DecodePosition(string(rowBytes))
+	pos, err := replication.DecodePosition(string(rowBytes))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -219,7 +218,7 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 		return nil, 0, err
 	}
 	ddl := string(rowBytes)
-	timeUpdated, err := evalengine.ToInt64(row[3])
+	timeUpdated, err := row[3].ToCastInt64()
 	if err != nil {
 		return nil, 0, err
 	}
@@ -232,7 +231,7 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 		return nil, 0, err
 	}
 	log.V(vl).Infof("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n",
-		id, mysql.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated)
+		id, replication.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated)
 
 	tables := map[string]*binlogdatapb.MinimalTable{}
 	for _, t := range sch.Tables {
@@ -281,7 +280,7 @@ func (h *historian) sortSchemas() {
 }
 
 // getTableFromHistoryForPos looks in the cache for a schema for a specific gtid
-func (h *historian) getTableFromHistoryForPos(tableName sqlparser.IdentifierCS, pos mysql.Position) *binlogdatapb.MinimalTable {
+func (h *historian) getTableFromHistoryForPos(tableName sqlparser.IdentifierCS, pos replication.Position) *binlogdatapb.MinimalTable {
 	idx := sort.Search(len(h.schemas), func(i int) bool {
 		return pos.Equal(h.schemas[i].pos) || !pos.AtLeast(h.schemas[i].pos)
 	})

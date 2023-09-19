@@ -27,10 +27,10 @@ import (
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -89,7 +89,7 @@ func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
 	return &tmState{
 		tm: tm,
 		displayState: displayState{
-			tablet: proto.Clone(tablet).(*topodatapb.Tablet),
+			tablet: tablet.CloneVT(),
 		},
 		tablet: tablet,
 		ctx:    ctx,
@@ -186,7 +186,7 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 	log.Infof("Changing Tablet Type: %v for %s", tabletType, ts.tablet.Alias.String())
 
 	if tabletType == topodatapb.TabletType_PRIMARY {
-		PrimaryTermStartTime := logutil.TimeToProto(time.Now())
+		PrimaryTermStartTime := protoutil.TimeToProto(time.Now())
 
 		// Update the tablet record first.
 		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, PrimaryTermStartTime)
@@ -264,7 +264,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 		return nil
 	}
 
-	terTime := logutil.ProtoToTime(ts.tablet.PrimaryTermStartTime)
+	ptsTime := protoutil.TimeFromProto(ts.tablet.PrimaryTermStartTime).UTC()
 
 	// Disable TabletServer first so the nonserving state gets advertised
 	// before other services are shutdown.
@@ -277,7 +277,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 		// always return error from 'SetServingType' and 'applyDenyList' to our client. It is up to them to handle it accordingly.
 		// UpdateLock is called from 'ChangeTabletType', 'Open' and 'RefreshFromTopoInfo'. For 'Open' and 'RefreshFromTopoInfo' we don't need
 		// to propagate error to client hence no changes there but we will propagate error from 'ChangeTabletType' to client.
-		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
+		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, ptsTime, false, reason); err != nil {
 			errStr := fmt.Sprintf("SetServingType(serving=false) failed: %v", err)
 			log.Errorf(errStr)
 			// No need to short circuit. Apply all steps and return error in the end.
@@ -326,7 +326,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 
 	// Open TabletServer last so that it advertises serving after all other services are up.
 	if reason == "" {
-		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true, ""); err != nil {
+		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, ptsTime, true, ""); err != nil {
 			errStr := fmt.Sprintf("Cannot start query service: %v", err)
 			log.Errorf(errStr)
 			returnErr = vterrors.Wrapf(err, errStr)
@@ -459,15 +459,14 @@ type displayState struct {
 func (ts *tmState) publishForDisplay() {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
-
-	ts.displayState.tablet = proto.Clone(ts.tablet).(*topodatapb.Tablet)
+	ts.displayState.tablet = ts.tablet.CloneVT()
 	ts.displayState.deniedTables = ts.deniedTables[ts.tablet.Type]
 }
 
 func (ts *tmState) Tablet() *topodatapb.Tablet {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
-	return proto.Clone(ts.displayState.tablet).(*topodatapb.Tablet)
+	return ts.displayState.tablet.CloneVT()
 }
 
 func (ts *tmState) DeniedTables() []string {

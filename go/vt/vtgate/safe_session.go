@@ -135,7 +135,7 @@ func NewSafeSession(sessn *vtgatepb.Session) *SafeSession {
 // NewAutocommitSession returns a SafeSession based on the original
 // session, but with autocommit enabled.
 func NewAutocommitSession(sessn *vtgatepb.Session) *SafeSession {
-	newSession := proto.Clone(sessn).(*vtgatepb.Session)
+	newSession := sessn.CloneVT()
 	newSession.InTransaction = false
 	newSession.ShardSessions = nil
 	newSession.PreSessions = nil
@@ -714,6 +714,20 @@ func (session *SafeSession) GetDDLStrategy() string {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.DDLStrategy
+}
+
+// SetMigrationContext set the migration_context setting.
+func (session *SafeSession) SetMigrationContext(migrationContext string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.MigrationContext = migrationContext
+}
+
+// GetMigrationContext returns the migration_context value.
+func (session *SafeSession) GetMigrationContext() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.MigrationContext
 }
 
 // GetSessionUUID returns the SessionUUID value.

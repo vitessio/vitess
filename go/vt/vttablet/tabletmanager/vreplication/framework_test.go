@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vttablet"
 
 	"vitess.io/vitess/go/test/utils"
@@ -61,17 +62,16 @@ import (
 )
 
 var (
-	playerEngine   *Engine
-	streamerEngine *vstreamer.Engine
-
-	envMu sync.Mutex
-	env   *testenv.Env
-
-	globalFBC             = &fakeBinlogClient{}
-	vrepldb               = "vrepl"
-	globalDBQueries       = make(chan string, 1000)
-	testForeignKeyQueries = false
-	doNotLogDBQueries     = false
+	playerEngine             *Engine
+	streamerEngine           *vstreamer.Engine
+	env                      *testenv.Env
+	envMu                    sync.Mutex
+	globalFBC                = &fakeBinlogClient{}
+	vrepldb                  = "vrepl"
+	globalDBQueries          = make(chan string, 1000)
+	testForeignKeyQueries    = false
+	testSetForeignKeyQueries = false
+	doNotLogDBQueries        = false
 )
 
 type LogExpectation struct {
@@ -126,9 +126,9 @@ func cleanup() {
 	envMu.Unlock()
 }
 
-func setup() (func(), int) {
+func setup(ctx context.Context) (func(), int) {
 	var err error
-	env, err = testenv.Init()
+	env, err = testenv.Init(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		return nil, 1
@@ -144,12 +144,12 @@ func setup() (func(), int) {
 	streamerEngine.InitDBConfig(env.KeyspaceName, env.ShardName)
 	streamerEngine.Open()
 
-	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), fmt.Sprintf("create database %s", vrepldb)); err != nil {
+	if err := env.Mysqld.ExecuteSuperQuery(ctx, fmt.Sprintf("create database %s", vrepldb)); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		return nil, 1
 	}
 
-	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "set @@global.innodb_lock_wait_timeout=1"); err != nil {
+	if err := env.Mysqld.ExecuteSuperQuery(ctx, "set @@global.innodb_lock_wait_timeout=1"); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		return nil, 1
 	}
@@ -158,7 +158,7 @@ func setup() (func(), int) {
 		"extb": env.Dbcfgs,
 	}
 	playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig)
-	playerEngine.Open(context.Background())
+	playerEngine.Open(ctx)
 
 	return cleanup, 0
 }
@@ -173,11 +173,13 @@ func TestMain(m *testing.M) {
 	binlogplayer.SetProtocol("vreplication_test_framework", "test")
 	_flag.ParseFlagsForTest()
 	exitCode := func() int {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		if err := utils.SetBinlogRowImageMode("full", tempDir); err != nil {
 			panic(err)
 		}
 		defer utils.SetBinlogRowImageMode("", tempDir)
-		cancel, ret := setup()
+		cancel, ret := setup(ctx)
 		if ret > 0 {
 			return ret
 		}
@@ -192,7 +194,7 @@ func TestMain(m *testing.M) {
 			panic(err)
 		}
 		defer utils.SetBinlogRowImageMode("", tempDir)
-		cancel, ret = setup()
+		cancel, ret = setup(ctx)
 		if ret > 0 {
 			return ret
 		}
@@ -212,7 +214,7 @@ func primaryPosition(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return mysql.EncodePosition(pos)
+	return replication.EncodePosition(pos)
 }
 
 func execStatements(t *testing.T, queries []string) {
@@ -474,6 +476,8 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 	}
 	if !strings.HasPrefix(query, "select") && !strings.HasPrefix(query, "set") && !dbc.nolog {
 		globalDBQueries <- query
+	} else if testSetForeignKeyQueries && strings.Contains(query, "set foreign_key_checks") {
+		globalDBQueries <- query
 	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { //allow select/set for foreign_key_checks
 		globalDBQueries <- query
 	}
@@ -482,6 +486,9 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 
 func expectDeleteQueries(t *testing.T) {
 	t.Helper()
+	if doNotLogDBQueries {
+		return
+	}
 	expectNontxQueries(t, qh.Expect(
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
@@ -532,6 +539,7 @@ func shouldIgnoreQuery(query string) bool {
 		", time_throttled=",      // update of last throttle time, can happen out-of-band, so can't test for it
 		", component_throttled=", // update of last throttle time, can happen out-of-band, so can't test for it
 		"context cancel",
+		"SELECT rows_copied FROM _vt.vreplication WHERE id=",
 	}
 	if sidecardb.MatchesInitQuery(query) {
 		return true
@@ -546,6 +554,9 @@ func shouldIgnoreQuery(query string) bool {
 
 func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, skippableOnce ...string) {
 	t.Helper()
+	if doNotLogDBQueries {
+		return
+	}
 	failed := false
 	skippedOnce := false
 	validator := qh.NewVerifier(expectations)
@@ -606,7 +617,9 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 // It also disregards updates to _vt.vreplication.
 func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence) {
 	t.Helper()
-
+	if doNotLogDBQueries {
+		return
+	}
 	failed := false
 
 	validator := qh.NewVerifier(expectations)
@@ -696,6 +709,7 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 			if err == nil {
 				return
 			}
+			log.Errorf("data mismatch: %v, retrying", err)
 			time.Sleep(tick)
 		}
 	}
@@ -718,7 +732,7 @@ func compareQueryResults(t *testing.T, query string, values [][]string,
 		}
 		for j, val := range row {
 			if got := qr.Rows[i][j].ToString(); got != val {
-				return fmt.Errorf("mismatch at (%d, %d): %v, want %s", i, j, qr.Rows[i][j], val)
+				return fmt.Errorf("mismatch at (%d, %d): got '%s', want '%s'", i, j, qr.Rows[i][j].ToString(), val)
 			}
 		}
 	}

@@ -26,7 +26,6 @@ import (
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -138,9 +137,14 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.PassthroughDML, "queryserver-config-passthrough-dmls", defaultConfig.PassthroughDML, "query server pass through all dml statements without rewriting")
 
 	fs.IntVar(&currentConfig.StreamBufferSize, "queryserver-config-stream-buffer-size", defaultConfig.StreamBufferSize, "query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream_buffer_size.")
-	fs.IntVar(&currentConfig.QueryCacheSize, "queryserver-config-query-cache-size", defaultConfig.QueryCacheSize, "query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
+
+	fs.Int("queryserver-config-query-cache-size", 0, "query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
+	_ = fs.MarkDeprecated("queryserver-config-query-cache-size", "`--queryserver-config-query-cache-size` is deprecated and will be removed in `v19.0`. This option only applied to LRU caches, which are now unsupported.")
+
 	fs.Int64Var(&currentConfig.QueryCacheMemory, "queryserver-config-query-cache-memory", defaultConfig.QueryCacheMemory, "query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
-	fs.BoolVar(&currentConfig.QueryCacheLFU, "queryserver-config-query-cache-lfu", defaultConfig.QueryCacheLFU, "query server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
+
+	fs.Bool("queryserver-config-query-cache-lfu", false, "query server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
+	_ = fs.MarkDeprecated("queryserver-config-query-cache-lfu", "`--queryserver-config-query-cache-lfu` is deprecated and will be removed in `v19.0`. The query cache always uses a LFU implementation now.")
 
 	currentConfig.SchemaReloadIntervalSeconds = defaultConfig.SchemaReloadIntervalSeconds.Clone()
 	fs.Var(&currentConfig.SchemaReloadIntervalSeconds, currentConfig.SchemaReloadIntervalSeconds.Name(), "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
@@ -185,6 +189,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	flagutil.DualFormatStringListVar(fs, &currentConfig.TxThrottlerHealthCheckCells, "tx_throttler_healthcheck_cells", defaultConfig.TxThrottlerHealthCheckCells, "A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.")
 	fs.IntVar(&currentConfig.TxThrottlerDefaultPriority, "tx-throttler-default-priority", defaultConfig.TxThrottlerDefaultPriority, "Default priority assigned to queries that lack priority information")
 	fs.Var(currentConfig.TxThrottlerTabletTypes, "tx-throttler-tablet-types", "A comma-separated list of tablet types. Only tablets of this type are monitored for replication lag by the transaction throttler. Supported types are replica and/or rdonly.")
+	fs.BoolVar(&currentConfig.TxThrottlerDryRun, "tx-throttler-dry-run", defaultConfig.TxThrottlerDryRun, "If present, the transaction throttler only records metrics about requests received and throttled, but does not actually throttle any requests.")
+	fs.DurationVar(&currentConfig.TxThrottlerTopoRefreshInterval, "tx-throttler-topo-refresh-interval", time.Minute*5, "The rate that the transaction throttler will refresh the topology to find cells.")
 
 	fs.BoolVar(&enableHotRowProtection, "enable_hot_row_protection", false, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
 	fs.BoolVar(&enableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", false, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
@@ -203,7 +209,6 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&enableHeartbeat, "heartbeat_enable", false, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the sidecar database's heartbeat table. The result is used to inform the serving state of the vttablet via healthchecks.")
 	fs.DurationVar(&heartbeatInterval, "heartbeat_interval", 1*time.Second, "How frequently to read and write replication heartbeat.")
 	fs.DurationVar(&heartbeatOnDemandDuration, "heartbeat_on_demand_duration", 0, "If non-zero, heartbeats are only written upon consumer request, and only run for up to given duration following the request. Frequent requests can keep the heartbeat running consistently; when requests are infrequent heartbeat may completely stop between requests")
-	flagutil.DualFormatBoolVar(fs, &currentConfig.EnableLagThrottler, "enable_lag_throttler", defaultConfig.EnableLagThrottler, "If true, vttablet will run a throttler service, and will implicitly enable heartbeats")
 
 	fs.BoolVar(&currentConfig.EnforceStrictTransTables, "enforce_strict_trans_tables", defaultConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
 	flagutil.DualFormatBoolVar(fs, &enableConsolidator, "enable_consolidator", true, "This option enables the query consolidator.")
@@ -335,9 +340,8 @@ type TabletConfig struct {
 	StreamBufferSize                        int                               `json:"streamBufferSize,omitempty"`
 	ConsolidatorStreamTotalSize             int64                             `json:"consolidatorStreamTotalSize,omitempty"`
 	ConsolidatorStreamQuerySize             int64                             `json:"consolidatorStreamQuerySize,omitempty"`
-	QueryCacheSize                          int                               `json:"queryCacheSize,omitempty"`
 	QueryCacheMemory                        int64                             `json:"queryCacheMemory,omitempty"`
-	QueryCacheLFU                           bool                              `json:"queryCacheLFU,omitempty"`
+	QueryCacheDoorkeeper                    bool                              `json:"queryCacheDoorkeeper,omitempty"`
 	SchemaReloadIntervalSeconds             flagutil.DeprecatedFloat64Seconds `json:"schemaReloadIntervalSeconds,omitempty"`
 	SignalSchemaChangeReloadIntervalSeconds flagutil.DeprecatedFloat64Seconds `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
 	SchemaChangeReloadTimeout               time.Duration                     `json:"schemaChangeReloadTimeout,omitempty"`
@@ -360,14 +364,15 @@ type TabletConfig struct {
 	TwoPCCoordinatorAddress string  `json:"-"`
 	TwoPCAbandonAge         Seconds `json:"-"`
 
-	EnableTxThrottler           bool                          `json:"-"`
-	TxThrottlerConfig           *TxThrottlerConfigFlag        `json:"-"`
-	TxThrottlerHealthCheckCells []string                      `json:"-"`
-	TxThrottlerDefaultPriority  int                           `json:"-"`
-	TxThrottlerTabletTypes      *topoproto.TabletTypeListFlag `json:"-"`
+	EnableTxThrottler              bool                          `json:"-"`
+	TxThrottlerConfig              *TxThrottlerConfigFlag        `json:"-"`
+	TxThrottlerHealthCheckCells    []string                      `json:"-"`
+	TxThrottlerDefaultPriority     int                           `json:"-"`
+	TxThrottlerTabletTypes         *topoproto.TabletTypeListFlag `json:"-"`
+	TxThrottlerTopoRefreshInterval time.Duration                 `json:"-"`
+	TxThrottlerDryRun              bool                          `json:"-"`
 
-	EnableLagThrottler bool `json:"-"`
-	EnableTableGC      bool `json:"-"` // can be turned off programmatically by tests
+	EnableTableGC bool `json:"-"` // can be turned off programmatically by tests
 
 	TransactionLimitConfig `json:"-"`
 
@@ -723,9 +728,6 @@ func (c *TabletConfig) verifyTxThrottlerConfig() error {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed to parse throttlerdatapb.Configuration config: %v", err)
 	}
 
-	if len(c.TxThrottlerHealthCheckCells) == 0 {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "empty healthCheckCells given: %+v", c.TxThrottlerHealthCheckCells)
-	}
 	if v := c.TxThrottlerDefaultPriority; v > sqlparser.MaxPriorityValue || v < 0 {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--tx-throttler-default-priority must be > 0 and < 100 (specified value: %d)", v)
 	}
@@ -816,10 +818,11 @@ var defaultConfig = TabletConfig{
 	// memory copies.  so with the encoding overhead, this seems to work
 	// great (the overhead makes the final packets on the wire about twice
 	// bigger than this).
-	StreamBufferSize:            32 * 1024,
-	QueryCacheSize:              int(cache.DefaultConfig.MaxEntries),
-	QueryCacheMemory:            cache.DefaultConfig.MaxMemoryUsage,
-	QueryCacheLFU:               cache.DefaultConfig.LFU,
+	StreamBufferSize: 32 * 1024,
+	QueryCacheMemory: 32 * 1024 * 1024, // 32 mb for our query cache
+	// The doorkeeper for the plan cache is disabled by default in endtoend tests to ensure
+	// results are consistent between runs.
+	QueryCacheDoorkeeper:        !servenv.TestingEndtoend,
 	SchemaReloadIntervalSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-reload-time", 30*time.Minute),
 	// SchemaChangeReloadTimeout is used for the signal reload operation where we have to query mysqld.
 	// The queries during the signal reload operation are typically expected to have low load,
@@ -829,13 +832,13 @@ var defaultConfig = TabletConfig{
 	MessagePostponeParallelism: 4,
 	SignalWhenSchemaChange:     true,
 
-	EnableTxThrottler:           false,
-	TxThrottlerConfig:           defaultTxThrottlerConfig(),
-	TxThrottlerHealthCheckCells: []string{},
-	TxThrottlerDefaultPriority:  sqlparser.MaxPriorityValue, // This leads to all queries being candidates to throttle
-	TxThrottlerTabletTypes:      &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA},
-
-	EnableLagThrottler: false, // Feature flag; to switch to 'true' at some stage in the future
+	EnableTxThrottler:              false,
+	TxThrottlerConfig:              defaultTxThrottlerConfig(),
+	TxThrottlerHealthCheckCells:    []string{},
+	TxThrottlerDefaultPriority:     sqlparser.MaxPriorityValue, // This leads to all queries being candidates to throttle
+	TxThrottlerTabletTypes:         &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA},
+	TxThrottlerDryRun:              false,
+	TxThrottlerTopoRefreshInterval: time.Minute * 5,
 
 	TransactionLimitConfig: defaultTransactionLimitConfig(),
 

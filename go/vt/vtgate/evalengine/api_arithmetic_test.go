@@ -24,7 +24,6 @@ import (
 	"strconv"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/vthash"
 
@@ -117,12 +116,12 @@ func TestArithmetics(t *testing.T) {
 			// testing for error for parsing float value to uint64
 			v1:  TestValue(sqltypes.Uint64, "1.2"),
 			v2:  NewInt64(2),
-			err: "strconv.ParseUint: parsing \"1.2\": invalid syntax",
+			err: "unparsed tail left after parsing uint64 from \"1.2\": \".2\"",
 		}, {
 			// testing for error for parsing float value to uint64
 			v1:  NewUint64(2),
 			v2:  TestValue(sqltypes.Uint64, "1.2"),
-			err: "strconv.ParseUint: parsing \"1.2\": invalid syntax",
+			err: "unparsed tail left after parsing uint64 from \"1.2\": \".2\"",
 		}, {
 			// uint64 - uint64
 			v1:  NewUint64(8),
@@ -253,11 +252,11 @@ func TestArithmetics(t *testing.T) {
 		}, {
 			v1:  TestValue(sqltypes.Int64, "1.2"),
 			v2:  NewInt64(2),
-			err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
+			err: "unparsed tail left after parsing int64 from \"1.2\": \".2\"",
 		}, {
 			v1:  NewInt64(2),
 			v2:  TestValue(sqltypes.Int64, "1.2"),
-			err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
+			err: "unparsed tail left after parsing int64 from \"1.2\": \".2\"",
 		}, {
 			// testing for uint64 overflow with max uint64 + int value
 			v1:  NewUint64(maxUint64),
@@ -320,12 +319,12 @@ func TestArithmetics(t *testing.T) {
 			// testing for error in types
 			v1:  TestValue(sqltypes.Int64, "1.2"),
 			v2:  NewInt64(2),
-			err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
+			err: "unparsed tail left after parsing int64 from \"1.2\": \".2\"",
 		}, {
 			// testing for error in types
 			v1:  NewInt64(2),
 			v2:  TestValue(sqltypes.Int64, "1.2"),
-			err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
+			err: "unparsed tail left after parsing int64 from \"1.2\": \".2\"",
 		}, {
 			// testing for uint/int
 			v1:  NewUint64(4),
@@ -384,12 +383,12 @@ func TestArithmetics(t *testing.T) {
 			// testing for error in types
 			v1:  TestValue(sqltypes.Int64, "1.2"),
 			v2:  NewInt64(2),
-			err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
+			err: "unparsed tail left after parsing int64 from \"1.2\": \".2\"",
 		}, {
 			// testing for error in types
 			v1:  NewInt64(2),
 			v2:  TestValue(sqltypes.Int64, "1.2"),
-			err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
+			err: "unparsed tail left after parsing int64 from \"1.2\": \".2\"",
 		}, {
 			// testing for uint*int
 			v1:  NewUint64(4),
@@ -479,12 +478,12 @@ func TestNullSafeAdd(t *testing.T) {
 		// Make sure underlying error is returned for LHS.
 		v1:  TestValue(sqltypes.Int64, "1.2"),
 		v2:  NewInt64(2),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unparsed tail left after parsing int64 from \"1.2\": \".2\""),
 	}, {
 		// Make sure underlying error is returned for RHS.
 		v1:  NewInt64(2),
 		v2:  TestValue(sqltypes.Int64, "1.2"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unparsed tail left after parsing int64 from \"1.2\": \".2\""),
 	}, {
 		// Make sure underlying error is returned while adding.
 		v1:  NewInt64(-1),
@@ -515,313 +514,6 @@ func TestNullSafeAdd(t *testing.T) {
 	}
 }
 
-func TestCast(t *testing.T) {
-	tcases := []struct {
-		typ sqltypes.Type
-		v   sqltypes.Value
-		out sqltypes.Value
-		err error
-	}{{
-		typ: sqltypes.VarChar,
-		v:   NULL,
-		out: NULL,
-	}, {
-		typ: sqltypes.VarChar,
-		v:   TestValue(sqltypes.VarChar, "exact types"),
-		out: TestValue(sqltypes.VarChar, "exact types"),
-	}, {
-		typ: sqltypes.Int64,
-		v:   TestValue(sqltypes.Int32, "32"),
-		out: TestValue(sqltypes.Int64, "32"),
-	}, {
-		typ: sqltypes.Int24,
-		v:   TestValue(sqltypes.Uint64, "64"),
-		out: TestValue(sqltypes.Int24, "64"),
-	}, {
-		typ: sqltypes.Int24,
-		v:   TestValue(sqltypes.VarChar, "bad int"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, `strconv.ParseInt: parsing "bad int": invalid syntax`),
-	}, {
-		typ: sqltypes.Uint64,
-		v:   TestValue(sqltypes.Uint32, "32"),
-		out: TestValue(sqltypes.Uint64, "32"),
-	}, {
-		typ: sqltypes.Uint24,
-		v:   TestValue(sqltypes.Int64, "64"),
-		out: TestValue(sqltypes.Uint24, "64"),
-	}, {
-		typ: sqltypes.Uint24,
-		v:   TestValue(sqltypes.Int64, "-1"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, `strconv.ParseUint: parsing "-1": invalid syntax`),
-	}, {
-		typ: sqltypes.Float64,
-		v:   TestValue(sqltypes.Int64, "64"),
-		out: TestValue(sqltypes.Float64, "64"),
-	}, {
-		typ: sqltypes.Float32,
-		v:   TestValue(sqltypes.Float64, "64"),
-		out: TestValue(sqltypes.Float32, "64"),
-	}, {
-		typ: sqltypes.Float32,
-		v:   TestValue(sqltypes.Decimal, "1.24"),
-		out: TestValue(sqltypes.Float32, "1.24"),
-	}, {
-		typ: sqltypes.Float64,
-		v:   TestValue(sqltypes.VarChar, "1.25"),
-		out: TestValue(sqltypes.Float64, "1.25"),
-	}, {
-		typ: sqltypes.Float64,
-		v:   TestValue(sqltypes.VarChar, "bad float"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, `strconv.ParseFloat: parsing "bad float": invalid syntax`),
-	}, {
-		typ: sqltypes.VarChar,
-		v:   TestValue(sqltypes.Int64, "64"),
-		out: TestValue(sqltypes.VarChar, "64"),
-	}, {
-		typ: sqltypes.VarBinary,
-		v:   TestValue(sqltypes.Float64, "64"),
-		out: TestValue(sqltypes.VarBinary, "64"),
-	}, {
-		typ: sqltypes.VarBinary,
-		v:   TestValue(sqltypes.Decimal, "1.24"),
-		out: TestValue(sqltypes.VarBinary, "1.24"),
-	}, {
-		typ: sqltypes.VarBinary,
-		v:   TestValue(sqltypes.VarChar, "1.25"),
-		out: TestValue(sqltypes.VarBinary, "1.25"),
-	}, {
-		typ: sqltypes.VarChar,
-		v:   TestValue(sqltypes.VarBinary, "valid string"),
-		out: TestValue(sqltypes.VarChar, "valid string"),
-	}, {
-		typ: sqltypes.VarChar,
-		v:   TestValue(sqltypes.Expression, "bad string"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "expression cannot be converted to bytes"),
-	}}
-	for _, tcase := range tcases {
-		got, err := Cast(tcase.v, tcase.typ)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("Cast(%v) error: %v, want %v", tcase.v, vterrors.Print(err), vterrors.Print(tcase.err))
-		}
-		if tcase.err != nil {
-			continue
-		}
-
-		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("Cast(%v): %v, want %v", tcase.v, got, tcase.out)
-		}
-	}
-}
-
-func TestToUint64(t *testing.T) {
-	tcases := []struct {
-		v   sqltypes.Value
-		out uint64
-		err error
-	}{{
-		v:   TestValue(sqltypes.VarChar, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
-	}, {
-		v:   NewInt64(-1),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "negative number cannot be converted to unsigned: -1"),
-	}, {
-		v:   NewInt64(1),
-		out: 1,
-	}, {
-		v:   NewUint64(1),
-		out: 1,
-	}}
-	for _, tcase := range tcases {
-		got, err := ToUint64(tcase.v)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("ToUint64(%v) error: %v, want %v", tcase.v, vterrors.Print(err), vterrors.Print(tcase.err))
-		}
-		if tcase.err != nil {
-			continue
-		}
-
-		if got != tcase.out {
-			t.Errorf("ToUint64(%v): %v, want %v", tcase.v, got, tcase.out)
-		}
-	}
-}
-
-func TestToInt64(t *testing.T) {
-	tcases := []struct {
-		v   sqltypes.Value
-		out int64
-		err error
-	}{{
-		v:   TestValue(sqltypes.VarChar, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
-	}, {
-		v:   NewUint64(18446744073709551615),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsigned number overflows int64 value: 18446744073709551615"),
-	}, {
-		v:   NewInt64(1),
-		out: 1,
-	}, {
-		v:   NewUint64(1),
-		out: 1,
-	}}
-	for _, tcase := range tcases {
-		got, err := ToInt64(tcase.v)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("ToInt64(%v) error: %v, want %v", tcase.v, vterrors.Print(err), vterrors.Print(tcase.err))
-		}
-		if tcase.err != nil {
-			continue
-		}
-
-		if got != tcase.out {
-			t.Errorf("ToInt64(%v): %v, want %v", tcase.v, got, tcase.out)
-		}
-	}
-}
-
-func TestToFloat64(t *testing.T) {
-	tcases := []struct {
-		v   sqltypes.Value
-		out float64
-		err error
-	}{{
-		v:   TestValue(sqltypes.VarChar, "abcd"),
-		out: 0,
-	}, {
-		v:   TestValue(sqltypes.VarChar, "1.2"),
-		out: 1.2,
-	}, {
-		v:   NewInt64(1),
-		out: 1,
-	}, {
-		v:   NewUint64(1),
-		out: 1,
-	}, {
-		v:   NewFloat64(1.2),
-		out: 1.2,
-	}, {
-		v:   TestValue(sqltypes.Int64, "1.2"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
-	}}
-	for _, tcase := range tcases {
-		t.Run(tcase.v.String(), func(t *testing.T) {
-			got, err := ToFloat64(tcase.v)
-			if tcase.err != nil {
-				require.EqualError(t, err, tcase.err.Error())
-			} else {
-				require.Equal(t, tcase.out, got)
-			}
-		})
-	}
-}
-
-func TestToNative(t *testing.T) {
-	testcases := []struct {
-		in  sqltypes.Value
-		out any
-	}{{
-		in:  NULL,
-		out: nil,
-	}, {
-		in:  TestValue(sqltypes.Int8, "1"),
-		out: int64(1),
-	}, {
-		in:  TestValue(sqltypes.Int16, "1"),
-		out: int64(1),
-	}, {
-		in:  TestValue(sqltypes.Int24, "1"),
-		out: int64(1),
-	}, {
-		in:  TestValue(sqltypes.Int32, "1"),
-		out: int64(1),
-	}, {
-		in:  TestValue(sqltypes.Int64, "1"),
-		out: int64(1),
-	}, {
-		in:  TestValue(sqltypes.Uint8, "1"),
-		out: uint64(1),
-	}, {
-		in:  TestValue(sqltypes.Uint16, "1"),
-		out: uint64(1),
-	}, {
-		in:  TestValue(sqltypes.Uint24, "1"),
-		out: uint64(1),
-	}, {
-		in:  TestValue(sqltypes.Uint32, "1"),
-		out: uint64(1),
-	}, {
-		in:  TestValue(sqltypes.Uint64, "1"),
-		out: uint64(1),
-	}, {
-		in:  TestValue(sqltypes.Float32, "1"),
-		out: float64(1),
-	}, {
-		in:  TestValue(sqltypes.Float64, "1"),
-		out: float64(1),
-	}, {
-		in:  TestValue(sqltypes.Timestamp, "2012-02-24 23:19:43"),
-		out: []byte("2012-02-24 23:19:43"),
-	}, {
-		in:  TestValue(sqltypes.Date, "2012-02-24"),
-		out: []byte("2012-02-24"),
-	}, {
-		in:  TestValue(sqltypes.Time, "23:19:43"),
-		out: []byte("23:19:43"),
-	}, {
-		in:  TestValue(sqltypes.Datetime, "2012-02-24 23:19:43"),
-		out: []byte("2012-02-24 23:19:43"),
-	}, {
-		in:  TestValue(sqltypes.Year, "1"),
-		out: uint64(1),
-	}, {
-		in:  TestValue(sqltypes.Decimal, "1"),
-		out: []byte("1"),
-	}, {
-		in:  TestValue(sqltypes.Text, "a"),
-		out: []byte("a"),
-	}, {
-		in:  TestValue(sqltypes.Blob, "a"),
-		out: []byte("a"),
-	}, {
-		in:  TestValue(sqltypes.VarChar, "a"),
-		out: []byte("a"),
-	}, {
-		in:  TestValue(sqltypes.VarBinary, "a"),
-		out: []byte("a"),
-	}, {
-		in:  TestValue(sqltypes.Char, "a"),
-		out: []byte("a"),
-	}, {
-		in:  TestValue(sqltypes.Binary, "a"),
-		out: []byte("a"),
-	}, {
-		in:  TestValue(sqltypes.Bit, "1"),
-		out: []byte("1"),
-	}, {
-		in:  TestValue(sqltypes.Enum, "a"),
-		out: []byte("a"),
-	}, {
-		in:  TestValue(sqltypes.Set, "a"),
-		out: []byte("a"),
-	}}
-	for _, tcase := range testcases {
-		v, err := ToNative(tcase.in)
-		if err != nil {
-			t.Error(err)
-		}
-		if !reflect.DeepEqual(v, tcase.out) {
-			t.Errorf("%v.ToNative = %#v, want %#v", tcase.in, v, tcase.out)
-		}
-	}
-
-	// Test Expression failure.
-	_, err := ToNative(TestValue(sqltypes.Expression, "aa"))
-	want := vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "EXPRESSION(aa) cannot be converted to a go type")
-	if !vterrors.Equals(err, want) {
-		t.Errorf("ToNative(EXPRESSION): %v, want %v", vterrors.Print(err), vterrors.Print(want))
-	}
-}
-
 func TestNewIntegralNumeric(t *testing.T) {
 	tcases := []struct {
 		v   sqltypes.Value
@@ -847,11 +539,11 @@ func TestNewIntegralNumeric(t *testing.T) {
 	}, {
 		// Only valid Int64 allowed if type is Int64.
 		v:   TestValue(sqltypes.Int64, "1.2"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unparsed tail left after parsing int64 from \"1.2\": \".2\""),
 	}, {
 		// Only valid Uint64 allowed if type is Uint64.
 		v:   TestValue(sqltypes.Uint64, "1.2"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseUint: parsing \"1.2\": invalid syntax"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unparsed tail left after parsing uint64 from \"1.2\": \".2\""),
 	}, {
 		v:   TestValue(sqltypes.VarChar, "abcd"),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
@@ -1112,220 +804,6 @@ func TestCompareNumeric(t *testing.T) {
 	}
 }
 
-func TestMin(t *testing.T) {
-	tcases := []struct {
-		v1, v2 sqltypes.Value
-		min    sqltypes.Value
-		err    error
-	}{{
-		v1:  NULL,
-		v2:  NULL,
-		min: NULL,
-	}, {
-		v1:  NewInt64(1),
-		v2:  NULL,
-		min: NewInt64(1),
-	}, {
-		v1:  NULL,
-		v2:  NewInt64(1),
-		min: NewInt64(1),
-	}, {
-		v1:  NewInt64(1),
-		v2:  NewInt64(2),
-		min: NewInt64(1),
-	}, {
-		v1:  NewInt64(2),
-		v2:  NewInt64(1),
-		min: NewInt64(1),
-	}, {
-		v1:  NewInt64(1),
-		v2:  NewInt64(1),
-		min: NewInt64(1),
-	}, {
-		v1:  TestValue(sqltypes.VarChar, "aa"),
-		v2:  TestValue(sqltypes.VarChar, "aa"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"),
-	}}
-	for _, tcase := range tcases {
-		v, err := Min(tcase.v1, tcase.v2, collations.Unknown)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("Min error: %v, want %v", vterrors.Print(err), vterrors.Print(tcase.err))
-		}
-		if tcase.err != nil {
-			continue
-		}
-
-		if !reflect.DeepEqual(v, tcase.min) {
-			t.Errorf("Min(%v, %v): %v, want %v", tcase.v1, tcase.v2, v, tcase.min)
-		}
-	}
-}
-
-func TestMinCollate(t *testing.T) {
-	tcases := []struct {
-		v1, v2    string
-		collation collations.ID
-		out       string
-		err       error
-	}{
-		{
-			// accent insensitive
-			v1:        "ǍḄÇ",
-			v2:        "ÁḆĈ",
-			out:       "ǍḄÇ",
-			collation: getCollationID("utf8mb4_0900_as_ci"),
-		},
-		{
-			// kana sensitive
-			v1:        "\xE3\x81\xAB\xE3\x81\xBB\xE3\x82\x93\xE3\x81\x94",
-			v2:        "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
-			out:       "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
-			collation: getCollationID("utf8mb4_ja_0900_as_cs_ks"),
-		},
-		{
-			// non breaking space
-			v1:        "abc ",
-			v2:        "abc\u00a0",
-			out:       "abc\u00a0",
-			collation: getCollationID("utf8mb4_0900_as_cs"),
-		},
-		{
-			// "cs" counts as a separate letter, where c < cs < d
-			v1:        "c",
-			v2:        "cs",
-			out:       "cs",
-			collation: getCollationID("utf8mb4_hu_0900_ai_ci"),
-		},
-		{
-			// "cs" counts as a separate letter, where c < cs < d
-			v1:        "cukor",
-			v2:        "csak",
-			out:       "csak",
-			collation: getCollationID("utf8mb4_hu_0900_ai_ci"),
-		},
-	}
-	for _, tcase := range tcases {
-		got, err := Min(TestValue(sqltypes.VarChar, tcase.v1), TestValue(sqltypes.VarChar, tcase.v2), tcase.collation)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
-		}
-		if tcase.err != nil {
-			continue
-		}
-
-		if got.ToString() == tcase.out {
-			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
-		}
-	}
-}
-
-func TestMax(t *testing.T) {
-	tcases := []struct {
-		v1, v2 sqltypes.Value
-		max    sqltypes.Value
-		err    error
-	}{{
-		v1:  NULL,
-		v2:  NULL,
-		max: NULL,
-	}, {
-		v1:  NewInt64(1),
-		v2:  NULL,
-		max: NewInt64(1),
-	}, {
-		v1:  NULL,
-		v2:  NewInt64(1),
-		max: NewInt64(1),
-	}, {
-		v1:  NewInt64(1),
-		v2:  NewInt64(2),
-		max: NewInt64(2),
-	}, {
-		v1:  NewInt64(2),
-		v2:  NewInt64(1),
-		max: NewInt64(2),
-	}, {
-		v1:  NewInt64(1),
-		v2:  NewInt64(1),
-		max: NewInt64(1),
-	}, {
-		v1:  TestValue(sqltypes.VarChar, "aa"),
-		v2:  TestValue(sqltypes.VarChar, "aa"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"),
-	}}
-	for _, tcase := range tcases {
-		v, err := Max(tcase.v1, tcase.v2, collations.Unknown)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("Max error: %v, want %v", vterrors.Print(err), vterrors.Print(tcase.err))
-		}
-		if tcase.err != nil {
-			continue
-		}
-
-		if !reflect.DeepEqual(v, tcase.max) {
-			t.Errorf("Max(%v, %v): %v, want %v", tcase.v1, tcase.v2, v, tcase.max)
-		}
-	}
-}
-
-func TestMaxCollate(t *testing.T) {
-	tcases := []struct {
-		v1, v2    string
-		collation collations.ID
-		out       string
-		err       error
-	}{
-		{
-			// accent insensitive
-			v1:        "ǍḄÇ",
-			v2:        "ÁḆĈ",
-			out:       "ǍḄÇ",
-			collation: getCollationID("utf8mb4_0900_as_ci"),
-		},
-		{
-			// kana sensitive
-			v1:        "\xE3\x81\xAB\xE3\x81\xBB\xE3\x82\x93\xE3\x81\x94",
-			v2:        "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
-			out:       "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
-			collation: getCollationID("utf8mb4_ja_0900_as_cs_ks"),
-		},
-		{
-			// non breaking space
-			v1:        "abc ",
-			v2:        "abc\u00a0",
-			out:       "abc\u00a0",
-			collation: getCollationID("utf8mb4_0900_as_cs"),
-		},
-		{
-			// "cs" counts as a separate letter, where c < cs < d
-			v1:        "c",
-			v2:        "cs",
-			out:       "cs",
-			collation: getCollationID("utf8mb4_hu_0900_ai_ci"),
-		},
-		{
-			// "cs" counts as a separate letter, where c < cs < d
-			v1:        "cukor",
-			v2:        "csak",
-			out:       "csak",
-			collation: getCollationID("utf8mb4_hu_0900_ai_ci"),
-		},
-	}
-	for _, tcase := range tcases {
-		got, err := Max(TestValue(sqltypes.VarChar, tcase.v1), TestValue(sqltypes.VarChar, tcase.v2), tcase.collation)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
-		}
-		if tcase.err != nil {
-			continue
-		}
-
-		if got.ToString() != tcase.out {
-			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
-		}
-	}
-}
-
 func printValue(v sqltypes.Value) string {
 	vBytes, _ := v.ToBytes()
 	return fmt.Sprintf("%v:%q", v.Type(), vBytes)
@@ -1360,8 +838,8 @@ func BenchmarkAddNoNative(b *testing.B) {
 	v1 := sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))
 	v2 := sqltypes.MakeTrusted(sqltypes.Int64, []byte("12"))
 	for i := 0; i < b.N; i++ {
-		iv1, _ := ToInt64(v1)
-		iv2, _ := ToInt64(v2)
+		iv1, _ := v1.ToInt64()
+		iv2, _ := v2.ToInt64()
 		v1 = sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, iv1+iv2, 10))
 	}
 }

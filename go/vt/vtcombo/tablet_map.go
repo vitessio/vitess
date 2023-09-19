@@ -89,7 +89,7 @@ func CreateTablet(
 	}
 	log.Infof("Creating %v tablet %v for %v/%v", tabletType, topoproto.TabletAliasString(alias), keyspace, shard)
 
-	controller := tabletserver.NewServer(topoproto.TabletAliasString(alias), ts, alias)
+	controller := tabletserver.NewServer(ctx, topoproto.TabletAliasString(alias), ts, alias)
 	initTabletType := tabletType
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		initTabletType = topodatapb.TabletType_REPLICA
@@ -394,6 +394,10 @@ func CreateKs(
 				return 0, fmt.Errorf("cannot load vschema file %v for keyspace %v: %v", f, keyspace, err)
 			}
 
+			_, err = vindexes.BuildKeyspace(formal)
+			if err != nil {
+				return 0, fmt.Errorf("BuildKeyspace(%v) failed: %v", keyspace, err)
+			}
 			if err := ts.SaveVSchema(ctx, keyspace, formal); err != nil {
 				return 0, fmt.Errorf("SaveVSchema(%v) failed: %v", keyspace, err)
 			}
@@ -703,6 +707,16 @@ func (itc *internalTabletConn) VStreamRows(
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
+// VStreamTables is part of the QueryService interface.
+func (itc *internalTabletConn) VStreamTables(
+	ctx context.Context,
+	request *binlogdatapb.VStreamTablesRequest,
+	send func(*binlogdatapb.VStreamTablesResponse) error,
+) error {
+	err := itc.tablet.qsc.QueryService().VStreamTables(ctx, request, send)
+	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
 // VStreamResults is part of the QueryService interface.
 func (itc *internalTabletConn) VStreamResults(
 	ctx context.Context,
@@ -861,6 +875,22 @@ func (itmc *internalTabletManagerClient) WaitForPosition(context.Context, *topod
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
+//
+// VReplication related methods
+//
+
+func (itmc *internalTabletManagerClient) CreateVReplicationWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) DeleteVReplicationWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) ReadVReplicationWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) VReplicationExec(context.Context, *topodatapb.Tablet, string) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
@@ -869,7 +899,7 @@ func (itmc *internalTabletManagerClient) VReplicationWaitForPos(context.Context,
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) UpdateVRWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
+func (itmc *internalTabletManagerClient) UpdateVReplicationWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
@@ -910,6 +940,10 @@ func (itmc *internalTabletManagerClient) Backup(context.Context, *topodatapb.Tab
 }
 
 func (itmc *internalTabletManagerClient) RestoreFromBackup(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.RestoreFromBackupRequest) (logutil.EventStream, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) CheckThrottler(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
@@ -957,5 +991,8 @@ func (itmc *internalTabletManagerClient) ResetReplicationParameters(context.Cont
 }
 
 func (itmc *internalTabletManagerClient) ReplicaWasRestarted(context.Context, *topodatapb.Tablet, *topodatapb.TabletAlias) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+func (itmc *internalTabletManagerClient) ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }

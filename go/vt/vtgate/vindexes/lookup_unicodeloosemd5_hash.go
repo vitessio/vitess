@@ -22,8 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -152,7 +150,7 @@ func (lh *LookupUnicodeLooseMD5Hash) Map(ctx context.Context, vcursor VCursor, i
 		}
 		ksids := make([][]byte, 0, len(result.Rows))
 		for _, row := range result.Rows {
-			num, err := evalengine.ToUint64(row[0])
+			num, err := row[0].ToCastUint64()
 			if err != nil {
 				// A failure to convert is equivalent to not being
 				// able to map.
@@ -332,7 +330,7 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Map(ctx context.Context, vcursor VCu
 		case 0:
 			out = append(out, key.DestinationNone{})
 		case 1:
-			num, err := evalengine.ToUint64(result.Rows[0][0])
+			num, err := result.Rows[0][0].ToCastUint64()
 			if err != nil {
 				out = append(out, key.DestinationNone{})
 				continue

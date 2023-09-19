@@ -803,8 +803,7 @@ func TestFindSchema(t *testing.T) {
 
 		if schema != nil {
 			// Clone so our mutation below doesn't trip the race detector.
-			schema = proto.Clone(schema).(*vtadminpb.Schema)
-
+			schema = schema.CloneVT()
 			for _, td := range schema.TableDefinitions {
 				// Zero these out because they're non-deterministic and also not
 				// relevant to the final result.
@@ -1050,19 +1049,19 @@ func TestGetKeyspace(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			topos := make([]*topo.Server, len(tt.clusterShards))
 			vtctlds := make([]vtctlservicepb.VtctldServer, len(tt.clusterShards))
 
 			for i, shards := range tt.clusterShards {
-				ts := memorytopo.NewServer("cell1")
+				ts := memorytopo.NewServer(ctx, "cell1")
 				testutil.AddShards(ctx, t, ts, shards...)
 				topos[i] = ts
 				vtctlds[i] = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -1282,20 +1281,20 @@ func TestGetKeyspaces(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			// Note that these test cases were written prior to the existence of
 			// WithTestServers, so they are all written with the assumption that
 			// there are exactly 2 clusters.
 			topos := []*topo.Server{
-				memorytopo.NewServer("c0_cell1"),
-				memorytopo.NewServer("c1_cell1"),
+				memorytopo.NewServer(ctx, "c0_cell1"),
+				memorytopo.NewServer(ctx, "c1_cell1"),
 			}
 
 			for cdx, cks := range tt.clusterKeyspaces {
@@ -1346,7 +1345,8 @@ func TestGetKeyspaces(t *testing.T) {
 }
 
 func TestGetSchema(t *testing.T) {
-	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	tests := []struct {
 		name      string
@@ -1361,7 +1361,7 @@ func TestGetSchema(t *testing.T) {
 		{
 			name:      "success",
 			clusterID: 1,
-			ts:        memorytopo.NewServer("zone1"),
+			ts:        memorytopo.NewServer(ctx, "zone1"),
 			tmc: &testutil.TabletManagerClient{
 				GetSchemaResults: map[string]struct {
 					Schema *tabletmanagerdatapb.SchemaDefinition
@@ -1416,7 +1416,7 @@ func TestGetSchema(t *testing.T) {
 		{
 			name:      "cluster not found",
 			clusterID: 1, // results in clusterId == "c1"
-			ts:        memorytopo.NewServer("zone1"),
+			ts:        memorytopo.NewServer(ctx, "zone1"),
 			tablets:   nil,
 			req: &vtadminpb.GetSchemaRequest{
 				ClusterId: "c2",
@@ -1429,7 +1429,7 @@ func TestGetSchema(t *testing.T) {
 		{
 			name:      "tablet not found for keyspace",
 			clusterID: 1,
-			ts:        memorytopo.NewServer("zone1"),
+			ts:        memorytopo.NewServer(ctx, "zone1"),
 			tablets: []*vtadminpb.Tablet{
 				{
 					Cluster: &vtadminpb.Cluster{
@@ -1457,7 +1457,7 @@ func TestGetSchema(t *testing.T) {
 		{
 			name:      "no serving tablet found for keyspace",
 			clusterID: 1,
-			ts:        memorytopo.NewServer("zone1"),
+			ts:        memorytopo.NewServer(ctx, "zone1"),
 			tablets: []*vtadminpb.Tablet{
 				{
 					Cluster: &vtadminpb.Cluster{
@@ -1485,7 +1485,7 @@ func TestGetSchema(t *testing.T) {
 		{
 			name:      "error in GetSchema call",
 			clusterID: 1,
-			ts:        memorytopo.NewServer("zone1"),
+			ts:        memorytopo.NewServer(ctx, "zone1"),
 			tmc: &testutil.TabletManagerClient{
 				GetSchemaResults: map[string]struct {
 					Schema *tabletmanagerdatapb.SchemaDefinition
@@ -1535,13 +1535,13 @@ func TestGetSchema(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return grpcvtctldserver.NewVtctldServer(ts)
@@ -1570,7 +1570,7 @@ func TestGetSchema(t *testing.T) {
 
 				if resp != nil {
 					// Clone so our mutation below doesn't trip the race detector.
-					resp = proto.Clone(resp).(*vtadminpb.Schema)
+					resp = resp.CloneVT()
 				}
 
 				assert.NoError(t, err)
@@ -1580,8 +1580,6 @@ func TestGetSchema(t *testing.T) {
 	}
 
 	t.Run("size aggregation", func(t *testing.T) {
-		t.Parallel()
-
 		c1pb := &vtadminpb.Cluster{
 			Id:   "c1",
 			Name: "cluster1",
@@ -1730,8 +1728,7 @@ func TestGetSchema(t *testing.T) {
 
 		if schema != nil {
 			// Clone so our mutation below doesn't trip the race detector.
-			schema = proto.Clone(schema).(*vtadminpb.Schema)
-
+			schema = schema.CloneVT()
 			for _, td := range schema.TableDefinitions {
 				// Zero these out because they're non-deterministic and also not
 				// relevant to the final result.
@@ -2176,8 +2173,6 @@ func TestGetSchemas(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		// Note that these test cases were written prior to the existence of
 		// WithTestServers, so they are all written with the assumption that
@@ -2186,10 +2181,12 @@ func TestGetSchemas(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
 			topos := []*topo.Server{
-				memorytopo.NewServer("c0_cell1"),
-				memorytopo.NewServer("c1_cell1"),
+				memorytopo.NewServer(ctx, "c0_cell1"),
+				memorytopo.NewServer(ctx, "c1_cell1"),
 			}
 
 			tmc := testutil.TabletManagerClient{
@@ -2469,7 +2466,7 @@ func TestGetSchemas(t *testing.T) {
 		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
 		defer api.Close()
 
-		resp, err := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{
+		resp, err := api.GetSchemas(context.Background(), &vtadminpb.GetSchemasRequest{
 			TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 				AggregateSizes: true,
 			},
@@ -2539,8 +2536,7 @@ func TestGetSchemas(t *testing.T) {
 			// Clone schemas so our mutations below don't trip the race detector.
 			schemas := make([]*vtadminpb.Schema, len(resp.Schemas))
 			for i, schema := range resp.Schemas {
-				schema := proto.Clone(schema).(*vtadminpb.Schema)
-
+				schema := schema.CloneVT()
 				for _, td := range schema.TableDefinitions {
 					// Zero these out because they're non-deterministic and also not
 					// relevant to the final result.
@@ -2627,17 +2623,18 @@ func TestGetSrvKeyspace(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			tmc := testutil.TabletManagerClient{}
 
-			toposerver := memorytopo.NewServer(tt.cells...)
+			toposerver := memorytopo.NewServer(ctx, tt.cells...)
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return grpcvtctldserver.NewVtctldServer(ts)
@@ -2787,17 +2784,17 @@ func TestGetSrvKeyspaces(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
 			tmc := testutil.TabletManagerClient{}
 
-			toposerver := memorytopo.NewServer(tt.cells...)
+			toposerver := memorytopo.NewServer(ctx, tt.cells...)
 
 			for _, ks := range tt.keyspaces {
 				testutil.AddKeyspace(ctx, t, toposerver, ks)
@@ -2956,17 +2953,17 @@ func TestGetSrvVSchema(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
 			tmc := testutil.TabletManagerClient{}
 
-			toposerver := memorytopo.NewServer(tt.cells...)
+			toposerver := memorytopo.NewServer(ctx, tt.cells...)
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return grpcvtctldserver.NewVtctldServer(ts)
@@ -3250,17 +3247,17 @@ func TestGetSrvVSchemas(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
 			tmc := testutil.TabletManagerClient{}
 
-			toposerver := memorytopo.NewServer(tt.cells...)
+			toposerver := memorytopo.NewServer(ctx, tt.cells...)
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return grpcvtctldserver.NewVtctldServer(ts)
@@ -5099,13 +5096,13 @@ func TestVTExplain(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			toposerver := memorytopo.NewServer("c0_cell1")
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			toposerver := memorytopo.NewServer(ctx, "c0_cell1")
 
 			tmc := testutil.TabletManagerClient{
 				GetSchemaResults: map[string]struct {
@@ -5202,6 +5199,7 @@ func TestServeHTTP(t *testing.T) {
 			},
 		},
 	}.Cluster(context.Background())
+	defer testCluster.Close()
 
 	tests := []struct {
 		name                  string

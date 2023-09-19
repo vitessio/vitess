@@ -24,21 +24,17 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/mysql/collations"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -94,7 +90,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 	stringListToExprList := func(in []string) []evalengine.Expr {
 		var schema []evalengine.Expr
 		for _, s := range in {
-			schema = append(schema, evalengine.NewLiteralString([]byte(s), collations.TypedCollation{}))
+			schema = append(schema, evalengine.NewLiteralString([]byte(s), collations.SystemCollation))
 		}
 		return schema
 	}
@@ -109,7 +105,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 	tests := []testCase{{
 		testName:    "both schema and table predicates - routed table",
 		tableSchema: []string{"schema"},
-		tableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("table"), collations.TypedCollation{})},
+		tableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("table"), collations.SystemCollation)},
 		routed:      true,
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
@@ -118,7 +114,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 	}, {
 		testName:    "both schema and table predicates - not routed",
 		tableSchema: []string{"schema"},
-		tableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("table"), collations.TypedCollation{})},
+		tableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("table"), collations.SystemCollation)},
 		routed:      false,
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
@@ -127,7 +123,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 	}, {
 		testName:    "multiple schema and table predicates",
 		tableSchema: []string{"schema", "schema", "schema"},
-		tableName:   map[string]evalengine.Expr{"t1": evalengine.NewLiteralString([]byte("table"), collations.TypedCollation{}), "t2": evalengine.NewLiteralString([]byte("table"), collations.TypedCollation{}), "t3": evalengine.NewLiteralString([]byte("table"), collations.TypedCollation{})},
+		tableName:   map[string]evalengine.Expr{"t1": evalengine.NewLiteralString([]byte("table"), collations.SystemCollation), "t2": evalengine.NewLiteralString([]byte("table"), collations.SystemCollation), "t3": evalengine.NewLiteralString([]byte("table"), collations.SystemCollation)},
 		routed:      false,
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
@@ -137,7 +133,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" t1: type:VARCHAR value:\"table\" t2: type:VARCHAR value:\"table\" t3: type:VARCHAR value:\"table\"} false false"},
 	}, {
 		testName:  "table name predicate - routed table",
-		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.TypedCollation{})},
+		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.SystemCollation)},
 		routed:    true,
 		expectedLog: []string{
 			"FindTable(tableName)",
@@ -145,7 +141,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 			"ExecuteMultiShard routedKeyspace.1: dummy_select {table_name: type:VARCHAR value:\"routedTable\"} false false"},
 	}, {
 		testName:  "table name predicate - not routed",
-		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.TypedCollation{})},
+		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.SystemCollation)},
 		routed:    false,
 		expectedLog: []string{
 			"FindTable(tableName)",
@@ -660,7 +656,7 @@ func TestSelectLike(t *testing.T) {
 
 	sel.Vindex = vindex
 	sel.Values = []evalengine.Expr{
-		evalengine.NewLiteralString([]byte("a%"), collations.TypedCollation{}),
+		evalengine.NewLiteralString([]byte("a%"), collations.SystemCollation),
 	}
 	// md5("a") = 0cc175b9c0f1b6a831c399e269772661
 	// keyspace id prefix for "a" is 0x0c
@@ -690,7 +686,7 @@ func TestSelectLike(t *testing.T) {
 	vc.Rewind()
 
 	sel.Values = []evalengine.Expr{
-		evalengine.NewLiteralString([]byte("ab%"), collations.TypedCollation{}),
+		evalengine.NewLiteralString([]byte("ab%"), collations.SystemCollation),
 	}
 	// md5("b") = 92eb5ffee6ae2fec3ad71c777531578f
 	// keyspace id prefix for "ab" is 0x0c92
@@ -1081,6 +1077,7 @@ func TestRouteSortCollation(t *testing.T) {
 
 	sel.OrderBy = []OrderByParams{{
 		Col:         0,
+		Type:        sqltypes.VarChar,
 		CollationID: collationID,
 	}}
 
@@ -1147,6 +1144,7 @@ func TestRouteSortCollation(t *testing.T) {
 	t.Run("Error when Unknown Collation", func(t *testing.T) {
 		sel.OrderBy = []OrderByParams{{
 			Col:         0,
+			Type:        sqltypes.Unknown,
 			CollationID: collations.Unknown,
 		}}
 
@@ -1439,7 +1437,7 @@ func TestExecFail(t *testing.T) {
 		expectResult(t, "sel.Execute", result, defaultSelectResult)
 
 		vc.Rewind()
-		vc.resultErr = mysql.NewSQLError(mysql.ERQueryInterrupted, "", "query timeout -20")
+		vc.resultErr = sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, "", "query timeout -20")
 		// test when there is order by column
 		sel.OrderBy = []OrderByParams{{
 			WeightStringCol: -1,
@@ -1447,7 +1445,7 @@ func TestExecFail(t *testing.T) {
 		}}
 		_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 		require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
-		vc.ExpectWarnings(t, []*querypb.QueryWarning{{Code: uint32(mysql.ERQueryInterrupted), Message: "query timeout -20 (errno 1317) (sqlstate HY000)"}})
+		vc.ExpectWarnings(t, []*querypb.QueryWarning{{Code: uint32(sqlerror.ERQueryInterrupted), Message: "query timeout -20 (errno 1317) (sqlstate HY000)"}})
 	})
 }
 

@@ -154,9 +154,8 @@ oltpReadPool:
   idleTimeoutSeconds: 30m0s
   maxWaiters: 5000
   size: 16
-queryCacheLFU: true
+queryCacheDoorkeeper: true
 queryCacheMemory: 33554432
-queryCacheSize: 5000
 replicationTracker:
   heartbeatIntervalSeconds: 250ms
   mode: disable
@@ -381,13 +380,6 @@ func TestVerifyTxThrottlerConfig(t *testing.T) {
 			ExpectedErrorCode: vtrpcpb.Code_INVALID_ARGUMENT,
 			EnableTxThrottler: true,
 			TxThrottlerConfig: &TxThrottlerConfigFlag{invalidMaxReplicationLagModuleConfig},
-		},
-		{
-			// enabled without cells defined
-			Name:              "enabled without cells",
-			ExpectedErrorCode: vtrpcpb.Code_FAILED_PRECONDITION,
-			EnableTxThrottler: true,
-			TxThrottlerConfig: &TxThrottlerConfigFlag{defaultMaxReplicationLagModuleConfig},
 		},
 		{
 			// enabled with good config (default/replica tablet type)

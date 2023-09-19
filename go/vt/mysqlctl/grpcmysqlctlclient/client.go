@@ -26,6 +26,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -41,9 +42,14 @@ type client struct {
 
 func factory(network, addr string) (mysqlctlclient.MysqlctlClient, error) {
 	// create the RPC client
-	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), grpc.WithInsecure(), grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) { //nolint:staticcheck
-		return net.DialTimeout(network, addr, timeout)
-	}))
+	cc, err := grpcclient.Dial(
+		addr,
+		grpcclient.FailFast(false),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(ctx context.Context, addr string,
+		) (net.Conn, error) {
+			return new(net.Dialer).DialContext(ctx, network, addr)
+		}))
 	if err != nil {
 		return nil, err
 	}
@@ -84,15 +90,20 @@ func (c *client) RunMysqlUpgrade(ctx context.Context) error {
 }
 
 // ApplyBinlogFile is part of the MysqlctlClient interface.
-func (c *client) ApplyBinlogFile(ctx context.Context, binlogFileName, binlogRestorePosition string) error {
-	req := &mysqlctlpb.ApplyBinlogFileRequest{
-		BinlogFileName:        binlogFileName,
-		BinlogRestorePosition: binlogRestorePosition,
-	}
+func (c *client) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error {
 	return c.withRetry(ctx, func() error {
 		_, err := c.c.ApplyBinlogFile(ctx, req)
 		return err
 	})
+}
+
+// ReadBinlogFilesTimestamps is part of the MysqlctlClient interface.
+func (c *client) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (resp *mysqlctlpb.ReadBinlogFilesTimestampsResponse, err error) {
+	err = c.withRetry(ctx, func() error {
+		resp, err = c.c.ReadBinlogFilesTimestamps(ctx, req)
+		return err
+	})
+	return resp, err
 }
 
 // ReinitConfig is part of the MysqlctlClient interface.
@@ -109,6 +120,20 @@ func (c *client) RefreshConfig(ctx context.Context) error {
 		_, err := c.c.RefreshConfig(ctx, &mysqlctlpb.RefreshConfigRequest{})
 		return err
 	})
+}
+
+// VersionString is part of the MysqlctlClient interface.
+func (c *client) VersionString(ctx context.Context) (string, error) {
+	var version string
+	err := c.withRetry(ctx, func() error {
+		r, err := c.c.VersionString(ctx, &mysqlctlpb.VersionStringRequest{})
+		if err != nil {
+			return err
+		}
+		version = r.Version
+		return nil
+	})
+	return version, err
 }
 
 // Close is part of the MysqlctlClient interface.

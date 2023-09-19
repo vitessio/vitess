@@ -103,17 +103,16 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 
 			// Check if it's an aggregate expression
 			if expr, ok := selExpr.Expr.(sqlparser.AggrFunc); ok {
-				switch fname := strings.ToLower(expr.AggrName()); fname {
+				switch fname := expr.AggrName(); fname {
 				case "count", "sum":
 					// this will only work as long as aggregates can be pushed down to tablets
 					// this won't work: "select count(*) from (select id from t limit 1)"
 					// since vreplication only handles simple tables (no joins/derived tables) this is fine for now
 					// but will need to be revisited when we add such support to vreplication
-					aggregateFuncType := "sum"
-					aggregates = append(aggregates, &engine.AggregateParams{
-						Opcode: opcode.SupportedAggregates[aggregateFuncType],
-						Col:    len(sourceSelect.SelectExprs) - 1,
-					})
+					aggregates = append(aggregates, engine.NewAggregateParam(
+						/*opcode*/ opcode.AggregateSum,
+						/*offset*/ len(sourceSelect.SelectExprs)-1,
+						/*alias*/ ""))
 				}
 			}
 		default:

@@ -21,12 +21,11 @@ import (
 	"fmt"
 	"strconv"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 const (
@@ -65,7 +64,7 @@ const (
 func getLastLog(dbClient *vdbClient, vreplID int32) (id int64, typ, state, message string, err error) {
 	var qr *sqltypes.Result
 	query := fmt.Sprintf("select id, type, state, message from %s.vreplication_log where vrepl_id = %d order by id desc limit 1",
-		sidecardb.GetIdentifier(), vreplID)
+		sidecar.GetIdentifier(), vreplID)
 	if qr, err = dbClient.Execute(query); err != nil {
 		return 0, "", "", "", err
 	}
@@ -73,7 +72,7 @@ func getLastLog(dbClient *vdbClient, vreplID int32) (id int64, typ, state, messa
 		return 0, "", "", "", nil
 	}
 	row := qr.Rows[0]
-	id, _ = evalengine.ToInt64(row[0])
+	id, _ = row[0].ToCastInt64()
 	typ = row[1].ToString()
 	state = row[2].ToString()
 	message = row[3].ToString()
@@ -93,11 +92,11 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 	}
 	var query string
 	if id > 0 && message == lastLogMessage {
-		query = fmt.Sprintf("update %s.vreplication_log set count = count + 1 where id = %d", sidecardb.GetIdentifier(), id)
+		query = fmt.Sprintf("update %s.vreplication_log set count = count + 1 where id = %d", sidecar.GetIdentifier(), id)
 	} else {
 		buf := sqlparser.NewTrackedBuffer(nil)
 		buf.Myprintf("insert into %s.vreplication_log(vrepl_id, type, state, message) values(%s, %s, %s, %s)",
-			sidecardb.GetIdentifier(), strconv.Itoa(int(vreplID)), encodeString(typ), encodeString(state), encodeString(message))
+			sidecar.GetIdentifier(), strconv.Itoa(int(vreplID)), encodeString(typ), encodeString(state), encodeString(message))
 		query = buf.ParsedQuery().Query
 	}
 	if _, err = dbClient.ExecuteFetch(query, 10000); err != nil {
@@ -124,72 +123,92 @@ func isUnrecoverableError(err error) bool {
 	if err == nil {
 		return false
 	}
-	sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 	if !isSQLErr {
 		return false
 	}
-	if sqlErr.Num == mysql.ERUnknownError {
+	if sqlErr.Num == sqlerror.ERUnknownError {
 		return false
 	}
 	switch sqlErr.Num {
 	case
 		// in case-insensitive alphabetical order
-		mysql.ERAccessDeniedError,
-		mysql.ERBadFieldError,
-		mysql.ERBadNullError,
-		mysql.ERCantDropFieldOrKey,
-		mysql.ERDataOutOfRange,
-		mysql.ERDataTooLong,
-		mysql.ERDBAccessDenied,
-		mysql.ERDupEntry,
-		mysql.ERDupFieldName,
-		mysql.ERDupKeyName,
-		mysql.ERDupUnique,
-		mysql.ERFeatureDisabled,
-		mysql.ERFunctionNotDefined,
-		mysql.ERIllegalValueForType,
-		mysql.ERInvalidCastToJSON,
-		mysql.ERInvalidJSONBinaryData,
-		mysql.ERInvalidJSONCharset,
-		mysql.ERInvalidJSONText,
-		mysql.ERInvalidJSONTextInParams,
-		mysql.ERJSONDocumentTooDeep,
-		mysql.ERJSONValueTooBig,
-		mysql.ERNoDefault,
-		mysql.ERNoDefaultForField,
-		mysql.ERNonUniq,
-		mysql.ERNonUpdateableTable,
-		mysql.ERNoSuchTable,
-		mysql.ERNotAllowedCommand,
-		mysql.ERNotSupportedYet,
-		mysql.EROptionPreventsStatement,
-		mysql.ERParseError,
-		mysql.ERPrimaryCantHaveNull,
-		mysql.ErrCantCreateGeometryObject,
-		mysql.ErrGISDataWrongEndianess,
-		mysql.ErrNonPositiveRadius,
-		mysql.ErrNotImplementedForCartesianSRS,
-		mysql.ErrNotImplementedForProjectedSRS,
-		mysql.ErrWrongValueForType,
-		mysql.ERSPDoesNotExist,
-		mysql.ERSpecifiedAccessDenied,
-		mysql.ERSyntaxError,
-		mysql.ERTooBigRowSize,
-		mysql.ERTooBigSet,
-		mysql.ERTruncatedWrongValue,
-		mysql.ERTruncatedWrongValueForField,
-		mysql.ERUnknownCollation,
-		mysql.ERUnknownProcedure,
-		mysql.ERUnknownTable,
-		mysql.ERWarnDataOutOfRange,
-		mysql.ERWarnDataTruncated,
-		mysql.ERWrongFKDef,
-		mysql.ERWrongFieldSpec,
-		mysql.ERWrongParamCountToProcedure,
-		mysql.ERWrongParametersToProcedure,
-		mysql.ERWrongUsage,
-		mysql.ERWrongValue,
-		mysql.ERWrongValueCountOnRow:
+		sqlerror.ERAccessDeniedError,
+		sqlerror.ERBadFieldError,
+		sqlerror.ERBadNullError,
+		sqlerror.ERCantDropFieldOrKey,
+		sqlerror.ERDataOutOfRange,
+		sqlerror.ERDataTooLong,
+		sqlerror.ERDBAccessDenied,
+		sqlerror.ERDupEntry,
+		sqlerror.ERDupFieldName,
+		sqlerror.ERDupKeyName,
+		sqlerror.ERDupUnique,
+		sqlerror.ERFeatureDisabled,
+		sqlerror.ERFunctionNotDefined,
+		sqlerror.ERIllegalValueForType,
+		sqlerror.ERInvalidCastToJSON,
+		sqlerror.ERInvalidJSONBinaryData,
+		sqlerror.ERInvalidJSONCharset,
+		sqlerror.ERInvalidJSONText,
+		sqlerror.ERInvalidJSONTextInParams,
+		sqlerror.ERJSONDocumentTooDeep,
+		sqlerror.ERJSONValueTooBig,
+		sqlerror.ERRegexpError,
+		sqlerror.ERRegexpStringNotTerminated,
+		sqlerror.ERRegexpIllegalArgument,
+		sqlerror.ERRegexpIndexOutOfBounds,
+		sqlerror.ERRegexpInternal,
+		sqlerror.ERRegexpRuleSyntax,
+		sqlerror.ERRegexpBadEscapeSequence,
+		sqlerror.ERRegexpUnimplemented,
+		sqlerror.ERRegexpMismatchParen,
+		sqlerror.ERRegexpBadInterval,
+		sqlerror.ERRRegexpMaxLtMin,
+		sqlerror.ERRegexpInvalidBackRef,
+		sqlerror.ERRegexpLookBehindLimit,
+		sqlerror.ERRegexpMissingCloseBracket,
+		sqlerror.ERRegexpInvalidRange,
+		sqlerror.ERRegexpStackOverflow,
+		sqlerror.ERRegexpTimeOut,
+		sqlerror.ERRegexpPatternTooBig,
+		sqlerror.ERRegexpInvalidCaptureGroup,
+		sqlerror.ERRegexpInvalidFlag,
+		sqlerror.ERNoDefault,
+		sqlerror.ERNoDefaultForField,
+		sqlerror.ERNonUniq,
+		sqlerror.ERNonUpdateableTable,
+		sqlerror.ERNoSuchTable,
+		sqlerror.ERNotAllowedCommand,
+		sqlerror.ERNotSupportedYet,
+		sqlerror.EROptionPreventsStatement,
+		sqlerror.ERParseError,
+		sqlerror.ERPrimaryCantHaveNull,
+		sqlerror.ErrCantCreateGeometryObject,
+		sqlerror.ErrGISDataWrongEndianess,
+		sqlerror.ErrNonPositiveRadius,
+		sqlerror.ErrNotImplementedForCartesianSRS,
+		sqlerror.ErrNotImplementedForProjectedSRS,
+		sqlerror.ErrWrongValueForType,
+		sqlerror.ERSPDoesNotExist,
+		sqlerror.ERSpecifiedAccessDenied,
+		sqlerror.ERSyntaxError,
+		sqlerror.ERTooBigRowSize,
+		sqlerror.ERTooBigSet,
+		sqlerror.ERTruncatedWrongValue,
+		sqlerror.ERTruncatedWrongValueForField,
+		sqlerror.ERUnknownCollation,
+		sqlerror.ERUnknownProcedure,
+		sqlerror.ERUnknownTable,
+		sqlerror.ERWarnDataOutOfRange,
+		sqlerror.ERWarnDataTruncated,
+		sqlerror.ERWrongFKDef,
+		sqlerror.ERWrongFieldSpec,
+		sqlerror.ERWrongParamCountToProcedure,
+		sqlerror.ERWrongParametersToProcedure,
+		sqlerror.ERWrongUsage,
+		sqlerror.ERWrongValue,
+		sqlerror.ERWrongValueCountOnRow:
 		log.Errorf("Got unrecoverable error: %v", sqlErr)
 		return true
 	}

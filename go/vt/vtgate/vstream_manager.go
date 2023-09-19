@@ -31,13 +31,10 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -580,12 +577,12 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					// Update table names and send.
 					// If we're streaming from multiple keyspaces, this will disambiguate
 					// duplicate table names.
-					ev := proto.Clone(event).(*binlogdatapb.VEvent)
+					ev := event.CloneVT()
 					ev.FieldEvent.TableName = sgtid.Keyspace + "." + ev.FieldEvent.TableName
 					sendevents = append(sendevents, ev)
 				case binlogdatapb.VEventType_ROW:
 					// Update table names and send.
-					ev := proto.Clone(event).(*binlogdatapb.VEvent)
+					ev := event.CloneVT()
 					ev.RowEvent.TableName = sgtid.Keyspace + "." + ev.RowEvent.TableName
 					sendevents = append(sendevents, ev)
 				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
@@ -703,7 +700,7 @@ func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, e
 				sgtid.Gtid = event.Gtid
 				events[j] = &binlogdatapb.VEvent{
 					Type:     binlogdatapb.VEventType_VGTID,
-					Vgtid:    proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+					Vgtid:    vs.vgtid.CloneVT(),
 					Keyspace: event.Keyspace,
 					Shard:    event.Shard,
 				}
@@ -732,7 +729,7 @@ func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, e
 				}
 				events[j] = &binlogdatapb.VEvent{
 					Type:     binlogdatapb.VEventType_VGTID,
-					Vgtid:    proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+					Vgtid:    vs.vgtid.CloneVT(),
 					Keyspace: event.Keyspace,
 					Shard:    event.Shard,
 				}

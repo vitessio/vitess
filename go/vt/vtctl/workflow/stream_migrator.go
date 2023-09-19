@@ -25,9 +25,9 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
@@ -262,7 +262,7 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 			continue
 		}
 
-		pos, err := mysql.DecodePosition(row["pos"].ToString())
+		pos, err := replication.DecodePosition(row["pos"].ToString())
 		if err != nil {
 			return nil, err
 		}
@@ -426,8 +426,8 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 	return nil
 }
 
-func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]mysql.Position, error) {
-	stopPositions := make(map[string]mysql.Position)
+func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]replication.Position, error) {
+	stopPositions := make(map[string]replication.Position)
 
 	for _, tabletStreams := range sm.streams {
 		for _, vrs := range tabletStreams {
@@ -455,7 +455,7 @@ func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]mys
 			}
 
 			wg.Add(1)
-			go func(vrs *VReplicationStream, shard string, pos mysql.Position) {
+			go func(vrs *VReplicationStream, shard string, pos replication.Position) {
 				defer wg.Done()
 				sm.ts.Logger().Infof("syncSourceStreams beginning of go func %s %s %+v %d", shard, vrs.BinlogSource.Shard, pos, vrs.ID)
 
@@ -471,14 +471,14 @@ func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]mys
 					return
 				}
 
-				query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for cutover' where id=%d", mysql.EncodePosition(pos), vrs.ID)
+				query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for cutover' where id=%d", replication.EncodePosition(pos), vrs.ID)
 				if _, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, primary.Tablet, query); err != nil {
 					allErrors.RecordError(err)
 					return
 				}
 
 				sm.ts.Logger().Infof("Waiting for keyspace:shard: %v:%v, position %v", sm.ts.SourceKeyspaceName(), shard, pos)
-				if err := sm.ts.TabletManagerClient().VReplicationWaitForPos(ctx, primary.Tablet, vrs.ID, mysql.EncodePosition(pos)); err != nil {
+				if err := sm.ts.TabletManagerClient().VReplicationWaitForPos(ctx, primary.Tablet, vrs.ID, replication.EncodePosition(pos)); err != nil {
 					allErrors.RecordError(err)
 					return
 				}
@@ -493,7 +493,7 @@ func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]mys
 	return stopPositions, allErrors.AggrError(vterrors.Aggregate)
 }
 
-func (sm *StreamMigrator) verifyStreamPositions(ctx context.Context, stopPositions map[string]mysql.Position) ([]string, error) {
+func (sm *StreamMigrator) verifyStreamPositions(ctx context.Context, stopPositions map[string]replication.Position) ([]string, error) {
 	var (
 		mu             sync.Mutex
 		stoppedStreams = make(map[string][]*VReplicationStream)
@@ -538,7 +538,7 @@ func (sm *StreamMigrator) verifyStreamPositions(ctx context.Context, stopPositio
 		for _, vrs := range tabletStreams {
 			key := fmt.Sprintf("%s:%s", vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard)
 			if pos := stopPositions[key]; !vrs.Position.Equal(pos) {
-				allErrors.RecordError(fmt.Errorf("%s: stream %d position: %s does not match %s", key, vrs.ID, mysql.EncodePosition(vrs.Position), mysql.EncodePosition(pos)))
+				allErrors.RecordError(fmt.Errorf("%s: stream %d position: %s does not match %s", key, vrs.ID, replication.EncodePosition(vrs.Position), replication.EncodePosition(pos)))
 			}
 		}
 	}
@@ -564,7 +564,7 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 	}
 
 	return sm.ts.ForAllTargets(func(target *MigrationTarget) error {
-		ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, target.GetPrimary().DbName())
+		ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, target.GetPrimary().DbName())
 		tabletStreams := VReplicationStreams(tmpl).Copy().ToSlice()
 
 		for _, vrs := range tabletStreams {
@@ -579,7 +579,7 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 				rule.Filter = buf.String()
 			}
 
-			ig.AddRow(vrs.Workflow, vrs.BinlogSource, mysql.EncodePosition(vrs.Position), "", "",
+			ig.AddRow(vrs.Workflow, vrs.BinlogSource, replication.EncodePosition(vrs.Position), "", "",
 				vrs.WorkflowType, vrs.WorkflowSubType, vrs.DeferSecondaryKeys)
 		}
 

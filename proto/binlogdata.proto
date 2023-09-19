@@ -222,6 +222,18 @@ enum VReplicationWorkflowType {
 enum VReplicationWorkflowSubType {
   None = 0;
   Partial = 1;
+  AtomicCopy = 2;
+}
+
+// VReplicationWorklfowState defines the valid states that a workflow can be in.
+enum VReplicationWorkflowState {
+  Unknown = 0;
+  Init = 1;
+  Stopped = 2;
+  Copying = 3;
+  Running = 4;
+  Error = 5;
+  Lagging = 6;
 }
 
 // BinlogSource specifies the source  and filter parameters for
@@ -328,6 +340,7 @@ message RowEvent {
   repeated RowChange row_changes = 2;
   string keyspace = 3;
   string shard = 4;
+  uint32 flags = 5; // https://dev.mysql.com/doc/dev/mysql-server/latest/classbinary__log_1_1Rows__event.html
 }
 
 // FieldEvent represents the field info for a table.
@@ -483,6 +496,24 @@ message VStreamRowsResponse {
   bool throttled = 6;
   // Heartbeat indicates that this is a heartbeat message
   bool heartbeat = 7;
+}
+
+
+// VStreamTablesRequest is the payload for VStreamTables
+message VStreamTablesRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  query.VTGateCallerID immediate_caller_id = 2;
+  query.Target target = 3;
+}
+
+// VStreamTablesResponse is the response from VStreamTables
+message VStreamTablesResponse {
+  string table_name = 1;
+  repeated query.Field fields = 2;
+  repeated query.Field pkfields = 3;
+  string gtid = 4;
+  repeated query.Row rows =  5;
+  query.Row lastpk = 6;
 }
 
 message LastPKEvent {

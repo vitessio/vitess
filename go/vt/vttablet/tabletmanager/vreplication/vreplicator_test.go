@@ -207,6 +207,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 	id := int32(1)
 	vsclient := newTabletConnector(tablet)
 	stats := binlogplayer.NewStats()
+	defer stats.Stop()
 	dbClient := playerEngine.dbClientFactoryFiltered()
 	err := dbClient.Connect()
 	require.NoError(t, err)
@@ -538,6 +539,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	id := int32(1)
 	vsclient := newTabletConnector(tablet)
 	stats := binlogplayer.NewStats()
+	defer stats.Stop()
 	dbaconn := playerEngine.dbClientFactoryDba()
 	err = dbaconn.Connect()
 	require.NoError(t, err)
@@ -624,6 +626,58 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	res, err = dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, id, tableName), 1)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(res.Rows))
+}
+
+// TestResumingFromPreviousWorkflowKeepingRowsCopied tests that when you
+// resume a workflow started by another tablet (eg. a reparent occurred),
+// the rows_copied does not reset to zero but continues along from where
+// it left off.
+func TestResumingFromPreviousWorkflowKeepingRowsCopied(t *testing.T) {
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	tablet := addTablet(100)
+	defer deleteTablet(tablet)
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "t1",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+	}
+	// The test env uses the same factory for both dba and
+	// filtered connections.
+	dbconfigs.GlobalDBConfigs.Filtered.User = "vt_dba"
+	id := int32(1)
+
+	vsclient := newTabletConnector(tablet)
+	stats := binlogplayer.NewStats()
+	defer stats.Stop()
+
+	dbaconn := playerEngine.dbClientFactoryDba()
+	err := dbaconn.Connect()
+	require.NoError(t, err)
+	defer dbaconn.Close()
+
+	dbClient := playerEngine.dbClientFactoryFiltered()
+	err = dbClient.Connect()
+	require.NoError(t, err)
+	defer dbClient.Close()
+
+	dbName := dbClient.DBName()
+	rowsCopied := int64(500000)
+	// Ensure there's an existing vreplication workflow
+	_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, rows_copied) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s', %v) on duplicate key update workflow='test', source='', pos='', max_tps=99999, max_replication_lag=99999, time_updated=0, transaction_timestamp=0, state='Running', db_name='%s', rows_copied=%v",
+		id, dbName, rowsCopied, dbName, rowsCopied), 1)
+	require.NoError(t, err)
+	defer func() {
+		_, err = dbClient.ExecuteFetch(fmt.Sprintf("delete from _vt.vreplication where id = %d", id), 1)
+		require.NoError(t, err)
+	}()
+	vr := newVReplicator(id, bls, vsclient, stats, dbClient, env.Mysqld, playerEngine)
+	assert.Equal(t, rowsCopied, vr.stats.CopyRowCount.Get())
 }
 
 // stripCruft removes all whitespace unicode chars and backticks.

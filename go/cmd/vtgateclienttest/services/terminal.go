@@ -17,10 +17,11 @@ limitations under the License.
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
-	"context"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/tb"
@@ -42,7 +43,7 @@ func newTerminalClient() *terminalClient {
 	return &terminalClient{}
 }
 
-func (c *terminalClient) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (c *terminalClient) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if sql == "quit://" {
 		log.Fatal("Received quit:// query. Going down.")
 	}
@@ -58,7 +59,7 @@ func (c *terminalClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Ses
 	return session, nil, errTerminal
 }
 
-func (c *terminalClient) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+func (c *terminalClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	return session, errTerminal
 }
 

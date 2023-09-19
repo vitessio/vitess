@@ -34,6 +34,14 @@ import "vtrpc.proto";
 // Data structures
 //
 
+// This structure allows us to manage tablet selection preferences
+// which are eventually passed to a TabletPicker.
+enum TabletSelectionPreference {
+  ANY = 0;
+  INORDER = 1;
+  UNKNOWN = 3; // Don't change any existing value
+}
+
 message TableDefinition {
   // the table name
   string name = 1;
@@ -211,6 +219,8 @@ message ApplySchemaRequest {
   SchemaDefinition before_schema = 4;
   SchemaDefinition after_schema = 5;
   string sql_mode = 6;
+  // BatchSize indicates how many queries to apply together
+  int64 batch_size = 7;
 }
 
 message ApplySchemaResponse {
@@ -478,6 +488,9 @@ message BackupRequest {
   // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
   // then the backup becomes incremental and applies as of given position.
   string incremental_from_pos = 3;
+  // UpgradeSafe indicates if the backup should be taken with innodb_fast_shutdown=0
+  // so that it's a backup that can be used for an upgrade.
+  bool upgrade_safe = 4;
 }
 
 message BackupResponse {
@@ -492,10 +505,81 @@ message RestoreFromBackupRequest {
   string restore_to_pos = 2;
   // Dry run does not actually performs the restore, but validates the steps and availability of backups
   bool dry_run = 3;
+  // RestoreToTimestamp, if given, requested an inremental restore up to (and excluding) the given timestamp.
+  // RestoreToTimestamp and RestoreToPos are mutually exclusive.
+  vttime.Time restore_to_timestamp = 4;
 }
 
 message RestoreFromBackupResponse {
   logutil.Event event = 1;
+}
+
+//
+// VReplication related messages
+//
+
+message CreateVReplicationWorkflowRequest {
+  string workflow = 1;
+  repeated binlogdata.BinlogSource binlog_source = 2;
+  // Optional parameters.
+  repeated string cells = 3;
+  // TabletTypes is the list of tablet types to use when selecting source tablets.
+  repeated topodata.TabletType tablet_types = 4;
+  TabletSelectionPreference tablet_selection_preference = 5;
+  binlogdata.VReplicationWorkflowType workflow_type = 6;
+  binlogdata.VReplicationWorkflowSubType workflow_sub_type = 7;
+  // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table
+  // copy finishes.
+  bool defer_secondary_keys = 8;
+  // AutoStart specifies if the workflow should be started when created.
+  bool auto_start = 9;
+  // Should the workflow stop after the copy phase.
+  bool stop_after_copy = 10;
+}
+
+message CreateVReplicationWorkflowResponse {
+  query.QueryResult result = 1;
+}
+
+message DeleteVReplicationWorkflowRequest {
+  string workflow = 1;
+}
+
+message DeleteVReplicationWorkflowResponse {
+  query.QueryResult result = 1;
+}
+
+message ReadVReplicationWorkflowRequest {
+  string workflow = 1;
+}
+
+message ReadVReplicationWorkflowResponse {
+  string workflow = 2;
+  string cells = 3;
+  repeated topodata.TabletType tablet_types = 4;
+  TabletSelectionPreference tablet_selection_preference = 5;
+  string db_name = 6;
+  string tags = 7;
+  binlogdata.VReplicationWorkflowType workflow_type = 8;
+  binlogdata.VReplicationWorkflowSubType workflow_sub_type = 9;
+  bool defer_secondary_keys = 10;
+  message Stream {
+    int32 id = 1;
+    binlogdata.BinlogSource bls = 2;
+    string pos = 3;
+    string stop_pos = 4;
+    int64 max_tps = 5;
+    int64 max_replication_lag = 6;
+    vttime.Time time_updated = 7;
+    vttime.Time transaction_timestamp = 8;
+    binlogdata.VReplicationWorkflowState state = 9;
+    string message = 10;
+    int64 rows_copied = 11;
+    vttime.Time time_heartbeat = 12;
+    vttime.Time time_throttled = 13;
+    string component_throttled = 14;
+  }
+  repeated Stream streams = 11;
 }
 
 message VDiffRequest {
@@ -544,13 +628,42 @@ message VDiffOptions {
   VDiffReportOptions report_options = 3;
 }
 
-message UpdateVRWorkflowRequest {
+message UpdateVReplicationWorkflowRequest {
   string workflow = 1;
   repeated string cells = 2;
-  repeated string tablet_types = 3;
-  binlogdata.OnDDLAction on_ddl = 4;
+  repeated topodata.TabletType tablet_types = 3;
+  TabletSelectionPreference tablet_selection_preference = 4;
+  binlogdata.OnDDLAction on_ddl = 5;
+  binlogdata.VReplicationWorkflowState state = 6;
 }
 
-message UpdateVRWorkflowResponse {
+message UpdateVReplicationWorkflowResponse {
   query.QueryResult result = 1;
+}
+
+message ResetSequencesRequest {
+  repeated string tables = 1;
+}
+
+message ResetSequencesResponse {
+}
+
+message CheckThrottlerRequest {
+  string app_name = 1;
+}
+
+message CheckThrottlerResponse {
+  // StatusCode is HTTP compliant response code (e.g. 200 for OK)
+  int32 status_code = 1;
+  // Value is the metric value collected by the tablet
+  double value = 2;
+  // Threshold is the throttling threshold the table was comparing the value with
+  double threshold = 3;
+  // Error indicates an error retrieving the value
+  string error = 4;
+  // Message 
+  string message = 5;
+  // RecentlyChecked indicates that the tablet has been hit with a user-facing check, which can then imply
+  // that heartbeats lease should be renwed.
+  bool recently_checked = 6;
 }

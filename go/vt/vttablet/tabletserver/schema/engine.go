@@ -22,27 +22,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
-	"golang.org/x/exp/maps"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/maps2"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -66,8 +69,8 @@ type Engine struct {
 	isOpen     bool
 	tables     map[string]*Table
 	lastChange int64
-	//the position at which the schema was last loaded. it is only used in conjunction with ReloadAt
-	reloadAtPos mysql.Position
+	// the position at which the schema was last loaded. it is only used in conjunction with ReloadAt
+	reloadAtPos replication.Position
 	notifierMu  sync.Mutex
 	notifiers   map[string]notifier
 	// isServingPrimary stores if this tablet is currently the serving primary or not.
@@ -150,7 +153,7 @@ func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnecti
 
 	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			_, err := conn.ExecuteFetch(sqlparser.BuildParsedQuery("use %s", sidecardb.GetIdentifier()).Query, maxRows, false)
+			_, err := conn.ExecuteFetch(sqlparser.BuildParsedQuery("use %s", sidecar.GetIdentifier()).Query, maxRows, false)
 			if err != nil {
 				return nil, err
 			}
@@ -192,7 +195,7 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 	if tabletType != topodatapb.TabletType_PRIMARY {
 		return err
 	}
-	if merr, isSQLErr := err.(*mysql.SQLError); !isSQLErr || merr.Num != mysql.ERBadDb {
+	if merr, isSQLErr := err.(*sqlerror.SQLError); !isSQLErr || merr.Num != sqlerror.ERBadDb {
 		return err
 	}
 
@@ -328,10 +331,7 @@ func (se *Engine) MakeNonPrimary() {
 	se.isServingPrimary = false
 	for _, t := range se.tables {
 		if t.SequenceInfo != nil {
-			t.SequenceInfo.Lock()
-			t.SequenceInfo.NextVal = 0
-			t.SequenceInfo.LastVal = 0
-			t.SequenceInfo.Unlock()
+			t.SequenceInfo.Reset()
 		}
 	}
 }
@@ -355,14 +355,14 @@ func (se *Engine) EnableHistorian(enabled bool) error {
 // The includeStats argument controls whether table size statistics should be
 // emitted, as they can be expensive to calculate for a large number of tables
 func (se *Engine) Reload(ctx context.Context) error {
-	return se.ReloadAt(ctx, mysql.Position{})
+	return se.ReloadAt(ctx, replication.Position{})
 }
 
 // ReloadAt reloads the schema info from the db.
 // Any tables that have changed since the last load are updated.
 // It maintains the position at which the schema was reloaded and if the same position is provided
 // (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
-func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
+func (se *Engine) ReloadAt(ctx context.Context, pos replication.Position) error {
 	return se.ReloadAtEx(ctx, pos, true)
 }
 
@@ -372,7 +372,7 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 // (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
 // The includeStats argument controls whether table size statistics should be
 // emitted, as they can be expensive to calculate for a large number of tables
-func (se *Engine) ReloadAtEx(ctx context.Context, pos mysql.Position, includeStats bool) error {
+func (se *Engine) ReloadAtEx(ctx context.Context, pos replication.Position, includeStats bool) error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if !se.isOpen {
@@ -380,7 +380,7 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos mysql.Position, includeSta
 		return nil
 	}
 	if !pos.IsZero() && se.reloadAtPos.AtLeast(pos) {
-		log.V(2).Infof("ReloadAtEx: found cached schema at %s", mysql.EncodePosition(pos))
+		log.V(2).Infof("ReloadAtEx: found cached schema at %s", replication.EncodePosition(pos))
 		return nil
 	}
 	if err := se.reload(ctx, includeStats); err != nil {
@@ -455,12 +455,12 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	for _, row := range tableData.Rows {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
-		createTime, _ := evalengine.ToInt64(row[2])
+		createTime, _ := row[2].ToCastInt64()
 		var fileSize, allocatedSize uint64
 
 		if includeStats {
-			fileSize, _ = evalengine.ToUint64(row[4])
-			allocatedSize, _ = evalengine.ToUint64(row[5])
+			fileSize, _ = row[4].ToCastUint64()
+			allocatedSize, _ = row[5].ToCastUint64()
 			// publish the size metrics
 			se.tableFileSizeGauge.Set(tableName, int64(fileSize))
 			se.tableAllocatedSizeGauge.Set(tableName, int64(allocatedSize))
@@ -496,8 +496,14 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		}
 
 		log.V(2).Infof("Reading schema for table: %s", tableName)
-		table, err := LoadTable(conn, se.cp.DBName(), tableName, row[1].String(), row[3].ToString())
+		tableType := row[1].String()
+		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString())
 		if err != nil {
+			if isView := strings.Contains(tableType, tmutils.TableView); isView {
+				log.Warningf("Failed reading schema for the view: %s, error: %v", tableName, err)
+				continue
+			}
+			// Non recoverable error:
 			rec.RecordError(vterrors.Wrapf(err, "in Engine.reload(), reading table %s", tableName))
 			continue
 		}
@@ -580,7 +586,7 @@ func (se *Engine) getDroppedTables(curTables map[string]bool, changedViews map[s
 		}
 	}
 
-	return maps.Values(dropped)
+	return maps2.Values(dropped)
 }
 
 func getTableData(ctx context.Context, conn *connpool.DBConn, includeStats bool) (*sqltypes.Result, error) {
@@ -600,7 +606,7 @@ func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.DBCon
 	}
 
 	if len(readRowsData.Rows) == 1 && len(readRowsData.Rows[0]) == 2 {
-		value, err := evalengine.ToInt64(readRowsData.Rows[0][1])
+		value, err := readRowsData.Rows[0][1].ToCastInt64()
 		if err != nil {
 			return err
 		}
@@ -621,7 +627,7 @@ func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, 
 	if len(tm.Rows) != 1 || len(tm.Rows[0]) != 1 || tm.Rows[0][0].IsNull() {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unexpected result for MySQL time: %+v", tm.Rows)
 	}
-	t, err := evalengine.ToInt64(tm.Rows[0][0])
+	t, err := tm.Rows[0][0].ToCastInt64()
 	if err != nil {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse time %v: %v", tm, err)
 	}
@@ -846,4 +852,20 @@ func extractNamesFromTablesList(tables []*Table) []string {
 		tableNames = append(tableNames, table.Name.String())
 	}
 	return tableNames
+}
+
+func (se *Engine) ResetSequences(tables []string) error {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	for _, tableName := range tables {
+		if table, ok := se.tables[tableName]; ok {
+			if table.SequenceInfo != nil {
+				log.Infof("Resetting sequence info for table %v: %s", tableName, table.SequenceInfo)
+				table.SequenceInfo.Reset()
+			}
+		} else {
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table %v not found in schema", tableName)
+		}
+	}
+	return nil
 }

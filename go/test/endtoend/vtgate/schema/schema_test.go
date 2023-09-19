@@ -107,6 +107,7 @@ func TestSchemaChange(t *testing.T) {
 	testWithAlterDatabase(t)
 	testWithDropCreateSchema(t)
 	testDropNonExistentTables(t)
+	testApplySchemaBatch(t)
 	testCreateInvalidView(t)
 	testCopySchemaShards(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, 2)
 	testCopySchemaShards(t, fmt.Sprintf("%s/0", keyspaceName), 3)
@@ -126,7 +127,6 @@ func testWithInitialSchema(t *testing.T) {
 
 	// Check if 4 tables are created
 	checkTables(t, totalTableCount)
-	checkTables(t, totalTableCount)
 
 	// Also match the vschema for those tablets
 	matchSchema(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, clusterInstance.Keyspaces[0].Shards[1].Vttablets[0].VttabletProcess.TabletPath)
@@ -144,7 +144,7 @@ func testWithAlterSchema(t *testing.T) {
 func testWithAlterDatabase(t *testing.T) {
 	sql := "create database alter_database_test; alter database alter_database_test default character set = utf8mb4; drop database alter_database_test"
 	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sql)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 // testWithDropCreateSchema , we should be able to drop and create same schema
@@ -158,7 +158,7 @@ func testWithAlterDatabase(t *testing.T) {
 func testWithDropCreateSchema(t *testing.T) {
 	dropCreateTable := fmt.Sprintf("DROP TABLE vt_select_test_%02d ;", 2) + fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", 2))
 	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, dropCreateTable)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	checkTables(t, totalTableCount)
 }
 
@@ -222,6 +222,33 @@ func testCreateInvalidView(t *testing.T) {
 		output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "--ddl_strategy", ddlStrategy, "--sql", createInvalidView, keyspaceName)
 		require.Error(t, err)
 		assert.Contains(t, output, "doesn't exist (errno 1146)")
+	}
+}
+
+func testApplySchemaBatch(t *testing.T) {
+	{
+		sqls := "create table batch1(id int primary key);create table batch2(id int primary key);create table batch3(id int primary key);create table batch4(id int primary key);create table batch5(id int primary key);"
+		_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "--sql", sqls, "--batch_size", "2", keyspaceName)
+		require.NoError(t, err)
+		checkTables(t, totalTableCount+5)
+	}
+	{
+		sqls := "drop table batch1; drop table batch2; drop table batch3; drop table batch4; drop table batch5"
+		_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "--sql", sqls, keyspaceName)
+		require.NoError(t, err)
+		checkTables(t, totalTableCount)
+	}
+	{
+		sqls := "create table batch1(id int primary key);create table batch2(id int primary key);create table batch3(id int primary key);create table batch4(id int primary key);create table batch5(id int primary key);"
+		_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "--ddl_strategy", "direct --allow-zero-in-date", "--sql", sqls, "--batch_size", "2", keyspaceName)
+		require.NoError(t, err)
+		checkTables(t, totalTableCount+5)
+	}
+	{
+		sqls := "drop table batch1; drop table batch2; drop table batch3; drop table batch4; drop table batch5"
+		_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "--sql", sqls, keyspaceName)
+		require.NoError(t, err)
+		checkTables(t, totalTableCount)
 	}
 }
 

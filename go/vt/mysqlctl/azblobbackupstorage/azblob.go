@@ -73,6 +73,14 @@ var (
 		},
 	)
 
+	azBlobBufferSize = viperutil.Configure(
+		configKey("buffer_size"),
+		viperutil.Options[int]{
+			Default:  100 << (10 * 2), // 100 MiB
+			FlagName: "azblob_buffer_size",
+		},
+	)
+
 	azBlobParallelism = viperutil.Configure(
 		configKey("parallelism"),
 		viperutil.Options[int]{
@@ -91,7 +99,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.String("azblob_backup_account_key_file", accountKeyFile.Default(), "Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).")
 	fs.String("azblob_backup_container_name", containerName.Default(), "Azure Blob Container Name.")
 	fs.String("azblob_backup_storage_root", storageRoot.Default(), "Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').")
-	fs.Int("azblob_backup_parallelism", azBlobParallelism.Default(), "Azure Blob operation parallelism (requires extra memory when increased).")
+	fs.Int("azblob_backup_buffer_size", azBlobBufferSize.Default(), "The memory buffer size to use in bytes, per file or stripe, when streaming to Azure Blob Service.")
+	fs.Int("azblob_backup_parallelism", azBlobParallelism.Default(), "Azure Blob operation parallelism (requires extra memory when increased -- a multiple of azblob_backup_buffer_size).")
 
 	viperutil.BindFlags(fs, accountName, accountKeyFile, containerName, storageRoot, azBlobParallelism)
 }
@@ -248,7 +257,7 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 	go func() {
 		defer bh.waitGroup.Done()
 		_, err := azblob.UploadStreamToBlockBlob(bh.ctx, reader, blockBlobURL, azblob.UploadStreamToBlockBlobOptions{
-			BufferSize: azblob.BlockBlobMaxStageBlockBytes,
+			BufferSize: azBlobBufferSize.Get(),
 			MaxBuffers: azBlobParallelism.Get(),
 		})
 		if err != nil {

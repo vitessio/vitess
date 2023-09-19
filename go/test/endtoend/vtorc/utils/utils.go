@@ -67,11 +67,10 @@ type CellInfo struct {
 
 // VTOrcClusterInfo stores the information for a cluster. This is supposed to be used only for VTOrc tests.
 type VTOrcClusterInfo struct {
-	ClusterInstance     *cluster.LocalProcessCluster
-	Ts                  *topo.Server
-	CellInfos           []*CellInfo
-	VtctldClientProcess *cluster.VtctldClientProcess
-	lastUsedValue       int
+	ClusterInstance *cluster.LocalProcessCluster
+	Ts              *topo.Server
+	CellInfos       []*CellInfo
+	lastUsedValue   int
 }
 
 // CreateClusterAndStartTopo starts the cluster and topology service
@@ -100,17 +99,13 @@ func CreateClusterAndStartTopo(cellInfos []*CellInfo) (*VTOrcClusterInfo, error)
 		return nil, err
 	}
 
-	// store the vtctldclient process
-	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
-
 	// create topo server connection
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
 	return &VTOrcClusterInfo{
-		ClusterInstance:     clusterInstance,
-		Ts:                  ts,
-		CellInfos:           cellInfos,
-		lastUsedValue:       100,
-		VtctldClientProcess: vtctldClientProcess,
+		ClusterInstance: clusterInstance,
+		Ts:              ts,
+		CellInfos:       cellInfos,
+		lastUsedValue:   100,
 	}, err
 }
 
@@ -208,10 +203,8 @@ func shutdownVttablets(clusterInfo *VTOrcClusterInfo) error {
 			}
 			// Remove the tablet record for this tablet
 		}
-		err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", vttablet.Alias)
-		if err != nil {
-			return err
-		}
+		// Ignoring error here because some tests delete tablets themselves.
+		_ = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", vttablet.Alias)
 	}
 	clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets = nil
 	return nil
@@ -307,8 +300,15 @@ func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numRep
 	if durability == "" {
 		durability = "none"
 	}
-	out, err := clusterInfo.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
+	out, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
 	require.NoError(t, err, out)
+	// VTOrc now uses shard record too, so we need to clear that as well for correct testing.
+	_, err = clusterInfo.Ts.UpdateShardFields(context.Background(), keyspaceName, shardName, func(info *topo.ShardInfo) error {
+		info.PrimaryTermStartTime = nil
+		info.PrimaryAlias = nil
+		return nil
+	})
+	require.NoError(t, err)
 
 	// start vtorc
 	StartVTOrcs(t, clusterInfo, orcExtraArgs, config, vtorcCount)
@@ -435,8 +435,8 @@ func CheckReplication(t *testing.T, clusterInfo *VTOrcClusterInfo, primary *clus
 				time.Sleep(100 * time.Millisecond)
 				break
 			}
-			confirmReplication(t, primary, replicas, time.Until(endTime), clusterInfo.lastUsedValue)
 			clusterInfo.lastUsedValue++
+			confirmReplication(t, primary, replicas, time.Until(endTime), clusterInfo.lastUsedValue)
 			validateTopology(t, clusterInfo, true, time.Until(endTime))
 			return
 		}
@@ -447,8 +447,8 @@ func CheckReplication(t *testing.T, clusterInfo *VTOrcClusterInfo, primary *clus
 // Call this function only after CheckReplication has been executed once, since that function creates the table that this function uses.
 func VerifyWritesSucceed(t *testing.T, clusterInfo *VTOrcClusterInfo, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
 	t.Helper()
-	confirmReplication(t, primary, replicas, timeToWait, clusterInfo.lastUsedValue)
 	clusterInfo.lastUsedValue++
+	confirmReplication(t, primary, replicas, timeToWait, clusterInfo.lastUsedValue)
 }
 
 func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration, valueToInsert int) {
@@ -481,6 +481,12 @@ func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*clu
 			return
 		}
 	}
+}
+
+// CheckTabletUptoDate verifies that the tablet has all the writes so far
+func CheckTabletUptoDate(t *testing.T, clusterInfo *VTOrcClusterInfo, tablet *cluster.Vttablet) {
+	err := checkInsertedValues(t, tablet, clusterInfo.lastUsedValue)
+	require.NoError(t, err)
 }
 
 func checkInsertedValues(t *testing.T, tablet *cluster.Vttablet, index int) error {
@@ -829,20 +835,17 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 		require.NoError(t, err)
 	}
 
-	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
-
-	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	require.NoError(t, err, out)
 
 	// create topo server connection
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 	clusterInfo := &VTOrcClusterInfo{
-		ClusterInstance:     clusterInstance,
-		Ts:                  ts,
-		CellInfos:           nil,
-		lastUsedValue:       100,
-		VtctldClientProcess: vtctldClientProcess,
+		ClusterInstance: clusterInstance,
+		Ts:              ts,
+		CellInfos:       nil,
+		lastUsedValue:   100,
 	}
 	return clusterInfo
 }
@@ -966,6 +969,13 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	assert.EqualValues(t, countExpected, successCount)
 }
 
+// WaitForTabletType waits for the tablet to reach a certain type.
+func WaitForTabletType(t *testing.T, tablet *cluster.Vttablet, expectedTabletType string) {
+	t.Helper()
+	err := tablet.VttabletProcess.WaitForTabletTypes([]string{expectedTabletType})
+	require.NoError(t, err)
+}
+
 // WaitForInstancePollSecondsExceededCount waits for 30 seconds and then queries api/aggregated-discovery-metrics.
 // It expects to find minimum occurrence or exact count of `keyName` provided.
 func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyName string, minCountExpected float64, enforceEquality bool) {
@@ -995,4 +1005,27 @@ func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluste
 		}
 	}
 	assert.Fail(t, "invalid response from api/aggregated-discovery-metrics")
+}
+
+// PrintVTOrcLogsOnFailure prints the VTOrc logs on failure of the test.
+// This function is supposed to be called as the first defer command from the vtorc tests.
+func PrintVTOrcLogsOnFailure(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
+	// If the test has not failed, then we don't need to print anything.
+	if !t.Failed() {
+		return
+	}
+
+	log.Errorf("Printing VTOrc logs")
+	for _, vtorc := range clusterInstance.VTOrcProcesses {
+		if vtorc == nil || vtorc.LogFileName == "" {
+			continue
+		}
+		filePath := path.Join(vtorc.LogDir, vtorc.LogFileName)
+		log.Errorf("Printing file - %s", filePath)
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			log.Errorf("Error while reading the file - %v", err)
+		}
+		log.Errorf("%s", string(content))
+	}
 }

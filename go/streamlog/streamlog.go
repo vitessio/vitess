@@ -262,18 +262,11 @@ func GetFormatter[T any](logger *StreamLogger[T]) LogFormatter {
 // ShouldEmitLog returns whether the log with the given SQL query
 // should be emitted or filtered
 func ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64) bool {
-	if queryLogRowThreshold > maxUint64(rowsAffected, rowsReturned) && queryLogFilterTag == "" {
+	if queryLogRowThreshold > max(rowsAffected, rowsReturned) && queryLogFilterTag == "" {
 		return false
 	}
 	if queryLogFilterTag != "" {
 		return strings.Contains(sql, queryLogFilterTag)
 	}
 	return true
-}
-
-func maxUint64(a, b uint64) uint64 {
-	if a < b {
-		return b
-	}
-	return a
 }

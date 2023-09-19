@@ -40,3 +40,5 @@ mysqlctl \
  --tablet_uid $uid \
  --mysql_port $mysql_port \
  $action
+
+echo -e "MySQL for tablet $alias is running!"

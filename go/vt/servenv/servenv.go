@@ -29,6 +29,8 @@ limitations under the License.
 package servenv
 
 import (
+	"flag"
+	"fmt"
 	"net/url"
 	"os"
 	"os/signal"
@@ -38,6 +40,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/event"
@@ -351,6 +354,53 @@ func ParseFlags(cmd string) {
 	logutil.PurgeLogs()
 }
 
+// ParseFlagsForTests initializes flags but skips the version, filesystem
+// args and go flag related work.
+// Note: this should not be used outside of unit tests.
+func ParseFlagsForTests(cmd string) {
+	fs := GetFlagSetFor(cmd)
+	pflag.CommandLine = fs
+	pflag.Parse()
+	viperutil.BindFlags(fs)
+	loadViper(cmd)
+}
+
+// MoveFlagsToCobraCommand moves the servenv-registered flags to the flagset of
+// the given cobra command, then copies over the glog flags that otherwise
+// require manual transferring.
+func MoveFlagsToCobraCommand(cmd *cobra.Command) {
+	cmd.Flags().AddFlagSet(GetFlagSetFor(cmd.Use))
+	// glog flags, no better way to do this
+	_flag.PreventGlogVFlagFromClobberingVersionFlagShorthand(cmd.Flags())
+	cmd.Flags().AddGoFlag(flag.Lookup("logtostderr"))
+	cmd.Flags().AddGoFlag(flag.Lookup("log_backtrace_at"))
+	cmd.Flags().AddGoFlag(flag.Lookup("alsologtostderr"))
+	cmd.Flags().AddGoFlag(flag.Lookup("stderrthreshold"))
+	cmd.Flags().AddGoFlag(flag.Lookup("log_dir"))
+	cmd.Flags().AddGoFlag(flag.Lookup("vmodule"))
+
+	pflag.CommandLine = cmd.Flags()
+}
+
+// CobraPreRunE returns the common function that commands will need to load
+// viper infrastructure. It matches the signature of cobra's (Pre|Post)RunE-type
+// functions.
+func CobraPreRunE(cmd *cobra.Command, args []string) error {
+	_flag.TrickGlog()
+
+	watchCancel, err := viperutil.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("%s: failed to read in config: %s", cmd.Name(), err)
+	}
+
+	OnTerm(watchCancel)
+	HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
+
+	logutil.PurgeLogs()
+
+	return nil
+}
+
 // GetFlagSetFor returns the flag set for a given command.
 // This has to exported for the Vitess-operator to use
 func GetFlagSetFor(cmd string) *pflag.FlagSet {
@@ -467,4 +517,11 @@ func RegisterFlagsForTopoBinaries(registerFlags func(fs *pflag.FlagSet)) {
 	for _, cmd := range topoBinaries {
 		OnParseFor(cmd, registerFlags)
 	}
+}
+
+// TestingEndtoend is true when this Vitess binary is being ran as part of an endtoend test suite
+var TestingEndtoend = false
+
+func init() {
+	TestingEndtoend = os.Getenv("VTTEST") == "endtoend"
 }

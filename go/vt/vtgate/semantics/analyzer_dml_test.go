@@ -45,8 +45,8 @@ func TestUpdBindingColName(t *testing.T) {
 
 			updExpr := extractFromUpdateSet(upd, 0)
 			recursiveDeps := semTable.RecursiveDeps(updExpr.Name)
-			assert.Equal(t, T1, recursiveDeps, query)
-			assert.Equal(t, T1, semTable.DirectDeps(updExpr.Name), query)
+			assert.Equal(t, TS0, recursiveDeps, query)
+			assert.Equal(t, TS0, semTable.DirectDeps(updExpr.Name), query)
 			assert.Equal(t, 1, recursiveDeps.NumberOfTables(), "number of tables is wrong")
 
 			recursiveDeps = semTable.RecursiveDeps(updExpr.Expr)
@@ -73,13 +73,13 @@ func TestUpdBindingExpr(t *testing.T) {
 
 			updExpr := extractFromUpdateSet(upd, 0)
 			recursiveDeps := semTable.RecursiveDeps(updExpr.Name)
-			assert.Equal(t, T1, recursiveDeps, query)
-			assert.Equal(t, T1, semTable.DirectDeps(updExpr.Name), query)
+			assert.Equal(t, TS0, recursiveDeps, query)
+			assert.Equal(t, TS0, semTable.DirectDeps(updExpr.Name), query)
 			assert.Equal(t, 1, recursiveDeps.NumberOfTables(), "number of tables is wrong")
 
 			recursiveDeps = semTable.RecursiveDeps(updExpr.Expr)
-			assert.Equal(t, T1, recursiveDeps, query)
-			assert.Equal(t, T1, semTable.DirectDeps(updExpr.Expr), query)
+			assert.Equal(t, TS0, recursiveDeps, query)
+			assert.Equal(t, TS0, semTable.DirectDeps(updExpr.Expr), query)
 			assert.Equal(t, 1, recursiveDeps.NumberOfTables(), "number of tables is wrong")
 		})
 	}
@@ -102,8 +102,8 @@ func TestUpdSetSubquery(t *testing.T) {
 
 			updExpr := extractFromUpdateSet(upd, 0)
 			recursiveDeps := semTable.RecursiveDeps(updExpr.Name)
-			assert.Equal(t, T1, recursiveDeps, query)
-			assert.Equal(t, T1, semTable.DirectDeps(updExpr.Name), query)
+			assert.Equal(t, TS0, recursiveDeps, query)
+			assert.Equal(t, TS0, semTable.DirectDeps(updExpr.Name), query)
 			assert.Equal(t, 1, recursiveDeps.NumberOfTables(), "number of tables is wrong")
 
 			extractedSubqs := semTable.SubqueryMap[upd]
