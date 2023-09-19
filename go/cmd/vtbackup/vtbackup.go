@@ -457,8 +457,8 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	// Wait for replication to catch up.
 	var (
 		lastStatus replication.ReplicationStatus
-		status replication.ReplicationStatus
-		statusErr error
+		status     replication.ReplicationStatus
+		statusErr  error
 
 		waitStartTime = time.Now()
 	)
