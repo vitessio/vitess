@@ -150,9 +150,14 @@ func (rs *rowStreamer) buildPlan() error {
 		return err
 	}
 	ti := &Table{
-		Name:   st.Name,
-		Fields: st.Fields,
+		Name: st.Name,
 	}
+
+	ti.Fields, err = getFields(rs.ctx, rs.cp, st.Name, rs.cp.DBName(), st.Fields)
+	if err != nil {
+		return err
+	}
+
 	// The plan we build is identical to the one for vstreamer.
 	// This is because the row format of a read is identical
 	// to the row format of a binlog event. So, the same
