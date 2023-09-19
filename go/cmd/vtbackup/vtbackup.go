@@ -221,7 +221,7 @@ func main() {
 	// Initialize stats.
 	for phaseName, statuses := range phaseStatuses {
 		for _, status := range statuses {
-			phaseStatus.Set([]string{phaseName, status}, int64(0))
+			phaseStatus.Set([]string{phaseName, status}, 0)
 		}
 	}
 
