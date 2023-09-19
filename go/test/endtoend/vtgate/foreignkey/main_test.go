@@ -25,19 +25,19 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	vtParams        mysql.ConnParams
-	mysqlParams     mysql.ConnParams
-	shardedKs       = "ks"
-	unshardedKs     = "uks"
-	Cell            = "test"
+	clusterInstance   *cluster.LocalProcessCluster
+	vtParams          mysql.ConnParams
+	mysqlParams       mysql.ConnParams
+	vtgateGrpcAddress string
+	shardedKs         = "ks"
+	unshardedKs       = "uks"
+	Cell              = "test"
 	//go:embed sharded_schema.sql
 	shardedSchemaSQL string
 
@@ -140,6 +140,7 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
+		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
 
 		connParams, closer, err := utils.NewMySQL(clusterInstance, shardedKs, shardedSchemaSQL)
 		if err != nil {
