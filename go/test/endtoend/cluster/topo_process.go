@@ -98,6 +98,7 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 	topo.ErrorLog = errFile.Name()
 
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
+	topo.proc.Env = append(topo.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Starting etcd with command: %v", strings.Join(topo.proc.Args, " "))
 

@@ -378,6 +378,8 @@ func MoveFlagsToCobraCommand(cmd *cobra.Command) {
 	cmd.Flags().AddGoFlag(flag.Lookup("stderrthreshold"))
 	cmd.Flags().AddGoFlag(flag.Lookup("log_dir"))
 	cmd.Flags().AddGoFlag(flag.Lookup("vmodule"))
+
+	pflag.CommandLine = cmd.Flags()
 }
 
 // CobraPreRunE returns the common function that commands will need to load
@@ -515,4 +517,11 @@ func RegisterFlagsForTopoBinaries(registerFlags func(fs *pflag.FlagSet)) {
 	for _, cmd := range topoBinaries {
 		OnParseFor(cmd, registerFlags)
 	}
+}
+
+// TestingEndtoend is true when this Vitess binary is being ran as part of an endtoend test suite
+var TestingEndtoend = false
+
+func init() {
+	TestingEndtoend = os.Getenv("VTTEST") == "endtoend"
 }

@@ -629,7 +629,7 @@
           "Sharded": false
         },
         "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-        "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname /* VARCHAR */",
+        "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname /* VARCHAR */ and TABLE_SCHEMA = :__vtschemaname /* VARCHAR */",
         "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"main\")]",
         "Table": "INFORMATION_SCHEMA.`TABLES`"
       }
@@ -939,7 +939,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+            "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */",
             "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"Music\")]",
             "Table": "information_schema.`tables`"
           },
@@ -951,7 +951,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
-            "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ limit 1",
+            "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ limit 1",
             "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"user\")]",
             "Table": "information_schema.views"
           }
@@ -976,7 +976,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+            "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */",
             "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"Music\")]",
             "Table": "information_schema.`tables`"
           },
@@ -988,7 +988,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
-            "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ limit 1",
+            "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ limit 1",
             "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"user\")]",
             "Table": "information_schema.views"
           }

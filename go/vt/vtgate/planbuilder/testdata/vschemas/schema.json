@@ -734,6 +734,14 @@
               "name": "hash_vin"
             }
           ]
+        },
+        "s_tbl": {
+          "column_vindexes": [
+            {
+              "column": "col",
+              "name": "hash_vin"
+            }
+          ]
         }
       }
     },
@@ -748,7 +756,11 @@
         "u_tbl6": {},
         "u_tbl7": {},
         "u_tbl8": {},
-        "u_tbl9": {}
+        "u_tbl9": {},
+        "u_tbl": {},
+        "u_multicol_tbl1": {},
+        "u_multicol_tbl2": {},
+        "u_multicol_tbl3": {}
       }
     }
   }

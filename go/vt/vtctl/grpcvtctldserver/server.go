@@ -3002,6 +3002,24 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	}, nil
 }
 
+// ReshardCreate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCreateRequest) (resp *vtctldatapb.WorkflowStatusResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReshardCreate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("cells", req.Cells)
+	span.Annotate("source_shards", req.SourceShards)
+	span.Annotate("target_shards", req.TargetShards)
+	span.Annotate("tablet_types", req.TabletTypes)
+	span.Annotate("on_ddl", req.OnDdl)
+
+	resp, err = s.ws.ReshardCreate(ctx, req)
+	return resp, err
+}
 func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupRequest, stream vtctlservicepb.Vtctld_RestoreFromBackupServer) (err error) {
 	span, ctx := trace.NewSpan(stream.Context(), "VtctldServer.RestoreFromBackup")
 	defer span.Finish()
@@ -3268,7 +3286,7 @@ func (s *VtctldServer) SetShardTabletControl(ctx context.Context, req *vtctldata
 	defer unlock(&err)
 
 	si, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
-		return si.UpdateSourceDeniedTables(ctx, req.TabletType, req.Cells, req.Remove, req.DeniedTables)
+		return si.UpdateDeniedTables(ctx, req.TabletType, req.Cells, req.Remove, req.DeniedTables)
 	})
 
 	switch {

@@ -76,6 +76,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	vtctld.ErrorLog = errFile.Name()
 
 	vtctld.proc.Env = append(vtctld.proc.Env, os.Environ()...)
+	vtctld.proc.Env = append(vtctld.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Starting vtctld with command: %v", strings.Join(vtctld.proc.Args, " "))
 

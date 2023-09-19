@@ -128,6 +128,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	vtgate.proc.Stderr = errFile
 
 	vtgate.proc.Env = append(vtgate.proc.Env, os.Environ()...)
+	vtgate.proc.Env = append(vtgate.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Running vtgate with command: %v", strings.Join(vtgate.proc.Args, " "))
 

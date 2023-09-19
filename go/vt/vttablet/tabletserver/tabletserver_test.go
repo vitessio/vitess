@@ -2051,14 +2051,6 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.te.Pool().Timeout: %v, want %v", val, newDuration)
 	}
 
-	tsv.SetQueryPlanCacheCap(newSize)
-	if val := tsv.QueryPlanCacheCap(); val != newSize {
-		t.Errorf("QueryPlanCacheCap: %d, want %d", val, newSize)
-	}
-	if val := int(tsv.qe.QueryPlanCacheCap()); val != newSize {
-		t.Errorf("tsv.qe.QueryPlanCacheCap: %d, want %d", val, newSize)
-	}
-
 	tsv.SetMaxResultSize(newSize)
 	if val := tsv.MaxResultSize(); val != newSize {
 		t.Errorf("MaxResultSize: %d, want %d", val, newSize)

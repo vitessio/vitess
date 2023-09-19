@@ -19,6 +19,7 @@ package framework
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -38,6 +39,7 @@ type QueryClient struct {
 	target              *querypb.Target
 	server              *tabletserver.TabletServer
 	transactionID       int64
+	reservedIDMu        sync.Mutex
 	reservedID          int64
 	sessionStateChanges string
 }
@@ -112,6 +114,8 @@ func (client *QueryClient) Commit() error {
 func (client *QueryClient) Rollback() error {
 	defer func() { client.transactionID = 0 }()
 	rID, err := client.server.Rollback(client.ctx, client.target, client.transactionID)
+	client.reservedIDMu.Lock()
+	defer client.reservedIDMu.Unlock()
 	client.reservedID = rID
 	if err != nil {
 		return err
@@ -291,6 +295,8 @@ func (client *QueryClient) MessageAck(name string, ids []string) (int64, error) 
 
 // ReserveExecute performs a ReserveExecute.
 func (client *QueryClient) ReserveExecute(query string, preQueries []string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	client.reservedIDMu.Lock()
+	defer client.reservedIDMu.Unlock()
 	if client.reservedID != 0 {
 		return nil, errors.New("already reserved a connection")
 	}
