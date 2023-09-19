@@ -327,7 +327,7 @@ func (tr *ShardedRouting) Cost() int {
 	switch tr.RouteOpCode {
 	case engine.EqualUnique:
 		return 1
-	case engine.Equal:
+	case engine.Equal, engine.SubShard:
 		return 5
 	case engine.IN:
 		return 10
