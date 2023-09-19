@@ -26,8 +26,8 @@ import (
 )
 
 const (
-	JSONindent = "  "
-	JSONprefix = ""
+	jsonIndent = "  "
+	jsonPrefix = ""
 )
 
 // MarshalJSON marshals obj to a JSON string. It uses the jsonpb marshaler for
@@ -44,14 +44,14 @@ func MarshalJSON(obj any) ([]byte, error) {
 	case proto.Message:
 		m := protojson.MarshalOptions{
 			Multiline:       true,
-			Indent:          JSONindent,
+			Indent:          jsonIndent,
 			UseEnumNumbers:  true,
 			UseProtoNames:   true,
 			EmitUnpopulated: true,
 		}
 		return m.Marshal(obj)
 	default:
-		data, err := json.MarshalIndent(obj, JSONprefix, JSONindent)
+		data, err := json.MarshalIndent(obj, jsonPrefix, jsonIndent)
 		if err != nil {
 			return nil, fmt.Errorf("json.Marshal = %v", err)
 		}
@@ -67,14 +67,14 @@ func MarshalJSONPretty(obj any) ([]byte, error) {
 	case proto.Message:
 		m := protojson.MarshalOptions{
 			Multiline:       true,
-			Indent:          JSONindent,
+			Indent:          jsonIndent,
 			UseEnumNumbers:  false,
 			UseProtoNames:   true,
 			EmitUnpopulated: false, // elide zero value elements
 		}
 		return m.Marshal(obj)
 	default:
-		data, err := json.MarshalIndent(obj, JSONprefix, JSONindent)
+		data, err := json.MarshalIndent(obj, jsonPrefix, jsonIndent)
 		if err != nil {
 			return nil, fmt.Errorf("json.Marshal = %v", err)
 		}
