@@ -17,7 +17,6 @@
 package inst
 
 import (
-	"slices"
 	"testing"
 
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -46,9 +45,4 @@ func TestGetAnalysisInstanceType(t *testing.T) {
 		analysis := &ReplicationAnalysis{IsPrimary: true, IsCoPrimary: true}
 		require.Equal(t, string(analysis.GetAnalysisInstanceType()), "co-primary")
 	}
-}
-
-func TestAnalysisCodes(t *testing.T) {
-	require.False(t, slices.Contains(AnalysisCodes(), string(NoProblem)))
-	require.Equal(t, 26, len(AnalysisCodes()))
 }

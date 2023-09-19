@@ -60,38 +60,6 @@ const (
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
 )
 
-// AnalysisCodes returns all analysis codes except for `NoProblem`.
-func AnalysisCodes() []string {
-	return []string{
-		string(ClusterHasNoPrimary),
-		string(DeadPrimaryWithoutReplicas),
-		string(DeadPrimary),
-		string(DeadPrimaryAndReplicas),
-		string(DeadPrimaryAndSomeReplicas),
-		string(PrimaryHasPrimary),
-		string(PrimaryIsReadOnly),
-		string(PrimarySemiSyncMustBeSet),
-		string(PrimarySemiSyncMustNotBeSet),
-		string(ReplicaIsWritable),
-		string(NotConnectedToPrimary),
-		string(ConnectedToWrongPrimary),
-		string(ReplicationStopped),
-		string(ReplicaSemiSyncMustBeSet),
-		string(ReplicaSemiSyncMustNotBeSet),
-		string(UnreachablePrimaryWithLaggingReplicas),
-		string(UnreachablePrimary),
-		string(PrimarySingleReplicaNotReplicating),
-		string(PrimarySingleReplicaDead),
-		string(AllPrimaryReplicasNotReplicating),
-		string(AllPrimaryReplicasNotReplicatingOrDead),
-		string(LockedSemiSyncPrimaryHypothesis),
-		string(LockedSemiSyncPrimary),
-		string(PrimaryWithoutReplicas),
-		string(BinlogServerFailingToConnectToPrimary),
-		string(GraceFulPrimaryTakeover),
-	}
-}
-
 type StructureAnalysisCode string
 
 const (
