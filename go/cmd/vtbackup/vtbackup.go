@@ -455,10 +455,13 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	backupParams.BackupTime = time.Now()
 
 	// Wait for replication to catch up.
-	var lastStatus replication.ReplicationStatus
-	var status replication.ReplicationStatus
-	var statusErr error
-	waitStartTime := time.Now()
+	var (
+		lastStatus replication.ReplicationStatus
+		status replication.ReplicationStatus
+		statusErr error
+
+		waitStartTime = time.Now()
+	)
 	for {
 		select {
 		case <-ctx.Done():
