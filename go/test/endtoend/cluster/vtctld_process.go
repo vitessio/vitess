@@ -98,10 +98,11 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		select {
 		case err := <-vtctld.exit:
 			errBytes, ferr := os.ReadFile(vtctld.ErrorLog)
-			if ferr != nil {
+			if ferr == nil {
+				log.Errorf("vtctld error log contents:\n%s", string(errBytes))
+			} else {
 				log.Errorf("Failed to read the vtctld error log file %q: %v", vtctld.ErrorLog, ferr)
 			}
-			log.Errorf("vtctld error log contents:\n%s", string(errBytes))
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtctld.Name, err)
 		default:
 			time.Sleep(300 * time.Millisecond)

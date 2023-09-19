@@ -266,14 +266,14 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 		return nil
 	}
 	retries := 5
-	var downloadErr error
-	for i := 0; i <= retries; i++ {
-		if downloadErr = downloadFile(); downloadErr == nil {
+	var dlerr error
+	for i := 0; i < retries; i++ {
+		if dlerr = downloadFile(); dlerr == nil {
 			break
 		}
 	}
-	if downloadErr != nil {
-		return downloadErr
+	if dlerr != nil {
+		return dlerr
 	}
 
 	untarCmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("tar xvf %s -C %s --strip-components=1", file, path))

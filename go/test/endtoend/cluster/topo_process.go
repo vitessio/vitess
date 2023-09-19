@@ -128,10 +128,11 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 		select {
 		case err := <-topo.exit:
 			errBytes, ferr := os.ReadFile(topo.ErrorLog)
-			if ferr != nil {
+			if ferr == nil {
+				log.Errorf("%s error log contents:\n%s", topo.Binary, string(errBytes))
+			} else {
 				log.Errorf("Failed to read the %s error log file %q: %v", topo.Binary, topo.ErrorLog, ferr)
 			}
-			log.Errorf("%s error log contents:\n%s", topo.Binary, string(errBytes))
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", topo.Binary, err)
 		default:
 			time.Sleep(300 * time.Millisecond)

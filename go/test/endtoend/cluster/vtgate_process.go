@@ -151,10 +151,11 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		select {
 		case err := <-vtgate.exit:
 			errBytes, ferr := os.ReadFile(vtgate.ErrorLog)
-			if ferr != nil {
+			if ferr == nil {
+				log.Errorf("vtgate error log contents:\n%s", string(errBytes))
+			} else {
 				log.Errorf("Failed to read the vtgate error log file %q: %v", vtgate.ErrorLog, ferr)
 			}
-			log.Errorf("vtgate error log contents:\n%s", string(errBytes))
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtgate.Name, err)
 		default:
 			time.Sleep(300 * time.Millisecond)
