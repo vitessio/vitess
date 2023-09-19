@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sync2"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -95,34 +96,36 @@ func (jn *Join) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 
 // TryStreamExecute performs a streaming exec.
 func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	joinVars := make(map[string]*querypb.BindVariable)
-	err := vcursor.StreamExecutePrimitive(ctx, jn.Left, bindVars, wantfields, func(lresult *sqltypes.Result) error {
+	var fieldNeeded sync2.AtomicBool
+	fieldNeeded.Set(wantfields)
+	err := vcursor.StreamExecutePrimitive(ctx, jn.Left, bindVars, fieldNeeded.Get(), func(lresult *sqltypes.Result) error {
+		joinVars := make(map[string]*querypb.BindVariable)
 		for _, lrow := range lresult.Rows {
 			for k, col := range jn.Vars {
 				joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
 			}
-			rowSent := false
-			err := vcursor.StreamExecutePrimitive(ctx, jn.Right, combineVars(bindVars, joinVars), wantfields, func(rresult *sqltypes.Result) error {
+			var rowSent sync2.AtomicBool
+			err := vcursor.StreamExecutePrimitive(ctx, jn.Right, combineVars(bindVars, joinVars), fieldNeeded.Get(), func(rresult *sqltypes.Result) error {
 				result := &sqltypes.Result{}
-				if wantfields {
+				if fieldNeeded.Get() {
 					// This code is currently unreachable because the first result
 					// will always be just the field info, which will cause the outer
 					// wantfields code path to be executed. But this may change in the future.
-					wantfields = false
+					fieldNeeded.Set(false)
 					result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
 				}
 				for _, rrow := range rresult.Rows {
 					result.Rows = append(result.Rows, joinRows(lrow, rrow, jn.Cols))
 				}
 				if len(rresult.Rows) != 0 {
-					rowSent = true
+					rowSent.Set(true)
 				}
 				return callback(result)
 			})
 			if err != nil {
 				return err
 			}
-			if jn.Opcode == LeftJoin && !rowSent {
+			if jn.Opcode == LeftJoin && !rowSent.Get() {
 				result := &sqltypes.Result{}
 				result.Rows = [][]sqltypes.Value{joinRows(
 					lrow,
@@ -132,8 +135,8 @@ func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 				return callback(result)
 			}
 		}
-		if wantfields {
-			wantfields = false
+		if fieldNeeded.Get() {
+			fieldNeeded.Set(false)
 			for k := range jn.Vars {
 				joinVars[k] = sqltypes.NullBindVariable
 			}
