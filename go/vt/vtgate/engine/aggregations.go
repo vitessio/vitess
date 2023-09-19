@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
@@ -78,7 +76,7 @@ func (ap *AggregateParams) String() string {
 		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
 	}
 	if sqltypes.IsText(ap.Type) && ap.CollationID != collations.Unknown {
-		keyCol += " COLLATE " + ap.CollationID.Get().Name()
+		keyCol += " COLLATE " + collations.Local().LookupName(ap.CollationID)
 	}
 	dispOrigOp := ""
 	if ap.OrigOpcode != AggregateUnassigned && ap.OrigOpcode != ap.Opcode {
@@ -91,210 +89,358 @@ func (ap *AggregateParams) String() string {
 }
 
 func (ap *AggregateParams) typ(inputType querypb.Type) querypb.Type {
-	opCode := ap.Opcode
 	if ap.OrigOpcode != AggregateUnassigned {
-		opCode = ap.OrigOpcode
+		return ap.OrigOpcode.Type(inputType)
 	}
-	typ, _ := opCode.Type(&inputType)
-	return typ
+	return ap.Opcode.Type(inputType)
 }
 
-func convertRow(
-	fields []*querypb.Field,
-	row []sqltypes.Value,
-	aggregates []*AggregateParams,
-) (newRow []sqltypes.Value, curDistincts []sqltypes.Value) {
-	newRow = append(newRow, row...)
-	curDistincts = make([]sqltypes.Value, len(aggregates))
-	for index, aggr := range aggregates {
-		switch aggr.Opcode {
-		case AggregateCountStar:
-			newRow[aggr.Col] = countOne
-		case AggregateCount:
-			val := countOne
-			if row[aggr.Col].IsNull() {
-				val = countZero
-			}
-			newRow[aggr.Col] = val
-		case AggregateCountDistinct:
-			curDistincts[index] = findComparableCurrentDistinct(row, aggr)
-			// Type is int64. Ok to call MakeTrusted.
-			if row[aggr.KeyCol].IsNull() {
-				newRow[aggr.Col] = countZero
-			} else {
-				newRow[aggr.Col] = countOne
-			}
-		case AggregateSum:
-			if row[aggr.Col].IsNull() {
-				break
-			}
-			var err error
-			newRow[aggr.Col], err = sqltypes.Cast(row[aggr.Col], fields[aggr.Col].Type)
-			if err != nil {
-				newRow[aggr.Col] = sumZero
-			}
-		case AggregateSumDistinct:
-			curDistincts[index] = findComparableCurrentDistinct(row, aggr)
-			var err error
-			newRow[aggr.Col], err = sqltypes.Cast(row[aggr.Col], fields[aggr.Col].Type)
-			if err != nil {
-				newRow[aggr.Col] = sumZero
-			}
-		case AggregateGtid:
-			vgtid := &binlogdatapb.VGtid{}
-			vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{
-				Keyspace: row[aggr.Col-1].ToString(),
-				Shard:    row[aggr.Col+1].ToString(),
-				Gtid:     row[aggr.Col].ToString(),
-			})
-			data, _ := vgtid.MarshalVT()
-			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
-			newRow[aggr.Col] = val
-		case AggregateGroupConcat:
-			if !row[aggr.Col].IsNull() {
-				newRow[aggr.Col] = sqltypes.MakeTrusted(fields[aggr.Col].Type, []byte(row[aggr.Col].ToString()))
-			}
-		}
-	}
-	return newRow, curDistincts
+type aggregator interface {
+	add(row []sqltypes.Value) error
+	finish() sqltypes.Value
+	reset()
 }
 
-func merge(
-	fields []*querypb.Field,
-	row1, row2 []sqltypes.Value,
-	curDistincts []sqltypes.Value,
-	aggregates []*AggregateParams,
-) ([]sqltypes.Value, []sqltypes.Value, error) {
-	result := sqltypes.CopyRow(row1)
-	for index, aggr := range aggregates {
-		if aggr.Opcode.IsDistinct() {
-			if row2[aggr.KeyCol].IsNull() {
-				continue
-			}
-			cmp, err := evalengine.NullsafeCompare(curDistincts[index], row2[aggr.KeyCol], aggr.CollationID)
+type aggregatorDistinct struct {
+	column int
+	last   sqltypes.Value
+	coll   collations.ID
+}
+
+func (a *aggregatorDistinct) shouldReturn(row []sqltypes.Value) (bool, error) {
+	if a.column >= 0 {
+		if !a.last.IsNull() {
+			cmp, err := evalengine.NullsafeCompare(a.last, row[a.column], a.coll)
 			if err != nil {
-				return nil, nil, err
+				return true, err
 			}
 			if cmp == 0 {
-				continue
+				return true, nil
 			}
-			curDistincts[index] = findComparableCurrentDistinct(row2, aggr)
+		}
+		a.last = row[a.column]
+	}
+	return false, nil
+}
+
+func (a *aggregatorDistinct) reset() {
+	a.last = sqltypes.NULL
+}
+
+type aggregatorCount struct {
+	from     int
+	n        int64
+	distinct aggregatorDistinct
+}
+
+func (a *aggregatorCount) add(row []sqltypes.Value) error {
+	if row[a.from].IsNull() {
+		return nil
+	}
+	if ret, err := a.distinct.shouldReturn(row); ret {
+		return err
+	}
+	a.n++
+	return nil
+}
+
+func (a *aggregatorCount) finish() sqltypes.Value {
+	return sqltypes.NewInt64(a.n)
+}
+
+func (a *aggregatorCount) reset() {
+	a.n = 0
+	a.distinct.reset()
+}
+
+type aggregatorCountStar struct {
+	n int64
+}
+
+func (a *aggregatorCountStar) add(_ []sqltypes.Value) error {
+	a.n++
+	return nil
+}
+
+func (a *aggregatorCountStar) finish() sqltypes.Value {
+	return sqltypes.NewInt64(a.n)
+}
+
+func (a *aggregatorCountStar) reset() {
+	a.n = 0
+}
+
+type aggregatorMinMax struct {
+	from   int
+	minmax evalengine.MinMax
+}
+
+type aggregatorMin struct {
+	aggregatorMinMax
+}
+
+func (a *aggregatorMin) add(row []sqltypes.Value) (err error) {
+	return a.minmax.Min(row[a.from])
+}
+
+type aggregatorMax struct {
+	aggregatorMinMax
+}
+
+func (a *aggregatorMax) add(row []sqltypes.Value) (err error) {
+	return a.minmax.Max(row[a.from])
+}
+
+func (a *aggregatorMinMax) finish() sqltypes.Value {
+	return a.minmax.Result()
+}
+
+func (a *aggregatorMinMax) reset() {
+	a.minmax.Reset()
+}
+
+type aggregatorSum struct {
+	from     int
+	sum      evalengine.Sum
+	distinct aggregatorDistinct
+}
+
+func (a *aggregatorSum) add(row []sqltypes.Value) error {
+	if row[a.from].IsNull() {
+		return nil
+	}
+	if ret, err := a.distinct.shouldReturn(row); ret {
+		return err
+	}
+	return a.sum.Add(row[a.from])
+}
+
+func (a *aggregatorSum) finish() sqltypes.Value {
+	return a.sum.Result()
+}
+
+func (a *aggregatorSum) reset() {
+	a.sum.Reset()
+	a.distinct.reset()
+}
+
+type aggregatorScalar struct {
+	from    int
+	current sqltypes.Value
+	init    bool
+}
+
+func (a *aggregatorScalar) add(row []sqltypes.Value) error {
+	if !a.init {
+		a.current = row[a.from]
+		a.init = true
+	}
+	return nil
+}
+
+func (a *aggregatorScalar) finish() sqltypes.Value {
+	return a.current
+}
+
+func (a *aggregatorScalar) reset() {
+	a.current = sqltypes.NULL
+	a.init = false
+}
+
+type aggregatorGroupConcat struct {
+	from  int
+	type_ sqltypes.Type
+
+	concat []byte
+	n      int
+}
+
+func (a *aggregatorGroupConcat) add(row []sqltypes.Value) error {
+	if row[a.from].IsNull() {
+		return nil
+	}
+	if a.n > 0 {
+		a.concat = append(a.concat, ',')
+	}
+	a.concat = append(a.concat, row[a.from].Raw()...)
+	a.n++
+	return nil
+}
+
+func (a *aggregatorGroupConcat) finish() sqltypes.Value {
+	if a.n == 0 {
+		return sqltypes.NULL
+	}
+	return sqltypes.MakeTrusted(a.type_, a.concat)
+}
+
+func (a *aggregatorGroupConcat) reset() {
+	a.n = 0
+	a.concat = nil // not safe to reuse this byte slice as it's returned as MakeTrusted
+}
+
+type aggregatorGtid struct {
+	from   int
+	shards []*binlogdatapb.ShardGtid
+}
+
+func (a *aggregatorGtid) add(row []sqltypes.Value) error {
+	a.shards = append(a.shards, &binlogdatapb.ShardGtid{
+		Keyspace: row[a.from-1].ToString(),
+		Shard:    row[a.from+1].ToString(),
+		Gtid:     row[a.from].ToString(),
+	})
+	return nil
+}
+
+func (a *aggregatorGtid) finish() sqltypes.Value {
+	gtid := binlogdatapb.VGtid{ShardGtids: a.shards}
+	return sqltypes.NewVarChar(gtid.String())
+}
+
+func (a *aggregatorGtid) reset() {
+	a.shards = a.shards[:0] // safe to reuse because only the serialized form of a.shards is returned
+}
+
+type aggregationState []aggregator
+
+func (a aggregationState) add(row []sqltypes.Value) error {
+	for _, st := range a {
+		if err := st.add(row); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a aggregationState) finish() (row []sqltypes.Value) {
+	row = make([]sqltypes.Value, 0, len(a))
+	for _, st := range a {
+		row = append(row, st.finish())
+	}
+	return
+}
+
+func (a aggregationState) reset() {
+	for _, st := range a {
+		st.reset()
+	}
+}
+
+func isComparable(typ sqltypes.Type) bool {
+	if typ == sqltypes.Null || sqltypes.IsNumber(typ) || sqltypes.IsBinary(typ) {
+		return true
+	}
+	switch typ {
+	case sqltypes.Timestamp,
+		sqltypes.Date,
+		sqltypes.Time,
+		sqltypes.Datetime,
+		sqltypes.Enum,
+		sqltypes.Set,
+		sqltypes.TypeJSON,
+		sqltypes.Bit:
+		return true
+	}
+	return false
+}
+
+func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (aggregationState, []*querypb.Field, error) {
+	fields = slice.Map(fields, func(from *querypb.Field) *querypb.Field { return from.CloneVT() })
+
+	agstate := make([]aggregator, len(fields))
+	for _, aggr := range aggregates {
+		sourceType := fields[aggr.Col].Type
+		targetType := aggr.typ(sourceType)
+
+		var ag aggregator
+		var distinct = -1
+
+		if aggr.Opcode.IsDistinct() {
+			distinct = aggr.KeyCol
+			if aggr.WAssigned() && !isComparable(sourceType) {
+				distinct = aggr.WCol
+			}
 		}
 
-		var err error
+		if aggr.Opcode == AggregateMin || aggr.Opcode == AggregateMax {
+			if aggr.WAssigned() && !isComparable(sourceType) {
+				return nil, nil, vterrors.VT12001("min/max on types that are not comparable is not supported")
+			}
+		}
+
 		switch aggr.Opcode {
 		case AggregateCountStar:
-			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], countOne, fields[aggr.Col].Type)
-		case AggregateCount:
-			val := countOne
-			if row2[aggr.Col].IsNull() {
-				val = countZero
+			ag = &aggregatorCountStar{}
+
+		case AggregateCount, AggregateCountDistinct:
+			ag = &aggregatorCount{
+				from: aggr.Col,
+				distinct: aggregatorDistinct{
+					column: distinct,
+					coll:   aggr.CollationID,
+				},
 			}
-			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], val, fields[aggr.Col].Type)
-		case AggregateSum:
-			value := row1[aggr.Col]
-			v2 := row2[aggr.Col]
-			if value.IsNull() && v2.IsNull() {
-				result[aggr.Col] = sqltypes.NULL
-				break
+
+		case AggregateSum, AggregateSumDistinct:
+			var sum evalengine.Sum
+			switch aggr.OrigOpcode {
+			case AggregateCount, AggregateCountStar, AggregateCountDistinct:
+				sum = evalengine.NewSumOfCounts()
+			default:
+				sum = evalengine.NewAggregationSum(sourceType)
 			}
-			result[aggr.Col], err = evalengine.NullSafeAdd(value, v2, fields[aggr.Col].Type)
+
+			ag = &aggregatorSum{
+				from: aggr.Col,
+				sum:  sum,
+				distinct: aggregatorDistinct{
+					column: distinct,
+					coll:   aggr.CollationID,
+				},
+			}
+
 		case AggregateMin:
-			if aggr.WAssigned() && !row2[aggr.Col].IsComparable() {
-				return minMaxWeightStringError()
+			ag = &aggregatorMin{
+				aggregatorMinMax{
+					from:   aggr.Col,
+					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.CollationID),
+				},
 			}
-			result[aggr.Col], err = evalengine.Min(row1[aggr.Col], row2[aggr.Col], aggr.CollationID)
+
 		case AggregateMax:
-			if aggr.WAssigned() && !row2[aggr.Col].IsComparable() {
-				return minMaxWeightStringError()
+			ag = &aggregatorMax{
+				aggregatorMinMax{
+					from:   aggr.Col,
+					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.CollationID),
+				},
 			}
-			result[aggr.Col], err = evalengine.Max(row1[aggr.Col], row2[aggr.Col], aggr.CollationID)
-		case AggregateCountDistinct:
-			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], countOne, fields[aggr.Col].Type)
-		case AggregateSumDistinct:
-			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
+
 		case AggregateGtid:
-			vgtid := &binlogdatapb.VGtid{}
-			rowBytes, err := row1[aggr.Col].ToBytes()
-			if err != nil {
-				return nil, nil, err
-			}
-			err = vgtid.UnmarshalVT(rowBytes)
-			if err != nil {
-				return nil, nil, err
-			}
-			vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{
-				Keyspace: row2[aggr.Col-1].ToString(),
-				Shard:    row2[aggr.Col+1].ToString(),
-				Gtid:     row2[aggr.Col].ToString(),
-			})
-			data, _ := vgtid.MarshalVT()
-			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
-			result[aggr.Col] = val
+			ag = &aggregatorGtid{from: aggr.Col}
+
 		case AggregateAnyValue:
-			// we just grab the first value per grouping. no need to do anything more complicated here
+			ag = &aggregatorScalar{from: aggr.Col}
+
 		case AggregateGroupConcat:
-			if row2[aggr.Col].IsNull() {
-				break
-			}
-			if result[aggr.Col].IsNull() {
-				result[aggr.Col] = sqltypes.MakeTrusted(fields[aggr.Col].Type, []byte(row2[aggr.Col].ToString()))
-				break
-			}
-			concat := row1[aggr.Col].ToString() + "," + row2[aggr.Col].ToString()
-			result[aggr.Col] = sqltypes.MakeTrusted(fields[aggr.Col].Type, []byte(concat))
+			ag = &aggregatorGroupConcat{from: aggr.Col, type_: targetType}
+
 		default:
-			return nil, nil, fmt.Errorf("BUG: Unexpected opcode: %v", aggr.Opcode)
+			panic("BUG: unexpected Aggregation opcode")
 		}
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	return result, curDistincts, nil
-}
 
-func minMaxWeightStringError() ([]sqltypes.Value, []sqltypes.Value, error) {
-	return nil, nil, vterrors.VT12001("min/max on types that are not comparable is not supported")
-}
-
-func convertFinal(current []sqltypes.Value, aggregates []*AggregateParams) ([]sqltypes.Value, error) {
-	result := sqltypes.CopyRow(current)
-	for _, aggr := range aggregates {
-		switch aggr.Opcode {
-		case AggregateGtid:
-			vgtid := &binlogdatapb.VGtid{}
-			currentBytes, err := current[aggr.Col].ToBytes()
-			if err != nil {
-				return nil, err
-			}
-			err = vgtid.UnmarshalVT(currentBytes)
-			if err != nil {
-				return nil, err
-			}
-			result[aggr.Col] = sqltypes.NewVarChar(vgtid.String())
-		}
-	}
-	return result, nil
-}
-
-func convertFields(fields []*querypb.Field, aggrs []*AggregateParams) []*querypb.Field {
-	fields = slice.Map(fields, func(from *querypb.Field) *querypb.Field {
-		return proto.Clone(from).(*querypb.Field)
-	})
-	for _, aggr := range aggrs {
-		fields[aggr.Col].Type = aggr.typ(fields[aggr.Col].Type)
+		agstate[aggr.Col] = ag
+		fields[aggr.Col].Type = targetType
 		if aggr.Alias != "" {
 			fields[aggr.Col].Name = aggr.Alias
 		}
 	}
-	return fields
-}
 
-func findComparableCurrentDistinct(row []sqltypes.Value, aggr *AggregateParams) sqltypes.Value {
-	curDistinct := row[aggr.KeyCol]
-	if aggr.WAssigned() && !curDistinct.IsComparable() {
-		aggr.KeyCol = aggr.WCol
-		curDistinct = row[aggr.KeyCol]
+	for i, a := range agstate {
+		if a == nil {
+			agstate[i] = &aggregatorScalar{from: i}
+		}
 	}
-	return curDistinct
+
+	return agstate, fields, nil
 }

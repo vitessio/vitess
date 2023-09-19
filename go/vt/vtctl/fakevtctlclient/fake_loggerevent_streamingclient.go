@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/logutil"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -111,7 +112,7 @@ type streamResultAdapter struct {
 func (s *streamResultAdapter) Recv() (*logutilpb.Event, error) {
 	if s.index < len(s.lines) {
 		result := &logutilpb.Event{
-			Time:  logutil.TimeToProto(time.Now()),
+			Time:  protoutil.TimeToProto(time.Now()),
 			Level: logutilpb.Level_CONSOLE,
 			File:  "fakevtctlclient",
 			Line:  -1,

@@ -61,7 +61,7 @@ func NewTimings(name, help, label string, categories ...string) *Timings {
 	return t
 }
 
-// Reset will clear histograms: used during testing
+// Reset will clearStats histograms: used during testing
 func (t *Timings) Reset() {
 	t.mu.RLock()
 	t.histograms = make(map[string]*Histogram)

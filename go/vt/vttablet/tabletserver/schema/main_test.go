@@ -37,7 +37,7 @@ func getTestSchemaEngine(t *testing.T, schemaMaxAgeSeconds int64) (*Engine, *fak
 	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{})
 	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{})
 	AddFakeInnoDBReadRowsResult(db, 1)
-	se := newEngine(10, 10*time.Second, 10*time.Second, schemaMaxAgeSeconds, db)
+	se := newEngine(10*time.Second, 10*time.Second, schemaMaxAgeSeconds, db)
 	require.NoError(t, se.Open())
 	cancel := func() {
 		defer db.Close()

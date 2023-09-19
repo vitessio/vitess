@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/protoutil"
 
 	"vitess.io/vitess/go/stats"
 
@@ -154,7 +155,7 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 	startTime = time.Now()
 
 	req := &tabletmanagerdatapb.RestoreFromBackupRequest{
-		BackupTime: logutil.TimeToProto(backupTime),
+		BackupTime: protoutil.TimeToProto(backupTime),
 	}
 	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, req)
 	if err != nil {
@@ -184,12 +185,12 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("snapshot keyspace %v has no base_keyspace set", tablet.Keyspace))
 		}
 		keyspace = keyspaceInfo.BaseKeyspace
-		log.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, logutil.ProtoToTime(request.BackupTime))
+		log.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, protoutil.TimeFromProto(request.BackupTime).UTC())
 	}
 
-	startTime := logutil.ProtoToTime(request.BackupTime)
+	startTime := protoutil.TimeFromProto(request.BackupTime).UTC()
 	if startTime.IsZero() {
-		startTime = logutil.ProtoToTime(keyspaceInfo.SnapshotTime)
+		startTime = protoutil.TimeFromProto(keyspaceInfo.SnapshotTime).UTC()
 	}
 
 	params := mysqlctl.RestoreParams{
@@ -206,7 +207,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		DryRun:              request.DryRun,
 		Stats:               backupstats.RestoreStats(),
 	}
-	if request.RestoreToPos != "" && !logutil.ProtoToTime(request.RestoreToTimestamp).IsZero() {
+	if request.RestoreToPos != "" && !protoutil.TimeFromProto(request.RestoreToTimestamp).UTC().IsZero() {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--restore_to_pos and --restore_to_timestamp are mutually exclusive")
 	}
 	if request.RestoreToPos != "" {
@@ -216,7 +217,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		}
 		params.RestoreToPos = pos
 	}
-	if restoreToTimestamp := logutil.ProtoToTime(request.RestoreToTimestamp); !restoreToTimestamp.IsZero() {
+	if restoreToTimestamp := protoutil.TimeFromProto(request.RestoreToTimestamp).UTC(); !restoreToTimestamp.IsZero() {
 		// Restore to given timestamp
 		params.RestoreToTimestamp = restoreToTimestamp
 	}
@@ -637,18 +638,4 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos replication.P
 	}
 
 	return nil
-}
-
-func (tm *TabletManager) getLocalMetadataValues(tabletType topodatapb.TabletType) map[string]string {
-	tablet := tm.Tablet()
-	values := map[string]string{
-		"Alias":         topoproto.TabletAliasString(tablet.Alias),
-		"ClusterAlias":  fmt.Sprintf("%s.%s", tablet.Keyspace, tablet.Shard),
-		"DataCenter":    tablet.Alias.Cell,
-		"PromotionRule": "must_not",
-	}
-	if isPrimaryEligible(tabletType) {
-		values["PromotionRule"] = "neutral"
-	}
-	return values
 }

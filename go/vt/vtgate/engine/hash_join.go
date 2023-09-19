@@ -234,8 +234,8 @@ func (hj *HashJoin) NeedsTransaction() bool {
 }
 
 // Inputs implements the Primitive interface
-func (hj *HashJoin) Inputs() []Primitive {
-	return []Primitive{hj.Left, hj.Right}
+func (hj *HashJoin) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{hj.Left, hj.Right}, nil
 }
 
 // description implements the Primitive interface
@@ -246,9 +246,9 @@ func (hj *HashJoin) description() PrimitiveDescription {
 		"Predicate":         sqlparser.String(hj.ASTPred),
 		"ComparisonType":    hj.ComparisonType.String(),
 	}
-	coll := hj.Collation.Get()
-	if coll != nil {
-		other["Collation"] = coll.Name()
+	coll := hj.Collation
+	if coll != collations.Unknown {
+		other["Collation"] = collations.Local().LookupName(coll)
 	}
 	return PrimitiveDescription{
 		OperatorType: "Join",

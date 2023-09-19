@@ -50,6 +50,7 @@ import (
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog"
@@ -452,6 +453,10 @@ func (tm *TabletManager) Stop() {
 	tm.stopShardSync()
 	tm.stopRebuildKeyspace()
 
+	if tm.QueryServiceControl != nil {
+		tm.QueryServiceControl.Stats().Stop()
+	}
+
 	if tm.UpdateStream != nil {
 		tm.UpdateStream.Disable()
 	}
@@ -629,7 +634,7 @@ func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInf
 				// Update the primary term start time (current value is 0) because we
 				// assume that we are actually the PRIMARY and in case of a tiebreak,
 				// vtgate should prefer us.
-				tablet.PrimaryTermStartTime = logutil.TimeToProto(time.Now())
+				tablet.PrimaryTermStartTime = protoutil.TimeToProto(time.Now())
 			})
 		case err == nil:
 			if oldTablet.Type == topodatapb.TabletType_PRIMARY {

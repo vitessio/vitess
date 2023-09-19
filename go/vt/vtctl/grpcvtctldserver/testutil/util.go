@@ -24,8 +24,6 @@ import (
 	"fmt"
 	"testing"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/nettest"
 	"google.golang.org/grpc"
@@ -106,7 +104,7 @@ func WithTestServers(
 // could not be added. It shallow copies the proto struct to prevent XXX_ fields
 // from changing in the marshalling.
 func AddKeyspace(ctx context.Context, t *testing.T, ts *topo.Server, ks *vtctldatapb.Keyspace) {
-	err := ts.CreateKeyspace(ctx, ks.Name, proto.Clone(ks.Keyspace).(*topodatapb.Keyspace))
+	err := ts.CreateKeyspace(ctx, ks.Name, ks.Keyspace.CloneVT())
 	require.NoError(t, err)
 }
 
@@ -149,7 +147,8 @@ type AddTabletOptions struct {
 // shard to serving. If that shard record already has a serving primary, then
 // AddTablet will fail the test.
 func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topodatapb.Tablet, opts *AddTabletOptions) {
-	tablet = proto.Clone(tablet).(*topodatapb.Tablet)
+	t.Helper()
+	tablet = tablet.CloneVT()
 	if opts == nil {
 		opts = &AddTabletOptions{}
 	}
@@ -200,6 +199,7 @@ func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topod
 // AddTablets adds a list of tablets to the topology. See AddTablet for more
 // details.
 func AddTablets(ctx context.Context, t *testing.T, ts *topo.Server, opts *AddTabletOptions, tablets ...*topodatapb.Tablet) {
+	t.Helper()
 	for _, tablet := range tablets {
 		AddTablet(ctx, t, ts, tablet, opts)
 	}

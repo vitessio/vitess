@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -39,7 +40,7 @@ type FkCascade struct {
 	// Selection is the Primitive that is used to find the rows that are going to be modified in the child tables.
 	Selection Primitive
 	// Children is a list of child foreign key Primitives that are executed using rows from the Selection Primitive.
-	Children []FkChild
+	Children []*FkChild
 	// Parent is the Primitive that is executed after the children are modified.
 	Parent Primitive
 
@@ -167,19 +168,30 @@ func (fkc *FkCascade) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 }
 
 // Inputs implements the Primitive interface.
-func (fkc *FkCascade) Inputs() []Primitive {
-	inputs := []Primitive{fkc.Selection}
-	for _, child := range fkc.Children {
+func (fkc *FkCascade) Inputs() ([]Primitive, []map[string]any) {
+	var inputs []Primitive
+	var inputsMap []map[string]any
+	inputs = append(inputs, fkc.Selection)
+	inputsMap = append(inputsMap, map[string]any{
+		inputName: "Selection",
+	})
+	for idx, child := range fkc.Children {
+		inputsMap = append(inputsMap, map[string]any{
+			inputName: fmt.Sprintf("CascadeChild-%d", idx+1),
+			"BvName":  child.BVName,
+			"Cols":    child.Cols,
+		})
 		inputs = append(inputs, child.Exec)
 	}
 	inputs = append(inputs, fkc.Parent)
-	return inputs
+	inputsMap = append(inputsMap, map[string]any{
+		inputName: "Parent",
+	})
+	return inputs, inputsMap
 }
 
 func (fkc *FkCascade) description() PrimitiveDescription {
-	return PrimitiveDescription{
-		OperatorType: fkc.RouteType(),
-	}
+	return PrimitiveDescription{OperatorType: fkc.RouteType()}
 }
 
 var _ Primitive = (*FkCascade)(nil)

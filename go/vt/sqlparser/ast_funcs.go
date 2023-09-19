@@ -1050,6 +1050,11 @@ func (node *Select) GetLimit() *Limit {
 	return node.Limit
 }
 
+// GetLock returns the lock clause
+func (node *Select) GetLock() Lock {
+	return node.Lock
+}
+
 // SetLock sets the lock clause
 func (node *Select) SetLock(lock Lock) {
 	node.Lock = lock
@@ -1098,29 +1103,14 @@ func (node *Select) GetParsedComments() *ParsedComments {
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Select) AddWhere(expr Expr) {
-	if node.Where == nil {
-		node.Where = &Where{
-			Type: WhereClause,
-			Expr: expr,
-		}
-		return
-	}
-	exprs := SplitAndExpression(nil, node.Where.Expr)
-	node.Where.Expr = AndExpressions(append(exprs, expr)...)
+	node.Where = addPredicate(node.Where, expr)
 }
 
 // AddHaving adds the boolean expression to the
 // HAVING clause as an AND condition.
 func (node *Select) AddHaving(expr Expr) {
-	if node.Having == nil {
-		node.Having = &Where{
-			Type: HavingClause,
-			Expr: expr,
-		}
-		return
-	}
-	exprs := SplitAndExpression(nil, node.Having.Expr)
-	node.Having.Expr = AndExpressions(append(exprs, expr)...)
+	node.Having = addPredicate(node.Having, expr)
+	node.Having.Type = HavingClause
 }
 
 // AddGroupBy adds a grouping expression, unless it's already present
@@ -1137,17 +1127,27 @@ func (node *Select) AddGroupBy(expr Expr) {
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Update) AddWhere(expr Expr) {
-	if node.Where == nil {
-		node.Where = &Where{
+	node.Where = addPredicate(node.Where, expr)
+}
+
+func addPredicate(where *Where, pred Expr) *Where {
+	if where == nil {
+		return &Where{
 			Type: WhereClause,
-			Expr: expr,
+			Expr: pred,
 		}
-		return
 	}
-	node.Where.Expr = &AndExpr{
-		Left:  node.Where.Expr,
-		Right: expr,
+	where.Expr = &AndExpr{
+		Left:  where.Expr,
+		Right: pred,
 	}
+	return where
+}
+
+// AddWhere adds the boolean expression to the
+// WHERE clause as an AND condition.
+func (node *Delete) AddWhere(expr Expr) {
+	node.Where = addPredicate(node.Where, expr)
 }
 
 // AddOrder adds an order by element
@@ -1178,6 +1178,11 @@ func (node *Union) GetLimit() *Limit {
 // GetColumns gets the columns
 func (node *Union) GetColumns() SelectExprs {
 	return node.Left.GetColumns()
+}
+
+// GetLock returns the lock clause
+func (node *Union) GetLock() Lock {
+	return node.Lock
 }
 
 // SetLock sets the lock clause
@@ -1996,17 +2001,6 @@ func (node *ColName) CompliantName() string {
 	return node.Name.CompliantName()
 }
 
-// isExprAliasForCurrentTimeStamp returns true if the Expr provided is an alias for CURRENT_TIMESTAMP
-func isExprAliasForCurrentTimeStamp(expr Expr) bool {
-	switch node := expr.(type) {
-	case *FuncExpr:
-		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
-	case *CurTimeFuncExpr:
-		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
-	}
-	return false
-}
-
 // AtCount represents the '@' count in IdentifierCI
 type AtCount int
 
@@ -2169,19 +2163,6 @@ func (s SelectExprs) AllAggregation() bool {
 		}
 	}
 	return true
-}
-
-func isExprLiteral(expr Expr) bool {
-	switch expr := expr.(type) {
-	case *Literal:
-		return true
-	case BoolVal:
-		return true
-	case *UnaryExpr:
-		return isExprLiteral(expr.Expr)
-	default:
-		return false
-	}
 }
 
 // RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
@@ -2539,4 +2520,24 @@ func (v *visitor) visitAllSelects(in SelectStatement, f func(p *Select, idx int)
 		return v.visitAllSelects(sel.Right, f)
 	}
 	panic("switch should be exhaustive")
+}
+
+// IsRestrict returns true if the reference action is of restrict type.
+func (ra ReferenceAction) IsRestrict() bool {
+	switch ra {
+	case Restrict, NoAction, DefaultAction:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsLiteral returns true if the expression is of a literal type.
+func IsLiteral(expr Expr) bool {
+	switch expr.(type) {
+	case *Argument, *NullVal, BoolVal, *Literal:
+		return true
+	default:
+		return false
+	}
 }

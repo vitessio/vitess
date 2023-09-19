@@ -102,3 +102,7 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 	stats.QPSRates = exporter.NewRates("QPS", stats.QueryTimings, 15*60/5, 5*time.Second)
 	return stats
 }
+
+func (st *Stats) Stop() {
+	st.QPSRates.Stop()
+}

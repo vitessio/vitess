@@ -19,6 +19,7 @@ package vindexes
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -41,6 +42,19 @@ func (fk *ParentFKInfo) MarshalJSON() ([]byte, error) {
 		ChildColumns:  fk.ChildColumns,
 		ParentColumns: fk.ParentColumns,
 	})
+}
+
+func (fk *ParentFKInfo) String(childTable *Table) string {
+	var str strings.Builder
+	str.WriteString(childTable.String())
+	for _, column := range fk.ChildColumns {
+		str.WriteString(column.String())
+	}
+	str.WriteString(fk.Table.String())
+	for _, column := range fk.ParentColumns {
+		str.WriteString(column.String())
+	}
+	return str.String()
 }
 
 // NewParentFkInfo creates a new ParentFKInfo.
@@ -75,6 +89,19 @@ func (fk *ChildFKInfo) MarshalJSON() ([]byte, error) {
 	})
 }
 
+func (fk *ChildFKInfo) String(parentTable *Table) string {
+	var str strings.Builder
+	str.WriteString(fk.Table.String())
+	for _, column := range fk.ChildColumns {
+		str.WriteString(column.String())
+	}
+	str.WriteString(parentTable.String())
+	for _, column := range fk.ParentColumns {
+		str.WriteString(column.String())
+	}
+	return str.String()
+}
+
 // NewChildFkInfo creates a new ChildFKInfo.
 func NewChildFkInfo(childTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) ChildFKInfo {
 	return ChildFKInfo{
@@ -87,29 +114,20 @@ func NewChildFkInfo(childTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) Chil
 	}
 }
 
-// AddForeignKey is for testing only.
-func (vschema *VSchema) AddForeignKey(ksname, childTableName string, fkConstraint *sqlparser.ForeignKeyDefinition) error {
-	ks, ok := vschema.Keyspaces[ksname]
-	if !ok {
-		return fmt.Errorf("keyspace %s not found in vschema", ksname)
-	}
-	cTbl, ok := ks.Tables[childTableName]
-	if !ok {
-		return fmt.Errorf("child table %s not found in keyspace %s", childTableName, ksname)
-	}
-	parentTableName := fkConstraint.ReferenceDefinition.ReferencedTable.Name.String()
-	pTbl, ok := ks.Tables[parentTableName]
-	if !ok {
-		return fmt.Errorf("parent table %s not found in keyspace %s", parentTableName, ksname)
-	}
-	pTbl.ChildForeignKeys = append(pTbl.ChildForeignKeys, NewChildFkInfo(cTbl, fkConstraint))
-	cTbl.ParentForeignKeys = append(cTbl.ParentForeignKeys, NewParentFkInfo(pTbl, fkConstraint))
-	return nil
-}
-
 // ParentFKsNeedsHandling returns all the parent fk constraints on this table that are not shard scoped.
-func (t *Table) ParentFKsNeedsHandling() (fks []ParentFKInfo) {
+func (t *Table) ParentFKsNeedsHandling(verifyAllFKs bool, fkToIgnore string) (fks []ParentFKInfo) {
 	for _, fk := range t.ParentForeignKeys {
+		// Check if we need to specifically ignore this foreign key
+		if fkToIgnore != "" && fk.String(t) == fkToIgnore {
+			continue
+		}
+
+		// If we require all the foreign keys, add them all.
+		if verifyAllFKs {
+			fks = append(fks, fk)
+			continue
+		}
+
 		// If the keyspaces are different, then the fk definition
 		// is going to go across shards.
 		if fk.Table.Keyspace.Name != t.Keyspace.Name {
@@ -131,7 +149,11 @@ func (t *Table) ParentFKsNeedsHandling() (fks []ParentFKInfo) {
 
 // ChildFKsNeedsHandling retuns the child foreign keys that needs to be handled by the vtgate.
 // This can be either the foreign key is not shard scoped or the child tables needs cascading.
-func (t *Table) ChildFKsNeedsHandling(getAction func(fk ChildFKInfo) sqlparser.ReferenceAction) (fks []ChildFKInfo) {
+func (t *Table) ChildFKsNeedsHandling(verifyAllFKs bool, getAction func(fk ChildFKInfo) sqlparser.ReferenceAction) (fks []ChildFKInfo) {
+	// If we require all the foreign keys, return the entire list.
+	if verifyAllFKs {
+		return t.ChildForeignKeys
+	}
 	for _, fk := range t.ChildForeignKeys {
 		// If the keyspaces are different, then the fk definition
 		// is going to go across shards.
@@ -199,4 +221,32 @@ func isShardScoped(pTable *Table, cTable *Table, pCols sqlparser.Columns, cCols 
 		}
 	}
 	return true
+}
+
+// AddForeignKey is for testing only.
+func (vschema *VSchema) AddForeignKey(ksname, childTableName string, fkConstraint *sqlparser.ForeignKeyDefinition) error {
+	ks, ok := vschema.Keyspaces[ksname]
+	if !ok {
+		return fmt.Errorf("keyspace %s not found in vschema", ksname)
+	}
+	cTbl, ok := ks.Tables[childTableName]
+	if !ok {
+		return fmt.Errorf("child table %s not found in keyspace %s", childTableName, ksname)
+	}
+	pKsName := fkConstraint.ReferenceDefinition.ReferencedTable.Qualifier.String()
+	if pKsName != "" {
+		ks, ok = vschema.Keyspaces[pKsName]
+		if !ok {
+			return fmt.Errorf("keyspace %s not found in vschema", pKsName)
+		}
+		ksname = pKsName
+	}
+	parentTableName := fkConstraint.ReferenceDefinition.ReferencedTable.Name.String()
+	pTbl, ok := ks.Tables[parentTableName]
+	if !ok {
+		return fmt.Errorf("parent table %s not found in keyspace %s", parentTableName, ksname)
+	}
+	pTbl.ChildForeignKeys = append(pTbl.ChildForeignKeys, NewChildFkInfo(cTbl, fkConstraint))
+	cTbl.ParentForeignKeys = append(cTbl.ParentForeignKeys, NewParentFkInfo(pTbl, fkConstraint))
+	return nil
 }

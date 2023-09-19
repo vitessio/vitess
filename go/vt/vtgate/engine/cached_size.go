@@ -261,11 +261,11 @@ func (cached *FkCascade) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Selection.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Children []vitess.io/vitess/go/vt/vtgate/engine.FkChild
+	// field Children []*vitess.io/vitess/go/vt/vtgate/engine.FkChild
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Children)) * int64(56))
+		size += hack.RuntimeAllocSize(int64(cap(cached.Children)) * int64(8))
 		for _, elem := range cached.Children {
-			size += elem.CachedSize(false)
+			size += elem.CachedSize(true)
 		}
 	}
 	// field Parent vitess.io/vitess/go/vt/vtgate/engine.Primitive
@@ -287,6 +287,27 @@ func (cached *FkChild) CachedSize(alloc bool) int64 {
 	// field Cols []int
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(8))
+	}
+	// field Exec vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Exec.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *FkVerify) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Verify []*vitess.io/vitess/go/vt/vtgate/engine.Verify
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Verify)) * int64(8))
+		for _, elem := range cached.Verify {
+			size += elem.CachedSize(true)
+		}
 	}
 	// field Exec vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Exec.(cachedObject); ok {
@@ -1220,6 +1241,22 @@ func (cached *VStream) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
 	// field Position string
 	size += hack.RuntimeAllocSize(int64(len(cached.Position)))
+	return size
+}
+func (cached *Verify) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Exec vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Exec.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Typ string
+	size += hack.RuntimeAllocSize(int64(len(cached.Typ)))
 	return size
 }
 func (cached *VindexFunc) CachedSize(alloc bool) int64 {

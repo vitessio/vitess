@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/protoutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -53,7 +53,7 @@ func TestSaveAndReadShard(t *testing.T) {
 					Cell: "zone1",
 					Uid:  301,
 				},
-				PrimaryTermStartTime: logutil.TimeToProto(timeToUse.Add(1 * time.Hour)),
+				PrimaryTermStartTime: protoutil.TimeToProto(timeToUse.Add(1 * time.Hour)),
 			},
 			primaryTimestampWanted: "2023-07-24 06:00:05.000001 +0000 UTC",
 			primaryAliasWanted:     "zone1-0000000301",
@@ -62,7 +62,7 @@ func TestSaveAndReadShard(t *testing.T) {
 			keyspaceName: "ks1",
 			shardName:    "-",
 			shard: &topodatapb.Shard{
-				PrimaryTermStartTime: logutil.TimeToProto(timeToUse),
+				PrimaryTermStartTime: protoutil.TimeToProto(timeToUse),
 			},
 			primaryTimestampWanted: "2023-07-24 05:00:05.000001 +0000 UTC",
 			primaryAliasWanted:     "",

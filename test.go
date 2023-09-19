@@ -77,7 +77,7 @@ For example:
 // Flags
 var (
 	flavor           = flag.String("flavor", "mysql57", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
-	bootstrapVersion = flag.String("bootstrap-version", "20", "the version identifier to use for the docker images")
+	bootstrapVersion = flag.String("bootstrap-version", "22", "the version identifier to use for the docker images")
 	runCount         = flag.Int("runs", 1, "run each test this many times")
 	retryMax         = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass          = flag.Bool("log-pass", false, "log test output even if it passes")
@@ -201,6 +201,9 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		} else {
 			// If there is no cache, we have to call 'make build' before each test.
 			args = []string{t.flavor, t.bootstrapVersion, "make build && " + testArgs}
+			if !*buildVTAdmin {
+				args[len(args)-1] = "NOVTADMINBUILD=1 " + args[len(args)-1]
+			}
 		}
 
 		cmd = exec.Command(path.Join(dir, "docker/test/run.sh"), args...)

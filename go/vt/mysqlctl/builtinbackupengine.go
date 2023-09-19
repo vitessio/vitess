@@ -39,20 +39,21 @@ import (
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-	"vitess.io/vitess/go/vt/proto/mysqlctl"
-	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -331,7 +332,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	// It's also nice for incremental backups that are taken on _other_ tablets, so that they don't need to understand what exactly was purged
 	// on _this_ tablet. They don't care, all they want to know is "what GTIDSet can we get from this".
 	incrementalBackupToPosition.GTIDSet = incrementalBackupToPosition.GTIDSet.Union(gtidPurged.GTIDSet)
-	req := &mysqlctl.ReadBinlogFilesTimestampsRequest{}
+	req := &mysqlctlpb.ReadBinlogFilesTimestampsRequest{}
 	for _, binlogFile := range binaryLogsToBackup {
 		fe := FileEntry{Base: backupBinlogDir, Name: binlogFile}
 		fullPath, err := fe.fullPath(params.Cnf)
@@ -348,9 +349,9 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		return false, vterrors.Errorf(vtrpc.Code_ABORTED, "empty binlog name in response. Request=%v, Response=%v", req, resp)
 	}
 	incrDetails := &IncrementalBackupDetails{
-		FirstTimestamp:       FormatRFC3339(logutil.ProtoToTime(resp.FirstTimestamp)),
+		FirstTimestamp:       FormatRFC3339(protoutil.TimeFromProto(resp.FirstTimestamp).UTC()),
 		FirstTimestampBinlog: filepath.Base(resp.FirstTimestampBinlog),
-		LastTimestamp:        FormatRFC3339(logutil.ProtoToTime(resp.LastTimestamp)),
+		LastTimestamp:        FormatRFC3339(protoutil.TimeFromProto(resp.LastTimestamp).UTC()),
 		LastTimestampBinlog:  filepath.Base(resp.LastTimestampBinlog),
 	}
 	// It's worthwhile we explain the difference between params.IncrementalFromPos and incrementalBackupFromPosition.
@@ -917,7 +918,7 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 		}
 		req := &mysqlctlpb.ApplyBinlogFileRequest{
 			BinlogFileName:        binlogFile,
-			BinlogRestoreDatetime: logutil.TimeToProto(params.RestoreToTimestamp),
+			BinlogRestoreDatetime: protoutil.TimeToProto(params.RestoreToTimestamp),
 		}
 		if params.RestoreToPos.GTIDSet != nil {
 			req.BinlogRestorePosition = params.RestoreToPos.GTIDSet.String()

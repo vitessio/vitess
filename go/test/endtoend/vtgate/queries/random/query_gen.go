@@ -19,11 +19,9 @@ package random
 import (
 	"fmt"
 	"math/rand"
+	"slices"
 
 	"vitess.io/vitess/go/slice"
-
-	"golang.org/x/exp/slices"
-
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -96,16 +94,6 @@ func newSelectGenerator(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, m
 		schemaTables: schemaTables,
 		sel:          &sqlparser.Select{},
 	}
-}
-
-// getColumnName returns tableName.name (if tableName is nonempty), otherwise name
-func (c *column) getColumnName() string {
-	var columnName string
-	if c.tableName != "" {
-		columnName += c.tableName + "."
-	}
-
-	return columnName + c.name
 }
 
 // getASTExpr returns the AST representation of a column

@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations/colldata"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -39,7 +41,7 @@ const (
 
 func columnSize(cs collations.ID, size uint32) uint32 {
 	// utf8_general_ci results in smaller max column sizes because MySQL 5.7 is silly
-	if cs.Get().Charset().Name() == "utf8mb3" {
+	if colldata.Lookup(cs).Charset().Name() == "utf8mb3" {
 		return size * 3 / 4
 	}
 	return size
@@ -321,6 +323,5 @@ func TestSysInfo(t *testing.T) {
 
 func getDefaultCollationID() collations.ID {
 	collationHandler := collations.Local()
-	collation := collationHandler.DefaultCollationForCharset(charsetName)
-	return collation.ID()
+	return collationHandler.DefaultCollationForCharset(charsetName)
 }

@@ -81,7 +81,7 @@ type testEnv struct {
 	protoName string
 }
 
-func newTestEnv(t *testing.T, sourceKeyspace string, sourceShards []string) *testEnv {
+func newTestEnv(t *testing.T, ctx context.Context, sourceKeyspace string, sourceShards []string) *testEnv {
 	tenv := &testEnv{
 		ctx:       context.Background(),
 		tmc:       newFakeTMClient(),
@@ -91,7 +91,7 @@ func newTestEnv(t *testing.T, sourceKeyspace string, sourceShards []string) *tes
 	}
 	tenv.mu.Lock()
 	defer tenv.mu.Unlock()
-	tenv.ts = memorytopo.NewServer(tenv.cells...)
+	tenv.ts = memorytopo.NewServer(ctx, tenv.cells...)
 	tenv.tmc.sourceKeyspace = sourceKeyspace
 	tenv.tmc.sourceShards = sourceShards
 	tenv.tmc.schema = defaultSchema
@@ -122,6 +122,7 @@ func (tenv *testEnv) close() {
 	tenv.mu.Lock()
 	defer tenv.mu.Unlock()
 	tenv.ts.Close()
+	tenv.mysqld.Close()
 }
 
 //--------------------------------------
@@ -156,9 +157,11 @@ func (tenv *testEnv) addTablet(t *testing.T, id int, keyspace, shard string) *fa
 		panic(err)
 	}
 
+	vrdbClient := binlogplayer.NewMockDBClient(t)
+	vrdbClient.Tag = fmt.Sprintf("tablet:%d", id)
 	tenv.tmc.tablets[id] = &fakeTabletConn{
 		tablet:     tablet,
-		vrdbClient: binlogplayer.NewMockDBClient(t),
+		vrdbClient: vrdbClient,
 	}
 
 	dbClientFactory := func() binlogplayer.DBClient {

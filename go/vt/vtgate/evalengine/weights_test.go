@@ -18,12 +18,10 @@ package evalengine
 
 import (
 	"fmt"
-	"math/rand"
-	"strconv"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -45,17 +43,17 @@ func TestWeightStrings(t *testing.T) {
 		len   int
 		prec  int
 	}{
-		{name: "int64", gen: randomInt64, types: []sqltypes.Type{sqltypes.Int64, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
-		{name: "uint64", gen: randomUint64, types: []sqltypes.Type{sqltypes.Uint64, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
-		{name: "float64", gen: randomFloat64, types: []sqltypes.Type{sqltypes.Float64, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
-		{name: "varchar", gen: randomVarChar, types: []sqltypes.Type{sqltypes.VarChar, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationUtf8mb4ID},
-		{name: "varbinary", gen: randomVarBinary, types: []sqltypes.Type{sqltypes.VarBinary, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
-		{name: "decimal", gen: randomDecimal, types: []sqltypes.Type{sqltypes.Decimal, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID, len: 20, prec: 10},
-		{name: "json", gen: randomJSON, types: []sqltypes.Type{sqltypes.TypeJSON}, col: collations.CollationBinaryID},
-		{name: "date", gen: randomDate, types: []sqltypes.Type{sqltypes.Date, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
-		{name: "datetime", gen: randomDatetime, types: []sqltypes.Type{sqltypes.Datetime, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
-		{name: "timestamp", gen: randomTimestamp, types: []sqltypes.Type{sqltypes.Timestamp, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
-		{name: "time", gen: randomTime, types: []sqltypes.Type{sqltypes.Time, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "int64", gen: sqltypes.RandomGenerators[sqltypes.Int64], types: []sqltypes.Type{sqltypes.Int64, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "uint64", gen: sqltypes.RandomGenerators[sqltypes.Uint64], types: []sqltypes.Type{sqltypes.Uint64, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "float64", gen: sqltypes.RandomGenerators[sqltypes.Float64], types: []sqltypes.Type{sqltypes.Float64, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "varchar", gen: sqltypes.RandomGenerators[sqltypes.VarChar], types: []sqltypes.Type{sqltypes.VarChar, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationUtf8mb4ID},
+		{name: "varbinary", gen: sqltypes.RandomGenerators[sqltypes.VarBinary], types: []sqltypes.Type{sqltypes.VarBinary, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "decimal", gen: sqltypes.RandomGenerators[sqltypes.Decimal], types: []sqltypes.Type{sqltypes.Decimal, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID, len: 20, prec: 10},
+		{name: "json", gen: sqltypes.RandomGenerators[sqltypes.TypeJSON], types: []sqltypes.Type{sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "date", gen: sqltypes.RandomGenerators[sqltypes.Date], types: []sqltypes.Type{sqltypes.Date, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "datetime", gen: sqltypes.RandomGenerators[sqltypes.Datetime], types: []sqltypes.Type{sqltypes.Datetime, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "timestamp", gen: sqltypes.RandomGenerators[sqltypes.Timestamp], types: []sqltypes.Type{sqltypes.Timestamp, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "time", gen: sqltypes.RandomGenerators[sqltypes.Time], types: []sqltypes.Type{sqltypes.Time, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
 	}
 
 	for _, tc := range cases {
@@ -102,46 +100,4 @@ func TestWeightStrings(t *testing.T) {
 			})
 		}
 	}
-}
-
-func randomVarBinary() sqltypes.Value { return sqltypes.NewVarBinary(string(randomBytes())) }
-func randomFloat64() sqltypes.Value {
-	return sqltypes.NewFloat64(rand.NormFloat64())
-}
-
-func randomBytes() []byte {
-	const Dictionary = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
-	b := make([]byte, 4+rand.Intn(256))
-	for i := range b {
-		b[i] = Dictionary[rand.Intn(len(Dictionary))]
-	}
-	return b
-}
-
-func randomJSON() sqltypes.Value {
-	var j string
-	switch rand.Intn(6) {
-	case 0:
-		j = "null"
-	case 1:
-		i := rand.Int63()
-		if rand.Int()&0x1 == 1 {
-			i = -i
-		}
-		j = strconv.FormatInt(i, 10)
-	case 2:
-		j = strconv.FormatFloat(rand.NormFloat64(), 'g', -1, 64)
-	case 3:
-		j = strconv.Quote(string(randomBytes()))
-	case 4:
-		j = "true"
-	case 5:
-		j = "false"
-	}
-	v, err := sqltypes.NewJSON(j)
-	if err != nil {
-		panic(err)
-	}
-	return v
 }

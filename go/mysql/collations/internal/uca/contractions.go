@@ -18,7 +18,6 @@ package uca
 
 import (
 	"fmt"
-	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
 )
@@ -26,19 +25,6 @@ import (
 type trie struct {
 	children map[rune]*trie
 	weights  []uint16
-}
-
-func (t *trie) walkUTF8(remainder []byte) ([]uint16, []byte) {
-	if len(remainder) > 0 {
-		cp, width := utf8.DecodeRune(remainder)
-		if cp == utf8.RuneError && width < 3 {
-			return nil, nil
-		}
-		if ch := t.children[cp]; ch != nil {
-			return ch.walkUTF8(remainder[width:])
-		}
-	}
-	return t.weights, remainder
 }
 
 func (t *trie) walkCharset(cs charset.Charset, remainder []byte, depth int) ([]uint16, []byte, int) {

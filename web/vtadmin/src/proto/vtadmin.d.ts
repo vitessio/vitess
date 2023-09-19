@@ -29722,7 +29722,8 @@ export namespace binlogdata {
     /** VReplicationWorkflowSubType enum. */
     enum VReplicationWorkflowSubType {
         None = 0,
-        Partial = 1
+        Partial = 1,
+        AtomicCopy = 2
     }
 
     /** VReplicationWorkflowState enum. */
@@ -30153,6 +30154,9 @@ export namespace binlogdata {
 
         /** RowEvent shard */
         shard?: (string|null);
+
+        /** RowEvent flags */
+        flags?: (number|null);
     }
 
     /** Represents a RowEvent. */
@@ -30175,6 +30179,9 @@ export namespace binlogdata {
 
         /** RowEvent shard. */
         public shard: string;
+
+        /** RowEvent flags. */
+        public flags: number;
 
         /**
          * Creates a new RowEvent instance using the specified properties.
@@ -31676,6 +31683,242 @@ export namespace binlogdata {
 
         /**
          * Gets the default type url for VStreamRowsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamTablesRequest. */
+    interface IVStreamTablesRequest {
+
+        /** VStreamTablesRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamTablesRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamTablesRequest target */
+        target?: (query.ITarget|null);
+    }
+
+    /** Represents a VStreamTablesRequest. */
+    class VStreamTablesRequest implements IVStreamTablesRequest {
+
+        /**
+         * Constructs a new VStreamTablesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamTablesRequest);
+
+        /** VStreamTablesRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamTablesRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamTablesRequest target. */
+        public target?: (query.ITarget|null);
+
+        /**
+         * Creates a new VStreamTablesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamTablesRequest instance
+         */
+        public static create(properties?: binlogdata.IVStreamTablesRequest): binlogdata.VStreamTablesRequest;
+
+        /**
+         * Encodes the specified VStreamTablesRequest message. Does not implicitly {@link binlogdata.VStreamTablesRequest.verify|verify} messages.
+         * @param message VStreamTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamTablesRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamTablesRequest.verify|verify} messages.
+         * @param message VStreamTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamTablesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamTablesRequest;
+
+        /**
+         * Decodes a VStreamTablesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamTablesRequest;
+
+        /**
+         * Verifies a VStreamTablesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamTablesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamTablesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamTablesRequest;
+
+        /**
+         * Creates a plain object from a VStreamTablesRequest message. Also converts values to other types if specified.
+         * @param message VStreamTablesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamTablesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamTablesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamTablesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamTablesResponse. */
+    interface IVStreamTablesResponse {
+
+        /** VStreamTablesResponse table_name */
+        table_name?: (string|null);
+
+        /** VStreamTablesResponse fields */
+        fields?: (query.IField[]|null);
+
+        /** VStreamTablesResponse pkfields */
+        pkfields?: (query.IField[]|null);
+
+        /** VStreamTablesResponse gtid */
+        gtid?: (string|null);
+
+        /** VStreamTablesResponse rows */
+        rows?: (query.IRow[]|null);
+
+        /** VStreamTablesResponse lastpk */
+        lastpk?: (query.IRow|null);
+    }
+
+    /** Represents a VStreamTablesResponse. */
+    class VStreamTablesResponse implements IVStreamTablesResponse {
+
+        /**
+         * Constructs a new VStreamTablesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamTablesResponse);
+
+        /** VStreamTablesResponse table_name. */
+        public table_name: string;
+
+        /** VStreamTablesResponse fields. */
+        public fields: query.IField[];
+
+        /** VStreamTablesResponse pkfields. */
+        public pkfields: query.IField[];
+
+        /** VStreamTablesResponse gtid. */
+        public gtid: string;
+
+        /** VStreamTablesResponse rows. */
+        public rows: query.IRow[];
+
+        /** VStreamTablesResponse lastpk. */
+        public lastpk?: (query.IRow|null);
+
+        /**
+         * Creates a new VStreamTablesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamTablesResponse instance
+         */
+        public static create(properties?: binlogdata.IVStreamTablesResponse): binlogdata.VStreamTablesResponse;
+
+        /**
+         * Encodes the specified VStreamTablesResponse message. Does not implicitly {@link binlogdata.VStreamTablesResponse.verify|verify} messages.
+         * @param message VStreamTablesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamTablesResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamTablesResponse.verify|verify} messages.
+         * @param message VStreamTablesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamTablesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamTablesResponse;
+
+        /**
+         * Decodes a VStreamTablesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamTablesResponse;
+
+        /**
+         * Verifies a VStreamTablesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamTablesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamTablesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamTablesResponse;
+
+        /**
+         * Creates a plain object from a VStreamTablesResponse message. Also converts values to other types if specified.
+         * @param message VStreamTablesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamTablesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamTablesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamTablesResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -42123,6 +42366,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings tablet_selection_preference */
         tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
+
+        /** MaterializeSettings atomic_copy */
+        atomic_copy?: (boolean|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -42178,6 +42424,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings tablet_selection_preference. */
         public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
+
+        /** MaterializeSettings atomic_copy. */
+        public atomic_copy: boolean;
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.
@@ -44622,6 +44871,9 @@ export namespace vtctldata {
 
         /** ApplySchemaResponse uuid_list */
         uuid_list?: (string[]|null);
+
+        /** ApplySchemaResponse rows_affected_by_shard */
+        rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
     }
 
     /** Represents an ApplySchemaResponse. */
@@ -44635,6 +44887,9 @@ export namespace vtctldata {
 
         /** ApplySchemaResponse uuid_list. */
         public uuid_list: string[];
+
+        /** ApplySchemaResponse rows_affected_by_shard. */
+        public rows_affected_by_shard: { [k: string]: (number|Long) };
 
         /**
          * Creates a new ApplySchemaResponse instance using the specified properties.
@@ -45301,6 +45556,206 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a CancelSchemaMigrationRequest. */
+    interface ICancelSchemaMigrationRequest {
+
+        /** CancelSchemaMigrationRequest keyspace */
+        keyspace?: (string|null);
+
+        /** CancelSchemaMigrationRequest uuid */
+        uuid?: (string|null);
+    }
+
+    /** Represents a CancelSchemaMigrationRequest. */
+    class CancelSchemaMigrationRequest implements ICancelSchemaMigrationRequest {
+
+        /**
+         * Constructs a new CancelSchemaMigrationRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ICancelSchemaMigrationRequest);
+
+        /** CancelSchemaMigrationRequest keyspace. */
+        public keyspace: string;
+
+        /** CancelSchemaMigrationRequest uuid. */
+        public uuid: string;
+
+        /**
+         * Creates a new CancelSchemaMigrationRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CancelSchemaMigrationRequest instance
+         */
+        public static create(properties?: vtctldata.ICancelSchemaMigrationRequest): vtctldata.CancelSchemaMigrationRequest;
+
+        /**
+         * Encodes the specified CancelSchemaMigrationRequest message. Does not implicitly {@link vtctldata.CancelSchemaMigrationRequest.verify|verify} messages.
+         * @param message CancelSchemaMigrationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ICancelSchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CancelSchemaMigrationRequest message, length delimited. Does not implicitly {@link vtctldata.CancelSchemaMigrationRequest.verify|verify} messages.
+         * @param message CancelSchemaMigrationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ICancelSchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CancelSchemaMigrationRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CancelSchemaMigrationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.CancelSchemaMigrationRequest;
+
+        /**
+         * Decodes a CancelSchemaMigrationRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CancelSchemaMigrationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.CancelSchemaMigrationRequest;
+
+        /**
+         * Verifies a CancelSchemaMigrationRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CancelSchemaMigrationRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CancelSchemaMigrationRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.CancelSchemaMigrationRequest;
+
+        /**
+         * Creates a plain object from a CancelSchemaMigrationRequest message. Also converts values to other types if specified.
+         * @param message CancelSchemaMigrationRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.CancelSchemaMigrationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CancelSchemaMigrationRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CancelSchemaMigrationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a CancelSchemaMigrationResponse. */
+    interface ICancelSchemaMigrationResponse {
+
+        /** CancelSchemaMigrationResponse rows_affected_by_shard */
+        rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
+    }
+
+    /** Represents a CancelSchemaMigrationResponse. */
+    class CancelSchemaMigrationResponse implements ICancelSchemaMigrationResponse {
+
+        /**
+         * Constructs a new CancelSchemaMigrationResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ICancelSchemaMigrationResponse);
+
+        /** CancelSchemaMigrationResponse rows_affected_by_shard. */
+        public rows_affected_by_shard: { [k: string]: (number|Long) };
+
+        /**
+         * Creates a new CancelSchemaMigrationResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CancelSchemaMigrationResponse instance
+         */
+        public static create(properties?: vtctldata.ICancelSchemaMigrationResponse): vtctldata.CancelSchemaMigrationResponse;
+
+        /**
+         * Encodes the specified CancelSchemaMigrationResponse message. Does not implicitly {@link vtctldata.CancelSchemaMigrationResponse.verify|verify} messages.
+         * @param message CancelSchemaMigrationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ICancelSchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CancelSchemaMigrationResponse message, length delimited. Does not implicitly {@link vtctldata.CancelSchemaMigrationResponse.verify|verify} messages.
+         * @param message CancelSchemaMigrationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ICancelSchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CancelSchemaMigrationResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CancelSchemaMigrationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.CancelSchemaMigrationResponse;
+
+        /**
+         * Decodes a CancelSchemaMigrationResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CancelSchemaMigrationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.CancelSchemaMigrationResponse;
+
+        /**
+         * Verifies a CancelSchemaMigrationResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CancelSchemaMigrationResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CancelSchemaMigrationResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.CancelSchemaMigrationResponse;
+
+        /**
+         * Creates a plain object from a CancelSchemaMigrationResponse message. Also converts values to other types if specified.
+         * @param message CancelSchemaMigrationResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.CancelSchemaMigrationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CancelSchemaMigrationResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CancelSchemaMigrationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a ChangeTabletTypeRequest. */
     interface IChangeTabletTypeRequest {
 
@@ -45513,6 +45968,406 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for ChangeTabletTypeResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a CleanupSchemaMigrationRequest. */
+    interface ICleanupSchemaMigrationRequest {
+
+        /** CleanupSchemaMigrationRequest keyspace */
+        keyspace?: (string|null);
+
+        /** CleanupSchemaMigrationRequest uuid */
+        uuid?: (string|null);
+    }
+
+    /** Represents a CleanupSchemaMigrationRequest. */
+    class CleanupSchemaMigrationRequest implements ICleanupSchemaMigrationRequest {
+
+        /**
+         * Constructs a new CleanupSchemaMigrationRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ICleanupSchemaMigrationRequest);
+
+        /** CleanupSchemaMigrationRequest keyspace. */
+        public keyspace: string;
+
+        /** CleanupSchemaMigrationRequest uuid. */
+        public uuid: string;
+
+        /**
+         * Creates a new CleanupSchemaMigrationRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CleanupSchemaMigrationRequest instance
+         */
+        public static create(properties?: vtctldata.ICleanupSchemaMigrationRequest): vtctldata.CleanupSchemaMigrationRequest;
+
+        /**
+         * Encodes the specified CleanupSchemaMigrationRequest message. Does not implicitly {@link vtctldata.CleanupSchemaMigrationRequest.verify|verify} messages.
+         * @param message CleanupSchemaMigrationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ICleanupSchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CleanupSchemaMigrationRequest message, length delimited. Does not implicitly {@link vtctldata.CleanupSchemaMigrationRequest.verify|verify} messages.
+         * @param message CleanupSchemaMigrationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ICleanupSchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CleanupSchemaMigrationRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CleanupSchemaMigrationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.CleanupSchemaMigrationRequest;
+
+        /**
+         * Decodes a CleanupSchemaMigrationRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CleanupSchemaMigrationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.CleanupSchemaMigrationRequest;
+
+        /**
+         * Verifies a CleanupSchemaMigrationRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CleanupSchemaMigrationRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CleanupSchemaMigrationRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.CleanupSchemaMigrationRequest;
+
+        /**
+         * Creates a plain object from a CleanupSchemaMigrationRequest message. Also converts values to other types if specified.
+         * @param message CleanupSchemaMigrationRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.CleanupSchemaMigrationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CleanupSchemaMigrationRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CleanupSchemaMigrationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a CleanupSchemaMigrationResponse. */
+    interface ICleanupSchemaMigrationResponse {
+
+        /** CleanupSchemaMigrationResponse rows_affected_by_shard */
+        rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
+    }
+
+    /** Represents a CleanupSchemaMigrationResponse. */
+    class CleanupSchemaMigrationResponse implements ICleanupSchemaMigrationResponse {
+
+        /**
+         * Constructs a new CleanupSchemaMigrationResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ICleanupSchemaMigrationResponse);
+
+        /** CleanupSchemaMigrationResponse rows_affected_by_shard. */
+        public rows_affected_by_shard: { [k: string]: (number|Long) };
+
+        /**
+         * Creates a new CleanupSchemaMigrationResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CleanupSchemaMigrationResponse instance
+         */
+        public static create(properties?: vtctldata.ICleanupSchemaMigrationResponse): vtctldata.CleanupSchemaMigrationResponse;
+
+        /**
+         * Encodes the specified CleanupSchemaMigrationResponse message. Does not implicitly {@link vtctldata.CleanupSchemaMigrationResponse.verify|verify} messages.
+         * @param message CleanupSchemaMigrationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ICleanupSchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CleanupSchemaMigrationResponse message, length delimited. Does not implicitly {@link vtctldata.CleanupSchemaMigrationResponse.verify|verify} messages.
+         * @param message CleanupSchemaMigrationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ICleanupSchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CleanupSchemaMigrationResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CleanupSchemaMigrationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.CleanupSchemaMigrationResponse;
+
+        /**
+         * Decodes a CleanupSchemaMigrationResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CleanupSchemaMigrationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.CleanupSchemaMigrationResponse;
+
+        /**
+         * Verifies a CleanupSchemaMigrationResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CleanupSchemaMigrationResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CleanupSchemaMigrationResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.CleanupSchemaMigrationResponse;
+
+        /**
+         * Creates a plain object from a CleanupSchemaMigrationResponse message. Also converts values to other types if specified.
+         * @param message CleanupSchemaMigrationResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.CleanupSchemaMigrationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CleanupSchemaMigrationResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CleanupSchemaMigrationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a CompleteSchemaMigrationRequest. */
+    interface ICompleteSchemaMigrationRequest {
+
+        /** CompleteSchemaMigrationRequest keyspace */
+        keyspace?: (string|null);
+
+        /** CompleteSchemaMigrationRequest uuid */
+        uuid?: (string|null);
+    }
+
+    /** Represents a CompleteSchemaMigrationRequest. */
+    class CompleteSchemaMigrationRequest implements ICompleteSchemaMigrationRequest {
+
+        /**
+         * Constructs a new CompleteSchemaMigrationRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ICompleteSchemaMigrationRequest);
+
+        /** CompleteSchemaMigrationRequest keyspace. */
+        public keyspace: string;
+
+        /** CompleteSchemaMigrationRequest uuid. */
+        public uuid: string;
+
+        /**
+         * Creates a new CompleteSchemaMigrationRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CompleteSchemaMigrationRequest instance
+         */
+        public static create(properties?: vtctldata.ICompleteSchemaMigrationRequest): vtctldata.CompleteSchemaMigrationRequest;
+
+        /**
+         * Encodes the specified CompleteSchemaMigrationRequest message. Does not implicitly {@link vtctldata.CompleteSchemaMigrationRequest.verify|verify} messages.
+         * @param message CompleteSchemaMigrationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ICompleteSchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CompleteSchemaMigrationRequest message, length delimited. Does not implicitly {@link vtctldata.CompleteSchemaMigrationRequest.verify|verify} messages.
+         * @param message CompleteSchemaMigrationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ICompleteSchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CompleteSchemaMigrationRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CompleteSchemaMigrationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.CompleteSchemaMigrationRequest;
+
+        /**
+         * Decodes a CompleteSchemaMigrationRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CompleteSchemaMigrationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.CompleteSchemaMigrationRequest;
+
+        /**
+         * Verifies a CompleteSchemaMigrationRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CompleteSchemaMigrationRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CompleteSchemaMigrationRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.CompleteSchemaMigrationRequest;
+
+        /**
+         * Creates a plain object from a CompleteSchemaMigrationRequest message. Also converts values to other types if specified.
+         * @param message CompleteSchemaMigrationRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.CompleteSchemaMigrationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CompleteSchemaMigrationRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CompleteSchemaMigrationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a CompleteSchemaMigrationResponse. */
+    interface ICompleteSchemaMigrationResponse {
+
+        /** CompleteSchemaMigrationResponse rows_affected_by_shard */
+        rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
+    }
+
+    /** Represents a CompleteSchemaMigrationResponse. */
+    class CompleteSchemaMigrationResponse implements ICompleteSchemaMigrationResponse {
+
+        /**
+         * Constructs a new CompleteSchemaMigrationResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ICompleteSchemaMigrationResponse);
+
+        /** CompleteSchemaMigrationResponse rows_affected_by_shard. */
+        public rows_affected_by_shard: { [k: string]: (number|Long) };
+
+        /**
+         * Creates a new CompleteSchemaMigrationResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CompleteSchemaMigrationResponse instance
+         */
+        public static create(properties?: vtctldata.ICompleteSchemaMigrationResponse): vtctldata.CompleteSchemaMigrationResponse;
+
+        /**
+         * Encodes the specified CompleteSchemaMigrationResponse message. Does not implicitly {@link vtctldata.CompleteSchemaMigrationResponse.verify|verify} messages.
+         * @param message CompleteSchemaMigrationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ICompleteSchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CompleteSchemaMigrationResponse message, length delimited. Does not implicitly {@link vtctldata.CompleteSchemaMigrationResponse.verify|verify} messages.
+         * @param message CompleteSchemaMigrationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ICompleteSchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CompleteSchemaMigrationResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CompleteSchemaMigrationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.CompleteSchemaMigrationResponse;
+
+        /**
+         * Decodes a CompleteSchemaMigrationResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CompleteSchemaMigrationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.CompleteSchemaMigrationResponse;
+
+        /**
+         * Verifies a CompleteSchemaMigrationResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CompleteSchemaMigrationResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CompleteSchemaMigrationResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.CompleteSchemaMigrationResponse;
+
+        /**
+         * Creates a plain object from a CompleteSchemaMigrationResponse message. Also converts values to other types if specified.
+         * @param message CompleteSchemaMigrationResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.CompleteSchemaMigrationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CompleteSchemaMigrationResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CompleteSchemaMigrationResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -53490,6 +54345,206 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a LaunchSchemaMigrationRequest. */
+    interface ILaunchSchemaMigrationRequest {
+
+        /** LaunchSchemaMigrationRequest keyspace */
+        keyspace?: (string|null);
+
+        /** LaunchSchemaMigrationRequest uuid */
+        uuid?: (string|null);
+    }
+
+    /** Represents a LaunchSchemaMigrationRequest. */
+    class LaunchSchemaMigrationRequest implements ILaunchSchemaMigrationRequest {
+
+        /**
+         * Constructs a new LaunchSchemaMigrationRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ILaunchSchemaMigrationRequest);
+
+        /** LaunchSchemaMigrationRequest keyspace. */
+        public keyspace: string;
+
+        /** LaunchSchemaMigrationRequest uuid. */
+        public uuid: string;
+
+        /**
+         * Creates a new LaunchSchemaMigrationRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns LaunchSchemaMigrationRequest instance
+         */
+        public static create(properties?: vtctldata.ILaunchSchemaMigrationRequest): vtctldata.LaunchSchemaMigrationRequest;
+
+        /**
+         * Encodes the specified LaunchSchemaMigrationRequest message. Does not implicitly {@link vtctldata.LaunchSchemaMigrationRequest.verify|verify} messages.
+         * @param message LaunchSchemaMigrationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ILaunchSchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified LaunchSchemaMigrationRequest message, length delimited. Does not implicitly {@link vtctldata.LaunchSchemaMigrationRequest.verify|verify} messages.
+         * @param message LaunchSchemaMigrationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ILaunchSchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a LaunchSchemaMigrationRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns LaunchSchemaMigrationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.LaunchSchemaMigrationRequest;
+
+        /**
+         * Decodes a LaunchSchemaMigrationRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns LaunchSchemaMigrationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.LaunchSchemaMigrationRequest;
+
+        /**
+         * Verifies a LaunchSchemaMigrationRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a LaunchSchemaMigrationRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns LaunchSchemaMigrationRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.LaunchSchemaMigrationRequest;
+
+        /**
+         * Creates a plain object from a LaunchSchemaMigrationRequest message. Also converts values to other types if specified.
+         * @param message LaunchSchemaMigrationRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.LaunchSchemaMigrationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this LaunchSchemaMigrationRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for LaunchSchemaMigrationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a LaunchSchemaMigrationResponse. */
+    interface ILaunchSchemaMigrationResponse {
+
+        /** LaunchSchemaMigrationResponse rows_affected_by_shard */
+        rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
+    }
+
+    /** Represents a LaunchSchemaMigrationResponse. */
+    class LaunchSchemaMigrationResponse implements ILaunchSchemaMigrationResponse {
+
+        /**
+         * Constructs a new LaunchSchemaMigrationResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ILaunchSchemaMigrationResponse);
+
+        /** LaunchSchemaMigrationResponse rows_affected_by_shard. */
+        public rows_affected_by_shard: { [k: string]: (number|Long) };
+
+        /**
+         * Creates a new LaunchSchemaMigrationResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns LaunchSchemaMigrationResponse instance
+         */
+        public static create(properties?: vtctldata.ILaunchSchemaMigrationResponse): vtctldata.LaunchSchemaMigrationResponse;
+
+        /**
+         * Encodes the specified LaunchSchemaMigrationResponse message. Does not implicitly {@link vtctldata.LaunchSchemaMigrationResponse.verify|verify} messages.
+         * @param message LaunchSchemaMigrationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ILaunchSchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified LaunchSchemaMigrationResponse message, length delimited. Does not implicitly {@link vtctldata.LaunchSchemaMigrationResponse.verify|verify} messages.
+         * @param message LaunchSchemaMigrationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ILaunchSchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a LaunchSchemaMigrationResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns LaunchSchemaMigrationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.LaunchSchemaMigrationResponse;
+
+        /**
+         * Decodes a LaunchSchemaMigrationResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns LaunchSchemaMigrationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.LaunchSchemaMigrationResponse;
+
+        /**
+         * Verifies a LaunchSchemaMigrationResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a LaunchSchemaMigrationResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns LaunchSchemaMigrationResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.LaunchSchemaMigrationResponse;
+
+        /**
+         * Creates a plain object from a LaunchSchemaMigrationResponse message. Also converts values to other types if specified.
+         * @param message LaunchSchemaMigrationResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.LaunchSchemaMigrationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this LaunchSchemaMigrationResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for LaunchSchemaMigrationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a MoveTablesCreateRequest. */
     interface IMoveTablesCreateRequest {
 
@@ -53543,6 +54598,12 @@ export namespace vtctldata {
 
         /** MoveTablesCreateRequest auto_start */
         auto_start?: (boolean|null);
+
+        /** MoveTablesCreateRequest no_routing_rules */
+        no_routing_rules?: (boolean|null);
+
+        /** MoveTablesCreateRequest atomic_copy */
+        atomic_copy?: (boolean|null);
     }
 
     /** Represents a MoveTablesCreateRequest. */
@@ -53604,6 +54665,12 @@ export namespace vtctldata {
 
         /** MoveTablesCreateRequest auto_start. */
         public auto_start: boolean;
+
+        /** MoveTablesCreateRequest no_routing_rules. */
+        public no_routing_rules: boolean;
+
+        /** MoveTablesCreateRequest atomic_copy. */
+        public atomic_copy: boolean;
 
         /**
          * Creates a new MoveTablesCreateRequest instance using the specified properties.
@@ -56776,6 +57843,169 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a ReshardCreateRequest. */
+    interface IReshardCreateRequest {
+
+        /** ReshardCreateRequest workflow */
+        workflow?: (string|null);
+
+        /** ReshardCreateRequest keyspace */
+        keyspace?: (string|null);
+
+        /** ReshardCreateRequest source_shards */
+        source_shards?: (string[]|null);
+
+        /** ReshardCreateRequest target_shards */
+        target_shards?: (string[]|null);
+
+        /** ReshardCreateRequest cells */
+        cells?: (string[]|null);
+
+        /** ReshardCreateRequest tablet_types */
+        tablet_types?: (topodata.TabletType[]|null);
+
+        /** ReshardCreateRequest tablet_selection_preference */
+        tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
+
+        /** ReshardCreateRequest skip_schema_copy */
+        skip_schema_copy?: (boolean|null);
+
+        /** ReshardCreateRequest on_ddl */
+        on_ddl?: (string|null);
+
+        /** ReshardCreateRequest stop_after_copy */
+        stop_after_copy?: (boolean|null);
+
+        /** ReshardCreateRequest defer_secondary_keys */
+        defer_secondary_keys?: (boolean|null);
+
+        /** ReshardCreateRequest auto_start */
+        auto_start?: (boolean|null);
+    }
+
+    /** Represents a ReshardCreateRequest. */
+    class ReshardCreateRequest implements IReshardCreateRequest {
+
+        /**
+         * Constructs a new ReshardCreateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IReshardCreateRequest);
+
+        /** ReshardCreateRequest workflow. */
+        public workflow: string;
+
+        /** ReshardCreateRequest keyspace. */
+        public keyspace: string;
+
+        /** ReshardCreateRequest source_shards. */
+        public source_shards: string[];
+
+        /** ReshardCreateRequest target_shards. */
+        public target_shards: string[];
+
+        /** ReshardCreateRequest cells. */
+        public cells: string[];
+
+        /** ReshardCreateRequest tablet_types. */
+        public tablet_types: topodata.TabletType[];
+
+        /** ReshardCreateRequest tablet_selection_preference. */
+        public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
+
+        /** ReshardCreateRequest skip_schema_copy. */
+        public skip_schema_copy: boolean;
+
+        /** ReshardCreateRequest on_ddl. */
+        public on_ddl: string;
+
+        /** ReshardCreateRequest stop_after_copy. */
+        public stop_after_copy: boolean;
+
+        /** ReshardCreateRequest defer_secondary_keys. */
+        public defer_secondary_keys: boolean;
+
+        /** ReshardCreateRequest auto_start. */
+        public auto_start: boolean;
+
+        /**
+         * Creates a new ReshardCreateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReshardCreateRequest instance
+         */
+        public static create(properties?: vtctldata.IReshardCreateRequest): vtctldata.ReshardCreateRequest;
+
+        /**
+         * Encodes the specified ReshardCreateRequest message. Does not implicitly {@link vtctldata.ReshardCreateRequest.verify|verify} messages.
+         * @param message ReshardCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IReshardCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReshardCreateRequest message, length delimited. Does not implicitly {@link vtctldata.ReshardCreateRequest.verify|verify} messages.
+         * @param message ReshardCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IReshardCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReshardCreateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReshardCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ReshardCreateRequest;
+
+        /**
+         * Decodes a ReshardCreateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReshardCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ReshardCreateRequest;
+
+        /**
+         * Verifies a ReshardCreateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReshardCreateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReshardCreateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ReshardCreateRequest;
+
+        /**
+         * Creates a plain object from a ReshardCreateRequest message. Also converts values to other types if specified.
+         * @param message ReshardCreateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ReshardCreateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReshardCreateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReshardCreateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a RestoreFromBackupRequest. */
     interface IRestoreFromBackupRequest {
 
@@ -57006,6 +58236,206 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for RestoreFromBackupResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a RetrySchemaMigrationRequest. */
+    interface IRetrySchemaMigrationRequest {
+
+        /** RetrySchemaMigrationRequest keyspace */
+        keyspace?: (string|null);
+
+        /** RetrySchemaMigrationRequest uuid */
+        uuid?: (string|null);
+    }
+
+    /** Represents a RetrySchemaMigrationRequest. */
+    class RetrySchemaMigrationRequest implements IRetrySchemaMigrationRequest {
+
+        /**
+         * Constructs a new RetrySchemaMigrationRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IRetrySchemaMigrationRequest);
+
+        /** RetrySchemaMigrationRequest keyspace. */
+        public keyspace: string;
+
+        /** RetrySchemaMigrationRequest uuid. */
+        public uuid: string;
+
+        /**
+         * Creates a new RetrySchemaMigrationRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RetrySchemaMigrationRequest instance
+         */
+        public static create(properties?: vtctldata.IRetrySchemaMigrationRequest): vtctldata.RetrySchemaMigrationRequest;
+
+        /**
+         * Encodes the specified RetrySchemaMigrationRequest message. Does not implicitly {@link vtctldata.RetrySchemaMigrationRequest.verify|verify} messages.
+         * @param message RetrySchemaMigrationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IRetrySchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RetrySchemaMigrationRequest message, length delimited. Does not implicitly {@link vtctldata.RetrySchemaMigrationRequest.verify|verify} messages.
+         * @param message RetrySchemaMigrationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IRetrySchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RetrySchemaMigrationRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RetrySchemaMigrationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.RetrySchemaMigrationRequest;
+
+        /**
+         * Decodes a RetrySchemaMigrationRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RetrySchemaMigrationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.RetrySchemaMigrationRequest;
+
+        /**
+         * Verifies a RetrySchemaMigrationRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RetrySchemaMigrationRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RetrySchemaMigrationRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.RetrySchemaMigrationRequest;
+
+        /**
+         * Creates a plain object from a RetrySchemaMigrationRequest message. Also converts values to other types if specified.
+         * @param message RetrySchemaMigrationRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.RetrySchemaMigrationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RetrySchemaMigrationRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RetrySchemaMigrationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a RetrySchemaMigrationResponse. */
+    interface IRetrySchemaMigrationResponse {
+
+        /** RetrySchemaMigrationResponse rows_affected_by_shard */
+        rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
+    }
+
+    /** Represents a RetrySchemaMigrationResponse. */
+    class RetrySchemaMigrationResponse implements IRetrySchemaMigrationResponse {
+
+        /**
+         * Constructs a new RetrySchemaMigrationResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IRetrySchemaMigrationResponse);
+
+        /** RetrySchemaMigrationResponse rows_affected_by_shard. */
+        public rows_affected_by_shard: { [k: string]: (number|Long) };
+
+        /**
+         * Creates a new RetrySchemaMigrationResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RetrySchemaMigrationResponse instance
+         */
+        public static create(properties?: vtctldata.IRetrySchemaMigrationResponse): vtctldata.RetrySchemaMigrationResponse;
+
+        /**
+         * Encodes the specified RetrySchemaMigrationResponse message. Does not implicitly {@link vtctldata.RetrySchemaMigrationResponse.verify|verify} messages.
+         * @param message RetrySchemaMigrationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IRetrySchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RetrySchemaMigrationResponse message, length delimited. Does not implicitly {@link vtctldata.RetrySchemaMigrationResponse.verify|verify} messages.
+         * @param message RetrySchemaMigrationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IRetrySchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RetrySchemaMigrationResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RetrySchemaMigrationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.RetrySchemaMigrationResponse;
+
+        /**
+         * Decodes a RetrySchemaMigrationResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RetrySchemaMigrationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.RetrySchemaMigrationResponse;
+
+        /**
+         * Verifies a RetrySchemaMigrationResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RetrySchemaMigrationResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RetrySchemaMigrationResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.RetrySchemaMigrationResponse;
+
+        /**
+         * Creates a plain object from a RetrySchemaMigrationResponse message. Also converts values to other types if specified.
+         * @param message RetrySchemaMigrationResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.RetrySchemaMigrationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RetrySchemaMigrationResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RetrySchemaMigrationResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

@@ -21,6 +21,7 @@ package metro
 import (
 	"encoding/binary"
 	"math/bits"
+	"unsafe"
 )
 
 const k0 = 0xC83A91E1
@@ -67,6 +68,10 @@ func (m *Metro128) Write64(u uint64) {
 	var scratch [8]byte
 	binary.LittleEndian.PutUint64(scratch[:8], u)
 	_, _ = m.Write(scratch[:8])
+}
+
+func (m *Metro128) WriteString(str string) (int, error) {
+	return m.Write(unsafe.Slice(unsafe.StringData(str), len(str)))
 }
 
 func (m *Metro128) Write(buffer []byte) (int, error) {

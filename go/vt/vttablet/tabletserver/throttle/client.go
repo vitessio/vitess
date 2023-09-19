@@ -52,7 +52,8 @@ type Client struct {
 	checkType ThrottleCheckType
 	flags     CheckFlags
 
-	lastSuccessfulThrottle int64
+	lastSuccessfulThrottleMu sync.Mutex
+	lastSuccessfulThrottle   int64
 }
 
 // NewProductionClient creates a client suitable for foreground/production jobs, which have normal priority.
@@ -68,7 +69,7 @@ func NewProductionClient(throttler *Throttler, appName throttlerapp.Name, checkT
 	}
 }
 
-// NewBackgroundClient creates a client suitable for background jobs, which have low priority over productio ntraffic,
+// NewBackgroundClient creates a client suitable for background jobs, which have low priority over production traffic,
 // e.g. migration, table pruning, vreplication
 func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, checkType ThrottleCheckType) *Client {
 	initThrottleTicker()
@@ -96,6 +97,8 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 		// no throttler
 		return true
 	}
+	c.lastSuccessfulThrottleMu.Lock()
+	defer c.lastSuccessfulThrottleMu.Unlock()
 	if c.lastSuccessfulThrottle >= atomic.LoadInt64(&throttleTicks) {
 		// if last check was OK just very recently there is no need to check again
 		return true

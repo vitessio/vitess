@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -122,7 +123,7 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 	}
 
 	// wait for all previous test cases to have been settled in cache
-	client.server.QueryPlanCacheWait()
+	time.Sleep(100 * time.Millisecond)
 
 	catcher := NewQueryCatcher()
 	defer catcher.Close()

@@ -20,13 +20,10 @@ import (
 	"context"
 	"sync"
 
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
-
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -58,7 +55,7 @@ type SchemaInfo interface {
 func (vm *VSchemaManager) GetCurrentSrvVschema() *vschemapb.SrvVSchema {
 	vm.mu.Lock()
 	defer vm.mu.Unlock()
-	return proto.Clone(vm.currentSrvVschema).(*vschemapb.SrvVSchema)
+	return vm.currentSrvVschema.CloneVT()
 }
 
 // UpdateVSchema propagates the updated vschema to the topo. The entry for
@@ -198,9 +195,16 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 	for ksName, ks := range vschema.Keyspaces {
 		m := vm.schema.Tables(ksName)
-
+		// Before we add the foreign key definitions in the tables, we need to make sure that all the tables
+		// are created in the Vschema, so that later when we try to find the routed tables, we don't end up
+		// getting dummy tables.
 		for tblName, tblInfo := range m {
-			vTbl := setColumns(ks, tblName, tblInfo.Columns)
+			setColumns(ks, tblName, tblInfo.Columns)
+		}
+
+		// Now that we have ensured that all the tables are created, we can start populating the foreign keys
+		// in the tables.
+		for tblName, tblInfo := range m {
 			for _, fkDef := range tblInfo.ForeignKeys {
 				parentTbl, err := vschema.FindRoutedTable(ksName, fkDef.ReferenceDefinition.ReferencedTable.Name.String(), topodatapb.TabletType_PRIMARY)
 				if err != nil {
@@ -212,7 +216,7 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 					log.Errorf("error finding child table %s: %v", tblName, err)
 					continue
 				}
-				vTbl.ParentForeignKeys = append(vTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
+				childTbl.ParentForeignKeys = append(childTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
 				parentTbl.ChildForeignKeys = append(parentTbl.ChildForeignKeys, vindexes.NewChildFkInfo(childTbl, fkDef))
 			}
 		}

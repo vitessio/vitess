@@ -16,7 +16,7 @@ jobs:
   get_previous_release:
     if: always()
     name: Get Previous Release - Query Serving (Queries)
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-16cores-1
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
 
@@ -36,7 +36,7 @@ jobs:
   upgrade_downgrade_test:
     if: always() && (needs.get_previous_release.result == 'success')
     name: Run Upgrade Downgrade Test - Query Serving (Queries)
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-16cores-1
     needs:
       - get_previous_release
 
@@ -87,7 +87,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v4
       with:
-        go-version: 1.20.5
+        go-version: 1.21.1
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

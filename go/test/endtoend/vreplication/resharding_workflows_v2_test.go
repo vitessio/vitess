@@ -63,7 +63,7 @@ var (
 
 func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) error {
 	err := tstWorkflowExec(t, defaultCellName, workflowName, targetKs, targetKs,
-		"", workflowActionCreate, "", sourceShards, targetShards)
+		"", workflowActionCreate, "", sourceShards, targetShards, false)
 	require.NoError(t, err)
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, "")
@@ -78,7 +78,7 @@ func createMoveTablesWorkflow(t *testing.T, tables string) {
 		tables = tablesToMove
 	}
 	err := tstWorkflowExec(t, defaultCellName, workflowName, sourceKs, targetKs,
-		tables, workflowActionCreate, "", "", "")
+		tables, workflowActionCreate, "", "", "", false)
 	require.NoError(t, err)
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, tables)
@@ -88,10 +88,10 @@ func createMoveTablesWorkflow(t *testing.T, tables string) {
 }
 
 func tstWorkflowAction(t *testing.T, action, tabletTypes, cells string) error {
-	return tstWorkflowExec(t, cells, workflowName, sourceKs, targetKs, tablesToMove, action, tabletTypes, "", "")
+	return tstWorkflowExec(t, cells, workflowName, sourceKs, targetKs, tablesToMove, action, tabletTypes, "", "", false)
 }
 
-func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes, sourceShards, targetShards string) error {
+func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes, sourceShards, targetShards string, atomicCopy bool) error {
 	var args []string
 	if currentWorkflowType == wrangler.MoveTablesWorkflow {
 		args = append(args, "MoveTables")
@@ -104,11 +104,18 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	if BypassLagCheck {
 		args = append(args, "--max_replication_lag_allowed=2542087h")
 	}
-
+	if atomicCopy {
+		args = append(args, "--atomic-copy")
+	}
 	switch action {
 	case workflowActionCreate:
 		if currentWorkflowType == wrangler.MoveTablesWorkflow {
-			args = append(args, "--source", sourceKs, "--tables", tables)
+			args = append(args, "--source", sourceKs)
+			if tables != "" {
+				args = append(args, "--tables", tables)
+			} else {
+				args = append(args, "--all")
+			}
 			if sourceShards != "" {
 				args = append(args, "--source_shards", sourceShards)
 			}
@@ -118,7 +125,9 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		// Test new experimental --defer-secondary-keys flag
 		switch currentWorkflowType {
 		case wrangler.MoveTablesWorkflow, wrangler.MigrateWorkflow, wrangler.ReshardWorkflow:
-			args = append(args, "--defer-secondary-keys")
+			if !atomicCopy {
+				args = append(args, "--defer-secondary-keys")
+			}
 			args = append(args, "--initialize-target-sequences") // Only used for MoveTables
 		}
 	}
@@ -209,7 +218,7 @@ func validateReadsRoute(t *testing.T, tabletTypes string, tablet *cluster.Vttabl
 	for _, tt := range []string{"replica", "rdonly"} {
 		destination := fmt.Sprintf("%s:%s@%s", tablet.Keyspace, tablet.Shard, tt)
 		if strings.Contains(tabletTypes, tt) {
-			require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, tablet, destination, readQuery, readQuery))
+			assertQueryExecutesOnTablet(t, vtgateConn, tablet, destination, readQuery, readQuery)
 		}
 	}
 }
@@ -224,17 +233,17 @@ func validateReadsRouteToTarget(t *testing.T, tabletTypes string) {
 
 func validateWritesRouteToSource(t *testing.T) {
 	insertQuery := "insert into customer(name, cid) values('tempCustomer2', 200)"
-	matchInsertQuery := "insert into customer(name, cid) values"
-	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, sourceTab, "customer", insertQuery, matchInsertQuery))
+	matchInsertQuery := "insert into customer(`name`, cid) values"
+	assertQueryExecutesOnTablet(t, vtgateConn, sourceTab, "customer", insertQuery, matchInsertQuery)
 	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
 }
 
 func validateWritesRouteToTarget(t *testing.T) {
 	insertQuery := "insert into customer(name, cid) values('tempCustomer3', 101)"
-	matchInsertQuery := "insert into customer(name, cid) values"
-	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, targetTab2, "customer", insertQuery, matchInsertQuery))
+	matchInsertQuery := "insert into customer(`name`, cid) values"
+	assertQueryExecutesOnTablet(t, vtgateConn, targetTab2, "customer", insertQuery, matchInsertQuery)
 	insertQuery = "insert into customer(name, cid) values('tempCustomer3', 102)"
-	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, targetTab1, "customer", insertQuery, matchInsertQuery))
+	assertQueryExecutesOnTablet(t, vtgateConn, targetTab1, "customer", insertQuery, matchInsertQuery)
 	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
 }
 
@@ -308,17 +317,17 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	// use MoveTables to move customer2 from product to customer using
 	currentWorkflowType = wrangler.MoveTablesWorkflow
 	err := tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
-		"customer2", workflowActionCreate, "", "", "")
+		"customer2", workflowActionCreate, "", "", "", false)
 	require.NoError(t, err)
 
 	waitForWorkflowState(t, vc, "customer.wf2", binlogdatapb.VReplicationWorkflowState_Running.String())
 	waitForLowLag(t, "customer", "wf2")
 
 	err = tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
-		"", workflowActionSwitchTraffic, "", "", "")
+		"", workflowActionSwitchTraffic, "", "", "", false)
 	require.NoError(t, err)
 	err = tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
-		"", workflowActionComplete, "", "", "")
+		"", workflowActionComplete, "", "", "", false)
 	require.NoError(t, err)
 
 	// sanity check
@@ -343,16 +352,16 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 
 	// use MoveTables to move customer2 back to product. Note that now the table has an associated sequence
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
-		"customer2", workflowActionCreate, "", "", "")
+		"customer2", workflowActionCreate, "", "", "", false)
 	require.NoError(t, err)
 	waitForWorkflowState(t, vc, "product.wf3", binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	waitForLowLag(t, "product", "wf3")
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
-		"", workflowActionSwitchTraffic, "", "", "")
+		"", workflowActionSwitchTraffic, "", "", "", false)
 	require.NoError(t, err)
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
-		"", workflowActionComplete, "", "", "")
+		"", workflowActionComplete, "", "", "", false)
 	require.NoError(t, err)
 
 	// sanity check

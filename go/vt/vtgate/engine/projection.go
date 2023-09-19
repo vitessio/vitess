@@ -165,8 +165,8 @@ func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*query
 }
 
 // Inputs implements the Primitive interface
-func (p *Projection) Inputs() []Primitive {
-	return []Primitive{p.Input}
+func (p *Projection) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{p.Input}, nil
 }
 
 // description implements the Primitive interface

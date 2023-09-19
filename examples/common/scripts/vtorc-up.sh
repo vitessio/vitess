@@ -6,6 +6,7 @@ source "${script_dir}/../env.sh"
 log_dir="${VTDATAROOT}/tmp"
 port=16000
 
+echo "Starting vtorc..."
 vtorc \
   $TOPOLOGY_FLAGS \
   --logtostderr \

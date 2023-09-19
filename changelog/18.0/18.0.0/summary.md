@@ -4,8 +4,10 @@
 
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
+    - [Local examples now use etcd v3 storage and API](#local-examples-etcd-v3)
   - **[New command line flags and behavior](#new-flag)**
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
+    - [VTOrc flag `--change-tablets-with-errant-gtid-to-drained`](#new-flag-errant-gtid-convert)
     - [ERS sub flag `--wait-for-all-tablets`](#new-ers-subflag)
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v18.16.0](#update-node)
@@ -16,6 +18,7 @@
     - [Deleted `vtgr`](#deleted-vtgr)
   - **[New stats](#new-stats)**
     - [VTGate Vindex unknown parameters](#vtgate-vindex-unknown-parameters)
+    - [VTBackup stat `PhaseStatus`](#vtbackup-stat-phase-status)
   - **[VTTablet](#vttablet)**
     - [VTTablet: New ResetSequences RPC](#vttablet-new-rpc-reset-sequences)
   - **[Docker](#docker)**
@@ -28,6 +31,14 @@
 
 ### <a id="breaking-changes"/>Breaking Changes
 
+#### <a id="local-examples-etcd-v3"/>Local examples now use etcd v3 storage and API
+In previous releases the [local examples](https://github.com/vitessio/vitess/tree/main/examples/local) were
+explicitly using etcd v2 storage (`etcd --enable-v2=true`) and API (`ETCDCTL_API=2`) mode. We have now
+removed this legacy etcd usage and instead use the new (default) etcd v3 storage and API. Please see
+[PR #13791](https://github.com/vitessio/vitess/pull/13791) for additional info. If you are using the local
+examples in any sort of long-term non-testing capacity, then you will need to explicitly use the v2 storage
+and API mode or [migrate your existing data from v2 to v3](https://etcd.io/docs/v3.5/tutorials/how-to-migrate/).
+
 ### <a id="new-flag"/>New command line flags and behavior
 
 #### <a id="new-flag-toggle-ers"/>VTOrc flag `--allow-emergency-reparent`
@@ -36,6 +47,14 @@ VTOrc has a new flag `--allow-emergency-reparent` that allows the users to toggl
 reparent operations. The users that want VTOrc to fix the replication issues, but don't want it to run any reparents
 should start using this flag. By default, VTOrc will be able to run `EmergencyReparentShard`. The users must specify the
 flag to `false` to change the behaviour.
+
+#### <a id="new-flag-errant-gtid-convert"/>VTOrc flag `--change-tablets-with-errant-gtid-to-drained`
+
+VTOrc has a new flag `--change-tablets-with-errant-gtid-to-drained` that allows users to choose whether VTOrc should change the
+tablet type of tablets with errant GTIDs to `DRAINED`. By default, the flag is false.
+
+This feature allows users to configure VTOrc such that any tablet that encounters errant GTIDs is automatically taken out of the
+serving graph. These tablets can then be inspected for what the errant GTIDs are, and once fixed, they can rejoin the cluster.
 
 #### <a id="new-ers-subflag"/>ERS sub flag `--wait-for-all-tablets`
 
@@ -65,9 +84,19 @@ Throttler related `vttablet` flags:
 - `--throttle_check_as_check_self` is deprecated and will be removed in `v19.0`
 - `--throttler-config-via-topo` is deprecated after assumed `true` in `v17.0`. It will be removed in a future version.
 
+Cache related `vttablet` flags:
+
+- `--queryserver-config-query-cache-lfu` is deprecated and will be removed in `v19.0`. The query cache always uses a LFU implementation now.
+- `--queryserver-config-query-cache-size` is deprecated and will be removed in `v19.0`. This option only applied to LRU caches, which are now unsupported.
+
 Buffering related `vtgate` flags:
 
 - `--buffer_implementation` is deprecated and will be removed in `v19.0`
+
+Cache related `vtgate` flags:
+
+- `--gate_query_cache_lfu` is deprecated and will be removed in `v19.0`. The query cache always uses a LFU implementation now.
+- `--gate_query_cache_size` is deprecated and will be removed in `v19.0`. This option only applied to LRU caches, which are now unsupported.
 
 VTGate flag:
 
@@ -91,6 +120,14 @@ The `vtgr` has been deprecated in Vitess 17, also see https://github.com/vitessi
 #### <a id="vtgate-vindex-unknown-parameters"/>VTGate Vindex unknown parameters
 
 The VTGate stat `VindexUnknownParameters` gauges unknown Vindex parameters found in the latest VSchema pulled from the topology.
+
+#### <a id="vtbackup-stat-phase-status"/>VTBackup `PhaseStatus` stat
+
+`PhaseStatus` reports a 1 (active) or a 0 (inactive) for each of the following phases and statuses:
+
+ * `CatchUpReplication` phase has statuses `Stalled` and `Stopped`.
+    * `Stalled` is set to `1` when replication stops advancing.
+    * `Stopped` is set to `1` when replication stops before `vtbackup` catches up with the primary.
 
 ### <a id="vttablet"/>VTTablet
 

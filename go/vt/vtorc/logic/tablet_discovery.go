@@ -20,14 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
-
-	"golang.org/x/exp/slices"
 
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -287,6 +286,11 @@ func tabletUndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, sem
 // setReadOnly calls the said RPC for the given tablet
 func setReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return tmc.SetReadOnly(ctx, tablet)
+}
+
+// changeTabletType calls the said RPC for the given tablet with the given parameters.
+func changeTabletType(ctx context.Context, tablet *topodatapb.Tablet, tabletType topodatapb.TabletType, semiSync bool) error {
+	return tmc.ChangeType(ctx, tablet, tabletType, semiSync)
 }
 
 // setReplicationSource calls the said RPC with the parameters provided

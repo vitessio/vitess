@@ -698,6 +698,11 @@ func (f *FakeQueryService) VStreamRows(ctx context.Context, request *binlogdatap
 	panic("not implemented")
 }
 
+// VStreamTables is part of the QueryService interface.
+func (f *FakeQueryService) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(*binlogdatapb.VStreamTablesResponse) error) error {
+	panic("not implemented")
+}
+
 // VStreamResults is part of the QueryService interface.
 func (f *FakeQueryService) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	panic("not implemented")

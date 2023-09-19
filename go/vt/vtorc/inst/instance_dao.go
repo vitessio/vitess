@@ -33,21 +33,19 @@ import (
 	"github.com/sjmudd/stopwatch"
 
 	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-
 	"vitess.io/vitess/go/tb"
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/collection"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/metrics/query"
 	"vitess.io/vitess/go/vt/vtorc/util"
-	math "vitess.io/vitess/go/vt/vtorc/util"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -557,7 +555,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 		instance.Problems = append(instance.Problems, "not_recently_checked")
 	} else if instance.ReplicationThreadsExist() && !instance.ReplicaRunning() {
 		instance.Problems = append(instance.Problems, "not_replicating")
-	} else if instance.ReplicationLagSeconds.Valid && math.AbsInt64(instance.ReplicationLagSeconds.Int64-int64(instance.SQLDelay)) > int64(config.Config.ReasonableReplicationLagSeconds) {
+	} else if instance.ReplicationLagSeconds.Valid && util.AbsInt64(instance.ReplicationLagSeconds.Int64-int64(instance.SQLDelay)) > int64(config.Config.ReasonableReplicationLagSeconds) {
 		instance.Problems = append(instance.Problems, "replication_lag")
 	}
 	if instance.GtidErrant != "" {

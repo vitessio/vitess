@@ -19,13 +19,12 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
-
+	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/mysql/replication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -314,6 +313,17 @@ func (dr *switcherDryRun) dropSourceDeniedTables(ctx context.Context) error {
 	return nil
 }
 
+func (dr *switcherDryRun) dropTargetDeniedTables(ctx context.Context) error {
+	logs := make([]string, 0)
+	for _, si := range dr.ts.TargetShards() {
+		logs = append(logs, fmt.Sprintf("keyspace:%s;shard:%s;tablet:%d", si.Keyspace(), si.ShardName(), si.PrimaryAlias.Uid))
+	}
+	if len(logs) > 0 {
+		dr.drLog.Logf("Denied tables records on [%s] will be removed from: [%s]", strings.Join(dr.ts.Tables(), ","), strings.Join(logs, ","))
+	}
+	return nil
+}
+
 func (dr *switcherDryRun) logs() *[]string {
 	return &dr.drLog.logs
 }
@@ -370,7 +380,7 @@ func (dr *switcherDryRun) resetSequences(ctx context.Context) error {
 }
 
 func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
-	sortedBackingTableNames := maps.Keys(sequencesByBackingTable)
+	sortedBackingTableNames := maps2.Keys(sequencesByBackingTable)
 	slices.Sort(sortedBackingTableNames)
 	dr.drLog.Log(fmt.Sprintf("The following sequence backing tables used by tables being moved will be initialized: %s",
 		strings.Join(sortedBackingTableNames, ",")))

@@ -27,8 +27,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/constants/sidecar"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -382,6 +380,8 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		return nil, err
 	}
 
+	stats := binlogplayer.NewStats()
+	defer stats.Stop()
 	switch plan.opcode {
 	case insertQuery:
 		qr, err := dbClient.ExecuteFetch(plan.query, 1)
@@ -396,7 +396,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			return nil, fmt.Errorf("insert id %v out of range", qr.InsertID)
 		}
 
-		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
+		vdbc := newVDBClient(dbClient, stats)
 
 		// If we are creating multiple streams, for example in a
 		// merge workflow going from 2 shards to 1 shard, we
@@ -455,7 +455,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
-		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
+		vdbc := newVDBClient(dbClient, stats)
 		for _, id := range ids {
 			params, err := readRow(dbClient, id)
 			if err != nil {
@@ -482,7 +482,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			return &sqltypes.Result{}, nil
 		}
 		// Stop and delete the current controllers.
-		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
+		vdbc := newVDBClient(dbClient, stats)
 		for _, id := range ids {
 			if ct := vre.controllers[id]; ct != nil {
 				ct.Stop()
@@ -680,7 +680,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	var newids []int32
 	for _, shard := range shardGTIDs {
 		sgtid := je.shardGTIDs[shard]
-		bls := proto.Clone(vre.controllers[refid].source).(*binlogdatapb.BinlogSource)
+		bls := vre.controllers[refid].source.CloneVT()
 		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
 
 		workflowType, _ := strconv.ParseInt(params["workflow_type"], 10, 32)

@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"runtime/debug"
@@ -68,6 +69,7 @@ const (
 	initSequenceTable        = "insert into %a.%a (id, next_id, cache) values (0, %d, 1000) on duplicate key update next_id = if(next_id < %d, %d, next_id)"
 	deleteWorkflow           = "delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'"
 	updatePickedSourceTablet = `update _vt.vreplication set message='Picked source tablet: cell:\"%s\" uid:%d' where id=1`
+	getRowsCopied            = "SELECT rows_copied FROM _vt.vreplication WHERE id=1"
 )
 
 var (
@@ -89,14 +91,15 @@ var (
 // from a VtctldServer MoveTablesCreate request to ensure
 // that the VReplication stream(s) are created correctly.
 func TestCreateVReplicationWorkflow(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	sourceKs := "sourceks"
 	sourceTabletUID := 200
 	targetKs := "targetks"
 	targetTabletUID := 300
 	shard := "0"
 	wf := "testwf"
-	tenv := newTestEnv(t, sourceKs, []string{shard})
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
 	defer tenv.close()
 
 	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
@@ -202,7 +205,8 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 // stream(s) are created correctly. Followed by ensuring that
 // SwitchTraffic and ReverseTraffic work as expected.
 func TestMoveTables(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	sourceKs := "sourceks"
 	sourceTabletUID := 200
 	targetKs := "targetks"
@@ -217,7 +221,7 @@ func TestMoveTables(t *testing.T) {
 		topodatapb.TabletType_RDONLY,
 	}
 
-	tenv := newTestEnv(t, sourceKs, []string{sourceShard})
+	tenv := newTestEnv(t, ctx, sourceKs, []string{sourceShard})
 	defer tenv.close()
 
 	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, sourceShard)
@@ -320,6 +324,16 @@ func TestMoveTables(t *testing.T) {
 		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(updatePickedSourceTablet, tenv.cells[0], sourceTabletUID), &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(setSessionTZ, &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(setNames, &sqltypes.Result{}, nil)
+		ftc.vrdbClient.ExpectRequest(getRowsCopied,
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"rows_copied",
+					"int64",
+				),
+				"0",
+			),
+			nil,
+		)
 		ftc.vrdbClient.ExpectRequest(getWorkflowState, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"pos|stop_pos|max_tps|max_replication_lag|state|workflow_type|workflow|workflow_sub_type|defer_secondary_keys",
@@ -434,7 +448,8 @@ func TestMoveTables(t *testing.T) {
 }
 
 func TestUpdateVReplicationWorkflow(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	cells := []string{"zone1"}
 	tabletTypes := []string{"replica"}
 	workflow := "testwf"
@@ -442,7 +457,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	vreplID := 1
 	tabletUID := 100
 
-	tenv := newTestEnv(t, keyspace, []string{shard})
+	tenv := newTestEnv(t, ctx, keyspace, []string{shard})
 	defer tenv.close()
 
 	tablet := tenv.addTablet(t, tabletUID, keyspace, shard)
@@ -573,12 +588,239 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	}
 }
 
+// TestSourceShardSelection tests the RPC calls made by VtctldServer to tablet
+// managers include the correct set of BLS settings.
+//
+// errShortCircuit is intentionally injected into the MoveTables workflow to
+// short-circuit the workflow after we've validated everything we wanted to in
+// the test.
+func TestSourceShardSelection(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sourceKs := "sourceks"
+	sourceShard0 := "-55"
+	sourceShard1 := "55-aa"
+	sourceShard2 := "aa-"
+	sourceTabletUID0 := 200
+	sourceTabletUID1 := 201
+	sourceTabletUID2 := 202
+
+	targetKs := "targetks"
+	targetShard0 := "-80"
+	targetShard1 := "80-"
+	targetTabletUID0 := 300
+	targetTabletUID1 := 301
+
+	wf := "testwf"
+
+	tenv := newTestEnv(t, ctx, sourceKs, []string{sourceShard0, sourceShard1, sourceShard2})
+	defer tenv.close()
+
+	sourceTablets := map[int]*fakeTabletConn{
+		sourceTabletUID0: tenv.addTablet(t, sourceTabletUID0, sourceKs, sourceShard0),
+		sourceTabletUID1: tenv.addTablet(t, sourceTabletUID1, sourceKs, sourceShard1),
+		sourceTabletUID2: tenv.addTablet(t, sourceTabletUID2, sourceKs, sourceShard2),
+	}
+	for _, st := range sourceTablets {
+		defer tenv.deleteTablet(st.tablet)
+	}
+
+	targetTablets := map[int]*fakeTabletConn{
+		targetTabletUID0: tenv.addTablet(t, targetTabletUID0, targetKs, targetShard0),
+		targetTabletUID1: tenv.addTablet(t, targetTabletUID1, targetKs, targetShard1),
+	}
+	for _, tt := range targetTablets {
+		defer tenv.deleteTablet(tt.tablet)
+	}
+
+	ws := workflow.NewServer(tenv.ts, tenv.tmc)
+
+	tenv.ts.SaveVSchema(ctx, sourceKs, &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id",
+					Name:   "hash",
+				}},
+			},
+		},
+	})
+	tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id",
+					Name:   "hash",
+				}},
+			},
+		},
+	})
+
+	tests := []struct {
+		name    string
+		req     *vtctldatapb.MoveTablesCreateRequest
+		schema  *tabletmanagerdatapb.SchemaDefinition
+		vschema *vschemapb.Keyspace
+		streams map[int][]string
+	}{
+		{
+			name: "same primary vindexes, use intersecting source shards",
+			req: &vtctldatapb.MoveTablesCreateRequest{
+				SourceKeyspace: sourceKs,
+				TargetKeyspace: targetKs,
+				Workflow:       wf,
+				Cells:          tenv.cells,
+				AllTables:      true,
+				AutoStart:      false,
+			},
+			streams: map[int][]string{
+				targetTabletUID0: {
+					sourceShard0,
+					sourceShard1,
+				},
+				targetTabletUID1: {
+					sourceShard1,
+					sourceShard2,
+				},
+			},
+		},
+		{
+			name: "different primary vindexes, use all source shards",
+			req: &vtctldatapb.MoveTablesCreateRequest{
+				SourceKeyspace: sourceKs,
+				TargetKeyspace: targetKs,
+				Workflow:       wf,
+				Cells:          tenv.cells,
+				AllTables:      true,
+				AutoStart:      false,
+			},
+			vschema: &vschemapb.Keyspace{
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "xxhash",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Column: "id",
+							Name:   "hash",
+						}},
+					},
+				},
+			},
+			streams: map[int][]string{
+				targetTabletUID0: {
+					sourceShard0,
+					sourceShard1,
+					sourceShard2,
+				},
+				targetTabletUID1: {
+					sourceShard0,
+					sourceShard1,
+					sourceShard2,
+				},
+			},
+		},
+	}
+
+	for _, tt := range targetTablets {
+		tenv.tmc.setVReplicationExecResults(tt.tablet, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'",
+			targetKs, wf), &sqltypes.Result{})
+		tenv.tmc.setVReplicationExecResults(tt.tablet, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and message='FROZEN' and workflow_sub_type != 1",
+			targetKs), &sqltypes.Result{})
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// This is needed because MockDBClient uses t.Fatal()
+			// which doesn't play well with subtests.
+			defer func() {
+				if err := recover(); err != nil {
+					t.Errorf("Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
+				}
+			}()
+
+			require.NotNil(t, tt.req, "No MoveTablesCreate request provided")
+			require.NotEmpty(t, tt.streams, "No expected streams provided")
+
+			if tt.schema == nil {
+				tt.schema = defaultSchema
+			}
+			tenv.tmc.SetSchema(tt.schema)
+
+			if tt.vschema != nil {
+				tenv.ts.SaveVSchema(ctx, targetKs, tt.vschema)
+			}
+
+			for uid, streams := range tt.streams {
+				tt := targetTablets[uid]
+				for i, sourceShard := range streams {
+					tt.vrdbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+					var err error
+					if i == len(streams)-1 {
+						// errShortCircuit is intentionally injected into the MoveTables
+						// workflow to short-circuit the workflow after we've validated
+						// everything we wanted to in the test.
+						err = errShortCircuit
+					}
+					tt.vrdbClient.ExpectRequest(
+						fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(id, \'%s.hash\', \'%s\')\"}}', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 0)`,
+							insertVReplicationPrefix, wf, sourceKs, sourceShard, targetKs, tt.tablet.Shard, tenv.cells[0], tenv.dbName),
+						&sqltypes.Result{InsertID: uint64(i + 1)},
+						err,
+					)
+					if errors.Is(err, errShortCircuit) {
+						break
+					}
+					tt.vrdbClient.ExpectRequest(getAutoIncrementStep, &sqltypes.Result{}, nil)
+					tt.vrdbClient.ExpectRequest(
+						fmt.Sprintf("select * from _vt.vreplication where id = %d", uint64(i+1)),
+						sqltypes.MakeTestResult(
+							sqltypes.MakeTestFields(
+								"id|source|state",
+								"int64|varchar|varchar",
+							),
+							fmt.Sprintf("%d|%s|Stopped", uint64(i+1), fmt.Sprintf(`keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select * from t1 where in_keyrange(id, '%s.hash', '%s')"}}`, sourceKs, sourceShard, targetKs, tt.tablet.Shard)),
+						),
+						nil,
+					)
+				}
+			}
+
+			_, err := ws.MoveTablesCreate(ctx, tt.req)
+			for _, tt := range targetTablets {
+				tt.vrdbClient.Wait()
+			}
+			// errShortCircuit is intentionally injected into the MoveTables
+			// workflow to short-circuit the workflow after we've validated
+			// everything we wanted to in the test.
+			require.ErrorContains(t, err, fmt.Sprintf("%s\n%s", errShortCircuit.Error(), errShortCircuit.Error()))
+		})
+	}
+}
+
 // TestFailedMoveTablesCreateCleanup tests that the workflow
 // and its artifacts are cleaned up when the workflow creation
 // fails -- specifically after the point where we have created
 // the workflow streams.
 func TestFailedMoveTablesCreateCleanup(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	sourceKs := "sourceks"
 	sourceTabletUID := 200
 	shard := "0"
@@ -589,7 +831,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	invalidTimeZone := "NOPE"
 	bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"%s\" filter:\"select * from %s\"}}",
 		sourceKs, shard, table, table)
-	tenv := newTestEnv(t, sourceKs, []string{shard})
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
 	defer tenv.close()
 	ws := workflow.NewServer(tenv.ts, tenv.tmc)
 
@@ -653,6 +895,16 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 		&sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(setSessionTZ, &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(setNames, &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(getRowsCopied,
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"rows_copied",
+				"int64",
+			),
+			"0",
+		),
+		nil,
+	)
 	targetTablet.vrdbClient.ExpectRequest(getWorkflowState,
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(

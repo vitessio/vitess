@@ -154,8 +154,8 @@ func (l *Limit) GetFields(ctx context.Context, vcursor VCursor, bindVars map[str
 }
 
 // Inputs returns the input to limit
-func (l *Limit) Inputs() []Primitive {
-	return []Primitive{l.Input}
+func (l *Limit) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{l.Input}, nil
 }
 
 // NeedsTransaction implements the Primitive interface.

@@ -208,8 +208,10 @@ func TestStripConstraints(t *testing.T) {
 }
 
 func TestAddTablesToVSchema(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("zone1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
 	srcks := "source"
 	ws := &Server{
 		ts: ts,
@@ -417,6 +419,8 @@ func TestAddTablesToVSchema(t *testing.T) {
 }
 
 func TestMigrateVSchema(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		Cell:           "cell",
@@ -427,7 +431,7 @@ func TestMigrateVSchema(t *testing.T) {
 			SourceExpression: "select * from t1",
 		}},
 	}
-	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
@@ -438,7 +442,6 @@ func TestMigrateVSchema(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzGetWorkflowStatusQuery, getWorkflowStatusRes)
 	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
 
-	ctx := context.Background()
 	_, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 		Workflow:       ms.Workflow,
 		Cells:          []string{ms.Cell},
@@ -468,7 +471,6 @@ func TestMigrateVSchema(t *testing.T) {
 //   - TestPlayerDDL tests that the vplayer correctly implements the ddl behavior
 //   - We have a manual e2e test for the full behavior: TestVReplicationDDLHandling
 func TestMoveTablesDDLFlag(t *testing.T) {
-	ctx := context.Background()
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		SourceKeyspace: "sourceks",
@@ -481,7 +483,9 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 
 	for onDDLAction := range binlogdatapb.OnDDLAction_value {
 		t.Run(fmt.Sprintf("OnDDL Flag:%v", onDDLAction), func(t *testing.T) {
-			env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 			defer env.close()
 			// This is the default and go does not marshal defaults
 			// for prototext fields so we use the default insert stmt.
@@ -517,4 +521,57 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			require.Equal(t, want, fmt.Sprintf("%+v", res))
 		})
 	}
+}
+
+// TestMoveTablesNoRoutingRules confirms that MoveTables does not create routing rules if --no-routing-rules is specified.
+func TestMoveTablesNoRoutingRules(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+	// This is the default and go does not marshal defaults
+	// for prototext fields so we use the default insert stmt.
+	//insert = fmt.Sprintf(`/insert into .vreplication\(.*on_ddl:%s.*`, onDDLAction)
+	//env.tmc.expectVRQuery(100, "/.*", &sqltypes.Result{})
+
+	// TODO: we cannot test the actual query generated w/o having a
+	// TabletManager. Importing the tabletmanager package, however, causes
+	// a circular dependency.
+	// The TabletManager portion is tested in rpc_vreplication_test.go.
+	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, getWorkflowQuery, getWorkflowRes)
+	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzGetWorkflowStatusQuery, getWorkflowStatusRes)
+	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
+
+	targetShard, err := env.topoServ.GetShardNames(ctx, ms.TargetKeyspace)
+	require.NoError(t, err)
+	sourceShard, err := env.topoServ.GetShardNames(ctx, ms.SourceKeyspace)
+	require.NoError(t, err)
+	want := fmt.Sprintf("shard_streams:{key:\"%s/%s\" value:{streams:{id:1 tablet:{cell:\"%s\" uid:200} source_shard:\"%s/%s\" position:\"MySQL56/9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97\" status:\"running\" info:\"VStream Lag: 0s\"}}}",
+		ms.TargetKeyspace, targetShard[0], env.cell, ms.SourceKeyspace, sourceShard[0])
+
+	res, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+		Workflow:       ms.Workflow,
+		SourceKeyspace: ms.SourceKeyspace,
+		TargetKeyspace: ms.TargetKeyspace,
+		IncludeTables:  []string{"t1"},
+		NoRoutingRules: true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, want, fmt.Sprintf("%+v", res))
+	rr, err := env.ws.ts.GetRoutingRules(ctx)
+	require.NoError(t, err)
+	require.Zerof(t, len(rr.Rules), "routing rules should be empty, found %+v", rr.Rules)
 }

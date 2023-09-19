@@ -25,7 +25,6 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
-	"time"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -128,18 +127,16 @@ type Conn struct {
 }
 
 // dial returns immediately, unless the Conn points to the sentinel
-// UnreachableServerAddr, in which case it will block until the context expires
-// and return the context's error.
+// UnreachableServerAddr, in which case it will block until the context expires.
 func (c *Conn) dial(ctx context.Context) error {
 	if c.closed {
 		return ErrConnectionClosed
 	}
 	if c.serverAddr == UnreachableServerAddr {
 		<-ctx.Done()
-		return ctx.Err()
 	}
 
-	return nil
+	return ctx.Err()
 }
 
 // Close is part of the topo.Conn interface.
@@ -236,14 +233,13 @@ func (n *node) PropagateWatchError(err error) {
 // NewServerAndFactory returns a new MemoryTopo and the backing factory for all
 // the cells. It will create one cell for each parameter passed in.  It will log.Exit out
 // in case of a problem.
-func NewServerAndFactory(cells ...string) (*topo.Server, *Factory) {
+func NewServerAndFactory(ctx context.Context, cells ...string) (*topo.Server, *Factory) {
 	f := &Factory{
 		cells:      make(map[string]*node),
 		generation: uint64(rand.Int63n(1 << 60)),
 	}
 	f.cells[topo.GlobalCell] = f.newDirectory(topo.GlobalCell, nil)
 
-	ctx := context.Background()
 	ts, err := topo.NewWithFactory(f, "" /*serverAddress*/, "" /*root*/)
 	if err != nil {
 		log.Exitf("topo.NewWithFactory() failed: %v", err)
@@ -258,8 +254,8 @@ func NewServerAndFactory(cells ...string) (*topo.Server, *Factory) {
 }
 
 // NewServer returns the new server
-func NewServer(cells ...string) *topo.Server {
-	server, _ := NewServerAndFactory(cells...)
+func NewServer(ctx context.Context, cells ...string) *topo.Server {
+	server, _ := NewServerAndFactory(ctx, cells...)
 	return server
 }
 
@@ -351,8 +347,4 @@ func (f *Factory) recursiveDelete(n *node) {
 	if len(parent.children) == 0 {
 		f.recursiveDelete(parent)
 	}
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }

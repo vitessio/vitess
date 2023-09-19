@@ -233,6 +233,9 @@ func (ft *fakeTablet) StopActionLoop(t *testing.T) {
 	if ft.StartHTTPServer {
 		ft.HTTPListener.Close()
 	}
+	if ft.RPCServer != nil {
+		ft.RPCServer.Stop()
+	}
 	ft.Listener.Close()
 	ft.TM.Stop()
 	ft.TM = nil

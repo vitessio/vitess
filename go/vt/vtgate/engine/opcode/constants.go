@@ -128,35 +128,26 @@ func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 }
 
 // Type returns the opcode return sql type, and a bool telling is we are sure about this type or not
-func (code AggregateOpcode) Type(typ *querypb.Type) (querypb.Type, bool) {
+func (code AggregateOpcode) Type(typ querypb.Type) querypb.Type {
 	switch code {
 	case AggregateUnassigned:
-		return sqltypes.Null, false
+		return sqltypes.Null
 	case AggregateGroupConcat:
-		if typ == nil {
-			return sqltypes.Text, false
+		if sqltypes.IsBinary(typ) {
+			return sqltypes.Blob
 		}
-		if sqltypes.IsBinary(*typ) {
-			return sqltypes.Blob, true
-		}
-		return sqltypes.Text, true
+		return sqltypes.Text
 	case AggregateMax, AggregateMin, AggregateAnyValue:
-		if typ == nil {
-			return sqltypes.Null, false
-		}
-		return *typ, true
+		return typ
 	case AggregateSumDistinct, AggregateSum:
-		if typ == nil {
-			return sqltypes.Float64, false
+		if sqltypes.IsIntegral(typ) || sqltypes.IsDecimal(typ) {
+			return sqltypes.Decimal
 		}
-		if sqltypes.IsIntegral(*typ) || sqltypes.IsDecimal(*typ) {
-			return sqltypes.Decimal, true
-		}
-		return sqltypes.Float64, true
+		return sqltypes.Float64
 	case AggregateCount, AggregateCountStar, AggregateCountDistinct:
-		return sqltypes.Int64, true
+		return sqltypes.Int64
 	case AggregateGtid:
-		return sqltypes.VarChar, true
+		return sqltypes.VarChar
 	default:
 		panic(code.String()) // we have a unit test checking we never reach here
 	}

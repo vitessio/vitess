@@ -18,8 +18,7 @@ package operators
 
 import (
 	"fmt"
-
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -37,7 +36,6 @@ type Union struct {
 
 	unionColumns              sqlparser.SelectExprs
 	unionColumnsAsAlisedExprs []*sqlparser.AliasedExpr
-	offsetPlanned             bool
 }
 
 func newUnion(srcs []ops.Operator, sourceSelects []sqlparser.SelectExprs, columns sqlparser.SelectExprs, distinct bool) *Union {

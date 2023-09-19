@@ -54,12 +54,18 @@ service Vtctld {
   rpc Backup(vtctldata.BackupRequest) returns (stream vtctldata.BackupResponse) {};
   // BackupShard chooses a tablet in the shard and uses it to create a backup.
   rpc BackupShard(vtctldata.BackupShardRequest) returns (stream vtctldata.BackupResponse) {};
+  // CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.
+  rpc CancelSchemaMigration(vtctldata.CancelSchemaMigrationRequest) returns (vtctldata.CancelSchemaMigrationResponse) {};
   // ChangeTabletType changes the db type for the specified tablet, if possible.
   // This is used primarily to arrange replicas, and it will not convert a
   // primary. For that, use InitShardPrimary.
   //
   // NOTE: This command automatically updates the serving graph.
   rpc ChangeTabletType(vtctldata.ChangeTabletTypeRequest) returns (vtctldata.ChangeTabletTypeResponse) {};
+  // CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
+  rpc CleanupSchemaMigration(vtctldata.CleanupSchemaMigrationRequest) returns (vtctldata.CleanupSchemaMigrationResponse) {};
+  // CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
+  rpc CompleteSchemaMigration(vtctldata.CompleteSchemaMigrationRequest) returns (vtctldata.CompleteSchemaMigrationResponse) {};
   // CreateKeyspace creates the specified keyspace in the topology. For a
   // SNAPSHOT keyspace, the request must specify the name of a base keyspace,
   // as well as a snapshot time.
@@ -162,6 +168,8 @@ service Vtctld {
   // PlannedReparentShard or EmergencyReparentShard should be used in those
   // cases instead.
   rpc InitShardPrimary(vtctldata.InitShardPrimaryRequest) returns (vtctldata.InitShardPrimaryResponse) {};
+  // LaunchSchemaMigration launches one or all migrations executed with --postpone-launch.
+  rpc LaunchSchemaMigration(vtctldata.LaunchSchemaMigrationRequest) returns (vtctldata.LaunchSchemaMigrationResponse) {};
   // MoveTablesCreate creates a workflow which moves one or more tables from a
   // source keyspace to a target keyspace.
   rpc MoveTablesCreate(vtctldata.MoveTablesCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};
@@ -215,8 +223,12 @@ service Vtctld {
   // only works if the current replica position matches the last known reparent
   // action.
   rpc ReparentTablet(vtctldata.ReparentTabletRequest) returns (vtctldata.ReparentTabletResponse) {};
+  // ReshardCreate creates a workflow to reshard a keyspace.
+  rpc ReshardCreate(vtctldata.ReshardCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};
   // RestoreFromBackup stops mysqld for the given tablet and restores a backup.
   rpc RestoreFromBackup(vtctldata.RestoreFromBackupRequest) returns (stream vtctldata.RestoreFromBackupResponse) {};
+  // RetrySchemaMigration marks a given schema migration for retry.
+  rpc RetrySchemaMigration(vtctldata.RetrySchemaMigrationRequest) returns (vtctldata.RetrySchemaMigrationResponse) {};
   // RunHealthCheck runs a healthcheck on the remote tablet.
   rpc RunHealthCheck(vtctldata.RunHealthCheckRequest) returns (vtctldata.RunHealthCheckResponse) {};
   // SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.

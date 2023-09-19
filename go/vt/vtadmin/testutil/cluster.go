@@ -164,10 +164,10 @@ type IntegrationTestCluster struct {
 //
 // (TODO|@ajm188): Unify this with the BuildCluster API. Also this does not
 // support any cluster methods that involve vtgate/vitessdriver queries.
-func BuildIntegrationTestCluster(t testing.TB, c *vtadminpb.Cluster, cells ...string) *IntegrationTestCluster {
+func BuildIntegrationTestCluster(t testing.TB, ctx context.Context, c *vtadminpb.Cluster, cells ...string) *IntegrationTestCluster {
 	t.Helper()
 
-	ts, factory := memorytopo.NewServerAndFactory(cells...)
+	ts, factory := memorytopo.NewServerAndFactory(ctx, cells...)
 	vtctld := grpcvtctldtestutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return grpcvtctldserver.NewVtctldServer(ts)
 	})

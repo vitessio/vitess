@@ -27,13 +27,11 @@ import (
 	"os/exec"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -232,12 +230,28 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 	}
 }
 
-func validateThatQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) bool {
-	count := getQueryCount(tablet.QueryzURL, matchQuery)
+func executeOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) (int, []byte, int, []byte) {
+	queryStatsURL := fmt.Sprintf("http://%s:%d/debug/query_stats", tablet.TabletHostname, tablet.Port)
+
+	count0, body0 := getQueryCount(t, queryStatsURL, matchQuery)
+
 	qr := execVtgateQuery(t, conn, ksName, query)
 	require.NotNil(t, qr)
-	newCount := getQueryCount(tablet.QueryzURL, matchQuery)
-	return newCount == count+1
+
+	count1, body1 := getQueryCount(t, queryStatsURL, matchQuery)
+	return count0, body0, count1, body1
+}
+
+func assertQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) {
+	t.Helper()
+	count0, body0, count1, body1 := executeOnTablet(t, conn, tablet, ksName, query, matchQuery)
+	assert.Equalf(t, count0+1, count1, "query %q did not execute in target;\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\n", query, matchQuery, body0, body1)
+}
+
+func assertQueryDoesNotExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) {
+	t.Helper()
+	count0, body0, count1, body1 := executeOnTablet(t, conn, tablet, ksName, query, matchQuery)
+	assert.Equalf(t, count0, count1, "query %q executed in target;\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\n", query, matchQuery, body0, body1)
 }
 
 // waitForWorkflowState waits for all of the given workflow's
@@ -352,77 +366,36 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 	}
 }
 
-func getHTTPBody(url string) string {
+func getHTTPBody(t *testing.T, url string) []byte {
 	resp, err := http.Get(url)
-	if err != nil {
-		log.Infof("http Get returns %+v", err)
-		return ""
-	}
-	if resp.StatusCode != 200 {
-		log.Infof("http Get returns status %d", resp.StatusCode)
-		return ""
-	}
-	respByte, _ := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+
 	defer resp.Body.Close()
-	body := string(respByte)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	return body
 }
 
-func getQueryCount(url string, query string) int {
-	var headings, row []string
-	var rows [][]string
-	body := getHTTPBody(url)
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(body))
-	if err != nil {
-		log.Infof("goquery parsing returns %+v\n", err)
-		return 0
+func getQueryCount(t *testing.T, url string, query string) (int, []byte) {
+	body := getHTTPBody(t, url)
+
+	var queryStats []struct {
+		Query      string
+		QueryCount uint64
 	}
 
-	var queryIndex, countIndex, count int
-	queryIndex = -1
-	countIndex = -1
+	err := json.Unmarshal(body, &queryStats)
+	require.NoError(t, err)
 
-	doc.Find("table").Each(func(index int, tablehtml *goquery.Selection) {
-		tablehtml.Find("tr").Each(func(indextr int, rowhtml *goquery.Selection) {
-			rowhtml.Find("th").Each(func(indexth int, tableheading *goquery.Selection) {
-				heading := tableheading.Text()
-				if heading == "Query" {
-					queryIndex = indexth
-				}
-				if heading == "Count" {
-					countIndex = indexth
-				}
-				headings = append(headings, heading)
-			})
-			rowhtml.Find("td").Each(func(indexth int, tablecell *goquery.Selection) {
-				row = append(row, tablecell.Text())
-			})
-			rows = append(rows, row)
-			row = nil
-		})
-	})
-	if queryIndex == -1 || countIndex == -1 {
-		log.Infof("Queryz response is incorrect")
-		return 0
-	}
-	for _, row := range rows {
-		if len(row) != len(headings) {
-			continue
-		}
-		filterChars := []string{"_", "`"}
-		//Queries seem to include non-printable characters at times and hence equality fails unless these are removed
-		re := regexp.MustCompile("[[:^ascii:]]")
-		foundQuery := re.ReplaceAllLiteralString(row[queryIndex], "")
-		cleanQuery := re.ReplaceAllLiteralString(query, "")
-		for _, filterChar := range filterChars {
-			foundQuery = strings.ReplaceAll(foundQuery, filterChar, "")
-			cleanQuery = strings.ReplaceAll(cleanQuery, filterChar, "")
-		}
-		if foundQuery == cleanQuery || strings.Contains(foundQuery, cleanQuery) {
-			count, _ = strconv.Atoi(row[countIndex])
+	for _, q := range queryStats {
+		if strings.Contains(q.Query, query) {
+			return int(q.QueryCount), body
 		}
 	}
-	return count
+
+	return 0, body
 }
 
 func validateDryRunResults(t *testing.T, output string, want []string) {
@@ -478,7 +451,17 @@ func checkIfTableExists(t *testing.T, vc *VitessCluster, tabletAlias string, tab
 	return found, nil
 }
 
-func checkIfDenyListExists(t *testing.T, vc *VitessCluster, ksShard string, table string) (bool, error) {
+func validateTableInDenyList(t *testing.T, vc *VitessCluster, ksShard string, table string, mustExist bool) {
+	found, err := isTableInDenyList(t, vc, ksShard, table)
+	require.NoError(t, err)
+	if mustExist {
+		require.True(t, found, "Table %s not found in deny list", table)
+	} else {
+		require.False(t, found, "Table %s found in deny list", table)
+	}
+}
+
+func isTableInDenyList(t *testing.T, vc *VitessCluster, ksShard string, table string) (bool, error) {
 	var output string
 	var err error
 	found := false
@@ -531,21 +514,10 @@ func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
 	var err error
 	url := fmt.Sprintf("http://localhost:%d/debug/vars", port)
 	log.Infof("url: %s, varPath: %s", url, strings.Join(varPath, ":"))
-	body := getHTTPBody(url)
-	val, _, _, err = jsonparser.Get([]byte(body), varPath...)
+	body := getHTTPBody(t, url)
+	val, _, _, err = jsonparser.Get(body, varPath...)
 	require.NoError(t, err)
 	return string(val), nil
-}
-
-func getDebugVars(t *testing.T, port int) map[string]any {
-	out := map[string]any{}
-	response, err := http.Get(fmt.Sprintf("http://localhost:%d/debug/vars", port))
-	if err != nil {
-		return out
-	}
-	defer response.Body.Close()
-	_ = json.NewDecoder(response.Body).Decode(&out)
-	return out
 }
 
 func confirmWorkflowHasCopiedNoData(t *testing.T, targetKS, workflow string) {

@@ -17,13 +17,11 @@ limitations under the License.
 package topotools
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sync"
 	"testing"
-	"time"
-
-	"context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -31,10 +29,10 @@ import (
 
 // TestCreateShard tests a few cases for topo.CreateShard
 func TestCreateShard(t *testing.T) {
-	ctx := context.Background()
-
-	// Set up topology.
-	ts := memorytopo.NewServer("test_cell")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "test_cell")
+	defer ts.Close()
 
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -60,10 +58,10 @@ func TestCreateShard(t *testing.T) {
 // TODO(sougou): we should eventually disallow multiple shards
 // for unsharded keyspaces.
 func TestCreateShardMultiUnsharded(t *testing.T) {
-	ctx := context.Background()
-
-	// Set up topology.
-	ts := memorytopo.NewServer("test_cell")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "test_cell")
+	defer ts.Close()
 
 	// create keyspace
 	keyspace := "test_keyspace"
@@ -102,16 +100,14 @@ func TestCreateShardMultiUnsharded(t *testing.T) {
 // for a long time in parallel, making sure the locking and everything
 // works correctly.
 func TestGetOrCreateShard(t *testing.T) {
-	ctx := context.Background()
-
-	// Set up topology.
-	cell := "test_cell"
-	ts := memorytopo.NewServer(cell)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "test_cell")
+	defer ts.Close()
 
 	// and do massive parallel GetOrCreateShard
 	keyspace := "test_keyspace"
 	wg := sync.WaitGroup{}
-	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func(i int) {

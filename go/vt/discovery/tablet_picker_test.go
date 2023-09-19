@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -30,10 +32,14 @@ import (
 )
 
 func TestPickPrimary(t *testing.T) {
-	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
-	want := addTablet(te, 100, topodatapb.TabletType_PRIMARY, "cell", true, true)
-	defer deleteTablet(t, te, want)
+	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	te := newPickerTestEnv(t, ctx, []string{"cell", "otherCell"})
+	want := addTablet(ctx, te, 100, topodatapb.TabletType_PRIMARY, "cell", true, true)
+	defer deleteTablet(t, te, want)
+	ctx, cancel = context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
 	_, err := te.topoServ.UpdateShardFields(ctx, te.keyspace, te.shard, func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = want.Alias
@@ -41,10 +47,10 @@ func TestPickPrimary(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"otherCell"}, "cell", te.keyspace, te.shard, "primary", TabletPickerOptions{})
+	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"otherCell"}, "cell", te.keyspace, te.shard, "primary", TabletPickerOptions{})
 	require.NoError(t, err)
 
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx2, cancel2 := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel2()
 	tablet, err := tp.PickForStreaming(ctx2)
 	require.NoError(t, err)
@@ -52,6 +58,7 @@ func TestPickPrimary(t *testing.T) {
 }
 
 func TestPickLocalPreferences(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	type tablet struct {
 		id   uint32
 		typ  topodatapb.TabletType
@@ -263,20 +270,21 @@ func TestPickLocalPreferences(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			te := newPickerTestEnv(t, tcase.envCells)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			te := newPickerTestEnv(t, ctx, tcase.envCells)
 			var testTablets []*topodatapb.Tablet
 			for _, tab := range tcase.tablets {
-				testTablets = append(testTablets, addTablet(te, int(tab.id), tab.typ, tab.cell, true, true))
+				testTablets = append(testTablets, addTablet(ctx, te, int(tab.id), tab.typ, tab.cell, true, true))
 			}
 			defer func() {
 				for _, tab := range testTablets {
 					deleteTablet(t, te, tab)
 				}
 			}()
-			tp, err := NewTabletPicker(context.Background(), te.topoServ, tcase.inCells, tcase.localCell, te.keyspace, te.shard, tcase.inTabletTypes, tcase.options)
+			tp, err := NewTabletPicker(ctx, te.topoServ, tcase.inCells, tcase.localCell, te.keyspace, te.shard, tcase.inTabletTypes, tcase.options)
 			require.NoError(t, err)
 			require.Equal(t, tp.localCellInfo.localCell, tcase.localCell)
 			require.ElementsMatch(t, tp.cells, tcase.tpCells)
@@ -297,26 +305,26 @@ func TestPickLocalPreferences(t *testing.T) {
 }
 
 func TestPickCellPreferenceLocalCell(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	// test env puts all cells into an alias called "cella"
-	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
-	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
+	te := newPickerTestEnv(t, ctx, []string{"cell", "otherCell"})
+	want1 := addTablet(ctx, te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
 	defer deleteTablet(t, te, want1)
 
 	// Local cell preference is default
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
+	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
-	ctx1, cancel1 := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel1()
-	tablet, err := tp.PickForStreaming(ctx1)
+	tablet, err := tp.PickForStreaming(ctx)
 	require.NoError(t, err)
 	assert.True(t, proto.Equal(want1, tablet), "Pick: %v, want %v", tablet, want1)
 
 	// create a tablet in the other cell
-	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
+	want2 := addTablet(ctx, te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
 	defer deleteTablet(t, te, want2)
 
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx2, cancel2 := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel2()
 
 	// In 20 attempts, only tablet in "cell" will be picked because we give local cell priority by default
@@ -336,49 +344,81 @@ func TestPickCellPreferenceLocalCell(t *testing.T) {
 }
 
 func TestPickCellPreferenceLocalAlias(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	// test env puts all cells into an alias called "cella"
-	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
+	te := newPickerTestEnv(t, ctx, []string{"cell", "otherCell"})
+	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	// create a tablet in the other cell, it should be picked
-	want := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
+	want := addTablet(ctx, te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
 	defer deleteTablet(t, te, want)
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
 	tablet, err := tp.PickForStreaming(ctx)
 	require.NoError(t, err)
 	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
 }
 
-func TestPickUsingCellAliasOnlySpecified(t *testing.T) {
-	// test env puts all cells into an alias called "cella"
-	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
-	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(t, te, want1)
+// TestPickUsingCellAsAlias confirms that when the tablet picker is
+// given a cell name that is an alias, it will choose a tablet that
+// exists within a cell that is part of the alias.
+func TestPickUsingCellAsAlias(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPreference: "OnlySpecified"})
+	// The test env puts all cells into an alias called "cella".
+	// We're also going to specify an optional extraCell that is NOT
+	// added to the alias.
+	te := newPickerTestEnv(t, ctx, []string{"cell1", "cell2", "cell3"}, "xtracell")
+	// Specify the alias as the cell.
+	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"cella"}, "cell1", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
-	ctx1, cancel1 := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel1()
-	tablet, err := tp.PickForStreaming(ctx1)
+	// Create a tablet in one of the main cells, it should be
+	// picked as it is part of the cella alias. This tablet is
+	// NOT part of the talbet picker's local cell (cell1) so it
+	// will not be given local preference.
+	want := addTablet(ctx, te, 101, topodatapb.TabletType_REPLICA, "cell2", true, true)
+	defer deleteTablet(t, te, want)
+	// Create a tablet in an extra cell which is thus NOT part of
+	// the cella alias so it should NOT be picked.
+	noWant := addTablet(ctx, te, 102, topodatapb.TabletType_REPLICA, "xtracell", true, true)
+	defer deleteTablet(t, te, noWant)
+	// Try it many times to be sure we don't ever pick the wrong one.
+	for i := 0; i < 100; i++ {
+		tablet, err := tp.PickForStreaming(ctx)
+		require.NoError(t, err)
+		assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
+	}
+}
+
+func TestPickUsingCellAliasOnlySpecified(t *testing.T) {
+	ctx := utils.LeakCheckContextTimeout(t, 200*time.Millisecond)
+
+	// test env puts all cells into an alias called "cella"
+	te := newPickerTestEnv(t, ctx, []string{"cell", "otherCell"})
+	want1 := addTablet(ctx, te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
+	defer deleteTablet(t, te, want1)
+
+	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPreference: "OnlySpecified"})
+	require.NoError(t, err)
+
+	tablet, err := tp.PickForStreaming(ctx)
 	require.NoError(t, err)
 	assert.True(t, proto.Equal(want1, tablet), "Pick: %v, want %v", tablet, want1)
 
 	// create a tablet in the other cell, it should be picked
 	deleteTablet(t, te, want1)
-	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
+	want2 := addTablet(ctx, te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
 	defer deleteTablet(t, te, want2)
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx2, cancel2 := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel2()
 	tablet, err = tp.PickForStreaming(ctx2)
 	require.NoError(t, err)
 	assert.True(t, proto.Equal(want2, tablet), "Pick: %v, want %v", tablet, want2)
 
 	// addTablet again and test that both are picked at least once
-	want1 = addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	ctx3, cancel3 := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	want1 = addTablet(ctx, te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
+	ctx3, cancel3 := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel3()
 
 	// In 20 attempts each of the tablets should get picked at least once.
@@ -399,8 +439,10 @@ func TestPickUsingCellAliasOnlySpecified(t *testing.T) {
 }
 
 func TestTabletAppearsDuringSleep(t *testing.T) {
-	te := newPickerTestEnv(t, []string{"cell"})
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
+	ctx := utils.LeakCheckContextTimeout(t, 200*time.Millisecond)
+
+	te := newPickerTestEnv(t, ctx, []string{"cell"})
+	tp, err := NewTabletPicker(ctx, te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	delay := GetTabletPickerRetryDelay()
@@ -412,14 +454,14 @@ func TestTabletAppearsDuringSleep(t *testing.T) {
 	result := make(chan *topodatapb.Tablet)
 	// start picker first, then add tablet
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+		ctx, cancel := context.WithTimeout(ctx, 20*time.Millisecond)
 		defer cancel()
 		tablet, err := tp.PickForStreaming(ctx)
 		assert.NoError(t, err)
 		result <- tablet
 	}()
 
-	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
+	want := addTablet(ctx, te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
 	defer deleteTablet(t, te, want)
 	got := <-result
 	require.NotNil(t, got, "Tablet should not be nil")
@@ -427,11 +469,13 @@ func TestTabletAppearsDuringSleep(t *testing.T) {
 }
 
 func TestPickErrorLocalPreferenceDefault(t *testing.T) {
-	te := newPickerTestEnv(t, []string{"cell"})
-	_, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "badtype", TabletPickerOptions{})
+	ctx := utils.LeakCheckContext(t)
+
+	te := newPickerTestEnv(t, ctx, []string{"cell"})
+	_, err := NewTabletPicker(ctx, te.topoServ, te.cells, "cell", te.keyspace, te.shard, "badtype", TabletPickerOptions{})
 	assert.EqualError(t, err, "failed to parse list of tablet types: badtype")
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
+	tp, err := NewTabletPicker(ctx, te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 	delay := GetTabletPickerRetryDelay()
 	defer func() {
@@ -439,25 +483,27 @@ func TestPickErrorLocalPreferenceDefault(t *testing.T) {
 	}()
 	SetTabletPickerRetryDelay(11 * time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer cancel()
+	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, 20*time.Millisecond)
+	defer timeoutCancel()
 	// no tablets
-	_, err = tp.PickForStreaming(ctx)
+	_, err = tp.PickForStreaming(timeoutCtx)
 	require.EqualError(t, err, "context has expired")
 	// no tablets of the correct type
-	defer deleteTablet(t, te, addTablet(te, 200, topodatapb.TabletType_RDONLY, "cell", true, true))
-	ctx, cancel = context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer cancel()
-	_, err = tp.PickForStreaming(ctx)
+	defer deleteTablet(t, te, addTablet(ctx, te, 200, topodatapb.TabletType_RDONLY, "cell", true, true))
+	timeoutCtx, timeoutCancel = context.WithTimeout(ctx, 20*time.Millisecond)
+	defer timeoutCancel()
+	_, err = tp.PickForStreaming(timeoutCtx)
 	require.EqualError(t, err, "context has expired")
 	// if local preference is selected, tp cells include's the local cell's alias
 	require.Greater(t, globalTPStats.noTabletFoundError.Counts()["cell_cella.ks.0.replica"], int64(0))
 }
 
 func TestPickErrorOnlySpecified(t *testing.T) {
-	te := newPickerTestEnv(t, []string{"cell"})
+	ctx := utils.LeakCheckContext(t)
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPreference: "OnlySpecified"})
+	te := newPickerTestEnv(t, ctx, []string{"cell"})
+
+	tp, err := NewTabletPicker(ctx, te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPreference: "OnlySpecified"})
 	require.NoError(t, err)
 	delay := GetTabletPickerRetryDelay()
 	defer func() {
@@ -465,16 +511,16 @@ func TestPickErrorOnlySpecified(t *testing.T) {
 	}()
 	SetTabletPickerRetryDelay(11 * time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer cancel()
+	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, 20*time.Millisecond)
+	defer timeoutCancel()
 	// no tablets
-	_, err = tp.PickForStreaming(ctx)
+	_, err = tp.PickForStreaming(timeoutCtx)
 	require.EqualError(t, err, "context has expired")
 	// no tablets of the correct type
-	defer deleteTablet(t, te, addTablet(te, 200, topodatapb.TabletType_RDONLY, "cell", true, true))
-	ctx, cancel = context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer cancel()
-	_, err = tp.PickForStreaming(ctx)
+	defer deleteTablet(t, te, addTablet(ctx, te, 200, topodatapb.TabletType_RDONLY, "cell", true, true))
+	timeoutCtx, timeoutCancel = context.WithTimeout(ctx, 20*time.Millisecond)
+	defer timeoutCancel()
+	_, err = tp.PickForStreaming(timeoutCtx)
 	require.EqualError(t, err, "context has expired")
 
 	require.Greater(t, globalTPStats.noTabletFoundError.Counts()["cell.ks.0.replica"], int64(0))
@@ -485,24 +531,27 @@ func TestPickErrorOnlySpecified(t *testing.T) {
 // type has no available healthy serving tablets that we select a healthy
 // serving tablet from the secondary/second type.
 func TestPickFallbackType(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	cells := []string{"cell1", "cell2"}
 	localCell := cells[0]
 	tabletTypes := "replica,primary"
 	options := TabletPickerOptions{
 		TabletOrder: "InOrder",
 	}
-	te := newPickerTestEnv(t, cells)
+	te := newPickerTestEnv(t, ctx, cells)
 
 	// This one should be selected even though it's the secondary type
 	// as it is healthy and serving.
-	primaryTablet := addTablet(te, 100, topodatapb.TabletType_PRIMARY, localCell, true, true)
+	primaryTablet := addTablet(ctx, te, 100, topodatapb.TabletType_PRIMARY, localCell, true, true)
 	defer deleteTablet(t, te, primaryTablet)
 
 	// Replica tablet should not be selected as it is unhealthy.
-	replicaTablet := addTablet(te, 200, topodatapb.TabletType_REPLICA, localCell, false, false)
+	replicaTablet := addTablet(ctx, te, 200, topodatapb.TabletType_REPLICA, localCell, false, false)
 	defer deleteTablet(t, te, replicaTablet)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
 	_, err := te.topoServ.UpdateShardFields(ctx, te.keyspace, te.shard, func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = primaryTablet.Alias
@@ -510,9 +559,9 @@ func TestPickFallbackType(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, cells, localCell, te.keyspace, te.shard, tabletTypes, options)
+	tp, err := NewTabletPicker(ctx, te.topoServ, cells, localCell, te.keyspace, te.shard, tabletTypes, options)
 	require.NoError(t, err)
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx2, cancel2 := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel2()
 	tablet, err := tp.PickForStreaming(ctx2)
 	require.NoError(t, err)
@@ -528,17 +577,20 @@ type pickerTestEnv struct {
 	topoServ *topo.Server
 }
 
-func newPickerTestEnv(t *testing.T, cells []string) *pickerTestEnv {
-	ctx := context.Background()
-
+// newPickerTestEnv creates a test environment for TabletPicker tests.
+// It creates a cell alias called 'cella' which contains all of the
+// provided cells. However, if any optional extraCells are provided, those
+// are NOT added to the cell alias.
+func newPickerTestEnv(t *testing.T, ctx context.Context, cells []string, extraCells ...string) *pickerTestEnv {
+	allCells := append(cells, extraCells...)
 	te := &pickerTestEnv{
 		t:        t,
 		keyspace: "ks",
 		shard:    "0",
 		cells:    cells,
-		topoServ: memorytopo.NewServer(cells...),
+		topoServ: memorytopo.NewServer(ctx, allCells...),
 	}
-	// create cell alias
+	// Create cell alias containing the cells (but NOT the extraCells).
 	err := te.topoServ.CreateCellsAlias(ctx, "cella", &topodatapb.CellsAlias{
 		Cells: cells,
 	})
@@ -550,7 +602,7 @@ func newPickerTestEnv(t *testing.T, cells []string) *pickerTestEnv {
 	return te
 }
 
-func addTablet(te *pickerTestEnv, id int, tabletType topodatapb.TabletType, cell string, serving, healthy bool) *topodatapb.Tablet {
+func addTablet(ctx context.Context, te *pickerTestEnv, id int, tabletType topodatapb.TabletType, cell string, serving, healthy bool) *topodatapb.Tablet {
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: cell,
@@ -564,7 +616,7 @@ func addTablet(te *pickerTestEnv, id int, tabletType topodatapb.TabletType, cell
 			"test": int32(id),
 		},
 	}
-	err := te.topoServ.CreateTablet(context.Background(), tablet)
+	err := te.topoServ.CreateTablet(ctx, tablet)
 	require.NoError(te.t, err)
 
 	shr := &querypb.StreamHealthResponse{

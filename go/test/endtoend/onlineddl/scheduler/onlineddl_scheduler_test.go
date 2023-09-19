@@ -275,6 +275,9 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("summary: validate sequential migration IDs", func(t *testing.T) {
 		onlineddl.ValidateSequentialMigrationIDs(t, &vtParams, shards)
 	})
+	t.Run("summary: validate completed_timestamp", func(t *testing.T) {
+		onlineddl.ValidateCompletedTimestamp(t, &vtParams)
+	})
 }
 
 func testScheduler(t *testing.T) {
@@ -878,6 +881,60 @@ func testScheduler(t *testing.T) {
 				retries := row.AsInt64("retries", 0)
 				assert.Greater(t, retries, int64(0))
 			}
+		})
+	})
+
+	t.Run("Cleanup artifacts", func(t *testing.T) {
+		// Create a migration with a low --retain-artifacts value.
+		// We will cancel the migration and expect the artifact to be cleaned.
+		t.Run("start migration", func(t *testing.T) {
+			t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion --retain-artifacts=1s", "vtctl", "", "", true)) // skip wait
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		})
+		var artifacts []string
+		t.Run("validate artifact exists", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			row := rs.Named().Row()
+			require.NotNil(t, row)
+
+			artifacts = textutil.SplitDelimitedList(row.AsString("artifacts", ""))
+			assert.NotEmpty(t, artifacts)
+			assert.Equal(t, 1, len(artifacts))
+			checkTable(t, artifacts[0], true)
+
+			retainArtifactsSeconds := row.AsInt64("retain_artifacts_seconds", 0)
+			assert.Equal(t, int64(1), retainArtifactsSeconds) // due to --retain-artifacts=1s
+		})
+		t.Run("cancel migration", func(t *testing.T) {
+			onlineddl.CheckCancelMigration(t, &vtParams, shards, t1uuid, true)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusCancelled)
+		})
+		t.Run("wait for cleanup", func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), normalWaitTime)
+			defer cancel()
+
+			for {
+				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				require.NotNil(t, rs)
+				row := rs.Named().Row()
+				require.NotNil(t, row)
+				if !row["cleanup_timestamp"].IsNull() {
+					// This is what we've been waiting for
+					break
+				}
+				select {
+				case <-ctx.Done():
+					assert.Fail(t, "timeout waiting for cleanup")
+					return
+				case <-time.After(time.Second):
+				}
+			}
+		})
+		t.Run("validate artifact does not exist", func(t *testing.T) {
+			checkTable(t, artifacts[0], false)
 		})
 	})
 

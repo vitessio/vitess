@@ -17,7 +17,7 @@ limitations under the License.
 package operators
 
 import (
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
@@ -327,7 +327,7 @@ func (tr *ShardedRouting) Cost() int {
 	switch tr.RouteOpCode {
 	case engine.EqualUnique:
 		return 1
-	case engine.Equal:
+	case engine.Equal, engine.SubShard:
 		return 5
 	case engine.IN:
 		return 10
@@ -555,29 +555,6 @@ func (tr *ShardedRouting) hasVindex(column *sqlparser.ColName) bool {
 		}
 	}
 	return false
-}
-
-// Reset all vindex predicates on this route and re-build their options from
-// the list of seen routing predicates.
-func (tr *ShardedRouting) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
-	tr.RouteOpCode = engine.Scatter
-	tr.Selected = nil
-	for i, vp := range tr.VindexPreds {
-		tr.VindexPreds[i] = &VindexPlusPredicates{ColVindex: vp.ColVindex, TableID: vp.TableID}
-	}
-
-	var routing Routing = tr
-	for _, predicate := range tr.SeenPredicates {
-		var err error
-		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-		if err != nil {
-			return err
-		}
-	}
-	if routing != tr {
-		return vterrors.VT13001("uh-oh. we ended up with a different type of routing")
-	}
-	return nil
 }
 
 func (tr *ShardedRouting) SelectedVindex() vindexes.Vindex {
