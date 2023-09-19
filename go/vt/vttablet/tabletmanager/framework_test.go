@@ -157,9 +157,11 @@ func (tenv *testEnv) addTablet(t *testing.T, id int, keyspace, shard string) *fa
 		panic(err)
 	}
 
+	vrdbClient := binlogplayer.NewMockDBClient(t)
+	vrdbClient.Tag = fmt.Sprintf("tablet:%d", id)
 	tenv.tmc.tablets[id] = &fakeTabletConn{
 		tablet:     tablet,
-		vrdbClient: binlogplayer.NewMockDBClient(t),
+		vrdbClient: vrdbClient,
 	}
 
 	dbClientFactory := func() binlogplayer.DBClient {

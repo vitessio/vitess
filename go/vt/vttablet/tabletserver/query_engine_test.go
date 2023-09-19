@@ -18,7 +18,6 @@ package tabletserver
 
 import (
 	"context"
-	"expvar"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -32,6 +31,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -41,7 +41,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
@@ -148,7 +147,7 @@ func TestGetMessageStreamPlan(t *testing.T) {
 	}
 	wantPlan := &planbuilder.Plan{
 		PlanID: planbuilder.PlanMessageStream,
-		Table:  qe.tables["msg"],
+		Table:  qe.schema.Load().tables["msg"],
 		Permissions: []planbuilder.Permission{{
 			TableName: "msg",
 			Role:      tableacl.WRITER,
@@ -164,12 +163,8 @@ func TestGetMessageStreamPlan(t *testing.T) {
 
 func assertPlanCacheSize(t *testing.T, qe *QueryEngine, expected int) {
 	t.Helper()
-	var size int
-	qe.plans.Wait()
-	qe.plans.ForEach(func(_ any) bool {
-		size++
-		return true
-	})
+	time.Sleep(100 * time.Millisecond)
+	size := qe.plans.Len()
 	require.Equal(t, expected, size, "expected query plan cache to contain %d entries, found %d", expected, size)
 }
 
@@ -179,7 +174,6 @@ func TestQueryPlanCache(t *testing.T) {
 	schematest.AddDefaultQueries(db)
 
 	firstQuery := "select * from test_table_01"
-	secondQuery := "select * from test_table_02"
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select * from test_table_02 where 1 != 1", &sqltypes.Result{})
 
@@ -190,23 +184,11 @@ func TestQueryPlanCache(t *testing.T) {
 
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	if cache.DefaultConfig.LFU {
-		// this cache capacity is in bytes
-		qe.SetQueryPlanCacheCap(528)
-	} else {
-		// this cache capacity is in number of elements
-		qe.SetQueryPlanCacheCap(1)
-	}
+
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
 	require.NoError(t, err)
 	require.NotNil(t, firstPlan, "plan should not be nil")
-	secondPlan, err := qe.GetPlan(ctx, logStats, secondQuery, false)
-	fmt.Println(secondPlan.CachedSize(true))
-	require.NoError(t, err)
-	require.NotNil(t, secondPlan, "plan should not be nil")
-	expvar.Do(func(kv expvar.KeyValue) {
-		_ = kv.Value.String()
-	})
+
 	assertPlanCacheSize(t, qe, 1)
 	qe.ClearQueryPlanCache()
 }
@@ -227,7 +209,7 @@ func TestNoQueryPlanCache(t *testing.T) {
 
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	qe.SetQueryPlanCacheCap(1024)
+
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, true)
 	if err != nil {
 		t.Fatal(err)
@@ -256,7 +238,7 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	qe.SetQueryPlanCacheCap(1024)
+
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
 	if err != nil {
 		t.Fatal(err)
@@ -305,6 +287,8 @@ func newTestQueryEngine(idleTimeout time.Duration, strict bool, dbcfgs *dbconfig
 	env := tabletenv.NewEnv(config, "TabletServerTest")
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
+	// the integration tests that check cache behavior do not expect a doorkeeper; disable it
+	qe.plans = theine.NewStore[PlanCacheKey, *TabletPlan](4*1024*1024, false)
 	se.InitDBConfig(dbcfgs.DbaWithDB())
 	return qe
 }
@@ -393,13 +377,12 @@ func BenchmarkPlanCacheThroughput(b *testing.B) {
 	}
 }
 
-func benchmarkPlanCache(b *testing.B, db *fakesqldb.DB, lfu bool, par int) {
+func benchmarkPlanCache(b *testing.B, db *fakesqldb.DB, par int) {
 	b.Helper()
 
 	dbcfgs := newDBConfigs(db)
 	config := tabletenv.NewDefaultConfig()
 	config.DB = dbcfgs
-	config.QueryCacheLFU = lfu
 
 	env := tabletenv.NewEnv(config, "TabletServerTest")
 	se := schema.NewEngine(env)
@@ -432,12 +415,8 @@ func BenchmarkPlanCacheContention(b *testing.B) {
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 
 	for par := 1; par <= 8; par *= 2 {
-		b.Run(fmt.Sprintf("ContentionLRU-%d", par), func(b *testing.B) {
-			benchmarkPlanCache(b, db, false, par)
-		})
-
 		b.Run(fmt.Sprintf("ContentionLFU-%d", par), func(b *testing.B) {
-			benchmarkPlanCache(b, db, true, par)
+			benchmarkPlanCache(b, db, par)
 		})
 	}
 }
@@ -483,16 +462,9 @@ func TestPlanCachePollution(t *testing.T) {
 	var wg sync.WaitGroup
 
 	go func() {
-		cacheMode := "lru"
-		if config.QueryCacheLFU {
-			cacheMode = "lfu"
-		}
+		cacheMode := "lfu"
 
-		out, err := os.Create(path.Join(plotPath,
-			fmt.Sprintf("cache_plot_%d_%d_%s.dat",
-				config.QueryCacheSize, config.QueryCacheMemory, cacheMode,
-			)),
-		)
+		out, err := os.Create(path.Join(plotPath, fmt.Sprintf("cache_plot_%d_%s.dat", config.QueryCacheMemory, cacheMode)))
 		require.NoError(t, err)
 		defer out.Close()
 
