@@ -969,6 +969,13 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	assert.EqualValues(t, countExpected, successCount)
 }
 
+// WaitForTabletType waits for the tablet to reach a certain type.
+func WaitForTabletType(t *testing.T, tablet *cluster.Vttablet, expectedTabletType string) {
+	t.Helper()
+	err := tablet.VttabletProcess.WaitForTabletTypes([]string{expectedTabletType})
+	require.NoError(t, err)
+}
+
 // WaitForInstancePollSecondsExceededCount waits for 30 seconds and then queries api/aggregated-discovery-metrics.
 // It expects to find minimum occurrence or exact count of `keyName` provided.
 func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyName string, minCountExpected float64, enforceEquality bool) {

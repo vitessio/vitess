@@ -176,6 +176,11 @@ func (client *localVtctldClient) CleanupSchemaMigration(ctx context.Context, in 
 	return client.s.CleanupSchemaMigration(ctx, in)
 }
 
+// CompleteSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) CompleteSchemaMigration(ctx context.Context, in *vtctldatapb.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CompleteSchemaMigrationResponse, error) {
+	return client.s.CompleteSchemaMigration(ctx, in)
+}
+
 // CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) CreateKeyspace(ctx context.Context, in *vtctldatapb.CreateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateKeyspaceResponse, error) {
 	return client.s.CreateKeyspace(ctx, in)
@@ -361,6 +366,11 @@ func (client *localVtctldClient) InitShardPrimary(ctx context.Context, in *vtctl
 	return client.s.InitShardPrimary(ctx, in)
 }
 
+// LaunchSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) LaunchSchemaMigration(ctx context.Context, in *vtctldatapb.LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.LaunchSchemaMigrationResponse, error) {
+	return client.s.LaunchSchemaMigration(ctx, in)
+}
+
 // MoveTablesComplete is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) MoveTablesComplete(ctx context.Context, in *vtctldatapb.MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldatapb.MoveTablesCompleteResponse, error) {
 	return client.s.MoveTablesComplete(ctx, in)
@@ -434,6 +444,11 @@ func (client *localVtctldClient) RemoveShardCell(ctx context.Context, in *vtctld
 // ReparentTablet is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ReparentTablet(ctx context.Context, in *vtctldatapb.ReparentTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.ReparentTabletResponse, error) {
 	return client.s.ReparentTablet(ctx, in)
+}
+
+// ReshardCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ReshardCreate(ctx context.Context, in *vtctldatapb.ReshardCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowStatusResponse, error) {
+	return client.s.ReshardCreate(ctx, in)
 }
 
 type restoreFromBackupStreamAdapter struct {

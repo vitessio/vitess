@@ -16,11 +16,15 @@ limitations under the License.
 
 package opcode
 
-import "testing"
+import (
+	"testing"
+
+	"vitess.io/vitess/go/sqltypes"
+)
 
 func TestCheckAllAggrOpCodes(t *testing.T) {
 	// This test is just checking that we never reach the panic when using Type() on valid opcodes
 	for i := AggregateOpcode(0); i < _NumOfOpCodes; i++ {
-		i.Type(nil)
+		i.Type(sqltypes.Null)
 	}
 }

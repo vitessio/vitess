@@ -42,6 +42,11 @@ var UBidi []byte
 //go:embed ucase.icu
 var UCase []byte
 
+// UEmoji is the list of Emoji properties.
+//
+//go:embed uemoji.icu
+var UEmoji []byte
+
 // ULayout is used for property checks agains the InPC, InSC
 // and VO properties.
 //

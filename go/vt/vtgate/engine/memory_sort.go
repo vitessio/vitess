@@ -150,8 +150,8 @@ func (ms *MemorySort) GetFields(ctx context.Context, vcursor VCursor, bindVars m
 }
 
 // Inputs returns the input to memory sort
-func (ms *MemorySort) Inputs() []Primitive {
-	return []Primitive{ms.Input}
+func (ms *MemorySort) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{ms.Input}, nil
 }
 
 // NeedsTransaction implements the Primitive interface

@@ -73,14 +73,6 @@ func TestStreamPoolSize(t *testing.T) {
 	verifyIntValue(t, vstart, "StreamConnPoolCapacity", 1)
 }
 
-func TestQueryCacheCapacity(t *testing.T) {
-	revert := changeVar(t, "QueryCacheCapacity", "1")
-	defer revert()
-
-	vstart := framework.DebugVars()
-	verifyIntValue(t, vstart, "QueryCacheCapacity", 1)
-}
-
 func TestDisableConsolidator(t *testing.T) {
 	totalConsolidationsTag := "Waits/Histograms/Consolidations/Count"
 	initial := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
@@ -182,8 +174,6 @@ func TestQueryPlanCache(t *testing.T) {
 	//sleep to avoid race between SchemaChanged event clearing out the plans cache which breaks this test
 	framework.Server.WaitForSchemaReset(2 * time.Second)
 
-	defer framework.Server.SetQueryPlanCacheCap(framework.Server.QueryPlanCacheCap())
-
 	bindVars := map[string]*querypb.BindVariable{
 		"ival1": sqltypes.Int64BindVariable(1),
 		"ival2": sqltypes.Int64BindVariable(1),
@@ -197,21 +187,18 @@ func TestQueryPlanCache(t *testing.T) {
 	assert.Equal(t, 1, framework.Server.QueryPlanCacheLen())
 
 	vend := framework.DebugVars()
-	assert.Equal(t, 1, framework.FetchInt(vend, "QueryCacheLength"))
 	assert.GreaterOrEqual(t, framework.FetchInt(vend, "QueryCacheSize"), cachedPlanSize)
 
 	_, _ = client.Execute("select * from vitess_test where intval=:ival2", bindVars)
 	require.Equal(t, 2, framework.Server.QueryPlanCacheLen())
 
 	vend = framework.DebugVars()
-	assert.Equal(t, 2, framework.FetchInt(vend, "QueryCacheLength"))
 	assert.GreaterOrEqual(t, framework.FetchInt(vend, "QueryCacheSize"), 2*cachedPlanSize)
 
 	_, _ = client.Execute("select * from vitess_test where intval=1", bindVars)
 	require.Equal(t, 3, framework.Server.QueryPlanCacheLen())
 
 	vend = framework.DebugVars()
-	assert.Equal(t, 3, framework.FetchInt(vend, "QueryCacheLength"))
 	assert.GreaterOrEqual(t, framework.FetchInt(vend, "QueryCacheSize"), 3*cachedPlanSize)
 }
 

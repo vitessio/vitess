@@ -95,6 +95,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	tempProcess.Stderr = errFile
 
 	tempProcess.Env = append(tempProcess.Env, os.Environ()...)
+	tempProcess.Env = append(tempProcess.Env, DefaultVttestEnv)
 	tempProcess.Stdout = os.Stdout
 	tempProcess.Stderr = os.Stderr
 

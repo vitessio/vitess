@@ -21,11 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 	"syscall"
@@ -267,9 +265,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	want = []string{"update test_table set `name` = 2 where pk = 1 limit 10001"}
 	utils.MustMatch(t, want, got, "Prepared queries")
 	wantFailed := map[string]error{"a:b:20": errPrepFailed}
-	if !reflect.DeepEqual(tsv.te.preparedPool.reserved, wantFailed) {
-		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
-	}
+	utils.MustMatch(t, tsv.te.preparedPool.reserved, wantFailed, fmt.Sprintf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed))
 	// Verify last id got adjusted.
 	assert.EqualValues(t, 20, tsv.te.txPool.scp.lastID.Load(), "tsv.te.txPool.lastID.Get()")
 	turnOffTxEngine()
@@ -2055,14 +2051,6 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.te.Pool().Timeout: %v, want %v", val, newDuration)
 	}
 
-	tsv.SetQueryPlanCacheCap(newSize)
-	if val := tsv.QueryPlanCacheCap(); val != newSize {
-		t.Errorf("QueryPlanCacheCap: %d, want %d", val, newSize)
-	}
-	if val := int(tsv.qe.QueryPlanCacheCap()); val != newSize {
-		t.Errorf("tsv.qe.QueryPlanCacheCap: %d, want %d", val, newSize)
-	}
-
 	tsv.SetMaxResultSize(newSize)
 	if val := tsv.MaxResultSize(); val != newSize {
 		t.Errorf("MaxResultSize: %d, want %d", val, newSize)
@@ -2682,8 +2670,4 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 			Type: sqltypes.Int64,
 		}},
 	})
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }

@@ -545,6 +545,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_queries_timeout": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/timeout"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_queries_normalize": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/normalize"],
@@ -1163,6 +1172,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_v2",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_fk": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestFKWorkflow"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_cellalias",
 			"RetryMax": 1,
 			"Tags": []
 		},

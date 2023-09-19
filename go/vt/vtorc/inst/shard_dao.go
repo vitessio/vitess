@@ -19,8 +19,8 @@ package inst
 import (
 	"errors"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -93,5 +93,5 @@ func getShardPrimaryTermStartTimeString(shard *topo.ShardInfo) string {
 	if shard.PrimaryTermStartTime == nil {
 		return ""
 	}
-	return logutil.ProtoToTime(shard.PrimaryTermStartTime).String()
+	return protoutil.TimeFromProto(shard.PrimaryTermStartTime).UTC().String()
 }

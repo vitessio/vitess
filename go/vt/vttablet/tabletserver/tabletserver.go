@@ -33,8 +33,6 @@ import (
 	"syscall"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/acl"
@@ -161,7 +159,7 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 		TruncateErrorLen:       config.TruncateErrorLen,
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		topoServer:             topoServer,
-		alias:                  proto.Clone(alias).(*topodatapb.TabletAlias),
+		alias:                  alias.CloneVT(),
 	}
 	tsv.QueryTimeout.Store(config.Oltp.QueryTimeoutSeconds.Get().Nanoseconds())
 
@@ -266,7 +264,7 @@ func (tsv *TabletServer) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.
 		return vterrors.NewErrorf(vtrpcpb.Code_UNAVAILABLE, vterrors.ServerNotAvailable, "Server isn't available")
 	}
 	tsv.sm.Init(tsv, target)
-	tsv.sm.target = proto.Clone(target).(*querypb.Target)
+	tsv.sm.target = target.CloneVT()
 	tsv.config.DB = dbcfgs
 
 	tsv.se.InitDBConfig(tsv.config.DB.DbaWithDB())
@@ -1165,6 +1163,14 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, request *binlogdatapb.
 	return tsv.vstreamer.StreamRows(ctx, request.Query, row, send)
 }
 
+// VStreamTables streams all tables.
+func (tsv *TabletServer) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(*binlogdatapb.VStreamTablesResponse) error) error {
+	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
+		return err
+	}
+	return tsv.vstreamer.StreamTables(ctx, send)
+}
+
 // VStreamResults streams rows from the specified starting point.
 func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	if err := tsv.sm.VerifyTarget(ctx, target); err != nil {
@@ -1724,7 +1730,6 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 // Close shuts down any remaining go routines
 func (tsv *TabletServer) Close(ctx context.Context) error {
 	tsv.sm.closeAll()
-	tsv.qe.Close()
 	tsv.stats.Stop()
 	return nil
 }
@@ -1955,11 +1960,6 @@ func (tsv *TabletServer) TxPoolSize() int {
 	return tsv.te.txPool.scp.Capacity()
 }
 
-// SetQueryPlanCacheCap changes the plan cache capacity to the specified value.
-func (tsv *TabletServer) SetQueryPlanCacheCap(val int) {
-	tsv.qe.SetQueryPlanCacheCap(val)
-}
-
 // QueryPlanCacheCap returns the plan cache capacity
 func (tsv *TabletServer) QueryPlanCacheCap() int {
 	return tsv.qe.QueryPlanCacheCap()
@@ -1968,11 +1968,6 @@ func (tsv *TabletServer) QueryPlanCacheCap() int {
 // QueryPlanCacheLen returns the plan cache length
 func (tsv *TabletServer) QueryPlanCacheLen() int {
 	return tsv.qe.QueryPlanCacheLen()
-}
-
-// QueryPlanCacheWait waits until the query plan cache has processed all recent queries
-func (tsv *TabletServer) QueryPlanCacheWait() {
-	tsv.qe.plans.Wait()
 }
 
 // SetMaxResultSize changes the max result size to the specified value.

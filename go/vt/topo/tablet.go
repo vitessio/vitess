@@ -24,18 +24,15 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/key"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/events"
@@ -215,7 +212,7 @@ func (ti *TabletInfo) IsReplicaType() bool {
 
 // GetPrimaryTermStartTime returns the tablet's primary term start time as a Time value.
 func (ti *TabletInfo) GetPrimaryTermStartTime() time.Time {
-	return logutil.ProtoToTime(ti.Tablet.PrimaryTermStartTime)
+	return protoutil.TimeFromProto(ti.Tablet.PrimaryTermStartTime).UTC()
 }
 
 // NewTabletInfo returns a TabletInfo basing on tablet with the
@@ -586,7 +583,7 @@ func (ts *Server) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, all
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
 		// we update primary_term_start_time even if the primary hasn't changed
 		// because that means a new primary term with the same primary
-		tablet.PrimaryTermStartTime = logutil.TimeToProto(time.Now())
+		tablet.PrimaryTermStartTime = protoutil.TimeToProto(time.Now())
 	}
 
 	err = ts.CreateTablet(ctx, tablet)
@@ -602,7 +599,7 @@ func (ts *Server) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, all
 		if oldTablet.Keyspace != tablet.Keyspace || oldTablet.Shard != tablet.Shard {
 			return fmt.Errorf("old tablet has shard %v/%v. Cannot override with shard %v/%v. Delete and re-add tablet if you want to change the tablet's keyspace/shard", oldTablet.Keyspace, oldTablet.Shard, tablet.Keyspace, tablet.Shard)
 		}
-		oldTablet.Tablet = proto.Clone(tablet).(*topodatapb.Tablet)
+		oldTablet.Tablet = tablet.CloneVT()
 		if err := ts.UpdateTablet(ctx, oldTablet); err != nil {
 			return fmt.Errorf("failed updating tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 		}

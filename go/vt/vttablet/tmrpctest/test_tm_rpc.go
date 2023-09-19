@@ -1319,7 +1319,7 @@ func tmRPCTestRestoreFromBackupPanic(ctx context.Context, t *testing.T, client t
 
 func tmRPCTestCheckThrottler(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) {
 	_, err := client.CheckThrottler(ctx, tablet, req)
-	expectHandleRPCPanic(t, "CheckThrottler", true /*verbose*/, err)
+	expectHandleRPCPanic(t, "CheckThrottler", false /*verbose*/, err)
 }
 
 //

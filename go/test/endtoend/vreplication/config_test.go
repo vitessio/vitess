@@ -55,7 +55,7 @@ create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, v
 create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at), key (dstuff)) CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 create table vdiff_order (order_id varchar(50) collate utf8mb4_unicode_ci not null, primary key (order_id), key (order_id)) charset=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id), key (dt1));
-create table json_tbl (id int, j1 json, j2 json, primary key(id));
+create table json_tbl (id int, j1 json, j2 json, j3 json not null, primary key(id));
 create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, mp multipoint, mls multilinestring, mpg multipolygon, gc geometrycollection, primary key(id));
 create table  ` + "`blüb_tbl`" + ` (id int, val1 varchar(20), ` + "`blöb1`" + ` blob, val2 varbinary(20), ` + "`bl@b2`" + ` longblob, txt1 text, blb3 tinyblob, txt2 longtext, blb4 mediumblob, primary key(id));
 create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
@@ -74,32 +74,59 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
 	initialProductVSchema = `
 {
   "tables": {
-	"product": {},
-	"merchant": {},
-	"orders": {},
+    "product": {},
+    "merchant": {},
+    "orders": {},
     "loadtest": {},
-	"customer": {},
-	"customer_seq": {
-		"type": "sequence"
-	},
-	"customer2": {},
-	"customer_seq2": {
-		"type": "sequence"
-	},
-	"order_seq": {
-		"type": "sequence"
-	},
-	"Lead": {},
-	"Lead-1": {},
-	"db_order_test": {},
-	"vdiff_order": {},
-	"datze": {},
-	"reftable": {
-		"type": "reference"
-	}
+    "customer": {},
+    "customer_seq": {
+      "type": "sequence"
+    },
+    "customer2": {},
+    "customer_seq2": {
+      "type": "sequence"
+    },
+    "order_seq": {
+      "type": "sequence"
+    },
+    "Lead": {},
+    "Lead-1": {},
+    "db_order_test": {},
+    "vdiff_order": {},
+    "datze": {},
+    "reftable": {
+      "type": "reference"
+    }
   }
 }
 `
+
+	createLookupVindexVSchema = `
+{
+  "sharded": true,
+  "vindexes": {
+    "customer_name_keyspace_id": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "product.customer_name_keyspace_id",
+        "from": "name,cid",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "customer"
+    }
+  },
+  "tables": {
+    "customer": {
+      "column_vindexes": [{
+        "columns": ["name", "cid"],
+        "name": "customer_name_keyspace_id"
+      }]
+    }
+  }
+}
+`
+
 	customerSchema  = ""
 	customerVSchema = `
 {

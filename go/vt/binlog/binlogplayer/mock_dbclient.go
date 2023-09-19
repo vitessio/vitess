@@ -17,6 +17,7 @@ limitations under the License.
 package binlogplayer
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"sync"
@@ -39,6 +40,7 @@ type MockDBClient struct {
 	currentResult int
 	done          chan struct{}
 	invariants    map[string]*sqltypes.Result
+	Tag           string
 }
 
 type mockExpect struct {
@@ -177,7 +179,11 @@ func (dc *MockDBClient) Close() {
 // ExecuteFetch is part of the DBClient interface
 func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
 	dc.t.Helper()
-	dc.t.Logf("DBClient query: %v", query)
+	msg := "DBClient query: %v"
+	if dc.Tag != "" {
+		msg = fmt.Sprintf("[%s] %s", dc.Tag, msg)
+	}
+	dc.t.Logf(msg, query)
 
 	for q, result := range dc.invariants {
 		if strings.Contains(strings.ToLower(query), strings.ToLower(q)) {
@@ -188,16 +194,28 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	dc.expectMu.Lock()
 	defer dc.expectMu.Unlock()
 	if dc.currentResult >= len(dc.expect) {
-		dc.t.Fatalf("DBClientMock: query: %s, no more requests are expected", query)
+		msg := "DBClientMock: query: %s, no more requests are expected"
+		if dc.Tag != "" {
+			msg = fmt.Sprintf("[%s] %s", dc.Tag, msg)
+		}
+		dc.t.Fatalf(msg, query)
 	}
 	result := dc.expect[dc.currentResult]
 	if result.re == nil {
 		if query != result.query {
-			dc.t.Fatalf("DBClientMock: query: %s, want %s", query, result.query)
+			msg := "DBClientMock: query: %s, want %s"
+			if dc.Tag != "" {
+				msg = fmt.Sprintf("[%s] %s", dc.Tag, msg)
+			}
+			dc.t.Fatalf(msg, query, result.query)
 		}
 	} else {
 		if !result.re.MatchString(query) {
-			dc.t.Fatalf("DBClientMock: query: %s, must match %s", query, result.query)
+			msg := "DBClientMock: query: %s, must match %s"
+			if dc.Tag != "" {
+				msg = fmt.Sprintf("[%s] %s", dc.Tag, msg)
+			}
+			dc.t.Fatalf(msg, query, result.query)
 		}
 	}
 	dc.currentResult++

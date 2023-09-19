@@ -36,7 +36,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 const (
@@ -67,7 +66,7 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 			req.Cells = append(req.Cells, tm.Tablet().Alias.Cell)
 		}
 		wfState := binlogdatapb.VReplicationWorkflowState_Stopped.String()
-		tabletTypesStr := topoprotopb.MakeStringTypeCSV(req.TabletTypes)
+		tabletTypesStr := topoproto.MakeStringTypeCSV(req.TabletTypes)
 		if req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
 			tabletTypesStr = discovery.InOrderHint + tabletTypesStr
 		}
