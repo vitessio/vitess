@@ -62,7 +62,9 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--queryserver-config-max-result-size", "1000000")
+			"--queryserver-config-max-result-size", "1000000",
+			"--queryserver-config-query-timeout", "200",
+			"--queryserver-config-query-pool-timeout", "200")
 		// Start Unsharded keyspace
 		ukeyspace := &cluster.Keyspace{
 			Name:      uks,
@@ -84,6 +86,8 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
+			"--query-timeout", "100")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {
