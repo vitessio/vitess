@@ -115,10 +115,10 @@ func TestNormalizedStatement(t *testing.T) {
 		expect    string
 	}{
 		{
-			statement: "create table mydb.t (id int primary key)",
+			statement: "create table mydb.t (id int auto_increment primary key) AUTO_INCREMENT=4",
 			db:        "mydb",
 			typ:       tmutils.TableBaseTable,
-			expect:    "create table mydb.t (id int primary key)",
+			expect:    "create table mydb.t (id int auto_increment primary key)",
 		},
 		{
 			statement: "create table `mydb`.t (id int primary key)",
