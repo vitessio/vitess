@@ -144,7 +144,7 @@ func TestHighNumberOfParams(t *testing.T) {
 	require.NoError(t, err)
 
 	// run the query
-	r, err := db.Query(fmt.Sprintf("SELECT /*vt+ QUERY_TIMEOUT_MS=10000 */ id1 FROM t1 WHERE id1 in (%s) ORDER BY id1 ASC", strings.Join(params, ", ")), vals...)
+	r, err := db.Query(fmt.Sprintf("SELECT id1 FROM t1 WHERE id1 in (%s) ORDER BY id1 ASC", strings.Join(params, ", ")), vals...)
 	require.NoError(t, err)
 
 	// check the results we got, we should get 5 rows with each: 0, 1, 2, 3, 4

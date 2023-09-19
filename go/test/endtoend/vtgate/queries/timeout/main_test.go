@@ -23,9 +23,10 @@ import (
 	"os"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
@@ -33,7 +34,11 @@ var (
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
 	keyspaceName    = "ks_misc"
+	uks             = "uks"
 	cell            = "test_misc"
+
+	//go:embed uschema.sql
+	uschemaSQL string
 
 	//go:embed schema.sql
 	schemaSQL string
@@ -56,6 +61,20 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
+			"--queryserver-config-max-result-size", "1000000",
+			"--queryserver-config-query-timeout", "200",
+			"--queryserver-config-query-pool-timeout", "200")
+		// Start Unsharded keyspace
+		ukeyspace := &cluster.Keyspace{
+			Name:      uks,
+			SchemaSQL: uschemaSQL,
+		}
+		err = clusterInstance.StartUnshardedKeyspace(*ukeyspace, 0, false)
+		if err != nil {
+			return 1
+		}
+
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
@@ -67,7 +86,8 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
+			"--query-timeout", "100")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {
