@@ -7,8 +7,8 @@
     - [Local examples now use etcd v3 storage and API](#local-examples-etcd-v3)
   - **[New command line flags and behavior](#new-flag)**
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
-    - [ERS sub flag `--wait-for-all-tablets`](#new-ers-subflag)
     - [VTOrc flag `--change-tablets-with-errant-gtid-to-drained`](#new-flag-errant-gtid-convert)
+    - [ERS sub flag `--wait-for-all-tablets`](#new-ers-subflag)
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v18.16.0](#update-node)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
@@ -63,8 +63,6 @@ Running `EmergencyReparentShard` from the vtctldclient has a new sub-flag `--wai
 for a response from all the tablets. Originally `EmergencyReparentShard` was meant only to be run when a primary tablet is unreachable.
 We have realized now that there are cases when the replication is broken but all the tablets are reachable. In these cases, it is advisable to 
 call `EmergencyReparentShard` with `--wait-for-all-tablets` so that it doesn't ignore one of the tablets.
-
-#### <a id="new-flag-toggle-ers"/>VTOrc flag `--allow-emergency-reparent`
 
 ### <a id="vtadmin"/>VTAdmin
 
