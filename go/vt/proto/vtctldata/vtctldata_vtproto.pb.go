@@ -4446,7 +4446,7 @@ func (m *VDiffCreateResponse) CloneVT() *VDiffCreateResponse {
 		return (*VDiffCreateResponse)(nil)
 	}
 	r := &VDiffCreateResponse{
-		Uuid: m.Uuid,
+		UUID: m.UUID,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -16650,10 +16650,10 @@ func (m *VDiffCreateResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Uuid) > 0 {
-		i -= len(m.Uuid)
-		copy(dAtA[i:], m.Uuid)
-		i = encodeVarint(dAtA, i, uint64(len(m.Uuid)))
+	if len(m.UUID) > 0 {
+		i -= len(m.UUID)
+		copy(dAtA[i:], m.UUID)
+		i = encodeVarint(dAtA, i, uint64(len(m.UUID)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -22250,7 +22250,7 @@ func (m *VDiffCreateResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Uuid)
+	l = len(m.UUID)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -51191,7 +51191,7 @@ func (m *VDiffCreateResponse) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Uuid", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field UUID", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -51219,7 +51219,7 @@ func (m *VDiffCreateResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Uuid = string(dAtA[iNdEx:postIndex])
+			m.UUID = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

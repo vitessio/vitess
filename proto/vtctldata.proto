@@ -1599,7 +1599,9 @@ message VDiffCreateRequest {
 }
 
 message VDiffCreateResponse {
-  string uuid = 1;
+  // Intentionally upper case to maintain compatibility with
+  // vtctlclient and other VDiff client output.
+  string UUID = 1;
 }
 
 message VDiffDeleteRequest {

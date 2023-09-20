@@ -63976,8 +63976,8 @@ export namespace vtctldata {
     /** Properties of a VDiffCreateResponse. */
     interface IVDiffCreateResponse {
 
-        /** VDiffCreateResponse uuid */
-        uuid?: (string|null);
+        /** VDiffCreateResponse UUID */
+        UUID?: (string|null);
     }
 
     /** Represents a VDiffCreateResponse. */
@@ -63989,8 +63989,8 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.IVDiffCreateResponse);
 
-        /** VDiffCreateResponse uuid. */
-        public uuid: string;
+        /** VDiffCreateResponse UUID. */
+        public UUID: string;
 
         /**
          * Creates a new VDiffCreateResponse instance using the specified properties.

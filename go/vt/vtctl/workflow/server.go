@@ -1369,7 +1369,7 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 	}
 
 	return &vtctldatapb.VDiffCreateResponse{
-		Uuid: req.Uuid,
+		UUID: req.Uuid,
 	}, nil
 }
 
