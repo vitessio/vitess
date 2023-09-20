@@ -5620,17 +5620,19 @@ func TestCreateTable(t *testing.T) {
 			")",
 	}
 	for _, sql := range validSQL {
-		sql = strings.TrimSpace(sql)
-		tree, err := Parse(sql)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", sql, err)
-			continue
-		}
-		got := String(tree.(*DDL))
+		t.Run(sql, func(t *testing.T) {
+			sql = strings.TrimSpace(sql)
+			tree, err := Parse(sql)
+			if err != nil {
+				t.Errorf("input: %s, err: %v", sql, err)
+				return
+			}
+			got := String(tree.(*DDL))
 
-		if sql != got {
-			t.Errorf("want:\n%s\ngot:\n%s", sql, got)
-		}
+			if sql != got {
+				t.Errorf("want:\n%s\ngot:\n%s", sql, got)
+			}
+		})
 	}
 
 	sql := "create table t garbage"
