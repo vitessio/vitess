@@ -775,17 +775,16 @@ func CheckAndRecover() {
 		log.Error(err)
 		return
 	}
+
 	// intentionally iterating entries in random order
 	for _, j := range rand.Perm(len(replicationAnalysis)) {
 		analysisEntry := replicationAnalysis[j]
 
 		go func() {
-			err = executeCheckAndRecoverFunction(analysisEntry)
-			if err != nil {
+			if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {
 				log.Error(err)
 			}
 		}()
-
 	}
 }
 
