@@ -54,7 +54,7 @@ func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
 	var executeBackupStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
 		if sr == executeBackupParams.Stats {
-			executeBackupStats = sr.(*backupstats.FakeStats)
+			executeBackupStats = sr
 		}
 	}
 	require.Contains(t, executeBackupStats.ScopeV, backupstats.ScopeComponent)
@@ -87,7 +87,7 @@ func TestBackupParameterizesBackupStorageWithScopedStats(t *testing.T) {
 	var storageStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
 		if sr == env.backupStorage.WithParamsCalls[0].Stats {
-			storageStats = sr.(*backupstats.FakeStats)
+			storageStats = sr
 		}
 	}
 	require.Contains(t, storageStats.ScopeV, backupstats.ScopeComponent)
@@ -344,7 +344,7 @@ func TestRestoreExecutesRestoreWithScopedParams(t *testing.T) {
 	var executeRestoreStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
 		if sr == executeRestoreParams.Stats {
-			executeRestoreStats = sr.(*backupstats.FakeStats)
+			executeRestoreStats = sr
 		}
 	}
 	require.Contains(t, executeRestoreStats.ScopeV, backupstats.ScopeComponent)
@@ -379,7 +379,7 @@ func TestRestoreParameterizesBackupStorageWithScopedStats(t *testing.T) {
 	var storageStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
 		if sr == env.backupStorage.WithParamsCalls[0].Stats {
-			storageStats = sr.(*backupstats.FakeStats)
+			storageStats = sr
 		}
 	}
 	require.Contains(t, storageStats.ScopeV, backupstats.ScopeComponent)
