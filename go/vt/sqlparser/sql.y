@@ -4110,7 +4110,7 @@ table_option:
   {
     $$ = string($1) + " "  + string($2) + " " + "'" + string($4) + "'"
   }
-| DELAY_KEY_WRITE equal_opt INTEGRAL
+| DELAY_KEY_WRITE equal_opt coericble_to_integral
   {
     $$ = string($1) + " " + string($3)
   }
@@ -4150,7 +4150,7 @@ table_option:
   {
     $$ = string($1) + " " + $3
   }
-| PACK_KEYS equal_opt INTEGRAL
+| PACK_KEYS equal_opt coericble_to_integral
   {
     $$ = string($1) + " " + string($3)
   }
@@ -4190,7 +4190,7 @@ table_option:
   {
     $$ = string($1) + " " + string($3)
   }
-| STATS_PERSISTENT equal_opt INTEGRAL
+| STATS_PERSISTENT equal_opt coericble_to_integral
   {
     $$ = string($1) + " " + string($3)
   }
