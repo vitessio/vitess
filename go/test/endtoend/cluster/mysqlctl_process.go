@@ -47,6 +47,7 @@ type MysqlctlProcess struct {
 	ExtraArgs       []string
 	InitMysql       bool
 	SecureTransport bool
+	MajorVersion    int
 }
 
 // InitDb executes mysqlctl command to add cell info
@@ -55,7 +56,12 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"--mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
 		"init",
-		"--init_db_sql_file", mysqlctl.InitDBFile}
+	}
+	if mysqlctl.MajorVersion < 18 {
+		args = append(args, "--")
+	}
+
+	args = append(args, "--init_db_sql_file", mysqlctl.InitDBFile)
 	if *isCoverage {
 		args = append([]string{"--test.coverprofile=" + getCoveragePath("mysql-initdb.out"), "--test.v"}, args...)
 	}
@@ -143,8 +149,12 @@ ssl_key={{.ServerKey}}
 		}
 
 		if init {
-			tmpProcess.Args = append(tmpProcess.Args, "init",
-				"--init_db_sql_file", mysqlctl.InitDBFile)
+			tmpProcess.Args = append(tmpProcess.Args, "init")
+			if mysqlctl.MajorVersion < 18 {
+				tmpProcess.Args = append(tmpProcess.Args, "--")
+			}
+
+			tmpProcess.Args = append(tmpProcess.Args, "--init_db_sql_file", mysqlctl.InitDBFile)
 		} else {
 			tmpProcess.Args = append(tmpProcess.Args, "start")
 		}
@@ -243,11 +253,17 @@ func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirect
 	if err != nil {
 		return nil, err
 	}
+
+	version, err := GetMajorVersion("mysqlctl")
+	if err != nil {
+		log.Warningf("failed to get major mysqlctl version; backwards-compatibility for CLI changes may not work: %s", err)
+	}
 	mysqlctl := &MysqlctlProcess{
 		Name:         "mysqlctl",
 		Binary:       "mysqlctl",
 		LogDirectory: tmpDirectory,
 		InitDBFile:   initFile,
+		MajorVersion: version,
 	}
 	mysqlctl.MySQLPort = mySQLPort
 	mysqlctl.TabletUID = tabletUID
