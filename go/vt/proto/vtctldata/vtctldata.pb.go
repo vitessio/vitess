@@ -12390,7 +12390,8 @@ type VDiffCreateResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Intentionally upper case to maintain compatibility with vtctlclient.
+	// Intentionally upper case to maintain compatibility with
+	// vtctlclient and other VDiff client command output.
 	UUID string `protobuf:"bytes,1,opt,name=UUID,proto3" json:"UUID,omitempty"`
 }
 
