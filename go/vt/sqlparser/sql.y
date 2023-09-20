@@ -612,6 +612,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <JSONTableColOpts> json_table_column_options
 %type <expr> val_on_empty val_on_error
 
+%type <bytes> coericble_to_integral
+
 %start any_command
 
 %%
@@ -4072,11 +4074,11 @@ table_option:
   {
     $$ = string($1) + " "  + string($2) + " "  + string($3) + " " + $5
   }
-| CHECKSUM equal_opt INTEGRAL
+| CHECKSUM equal_opt coericble_to_integral
   {
     $$ = string($1) + " " + string($3)
   }
-| TABLE_CHECKSUM equal_opt INTEGRAL
+| TABLE_CHECKSUM equal_opt coericble_to_integral
   {
     $$ = "CHECKSUM" + " " + string($3)
   }
@@ -4232,7 +4234,7 @@ table_opt_value:
   {
     $$ = "'" + string($1) + "'"
   }
-| INTEGRAL
+| coericble_to_integral
   {
     $$ = string($1)
   }
@@ -4248,6 +4250,20 @@ table_opt_value:
 | PASSWORD
   {
     $$ = string($1)
+  }
+
+coericble_to_integral:
+  INTEGRAL
+  {
+     $$ = $1
+  }
+| HEXNUM
+  {
+    $$ = $1
+  }
+| FLOAT
+  {
+     $$ = $1
   }
 
 row_fmt_opt:
@@ -4603,11 +4619,11 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr}
   }
-| CHECKSUM equal_opt INTEGRAL
+| CHECKSUM equal_opt coericble_to_integral
   {
     $$ = &DDL{Action: AlterStr}
   }
-| TABLE_CHECKSUM equal_opt INTEGRAL
+| TABLE_CHECKSUM equal_opt coericble_to_integral
   {
     $$ = &DDL{Action: AlterStr}
   }
