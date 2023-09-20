@@ -3812,6 +3812,14 @@ index_option:
   {
     $$ = &IndexOption{Name: string($1), Value: NewStrVal($3)}
   }
+| VISIBLE
+  {
+    $$ = &IndexOption{Name: string($1), Value: nil}
+  }
+| INVISIBLE
+  {
+    $$ = &IndexOption{Name: string($1), Value: nil}
+  }
 
 equal_opt:
   /* empty */

@@ -644,6 +644,7 @@ var keywords = map[string]int{
 	"version_token_admin":           VERSION_TOKEN_ADMIN,
 	"view":                          VIEW,
 	"virtual":                       VIRTUAL,
+	"visible":                       VISIBLE,
 	"warnings":                      WARNINGS,
 	"week":                          WEEK,
 	"when":                          WHEN,
