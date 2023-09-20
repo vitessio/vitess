@@ -130,7 +130,7 @@ The `vtgr` has been deprecated in Vitess 17, also see https://github.com/vitessi
 
 #### <a id="deleted-query_analyzer"/>Deleted `query_analyzer`
 
-The undocmunted `query_analyzer` binary has been removed in Vitess 18, also see https://github.com/vitessio/vitess/issues/14054.
+The undocumented `query_analyzer` binary has been removed in Vitess 18, see https://github.com/vitessio/vitess/issues/14054.
 
 #### <a id="deprecated-vtbackup-stat-duration-by-phase"/>Deprecated VTbackup stat `DurationByPhase`
 
