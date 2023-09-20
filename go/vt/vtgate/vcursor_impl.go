@@ -1280,7 +1280,7 @@ func (vc *vcursorImpl) GetWarmingReadsPercent() int {
 	return vc.warmingReadsPercent
 }
 
-func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) interface{} {
+func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCursor {
 	callerId := callerid.EffectiveCallerIDFromContext(ctx)
 	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
 

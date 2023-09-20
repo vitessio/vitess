@@ -587,7 +587,7 @@ func orderByToString(in any) string {
 
 func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, queries []*querypb.BoundQuery) {
 	switch route.Opcode {
-	case Unsharded, Scatter, Equal, EqualUnique, IN:
+	case Unsharded, Scatter, Equal, EqualUnique, IN, MultiEqual:
 		// no-op
 	default:
 		return

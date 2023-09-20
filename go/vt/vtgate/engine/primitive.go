@@ -124,7 +124,7 @@ type (
 		GetWarmingReadsPercent() int
 
 		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas
-		CloneForReplicaWarming(ctx context.Context) interface{}
+		CloneForReplicaWarming(ctx context.Context) VCursor
 	}
 
 	// SessionActions gives primitives ability to interact with the session state

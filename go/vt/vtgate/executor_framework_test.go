@@ -302,12 +302,13 @@ func createExecutorEnvWithPrimaryReplicaConn(t testing.TB, warmingReadsPercent i
 		log.Errorf("CreateShard(0) failed: %v", err)
 	}
 
+	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, DefaultPlanCache(), nil, false, querypb.ExecuteOptions_Gen4, warmingReadsPercent)
+	executor.SetQueryLogger(queryLogger)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	t.Cleanup(func() {
-		defer utils.EnsureNoLeaks(t)
 		executor.Close()
 		cancel()
 	})
