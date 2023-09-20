@@ -341,7 +341,7 @@ func (collector *TableGC) nextState(fromState schema.TableGCState) *schema.Table
 
 // generateTansition creates a transition request, based on current state and taking configured lifecycleStates
 // into consideration (we may skip some states)
-func (collector *TableGC) generateTansition(ctx context.Context, fromState schema.TableGCState, fromTableName string, isBaseTable bool, uuid string) *transitionRequest {
+func (collector *TableGC) generateTansition(ctx context.Context, fromState schema.TableGCState, fromTableName string, isBaseTable bool, uuid string) *transitionRequest { // nolint
 	nextState := collector.nextState(fromState)
 	if nextState == nil {
 		return nil
@@ -439,13 +439,7 @@ func (collector *TableGC) checkTables(ctx context.Context, gcTables []*gcTable, 
 		if state == schema.PurgeTableGCState {
 			if table.isBaseTable {
 				// This table needs to be purged. Make sure to enlist it (we may already have)
-<<<<<<< HEAD
-				collector.addPurgingTable(tableName)
-=======
-				if !collector.addPurgingTable(table.tableName) {
-					collector.submitTransitionRequest(ctx, transitionRequestsChan, state, table.tableName, table.isBaseTable, uuid)
-				}
->>>>>>> adac81020c (TableGC: support DROP VIEW (#14020))
+				collector.addPurgingTable(table.tableName)
 			} else {
 				// This is a view. We don't need to delete rows from views. Just transition into next phase
 				collector.submitTransitionRequest(ctx, transitionRequestsChan, state, table.tableName, table.isBaseTable, uuid)
