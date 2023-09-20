@@ -24,8 +24,6 @@ import (
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
-
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -185,6 +183,5 @@ func TestBuggyOuterJoin(t *testing.T) {
 	defer closer()
 
 	mcmp.Exec("insert into t1(id1, id2) values (1,2), (42,5), (5, 42)")
-
 	mcmp.Exec("select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2")
 }
