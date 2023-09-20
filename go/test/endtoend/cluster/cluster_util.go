@@ -223,26 +223,53 @@ func filterResultWhenRunsForCoverage(input string) string {
 	return result
 }
 
-// WaitForReplicationPos will wait for replication position to catch-up
-func WaitForReplicationPos(t *testing.T, tabletA *Vttablet, tabletB *Vttablet, hostname string, timeout float64) {
-	replicationPosA, _ := GetPrimaryPosition(t, *tabletA, hostname)
-	for {
-		replicationPosB, _ := GetPrimaryPosition(t, *tabletB, hostname)
-		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
-			break
-		}
-		msg := fmt.Sprintf("%s's replication position to catch up to %s's;currently at: %s, waiting to catch up to: %s", tabletB.Alias, tabletA.Alias, replicationPosB, replicationPosA)
-		waitStep(t, msg, timeout, 0.01)
-	}
+func ValidateReplicationIsHealthy(t *testing.T, tablet *Vttablet) bool {
+	query := "show replica status"
+	rs, err := tablet.VttabletProcess.QueryTablet(query, "", true)
+	assert.NoError(t, err)
+	row := rs.Named().Row()
+	require.NotNil(t, row)
+
+	ioRunning := row.AsString("Replica_IO_Running", "")
+	require.NotEmpty(t, ioRunning)
+	ioHealthy := assert.Equalf(t, "Yes", ioRunning, "Replication is broken. Replication status: %v", row)
+	sqlRunning := row.AsString("Replica_SQL_Running", "")
+	require.NotEmpty(t, sqlRunning)
+	sqlHealthy := assert.Equalf(t, "Yes", sqlRunning, "Replication is broken. Replication status: %v", row)
+
+	return ioHealthy && sqlHealthy
 }
 
-func waitStep(t *testing.T, msg string, timeout float64, sleepTime float64) float64 {
-	timeout = timeout - sleepTime
-	if timeout < 0.0 {
-		t.Errorf("timeout waiting for condition '%s'", msg)
+// WaitForReplicationPos will wait for replication position to catch-up
+func WaitForReplicationPos(t *testing.T, tabletA *Vttablet, tabletB *Vttablet, validateReplication bool, timeout time.Duration) {
+	hostname := "localhost"
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	replicationPosA, _ := GetPrimaryPosition(t, *tabletA, hostname)
+	for {
+		if validateReplication {
+			if !ValidateReplicationIsHealthy(t, tabletB) {
+				assert.FailNowf(t, "Replication broken on tablet %v. Will not wait for position", tabletB.Alias)
+			}
+			if t.Failed() {
+				return
+			}
+		}
+		replicationPosB, _ := GetPrimaryPosition(t, *tabletB, hostname)
+		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
+			return
+		}
+		msg := fmt.Sprintf("%s's replication position to catch up to %s's;currently at: %s, waiting to catch up to: %s", tabletB.Alias, tabletA.Alias, replicationPosB, replicationPosA)
+		select {
+		case <-ctx.Done():
+			assert.FailNowf(t, "Timeout waiting for condition '%s'", msg)
+			return
+		case <-ticker.C:
+		}
 	}
-	time.Sleep(time.Duration(sleepTime) * time.Second)
-	return timeout
 }
 
 func positionAtLeast(t *testing.T, tablet *Vttablet, a string, b string) bool {

@@ -435,7 +435,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name, true)
-	checkIfDenyListExists(t, vc, "product:0", "customer")
+	isTableInDenyList(t, vc, "product:0", "customer")
 	// we tag along this test so as not to create the overhead of creating another cluster
 	testVStreamCellFlag(t)
 }
@@ -876,13 +876,13 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			switchWrites(t, workflowType, ksWorkflow, false)
 
 			var exists bool
-			exists, err = checkIfDenyListExists(t, vc, "product:0", "customer")
+			exists, err = isTableInDenyList(t, vc, "product:0", "customer")
 			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.True(t, exists)
 
 			moveTablesAction(t, "Complete", allCellNames, workflow, sourceKs, targetKs, tables)
 
-			exists, err = checkIfDenyListExists(t, vc, "product:0", "customer")
+			exists, err = isTableInDenyList(t, vc, "product:0", "customer")
 			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.False(t, exists)
 
