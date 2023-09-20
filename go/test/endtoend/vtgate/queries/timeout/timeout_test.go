@@ -76,14 +76,14 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	// unsharded
 	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
 	for i := 0; i < 12; i++ {
-		utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=2000 */ into uks.unsharded(id1) select id1+5 from uks.unsharded")
+		utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into uks.unsharded(id1) select id1+5 from uks.unsharded")
 	}
 
 	utils.Exec(t, mcmp.VtConn, "select count(*) from uks.unsharded where id1 > 31")
-	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*) from uks.unsharded where id1 > 31")
+	utils.Exec(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=100 */ count(*) from uks.unsharded where id1 > 31")
 
 	// the query usually takes more than 5ms to return. So this should fail.
-	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=1 */ count(*) from uks.unsharded where id1 > 31")
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=1 */ count(*) from uks.unsharded where id1 > 31")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
@@ -92,8 +92,8 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into ks_misc.t1(id1, id2) values (1,2),(2,4),(3,6),(4,8),(5,10)")
 
 	// sleep take in seconds, so 0.1 is 100ms
-	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.1) from t1 where id1 = 1")
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=20 */ sleep(0.1) from t1 where id1 = 1")
+	utils.Exec(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=500 */ sleep(0.1) from t1 where id1 = 1")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=20 */ sleep(0.1) from t1 where id1 = 1")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
