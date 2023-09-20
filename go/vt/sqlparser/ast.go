@@ -3094,7 +3094,7 @@ func (idx *IndexSpec) Format(buf *TrackedBuffer) {
 			buf.Myprintf(" %s", opt.Name)
 			if opt.Using != "" {
 				buf.Myprintf(" %s", opt.Using)
-			} else {
+			} else if opt.Value != nil {
 				buf.Myprintf(" %v", opt.Value)
 			}
 		}
@@ -3152,7 +3152,7 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" %s", opt.Name)
 		if opt.Using != "" {
 			buf.Myprintf(" %s", opt.Using)
-		} else {
+		} else if opt.Value != nil {
 			buf.Myprintf(" %v", opt.Value)
 		}
 	}

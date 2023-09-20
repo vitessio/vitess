@@ -1544,6 +1544,12 @@ var (
 			input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 			output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 		}, {
+			input:  "CREATE TABLE `dolt_test`.`a` (`id` INT, `b` DOUBLE, PRIMARY KEY (`id`), INDEX `c` (`b` ASC) INVISIBLE)",
+			output: "create table dolt_test.a (\n\tid INT,\n\tb DOUBLE,\n\tPRIMARY KEY (id),\n\tINDEX c (b) INVISIBLE\n)",
+		}, {
+			input:  "CREATE TABLE `dolt_test`.`a` (`id` INT, `b` DOUBLE, PRIMARY KEY (`id`), INDEX `c` (`b` ASC) VISIBLE)",
+			output: "create table dolt_test.a (\n\tid INT,\n\tb DOUBLE,\n\tPRIMARY KEY (id),\n\tINDEX c (b) VISIBLE\n)",
+		}, {
 			input:  "create temporary table a (b1 bool not null primary key, b2 boolean not null)",
 			output: "create temporary table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 		}, {
@@ -1558,6 +1564,12 @@ var (
 		}, {
 			input:  "create index a on b (foo(6) desc, foo asc)",
 			output: "alter table b add index a (foo(6) desc, foo)",
+		}, {
+			input:  "CREATE INDEX `c` on `dolt_test`.`a`(`b` ASC) INVISIBLE",
+			output: "alter table dolt_test.a add index c (b) INVISIBLE",
+		}, {
+			input:  "CREATE INDEX `c` on `dolt_test`.`a`(`b` ASC) VISIBLE",
+			output: "alter table dolt_test.a add index c (b) VISIBLE",
 		}, {
 			input:  "create unique index a on b (id)",
 			output: "alter table b add unique index a (id)",
