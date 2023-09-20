@@ -220,13 +220,13 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
 	t.Run("Client error handling", func(t *testing.T) {
 		_, output := performVDiff2Action(t, ksWorkflow, cells, "badcmd", "", true)
-		require.Contains(t, output, "usage:")
+		require.Contains(t, output, "Usage:")
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "create", "invalid_uuid", true)
-		require.Contains(t, output, "please provide a valid UUID")
+		require.Contains(t, output, "invalid UUID provided")
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "resume", "invalid_uuid", true)
-		require.Contains(t, output, "can only resume a specific vdiff, please provide a valid UUID")
+		require.Contains(t, output, "invalid UUID provided")
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", "invalid_uuid", true)
-		require.Contains(t, output, "can only delete a specific vdiff, please provide a valid UUID")
+		require.Contains(t, output, "invalid UUID provided")
 		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false)
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "create", uuid, true)
 		require.Contains(t, output, "already exists")
@@ -312,7 +312,7 @@ func testResume(t *testing.T, tc *testCase, cells string) {
 
 		// confirm that the VDiff was resumed, able to complete, and we compared the
 		// expected number of rows in total (original run and resume)
-		uuid, _ = performVDiff2Action(t, ksWorkflow, cells, "resume", uuid, false)
+		_, _ = performVDiff2Action(t, ksWorkflow, cells, "resume", uuid, false)
 		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, ogTime)
 		require.False(t, info.HasMismatch)
 		require.Equal(t, expectedRows, info.RowsCompared)
