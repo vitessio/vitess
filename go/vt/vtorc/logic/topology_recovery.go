@@ -586,18 +586,6 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	countPendingRecoveries.Add(1)
 	defer countPendingRecoveries.Add(-1)
 
-	// Regardless of whether there's an action to take, we have to increment
-	// the problems counter with the analysis entry unless it indicates there's
-	// no problem.
-	if code := analysisEntry.Analysis; code != inst.NoProblem {
-		detectedProblemsCounter.Add([]string{
-			string(code),
-			analysisEntry.AnalyzedInstanceAlias,
-			analysisEntry.AnalyzedKeyspace,
-			analysisEntry.AnalyzedShard,
-		}, 1)
-	}
-
 	checkAndRecoverFunctionCode := getCheckAndRecoverFunctionCode(analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
 	isActionableRecovery := hasActionableRecovery(checkAndRecoverFunctionCode)
 	analysisEntry.IsActionableRecovery = isActionableRecovery
@@ -774,6 +762,33 @@ func CheckAndRecover() {
 	if err != nil {
 		log.Error(err)
 		return
+	}
+
+	// Regardless of if the problem is solved or not we want to monitor active
+	// issues, we use a map of labels and set a counter to `1` for each problem
+	// then we reset any counter that is not present in the current analysis.
+	active := make(map[string][]string)
+	for _, e := range replicationAnalysis {
+		if e.Analysis != inst.NoProblem {
+			names := [...]string{
+				string(e.Analysis),
+				e.AnalyzedInstanceAlias,
+				e.AnalyzedKeyspace,
+				e.AnalyzedShard,
+			}
+
+			key := detectedProblemsCounter.GetLabelName(names[:]...)
+			active[key] = names[:]
+			detectedProblemsCounter.Reset(names[:])
+			detectedProblemsCounter.Add(names[:], 1)
+		}
+	}
+
+	// Reset any non-active problems.
+	for key := range detectedProblemsCounter.Counts() {
+		if names, ok := active[key]; !ok {
+			detectedProblemsCounter.Reset(names)
+		}
 	}
 
 	// intentionally iterating entries in random order
