@@ -73,8 +73,14 @@ var (
 	sqlPurgeTable       = `delete from %a limit 50`
 	sqlShowVtTables     = `show full tables like '\_vt\_%'`
 	sqlDropTable        = "drop table if exists `%a`"
+	sqlDropView         = "drop view if exists `%a`"
 	purgeReentranceFlag int64
 )
+
+type gcTable struct {
+	tableName   string
+	isBaseTable bool
+}
 
 // transitionRequest encapsulates a request to transition a table to next state
 type transitionRequest struct {
@@ -238,6 +244,14 @@ func (collector *TableGC) Close() {
 // Operate is the main entry point for the table garbage collector operation and logic.
 func (collector *TableGC) Operate(ctx context.Context) {
 
+<<<<<<< HEAD
+=======
+	dropTablesChan := make(chan *gcTable)
+	purgeRequestsChan := make(chan bool)
+	transitionRequestsChan := make(chan *transitionRequest)
+
+	tickers := [](*timer.SuspendableTicker){}
+>>>>>>> adac81020c (TableGC: support DROP VIEW (#14020))
 	addTicker := func(d time.Duration) *timer.SuspendableTicker {
 		collector.initMutex.Lock()
 		defer collector.initMutex.Unlock()
@@ -282,7 +296,16 @@ func (collector *TableGC) Operate(ctx context.Context) {
 			}
 		case <-tableCheckTicker.C:
 			{
+<<<<<<< HEAD
 				_ = collector.checkTables(ctx)
+=======
+				log.Info("TableGC: tableCheckTicker")
+				if gcTables, err := collector.readTables(ctx); err != nil {
+					log.Errorf("TableGC: error while reading tables: %+v", err)
+				} else {
+					_ = collector.checkTables(ctx, gcTables, dropTablesChan, transitionRequestsChan)
+				}
+>>>>>>> adac81020c (TableGC: support DROP VIEW (#14020))
 			}
 		case <-purgeReentranceTicker.C:
 			{
@@ -297,10 +320,18 @@ func (collector *TableGC) Operate(ctx context.Context) {
 					}
 				}()
 			}
+<<<<<<< HEAD
 		case dropTableName := <-collector.dropTablesChan:
 			{
 				if err := collector.dropTable(ctx, dropTableName); err != nil {
 					log.Errorf("TableGC: error dropping table %s: %+v", dropTableName, err)
+=======
+		case dropTable := <-dropTablesChan:
+			{
+				log.Infof("TableGC: found %v in dropTablesChan", dropTable.tableName)
+				if err := collector.dropTable(ctx, dropTable.tableName, dropTable.isBaseTable); err != nil {
+					log.Errorf("TableGC: error dropping table %s: %+v", dropTable.tableName, err)
+>>>>>>> adac81020c (TableGC: support DROP VIEW (#14020))
 				}
 			}
 		case transition := <-collector.transitionRequestsChan:
@@ -383,6 +414,7 @@ func (collector *TableGC) shouldTransitionTable(tableName string) (shouldTransit
 	return true, state, uuid, nil
 }
 
+<<<<<<< HEAD
 // checkTables looks for potential GC tables in the MySQL server+schema.
 // It lists _vt_% tables, then filters through those which are due-date.
 // It then applies the necessary operation per table.
@@ -390,26 +422,41 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 	if atomic.LoadInt64(&collector.isPrimary) == 0 {
 		return nil
 	}
+=======
+// readTables reads the list of _vt_% tables from the database
+func (collector *TableGC) readTables(ctx context.Context) (gcTables []*gcTable, err error) {
+	log.Infof("TableGC: read tables")
+>>>>>>> adac81020c (TableGC: support DROP VIEW (#14020))
 
 	conn, err := collector.pool.Get(ctx, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer conn.Recycle()
 
-	log.Infof("TableGC: check tables")
-
 	res, err := conn.Exec(ctx, sqlShowVtTables, math.MaxInt32, true)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, row := range res.Rows {
 		tableName := row[0].ToString()
 		tableType := row[1].ToString()
 		isBaseTable := (tableType == "BASE TABLE")
+		gcTables = append(gcTables, &gcTable{tableName: tableName, isBaseTable: isBaseTable})
+	}
+	return gcTables, nil
+}
 
-		shouldTransition, state, uuid, err := collector.shouldTransitionTable(tableName)
+// checkTables looks for potential GC tables in the MySQL server+schema.
+// It lists _vt_% tables, then filters through those which are due-date.
+// It then applies the necessary operation per table.
+func (collector *TableGC) checkTables(ctx context.Context, gcTables []*gcTable, dropTablesChan chan<- *gcTable, transitionRequestsChan chan<- *transitionRequest) error {
+	log.Infof("TableGC: check tables")
+
+	for i := range gcTables {
+		table := gcTables[i] // we capture as local variable as we will later use this in a goroutine
+		shouldTransition, state, uuid, err := collector.shouldTransitionTable(table.tableName)
 
 		if err != nil {
 			log.Errorf("TableGC: error while checking tables: %+v", err)
@@ -420,28 +467,51 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 			continue
 		}
 
-		log.Infof("TableGC: will operate on table %s", tableName)
+		log.Infof("TableGC: will operate on table %s", table.tableName)
 
 		if state == schema.HoldTableGCState {
 			// Hold period expired. Moving to next state
+<<<<<<< HEAD
 			collector.submitTransitionRequest(ctx, state, tableName, isBaseTable, uuid)
+=======
+			collector.submitTransitionRequest(ctx, transitionRequestsChan, state, table.tableName, table.isBaseTable, uuid)
+>>>>>>> adac81020c (TableGC: support DROP VIEW (#14020))
 		}
 		if state == schema.PurgeTableGCState {
-			if isBaseTable {
+			if table.isBaseTable {
 				// This table needs to be purged. Make sure to enlist it (we may already have)
+<<<<<<< HEAD
 				collector.addPurgingTable(tableName)
 			} else {
 				// This is a view. We don't need to delete rows from views. Just transition into next phase
 				collector.submitTransitionRequest(ctx, state, tableName, isBaseTable, uuid)
+=======
+				if !collector.addPurgingTable(table.tableName) {
+					collector.submitTransitionRequest(ctx, transitionRequestsChan, state, table.tableName, table.isBaseTable, uuid)
+				}
+			} else {
+				// This is a view. We don't need to delete rows from views. Just transition into next phase
+				collector.submitTransitionRequest(ctx, transitionRequestsChan, state, table.tableName, table.isBaseTable, uuid)
+>>>>>>> adac81020c (TableGC: support DROP VIEW (#14020))
 			}
 		}
 		if state == schema.EvacTableGCState {
 			// This table was in EVAC state for the required period. It will transition into DROP state
+<<<<<<< HEAD
 			collector.submitTransitionRequest(ctx, state, tableName, isBaseTable, uuid)
 		}
 		if state == schema.DropTableGCState {
 			// This table needs to be dropped immediately.
 			go func() { collector.dropTablesChan <- tableName }()
+=======
+			collector.submitTransitionRequest(ctx, transitionRequestsChan, state, table.tableName, table.isBaseTable, uuid)
+		}
+		if state == schema.DropTableGCState {
+			// This table needs to be dropped immediately.
+			go func() {
+				dropTablesChan <- table
+			}()
+>>>>>>> adac81020c (TableGC: support DROP VIEW (#14020))
 		}
 	}
 
@@ -542,25 +612,34 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 
 // dropTable runs an actual DROP TABLE statement, and marks the end of the line for the
 // tables' GC lifecycle.
+<<<<<<< HEAD
 func (collector *TableGC) dropTable(ctx context.Context, tableName string) error {
 	if atomic.LoadInt64(&collector.isPrimary) == 0 {
 		return nil
 	}
 
 	conn, err := collector.pool.Get(ctx, nil)
+=======
+func (collector *TableGC) dropTable(ctx context.Context, tableName string, isBaseTable bool) error {
+	conn, err := dbconnpool.NewDBConnection(ctx, collector.env.Config().DB.DbaWithDB())
+>>>>>>> adac81020c (TableGC: support DROP VIEW (#14020))
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer conn.Close()
 
-	parsed := sqlparser.BuildParsedQuery(sqlDropTable, tableName)
+	sqlDrop := sqlDropTable
+	if !isBaseTable {
+		sqlDrop = sqlDropView
+	}
+	parsed := sqlparser.BuildParsedQuery(sqlDrop, tableName)
 
 	log.Infof("TableGC: dropping table: %s", tableName)
-	_, err = conn.Exec(ctx, parsed.Query, 1, true)
+	_, err = conn.ExecuteFetch(parsed.Query, 1, false)
 	if err != nil {
 		return err
 	}
-	log.Infof("TableGC: dropped table: %s", tableName)
+	log.Infof("TableGC: dropped table: %s, isBaseTable: %v", tableName, isBaseTable)
 	return nil
 }
 
