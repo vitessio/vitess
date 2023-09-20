@@ -1566,7 +1566,7 @@ var (
 			output: "alter table b add index a (foo(6) desc, foo)",
 		}, {
 			input:  "CREATE INDEX `c` on `dolt_test`.`a`(`b` ASC) INVISIBLE",
-        	output: "alter table dolt_test.a add index c (b) INVISIBLE",
+			output: "alter table dolt_test.a add index c (b) INVISIBLE",
 		}, {
 			input:  "CREATE INDEX `c` on `dolt_test`.`a`(`b` ASC) VISIBLE",
 			output: "alter table dolt_test.a add index c (b) VISIBLE",
