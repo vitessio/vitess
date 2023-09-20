@@ -3220,11 +3220,11 @@ var (
 				") secondary_engine rapid",
 		},
 		{
-			input: "alter table t secondary_engine=rapid",
+			input:  "alter table t secondary_engine=rapid",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t secondary_engine rapid",
+			input:  "alter table t secondary_engine rapid",
 			output: "alter table t",
 		},
 		{
@@ -3240,15 +3240,15 @@ var (
 				") secondary_engine_attribute 'rapid'",
 		},
 		{
-			input: "alter table t secondary_engine_attribute='rapid'",
+			input:  "alter table t secondary_engine_attribute='rapid'",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t secondary_engine_attribute 'rapid'",
+			input:  "alter table t secondary_engine_attribute 'rapid'",
 			output: "alter table t",
 		},
 		{
-			input: "table t",
+			input:  "table t",
 			output: "select * from t",
 		},
 		{
@@ -3264,11 +3264,11 @@ var (
 				") checksum 100",
 		},
 		{
-			input: "alter table t checksum 1",
+			input:  "alter table t checksum 1",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t checksum = 1",
+			input:  "alter table t checksum = 1",
 			output: "alter table t",
 		},
 		{
@@ -3284,11 +3284,11 @@ var (
 				") CHECKSUM 100",
 		},
 		{
-			input: "alter table t table_checksum 1",
+			input:  "alter table t table_checksum 1",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t table_checksum = 1",
+			input:  "alter table t table_checksum = 1",
 			output: "alter table t",
 		},
 		{
@@ -3304,7 +3304,7 @@ var (
 				") union (a,b,c)",
 		},
 		{
-			input: "alter table t union=(a, b, c)",
+			input:  "alter table t union=(a, b, c)",
 			output: "alter table t",
 		},
 		{
@@ -3320,11 +3320,11 @@ var (
 				") insert_method last",
 		},
 		{
-			input: "alter table t insert_method last",
+			input:  "alter table t insert_method last",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t insert_method=last",
+			input:  "alter table t insert_method=last",
 			output: "alter table t",
 		},
 	}
@@ -5608,6 +5608,36 @@ func TestCreateTable(t *testing.T) {
 			"  tablespace tablespace_name storage disk,\n" +
 			"  tablespace tablespace_name\n",
 
+		// passing hex nums to table options
+		"create table t (\n" +
+			"	id int auto_increment\n" +
+			") engine InnoDB,\n" +
+			"  auto_increment 0x1,\n" +
+			"  avg_row_length 0x2,\n" +
+			"  checksum 0x3,\n" +
+			"  delay_key_write 0x4,\n" +
+			"  key_block_size 0x5,\n" +
+			"  max_rows 0x6,\n" +
+			"  min_rows 0x7,\n" +
+			"  pack_keys 0x8,\n" +
+			"  stats_persistent 0x9,\n" +
+			"  stats_sample_pages 0x10\n",
+
+		// passing floats to table options
+		"create table t (\n" +
+			"	id int auto_increment\n" +
+			") engine InnoDB,\n" +
+			"  auto_increment 4.1,\n" +
+			"  avg_row_length 4.2,\n" +
+			"  checksum 4.3,\n" +
+			"  delay_key_write 4.4,\n" +
+			"  key_block_size 4.5,\n" +
+			"  max_rows 4.6,\n" +
+			"  min_rows 4.7,\n" +
+			"  pack_keys 4.8,\n" +
+			"  stats_persistent 4.9,\n" +
+			"  stats_sample_pages 4.01\n",
+
 		// boolean columns
 		"create table t (\n" +
 			"	bi bigint not null primary key,\n" +
@@ -5621,17 +5651,19 @@ func TestCreateTable(t *testing.T) {
 			")",
 	}
 	for _, sql := range validSQL {
-		sql = strings.TrimSpace(sql)
-		tree, err := Parse(sql)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", sql, err)
-			continue
-		}
-		got := String(tree.(*DDL))
+		t.Run(sql, func(t *testing.T) {
+			sql = strings.TrimSpace(sql)
+			tree, err := Parse(sql)
+			if err != nil {
+				t.Errorf("input: %s, err: %v", sql, err)
+				return
+			}
+			got := String(tree.(*DDL))
 
-		if sql != got {
-			t.Errorf("want:\n%s\ngot:\n%s", sql, got)
-		}
+			if sql != got {
+				t.Errorf("want:\n%s\ngot:\n%s", sql, got)
+			}
+		})
 	}
 
 	sql := "create table t garbage"
