@@ -19,6 +19,7 @@ package schema
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -36,71 +37,6 @@ func TestIsDirect(t *testing.T) {
 	assert.False(t, DDLStrategy("pt-osc").IsDirect())
 	assert.False(t, DDLStrategy("mysql").IsDirect())
 	assert.True(t, DDLStrategy("something").IsDirect())
-}
-
-<<<<<<< HEAD
-=======
-func TestIsCutOverThresholdFlag(t *testing.T) {
-	tt := []struct {
-		s      string
-		expect bool
-		val    string
-		d      time.Duration
-	}{
-		{
-			s: "something",
-		},
-		{
-			s: "-cut-over-threshold",
-		},
-		{
-			s: "--cut-over-threshold",
-		},
-		{
-			s:      "--cut-over-threshold=",
-			expect: true,
-		},
-		{
-			s:      "--cut-over-threshold=0",
-			expect: true,
-			val:    "0",
-			d:      0,
-		},
-		{
-			s:      "-cut-over-threshold=0",
-			expect: true,
-			val:    "0",
-			d:      0,
-		},
-		{
-			s:      "--cut-over-threshold=1m",
-			expect: true,
-			val:    "1m",
-			d:      time.Minute,
-		},
-		{
-			s:      `--cut-over-threshold="1m"`,
-			expect: true,
-			val:    `"1m"`,
-			d:      time.Minute,
-		},
-	}
-	for _, ts := range tt {
-		t.Run(ts.s, func(t *testing.T) {
-			setting, err := ParseDDLStrategy("online " + ts.s)
-			assert.NoError(t, err)
-
-			val, isCutOver := isCutOverThresholdFlag(ts.s)
-			assert.Equal(t, ts.expect, isCutOver)
-			assert.Equal(t, ts.val, val)
-
-			if ts.expect {
-				d, err := setting.CutOverThreshold()
-				assert.NoError(t, err)
-				assert.Equal(t, ts.d, d)
-			}
-		})
-	}
 }
 
 func TestIsExpireArtifactsFlag(t *testing.T) {
@@ -166,7 +102,6 @@ func TestIsExpireArtifactsFlag(t *testing.T) {
 	}
 }
 
->>>>>>> 0461fafbd2 (OnlineDDL: cleanup cancelled migration artifacts; support `--retain-artifacts=<duration>` DDL strategy flag (#14029))
 func TestParseDDLStrategy(t *testing.T) {
 	tt := []struct {
 		strategyVariable     string
@@ -181,12 +116,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		fastOverRevertible   bool
 		fastRangeRotation    bool
 		allowForeignKeys     bool
-<<<<<<< HEAD
-=======
-		analyzeTable         bool
-		cutOverThreshold     time.Duration
 		expireArtifacts      time.Duration
->>>>>>> 0461fafbd2 (OnlineDDL: cleanup cancelled migration artifacts; support `--retain-artifacts=<duration>` DDL strategy flag (#14029))
 		runtimeOptions       string
 		err                  error
 	}{
@@ -301,15 +231,6 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:   "",
 			allowForeignKeys: true,
 		},
-<<<<<<< HEAD
-=======
-		{
-			strategyVariable: "vitess --cut-over-threshold=5m",
-			strategy:         DDLStrategyVitess,
-			options:          "--cut-over-threshold=5m",
-			runtimeOptions:   "",
-			cutOverThreshold: 5 * time.Minute,
-		},
 		{
 			strategyVariable: "vitess --retain-artifacts=4m",
 			strategy:         DDLStrategyVitess,
@@ -317,14 +238,6 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:   "",
 			expireArtifacts:  4 * time.Minute,
 		},
-		{
-			strategyVariable: "vitess --analyze-table",
-			strategy:         DDLStrategyVitess,
-			options:          "--analyze-table",
-			runtimeOptions:   "",
-			analyzeTable:     true,
-		},
->>>>>>> 0461fafbd2 (OnlineDDL: cleanup cancelled migration artifacts; support `--retain-artifacts=<duration>` DDL strategy flag (#14029))
 	}
 	for _, ts := range tt {
 		t.Run(ts.strategyVariable, func(t *testing.T) {
@@ -349,19 +262,8 @@ func TestParseDDLStrategy(t *testing.T) {
 		_, err := ParseDDLStrategy("other")
 		assert.Error(t, err)
 	}
-<<<<<<< HEAD
-=======
-	{
-		_, err := ParseDDLStrategy("online --cut-over-threshold=X")
-		assert.Error(t, err)
-	}
-	{
-		_, err := ParseDDLStrategy("online --cut-over-threshold=3")
-		assert.Error(t, err)
-	}
 	{
 		_, err := ParseDDLStrategy("online --retain-artifacts=3")
 		assert.Error(t, err)
 	}
->>>>>>> 0461fafbd2 (OnlineDDL: cleanup cancelled migration artifacts; support `--retain-artifacts=<duration>` DDL strategy flag (#14029))
 }
