@@ -225,7 +225,7 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Ope
 		if sq.FilterType != opcode.PulloutExists {
 			return nil, correlatedSubqueryErr
 		}
-		return sq.settleExistSubquery(ctx, outer)
+		return outer, nil
 	}
 
 	hasValuesArg := func() string {
@@ -276,22 +276,6 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Ope
 		Source:     outer,
 		Predicates: predicates,
 	}, nil
-}
-
-func (sq *SubQuery) settleExistSubquery(ctx *plancontext.PlanningContext, outer ops.Operator) (ops.Operator, error) {
-	jcs, err := sq.GetJoinColumns(ctx, outer)
-	if err != nil {
-		return nil, err
-	}
-
-	sq.Subquery = &Filter{
-		Source:     sq.Subquery,
-		Predicates: slice.Map(jcs, func(col JoinColumn) sqlparser.Expr { return col.RHSExpr }),
-	}
-
-	// the columns needed by the RHS expression are handled during offset planning time
-
-	return outer, nil
 }
 
 func (sq *SubQuery) isMerged(ctx *plancontext.PlanningContext) bool {

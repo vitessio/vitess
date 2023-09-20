@@ -37,25 +37,25 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, jo
 	switch {
 	// if either side is a dual query, we can always merge them together
 	case a == dual:
-		return m.merge(lhsRoute, rhsRoute, routingB)
+		return m.merge(ctx, lhsRoute, rhsRoute, routingB)
 	case b == dual:
-		return m.merge(lhsRoute, rhsRoute, routingA)
+		return m.merge(ctx, lhsRoute, rhsRoute, routingA)
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case a == anyShard && sameKeyspace:
-		return m.merge(lhsRoute, rhsRoute, routingB)
+		return m.merge(ctx, lhsRoute, rhsRoute, routingB)
 	case b == anyShard && sameKeyspace:
-		return m.merge(lhsRoute, rhsRoute, routingA)
+		return m.merge(ctx, lhsRoute, rhsRoute, routingA)
 
 	// None routing can always be merged, as long as we are aiming for the same keyspace
 	case a == none && sameKeyspace:
-		return m.merge(lhsRoute, rhsRoute, routingA)
+		return m.merge(ctx, lhsRoute, rhsRoute, routingA)
 	case b == none && sameKeyspace:
-		return m.merge(lhsRoute, rhsRoute, routingB)
+		return m.merge(ctx, lhsRoute, rhsRoute, routingB)
 
 	// infoSchema routing is complex, so we handle it in a separate method
 	case a == infoSchema && b == infoSchema:
-		return tryMergeInfoSchemaRoutings(routingA, routingB, m, lhsRoute, rhsRoute)
+		return tryMergeInfoSchemaRoutings(ctx, routingA, routingB, m, lhsRoute, rhsRoute)
 
 	// sharded routing is complex, so we handle it in a separate method
 	case a == sharded && b == sharded:
@@ -87,20 +87,13 @@ func prepareInputRoutes(lhs ops.Operator, rhs ops.Operator) (*Route, *Route, Rou
 
 type (
 	merger interface {
-		mergeShardedRouting(r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error)
-		merge(op1, op2 *Route, r Routing) (*Route, error)
+		mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error)
+		merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) (*Route, error)
 	}
 
 	joinMerger struct {
-		ctx        *plancontext.PlanningContext
 		predicates []sqlparser.Expr
 		innerJoin  bool
-	}
-
-	// mergeDecorator runs the inner merge and also runs the additional function f.
-	mergeDecorator struct {
-		inner merger
-		f     func() error
 	}
 
 	routingType int
@@ -184,16 +177,15 @@ func getRoutingType(r Routing) routingType {
 	panic(fmt.Sprintf("switch should be exhaustive, got %T", r))
 }
 
-func newJoinMerge(ctx *plancontext.PlanningContext, predicates []sqlparser.Expr, innerJoin bool) merger {
+func newJoinMerge(predicates []sqlparser.Expr, innerJoin bool) merger {
 	return &joinMerger{
-		ctx:        ctx,
 		predicates: predicates,
 		innerJoin:  innerJoin,
 	}
 }
 
-func (jm *joinMerger) mergeShardedRouting(r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error) {
-	return jm.merge(op1, op2, mergeShardedRouting(r1, r2))
+func (jm *joinMerger) mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error) {
+	return jm.merge(ctx, op1, op2, mergeShardedRouting(r1, r2))
 }
 
 func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting {
@@ -211,36 +203,14 @@ func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting
 	return tr
 }
 
-func (jm *joinMerger) getApplyJoin(op1, op2 *Route) *ApplyJoin {
-	return NewApplyJoin(op1.Source, op2.Source, jm.ctx.SemTable.AndExpressions(jm.predicates...), !jm.innerJoin)
+func (jm *joinMerger) getApplyJoin(ctx *plancontext.PlanningContext, op1, op2 *Route) *ApplyJoin {
+	return NewApplyJoin(op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), !jm.innerJoin)
 }
 
-func (jm *joinMerger) merge(op1, op2 *Route, r Routing) (*Route, error) {
+func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) (*Route, error) {
 	return &Route{
-		Source:     jm.getApplyJoin(op1, op2),
+		Source:     jm.getApplyJoin(ctx, op1, op2),
 		MergedWith: []*Route{op2},
 		Routing:    r,
 	}, nil
-}
-
-func (d *mergeDecorator) mergeShardedRouting(outer, inner *ShardedRouting, op1, op2 *Route) (*Route, error) {
-	merged, err := d.inner.mergeShardedRouting(outer, inner, op1, op2)
-	if err != nil {
-		return nil, err
-	}
-	if err := d.f(); err != nil {
-		return nil, err
-	}
-	return merged, nil
-}
-
-func (d *mergeDecorator) merge(outer, inner *Route, r Routing) (*Route, error) {
-	merged, err := d.inner.merge(outer, inner, r)
-	if err != nil {
-		return nil, err
-	}
-	if err := d.f(); err != nil {
-		return nil, err
-	}
-	return merged, nil
 }

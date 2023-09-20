@@ -169,7 +169,7 @@ func isTableOrSchemaRoutable(cmp *sqlparser.ComparisonExpr) (
 	return false, nil
 }
 
-func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, rhsRoute *Route) (*Route, error) {
+func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, routingB Routing, m merger, lhsRoute, rhsRoute *Route) (*Route, error) {
 	// we have already checked type earlier, so this should always be safe
 	isrA := routingA.(*InfoSchemaRouting)
 	isrB := routingB.(*InfoSchemaRouting)
@@ -179,9 +179,9 @@ func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, 
 	switch {
 	// if either side has no predicates to help us route, we can merge them
 	case emptyA:
-		return m.merge(lhsRoute, rhsRoute, isrB)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrB)
 	case emptyB:
-		return m.merge(lhsRoute, rhsRoute, isrA)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
 
 	// if we have no schema predicates on either side, we can merge if the table info is the same
 	case len(isrA.SysTableTableSchema) == 0 && len(isrB.SysTableTableSchema) == 0:
@@ -192,14 +192,14 @@ func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, 
 			}
 			isrA.SysTableTableName[k] = expr
 		}
-		return m.merge(lhsRoute, rhsRoute, isrA)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
 
 	// if both sides have the same schema predicate, we can safely merge them
 	case sqlparser.Equals.Exprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
 		for k, expr := range isrB.SysTableTableName {
 			isrA.SysTableTableName[k] = expr
 		}
-		return m.merge(lhsRoute, rhsRoute, isrA)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
 
 	// give up
 	default:

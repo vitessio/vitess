@@ -4337,7 +4337,6 @@
   {
     "comment": "merge through correlated subquery",
     "query": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id = 5",
-    "skip": true,
     "plan": {
       "QueryType": "UPDATE",
       "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id = 5",
@@ -4365,7 +4364,6 @@
   {
     "comment": "merge through correlated subquery #2",
     "query": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id > 5",
-    "skip": true,
     "plan": {
       "QueryType": "UPDATE",
       "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id > 5",

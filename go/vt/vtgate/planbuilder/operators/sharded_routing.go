@@ -186,7 +186,7 @@ func (tr *ShardedRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, e
 	return tr, nil
 }
 
-func (tr *ShardedRouting) ResetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error) {
+func (tr *ShardedRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error) {
 	tr.RouteOpCode = engine.Scatter
 	tr.Selected = nil
 	for i, vp := range tr.VindexPreds {
@@ -583,7 +583,7 @@ func tryMergeJoinShardedRouting(
 			aExpr := tblA.VindexExpressions()
 			bExpr := tblB.VindexExpressions()
 			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-				return m.mergeShardedRouting(tblA, tblB, routeA, routeB)
+				return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB)
 			}
 		}
 
@@ -607,7 +607,7 @@ func tryMergeJoinShardedRouting(
 		if !canMerge {
 			return nil, nil
 		}
-		return m.mergeShardedRouting(tblA, tblB, routeA, routeB)
+		return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB)
 	}
 	return nil, nil
 }

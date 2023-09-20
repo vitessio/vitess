@@ -17,6 +17,11 @@ limitations under the License.
 package operators
 
 import (
+	"io"
+
+	"golang.org/x/exp/slices"
+
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -180,6 +185,10 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner *SubQuery
 	joinID := TableID(outer)
 	innerID := TableID(inner.Subquery)
 
+	// Deps are the dependencies of the merge predicates -
+	// we want to push the subquery as close to its needs
+	// as possible, so that we can potentially merge them together
+	// TODO: we need to check dependencies and break apart all expressions in the subquery, not just the merge predicates
 	deps := semantics.EmptyTableSet()
 	for _, predicate := range inner.GetMergePredicates() {
 		deps = deps.Merge(ctx.SemTable.RecursiveDeps(predicate))
@@ -212,11 +221,8 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner *SubQuery
 		return outer, rewrite.NewTree("push subquery into LHS of join", inner), nil
 	}
 
-	if outer.LeftJoin {
-		return nil, rewrite.SameTree, nil
-	}
-
-	if len(inner.Predicates) == 0 {
+	if outer.LeftJoin || len(inner.Predicates) == 0 {
+		// we can't push any filters on the RHS of an outer join, and
 		// we don't want to push uncorrelated subqueries to the RHS of a join
 		return nil, rewrite.SameTree, nil
 	}
@@ -237,13 +243,19 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner *SubQuery
 		}
 
 		outer.RHS = addSubQuery(outer.RHS, inner)
-		return outer, rewrite.NewTree("push subquery into RHS of join removing LHS expr", inner), nil
+		return outer, rewrite.NewTree("push subquery into RHS of join rewriting predicates", inner), nil
 	}
 
 	return nil, rewrite.SameTree, nil
 }
 
-func extractLHSExpr(ctx *plancontext.PlanningContext, outer *ApplyJoin, lhs semantics.TableSet) func(expr sqlparser.Expr) (sqlparser.Expr, error) {
+// extractLHSExpr will return a function that extracts any ColName coming from the LHS table,
+// adding them to the ExtraLHSVars on the join if they are not already known
+func extractLHSExpr(
+	ctx *plancontext.PlanningContext,
+	outer *ApplyJoin,
+	lhs semantics.TableSet,
+) func(expr sqlparser.Expr) (sqlparser.Expr, error) {
 	return func(expr sqlparser.Expr) (sqlparser.Expr, error) {
 		col, err := BreakExpressionInLHSandRHS(ctx, expr, lhs)
 		if err != nil {
@@ -263,6 +275,9 @@ func extractLHSExpr(ctx *plancontext.PlanningContext, outer *ApplyJoin, lhs sema
 
 // tryMergeWithRHS attempts to merge a subquery with the RHS of a join
 func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
+	if outer.LeftJoin {
+		return nil, nil, nil
+	}
 	// both sides need to be routes
 	outerRoute, ok := outer.RHS.(*Route)
 	if !ok {
@@ -530,11 +545,58 @@ type subqueryRouteMerger struct {
 	subq     *SubQuery
 }
 
-func (s *subqueryRouteMerger) mergeShardedRouting(r1, r2 *ShardedRouting, old1, old2 *Route) (*Route, error) {
-	return s.merge(old1, old2, mergeShardedRouting(r1, r2))
+func (s *subqueryRouteMerger) mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, old1, old2 *Route) (*Route, error) {
+	tr := &ShardedRouting{
+		VindexPreds:    append(r1.VindexPreds, r2.VindexPreds...),
+		keyspace:       r1.keyspace,
+		RouteOpCode:    r1.RouteOpCode,
+		SeenPredicates: append(r1.SeenPredicates, r2.SeenPredicates...),
+	}
+
+	tr.SeenPredicates = slice.Filter(tr.SeenPredicates, func(expr sqlparser.Expr) bool {
+		// There are two cases we can have - we can have predicates in the outer
+		// that are no longer valid, and predicates in the inner that are no longer valid
+		// For the case WHERE exists(select 1 from user where user.id = ue.user_id)
+		// Outer: ::has_values
+		// Inner: user.id = :ue_user_id
+		//
+		// And for the case WHERE id IN (select id FROM user WHERE id = 5)
+		// Outer: id IN ::__sq1
+		// Inner: id = 5
+		//
+		// We only keep SeenPredicates that are not bind variables in the join columns.
+		// We have to remove the outer predicate since we merge both routes, and no one
+		// is producing the bind variable anymore.
+		if exprFromSubQ := ctx.SemTable.RecursiveDeps(expr).IsOverlapping(TableID(s.subq.Subquery)); !exprFromSubQ {
+			return true
+		}
+		var argFound bool
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			arg, ok := node.(*sqlparser.Argument)
+			if !ok {
+				return true, nil
+			}
+			f := func(bve BindVarExpr) bool { return bve.Name == arg.Name }
+			for _, jc := range s.subq.JoinColumns {
+				if slices.ContainsFunc(jc.LHSExprs, f) {
+					argFound = true
+					return false, io.EOF
+				}
+			}
+			return true, nil
+		}, expr)
+
+		return !argFound
+	})
+
+	routing, err := tr.resetRoutingLogic(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.merge(ctx, old1, old2, routing)
 }
 
-func (s *subqueryRouteMerger) merge(old1, old2 *Route, r Routing) (*Route, error) {
+func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, old1, old2 *Route, r Routing) (*Route, error) {
 	mergedWith := append(old1.MergedWith, old1, old2)
 	mergedWith = append(mergedWith, old2.MergedWith...)
 	src := s.outer.Source

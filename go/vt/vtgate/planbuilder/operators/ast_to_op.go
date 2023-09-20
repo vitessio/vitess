@@ -202,22 +202,25 @@ func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNod
 	return
 }
 
-func inspectWherePredicates(ctx *plancontext.PlanningContext, sqc *SubQueryContainer, sel *sqlparser.Select) sqlparser.Exprs {
-	newWhere, wherePreds, err := sqc.inspectInnerPredicates(ctx, sel.Where)
+func inspectWherePredicates(
+	ctx *plancontext.PlanningContext,
+	sqc *SubQueryContainer,
+	sel *sqlparser.Select,
+) (sqlparser.Exprs, []JoinColumn, error) {
+	newWhere, wherePreds, whereJoinCols, err := sqc.inspectInnerPredicates(ctx, sel.Where)
 	if err != nil {
-		return nil
+		return nil, nil, err
+	}
+	newHaving, havingPreds, havingJoinCols, err := sqc.inspectInnerPredicates(ctx, sel.Having)
+	if err != nil {
+		return nil, nil, err
 	}
 	sel.Where = newWhere
-
-	newHaving, havingPreds, err := sqc.inspectInnerPredicates(ctx, sel.Having)
-	if err != nil {
-		return nil
-	}
 	sel.Having = newHaving
 
 	// TODO: we need to look at join conditions as well
 
-	return append(wherePreds, havingPreds...)
+	return append(wherePreds, havingPreds...), append(whereJoinCols, havingJoinCols...), nil
 }
 func createSubquery(
 	ctx *plancontext.PlanningContext,
@@ -237,9 +240,15 @@ func createSubquery(
 	sqc := &SubQueryContainer{totalID: totalID, subqID: subqID, outerID: outerID}
 
 	var predicates sqlparser.Exprs
+	var joinCols []JoinColumn
+	var err error
+
 	switch stmt := subq.Select.(type) {
 	case *sqlparser.Select:
-		predicates = inspectWherePredicates(ctx, sqc, stmt)
+		predicates, joinCols, err = inspectWherePredicates(ctx, sqc, stmt)
+		if err != nil {
+			return nil, err
+		}
 	case *sqlparser.Union:
 		return nil, vterrors.VT13001("yucki unions")
 	}
@@ -260,6 +269,7 @@ func createSubquery(
 		originalSubquery: originalSq,
 		IsProjection:     isProjection,
 		TopLevel:         topLevel,
+		JoinColumns:      joinCols,
 	}, nil
 }
 
@@ -287,9 +297,9 @@ func rewriteRemainingColumns(
 func (sqc *SubQueryContainer) inspectInnerPredicates(
 	ctx *plancontext.PlanningContext,
 	in *sqlparser.Where,
-) (*sqlparser.Where, sqlparser.Exprs, error) {
+) (*sqlparser.Where, sqlparser.Exprs, []JoinColumn, error) {
 	if in == nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	jpc := &joinPredicateCollector{
 		totalID: sqc.totalID,
@@ -300,20 +310,22 @@ func (sqc *SubQueryContainer) inspectInnerPredicates(
 		sqlparser.RemoveKeyspaceFromColName(predicate)
 		subq, err := sqc.handleSubquery(ctx, predicate, sqc.totalID)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if subq != nil {
 			continue
 		}
-		jpc.inspectPredicate(ctx, predicate)
+		if err = jpc.inspectPredicate(ctx, predicate); err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
 	if len(jpc.remainingPredicates) == 0 {
-		return nil, jpc.predicates, nil
-	} else {
-		in.Expr = sqlparser.AndExpressions(jpc.remainingPredicates...)
-		return in, jpc.predicates, nil
+		return nil, jpc.predicates, jpc.joinColumns, nil
 	}
+
+	in.Expr = sqlparser.AndExpressions(jpc.remainingPredicates...)
+	return in, jpc.predicates, jpc.joinColumns, nil
 }
 
 func createComparisonSubQuery(
@@ -358,6 +370,7 @@ func createComparisonSubQuery(
 type joinPredicateCollector struct {
 	predicates          sqlparser.Exprs
 	remainingPredicates sqlparser.Exprs
+	joinColumns         []JoinColumn
 
 	totalID,
 	subqID,
@@ -367,15 +380,22 @@ type joinPredicateCollector struct {
 func (jpc *joinPredicateCollector) inspectPredicate(
 	ctx *plancontext.PlanningContext,
 	predicate sqlparser.Expr,
-) {
+) error {
+	pred := predicate
 	deps := ctx.SemTable.RecursiveDeps(predicate)
 	// if the subquery is not enough, but together we have all we need,
 	// then we can use this predicate to connect the subquery to the outer query
 	if !deps.IsSolvedBy(jpc.subqID) && deps.IsSolvedBy(jpc.totalID) {
 		jpc.predicates = append(jpc.predicates, predicate)
-	} else {
-		jpc.remainingPredicates = append(jpc.remainingPredicates, predicate)
+		jc, err := BreakExpressionInLHSandRHS(ctx, predicate, jpc.outerID)
+		if err != nil {
+			return err
+		}
+		jpc.joinColumns = append(jpc.joinColumns, jc)
+		pred = jc.RHSExpr
 	}
+	jpc.remainingPredicates = append(jpc.remainingPredicates, pred)
+	return nil
 }
 
 func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (ops.Operator, error) {

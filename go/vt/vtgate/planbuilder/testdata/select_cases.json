@@ -2466,7 +2466,29 @@
   {
     "comment": "correlated subquery that is dependent on one side of a join, fully mergeable",
     "query": "SELECT music.id FROM music INNER JOIN user ON music.user_id = user.id WHERE music.user_id = 5 AND music.id = (SELECT MAX(m2.id) FROM music m2 WHERE m2.user_id = user.id)",
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT music.id FROM music INNER JOIN user ON music.user_id = user.id WHERE music.user_id = 5 AND music.id = (SELECT MAX(m2.id) FROM music m2 WHERE m2.user_id = user.id)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music, `user` where 1 != 1",
+        "Query": "select music.id from music, `user` where music.user_id = 5 and music.user_id = `user`.id and music.id = (select max(m2.id) from music as m2 where m2.user_id = `user`.id)",
+        "Table": "`user`, music",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   },
   {
     "comment": "union as a derived table",
@@ -3375,7 +3397,7 @@
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) and music.user_id = 5",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "IN",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -3384,7 +3406,7 @@
         "Query": "select music.id from music where music.user_id = 5 and music.id in (select music.id from music where music.user_id in (1, 2, 3))",
         "Table": "music",
         "Values": [
-          "(INT64(1), INT64(2), INT64(3))"
+          "INT64(5)"
         ],
         "Vindex": "user_index"
       },
@@ -4391,7 +4413,25 @@
   {
     "comment": "merge subquery using MAX and join into single route",
     "query": "select 1 from user join music_extra on user.id = music_extra.user_id where music_extra.music_id = (select max(music_id) from music_extra where user_id = user.id)",
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user join music_extra on user.id = music_extra.user_id where music_extra.music_id = (select max(music_id) from music_extra where user_id = user.id)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user`, music_extra where 1 != 1",
+        "Query": "select 1 from `user`, music_extra where `user`.id = music_extra.user_id and music_extra.music_id = (select max(music_id) from music_extra where user_id = `user`.id)",
+        "Table": "`user`, music_extra"
+      },
+      "TablesUsed": [
+        "user.music_extra",
+        "user.user"
+      ]
+    }
   },
   {
     "comment": "Query with non-plannable lookup vindex",
