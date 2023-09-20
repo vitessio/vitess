@@ -582,13 +582,13 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 }
 
 // Each child foreign key constraint is verified by a join query of the form:
-// select 1 from child_tbl join parent_tbl on <columns in fk> where <clause same as original update> limit 1
+// select 1 from child_tbl join parent_tbl on <columns in fk> where <clause same as original update> [AND <parent_columns_in_fk> NOT IN (<bind variables in the SET clause of the original update>)] limit 1
 // E.g:
 // Child (c1, c2) references Parent (p1, p2)
 // update Parent set p1 = 1 where id = 1
 // verify query:
 // select 1 from Child join Parent on Parent.p1 = Child.c1 and Parent.p2 = Child.c2
-// where Parent.id = 1 limit 1
+// where Parent.id = 1 and (parent.p1) NOT IN ((1)) limit 1
 func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, cFk vindexes.ChildFKInfo) (ops.Operator, error) {
 	// ON UPDATE RESTRICT foreign keys that require validation, should only be allowed in the case where we
 	// are verifying all the FKs on vtgate level.
@@ -621,6 +621,32 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updSt
 	if updStmt.Where != nil {
 		whereCond = prefixColNames(parentTbl, updStmt.Where.Expr)
 	}
+
+	// We don't want to fail the RESTRICT for the case where the parent columns remains unchanged on the update.
+	// We need to add a condition to the where clause to handle this case.
+	// The additional condition looks like [AND <parent_columns_in_fk> NOT IN (<bind variables in the SET clause of the original update>)].
+	// If any of the parent columns is being set to NULL, then we don't need this condition.
+	var updateValues sqlparser.ValTuple
+	colSetToNull := false
+	for _, updateExpr := range updStmt.Exprs {
+		colIdx := cFk.ParentColumns.FindColumn(updateExpr.Name.Name)
+		if colIdx >= 0 {
+			if sqlparser.IsNull(updateExpr.Expr) {
+				colSetToNull = true
+				break
+			}
+			updateValues = append(updateValues, updateExpr.Expr)
+		}
+	}
+	if !colSetToNull {
+		// Create a ValTuple of child column names
+		var valTuple sqlparser.ValTuple
+		for _, column := range cFk.ParentColumns {
+			valTuple = append(valTuple, sqlparser.NewColNameWithQualifier(column.String(), parentTbl))
+		}
+		whereCond = sqlparser.AndExpressions(whereCond, sqlparser.NewComparisonExpr(sqlparser.NotInOp, valTuple, sqlparser.ValTuple{updateValues}, nil))
+	}
+
 	return createSelectionOp(ctx,
 		sqlparser.SelectExprs{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
 		[]sqlparser.TableExpr{

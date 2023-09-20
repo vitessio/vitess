@@ -16,8 +16,11 @@
     - [Deleted `V3` planner](#deleted-v3)
     - [Deleted `k8stopo`](#deleted-k8stopo)
     - [Deleted `vtgr`](#deleted-vtgr)
+    - [Deprecated VTBackup stat `DurationByPhase`](#deprecated-vtbackup-stat-duration-by-phase)
   - **[New stats](#new-stats)**
     - [VTGate Vindex unknown parameters](#vtgate-vindex-unknown-parameters)
+    - [VTBackup stat `Phase`](#vtbackup-stat-phase)
+    - [VTBackup stat `PhaseStatus`](#vtbackup-stat-phase-status)
   - **[VTTablet](#vttablet)**
     - [VTTablet: New ResetSequences RPC](#vttablet-new-rpc-reset-sequences)
   - **[Docker](#docker)**
@@ -114,11 +117,39 @@ the `k8stopo` has been removed.
 
 The `vtgr` has been deprecated in Vitess 17, also see https://github.com/vitessio/vitess/issues/13300. With Vitess 18 `vtgr` has been removed.
 
+#### <a id="deprecated-vtbackup-stat-duration-by-phase"/>Deprecated VTbackup stat `DurationByPhase`
+
+VTBackup stat `DurationByPhase` is deprecated. Use the binary-valued `Phase` stat instead.
+
 ### <a id="new-stats"/>New stats
 
 #### <a id="vtgate-vindex-unknown-parameters"/>VTGate Vindex unknown parameters
 
 The VTGate stat `VindexUnknownParameters` gauges unknown Vindex parameters found in the latest VSchema pulled from the topology.
+
+#### <a id="vtbackup-stat-phase"/>VTBackup `Phase` stat
+
+In v17, the `vtbackup` stat `DurationByPhase` stat was added measuring the time spent by `vtbackup` in each phase. This stat turned out to be awkward to use in production, and has been replaced in v18 by a binary-valued `Phase` stat.
+
+`Phase` reports a 1 (active) or a 0 (inactive) for each of the following phases:
+
+ * `CatchupReplication`
+ * `InitialBackup`
+ * `RestoreLastBackup`
+ * `TakeNewBackup`
+
+To calculate how long `vtbackup` has spent in a given phase, sum the 1-valued data points over time and multiply by the data collection or reporting interval. For example, in Prometheus:
+
+```
+sum_over_time(vtbackup_phase{phase="TakeNewBackup"}) * <interval>
+```
+#### <a id="vtbackup-stat-phase-status"/>VTBackup `PhaseStatus` stat
+
+`PhaseStatus` reports a 1 (active) or a 0 (inactive) for each of the following phases and statuses:
+
+ * `CatchupReplication` phase has statuses `Stalled` and `Stopped`.
+    * `Stalled` is set to `1` when replication stops advancing.
+    * `Stopped` is set to `1` when replication stops before `vtbackup` catches up with the primary.
 
 ### <a id="vttablet"/>VTTablet
 

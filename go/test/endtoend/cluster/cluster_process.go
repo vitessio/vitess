@@ -334,13 +334,12 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 	}
 	// Create the keyspace if it doesn't already exist.
 	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
-	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {
 		shard := &Shard{
 			Name: shardName,
 		}
 		log.Infof("Starting shard: %v", shardName)
-		mysqlctlProcessList = []*exec.Cmd{}
+		var mysqlctlProcessList []*exec.Cmd
 		for i := 0; i < totalTabletsRequired; i++ {
 			// instantiate vttablet object with reserved ports
 			tabletUID := cluster.GetAndReserveTabletUID()
@@ -1263,8 +1262,16 @@ func (cluster *LocalProcessCluster) VtprocessInstanceFromVttablet(tablet *Vttabl
 }
 
 // StartVttablet starts a new tablet
-func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatus string,
-	supportBackup bool, cell string, keyspaceName string, hostname string, shardName string) error {
+func (cluster *LocalProcessCluster) StartVttablet(
+	tablet *Vttablet,
+	explicitServingStatus bool,
+	servingStatus string,
+	supportBackup bool,
+	cell string,
+	keyspaceName string,
+	hostname string,
+	shardName string,
+) error {
 	tablet.VttabletProcess = VttabletProcessInstance(
 		tablet.HTTPPort,
 		tablet.GrpcPort,
@@ -1282,6 +1289,7 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 
 	tablet.VttabletProcess.SupportsBackup = supportBackup
 	tablet.VttabletProcess.ServingStatus = servingStatus
+	tablet.VttabletProcess.ExplicitServingStatus = explicitServingStatus
 	return tablet.VttabletProcess.Setup()
 }
 
