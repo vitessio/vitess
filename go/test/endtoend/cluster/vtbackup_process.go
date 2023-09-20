@@ -69,8 +69,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 
 		//Backup Arguments are not optional
 		"--backup_storage_implementation", "file",
-		"--file_backup_storage_root",
-		path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
+		"--file_backup_storage_root", path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
 	)
 
 	if vtbackup.initialBackup {
