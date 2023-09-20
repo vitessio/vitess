@@ -418,12 +418,11 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.Apply
 	}
 
 	return &join{
-		Left:       lhs,
-		Right:      rhs,
-		Cols:       n.Columns,
-		Vars:       n.Vars,
-		LHSColumns: n.LHSColumns,
-		Opcode:     opCode,
+		Left:   lhs,
+		Right:  rhs,
+		Cols:   n.Columns,
+		Vars:   n.Vars,
+		Opcode: opCode,
 	}, nil
 }
 

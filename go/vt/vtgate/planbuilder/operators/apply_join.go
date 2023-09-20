@@ -37,10 +37,6 @@ type ApplyJoin struct {
 	// LeftJoin will be true in the case of an outer join
 	LeftJoin bool
 
-	// JoinCols are the columns from the LHS used for the join.
-	// These are the same columns pushed on the LHS that are now used in the Vars field
-	LHSColumns []*sqlparser.ColName
-
 	// Before offset planning
 	Predicate sqlparser.Expr
 
@@ -99,7 +95,6 @@ func (a *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
 		Vars:           maps.Clone(a.Vars),
 		LeftJoin:       a.LeftJoin,
 		Predicate:      sqlparser.CloneExpr(a.Predicate),
-		LHSColumns:     slices.Clone(a.LHSColumns),
 	}
 }
 
@@ -287,18 +282,9 @@ func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 			}
 			a.Vars[col.BvNames[i]] = offset
 		}
-		lhsColumns := slice.Map(col.LHSExprs, func(from sqlparser.Expr) *sqlparser.ColName {
-			col, ok := from.(*sqlparser.ColName)
-			if !ok {
-				// todo: there is no good reason to keep this limitation around
-				err = vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(from))
-			}
-			return col
-		})
 		if err != nil {
 			return err
 		}
-		a.LHSColumns = append(a.LHSColumns, lhsColumns...)
 	}
 	return nil
 }
@@ -313,6 +299,15 @@ func (a *ApplyJoin) ShortDescription() string {
 		return sqlparser.String(from.Original)
 	})
 	return fmt.Sprintf("on %s columns: %s", pred, strings.Join(columns, ", "))
+}
+
+func (a *ApplyJoin) LHSColumnsNeeded(ctx *plancontext.PlanningContext) (needed sqlparser.Exprs) {
+	extract := func(jc JoinColumn) []sqlparser.Expr {
+		return jc.LHSExprs
+	}
+	colsA := slice.FlatMap(a.JoinColumns, extract)
+	colsB := slice.FlatMap(a.JoinPredicates, extract)
+	return ctx.SemTable.Uniquify(append(colsA, colsB...))
 }
 
 func (jc JoinColumn) IsPureLeft() bool {
