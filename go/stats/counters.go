@@ -183,6 +183,11 @@ func NewCountersWithMultiLabels(name, help string, labels []string) *CountersWit
 	return t
 }
 
+// GetLabelName returns a label name using the provided values.
+func (mc *CountersWithMultiLabels) GetLabelName(names ...string) string {
+	return safeJoinLabels(names, mc.combinedLabels)
+}
+
 // Labels returns the list of labels.
 func (mc *CountersWithMultiLabels) Labels() []string {
 	return mc.labels
