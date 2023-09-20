@@ -19,6 +19,7 @@ package schema
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -37,6 +38,69 @@ func TestIsDirect(t *testing.T) {
 	assert.True(t, DDLStrategy("something").IsDirect())
 }
 
+func TestIsExpireArtifactsFlag(t *testing.T) {
+	tt := []struct {
+		s      string
+		expect bool
+		val    string
+		d      time.Duration
+	}{
+		{
+			s: "something",
+		},
+		{
+			s: "-retain-artifacts",
+		},
+		{
+			s: "--retain-artifacts",
+		},
+		{
+			s:      "--retain-artifacts=",
+			expect: true,
+		},
+		{
+			s:      "--retain-artifacts=0",
+			expect: true,
+			val:    "0",
+			d:      0,
+		},
+		{
+			s:      "-retain-artifacts=0",
+			expect: true,
+			val:    "0",
+			d:      0,
+		},
+		{
+			s:      "--retain-artifacts=1m",
+			expect: true,
+			val:    "1m",
+			d:      time.Minute,
+		},
+		{
+			s:      `--retain-artifacts="1m"`,
+			expect: true,
+			val:    `"1m"`,
+			d:      time.Minute,
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.s, func(t *testing.T) {
+			setting, err := ParseDDLStrategy("online " + ts.s)
+			assert.NoError(t, err)
+
+			val, isRetainArtifacts := isRetainArtifactsFlag(ts.s)
+			assert.Equal(t, ts.expect, isRetainArtifacts)
+			assert.Equal(t, ts.val, val)
+
+			if ts.expect {
+				d, err := setting.RetainArtifactsDuration()
+				assert.NoError(t, err)
+				assert.Equal(t, ts.d, d)
+			}
+		})
+	}
+}
+
 func TestParseDDLStrategy(t *testing.T) {
 	tt := []struct {
 		strategyVariable     string
@@ -49,6 +113,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		isAllowConcurrent    bool
 		fastOverRevertible   bool
 		fastRangeRotation    bool
+		expireArtifacts      time.Duration
 		runtimeOptions       string
 		err                  error
 	}{
@@ -145,6 +210,13 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:    "",
 			fastRangeRotation: true,
 		},
+		{
+			strategyVariable: "vitess --retain-artifacts=4m",
+			strategy:         DDLStrategyVitess,
+			options:          "--retain-artifacts=4m",
+			runtimeOptions:   "",
+			expireArtifacts:  4 * time.Minute,
+		},
 	}
 	for _, ts := range tt {
 		setting, err := ParseDDLStrategy(ts.strategyVariable)
@@ -164,6 +236,10 @@ func TestParseDDLStrategy(t *testing.T) {
 	}
 	{
 		_, err := ParseDDLStrategy("other")
+		assert.Error(t, err)
+	}
+	{
+		_, err := ParseDDLStrategy("online --retain-artifacts=3")
 		assert.Error(t, err)
 	}
 }

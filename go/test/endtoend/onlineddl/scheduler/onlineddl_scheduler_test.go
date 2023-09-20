@@ -154,10 +154,8 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		fmt.Printf("%v\n", err)
 		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
 	}
-
+	os.Exit(exitcode)
 }
 
 func TestSchemaChange(t *testing.T) {
