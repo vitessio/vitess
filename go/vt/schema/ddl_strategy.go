@@ -19,18 +19,15 @@ package schema
 import (
 	"fmt"
 	"regexp"
+	"strconv"
+	"time"
 
 	"github.com/google/shlex"
 )
 
 var (
-<<<<<<< HEAD
-	strategyParserRegexp = regexp.MustCompile(`^([\S]+)\s+(.*)$`)
-=======
-	strategyParserRegexp       = regexp.MustCompile(`^([\S]+)\s+(.*)$`)
-	cutOverThresholdFlagRegexp = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, cutOverThresholdFlag))
-	retainArtifactsFlagRegexp  = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, retainArtifactsFlag))
->>>>>>> 0461fafbd2 (OnlineDDL: cleanup cancelled migration artifacts; support `--retain-artifacts=<duration>` DDL strategy flag (#14029))
+	strategyParserRegexp      = regexp.MustCompile(`^([\S]+)\s+(.*)$`)
+	retainArtifactsFlagRegexp = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, retainArtifactsFlag))
 )
 
 const (
@@ -44,11 +41,7 @@ const (
 	allowConcurrentFlag    = "allow-concurrent"
 	fastOverRevertibleFlag = "fast-over-revertible"
 	fastRangeRotationFlag  = "fast-range-rotation"
-<<<<<<< HEAD
-=======
-	cutOverThresholdFlag   = "cut-over-threshold"
 	retainArtifactsFlag    = "retain-artifacts"
->>>>>>> 0461fafbd2 (OnlineDDL: cleanup cancelled migration artifacts; support `--retain-artifacts=<duration>` DDL strategy flag (#14029))
 	vreplicationTestSuite  = "vreplication-test-suite"
 )
 
@@ -109,15 +102,9 @@ func ParseDDLStrategy(strategyVariable string) (*DDLStrategySetting, error) {
 	default:
 		return nil, fmt.Errorf("Unknown online DDL strategy: '%v'", strategy)
 	}
-<<<<<<< HEAD
-=======
-	if _, err := setting.CutOverThreshold(); err != nil {
-		return nil, err
-	}
 	if _, err := setting.RetainArtifactsDuration(); err != nil {
 		return nil, err
 	}
->>>>>>> 0461fafbd2 (OnlineDDL: cleanup cancelled migration artifacts; support `--retain-artifacts=<duration>` DDL strategy flag (#14029))
 	return setting, nil
 }
 
@@ -188,18 +175,6 @@ func (setting *DDLStrategySetting) IsFastRangeRotationFlag() bool {
 	return setting.hasFlag(fastRangeRotationFlag)
 }
 
-<<<<<<< HEAD
-// IsVreplicationTestSuite checks if strategy options include -vreplicatoin-test-suite
-=======
-// isCutOverThresholdFlag returns true when given option denotes a `--cut-over-threshold=[...]` flag
-func isCutOverThresholdFlag(opt string) (string, bool) {
-	submatch := cutOverThresholdFlagRegexp.FindStringSubmatch(opt)
-	if len(submatch) == 0 {
-		return "", false
-	}
-	return submatch[1], true
-}
-
 // isRetainArtifactsFlag returns true when given option denotes a `--retain-artifacts=[...]` flag
 func isRetainArtifactsFlag(opt string) (string, bool) {
 	submatch := retainArtifactsFlagRegexp.FindStringSubmatch(opt)
@@ -207,24 +182,6 @@ func isRetainArtifactsFlag(opt string) (string, bool) {
 		return "", false
 	}
 	return submatch[1], true
-}
-
-// CutOverThreshold returns a the duration threshold indicated by --cut-over-threshold
-func (setting *DDLStrategySetting) CutOverThreshold() (d time.Duration, err error) {
-	// We do some ugly manual parsing of --cut-over-threshold value
-	opts, _ := shlex.Split(setting.Options)
-	for _, opt := range opts {
-		if val, isCutOver := isCutOverThresholdFlag(opt); isCutOver {
-			// value is possibly quoted
-			if s, err := strconv.Unquote(val); err == nil {
-				val = s
-			}
-			if val != "" {
-				d, err = time.ParseDuration(val)
-			}
-		}
-	}
-	return d, err
 }
 
 // RetainArtifactsDuration returns a the duration indicated by --retain-artifacts
@@ -246,7 +203,6 @@ func (setting *DDLStrategySetting) RetainArtifactsDuration() (d time.Duration, e
 }
 
 // IsVreplicationTestSuite checks if strategy options include --vreplicatoin-test-suite
->>>>>>> 0461fafbd2 (OnlineDDL: cleanup cancelled migration artifacts; support `--retain-artifacts=<duration>` DDL strategy flag (#14029))
 func (setting *DDLStrategySetting) IsVreplicationTestSuite() bool {
 	return setting.hasFlag(vreplicationTestSuite)
 }
@@ -256,15 +212,9 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 	opts, _ := shlex.Split(setting.Options)
 	validOpts := []string{}
 	for _, opt := range opts {
-<<<<<<< HEAD
-=======
-		if _, ok := isCutOverThresholdFlag(opt); ok {
-			continue
-		}
 		if _, ok := isRetainArtifactsFlag(opt); ok {
 			continue
 		}
->>>>>>> 0461fafbd2 (OnlineDDL: cleanup cancelled migration artifacts; support `--retain-artifacts=<duration>` DDL strategy flag (#14029))
 		switch {
 		case isFlag(opt, declarativeFlag):
 		case isFlag(opt, skipTopoFlag):
