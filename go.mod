@@ -107,6 +107,7 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0
 	github.com/xlab/treeprint v1.2.0
 	go.uber.org/goleak v1.2.1
+	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63
 	golang.org/x/sync v0.3.0
 	modernc.org/sqlite v1.20.3
 )
