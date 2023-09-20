@@ -50,17 +50,6 @@ func Map[From, To any](in []From, f func(From) To) []To {
 	return result
 }
 
-// FlatMap applies a function to each element of a slice and returns a new slice
-func FlatMap[From, To any](in []From, f func(From) []To) (result []To) {
-	if in == nil {
-		return nil
-	}
-	for _, col := range in {
-		result = append(result, f(col)...)
-	}
-	return result
-}
-
 // MapWithError applies a function to each element of a slice and returns a new slice, or an error
 func MapWithError[From, To any](in []From, f func(From) (To, error)) (result []To, err error) {
 	if in == nil {

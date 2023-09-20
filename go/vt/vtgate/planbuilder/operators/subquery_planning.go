@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -113,7 +114,7 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 	rewritten := false
 	for _, sq := range se {
 		for _, sq2 := range ctx.MergedSubqueries {
-			if sq._sq == sq2 {
+			if sq.originalSubquery == sq2 {
 				expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
 					switch expr := cursor.Node().(type) {
 					case *sqlparser.ColName:
@@ -128,7 +129,7 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 						return true
 					}
 					rewritten = true
-					cursor.Replace(sq._sq)
+					cursor.Replace(sq.originalSubquery)
 					return false
 				}).(sqlparser.Expr)
 			}
@@ -138,6 +139,41 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 }
 
 // tryPushDownSubQueryInJoin attempts to push down a SubQuery into an ApplyJoin
+/*
+For this query:
+
+    select 1 from user u1, user u2 where exists (
+        select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col
+    )
+
+We can use a very simplified tree where the subquery starts at the top, like this:
+┌──────────────────────────────────────────────────────────────────────┐
+│SQ WHERE ue.col = u1.col and ue.col = u2.col, JoinVars: u1.col. u2.col│
+└──┬────────────────────────────────────────────────────┬──────────────┘
+ inner                                                outer
+┌──▼──┐                                 ┌───────────────▼──────────────┐
+│R(ue)│                                 │JOIN WHERE true JoinVars <nil>│
+└─────┘                                 └──┬───────────────────────┬───┘
+                                        ┌──▼──┐                  ┌─▼───┐
+                                        │R(u1)│                  │R(u2)│
+                                        └─────┘                  └─────┘
+
+We transform it to:
+    ┌────────────────────────────────┐
+    │JOIN WHERE true JoinVars: u1.col│
+    ├─────────────────────────────┬──┘
+┌───▼─┐ ┌─────────────────────────▼────────────────────────────────────┐
+│R(u1)│ │SQ WHERE ue.col = :u1_col and ue.col = u2.col JoinVars: u2.col│
+└─────┘ └──┬───────────────────────────────────────────────────────┬───┘
+         inner                                                   outer
+        ┌──▼──┐                                                 ┌──▼──┐
+        │R(ue)│                                                 │R(u2)│
+        └─────┘                                                 └─────┘
+We are rewriting all expressions in the subquery to use arguments any columns
+coming from the LHS. The join predicate is not affected, but we are adding
+any new columns needed by the inner subquery to the JoinVars that the join
+will handle.
+*/
 func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner *SubQuery, outer *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
 	lhs := TableID(outer.LHS)
 	rhs := TableID(outer.RHS)
@@ -195,28 +231,34 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner *SubQuery
 		// we can rewrite the predicate to not use the values from the lhs,
 		// and instead use arguments for these dependencies.
 		// this way we can push the subquery into the RHS of this join
-		var updatedPred sqlparser.Exprs
-		for _, predicate := range inner.Predicates {
-			col, err := BreakExpressionInLHSandRHS(ctx, predicate, lhs)
-			if err != nil {
-				return nil, rewrite.SameTree, nil
-			}
-			outer.Predicate = ctx.SemTable.AndExpressions(predicate, outer.Predicate)
-			outer.JoinPredicates = append(outer.JoinPredicates, col)
-			updatedPred = append(updatedPred, col.RHSExpr)
-			for idx, expr := range col.LHSExprs {
-				argName := col.BvNames[idx]
-				newOrg := replaceSingleExpr(ctx, inner.Original, expr, sqlparser.NewArgument(argName))
-				inner.Original = newOrg
-			}
+		err := inner.mapExpr(extractLHSExpr(ctx, outer, lhs))
+		if err != nil {
+			return nil, nil, err
 		}
-		inner.Predicates = updatedPred
-		// we can't push down filter on outer joins
+
 		outer.RHS = addSubQuery(outer.RHS, inner)
 		return outer, rewrite.NewTree("push subquery into RHS of join removing LHS expr", inner), nil
 	}
 
 	return nil, rewrite.SameTree, nil
+}
+
+func extractLHSExpr(ctx *plancontext.PlanningContext, outer *ApplyJoin, lhs semantics.TableSet) func(expr sqlparser.Expr) (sqlparser.Expr, error) {
+	return func(expr sqlparser.Expr) (sqlparser.Expr, error) {
+		col, err := BreakExpressionInLHSandRHS(ctx, expr, lhs)
+		if err != nil {
+			return nil, err
+		}
+		if col.IsPureLeft() {
+			return nil, vterrors.VT13001("did not expect to find any predicates that do not need data from the inner here")
+		}
+		for _, bve := range col.LHSExprs {
+			if !outer.isColNameMovedFromL2R(bve.Name) {
+				outer.ExtraLHSVars = append(outer.ExtraLHSVars, bve)
+			}
+		}
+		return col.RHSExpr, nil
+	}
 }
 
 // tryMergeWithRHS attempts to merge a subquery with the RHS of a join
@@ -246,7 +288,7 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	}
 
 	outer.RHS = newOp
-	ctx.MergedSubqueries = append(ctx.MergedSubqueries, inner._sq)
+	ctx.MergedSubqueries = append(ctx.MergedSubqueries, inner.originalSubquery)
 	return outer, rewrite.NewTree("merged subquery with rhs of join", inner), nil
 }
 
@@ -448,8 +490,38 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	if !subQuery.IsProjection {
 		op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.Original}}
 	}
-	ctx.MergedSubqueries = append(ctx.MergedSubqueries, subQuery._sq)
+	ctx.MergedSubqueries = append(ctx.MergedSubqueries, subQuery.originalSubquery)
 	return op, rewrite.NewTree("merged subquery with outer", subQuery), nil
+}
+
+func pushOrMerge(ctx *plancontext.PlanningContext, outer ops.Operator, inner *SubQuery) (ops.Operator, *rewrite.ApplyResult, error) {
+	switch o := outer.(type) {
+	case *Route:
+		return tryPushDownSubQueryInRoute(ctx, inner, o)
+	case *ApplyJoin:
+		join, applyResult, err := tryPushDownSubQueryInJoin(ctx, inner, o)
+		if err != nil {
+			return nil, nil, err
+		}
+		if join == nil {
+			return outer, rewrite.SameTree, nil
+		}
+		return join, applyResult, nil
+	default:
+		return outer, rewrite.SameTree, nil
+	}
+}
+
+func replaceSingleExpr(ctx *plancontext.PlanningContext, expr, from, to sqlparser.Expr) sqlparser.Expr {
+	return sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		expr, ok := cursor.Node().(sqlparser.Expr)
+		if !ok {
+			return
+		}
+		if ctx.SemTable.EqualsExpr(expr, from) {
+			cursor.Replace(to)
+		}
+	}, ctx.SemTable.CopyDependenciesOnSQLNodes).(sqlparser.Expr)
 }
 
 type subqueryRouteMerger struct {

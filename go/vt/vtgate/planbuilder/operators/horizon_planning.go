@@ -19,7 +19,6 @@ package operators
 import (
 	"fmt"
 	"io"
-	"slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -168,75 +167,6 @@ func pushDownLockAndComment(l *LockAndComment) (ops.Operator, *rewrite.ApplyResu
 		src.SetInputs(inputs)
 		return src, rewrite.NewTree("pushed down lock and comments", l), nil
 	}
-}
-
-func pushOrMerge(ctx *plancontext.PlanningContext, outer ops.Operator, inner *SubQuery) (ops.Operator, *rewrite.ApplyResult, error) {
-	switch o := outer.(type) {
-	case *Route:
-		return tryPushDownSubQueryInRoute(ctx, inner, o)
-	case *ApplyJoin:
-		join, applyResult, err := tryPushDownSubQueryInJoin(ctx, inner, o)
-		if err != nil {
-			return nil, nil, err
-		}
-		if join == nil {
-			return outer, rewrite.SameTree, nil
-		}
-		return join, applyResult, nil
-	default:
-		return outer, rewrite.SameTree, nil
-	}
-}
-
-// findOrAddColNameBindVarName goes through the JoinColumns and looks for the given colName and returns the argument name if found.
-// if it's not found, a new JoinColumn passing this through will be added
-func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContext, col *sqlparser.ColName) (string, error) {
-	for i, thisCol := range aj.JoinColumns {
-		idx := slices.IndexFunc(thisCol.LHSExprs, func(e sqlparser.Expr) bool {
-			return ctx.SemTable.EqualsExpr(e, col)
-		})
-
-		if idx != -1 {
-			if len(thisCol.LHSExprs) == 1 && len(thisCol.BvNames) == 0 {
-				// this is a ColName that was not being sent to the RHS, so it has no bindvar name.
-				// let's add one.
-				expr := thisCol.LHSExprs[idx]
-				bvname := ctx.GetReservedArgumentFor(expr)
-				thisCol.BvNames = append(thisCol.BvNames, bvname)
-				aj.JoinColumns[i] = thisCol
-			}
-			return thisCol.BvNames[idx], nil
-		}
-	}
-	for _, thisCol := range aj.JoinPredicates {
-		idx := slices.IndexFunc(thisCol.LHSExprs, func(e sqlparser.Expr) bool {
-			return ctx.SemTable.EqualsExpr(e, col)
-		})
-		if idx != -1 {
-			return thisCol.BvNames[idx], nil
-		}
-	}
-	// we didn't find it, so we need to add it
-	bvName := ctx.GetReservedArgumentFor(col)
-	aj.JoinColumns = append(aj.JoinColumns, JoinColumn{
-		Original: aeWrap(col),
-		BvNames:  []string{bvName},
-		LHSExprs: []sqlparser.Expr{col},
-		GroupBy:  false,
-	})
-	return bvName, nil
-}
-
-func replaceSingleExpr(ctx *plancontext.PlanningContext, expr, from, to sqlparser.Expr) sqlparser.Expr {
-	return sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-		expr, ok := cursor.Node().(sqlparser.Expr)
-		if !ok {
-			return
-		}
-		if ctx.SemTable.EqualsExpr(expr, from) {
-			cursor.Replace(to)
-		}
-	}, ctx.SemTable.CopyDependenciesOnSQLNodes).(sqlparser.Expr)
 }
 
 func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -450,7 +380,7 @@ func splitUnexploredExpression(
 		rhs.add(pe)
 	case col.IsMixedLeftAndRight():
 		for _, lhsExpr := range col.LHSExprs {
-			lhs.add(newProjExpr(aeWrap(lhsExpr)))
+			lhs.add(newProjExpr(aeWrap(lhsExpr.Expr)))
 		}
 		innerPE := newProjExprWithInner(pe.Original, col.RHSExpr)
 		innerPE.ColExpr = col.RHSExpr
@@ -482,7 +412,8 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 		return err
 	}
 	for _, predicate := range src.JoinPredicates {
-		for idx, expr := range predicate.LHSExprs {
+		for idx, bve := range predicate.LHSExprs {
+			expr := bve.Expr
 			tbl, err := ctx.SemTable.TableInfoForExpr(expr)
 			if err != nil {
 				return err
@@ -497,7 +428,7 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 			out := prefixColNames(tblName, expr)
 
 			alias := sqlparser.UnescapedString(out)
-			predicate.LHSExprs[idx] = sqlparser.NewColNameWithQualifier(alias, derivedTblName)
+			predicate.LHSExprs[idx].Expr = sqlparser.NewColNameWithQualifier(alias, derivedTblName)
 			lhs.add(newProjExprWithInner(&sqlparser.AliasedExpr{Expr: out, As: sqlparser.NewIdentifierCI(alias)}, out))
 		}
 	}
@@ -639,34 +570,6 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operat
 		}
 		src.Outer, in.Source = in, src.Outer
 		return src, rewrite.NewTree("push ordering into outer side of subquery", in), nil
-		// ap, err := in.GetAliasedProjections()
-		// if err != nil {
-		// 	return p, rewrite.SameTree, nil
-		// }
-		//
-		// if !ctx.SubqueriesSettled || err != nil {
-		// 	return p, rewrite.SameTree, nil
-		// }
-		//
-		// outer := TableID(src.Outer)
-		// for _, pe := range ap {
-		// 	_, isOffset := pe.Info.(*Offset)
-		// 	if isOffset {
-		// 		continue
-		// 	}
-		//
-		// 	if !ctx.SemTable.RecursiveDeps(pe.EvalExpr).IsSolvedBy(outer) {
-		// 		return p, rewrite.SameTree, nil
-		// 	}
-		//
-		// 	se, ok := pe.Info.(SubQueryExpression)
-		// 	if ok {
-		// 		pe.EvalExpr = rewriteColNameToArgument(pe.EvalExpr, se, src)
-		// 	}
-		// }
-		// // all projections can be pushed to the outer
-		// src.Outer, p.Source = p, src.Outer
-		// return src, rewrite.NewTree("push projection into outer side of subquery", p), nil
 	}
 	return in, rewrite.SameTree, nil
 }

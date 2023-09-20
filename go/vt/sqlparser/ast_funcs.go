@@ -37,7 +37,11 @@ import (
 // If postVisit returns true, the underlying nodes
 // are also visited. If it returns an error, walking
 // is interrupted, and the error is returned.
-func Walk(visit Visit, nodes ...SQLNode) error {
+func Walk(visit Visit, first SQLNode, nodes ...SQLNode) error {
+	err := VisitSQLNode(first, visit)
+	if err != nil {
+		return err
+	}
 	for _, node := range nodes {
 		err := VisitSQLNode(node, visit)
 		if err != nil {

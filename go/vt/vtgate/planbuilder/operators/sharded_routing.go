@@ -556,6 +556,14 @@ func (tr *ShardedRouting) VindexExpressions() []sqlparser.Expr {
 	return tr.Selected.ValueExprs
 }
 
+func (tr *ShardedRouting) extraInfo() string {
+	if tr.Selected == nil {
+		return ""
+	}
+
+	return tr.Selected.FoundVindex.String() + " " + sqlparser.String(sqlparser.Exprs(tr.Selected.ValueExprs))
+}
+
 func tryMergeJoinShardedRouting(
 	ctx *plancontext.PlanningContext,
 	routeA, routeB *Route,

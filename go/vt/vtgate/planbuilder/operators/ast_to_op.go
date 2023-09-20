@@ -231,7 +231,7 @@ func createSubquery(
 ) (*SubQuery, error) {
 	topLevel := ctx.SemTable.EqualsExpr(original, parent)
 	original = cloneASTAndSemState(ctx, original)
-
+	originalSq := cloneASTAndSemState(ctx, subq)
 	subqID := findTablesContained(ctx, subq.Select)
 	totalID := subqID.Merge(outerID)
 	sqc := &SubQueryContainer{totalID: totalID, subqID: subqID, outerID: outerID}
@@ -252,14 +252,14 @@ func createSubquery(
 
 	opInner = sqc.getRootOperator(opInner)
 	return &SubQuery{
-		FilterType:   filterType,
-		Subquery:     opInner,
-		Predicates:   predicates,
-		Original:     original,
-		ArgName:      argName,
-		_sq:          subq,
-		IsProjection: isProjection,
-		TopLevel:     topLevel,
+		FilterType:       filterType,
+		Subquery:         opInner,
+		Predicates:       predicates,
+		Original:         original,
+		ArgName:          argName,
+		originalSubquery: originalSq,
+		IsProjection:     isProjection,
+		TopLevel:         topLevel,
 	}, nil
 }
 

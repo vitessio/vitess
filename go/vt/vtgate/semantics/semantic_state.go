@@ -505,7 +505,7 @@ func (st *SemTable) ContainsExpr(e sqlparser.Expr, expres []sqlparser.Expr) bool
 
 // Uniquify takes a slice of expressions and removes any duplicates
 func (st *SemTable) Uniquify(in []sqlparser.Expr) []sqlparser.Expr {
-	result := make([]sqlparser.Expr, len(in))
+	result := make([]sqlparser.Expr, 0, len(in))
 	idx := 0
 outer:
 	for _, expr := range in {
@@ -513,7 +513,7 @@ outer:
 			if st.EqualsExprWithDeps(result[i], expr) {
 				continue outer
 			}
-			result[idx] = expr
+			result = append(result, expr)
 			idx++
 		}
 	}

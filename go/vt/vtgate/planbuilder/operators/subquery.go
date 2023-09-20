@@ -34,19 +34,16 @@ import (
 // outer query through a join.
 type SubQuery struct {
 	// Fields filled in at the time of construction:
-	Outer          ops.Operator         // Outer query operator.
-	Subquery       ops.Operator         // Subquery operator.
-	FilterType     opcode.PulloutOpcode // Type of subquery filter.
-	Original       sqlparser.Expr       // This is the expression we should use if we can merge the inner to the outer
-	_sq            *sqlparser.Subquery  // Subquery representation, e.g., (SELECT foo from user LIMIT 1).
-	Predicates     sqlparser.Exprs      // Predicates joining outer and inner queries. Empty for uncorrelated subqueries.
-	OuterPredicate sqlparser.Expr       // This is the predicate that is using the subquery expression. It will not be empty for projections
-	ArgName        string               // This is the name of the ColName or Argument used to replace the subquery
-	TopLevel       bool                 // will be false if the subquery is deeply nested
-
-	// Fields filled in at the subquery settling phase:
+	Outer             ops.Operator         // Outer query operator.
+	Subquery          ops.Operator         // Subquery operator.
+	FilterType        opcode.PulloutOpcode // Type of subquery filter.
+	Original          sqlparser.Expr       // This is the expression we should use if we can merge the inner to the outer
+	originalSubquery  *sqlparser.Subquery  // Subquery representation, e.g., (SELECT foo from user LIMIT 1).
+	Predicates        sqlparser.Exprs      // Predicates joining outer and inner queries. Empty for uncorrelated subqueries.
+	OuterPredicate    sqlparser.Expr       // This is the predicate that is using the subquery expression. It will not be empty for projections
+	ArgName           string               // This is the name of the ColName or Argument used to replace the subquery
+	TopLevel          bool                 // will be false if the subquery is deeply nested
 	JoinColumns       []JoinColumn         // Broken up join predicates.
-	LHSColumns        []*sqlparser.ColName // Left hand side columns of join predicates.
 	SubqueryValueName string               // Value name returned by the subquery (uncorrelated queries).
 	HasValuesName     string               // Argument name passed to the subquery (uncorrelated queries).
 
@@ -64,32 +61,32 @@ func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) error {
 		return err
 	}
 	for _, jc := range columns {
-		for i, lhsExpr := range jc.LHSExprs {
-			offset, err := sq.Outer.AddColumn(ctx, true, false, aeWrap(lhsExpr))
+		for _, lhsExpr := range jc.LHSExprs {
+			offset, err := sq.Outer.AddColumn(ctx, true, false, aeWrap(lhsExpr.Expr))
 			if err != nil {
 				return err
 			}
-			sq.Vars[jc.BvNames[i]] = offset
+			sq.Vars[lhsExpr.Name] = offset
 		}
 	}
 	return nil
 }
 
-func (sq *SubQuery) OuterExpressionsNeeded(ctx *plancontext.PlanningContext, outer ops.Operator) ([]*sqlparser.ColName, error) {
+func (sq *SubQuery) OuterExpressionsNeeded(ctx *plancontext.PlanningContext, outer ops.Operator) (result []*sqlparser.ColName, err error) {
 	joinColumns, err := sq.GetJoinColumns(ctx, outer)
 	if err != nil {
 		return nil, err
 	}
 	for _, jc := range joinColumns {
 		for _, lhsExpr := range jc.LHSExprs {
-			col, ok := lhsExpr.(*sqlparser.ColName)
+			col, ok := lhsExpr.Expr.(*sqlparser.ColName)
 			if !ok {
-				return nil, vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(lhsExpr))
+				return nil, vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(lhsExpr.Expr))
 			}
-			sq.LHSColumns = append(sq.LHSColumns, col)
+			result = append(result, col)
 		}
 	}
-	return sq.LHSColumns, nil
+	return result, nil
 }
 
 func (sq *SubQuery) GetJoinColumns(ctx *plancontext.PlanningContext, outer ops.Operator) ([]JoinColumn, error) {
@@ -127,7 +124,6 @@ func (sq *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
 		panic("wrong number of inputs")
 	}
 	klone.JoinColumns = slices.Clone(sq.JoinColumns)
-	klone.LHSColumns = slices.Clone(sq.LHSColumns)
 	klone.Vars = maps.Clone(sq.Vars)
 	klone.Predicates = sqlparser.CloneExprs(sq.Predicates)
 	return &klone
@@ -299,5 +295,26 @@ func (sq *SubQuery) settleExistSubquery(ctx *plancontext.PlanningContext, outer 
 }
 
 func (sq *SubQuery) isMerged(ctx *plancontext.PlanningContext) bool {
-	return slices.Index(ctx.MergedSubqueries, sq._sq) >= 0
+	return slices.Index(ctx.MergedSubqueries, sq.originalSubquery) >= 0
+}
+
+// mapExpr rewrites all expressions according to the provided function
+func (sq *SubQuery) mapExpr(f func(expr sqlparser.Expr) (sqlparser.Expr, error)) error {
+	newPredicates, err := slice.MapWithError(sq.Predicates, f)
+	if err != nil {
+		return err
+	}
+	sq.Predicates = newPredicates
+
+	sq.Original, err = f(sq.Original)
+	if err != nil {
+		return err
+	}
+
+	originalSubquery, err := f(sq.originalSubquery)
+	if err != nil {
+		return err
+	}
+	sq.originalSubquery = originalSubquery.(*sqlparser.Subquery)
+	return nil
 }

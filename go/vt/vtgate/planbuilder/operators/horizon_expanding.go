@@ -252,7 +252,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 					return true, nil
 				}
 				return false, vterrors.VT09015()
-			})
+			}, expr.Col)
 			if err != nil {
 				return nil, err
 			}

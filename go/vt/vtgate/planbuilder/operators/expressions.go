@@ -46,8 +46,10 @@ func BreakExpressionInLHSandRHS(
 		}
 
 		bvName := ctx.GetReservedArgumentFor(nodeExpr)
-		col.LHSExprs = append(col.LHSExprs, nodeExpr)
-		col.BvNames = append(col.BvNames, bvName)
+		col.LHSExprs = append(col.LHSExprs, BindVarExpr{
+			Name: bvName,
+			Expr: nodeExpr,
+		})
 		arg := sqlparser.NewArgument(bvName)
 		// we are replacing one of the sides of the comparison with an argument,
 		// but we don't want to lose the type information we have, so we copy it over

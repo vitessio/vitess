@@ -748,6 +748,13 @@ func (r *Route) ShortDescription() string {
 		first = fmt.Sprintf("%s on %s", r.Routing.OpCode().String(), ks.Name)
 	}
 
+	type extraInfo interface {
+		extraInfo() string
+	}
+	if info, ok := r.Routing.(extraInfo); ok {
+		first += " " + info.extraInfo()
+	}
+
 	orderBy, err := r.Source.GetOrdering()
 	if err != nil {
 		return first

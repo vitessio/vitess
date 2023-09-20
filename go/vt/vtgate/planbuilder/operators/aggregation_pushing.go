@@ -417,7 +417,8 @@ var errAbortAggrPushing = fmt.Errorf("abort aggregation pushing")
 
 func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin, lhs *joinPusher) error {
 	for _, pred := range join.JoinPredicates {
-		for _, expr := range pred.LHSExprs {
+		for _, bve := range pred.LHSExprs {
+			expr := bve.Expr
 			wexpr := rootAggr.QP.GetSimplifiedExpr(expr)
 			idx, found := canReuseColumn(ctx, lhs.pushed.Columns, expr, extractExpr)
 			if !found {
@@ -454,7 +455,7 @@ func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Agg
 			lhs.addGrouping(ctx, groupBy)
 			groupingJCs = append(groupingJCs, JoinColumn{
 				Original: aeWrap(groupBy.Inner),
-				LHSExprs: []sqlparser.Expr{expr},
+				LHSExprs: []BindVarExpr{{Expr: expr}},
 			})
 		case deps.IsSolvedBy(rhs.tableID):
 			rhs.addGrouping(ctx, groupBy)
@@ -468,7 +469,8 @@ func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Agg
 				return nil, err
 			}
 			for _, lhsExpr := range jc.LHSExprs {
-				lhs.addGrouping(ctx, NewGroupBy(lhsExpr, lhsExpr, aeWrap(lhsExpr)))
+				e := lhsExpr.Expr
+				lhs.addGrouping(ctx, NewGroupBy(e, e, aeWrap(e)))
 			}
 			rhs.addGrouping(ctx, NewGroupBy(jc.RHSExpr, jc.RHSExpr, aeWrap(jc.RHSExpr)))
 		default:
@@ -556,7 +558,7 @@ func (ab *aggBuilder) leftCountStar(ctx *plancontext.PlanningContext) *sqlparser
 	if created {
 		ab.joinColumns = append(ab.joinColumns, JoinColumn{
 			Original: ae,
-			LHSExprs: []sqlparser.Expr{ae.Expr},
+			LHSExprs: []BindVarExpr{{Expr: ae.Expr}},
 		})
 	}
 	return ae
@@ -622,7 +624,7 @@ func (ab *aggBuilder) pushThroughLeft(aggr Aggr) {
 	ab.lhs.pushThroughAggr(aggr)
 	ab.joinColumns = append(ab.joinColumns, JoinColumn{
 		Original: aggr.Original,
-		LHSExprs: []sqlparser.Expr{aggr.Original.Expr},
+		LHSExprs: []BindVarExpr{{Expr: aggr.Original.Expr}},
 	})
 }
 
