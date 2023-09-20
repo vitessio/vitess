@@ -17,6 +17,7 @@
     - [Deleted `V3` planner](#deleted-v3)
     - [Deleted `k8stopo`](#deleted-k8stopo)
     - [Deleted `vtgr`](#deleted-vtgr)
+    - [Deleted `query_analyzer`](#deleted-query_analyzer)
     - [Deprecated VTBackup stat `DurationByPhase`](#deprecated-vtbackup-stat-duration-by-phase)
   - **[New stats](#new-stats)**
     - [VTGate Vindex unknown parameters](#vtgate-vindex-unknown-parameters)
@@ -126,6 +127,10 @@ the `k8stopo` has been removed.
 #### <a id="deleted-vtgr"/>Deleted `vtgr`
 
 The `vtgr` has been deprecated in Vitess 17, also see https://github.com/vitessio/vitess/issues/13300. With Vitess 18 `vtgr` has been removed.
+
+#### <a id="deleted-query_analyzer"/>Deleted `query_analyzer`
+
+The undocumented `query_analyzer` binary has been removed in Vitess 18, see https://github.com/vitessio/vitess/issues/14054.
 
 #### <a id="deprecated-vtbackup-stat-duration-by-phase"/>Deprecated VTbackup stat `DurationByPhase`
 
