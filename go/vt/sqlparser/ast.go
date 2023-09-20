@@ -404,7 +404,7 @@ type Statement interface {
 
 type Statements []Statement
 
-func (*Union) iStatement()             {}
+func (*SetOp)  iStatement()            {}
 func (*Select) iStatement()            {}
 func (*Stream) iStatement()            {}
 func (*Insert) iStatement()            {}
@@ -467,7 +467,7 @@ type SelectStatement interface {
 }
 
 func (*Select) iSelectStatement()          {}
-func (*Union) iSelectStatement()           {}
+func (*SetOp) iSelectStatement()           {}
 func (*ParenSelect) iSelectStatement()     {}
 func (*ValuesStatement) iSelectStatement() {}
 
@@ -701,8 +701,8 @@ func (s *ValuesStatement) walkSubtree(visit Visit) error {
 	return Walk(visit, s.Rows)
 }
 
-// Union represents a UNION statement.
-type Union struct {
+// SetOp represents a UNION, INTERSECT, and EXCEPT statement.
+type SetOp struct {
 	Type        string
 	Left, Right SelectStatement
 	OrderBy     OrderBy
@@ -712,36 +712,42 @@ type Union struct {
 	Into        *Into
 }
 
-// Union.Type
+// SetOp.Type
 const (
-	UnionStr         = "union"
-	UnionAllStr      = "union all"
-	UnionDistinctStr = "union distinct"
+	UnionStr             = "union"
+	UnionAllStr          = "union all"
+	UnionDistinctStr     = "union distinct"
+	IntersectStr         = "intersect"
+	IntersectAllStr      = "intersect all"
+	IntersectDistinctStr = "intersect distinct"
+	ExceptStr            = "except"
+	ExceptAllStr         = "except all"
+	ExceptDistinctStr    = "except distinct"
 )
 
 // AddOrder adds an order by element
-func (node *Union) AddOrder(order *Order) {
+func (node *SetOp) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
 }
 
-func (node *Union) SetOrderBy(orderBy OrderBy) {
+func (node *SetOp) SetOrderBy(orderBy OrderBy) {
 	node.OrderBy = orderBy
 }
 
-func (node *Union) SetWith(w *With) {
+func (node *SetOp) SetWith(w *With) {
 	node.With = w
 }
 
 // SetLimit sets the limit clause
-func (node *Union) SetLimit(limit *Limit) {
+func (node *SetOp) SetLimit(limit *Limit) {
 	node.Limit = limit
 }
 
-func (node *Union) SetLock(lock string) {
+func (node *SetOp) SetLock(lock string) {
 	node.Lock = lock
 }
 
-func (node *Union) SetInto(into *Into) error {
+func (node *SetOp) SetInto(into *Into) error {
 	if into == nil {
 		if r, ok := node.Right.(*Select); ok {
 			node.Into = r.Into
@@ -756,17 +762,17 @@ func (node *Union) SetInto(into *Into) error {
 	return nil
 }
 
-func (node *Union) GetInto() *Into {
+func (node *SetOp) GetInto() *Into {
 	return node.Into
 }
 
 // Format formats the node.
-func (node *Union) Format(buf *TrackedBuffer) {
+func (node *SetOp) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v%v %s %v%v%v%s%v", node.With, node.Left, node.Type, node.Right,
 		node.OrderBy, node.Limit, node.Lock, node.Into)
 }
 
-func (node *Union) walkSubtree(visit Visit) error {
+func (node *SetOp) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
@@ -1594,9 +1600,9 @@ type InsertRows interface {
 	SQLNode
 }
 
-func (*Select) iInsertRows()      {}
-func (*Union) iInsertRows()       {}
-func (Values) iInsertRows()       {}
+func (*Select) iInsertRows() {}
+func (*SetOp) iInsertRows()  {}
+func (Values) iInsertRows()  {}
 func (*ParenSelect) iInsertRows() {}
 
 // Update represents an UPDATE statement.

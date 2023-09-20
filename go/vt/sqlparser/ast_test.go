@@ -154,7 +154,7 @@ func TestAddOrder(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	dst.(*Union).AddOrder(order)
+	dst.(*SetOp).AddOrder(order)
 	buf = NewTrackedBuffer(nil)
 	dst.Format(buf)
 	want = "select * from t union select * from s order by foo asc"
@@ -184,7 +184,7 @@ func TestSetLimit(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	dst.(*Union).SetLimit(limit)
+	dst.(*SetOp).SetLimit(limit)
 	buf = NewTrackedBuffer(nil)
 	dst.Format(buf)
 	want = "select * from t union select * from s limit 4"

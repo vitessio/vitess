@@ -306,7 +306,26 @@ var (
 		}, {
 			input:  "select /* union order by limit lock */ 1 from t union select 1 from t order by a limit 1 for update",
 			output: "select /* union order by limit lock */ 1 from t union select 1 from t order by a asc limit 1 for update",
-		}, {
+		},
+		{
+			input: "select 1 from t intersect select 1 from t",
+		},
+		{
+			input: "select 1 from t intersect all select 1 from t",
+		},
+		{
+			input: "select 1 from t intersect distinct select 1 from t",
+		},
+		{
+			input: "select 1 from t except select 1 from t",
+		},
+		{
+			input: "select 1 from t except all select 1 from t",
+		},
+		{
+			input: "select 1 from t except distinct select 1 from t",
+		},
+		{
 			input:  "(select id, a from t order by id limit 1) union (select id, b as a from s order by id limit 1) order by a limit 1",
 			output: "(select id, a from t order by id asc limit 1) union (select id, b as a from s order by id asc limit 1) order by a asc limit 1",
 		}, {

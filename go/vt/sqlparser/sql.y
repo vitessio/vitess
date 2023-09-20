@@ -207,7 +207,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> FOR_SYSTEM_TIME
 %token <bytes> FOR_VERSION
 
+%left <bytes> EXCEPT
 %left <bytes> UNION
+%left <bytes> INTERSECT
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL 
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
@@ -281,7 +283,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 
 // Permissions Tokens
 %token <bytes> USER IDENTIFIED ROLE REUSE GRANT GRANTS REVOKE NONE ATTRIBUTE RANDOM PASSWORD INITIAL AUTHENTICATION
-%token <bytes> SSL X509 CIPHER ISSUER SUBJECT ACCOUNT EXPIRE NEVER OPTION OPTIONAL EXCEPT ADMIN PRIVILEGES
+%token <bytes> SSL X509 CIPHER ISSUER SUBJECT ACCOUNT EXPIRE NEVER OPTION OPTIONAL ADMIN PRIVILEGES
 %token <bytes> MAX_QUERIES_PER_HOUR MAX_UPDATES_PER_HOUR MAX_CONNECTIONS_PER_HOUR MAX_USER_CONNECTIONS FLUSH
 %token <bytes> FAILED_LOGIN_ATTEMPTS PASSWORD_LOCK_TIME UNBOUNDED REQUIRE PROXY ROUTINE TABLESPACE CLIENT SLAVE
 %token <bytes> EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE LOGS ENGINE ERROR GENERAL HOSTS
@@ -402,7 +404,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> NVAR PASSWORD_LOCK
 
 %type <statement> command
-%type <selStmt>  create_query_expression select_statement base_select with_select base_select_no_cte union_lhs union_rhs select_statement_with_no_trailing_into
+%type <selStmt> create_query_expression select_statement with_select select_or_set_op base_select base_select_no_cte select_statement_with_no_trailing_into
+%type <selStmt> set_op intersect_stmt union_except_lhs union_except_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
@@ -432,7 +435,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
 %type <bytes> work_opt no_opt chain_opt release_opt index_name_opt
 %type <bytes2> comment_opt comment_list
-%type <str> union_op insert_or_replace
+%type <str> union_op intersect_op except_op insert_or_replace
 %type <str> distinct_opt straight_join_opt cache_opt match_option format_opt
 %type <separator> separator_opt
 %type <expr> like_escape_opt
@@ -711,23 +714,92 @@ stream_statement:
     $$ = &Stream{Comments: Comments($2), SelectExpr: $3, Table: $5}
   }
 
-// base_select is an unparenthesized SELECT with no order by clause or beyond.
-base_select:
+// select_or_set_op is an unparenthesized SELECT without an order by clause or UNION/INTERSECT/EXCEPT operation
+// TODO: select_or_set_op should also include openb select_statement_with_no_trailing_into closeb; so it should just use base_select
+select_or_set_op:
   base_select_no_cte
   {
     $$ = $1
   }
-| union_lhs union_op union_rhs
+| set_op
   {
-    $$ = &Union{Type: $2, Left: $1, Right: $3}
+    $$ = $1
   }
 
-with_select:
+// set_op is a UNION/INTERSECT/EXCEPT operation
+set_op:
+  intersect_stmt
+  {
+    $$ = $1
+  }
+| union_except_lhs union_op union_except_rhs
+  {
+    $$ = &SetOp{Type: $2, Left: $1, Right: $3}
+  }
+| union_except_lhs except_op union_except_rhs
+  {
+    $$ = &SetOp{Type: $2, Left: $1, Right: $3}
+  }
+
+// intersect_stmt is an INTERSECT operation
+// in order to enforce its higher precedence over UNION/EXCEPT, it is defined as a terminal rule
+// this way, base_select and other intersect_stmt are greedily paired up
+intersect_stmt:
+  base_select intersect_op base_select
+  {
+    $$ = &SetOp{Type: $2, Left: $1, Right: $3}
+  }
+| intersect_stmt intersect_op base_select
+  {
+    $$ = &SetOp{Type: $2, Left: $1, Right: $3}
+  }
+
+// TODO: add (VALUES ROW(...), ROW(...), ...) support
+// base_select is either a simple SELECT or a SELECT wrapped in parentheses
+base_select:
+  base_select_no_cte
+  {
+    if $1.GetInto() != nil {
+      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
+      return 1
+    }
+    $$ = $1
+  }
+| openb select_statement_with_no_trailing_into closeb
+  {
+    $$ = &ParenSelect{Select: $2}
+  }
+
+// union_except_lhs is either a simple select or a set_op
+// this allows further nesting of UNION/INTERSECT/EXCEPT
+union_except_lhs:
   base_select
   {
     $$ = $1
   }
-| WITH with_clause base_select
+| set_op
+  {
+    $$ = $1
+  }
+
+// union_except_rhs is either a simple SELECT or an intersect_stmt
+// this is a terminal rule, to prevent further nesting of set_op
+union_except_rhs:
+  base_select
+  {
+    $$ = $1
+  }
+| intersect_stmt
+  {
+    $$ = $1
+  }
+
+with_select:
+  select_or_set_op
+  {
+    $$ = $1
+  }
+| WITH with_clause select_or_set_op
   {
     $3.SetWith($2)
     $$ = $3
@@ -822,34 +894,6 @@ common_table_expression:
   table_alias ins_column_list_opt AS subquery_or_values
   {
     $$ = &CommonTableExpr{&AliasedTableExpr{Expr:$4, As: $1}, $2}
-  }
-
-union_lhs:
-  base_select
-  {
-    if $1.GetInto() != nil {
-      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
-      return 1
-    }
-    $$ = $1
-  }
-| openb select_statement_with_no_trailing_into closeb
-  {
-    $$ = &ParenSelect{Select: $2}
-  }
-
-union_rhs:
-  base_select_no_cte
-  {
-    if $1.GetInto() != nil {
-      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
-      return 1
-    }
-    $$ = $1
-  }
-| openb select_statement_with_no_trailing_into closeb
-  {
-    $$ = &ParenSelect{Select: $2}
   }
 
 insert_statement:
@@ -5352,6 +5396,34 @@ union_op:
 | UNION DISTINCT
   {
     $$ = UnionDistinctStr
+  }
+
+intersect_op:
+  INTERSECT
+  {
+    $$ = IntersectStr
+  }
+| INTERSECT ALL
+  {
+    $$ = IntersectAllStr
+  }
+| INTERSECT DISTINCT
+  {
+    $$ = IntersectDistinctStr
+  }
+
+except_op:
+  EXCEPT
+  {
+    $$ = ExceptStr
+  }
+| EXCEPT ALL
+  {
+    $$ = ExceptAllStr
+  }
+| EXCEPT DISTINCT
+  {
+    $$ = ExceptDistinctStr
   }
 
 sql_calc_found_rows_opt:
