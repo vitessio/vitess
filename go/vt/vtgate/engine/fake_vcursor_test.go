@@ -93,6 +93,10 @@ func (t *noopVCursor) GetWarmingReadsPercent() int {
 	panic("implement me")
 }
 
+func (t *noopVCursor) GetWarmingReadsPool() chan bool {
+	panic("implement me")
+}
+
 func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	panic("implement me")
 }
@@ -491,6 +495,10 @@ func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {
 
 func (f *loggingVCursor) GetWarmingReadsPercent() int {
 	return 0
+}
+
+func (f *loggingVCursor) GetWarmingReadsPool() chan bool {
+	return make(chan bool)
 }
 
 func (f *loggingVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {

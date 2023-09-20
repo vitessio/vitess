@@ -24,9 +24,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -41,6 +41,13 @@ import (
 )
 
 var _ Primitive = (*Route)(nil)
+
+var (
+	replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
+		"ReplicaWarmingReadsMirrored",
+		"Number of reads mirrored to replicas to warm their bufferpools",
+		[]string{"Keyspace"})
+)
 
 // Route represents the instructions to route a read query to
 // one or many vttablets.
@@ -603,12 +610,23 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		return
 	}
 
-	go func(replicaVCursor VCursor) {
-		rss, _, err := route.findRoute(ctx, replicaVCursor, bindVars)
-		if err != nil {
-			return
-		}
+	pool := vcursor.GetWarmingReadsPool()
+	select {
+	// if there's no more room in the pool, drop the warming read
+	case pool <- true:
+		go func(replicaVCursor VCursor) {
+			rss, _, err := route.findRoute(ctx, replicaVCursor, bindVars)
+			if err != nil {
+				return
+			}
 
-		_, _ = replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false /* rollbackOnError */, false /* autocommit */)
-	}(replicaVCursor)
+			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false /* rollbackOnError */, false /* autocommit */)
+			if errs != nil && len(errs) > 0 {
+				log.Warningf("Failed to execute warming replica read: %v", errs)
+			} else {
+				replicaWarmingReadsMirrored.Add([]string{route.Keyspace.Name}, 1)
+			}
+		}(replicaVCursor)
+	default:
+	}
 }

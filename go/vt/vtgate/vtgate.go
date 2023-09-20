@@ -112,7 +112,9 @@ var (
 	// allowKillStmt to allow execution of kill statement.
 	allowKillStmt bool
 
-	warmingReadsPercent = 0
+	warmingReadsPercent      = 0
+	warmingReadsQueryTimeout = 5 * time.Second
+	warmingReadsPoolSize     = 100
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -146,6 +148,9 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&messageStreamGracePeriod, "message_stream_grace_period", messageStreamGracePeriod, "the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent.")
 	fs.BoolVar(&enableViews, "enable-views", enableViews, "Enable views support in vtgate.")
 	fs.BoolVar(&allowKillStmt, "allow-kill-statement", allowKillStmt, "Allows the execution of kill statement")
+	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm.")
+	fs.DurationVar(&warmingReadsQueryTimeout, "warming-reads-query-timeout", 5*time.Second, "Timeout of warming read queries (default 5s).")
+	fs.IntVar(&warmingReadsPoolSize, "warming-reads-pool-size", 100, "Size of goroutine pool for warming reads (default 100)")
 
 	_ = fs.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 	_ = fs.MarkDeprecated("schema_change_signal_user", "schema tracking uses an internal api and does not require a user to be specified")
@@ -155,7 +160,6 @@ func registerFlags(fs *pflag.FlagSet) {
 
 	fs.Bool("gate_query_cache_lfu", false, "gate server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
 	_ = fs.MarkDeprecated("gate_query_cache_lfu", "`--gate_query_cache_lfu` is deprecated and will be removed in `v19.0`. The query cache always uses a LFU implementation now.")
-	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm.")
 }
 func init() {
 	servenv.OnParseFor("vtgate", registerFlags)

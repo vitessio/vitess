@@ -272,9 +272,9 @@ func createCustomExecutorSetValues(t testing.TB, vschema string, values []*sqlty
 	return executor, sbcs[0], sbcs[1], sbclookup, ctx
 }
 
-func createExecutorEnvWithPrimaryReplicaConn(t testing.TB, warmingReadsPercent int) (executor *Executor, primary, replica *sandboxconn.SandboxConn) {
+func createExecutorEnvWithPrimaryReplicaConn(t testing.TB, ctx context.Context, warmingReadsPercent int) (executor *Executor, primary, replica *sandboxconn.SandboxConn) {
 	var cancel context.CancelFunc
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(ctx)
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 	serv := newSandboxForCells(ctx, []string{cell})
@@ -309,6 +309,7 @@ func createExecutorEnvWithPrimaryReplicaConn(t testing.TB, warmingReadsPercent i
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	t.Cleanup(func() {
+		defer utils.EnsureNoLeaks(t)
 		executor.Close()
 		cancel()
 	})

@@ -115,6 +115,7 @@ type vcursorImpl struct {
 	pv       plancontext.PlannerVersion
 
 	warmingReadsPercent int
+	warmingReadsPool    chan bool
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
@@ -160,8 +161,10 @@ func newVCursorImpl(
 	}
 
 	warmingReadsPct := 0
+	var warmingReadsPool chan bool
 	if executor != nil {
 		warmingReadsPct = executor.warmingReadsPercent
+		warmingReadsPool = executor.warmingReadsPool
 	}
 	return &vcursorImpl{
 		safeSession:         safeSession,
@@ -179,6 +182,7 @@ func newVCursorImpl(
 		warnShardedOnly:     warnShardedOnly,
 		pv:                  pv,
 		warmingReadsPercent: warmingReadsPct,
+		warmingReadsPool:    warmingReadsPool,
 	}, nil
 }
 
@@ -1280,11 +1284,15 @@ func (vc *vcursorImpl) GetWarmingReadsPercent() int {
 	return vc.warmingReadsPercent
 }
 
+func (vc *vcursorImpl) GetWarmingReadsPool() chan bool {
+	return vc.warmingReadsPool
+}
+
 func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCursor {
 	callerId := callerid.EffectiveCallerIDFromContext(ctx)
 	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
 
-	timedCtx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	timedCtx, _ := context.WithTimeout(context.Background(), warmingReadsQueryTimeout)
 	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
 
 	v := &vcursorImpl{
