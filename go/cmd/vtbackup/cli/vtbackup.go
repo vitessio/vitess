@@ -152,7 +152,7 @@ Whatever system launches vtbackup is responsible for the following:
 	- Retrying vtbackup if it fails.
 	- Alerting human operators if the failure is persistent.
 
-The process vtbackup follows to take a new backup is as follows:
+The process vtbackup follows to take a new backup has the following steps:
  1. Restore from the most recent backup.
  2. Start a mysqld instance (but no vttablet) from the restored data.
  3. Instruct mysqld to connect to the current shard primary and replicate any

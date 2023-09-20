@@ -67,8 +67,6 @@ var (
 		Short: "vtclient connects to a vtgate server using the standard go driver API.",
 		Long: `vtclient connects to a vtgate server using the standard go driver API.
 
-Version 3 of the API is used, we do not send any hint to the server.
-
 For query bound variables, we assume place-holders in the query string
 in the form of :v1, :v2, etc.`,
 		Example: `vtclient --server vtgate:15991 "SELECT * FROM messages"

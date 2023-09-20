@@ -60,7 +60,7 @@ var (
 		Long: `vtcombo is a single binary containing several vitess components.
 
 In particular, it contains:
-- A ZK topology server based on an in-memory map.
+- A topology server based on an in-memory map.
 - One vtgate instance.
 - Many vttablet instances.
 - A vtctld instance so it's easy to see the topology.`,
