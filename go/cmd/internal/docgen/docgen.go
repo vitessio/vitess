@@ -58,6 +58,10 @@ import (
 // written to `dir`. The root command is also renamed to _index.md to remain
 // compatible with the vitessio/website content structure expectations.
 func GenerateMarkdownTree(cmd *cobra.Command, dir string) error {
+	sha, err := getCommitID("HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to get commit id for HEAD: %w", err)
+	}
 	switch fi, err := os.Stat(dir); {
 	case errors.Is(err, fs.ErrNotExist):
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -70,7 +74,7 @@ func GenerateMarkdownTree(cmd *cobra.Command, dir string) error {
 	}
 
 	recursivelyDisableAutoGenTags(cmd)
-	if err := doc.GenMarkdownTreeCustom(cmd, dir, frontmatterFilePrepender, linkHandler); err != nil {
+	if err := doc.GenMarkdownTreeCustom(cmd, dir, frontmatterFilePrepender(sha), linkHandler); err != nil {
 		return err
 	}
 
@@ -168,24 +172,37 @@ func recursivelyDisableAutoGenTags(root *cobra.Command) {
 	}
 }
 
+func getCommitID(ref string) (string, error) {
+	gitShow := exec.Command("git", "show", "--pretty=format:%H", "--no-patch", ref)
+	out, err := gitShow.Output()
+	if err != nil {
+		return "", err
+	}
+
+	return string(out), nil
+}
+
 const frontmatter = `---
 title: %s
 series: %s
+commit: %s
 ---
 `
 
-func frontmatterFilePrepender(filename string) string {
-	name := filepath.Base(filename)
-	base := strings.TrimSuffix(name, filepath.Ext(name))
+func frontmatterFilePrepender(sha string) func(filename string) string {
+	return func(filename string) string {
+		name := filepath.Base(filename)
+		base := strings.TrimSuffix(name, filepath.Ext(name))
 
-	root, cmdName, ok := strings.Cut(base, "_")
-	if !ok { // no `_`, so not a subcommand
-		cmdName = root
+		root, cmdName, ok := strings.Cut(base, "_")
+		if !ok { // no `_`, so not a subcommand
+			cmdName = root
+		}
+
+		cmdName = strings.ReplaceAll(cmdName, "_", " ")
+
+		return fmt.Sprintf(frontmatter, cmdName, root, sha)
 	}
-
-	cmdName = strings.ReplaceAll(cmdName, "_", " ")
-
-	return fmt.Sprintf(frontmatter, cmdName, root)
 }
 
 func linkHandler(filename string) string {
