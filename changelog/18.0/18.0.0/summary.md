@@ -9,6 +9,7 @@
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
     - [VTOrc flag `--change-tablets-with-errant-gtid-to-drained`](#new-flag-errant-gtid-convert)
     - [ERS sub flag `--wait-for-all-tablets`](#new-ers-subflag)
+    - [VTGate flag `--grpc-send-session-in-streaming`](#new-vtgate-streaming-sesion)
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v18.16.0](#update-node)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
@@ -64,6 +65,14 @@ Running `EmergencyReparentShard` from the vtctldclient has a new sub-flag `--wai
 for a response from all the tablets. Originally `EmergencyReparentShard` was meant only to be run when a primary tablet is unreachable.
 We have realized now that there are cases when the replication is broken but all the tablets are reachable. In these cases, it is advisable to 
 call `EmergencyReparentShard` with `--wait-for-all-tablets` so that it doesn't ignore one of the tablets.
+
+#### <a id="new-vtgate-streaming-sesion"/>VTGate GRPC stream execute session flag `--grpc-send-session-in-streaming`
+
+This flag enables transaction support on `StreamExecute` api.
+One enabled, VTGate `StreamExecute` grpc api will send session as the last packet in the response.
+The client should enable it only when they have made the required changes to expect such a packet.
+
+It is disabled by default.
 
 ### <a id="vtadmin"/>VTAdmin
 
