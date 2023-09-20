@@ -302,8 +302,6 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:   "",
 			cutOverThreshold: 5 * time.Minute,
 		},
-<<<<<<< HEAD
-=======
 		{
 			strategyVariable: "vitess --retain-artifacts=4m",
 			strategy:         DDLStrategyVitess,
@@ -311,14 +309,6 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:   "",
 			expireArtifacts:  4 * time.Minute,
 		},
-		{
-			strategyVariable: "vitess --analyze-table",
-			strategy:         DDLStrategyVitess,
-			options:          "--analyze-table",
-			runtimeOptions:   "",
-			analyzeTable:     true,
-		},
->>>>>>> 0461fafbd2 (OnlineDDL: cleanup cancelled migration artifacts; support `--retain-artifacts=<duration>` DDL strategy flag (#14029))
 	}
 	for _, ts := range tt {
 		t.Run(ts.strategyVariable, func(t *testing.T) {
