@@ -5590,7 +5590,7 @@ func TestCreateTable(t *testing.T) {
 			"  min_rows 0x7,\n" +
 			"  pack_keys 0x8,\n" +
 			"  stats_persistent 0x9,\n" +
-			"  stats_sample_pages 0x10,\n",
+			"  stats_sample_pages 0x10\n",
 
 		// passing floats to table options
 		"create table t (\n" +
@@ -5605,7 +5605,7 @@ func TestCreateTable(t *testing.T) {
 			"  min_rows 4.7,\n" +
 			"  pack_keys 4.8,\n" +
 			"  stats_persistent 4.9,\n" +
-			"  stats_sample_pages 4.01,\n",
+			"  stats_sample_pages 4.01\n",
 
 		// boolean columns
 		"create table t (\n" +
