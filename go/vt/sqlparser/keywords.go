@@ -312,6 +312,7 @@ var keywords = map[string]int{
 	"int8":                          INT8,
 	"integer":                       INTEGER,
 	"interval":                      INTERVAL,
+	"intersect":                     INTERSECT,
 	"into":                          INTO,
 	"invisible":                     INVISIBLE,
 	"invoker":                       INVOKER,
