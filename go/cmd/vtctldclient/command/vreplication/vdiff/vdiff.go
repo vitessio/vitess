@@ -117,7 +117,7 @@ var (
 	// base is the base command for all actions related to VDiff.
 	base = &cobra.Command{
 		Use:   "VDiff --workflow <workflow> --keyspace <keyspace> [command] [command-flags]",
-		Short: "Perform commands related to diffing tables between the source keyspace and target keyspace.",
+		Short: "Perform commands related to diffing tables involved in a VReplication workflow between the source and target.",
 		Long: `VDiff commands: create, resume, show, stop, and delete.
 See the --help output for each command for more details.`,
 		DisableFlagsInUseLine: true,

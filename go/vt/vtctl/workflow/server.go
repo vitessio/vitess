@@ -65,14 +65,14 @@ import (
 	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
 
-// TableCopyProgress stores the row counts and disk sizes of the source and target tables
-type TableCopyProgress struct {
+// tableCopyProgress stores the row counts and disk sizes of the source and target tables
+type tableCopyProgress struct {
 	TargetRowCount, TargetTableSize int64
 	SourceRowCount, SourceTableSize int64
 }
 
-// CopyProgress stores the TableCopyProgress for all tables still being copied
-type CopyProgress map[string]*TableCopyProgress
+// copyProgress stores the tableCopyProgress for all tables still being copied
+type copyProgress map[string]*tableCopyProgress
 
 // sequenceMetadata contains all of the relevant metadata for a sequence that
 // is being used by a table involved in a vreplication workflow.
@@ -1587,7 +1587,7 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 			tables = append(tables, table)
 		}
 		sort.Strings(tables)
-		var progress TableCopyProgress
+		var progress tableCopyProgress
 		for _, table := range tables {
 			var rowCountPct, tableSizePct float32
 			resp.TableCopyState[table] = &vtctldatapb.WorkflowStatusResponse_TableCopyState{}
@@ -1666,7 +1666,7 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 
 // GetCopyProgress returns the progress of all tables being copied in the
 // workflow.
-func (s *Server) GetCopyProgress(ctx context.Context, ts *trafficSwitcher, state *State) (*CopyProgress, error) {
+func (s *Server) GetCopyProgress(ctx context.Context, ts *trafficSwitcher, state *State) (*copyProgress, error) {
 	getTablesQuery := "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
 	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = %s and table_name in (%s)"
 	tables := make(map[string]bool)
@@ -1783,9 +1783,9 @@ func (s *Server) GetCopyProgress(ctx context.Context, ts *trafficSwitcher, state
 		}
 	}
 
-	copyProgress := CopyProgress{}
+	copyProgress := copyProgress{}
 	for table, rowCount := range targetRowCounts {
-		copyProgress[table] = &TableCopyProgress{
+		copyProgress[table] = &tableCopyProgress{
 			TargetRowCount:  rowCount,
 			TargetTableSize: targetTableSizes[table],
 			SourceRowCount:  sourceRowCounts[table],
