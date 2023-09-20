@@ -656,3 +656,16 @@ func (mysqld *Mysqld) SemiSyncReplicationStatus() (bool, error) {
 	}
 	return false, nil
 }
+
+// SemiSyncExtensionLoaded returns whether semi-sync plugins are loaded.
+func (mysqld *Mysqld) SemiSyncExtensionLoaded() (bool, error) {
+	qr, err := mysqld.FetchSuperQuery(context.Background(), "SELECT COUNT(*) > 0 AS plugin_loaded FROM information_schema.plugins WHERE plugin_name LIKE 'rpl_semi_sync%'")
+	if err != nil {
+		return false, err
+	}
+	pluginPresent, err := qr.Rows[0][0].ToBool()
+	if err != nil {
+		return false, err
+	}
+	return pluginPresent, nil
+}

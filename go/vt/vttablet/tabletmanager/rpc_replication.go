@@ -294,7 +294,12 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 		}
 	}()
 
-	if err := tm.fixSemiSync(tm.Tablet().Type, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return err
+	}
+
+	if err := tm.fixSemiSync(tm.Tablet().Type, semiSyncAction); err != nil {
 		return err
 	}
 	return tm.MysqlDaemon.StartReplication(tm.hookExtraEnv())
@@ -377,16 +382,21 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		return "", err
 	}
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return "", err
+	}
+
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
 	// we'll still need some replicas to be able to commit transactions.
-	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, semiSyncAction); err != nil {
 		return "", err
 	}
 
 	// Enforce semi-sync after changing the tablet)type to PRIMARY. Otherwise, the
 	// primary will hang while trying to create the database.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 		return "", err
 	}
 
@@ -423,11 +433,16 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	}
 	defer tm.unlock()
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return err
+	}
+
 	// If we were a primary type, switch our type to replica.  This
 	// is used on the old primary when using InitShardPrimary with
 	// -force, and the new primary is different from the old primary.
 	if tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
-		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_REPLICA, DBActionNone, convertBoolToSemiSyncAction(semiSync)); err != nil {
+		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_REPLICA, DBActionNone, semiSyncAction); err != nil {
 			return err
 		}
 	}
@@ -450,7 +465,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if tt == topodatapb.TabletType_PRIMARY {
 		tt = topodatapb.TabletType_REPLICA
 	}
-	if err := tm.fixSemiSync(tt, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	if err := tm.fixSemiSync(tt, semiSyncAction); err != nil {
 		return err
 	}
 
@@ -601,8 +616,13 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	}
 	defer tm.unlock()
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return err
+	}
+
 	// If using semi-sync, we need to enable source-side.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 		return err
 	}
 
@@ -670,9 +690,14 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 	}
 	defer tm.unlock()
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return err
+	}
+
 	// setReplicationSourceLocked also fixes the semi-sync. In case the tablet type is primary it assumes that it will become a replica if SetReplicationSource
 	// is called, so we always call fixSemiSync with a non-primary tablet type. This will always set the source side replication to false.
-	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, convertBoolToSemiSyncAction(semiSync))
+	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, semiSyncAction)
 }
 
 func (tm *TabletManager) setReplicationSourceRepairReplication(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) (err error) {
@@ -962,8 +987,13 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 		return "", err
 	}
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return "", err
+	}
+
 	// If using semi-sync, we need to enable it before going read-write.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 		return "", err
 	}
 

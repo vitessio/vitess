@@ -346,3 +346,8 @@ func (mysqld *vtcomboMysqld) StopReplication(hookExtraEnv map[string]string) err
 func (mysqld *vtcomboMysqld) SetSemiSyncEnabled(source, replica bool) error {
 	return nil
 }
+
+// SemiSyncExtensionLoaded implements the MysqlDaemon interface
+func (mysqld *vtcomboMysqld) SemiSyncExtensionLoaded() (bool, error) {
+	return true, nil
+}
