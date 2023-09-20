@@ -27,7 +27,7 @@ var (
 	moveTables = &cobra.Command{
 		Use:   "MoveTables --workflow <workflow> --keyspace <keyspace> [command] [command-flags]",
 		Short: "Perform commands related to moving tables from a source keyspace to a target keyspace.",
-		Long: `moveTables commands: Create, Show, Status, SwitchTraffic, ReverseTraffic, Stop, Start, Cancel, and Delete.
+		Long: `MoveTables commands: Create, Show, Status, SwitchTraffic, ReverseTraffic, Stop, Start, Cancel, and Delete.
 See the --help output for each command for more details.`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"movetables"},

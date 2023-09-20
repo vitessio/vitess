@@ -44,7 +44,7 @@ var (
 	// moveTablesCreate makes a moveTablesCreate gRPC call to a vtctld.
 	moveTablesCreate = &cobra.Command{
 		Use:                   "create",
-		Short:                 "Create and optionally run a moveTables VReplication workflow.",
+		Short:                 "Create and optionally run a MoveTables VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 movetables --workflow commerce2customer --target-keyspace customer create --source-keyspace commerce --cells zone1 --cells zone2 --tablet-types replica`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
