@@ -257,7 +257,7 @@ Usage of vttablet:
       --restore_from_backup                                              (init restore parameter) will check BackupStorage for a recent backup at startup and start there
       --restore_from_backup_ts string                                    (init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'
       --restore_to_pos string                                            (init incremental restore parameter) if set, run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups
-      --restore_to_timestamp 2006-01-02T15:04:05Z07:00                   (init incremental restore parameter) if set, run a point in time recovery that restores up to the given timestamp, if possible. Given timestamp in RFC3339 format (2006-01-02T15:04:05Z07:00)
+      --restore_to_timestamp string                                      (init incremental restore parameter) if set, run a point in time recovery that restores up to the given timestamp, if possible. Given timestamp in RFC3339 format. Example: '2006-01-02T15:04:05Z07:00'
       --retain_online_ddl_tables duration                                How long should vttablet keep an old migrated table before purging it (default 24h0m0s)
       --s2a_enable_appengine_dialer                                      If true, opportunistically use AppEngine-specific dialer to call S2A.
       --s2a_timeout duration                                             Timeout enforced on the connection to the S2A service for handshake. (default 3s)

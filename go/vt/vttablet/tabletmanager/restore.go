@@ -77,7 +77,7 @@ var (
 )
 
 func registerIncrementalRestoreFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&restoreToTimestampStr, "restore_to_timestamp", restoreToTimestampStr, "(init incremental restore parameter) if set, run a point in time recovery that restores up to the given timestamp, if possible. Given timestamp in RFC3339 format (`2006-01-02T15:04:05Z07:00`)")
+	fs.StringVar(&restoreToTimestampStr, "restore_to_timestamp", restoreToTimestampStr, "(init incremental restore parameter) if set, run a point in time recovery that restores up to the given timestamp, if possible. Given timestamp in RFC3339 format. Example: '2006-01-02T15:04:05Z07:00'")
 	fs.StringVar(&restoreToPos, "restore_to_pos", restoreToPos, "(init incremental restore parameter) if set, run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups")
 }
 
