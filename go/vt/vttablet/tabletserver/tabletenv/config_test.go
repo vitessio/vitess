@@ -47,9 +47,8 @@ func TestConfigParse(t *testing.T) {
 			},
 		},
 		OltpReadPool: ConnPoolConfig{
-			Size:               16,
-			PrefillParallelism: 30,
-			MaxWaiters:         40,
+			Size:       16,
+			MaxWaiters: 40,
 		},
 		RowStreamer: RowStreamerConfig{
 			MaxInnoDBTrxHistLen: 1000,
@@ -181,9 +180,8 @@ func TestClone(t *testing.T) {
 
 	cfg1 := &TabletConfig{
 		OltpReadPool: ConnPoolConfig{
-			Size:               16,
-			PrefillParallelism: 30,
-			MaxWaiters:         40,
+			Size:       16,
+			MaxWaiters: 40,
 		},
 		RowStreamer: RowStreamerConfig{
 			MaxInnoDBTrxHistLen: 1000000,
