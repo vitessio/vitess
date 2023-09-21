@@ -1550,7 +1550,7 @@
                                           "Sharded": true
                                         },
                                         "FieldQuery": "select count(*), l1.l_suppkey, l1.l_orderkey from lineitem as l1 where 1 != 1 group by l1.l_suppkey, l1.l_orderkey",
-                                        "Query": "select count(*), l1.l_suppkey, l1.l_orderkey from lineitem as l1 where l1.l_receiptdate > l1.l_commitdate and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate) group by l1.l_suppkey, l1.l_orderkey",
+                                        "Query": "select count(*), l1.l_suppkey, l1.l_orderkey from lineitem as l1 where l1.l_receiptdate > l1.l_commitdate and exists(select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey) and not exists(select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate) group by l1.l_suppkey, l1.l_orderkey",
                                         "Table": "lineitem"
                                       },
                                       {

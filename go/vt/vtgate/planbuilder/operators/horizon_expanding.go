@@ -241,6 +241,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 		return ae, nil
 	})
 
+	// if we have a star in the select expression
 	if err != nil {
 		// if we have unexpanded expressions, we take this shortcut and hope we don't need any offsets from this plan
 		cols := sqlparser.SelectExprs{}
@@ -296,9 +297,10 @@ func newStarProjection(src ops.Operator, cols sqlparser.SelectExprs) *Projection
 }
 
 type subqueryExtraction struct {
-	new  sqlparser.Expr
-	subq []*sqlparser.Subquery
-	cols []string
+	new         sqlparser.Expr
+	subq        []*sqlparser.Subquery
+	pullOutCode []opcode.PulloutOpcode
+	cols        []string
 }
 
 func (sqc *SubQueryContainer) pullOutValueSubqueries(
@@ -315,7 +317,7 @@ func (sqc *SubQueryContainer) pullOutValueSubqueries(
 	var newSubqs []*SubQuery
 
 	for idx, subq := range sqe.subq {
-		sqInner, err := createSubquery(ctx, original, subq, outerID, original, sqe.cols[idx], opcode.PulloutValue, true)
+		sqInner, err := createSubquery(ctx, original, subq, outerID, original, sqe.cols[idx], sqe.pullOutCode[idx], true)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -329,20 +331,27 @@ func (sqc *SubQueryContainer) pullOutValueSubqueries(
 
 func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, isDML bool) *subqueryExtraction {
 	sqe := &subqueryExtraction{}
-	expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-		_, isExists := cursor.Parent().(*sqlparser.ExistsExpr)
-		if isExists {
-			return true
+	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery) {
+		sqName := ctx.GetReservedArgumentFor(sq)
+		sqe.cols = append(sqe.cols, sqName)
+		if isDML {
+			cursor.Replace(sqlparser.NewArgument(sqName))
+		} else {
+			cursor.Replace(sqlparser.NewColName(sqName))
 		}
-		if subq, ok := cursor.Node().(*sqlparser.Subquery); ok {
-			sqName := ctx.GetReservedArgumentFor(subq)
-			sqe.cols = append(sqe.cols, sqName)
-			if isDML {
-				cursor.Replace(sqlparser.NewArgument(sqName))
-			} else {
-				cursor.Replace(sqlparser.NewColName(sqName))
+		sqe.subq = append(sqe.subq, sq)
+	}
+	expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.Subquery:
+			if _, isExists := cursor.Parent().(*sqlparser.ExistsExpr); isExists {
+				return true
 			}
-			sqe.subq = append(sqe.subq, subq)
+			replaceWithArg(cursor, node)
+			sqe.pullOutCode = append(sqe.pullOutCode, opcode.PulloutValue)
+		case *sqlparser.ExistsExpr:
+			replaceWithArg(cursor, node.Subquery)
+			sqe.pullOutCode = append(sqe.pullOutCode, opcode.PulloutExists)
 		}
 		return true
 	}).(sqlparser.Expr)

@@ -2681,7 +2681,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 1 from dual where 1 != 1",
-        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = 'proc' and `TABLES`.TABLE_SCHEMA = 'mysql')",
+        "Query": "select 1 from dual where exists(select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = 'proc' and `TABLES`.TABLE_SCHEMA = 'mysql')",
         "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
         "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
         "Table": "dual"
@@ -2778,8 +2778,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select exists (select 1 from dual where 1 != 1) from `user` where 1 != 1",
-        "Query": "select exists (select 1 from dual) from `user` where id = 5",
+        "FieldQuery": "select exists(select 1 from dual where 1 != 1) from `user` where 1 != 1",
+        "Query": "select exists(select 1 from dual) from `user` where id = 5",
         "Table": "`user`",
         "Values": [
           "INT64(5)"
@@ -2787,6 +2787,7 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
+        "main.dual",
         "user.user"
       ]
     }
@@ -2975,17 +2976,22 @@
       "Original": "select exists(select id from user where id = 4)",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Reference",
+        "Variant": "EqualUnique",
         "Keyspace": {
-          "Name": "main",
-          "Sharded": false
+          "Name": "user",
+          "Sharded": true
         },
-        "FieldQuery": "select exists (select 1 from `user` where 1 != 1) from dual where 1 != 1",
-        "Query": "select exists (select 1 from `user` where id = 4) from dual",
-        "Table": "dual"
+        "FieldQuery": "select exists(select 1 from `user` where 1 != 1) from dual where 1 != 1",
+        "Query": "select exists(select 1 from `user` where id = 4) from dual",
+        "Table": "dual",
+        "Values": [
+          "INT64(4)"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual"
+        "main.dual",
+        "user.user"
       ]
     }
   },
@@ -2997,17 +3003,18 @@
       "Original": "select exists(select * from user)",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Reference",
+        "Variant": "Scatter",
         "Keyspace": {
-          "Name": "main",
-          "Sharded": false
+          "Name": "user",
+          "Sharded": true
         },
-        "FieldQuery": "select exists (select 1 from `user` where 1 != 1) from dual where 1 != 1",
-        "Query": "select exists (select 1 from `user`) from dual",
+        "FieldQuery": "select exists(select 1 from `user` where 1 != 1) from dual where 1 != 1",
+        "Query": "select exists(select 1 from `user`) from dual",
         "Table": "dual"
       },
       "TablesUsed": [
-        "main.dual"
+        "main.dual",
+        "user.user"
       ]
     }
   },

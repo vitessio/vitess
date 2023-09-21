@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -134,7 +135,11 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 						return true
 					}
 					rewritten = true
-					cursor.Replace(sq.originalSubquery)
+					if sq.FilterType == opcode.PulloutExists {
+						cursor.Replace(&sqlparser.ExistsExpr{Subquery: sq.originalSubquery})
+					} else {
+						cursor.Replace(sq.originalSubquery)
+					}
 					return false
 				}).(sqlparser.Expr)
 			}
