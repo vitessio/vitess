@@ -1,11 +1,11 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,18 +16,22 @@ limitations under the License.
 
 package main
 
-// Import and register the gRPC mysqlctl server
-
 import (
-	"vitess.io/vitess/go/vt/mysqlctl/grpcmysqlctlserver"
-	"vitess.io/vitess/go/vt/servenv"
+	"github.com/spf13/cobra"
+
+	"vitess.io/vitess/go/cmd/internal/docgen"
+	"vitess.io/vitess/go/cmd/mysqlctld/cli"
 )
 
-func init() {
-	servenv.InitServiceMap("grpc", "mysqlctl")
-	servenv.OnRun(func() {
-		if servenv.GRPCCheckServiceMap("mysqlctl") {
-			grpcmysqlctlserver.StartServer(servenv.GRPCServer, cnf, mysqld)
-		}
-	})
+func main() {
+	var dir string
+	cmd := cobra.Command{
+		Use: "docgen [-d <dir>]",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return docgen.GenerateMarkdownTree(cli.Main, dir)
+		},
+	}
+
+	cmd.Flags().StringVarP(&dir, "dir", "d", "doc", "output directory to write documentation")
+	_ = cmd.Execute()
 }
