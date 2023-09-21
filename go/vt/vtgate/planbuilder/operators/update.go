@@ -426,9 +426,19 @@ func buildChildUpdOpForSetNull(ctx *plancontext.PlanningContext, fk vindexes.Chi
 		}
 	}
 	if !colSetToNull {
+		var finalExpr sqlparser.Expr = sqlparser.NewComparisonExpr(sqlparser.NotInOp, valTuple, sqlparser.ValTuple{updateValues}, nil)
+		for _, value := range updateValues {
+			finalExpr = &sqlparser.OrExpr{
+				Left: &sqlparser.IsExpr{
+					Left:  value,
+					Right: sqlparser.IsNullOp,
+				},
+				Right: finalExpr,
+			}
+		}
 		childWhereExpr = &sqlparser.AndExpr{
 			Left:  childWhereExpr,
-			Right: sqlparser.NewComparisonExpr(sqlparser.NotInOp, valTuple, sqlparser.ValTuple{updateValues}, nil),
+			Right: finalExpr,
 		}
 	}
 	childUpdStmt := &sqlparser.Update{
@@ -618,7 +628,17 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updSt
 		for _, column := range cFk.ParentColumns {
 			valTuple = append(valTuple, sqlparser.NewColNameWithQualifier(column.String(), parentTbl))
 		}
-		whereCond = sqlparser.AndExpressions(whereCond, sqlparser.NewComparisonExpr(sqlparser.NotInOp, valTuple, sqlparser.ValTuple{updateValues}, nil))
+		var finalExpr sqlparser.Expr = sqlparser.NewComparisonExpr(sqlparser.NotInOp, valTuple, sqlparser.ValTuple{updateValues}, nil)
+		for _, value := range updateValues {
+			finalExpr = &sqlparser.OrExpr{
+				Left: &sqlparser.IsExpr{
+					Left:  value,
+					Right: sqlparser.IsNullOp,
+				},
+				Right: finalExpr,
+			}
+		}
+		whereCond = sqlparser.AndExpressions(whereCond, finalExpr)
 	}
 
 	return createSelectionOp(ctx,

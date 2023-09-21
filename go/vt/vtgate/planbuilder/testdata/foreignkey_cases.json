@@ -1260,6 +1260,95 @@
     }
   },
   {
+    "comment": "Update that cascades and requires parent fk and restrict child fk verification - bindVariable",
+    "query": "update u_tbl7 set col7 = :v1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update u_tbl7 set col7 = :v1",
+      "Instructions": {
+        "OperatorType": "FkCascade",
+        "Inputs": [
+          {
+            "InputName": "Selection",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select col7 from u_tbl7 where 1 != 1",
+            "Query": "select col7 from u_tbl7 for update",
+            "Table": "u_tbl7"
+          },
+          {
+            "InputName": "CascadeChild-1",
+            "OperatorType": "FKVerify",
+            "BvName": "fkc_vals",
+            "Cols": [
+              0
+            ],
+            "Inputs": [
+              {
+                "InputName": "VerifyParent-1",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :v1 where 1 != 1",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :v1 where (u_tbl4.col4) in ::fkc_vals and u_tbl3.col3 is null limit 1 lock in share mode",
+                "Table": "u_tbl3, u_tbl4"
+              },
+              {
+                "InputName": "VerifyChild-2",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
+                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (:v1 is null or (u_tbl4.col4) not in ((:v1))) and u_tbl4.col4 = u_tbl9.col9 limit 1 lock in share mode",
+                "Table": "u_tbl4, u_tbl9"
+              },
+              {
+                "InputName": "PostVerify",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col4 = :v1 where (u_tbl4.col4) in ::fkc_vals",
+                "Table": "u_tbl4"
+              }
+            ]
+          },
+          {
+            "InputName": "Parent",
+            "OperatorType": "Update",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "update u_tbl7 set col7 = :v1",
+            "Table": "u_tbl7"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl3",
+        "unsharded_fk_allow.u_tbl4",
+        "unsharded_fk_allow.u_tbl7",
+        "unsharded_fk_allow.u_tbl9"
+      ]
+    }
+  },
+  {
     "comment": "Insert with on duplicate key update - foreign keys disallowed",
     "query": "insert into u_tbl1 (id, col1) values (1, 3) on duplicate key update col1 = 5",
     "plan": "VT12001: unsupported: ON DUPLICATE KEY UPDATE with foreign keys"
@@ -1364,7 +1453,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2))",
+                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (1 is null or (cola, colb) not in ((1, 2)))",
                 "Table": "u_multicol_tbl2"
               }
             ]
@@ -1379,6 +1468,100 @@
             },
             "TargetTabletType": "PRIMARY",
             "Query": "update u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
+            "Table": "u_multicol_tbl1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_multicol_tbl1",
+        "unsharded_fk_allow.u_multicol_tbl2",
+        "unsharded_fk_allow.u_multicol_tbl3"
+      ]
+    }
+  },
+  {
+    "comment": "update on a multicol foreign key that set nulls and then cascades - bindVariables",
+    "query": "update u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
+      "Instructions": {
+        "OperatorType": "FkCascade",
+        "Inputs": [
+          {
+            "InputName": "Selection",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select cola, colb from u_multicol_tbl1 where 1 != 1",
+            "Query": "select cola, colb from u_multicol_tbl1 where id = :v3 for update",
+            "Table": "u_multicol_tbl1"
+          },
+          {
+            "InputName": "CascadeChild-1",
+            "OperatorType": "FkCascade",
+            "BvName": "fkc_vals",
+            "Cols": [
+              0,
+              1
+            ],
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select cola, colb from u_multicol_tbl2 where 1 != 1",
+                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2)))) for update",
+                "Table": "u_multicol_tbl2"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals1",
+                "Cols": [
+                  0,
+                  1
+                ],
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = null, colb = null where (cola, colb) in ::fkc_vals1",
+                "Table": "u_multicol_tbl3"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2))))",
+                "Table": "u_multicol_tbl2"
+              }
+            ]
+          },
+          {
+            "InputName": "Parent",
+            "OperatorType": "Update",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "update u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
             "Table": "u_multicol_tbl1"
           }
         ]
