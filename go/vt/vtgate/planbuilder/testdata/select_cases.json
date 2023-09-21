@@ -4364,7 +4364,6 @@
   {
     "comment": "subquery having join table on clause, using column reference of outer select table",
     "query": "select (select 1 from user u1 join user u2 on u1.id = u2.id and u1.id = u3.id) subquery from user u3 where u3.id = 1",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select (select 1 from user u1 join user u2 on u1.id = u2.id and u1.id = u3.id) subquery from user u3 where u3.id = 1",

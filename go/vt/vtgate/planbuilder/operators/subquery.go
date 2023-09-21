@@ -233,12 +233,6 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Ope
 		sq.HasValuesName = s
 		return s
 	}
-	dontEnterSubqueries := func(node, _ sqlparser.SQLNode) bool {
-		if _, ok := node.(*sqlparser.Subquery); ok {
-			return false
-		}
-		return true
-	}
 	post := func(cursor *sqlparser.CopyOnWriteCursor) {
 		node := cursor.Node()
 		if _, ok := node.(*sqlparser.Subquery); !ok {
@@ -276,6 +270,12 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Ope
 		Source:     outer,
 		Predicates: predicates,
 	}, nil
+}
+func dontEnterSubqueries(node, _ sqlparser.SQLNode) bool {
+	if _, ok := node.(*sqlparser.Subquery); ok {
+		return false
+	}
+	return true
 }
 
 func (sq *SubQuery) isMerged(ctx *plancontext.PlanningContext) bool {

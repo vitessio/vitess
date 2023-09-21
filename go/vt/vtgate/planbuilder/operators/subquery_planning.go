@@ -480,7 +480,6 @@ func tryMergeSubqueriesRecursively(
 		finalResult = finalResult.Merge(res)
 	}
 
-	// TODO: this is not correct
 	op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.Original}}
 	return op, finalResult.Merge(rewrite.NewTree("merge outer of two subqueries", subQuery)), nil
 }
@@ -525,18 +524,6 @@ func pushOrMerge(ctx *plancontext.PlanningContext, outer ops.Operator, inner *Su
 	default:
 		return outer, rewrite.SameTree, nil
 	}
-}
-
-func replaceSingleExpr(ctx *plancontext.PlanningContext, expr, from, to sqlparser.Expr) sqlparser.Expr {
-	return sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-		expr, ok := cursor.Node().(sqlparser.Expr)
-		if !ok {
-			return
-		}
-		if ctx.SemTable.EqualsExpr(expr, from) {
-			cursor.Replace(to)
-		}
-	}, ctx.SemTable.CopyDependenciesOnSQLNodes).(sqlparser.Expr)
 }
 
 type subqueryRouteMerger struct {
@@ -596,7 +583,7 @@ func (s *subqueryRouteMerger) mergeShardedRouting(ctx *plancontext.PlanningConte
 	return s.merge(ctx, old1, old2, routing)
 }
 
-func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, old1, old2 *Route, r Routing) (*Route, error) {
+func (s *subqueryRouteMerger) merge(_ *plancontext.PlanningContext, old1, old2 *Route, r Routing) (*Route, error) {
 	mergedWith := append(old1.MergedWith, old1, old2)
 	mergedWith = append(mergedWith, old2.MergedWith...)
 	src := s.outer.Source

@@ -207,6 +207,8 @@ func inspectWherePredicates(
 	sqc *SubQueryContainer,
 	sel *sqlparser.Select,
 ) (sqlparser.Exprs, []JoinColumn, error) {
+	// first we need to go through all the places where one can find predicates
+	// and search for subqueries
 	newWhere, wherePreds, whereJoinCols, err := sqc.inspectInnerPredicates(ctx, sel.Where)
 	if err != nil {
 		return nil, nil, err
@@ -215,13 +217,21 @@ func inspectWherePredicates(
 	if err != nil {
 		return nil, nil, err
 	}
+
+	newFrom, onPreds, onJoinCols, err := sqc.inspectOnConditions(ctx, sel.From)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// then we use the updated AST structs to build the operator
+	// these AST elements have any subqueries replace by arguments
 	sel.Where = newWhere
 	sel.Having = newHaving
+	sel.From = newFrom
 
-	// TODO: we need to look at join conditions as well
-
-	return append(wherePreds, havingPreds...), append(whereJoinCols, havingJoinCols...), nil
+	return append(append(wherePreds, havingPreds...), onPreds...), append(append(whereJoinCols, havingJoinCols...), onJoinCols...), nil
 }
+
 func createSubquery(
 	ctx *plancontext.PlanningContext,
 	original sqlparser.Expr,
@@ -321,11 +331,61 @@ func (sqc *SubQueryContainer) inspectInnerPredicates(
 	}
 
 	if len(jpc.remainingPredicates) == 0 {
-		return nil, jpc.predicates, jpc.joinColumns, nil
+		in = nil
+	} else {
+		in.Expr = sqlparser.AndExpressions(jpc.remainingPredicates...)
 	}
 
-	in.Expr = sqlparser.AndExpressions(jpc.remainingPredicates...)
 	return in, jpc.predicates, jpc.joinColumns, nil
+}
+
+func (sqc *SubQueryContainer) inspectOnConditions(
+	ctx *plancontext.PlanningContext,
+	from []sqlparser.TableExpr,
+) (newFrom []sqlparser.TableExpr, onPreds sqlparser.Exprs, onJoinCols []JoinColumn, err error) {
+	for _, tbl := range from {
+		tbl := sqlparser.CopyOnRewrite(tbl, dontEnterSubqueries, func(cursor *sqlparser.CopyOnWriteCursor) {
+			cond, ok := cursor.Node().(*sqlparser.JoinCondition)
+			if !ok || cond.On == nil {
+				return
+			}
+
+			jpc := &joinPredicateCollector{
+				totalID: sqc.totalID,
+				subqID:  sqc.subqID,
+				outerID: sqc.outerID,
+			}
+
+			for _, pred := range sqlparser.SplitAndExpression(nil, cond.On) {
+				subq, innerErr := sqc.handleSubquery(ctx, pred, sqc.totalID)
+				if err != nil {
+					err = innerErr
+					cursor.StopTreeWalk()
+					return
+				}
+				if subq != nil {
+					continue
+				}
+				if err = jpc.inspectPredicate(ctx, pred); err != nil {
+					err = innerErr
+					cursor.StopTreeWalk()
+					return
+				}
+			}
+			if len(jpc.remainingPredicates) == 0 {
+				cond.On = nil
+			} else {
+				cond.On = sqlparser.AndExpressions(jpc.remainingPredicates...)
+			}
+			onPreds = append(onPreds, jpc.predicates...)
+			onJoinCols = append(onJoinCols, jpc.joinColumns...)
+		}, ctx.SemTable.CopyDependenciesOnSQLNodes)
+		if err != nil {
+			return
+		}
+		newFrom = append(newFrom, tbl.(sqlparser.TableExpr))
+	}
+	return
 }
 
 func createComparisonSubQuery(
