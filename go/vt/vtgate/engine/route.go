@@ -605,13 +605,9 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		return
 	}
 
-	replicaVCursor, ok := vcursor.CloneForReplicaWarming(ctx).(VCursor)
-
-	if !ok {
-		return
-	}
-
+	replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
 	pool := vcursor.GetWarmingReadsPool()
+
 	select {
 	// if there's no more room in the pool, drop the warming read
 	case pool <- true:

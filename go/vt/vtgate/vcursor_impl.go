@@ -1289,10 +1289,11 @@ func (vc *vcursorImpl) GetWarmingReadsPool() chan bool {
 }
 
 func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCursor {
+	timedCtx, cancel := context.WithTimeout(context.Background(), warmingReadsQueryTimeout)
+	defer cancel()
+
 	callerId := callerid.EffectiveCallerIDFromContext(ctx)
 	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
-
-	timedCtx, _ := context.WithTimeout(context.Background(), warmingReadsQueryTimeout)
 	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
 
 	v := &vcursorImpl{
