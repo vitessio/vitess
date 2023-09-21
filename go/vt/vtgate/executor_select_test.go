@@ -4159,6 +4159,7 @@ func TestWarmingReads(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
 
 	_, err := executor.Execute(ctx, nil, "TestSelect", session, "select age, city from user", map[string]*querypb.BindVariable{})
+	time.Sleep(10 * time.Millisecond)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select age, city from `user`"},
@@ -4173,6 +4174,7 @@ func TestWarmingReads(t *testing.T) {
 	replica.Queries = nil
 
 	_, err = executor.Execute(ctx, nil, "TestSelect", session, "select age, city from user /* already has a comment */ ", map[string]*querypb.BindVariable{})
+	time.Sleep(10 * time.Millisecond)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select age, city from `user` /* already has a comment */"},
@@ -4187,20 +4189,24 @@ func TestWarmingReads(t *testing.T) {
 	replica.Queries = nil
 
 	_, err = executor.Execute(ctx, nil, "TestSelect", session, "insert into user (age, city) values (5, 'Boston')", map[string]*querypb.BindVariable{})
+	time.Sleep(10 * time.Millisecond)
 	require.NoError(t, err)
 	require.Nil(t, replica.Queries)
 
 	_, err = executor.Execute(ctx, nil, "TestSelect", session, "update user set age=5 where city='Boston'", map[string]*querypb.BindVariable{})
+	time.Sleep(10 * time.Millisecond)
 	require.NoError(t, err)
 	require.Nil(t, replica.Queries)
 
 	_, err = executor.Execute(ctx, nil, "TestSelect", session, "delete from user where city='Boston'", map[string]*querypb.BindVariable{})
+	time.Sleep(10 * time.Millisecond)
 	require.NoError(t, err)
 	require.Nil(t, replica.Queries)
 	primary.Queries = nil
 
 	executor, primary, replica = createExecutorEnvWithPrimaryReplicaConn(t, ctx, 0)
 	_, err = executor.Execute(ctx, nil, "TestSelect", session, "select age, city from user", map[string]*querypb.BindVariable{})
+	time.Sleep(10 * time.Millisecond)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select age, city from `user`"},
