@@ -1572,5 +1572,86 @@
         "unsharded_fk_allow.u_multicol_tbl3"
       ]
     }
+  },
+  {
+    "comment": "Cascaded delete run from prepared statement",
+    "query": "execute prep_delete using @foo",
+    "plan": {
+      "QueryType": "EXECUTE",
+      "Original": "execute prep_delete using @foo",
+      "Instructions": {
+        "OperatorType": "EXECUTE",
+        "Parameters": [
+          "foo"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "sharded_fk_allow",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col5, t5col5 from tbl5 where 1 != 1",
+                "Query": "select col5, t5col5 from tbl5 where id = :v1 for update",
+                "Table": "tbl5"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Delete",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "sharded_fk_allow",
+                  "Sharded": true
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "delete from tbl4 where (col4) in ::fkc_vals",
+                "Table": "tbl4"
+              },
+              {
+                "InputName": "CascadeChild-2",
+                "OperatorType": "Delete",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "sharded_fk_allow",
+                  "Sharded": true
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals1",
+                "Cols": [
+                  1
+                ],
+                "Query": "delete from tbl4 where (t4col4) in ::fkc_vals1",
+                "Table": "tbl4"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "sharded_fk_allow",
+                  "Sharded": true
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from tbl5 where id = :v1",
+                "Table": "tbl5"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl4",
+        "sharded_fk_allow.tbl5"
+      ]
+    }
   }
 ]
