@@ -256,11 +256,10 @@ func createSubquery(
 	switch stmt := subq.Select.(type) {
 	case *sqlparser.Select:
 		predicates, joinCols, err = inspectWherePredicates(ctx, sqc, stmt)
-		if err != nil {
-			return nil, err
-		}
 	case *sqlparser.Union:
-		return nil, vterrors.VT13001("yucki unions")
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	stmt := rewriteRemainingColumns(ctx, subq, subqID, parent)

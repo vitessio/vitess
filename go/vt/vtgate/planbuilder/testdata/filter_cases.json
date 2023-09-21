@@ -4374,5 +4374,33 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "union inside subquery. all routes can be merged by literal value",
+    "query": "select 1 from user where id = 12 and exists(select 1 from music where user_id = 12 union select 1 from user_extra where user_id = 12)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user where id = 12 and exists(select 1 from music where user_id = 12 union select 1 from user_extra where user_id = 12)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where id = 12 and exists (select 1 from music where user_id = 12 union select 1 from user_extra where user_id = 12)",
+        "Table": "`user`",
+        "Values": [
+          "INT64(12)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]

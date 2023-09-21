@@ -2,8 +2,7 @@
   {
     "comment": "unexpanded expressions invalid also inside subqueries",
     "query": "select * from user where id in (select * from user union select * from user_extra)",
-    "plan": "VT09015: schema tracking required",
-    "skip": true
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "union operations in subqueries (expressions)",
