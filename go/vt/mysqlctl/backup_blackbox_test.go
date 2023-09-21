@@ -173,26 +173,25 @@ func TestExecuteBackup(t *testing.T) {
 	var sourceReadStats int
 
 	for _, sr := range fakeStats.ScopeReturns {
-		sfs := sr.(*backupstats.FakeStats)
-		switch sfs.ScopeV[backupstats.ScopeOperation] {
+		switch sr.ScopeV[backupstats.ScopeOperation] {
 		case "Destination:Close":
 			destinationCloseStats++
-			require.Len(t, sfs.TimedIncrementCalls, 1)
+			require.Len(t, sr.TimedIncrementCalls, 1)
 		case "Destination:Open":
 			destinationOpenStats++
-			require.Len(t, sfs.TimedIncrementCalls, 1)
+			require.Len(t, sr.TimedIncrementCalls, 1)
 		case "Destination:Write":
 			destinationWriteStats++
-			require.GreaterOrEqual(t, len(sfs.TimedIncrementBytesCalls), 1)
+			require.GreaterOrEqual(t, len(sr.TimedIncrementBytesCalls), 1)
 		case "Source:Close":
 			sourceCloseStats++
-			require.Len(t, sfs.TimedIncrementCalls, 1)
+			require.Len(t, sr.TimedIncrementCalls, 1)
 		case "Source:Open":
 			sourceOpenStats++
-			require.Len(t, sfs.TimedIncrementCalls, 1)
+			require.Len(t, sr.TimedIncrementCalls, 1)
 		case "Source:Read":
 			sourceReadStats++
-			require.GreaterOrEqual(t, len(sfs.TimedIncrementBytesCalls), 1)
+			require.GreaterOrEqual(t, len(sr.TimedIncrementBytesCalls), 1)
 		}
 	}
 
@@ -529,26 +528,25 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	var sourceReadStats int
 
 	for _, sr := range fakeStats.ScopeReturns {
-		sfs := sr.(*backupstats.FakeStats)
-		switch sfs.ScopeV[backupstats.ScopeOperation] {
+		switch sr.ScopeV[backupstats.ScopeOperation] {
 		case "Destination:Close":
 			destinationCloseStats++
-			require.Len(t, sfs.TimedIncrementCalls, 1)
+			require.Len(t, sr.TimedIncrementCalls, 1)
 		case "Destination:Open":
 			destinationOpenStats++
-			require.Len(t, sfs.TimedIncrementCalls, 1)
+			require.Len(t, sr.TimedIncrementCalls, 1)
 		case "Destination:Write":
 			destinationWriteStats++
-			require.GreaterOrEqual(t, len(sfs.TimedIncrementBytesCalls), 1)
+			require.GreaterOrEqual(t, len(sr.TimedIncrementBytesCalls), 1)
 		case "Source:Close":
 			sourceCloseStats++
-			require.Len(t, sfs.TimedIncrementCalls, 1)
+			require.Len(t, sr.TimedIncrementCalls, 1)
 		case "Source:Open":
 			sourceOpenStats++
-			require.Len(t, sfs.TimedIncrementCalls, 1)
+			require.Len(t, sr.TimedIncrementCalls, 1)
 		case "Source:Read":
 			sourceReadStats++
-			require.GreaterOrEqual(t, len(sfs.TimedIncrementBytesCalls), 1)
+			require.GreaterOrEqual(t, len(sr.TimedIncrementBytesCalls), 1)
 		}
 	}
 

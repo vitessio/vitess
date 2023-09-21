@@ -4039,5 +4039,53 @@
         "main.unsharded_authoritative"
       ]
     }
+  },
+  {
+    "comment": "join query using table with muticolumn vindex",
+    "query": "select 1 from multicol_tbl m1 join multicol_tbl m2 on m1.cola = m2.cola",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from multicol_tbl m1 join multicol_tbl m2 on m1.cola = m2.cola",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "m1_cola": 1
+        },
+        "TableName": "multicol_tbl_multicol_tbl",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1, m1.cola from multicol_tbl as m1 where 1 != 1",
+            "Query": "select 1, m1.cola from multicol_tbl as m1",
+            "Table": "multicol_tbl"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SubShard",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from multicol_tbl as m2 where 1 != 1",
+            "Query": "select 1 from multicol_tbl as m2 where m2.cola = :m1_cola",
+            "Table": "multicol_tbl",
+            "Values": [
+              ":m1_cola"
+            ],
+            "Vindex": "multicolIdx"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
   }
 ]

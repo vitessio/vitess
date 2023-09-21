@@ -44,6 +44,7 @@ type iswitcher interface {
 	removeSourceTables(ctx context.Context, removalType workflow.TableRemovalType) error
 	dropSourceShards(ctx context.Context) error
 	dropSourceDeniedTables(ctx context.Context) error
+	dropTargetDeniedTables(ctx context.Context) error
 	freezeTargetVReplication(ctx context.Context) error
 	dropSourceReverseVReplicationStreams(ctx context.Context) error
 	dropTargetVReplicationStreams(ctx context.Context) error

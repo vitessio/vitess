@@ -1883,6 +1883,9 @@ func (s *Server) DropTargets(ctx context.Context, targetKeyspace, workflow strin
 			if err := sw.dropSourceDeniedTables(ctx); err != nil {
 				return nil, err
 			}
+			if err := sw.dropTargetDeniedTables(ctx); err != nil {
+				return nil, err
+			}
 		case binlogdatapb.MigrationType_SHARDS:
 			if err := sw.dropTargetShards(ctx); err != nil {
 				return nil, err
@@ -2072,6 +2075,9 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 				return nil, err
 			}
 			if err := sw.dropSourceDeniedTables(ctx); err != nil {
+				return nil, err
+			}
+			if err := sw.dropTargetDeniedTables(ctx); err != nil {
 				return nil, err
 			}
 

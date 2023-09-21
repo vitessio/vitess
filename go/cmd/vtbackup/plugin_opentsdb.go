@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,18 +16,10 @@ limitations under the License.
 
 package main
 
-// Import and register the gRPC mysqlctl server
+import "vitess.io/vitess/go/stats/opentsdb"
 
-import (
-	"vitess.io/vitess/go/vt/mysqlctl/grpcmysqlctlserver"
-	"vitess.io/vitess/go/vt/servenv"
-)
+// This plugin imports opentsdb to register the opentsdb stats backend.
 
 func init() {
-	servenv.InitServiceMap("grpc", "mysqlctl")
-	servenv.OnRun(func() {
-		if servenv.GRPCCheckServiceMap("mysqlctl") {
-			grpcmysqlctlserver.StartServer(servenv.GRPCServer, cnf, mysqld)
-		}
-	})
+	opentsdb.Init("vtbackup")
 }

@@ -14,18 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
-// This plugin imports Prometheus to allow for instrumentation
-// with the Prometheus client library
+// Import and register the gRPC mysqlctl server
 
 import (
-	"vitess.io/vitess/go/stats/prometheusbackend"
+	"vitess.io/vitess/go/vt/mysqlctl/grpcmysqlctlserver"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
 func init() {
+	servenv.InitServiceMap("grpc", "mysqlctl")
 	servenv.OnRun(func() {
-		prometheusbackend.Init("mysqlctld")
+		if servenv.GRPCCheckServiceMap("mysqlctl") {
+			grpcmysqlctlserver.StartServer(servenv.GRPCServer, cnf, mysqld)
+		}
 	})
 }

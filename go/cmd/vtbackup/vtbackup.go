@@ -100,9 +100,12 @@ const (
 	// forever for things that should be quick.
 	operationTimeout = 1 * time.Minute
 
-	phaseNameCatchUpReplication          = "CatchUpReplication"
-	phaseStatusCatchUpReplicationStalled = "Stalled"
-	phaseStatusCatchUpReplicationStopped = "Stopped"
+	phaseNameCatchupReplication          = "CatchupReplication"
+	phaseNameInitialBackup               = "InitialBackup"
+	phaseNameRestoreLastBackup           = "RestoreLastBackup"
+	phaseNameTakeNewBackup               = "TakeNewBackup"
+	phaseStatusCatchupReplicationStalled = "Stalled"
+	phaseStatusCatchupReplicationStopped = "Stopped"
 )
 
 var (
@@ -127,20 +130,44 @@ var (
 	detachedMode     bool
 	keepAliveTimeout = 0 * time.Second
 	disableRedoLog   = false
-	durationByPhase  = stats.NewGaugesWithSingleLabel(
+
+	// Deprecated, use "Phase" instead.
+	deprecatedDurationByPhase = stats.NewGaugesWithSingleLabel(
 		"DurationByPhaseSeconds",
-		"How long it took vtbackup to perform each phase (in seconds).",
+		"[DEPRECATED] How long it took vtbackup to perform each phase (in seconds).",
 		"phase",
 	)
+
+	// This gauge is updated 3*N times during the course of a vtbackup run,
+	// where N is the number of different phases vtbackup transitions through.
+	// Once to initialize to 0, another time to set the phase to active (1),
+	// and another to deactivate the phase (back to 0).
+	//
+	// At most a single phase is active at a given time.
+	//
+	// The sync gauge immediately reports changes to push-backed backends.
+	// The benefit of the sync gauge is that it makes verifying stats in
+	// integration tests a lot more tractable.
+	phase = stats.NewSyncGaugesWithSingleLabel(
+		"Phase",
+		"Active phase.",
+		"phase",
+	)
+	phaseNames = []string{
+		phaseNameCatchupReplication,
+		phaseNameInitialBackup,
+		phaseNameRestoreLastBackup,
+		phaseNameTakeNewBackup,
+	}
 	phaseStatus = stats.NewGaugesWithMultiLabels(
 		"PhaseStatus",
 		"Internal state of vtbackup phase.",
 		[]string{"phase", "status"},
 	)
 	phaseStatuses = map[string][]string{
-		phaseNameCatchUpReplication: {
-			phaseStatusCatchUpReplicationStalled,
-			phaseStatusCatchUpReplicationStopped,
+		phaseNameCatchupReplication: {
+			phaseStatusCatchupReplicationStalled,
+			phaseStatusCatchupReplicationStopped,
 		},
 	}
 )
@@ -219,6 +246,9 @@ func main() {
 	defer topoServer.Close()
 
 	// Initialize stats.
+	for _, phaseName := range phaseNames {
+		phase.Set(phaseName, int64(0))
+	}
 	for phaseName, statuses := range phaseStatuses {
 		for _, status := range statuses {
 			phaseStatus.Set([]string{phaseName, status}, 0)
@@ -294,7 +324,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	if err := mysqld.Init(initCtx, mycnf, initDBSQLFile); err != nil {
 		return fmt.Errorf("failed to initialize mysql data dir and start mysqld: %v", err)
 	}
-	durationByPhase.Set("InitMySQLd", int64(time.Since(initMysqldAt).Seconds()))
+	deprecatedDurationByPhase.Set("InitMySQLd", int64(time.Since(initMysqldAt).Seconds()))
 	// Shut down mysqld when we're done.
 	defer func() {
 		// Be careful not to use the original context, because we don't want to
@@ -358,14 +388,19 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 
 		backupParams.BackupTime = time.Now()
 		// Now we're ready to take the backup.
+		phase.Set(phaseNameInitialBackup, int64(1))
+		defer phase.Set(phaseNameInitialBackup, int64(0))
 		if err := mysqlctl.Backup(ctx, backupParams); err != nil {
 			return fmt.Errorf("backup failed: %v", err)
 		}
-		durationByPhase.Set("InitialBackup", int64(time.Since(backupParams.BackupTime).Seconds()))
+		deprecatedDurationByPhase.Set("InitialBackup", int64(time.Since(backupParams.BackupTime).Seconds()))
 		log.Info("Initial backup successful.")
+		phase.Set(phaseNameInitialBackup, int64(0))
 		return nil
 	}
 
+	phase.Set(phaseNameRestoreLastBackup, int64(1))
+	defer phase.Set(phaseNameRestoreLastBackup, int64(0))
 	backupDir := mysqlctl.GetBackupDir(initKeyspace, initShard)
 	log.Infof("Restoring latest backup from directory %v", backupDir)
 	restoreAt := time.Now()
@@ -397,7 +432,8 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	default:
 		return fmt.Errorf("can't restore from backup: %v", err)
 	}
-	durationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
+	deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
+	phase.Set(phaseNameRestoreLastBackup, int64(0))
 
 	// As of MySQL 8.0.21, you can disable redo logging using the ALTER INSTANCE
 	// DISABLE INNODB REDO_LOG statement. This functionality is intended for
@@ -455,6 +491,9 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	backupParams.BackupTime = time.Now()
 
 	// Wait for replication to catch up.
+	phase.Set(phaseNameCatchupReplication, int64(1))
+	defer phase.Set(phaseNameCatchupReplication, int64(0))
+
 	var (
 		lastStatus replication.ReplicationStatus
 		status     replication.ReplicationStatus
@@ -479,26 +518,27 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 			// We're caught up on replication to at least the point the primary
 			// was at when this vtbackup run started.
 			log.Infof("Replication caught up to %v after %v", status.Position, time.Since(waitStartTime))
-			durationByPhase.Set("CatchUpReplication", int64(time.Since(waitStartTime).Seconds()))
+			deprecatedDurationByPhase.Set("CatchUpReplication", int64(time.Since(waitStartTime).Seconds()))
 			break
 		}
 		if !lastStatus.Position.IsZero() {
 			if status.Position.Equal(lastStatus.Position) {
-				phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStalled}, 1)
+				phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 1)
 			} else {
-				phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStalled}, 0)
+				phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 0)
 			}
 		}
 		if !status.Healthy() {
 			log.Warning("Replication has stopped before backup could be taken. Trying to restart replication.")
-			phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStopped}, 1)
+			phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 1)
 			if err := startReplication(ctx, mysqld, topoServer); err != nil {
 				log.Warningf("Failed to restart replication: %v", err)
 			}
 		} else {
-			phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStopped}, 0)
+			phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 0)
 		}
 	}
+	phase.Set(phaseNameCatchupReplication, int64(0))
 
 	// Stop replication and see where we are.
 	if err := mysqld.StopReplication(nil); err != nil {
@@ -514,8 +554,8 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	if !status.Position.AtLeast(primaryPos) && status.Position.Equal(restorePos) {
 		return fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
 	}
-	phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStalled}, 0)
-	phaseStatus.Set([]string{phaseNameCatchUpReplication, phaseStatusCatchUpReplicationStopped}, 0)
+	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 0)
+	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 0)
 
 	// Re-enable redo logging.
 	if disabledRedoLog {
@@ -539,15 +579,18 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.Start(ctx, mycnf); err != nil {
 			return fmt.Errorf("Could not start MySQL after full shutdown: %v", err)
 		}
-		durationByPhase.Set("RestartBeforeBackup", int64(time.Since(restartAt).Seconds()))
+		deprecatedDurationByPhase.Set("RestartBeforeBackup", int64(time.Since(restartAt).Seconds()))
 	}
 
 	// Now we can take a new backup.
 	backupAt := time.Now()
+	phase.Set(phaseNameTakeNewBackup, int64(1))
+	defer phase.Set(phaseNameTakeNewBackup, int64(0))
 	if err := mysqlctl.Backup(ctx, backupParams); err != nil {
 		return fmt.Errorf("error taking backup: %v", err)
 	}
-	durationByPhase.Set("TakeNewBackup", int64(time.Since(backupAt).Seconds()))
+	deprecatedDurationByPhase.Set("TakeNewBackup", int64(time.Since(backupAt).Seconds()))
+	phase.Set(phaseNameTakeNewBackup, int64(0))
 
 	// Return a non-zero exit code if we didn't meet the replication position
 	// goal, even though we took a backup that pushes the high-water mark up.
