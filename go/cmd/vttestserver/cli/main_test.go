@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"os"
 	"os/exec"
 	"path"
 	"strings"
@@ -54,9 +53,8 @@ type columnVindex struct {
 }
 
 func TestRunsVschemaMigrations(t *testing.T) {
-	args := os.Args
 	conf := config
-	defer resetFlags(args, conf)
+	defer resetConfig(conf)
 
 	cluster, err := startCluster()
 	defer cluster.TearDown()
@@ -72,9 +70,8 @@ func TestRunsVschemaMigrations(t *testing.T) {
 }
 
 func TestPersistentMode(t *testing.T) {
-	args := os.Args
 	conf := config
-	defer resetFlags(args, conf)
+	defer resetConfig(conf)
 
 	dir := t.TempDir()
 
@@ -135,9 +132,8 @@ func TestPersistentMode(t *testing.T) {
 }
 
 func TestForeignKeysAndDDLModes(t *testing.T) {
-	args := os.Args
 	conf := config
-	defer resetFlags(args, conf)
+	defer resetConfig(conf)
 
 	cluster, err := startCluster("--foreign_key_mode=allow", "--enable_online_ddl=true", "--enable_direct_ddl=true")
 	assert.NoError(t, err)
@@ -190,9 +186,8 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 }
 
 func TestCanGetKeyspaces(t *testing.T) {
-	args := os.Args
 	conf := config
-	defer resetFlags(args, conf)
+	defer resetConfig(conf)
 
 	cluster, err := startCluster()
 	assert.NoError(t, err)
@@ -202,9 +197,8 @@ func TestCanGetKeyspaces(t *testing.T) {
 }
 
 func TestExternalTopoServerConsul(t *testing.T) {
-	args := os.Args
 	conf := config
-	defer resetFlags(args, conf)
+	defer resetConfig(conf)
 
 	// Start a single consul in the background.
 	cmd, serverAddr := startConsul(t)
@@ -228,9 +222,8 @@ func TestExternalTopoServerConsul(t *testing.T) {
 }
 
 func TestMtlsAuth(t *testing.T) {
-	args := os.Args
 	conf := config
-	defer resetFlags(args, conf)
+	defer resetConfig(conf)
 
 	// Our test root.
 	root := t.TempDir()
@@ -270,9 +263,8 @@ func TestMtlsAuth(t *testing.T) {
 }
 
 func TestMtlsAuthUnauthorizedFails(t *testing.T) {
-	args := os.Args
 	conf := config
-	defer resetFlags(args, conf)
+	defer resetConfig(conf)
 
 	// Our test root.
 	root := t.TempDir()
@@ -322,16 +314,21 @@ var clusterKeyspaces = []string{
 	"app_customer",
 }
 
-func startCluster(flags ...string) (vttest.LocalCluster, error) {
-	os.Args = []string{"vttestserver"}
+func startCluster(flags ...string) (cluster vttest.LocalCluster, err error) {
+	args := []string{"vttestserver"}
 	schemaDirArg := "--schema_dir=data/schema"
 	tabletHostname := "--tablet_hostname=localhost"
 	keyspaceArg := "--keyspaces=" + strings.Join(clusterKeyspaces, ",")
 	numShardsArg := "--num_shards=2,2"
 	vschemaDDLAuthorizedUsers := "--vschema_ddl_authorized_users=%"
 	alsoLogToStderr := "--alsologtostderr" // better debugging
-	os.Args = append(os.Args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers, alsoLogToStderr}...)
-	os.Args = append(os.Args, flags...)
+	args = append(args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers, alsoLogToStderr}...)
+	args = append(args, flags...)
+
+	if err = New().ParseFlags(args); err != nil {
+		return
+	}
+
 	return runCluster()
 }
 
@@ -384,8 +381,7 @@ func assertEqual(t *testing.T, actual string, expected string, message string) {
 	}
 }
 
-func resetFlags(args []string, conf vttest.Config) {
-	os.Args = args
+func resetConfig(conf vttest.Config) {
 	config = conf
 }
 
