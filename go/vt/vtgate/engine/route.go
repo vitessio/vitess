@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/log"
@@ -615,6 +616,9 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 	// if there's no more room in the pool, drop the warming read
 	case pool <- true:
 		go func(replicaVCursor VCursor) {
+			defer func() {
+				<-pool
+			}()
 			rss, _, err := route.findRoute(ctx, replicaVCursor, bindVars)
 			if err != nil {
 				return
