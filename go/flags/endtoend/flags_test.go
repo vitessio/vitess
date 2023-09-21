@@ -41,6 +41,9 @@ var (
 	//go:embed mysqlctld.txt
 	mysqlctldTxt string
 
+	//go:embed topo2topo.txt
+	topo2topoTxt string
+
 	//go:embed vtaclcheck.txt
 	vtaclcheckTxt string
 
@@ -89,6 +92,7 @@ var (
 	helpOutput = map[string]string{
 		"mysqlctl":     mysqlctlTxt,
 		"mysqlctld":    mysqlctldTxt,
+		"topo2topo":    topo2topoTxt,
 		"vtaclcheck":   vtaclcheckTxt,
 		"vtbackup":     vtbackupTxt,
 		"vtcombo":      vtcomboTxt,
