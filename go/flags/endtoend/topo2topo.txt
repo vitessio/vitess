@@ -1,4 +1,10 @@
-Usage of topo2topo:
+topo2topo copies Vitess topology data from one topo server to another.
+It can also be used to compare data between two topologies.
+
+Usage:
+  topo2topo [flags]
+
+Flags:
       --alsologtostderr                                             log to standard error as well as files
       --compare                                                     compares data between topologies
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
@@ -15,7 +21,10 @@ Usage of topo2topo:
       --from_implementation string                                  topology implementation to copy data from
       --from_root string                                            topology server root to copy data from
       --from_server string                                          topology server address to copy data from
-  -h, --help                                                        display usage and exit
+      --grpc_enable_tracing                                         Enable gRPC tracing.
+      --grpc_max_message_size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
+      --grpc_prometheus                                             Enable gRPC monitoring with Prometheus.
+  -h, --help                                                        help for topo2topo
       --keep_logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
       --log_backtrace_at traceLocation                              when logging hits line file:N, emit a stack trace (default :0)
