@@ -1,4 +1,9 @@
-Usage of vtgateclienttest:
+vtgateclienttest is a chain of vtgateservice.VTGateService implementations, each one being responsible for one test scenario.
+
+Usage:
+  vtgateclienttest [flags]
+
+Flags:
       --alsologtostderr                                                  log to standard error as well as files
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
@@ -33,7 +38,7 @@ Usage of vtgateclienttest:
       --grpc_server_initial_window_size int                              gRPC server initial window size
       --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
       --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
-  -h, --help                                                             display usage and exit
+  -h, --help                                                             help for vtgateclienttest
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)

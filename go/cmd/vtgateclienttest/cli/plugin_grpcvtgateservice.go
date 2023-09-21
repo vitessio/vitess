@@ -14,18 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
+
+// Imports and register the gRPC vtgateservice server
 
 import (
-	"vitess.io/vitess/go/cmd/vtgateclienttest/cli"
-	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/log"
+	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
 )
-
-func main() {
-	defer exit.Recover()
-
-	if err := cli.Main.Execute(); err != nil {
-		log.Exitf("%s", err)
-	}
-}
