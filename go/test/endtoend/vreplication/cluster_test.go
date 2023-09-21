@@ -248,19 +248,32 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 	if _, err := os.Stat(file); err == nil {
 		return nil
 	}
-	resp, err := client.Get(url)
-	if err != nil {
-		return fmt.Errorf("error downloading contents of %s to %s. Error: %v", url, file, err)
+	downloadFile := func() error {
+		resp, err := client.Get(url)
+		if err != nil {
+			return fmt.Errorf("error downloading contents of %s to %s. Error: %v", url, file, err)
+		}
+		defer resp.Body.Close()
+		out, err := os.Create(file)
+		if err != nil {
+			return fmt.Errorf("error creating file %s to save the contents of %s. Error: %v", file, url, err)
+		}
+		defer out.Close()
+		_, err = io.Copy(out, resp.Body)
+		if err != nil {
+			return fmt.Errorf("error saving contents of %s to %s. Error: %v", url, file, err)
+		}
+		return nil
 	}
-	defer resp.Body.Close()
-	out, err := os.Create(file)
-	if err != nil {
-		return fmt.Errorf("error creating file %s to save the contents of %s. Error: %v", file, url, err)
+	retries := 5
+	var dlerr error
+	for i := 0; i < retries; i++ {
+		if dlerr = downloadFile(); dlerr == nil {
+			break
+		}
 	}
-	defer out.Close()
-	_, err = io.Copy(out, resp.Body)
-	if err != nil {
-		return fmt.Errorf("error saving contents of %s to %s. Error: %v", url, file, err)
+	if dlerr != nil {
+		return dlerr
 	}
 
 	untarCmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("tar xvf %s -C %s --strip-components=1", file, path))
@@ -559,7 +572,17 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			for ind, proc := range dbProcesses {
 				log.Infof("Waiting for mysql process for tablet %s", tablets[ind].Name)
 				if err := proc.Wait(); err != nil {
-					t.Fatalf("%v :: Unable to start mysql server for %v", err, tablets[ind].Vttablet)
+					// Retry starting the database process before giving up.
+					t.Logf("%v :: Unable to start mysql server for %v. Will retry...", err, tablets[ind].Vttablet)
+					tablets[ind].DbServer.CleanupFiles(tablets[ind].Vttablet.TabletUID)
+					time.Sleep(1 * time.Second)
+					dbcmd, err := tablets[ind].DbServer.StartProcess()
+					require.NoError(t, err)
+					if err = dbcmd.Wait(); err != nil {
+						output, _ := dbcmd.CombinedOutput()
+						t.Fatalf("%v :: Unable to start mysql server for %v; Output: %s", err,
+							tablets[ind].Vttablet, string(output))
+					}
 				}
 			}
 			for ind, tablet := range tablets {
@@ -666,7 +689,7 @@ func (vc *VitessCluster) teardown() {
 				go func(tablet2 *Tablet) {
 					defer wg.Done()
 					if tablet2.DbServer != nil && tablet2.DbServer.TabletUID > 0 {
-						if _, err := tablet2.DbServer.StopProcess(); err != nil {
+						if err := tablet2.DbServer.Stop(); err != nil {
 							log.Infof("Error stopping mysql process: %s", err.Error())
 						}
 					}

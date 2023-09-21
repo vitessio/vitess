@@ -167,7 +167,8 @@ ssl_key={{.ServerKey}}
 	return tmpProcess, tmpProcess.Start()
 }
 
-// Stop executes mysqlctl command to stop mysql instance and kills the mysql instance if it doesn't shutdown in 30 seconds.
+// Stop executes mysqlctl command to stop mysql instance and kills the mysql instance
+// if it doesn't shutdown in 30 seconds.
 func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 	log.Infof("Shutting down MySQL: %d", mysqlctl.TabletUID)
 	defer log.Infof("MySQL shutdown complete: %d", mysqlctl.TabletUID)
@@ -202,6 +203,21 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
 	if err != nil {
 		return err
+	}
+	// We first need to try and kill any associated mysqld_safe process or
+	// else it will immediately restart the mysqld process when we kill it.
+	mspidb, err := exec.Command("sh", "-c",
+		fmt.Sprintf("ps auxww | grep mysqld_safe | grep vt_%010d | awk '{print $2}'", mysqlctl.TabletUID)).Output()
+	if err != nil {
+		return err
+	}
+	mysqldSafePID, err := strconv.Atoi(strings.TrimSpace(string(mspidb)))
+	// If we found a valid associated mysqld_safe process then let's kill
+	// it first.
+	if err == nil && mysqldSafePID > 0 {
+		if err = syscall.Kill(mysqldSafePID, syscall.SIGKILL); err != nil {
+			return err
+		}
 	}
 	return syscall.Kill(pid, syscall.SIGKILL)
 }
