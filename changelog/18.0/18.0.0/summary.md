@@ -14,6 +14,7 @@
     - [Updated to node v18.16.0](#update-node)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
+    - [Deleted Flags](#deleted-flags)
     - [Deleted `V3` planner](#deleted-v3)
     - [Deleted `k8stopo`](#deleted-k8stopo)
     - [Deleted `vtgr`](#deleted-vtgr)
@@ -114,6 +115,35 @@ Cache related `vtgate` flags:
 VTGate flag:
 
 - `--schema_change_signal_user` is deprecated and will be removed in `v19.0`
+
+#### <a id="deleted-flags"/>Deleted Command Line Flags
+
+Flags in `vtcombo`:
+- `--vtctld_addr`
+
+Flags in `vtctldclient`:
+- `--skip-preflight`
+
+Flags in `vtgate`:
+- `--vtctld_addr`
+
+Flags in `vttablet`:
+- `--vtctld_addr`
+- `--use_super_read_only`
+- `--disable-replication-manager`
+- `--init_populate_metadata`
+- `--queryserver-config-pool-prefill-parallelis`
+- `--queryserver-config-stream-pool-prefill-parallelis`
+- `--queryserver-config-transaction-pool-prefill-parallelis`
+- `--queryserver-config-schema-change-signal-interval`
+
+Flags in `vtctld`:
+- `--vtctld_show_topology_crud`
+- `--durability_policy`
+
+Flags in `vtorc`:
+- `--lock-shard-timeout`
+- `--orc_web_dir`
 
 #### <a id="deleted-v3"/>Deleted `v3` planner
 
