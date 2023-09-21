@@ -63,8 +63,11 @@ var (
 
 	countPendingRecoveries = stats.NewGauge("PendingRecoveries", "Count of the number of pending recoveries")
 
-	// detectedProblemsCounter is used to count the number of detected problems.
-	detectedProblemsCounter = stats.NewCountersWithMultiLabels("DetectedProblems", "Count of the different detected problems", []string{
+	// detectedProblems is used to track the number of detected problems.
+	//
+	// When an issue is active it will be set to 1, when it is no longer active
+	// it will be reset back to 0.
+	detectedProblems = stats.NewGaugesWithMultiLabels("DetectedProblems", "Count of the different detected problems", []string{
 		"Analysis",
 		"TabletAlias",
 		"Keyspace",
@@ -777,17 +780,16 @@ func CheckAndRecover() {
 				e.AnalyzedShard,
 			}
 
-			key := detectedProblemsCounter.GetLabelName(names[:]...)
+			key := detectedProblems.GetLabelName(names[:]...)
 			active[key] = names[:]
-			detectedProblemsCounter.Reset(names[:])
-			detectedProblemsCounter.Add(names[:], 1)
+			detectedProblems.Set(names[:], 1)
 		}
 	}
 
 	// Reset any non-active problems.
-	for key := range detectedProblemsCounter.Counts() {
+	for key := range detectedProblems.Counts() {
 		if names, ok := active[key]; !ok {
-			detectedProblemsCounter.Reset(names)
+			detectedProblems.Set(names, 0)
 		}
 	}
 
