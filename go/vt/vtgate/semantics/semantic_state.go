@@ -149,6 +149,7 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	if ValidAsMapKey(to) {
 		st.Recursive[to] = st.RecursiveDeps(from)
 		st.Direct[to] = st.DirectDeps(from)
+		st.ExprTypes[to] = st.ExprTypes[from]
 	}
 }
 
@@ -186,17 +187,32 @@ func getColumnNames(exprs sqlparser.SelectExprs) (expanded bool, selectExprs sql
 	return
 }
 
-// CopyDependenciesOnSQLNodes copies the dependencies from one expression into the other
-func (st *SemTable) CopyDependenciesOnSQLNodes(from, to sqlparser.SQLNode) {
-	f, ok := from.(sqlparser.Expr)
-	if !ok {
+// CopySemanticInfo copies all semantic information we have about this SQLNode so that it also applies to the `to` node
+func (st *SemTable) CopySemanticInfo(from, to sqlparser.SQLNode) {
+	if f, ok := from.(sqlparser.Statement); ok {
+		t, ok := to.(sqlparser.Statement)
+		if ok {
+			st.StatementIDs[t] = st.StatementIDs[f]
+		}
+	}
+
+	switch f := from.(type) {
+	case sqlparser.Expr:
+		t, ok := to.(sqlparser.Expr)
+		if !ok {
+			return
+		}
+		st.CopyDependencies(f, t)
+	case *sqlparser.Union:
+		t, ok := to.(*sqlparser.Union)
+		if !ok {
+			return
+		}
+		exprs := st.columns[f]
+		st.columns[t] = exprs
+	default:
 		return
 	}
-	t, ok := to.(sqlparser.Expr)
-	if !ok {
-		return
-	}
-	st.CopyDependencies(f, t)
 }
 
 // Cloned copies the dependencies from one expression into the other

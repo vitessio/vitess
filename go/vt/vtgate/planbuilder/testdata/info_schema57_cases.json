@@ -934,7 +934,6 @@
   {
     "comment": "merge union subquery with outer query referencing the same system schemas",
     "query": "select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' and exists (select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' union all (select 1 as found from information_schema.views where table_name = 'music' and table_name = 'user' limit 1))",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' and exists (select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' union all (select 1 as found from information_schema.views where table_name = 'music' and table_name = 'user' limit 1))",
@@ -942,7 +941,7 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutExists",
         "PulloutVars": [
-          "__sq_has_values1"
+          "__sq_has_values"
         ],
         "Inputs": [
           {
@@ -957,8 +956,8 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-                "Query": "select 1 as found from information_schema.`tables` where table_name = :table_name2 /* VARCHAR */ and table_name = :table_name3 /* VARCHAR */",
-                "SysTableTableName": "[table_name2:VARCHAR(\"music\"), table_name3:VARCHAR(\"Music\")]",
+                "Query": "select 1 as found from information_schema.`tables` where table_name = :table_name1 /* VARCHAR */ and table_name = :table_name1 /* VARCHAR */",
+                "SysTableTableName": "[table_name1:VARCHAR(\"Music\")]",
                 "Table": "information_schema.`tables`"
               },
               {
@@ -969,8 +968,8 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
-                "Query": "select 1 as found from information_schema.views where table_name = :table_name4 /* VARCHAR */ and table_name = :table_name5 /* VARCHAR */ limit 1",
-                "SysTableTableName": "[table_name4:VARCHAR(\"music\"), table_name5:VARCHAR(\"user\")]",
+                "Query": "select 1 as found from information_schema.views where table_name = :table_name2 /* VARCHAR */ and table_name = :table_name2 /* VARCHAR */ limit 1",
+                "SysTableTableName": "[table_name2:VARCHAR(\"user\")]",
                 "Table": "information_schema.views"
               }
             ]
@@ -984,8 +983,8 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as found from information_schema.`tables` where table_name = :table_name /* VARCHAR */ and table_name = :table_name1 /* VARCHAR */ and :__sq_has_values1",
-            "SysTableTableName": "[table_name1:VARCHAR(\"Music\"), table_name:VARCHAR(\"music\")]",
+            "Query": "select 1 as found from information_schema.`tables` where table_name = :table_name /* VARCHAR */ and table_name = :table_name /* VARCHAR */ and :__sq_has_values",
+            "SysTableTableName": "[table_name:VARCHAR(\"Music\")]",
             "Table": "information_schema.`tables`"
           }
         ]
@@ -1039,7 +1038,6 @@
   {
     "comment": "merge even one side have schema name in subquery",
     "query": "select `COLLATION_NAME` from information_schema.`COLUMNS` t where `COLUMN_NAME` in (select `COLUMN_NAME` from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select `COLUMN_NAME` from information_schema.columns)",
-    "skip": true,
     "plan": {
       "QueryType": "SELECT",
       "Original": "select `COLLATION_NAME` from information_schema.`COLUMNS` t where `COLUMN_NAME` in (select `COLUMN_NAME` from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select `COLUMN_NAME` from information_schema.columns)",
@@ -1047,36 +1045,44 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
           {
             "InputName": "SubQuery",
-            "OperatorType": "Concatenate",
+            "OperatorType": "Distinct",
+            "Collations": [
+              "0: utf8mb4_0900_ai_ci"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "DBA",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select COLUMN_NAME from information_schema.`tables` as t where 1 != 1",
-                "Query": "select COLUMN_NAME from information_schema.`tables` as t where t.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */",
-                "SysTableTableSchema": "[VARCHAR(\"a\")]",
-                "Table": "information_schema.`tables`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "DBA",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select COLUMN_NAME from information_schema.`columns` where 1 != 1",
-                "Query": "select COLUMN_NAME from information_schema.`columns`",
-                "Table": "information_schema.`columns`"
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "DBA",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select :COLUMN_NAME from information_schema.`tables` as t where 1 != 1",
+                    "Query": "select distinct :COLUMN_NAME from information_schema.`tables` as t where t.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */",
+                    "SysTableTableSchema": "[VARCHAR(\"a\")]",
+                    "Table": "information_schema.`tables`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "DBA",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select COLUMN_NAME from information_schema.`columns` where 1 != 1",
+                    "Query": "select distinct COLUMN_NAME from information_schema.`columns`",
+                    "Table": "information_schema.`columns`"
+                  }
+                ]
               }
             ]
           },
@@ -1089,7 +1095,7 @@
               "Sharded": false
             },
             "FieldQuery": "select COLLATION_NAME from information_schema.`COLUMNS` as t where 1 != 1",
-            "Query": "select COLLATION_NAME from information_schema.`COLUMNS` as t where :__sq_has_values1 = 1 and COLUMN_NAME in ::__sq1",
+            "Query": "select COLLATION_NAME from information_schema.`COLUMNS` as t where :__sq_has_values and COLUMN_NAME in ::__sq1",
             "Table": "information_schema.`COLUMNS`"
           }
         ]

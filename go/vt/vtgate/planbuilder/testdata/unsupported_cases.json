@@ -7,8 +7,7 @@
   {
     "comment": "union operations in subqueries (expressions)",
     "query": "select col from user u where id in (select bar from user where user.x = u.z union select * from user_extra)",
-    "plan": "VT09015: schema tracking required",
-    "skip": true
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "TODO: Implement support for select with a target destination",

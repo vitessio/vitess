@@ -180,13 +180,12 @@ func createSubqueryOp(
 // cloneASTAndSemState clones the AST and the semantic state of the input node.
 func cloneASTAndSemState[T sqlparser.SQLNode](ctx *plancontext.PlanningContext, original T) T {
 	return sqlparser.CopyOnRewrite(original, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-		sqlNode, ok := cursor.Node().(sqlparser.Expr)
+		e, ok := cursor.Node().(sqlparser.Expr)
 		if !ok {
 			return
 		}
-		node := sqlparser.CloneExpr(sqlNode)
-		cursor.Replace(node)
-	}, ctx.SemTable.CopyDependenciesOnSQLNodes).(T)
+		cursor.Replace(e) // We do this only to trigger the cloning of the AST
+	}, ctx.SemTable.CopySemanticInfo).(T)
 }
 
 func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNode) (result semantics.TableSet) {
@@ -232,6 +231,27 @@ func inspectWherePredicates(
 	return append(append(wherePreds, havingPreds...), onPreds...), append(append(whereJoinCols, havingJoinCols...), onJoinCols...), nil
 }
 
+func inspectWherePredicatesStatement(ctx *plancontext.PlanningContext,
+	sqc *SubQueryContainer,
+	stmt sqlparser.SelectStatement,
+) (sqlparser.Exprs, []JoinColumn, error) {
+	switch stmt := stmt.(type) {
+	case *sqlparser.Select:
+		return inspectWherePredicates(ctx, sqc, stmt)
+	case *sqlparser.Union:
+		exprs1, cols1, err := inspectWherePredicatesStatement(ctx, sqc, stmt.Left)
+		if err != nil {
+			return nil, nil, err
+		}
+		exprs2, cols2, err := inspectWherePredicatesStatement(ctx, sqc, stmt.Right)
+		if err != nil {
+			return nil, nil, err
+		}
+		return append(exprs1, exprs2...), append(cols1, cols2...), nil
+	}
+	panic("unknown type")
+}
+
 func createSubquery(
 	ctx *plancontext.PlanningContext,
 	original sqlparser.Expr,
@@ -249,20 +269,16 @@ func createSubquery(
 	totalID := subqID.Merge(outerID)
 	sqc := &SubQueryContainer{totalID: totalID, subqID: subqID, outerID: outerID}
 
-	var predicates sqlparser.Exprs
-	var joinCols []JoinColumn
-	var err error
-
-	switch stmt := subq.Select.(type) {
-	case *sqlparser.Select:
-		predicates, joinCols, err = inspectWherePredicates(ctx, sqc, stmt)
-	case *sqlparser.Union:
-	}
+	predicates, joinCols, err := inspectWherePredicatesStatement(ctx, sqc, subq.Select)
 	if err != nil {
 		return nil, err
 	}
 
-	stmt := rewriteRemainingColumns(ctx, subq, subqID, parent)
+	stmt := rewriteRemainingColumns(ctx, subq.Select, subqID, parent)
+
+	// TODO: this should not be needed. We are using CopyOnRewrite above, but somehow this is not getting copied
+	ctx.SemTable.CopySemanticInfo(subq.Select, stmt)
+
 	opInner, err := translateQueryToOp(ctx, stmt)
 	if err != nil {
 		return nil, err
@@ -284,11 +300,11 @@ func createSubquery(
 
 func rewriteRemainingColumns(
 	ctx *plancontext.PlanningContext,
-	subq *sqlparser.Subquery,
+	stmt sqlparser.SelectStatement,
 	subqID semantics.TableSet,
 	parent sqlparser.Expr,
 ) sqlparser.SelectStatement {
-	return sqlparser.CopyOnRewrite(subq.Select, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+	return sqlparser.CopyOnRewrite(stmt, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		colname, isColname := cursor.Node().(*sqlparser.ColName)
 		if !isColname {
 			return
@@ -378,7 +394,7 @@ func (sqc *SubQueryContainer) inspectOnConditions(
 			}
 			onPreds = append(onPreds, jpc.predicates...)
 			onJoinCols = append(onJoinCols, jpc.joinColumns...)
-		}, ctx.SemTable.CopyDependenciesOnSQLNodes)
+		}, ctx.SemTable.CopySemanticInfo)
 		if err != nil {
 			return
 		}
