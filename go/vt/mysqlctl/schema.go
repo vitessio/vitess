@@ -250,7 +250,9 @@ func (mysqld *Mysqld) collectSchema(ctx context.Context, dbName, tableName, tabl
 	return fields, columns, schema, nil
 }
 
-// normalizedStatement returns a table schema with database names replaced, and auto_increment annotations removed.
+// normalizedStatement normalizes a CREATE TABLE or CREATE VIEW statement as follows:
+// - For CREATE TABLE, it stripts away any AUTO_INCREMENT=... clause.
+// - For CREATE VIEW, it replaces the schema name with given `dbName`
 func normalizedStatement(ctx context.Context, statementQuery, dbName, tableType string) (string, error) {
 	// Normalize & remove auto_increment because it changes on every insert
 	// FIXME(alainjobart) find a way to share this with
