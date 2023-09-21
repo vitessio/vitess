@@ -323,7 +323,6 @@ func TestMoveTables(t *testing.T) {
 			), nil)
 		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(updatePickedSourceTablet, tenv.cells[0], sourceTabletUID), &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(setSessionTZ, &sqltypes.Result{}, nil)
-		ftc.vrdbClient.ExpectRequest(setNames, &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(getRowsCopied,
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -894,7 +893,6 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(updatePickedSourceTablet, tenv.cells[0], sourceTabletUID),
 		&sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(setSessionTZ, &sqltypes.Result{}, nil)
-	targetTablet.vrdbClient.ExpectRequest(setNames, &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(getRowsCopied,
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
