@@ -384,6 +384,91 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 	}
 }
 
+func TestExecutorDropSequenceDDL(t *testing.T) {
+	vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		vschemaacl.AuthorizedDDLUsers = ""
+	}()
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	ks := KsTestUnsharded
+
+	vschema := executor.vm.GetCurrentSrvVschema()
+
+	_, ok := vschema.Keyspaces[ks].Tables["test_seq"]
+	if ok {
+		t.Fatalf("test_seq should not exist in original vschema")
+	}
+
+	var vschemaTables []string
+	for t := range vschema.Keyspaces[ks].Tables {
+		vschemaTables = append(vschemaTables, t)
+	}
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+
+	// add test sequence
+	stmt := "alter vschema add sequence test_seq"
+	_, err := executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
+	require.NoError(t, err)
+	_ = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_seq"}...), executor)
+	vschema = executor.vm.GetCurrentSrvVschema()
+	table := vschema.Keyspaces[ks].Tables["test_seq"]
+	wantType := "sequence"
+	if table.Type != wantType {
+		t.Errorf("want table type sequence got %v", table)
+	}
+
+	// drop existing test sequence
+	stmt = "alter vschema drop sequence test_seq"
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
+	require.NoError(t, err)
+
+	// Should fail dropping a non-existing test sequence
+	session = NewSafeSession(&vtgatepb.Session{TargetString: ks})
+
+	stmt = "alter vschema drop sequence test_seq"
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
+
+	wantErr := "vschema does not contain sequence test_seq in keyspace TestUnsharded"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("want error %v got %v", wantErr, err)
+	}
+}
+
+func TestExecutorDropAutoIncDDL(t *testing.T) {
+	vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		vschemaacl.AuthorizedDDLUsers = ""
+	}()
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	ks := KsTestUnsharded
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+
+	stmt := "alter vschema add table test_table"
+	_, err := executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
+	require.NoError(t, err)
+
+	stmt = "alter vschema on test_table add auto_increment id using `db-name`.`test_seq`"
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
+	require.NoError(t, err)
+
+	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "`db-name`.test_seq"}
+	gotAutoInc := executor.vm.GetCurrentSrvVschema().Keyspaces[ks].Tables["test_table"].AutoIncrement
+
+	if !reflect.DeepEqual(wantAutoInc, gotAutoInc) {
+		t.Errorf("want autoinc %v, got autoinc %v", wantAutoInc, gotAutoInc)
+	}
+
+	stmt = "alter vschema on test_table drop auto_increment"
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
+	require.NoError(t, err)
+
+	if executor.vm.GetCurrentSrvVschema().Keyspaces[ks].Tables["test_table"].AutoIncrement != nil {
+		t.Errorf("auto increment should be nil after drop")
+	}
+}
+
 func TestExecutorAddDropVindexDDL(t *testing.T) {
 	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {

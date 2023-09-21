@@ -3252,6 +3252,10 @@ alter_statement:
   {
     $$ = &AlterVschema{Action: AddSequenceDDLAction, Table: $6}
   }
+| ALTER comment_opt VSCHEMA DROP SEQUENCE table_name
+  {
+    $$ = &AlterVschema{Action: DropSequenceDDLAction, Table: $6}
+  }
 | ALTER comment_opt VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
   {
     $$ = &AlterVschema{
@@ -3261,6 +3265,13 @@ alter_statement:
             Column: $8,
             Sequence: $10,
         },
+    }
+  }
+| ALTER comment_opt VSCHEMA ON table_name DROP AUTO_INCREMENT
+  {
+    $$ = &AlterVschema{
+        Action: DropAutoIncDDLAction,
+        Table: $5,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING RETRY
