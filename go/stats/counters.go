@@ -183,11 +183,6 @@ func NewCountersWithMultiLabels(name, help string, labels []string) *CountersWit
 	return t
 }
 
-// GetLabelName returns a label name using the provided values.
-func (mc *CountersWithMultiLabels) GetLabelName(names ...string) string {
-	return safeJoinLabels(names, mc.combinedLabels)
-}
-
 // Labels returns the list of labels.
 func (mc *CountersWithMultiLabels) Labels() []string {
 	return mc.labels
@@ -371,6 +366,11 @@ func NewGaugesWithMultiLabels(name, help string, labels []string) *GaugesWithMul
 	}
 
 	return t
+}
+
+// GetLabelName returns a label name using the provided values.
+func (mg *GaugesWithMultiLabels) GetLabelName(names ...string) string {
+	return safeJoinLabels(names, mg.combinedLabels)
 }
 
 // Set sets the value of a named counter.
