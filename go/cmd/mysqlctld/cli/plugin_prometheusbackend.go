@@ -14,18 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// mysqlctld is a daemon that starts or initializes mysqld and provides an RPC
-// interface for vttablet to stop and start mysqld from a different container
-// without having to restart the container running mysqlctld.
-package main
+package cli
+
+// This plugin imports Prometheus to allow for instrumentation
+// with the Prometheus client library
 
 import (
-	"vitess.io/vitess/go/cmd/mysqlctld/cli"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/stats/prometheusbackend"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
-func main() {
-	if err := cli.Main.Execute(); err != nil {
-		log.Exit(err)
-	}
+func init() {
+	servenv.OnRun(func() {
+		prometheusbackend.Init("mysqlctld")
+	})
 }
