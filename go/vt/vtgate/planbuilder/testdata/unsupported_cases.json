@@ -519,7 +519,6 @@
   {
     "comment": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
     "query": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
-    "skip": true
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   }
 ]

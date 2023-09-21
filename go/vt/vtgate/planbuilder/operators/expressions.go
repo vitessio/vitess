@@ -18,7 +18,6 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -36,11 +35,6 @@ func BreakExpressionInLHSandRHS(
 			return
 		}
 		deps := ctx.SemTable.RecursiveDeps(nodeExpr)
-		if deps.IsEmpty() {
-			err = vterrors.VT13001("unknown column. has the AST been copied?")
-			cursor.StopTreeWalk()
-			return
-		}
 		if !deps.IsSolvedBy(lhs) {
 			return
 		}
