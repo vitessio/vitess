@@ -1313,7 +1313,7 @@ func checkVtgateHealth(t *testing.T, cell *Cell) {
 	for _, vtgate := range cell.Vtgates {
 		vtgateHealthURL := strings.Replace(vtgate.VerifyURL, "vars", "health", -1)
 		if !checkHealth(t, vtgateHealthURL) {
-			assert.Failf(t, "Vtgate not healthy: ", vtgateHealthURL)
+			assert.Fail(t, "Vtgate not healthy: ", vtgateHealthURL)
 		}
 	}
 }
@@ -1321,7 +1321,7 @@ func checkVtgateHealth(t *testing.T, cell *Cell) {
 func checkTabletHealth(t *testing.T, tablet *Tablet) {
 	vttabletHealthURL := strings.Replace(tablet.Vttablet.VerifyURL, "debug/vars", "healthz", -1)
 	if !checkHealth(t, vttabletHealthURL) {
-		assert.Failf(t, "Vttablet not healthy: ", vttabletHealthURL)
+		assert.Fail(t, "Vttablet not healthy: ", vttabletHealthURL)
 	}
 }
 
