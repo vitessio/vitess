@@ -621,7 +621,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 			}
 
 			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false /* rollbackOnError */, false /* autocommit */)
-			if errs != nil && len(errs) > 0 {
+			if len(errs) > 0 {
 				log.Warningf("Failed to execute warming replica read: %v", errs)
 			} else {
 				replicaWarmingReadsMirrored.Add([]string{route.Keyspace.Name}, 1)

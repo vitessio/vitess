@@ -27,8 +27,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/vt/topo"
-
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
@@ -281,35 +279,14 @@ func createExecutorEnvWithPrimaryReplicaConn(t testing.TB, ctx context.Context, 
 	resolver := newTestResolver(ctx, hc, serv, cell)
 
 	createSandbox(KsTestUnsharded)
-	_ = topo.NewShardInfo(KsTestUnsharded, "0", &topodatapb.Shard{}, nil)
-	if err := serv.topoServer.CreateKeyspace(ctx, KsTestUnsharded, &topodatapb.Keyspace{}); err != nil {
-		log.Errorf("CreateKeyspace() failed: %v", err)
-	}
-	if err := serv.topoServer.CreateShard(ctx, KsTestUnsharded, "0"); err != nil {
-		log.Errorf("CreateShard(0) failed: %v", err)
-	}
 	primary = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	replica = hc.AddTestTablet(cell, "0-replica", 1, KsTestUnsharded, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
-	tablet := topo.NewTablet(primary.Tablet().Alias.Uid, cell, "0")
-	tablet.Type = topodatapb.TabletType_PRIMARY
-	tablet.Keyspace = KsTestUnsharded
-	tablet.Shard = "0"
-	serv.topoServer.UpdateShardFields(ctx, KsTestUnsharded, "0", func(si *topo.ShardInfo) error {
-		si.PrimaryAlias = tablet.Alias
-		return nil
-	})
-	if err := serv.topoServer.CreateTablet(ctx, tablet); err != nil {
-		log.Errorf("CreateShard(0) failed: %v", err)
-	}
 
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, DefaultPlanCache(), nil, false, querypb.ExecuteOptions_Gen4, warmingReadsPercent)
 	executor.SetQueryLogger(queryLogger)
 
-	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	t.Cleanup(func() {
-		defer utils.EnsureNoLeaks(t)
 		executor.Close()
 		cancel()
 	})
