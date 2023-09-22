@@ -468,51 +468,6 @@ func TestConstantFolding(t *testing.T) {
 				}},
 				ColumnListAuthoritative: true,
 			},
-			"t2": {
-				Keyspace: ks,
-				Name:     sqlparser.NewIdentifierCS("t2"),
-				Columns: []vindexes.Column{{
-					Name: sqlparser.NewIdentifierCI("c1"),
-					Type: sqltypes.VarChar,
-				}, {
-					Name: sqlparser.NewIdentifierCI("c2"),
-					Type: sqltypes.VarChar,
-				}},
-				ColumnListAuthoritative: true,
-			},
-			"t3": { // non authoritative table.
-				Keyspace: ks,
-				Name:     sqlparser.NewIdentifierCS("t3"),
-				Columns: []vindexes.Column{{
-					Name: sqlparser.NewIdentifierCI("col"),
-					Type: sqltypes.VarChar,
-				}},
-				ColumnListAuthoritative: false,
-			},
-			"t4": {
-				Keyspace: ks,
-				Name:     sqlparser.NewIdentifierCS("t4"),
-				Columns: []vindexes.Column{{
-					Name: sqlparser.NewIdentifierCI("c1"),
-					Type: sqltypes.VarChar,
-				}, {
-					Name: sqlparser.NewIdentifierCI("c4"),
-					Type: sqltypes.VarChar,
-				}},
-				ColumnListAuthoritative: true,
-			},
-			"t5": {
-				Keyspace: ks,
-				Name:     sqlparser.NewIdentifierCS("t5"),
-				Columns: []vindexes.Column{{
-					Name: sqlparser.NewIdentifierCI("a"),
-					Type: sqltypes.VarChar,
-				}, {
-					Name: sqlparser.NewIdentifierCI("b"),
-					Type: sqltypes.VarChar,
-				}},
-				ColumnListAuthoritative: true,
-			},
 		},
 	}
 	cDB := "db"
