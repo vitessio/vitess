@@ -226,6 +226,8 @@ func (node *AlterVschema) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "alter vschema add table %v", node.Table)
 	case DropVschemaTableDDLAction:
 		buf.astPrintf(node, "alter vschema drop table %v", node.Table)
+	case AlterVschemaTableDDLAction:
+		buf.astPrintf(node, "alter vschema table %v", node.Table)
 	case AddColVindexDDLAction:
 		buf.astPrintf(node, "alter vschema on %v add vindex %v (", node.Table, node.VindexSpec.Name)
 		for i, col := range node.VindexCols {

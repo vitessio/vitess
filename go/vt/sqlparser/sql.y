@@ -3225,6 +3225,22 @@ alter_statement:
   {
     $$ = &AlterVschema{Action: DropVschemaTableDDLAction, Table: $6}
   }
+| ALTER comment_opt VSCHEMA ON table_name alter_options
+  {
+    $$ = &AlterVschema{
+        Action: AlterVschemaTableDDLAction,
+        Table: $5,
+        AlterOptions: $6,
+      }
+  }
+| ALTER comment_opt VSCHEMA ON table_name set_statement
+  {
+    $$ = &AlterVschema{
+        Action: AlterVschemaTableDDLAction,
+        Table: $5,
+        AlterOptions: $6,
+      }
+  }
 | ALTER comment_opt VSCHEMA ON table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
   {
     $$ = &AlterVschema{

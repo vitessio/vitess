@@ -1028,6 +1028,15 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 	}) {
 		return false
 	}
+	for x, el := range node.AlterOptions {
+		if !a.rewriteAlterOption(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*AlterVschema).AlterOptions[idx] = newNode.(AlterOption)
+			}
+		}(x)) {
+			return false
+		}
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent

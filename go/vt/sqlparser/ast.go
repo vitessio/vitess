@@ -451,6 +451,8 @@ type (
 
 		// AutoIncSpec is set for AddAutoIncDDLAction.
 		AutoIncSpec *AutoIncSpec
+
+		AlterOptions []AlterOption
 	}
 
 	// ShowMigrationLogs represents a SHOW VITESS_MIGRATION '<uuid>' LOGS statement

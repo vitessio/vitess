@@ -113,6 +113,41 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, alterVschema *sqlpar
 
 		return ks, nil
 
+	case sqlparser.AlterVschemaTableDDLAction:
+		name := alterVschema.Table.Name.String()
+		if _, ok := ks.Tables[name]; !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema does not contain table %s in keyspace %s", name, ksName)
+		}
+
+		table := ks.Tables[name]
+		for _, opt2 := range alterVschema.AlterOptions {
+			switch opt := opt2.(type) {
+			case *sqlparser.AddColumns:
+				columns := table.GetColumns()
+
+				for _, col := range opt.Columns {
+					column := &vschemapb.Column{Name: col.Name.String(), Type: col.Type.SQLType()}
+					columns = append(columns, column)
+				}
+
+				table.Columns = columns
+			case *sqlparser.DropColumn:
+				columns := table.GetColumns()
+
+				for i, col := range columns {
+					if col.Name == opt.Name.Name.String() {
+						columns = append(columns[:i], columns[i+1:]...)
+					}
+				}
+
+				table.Columns = columns
+			default:
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected alter option %s", opt)
+			}
+		}
+
+		return ks, nil
+
 	case sqlparser.AddColVindexDDLAction:
 		// Support two cases:
 		//

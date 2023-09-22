@@ -51,21 +51,22 @@ const (
 	VariableStr       = "variable"
 
 	// DDL strings.
-	CreateStr           = "create"
-	AlterStr            = "alter"
-	DeallocateStr       = "deallocate"
-	DropStr             = "drop"
-	RenameStr           = "rename"
-	TruncateStr         = "truncate"
-	FlushStr            = "flush"
-	CreateVindexStr     = "create vindex"
-	DropVindexStr       = "drop vindex"
-	AddVschemaTableStr  = "add vschema table"
-	DropVschemaTableStr = "drop vschema table"
-	AddColVindexStr     = "on table add vindex"
-	DropColVindexStr    = "on table drop vindex"
-	AddSequenceStr      = "add sequence"
-	AddAutoIncStr       = "add auto_increment"
+	CreateStr            = "create"
+	AlterStr             = "alter"
+	DeallocateStr        = "deallocate"
+	DropStr              = "drop"
+	RenameStr            = "rename"
+	TruncateStr          = "truncate"
+	FlushStr             = "flush"
+	CreateVindexStr      = "create vindex"
+	DropVindexStr        = "drop vindex"
+	AddVschemaTableStr   = "add vschema table"
+	DropVschemaTableStr  = "drop vschema table"
+	AlterVschemaTableStr = "alter vschema table"
+	AddColVindexStr      = "on table add vindex"
+	DropColVindexStr     = "on table drop vindex"
+	AddSequenceStr       = "add sequence"
+	AddAutoIncStr        = "add auto_increment"
 
 	// ALTER TABLE ALGORITHM string.
 	DefaultStr = "default"
@@ -486,6 +487,7 @@ const (
 	DropVindexDDLAction
 	AddVschemaTableDDLAction
 	DropVschemaTableDDLAction
+	AlterVschemaTableDDLAction
 	AddColVindexDDLAction
 	DropColVindexDDLAction
 	AddSequenceDDLAction

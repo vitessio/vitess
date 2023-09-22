@@ -332,6 +332,9 @@ func (node *AlterVschema) formatFast(buf *TrackedBuffer) {
 	case DropVschemaTableDDLAction:
 		buf.WriteString("alter vschema drop table ")
 		node.Table.formatFast(buf)
+	case AlterVschemaTableDDLAction:
+		buf.WriteString("alter vschema table ")
+		node.Table.formatFast(buf)
 	case AddColVindexDDLAction:
 		buf.WriteString("alter vschema on ")
 		node.Table.formatFast(buf)

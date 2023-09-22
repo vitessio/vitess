@@ -1261,6 +1261,8 @@ func (action DDLAction) ToString() string {
 		return AddVschemaTableStr
 	case DropVschemaTableDDLAction:
 		return DropVschemaTableStr
+	case AlterVschemaTableDDLAction:
+		return AlterVschemaTableStr
 	case AddColVindexDDLAction:
 		return AddColVindexStr
 	case DropColVindexDDLAction:

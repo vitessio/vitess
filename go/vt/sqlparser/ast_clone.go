@@ -719,6 +719,7 @@ func CloneRefOfAlterVschema(n *AlterVschema) *AlterVschema {
 	out.VindexSpec = CloneRefOfVindexSpec(n.VindexSpec)
 	out.VindexCols = CloneSliceOfIdentifierCI(n.VindexCols)
 	out.AutoIncSpec = CloneRefOfAutoIncSpec(n.AutoIncSpec)
+	out.AlterOptions = CloneSliceOfAlterOption(n.AlterOptions)
 	return &out
 }
 

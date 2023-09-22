@@ -901,12 +901,22 @@ func (c *cow) copyOnRewriteRefOfAlterVschema(n *AlterVschema, parent SQLNode) (o
 			}
 		}
 		_AutoIncSpec, changedAutoIncSpec := c.copyOnRewriteRefOfAutoIncSpec(n.AutoIncSpec, n)
-		if changedTable || changedVindexSpec || changedVindexCols || changedAutoIncSpec {
+		var changedAlterOptions bool
+		_AlterOptions := make([]AlterOption, len(n.AlterOptions))
+		for x, el := range n.AlterOptions {
+			this, changed := c.copyOnRewriteAlterOption(el, n)
+			_AlterOptions[x] = this.(AlterOption)
+			if changed {
+				changedAlterOptions = true
+			}
+		}
+		if changedTable || changedVindexSpec || changedVindexCols || changedAutoIncSpec || changedAlterOptions {
 			res := *n
 			res.Table, _ = _Table.(TableName)
 			res.VindexSpec, _ = _VindexSpec.(*VindexSpec)
 			res.VindexCols = _VindexCols
 			res.AutoIncSpec, _ = _AutoIncSpec.(*AutoIncSpec)
+			res.AlterOptions = _AlterOptions
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)

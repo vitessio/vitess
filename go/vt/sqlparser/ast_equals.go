@@ -1822,7 +1822,8 @@ func (cmp *Comparator) RefOfAlterVschema(a, b *AlterVschema) bool {
 		cmp.TableName(a.Table, b.Table) &&
 		cmp.RefOfVindexSpec(a.VindexSpec, b.VindexSpec) &&
 		cmp.SliceOfIdentifierCI(a.VindexCols, b.VindexCols) &&
-		cmp.RefOfAutoIncSpec(a.AutoIncSpec, b.AutoIncSpec)
+		cmp.RefOfAutoIncSpec(a.AutoIncSpec, b.AutoIncSpec) &&
+		cmp.SliceOfAlterOption(a.AlterOptions, b.AlterOptions)
 }
 
 // RefOfAndExpr does deep equals between the two objects.

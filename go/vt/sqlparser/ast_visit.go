@@ -784,6 +784,11 @@ func VisitRefOfAlterVschema(in *AlterVschema, f Visit) error {
 	if err := VisitRefOfAutoIncSpec(in.AutoIncSpec, f); err != nil {
 		return err
 	}
+	for _, el := range in.AlterOptions {
+		if err := VisitAlterOption(el, f); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
