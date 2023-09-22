@@ -15,7 +15,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package smartconnpool
+// Package list is the standard library's 'container/list', but using Generics
+// for performance.
+package list
 
 import "sync/atomic"
 
@@ -63,6 +65,10 @@ func (l *List[T]) Init() *List[T] {
 	l.root.next = &l.root
 	l.root.prev = &l.root
 	return l
+}
+
+func (l *List[T]) Len() int {
+	return int(l.len.Load())
 }
 
 // New returns an initialized list.

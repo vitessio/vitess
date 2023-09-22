@@ -19,6 +19,8 @@ package smartconnpool
 import (
 	"context"
 	"sync"
+
+	"vitess.io/vitess/go/list"
 )
 
 // waiter represents a client waiting for a connection in the waitlist
@@ -40,7 +42,7 @@ type waiter[C Connection] struct {
 type waitlist[C Connection] struct {
 	nodes sync.Pool
 	mu    sync.Mutex
-	list  List[waiter[C]]
+	list  list.List[waiter[C]]
 }
 
 // waitForConn blocks until a connection with the given Setting is returned by another client,
@@ -49,7 +51,7 @@ type waitlist[C Connection] struct {
 // also return a `nil` connection even if our context has expired, if the pool has
 // forced an expiration of all waiters in the waitlist.
 func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting) (*Pooled[C], error) {
-	elem := wl.nodes.Get().(*Element[waiter[C]])
+	elem := wl.nodes.Get().(*list.Element[waiter[C]])
 	elem.Value = waiter[C]{setting: setting, conn: nil, ctx: ctx}
 
 	wl.mu.Lock()
@@ -72,11 +74,11 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting) (*Pool
 // expire removes and wakes any expired waiter in the waitlist.
 // if force is true, it'll wake and remove all the waiters.
 func (wl *waitlist[C]) expire(force bool) (waiting int) {
-	if wl.list.len.Load() == 0 {
+	if wl.list.Len() == 0 {
 		return 0
 	}
 
-	var expired []*Element[waiter[C]]
+	var expired []*list.Element[waiter[C]]
 
 	wl.mu.Lock()
 	// iterate the waitlist looking for waiters with an expired Context,
@@ -101,7 +103,7 @@ func (wl *waitlist[C]) expire(force bool) (waiting int) {
 // tryReturnConn tries handing over a connection to one of the waiters in the pool.
 func (wl *waitlist[D]) tryReturnConn(conn *Pooled[D]) bool {
 	// fast path: if there's nobody waiting there's nothing to do
-	if wl.list.len.Load() == 0 {
+	if wl.list.Len() == 0 {
 		return false
 	}
 	// split the slow path into a separate function to enable inlining
@@ -111,7 +113,7 @@ func (wl *waitlist[D]) tryReturnConn(conn *Pooled[D]) bool {
 func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 	const maxAge = 8
 	var (
-		target      *Element[waiter[D]]
+		target      *list.Element[waiter[D]]
 		connSetting = conn.Conn.Setting()
 	)
 
@@ -148,11 +150,11 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 
 func (wl *waitlist[C]) init() {
 	wl.nodes.New = func() any {
-		return &Element[waiter[C]]{}
+		return &list.Element[waiter[C]]{}
 	}
 	wl.list.Init()
 }
 
 func (wl *waitlist[C]) waiting() int {
-	return int(wl.list.len.Load())
+	return wl.list.Len()
 }
