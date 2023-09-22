@@ -71,8 +71,17 @@ func insertJSONValues(t *testing.T) {
 // insertMoreCustomers creates additional customers.
 // Note: this will only work when the customer sequence is in place.
 func insertMoreCustomers(t *testing.T, numCustomers int) {
+	// Let's first be sure that the sequence is working.
+	// We use the value returned to ensure that we do not change the
+	// expected data distribution across shards by using higher
+	// primary vindex values than expected.
+	cid := waitForSequenceValue(t, vtgateConn, "product", "customer_seq")
+	execVtgateQuery(t, vtgateConn, "customer", fmt.Sprintf("insert into customer (cid, name) values (%d, 'customer-1')", cid))
+
+	// Now let's insert the rest of the records using the sequence
+	// implicitly.
 	sql := "insert into customer (name) values "
-	i := 0
+	i := 1 // We've already inserted one record
 	for i < numCustomers {
 		i++
 		sql += fmt.Sprintf("('customer%d')", i)

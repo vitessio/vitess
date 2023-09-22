@@ -230,6 +230,33 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 	}
 }
 
+// waitForSequenceValue queries the provided sequence name in the
+// provided database using the provided vtgate connection until
+// we get a next value from it. This allows us to move forward
+// with queries that rely on the sequence working as expected.
+// The read next value is also returned so that the caller can
+// use it if they want.
+func waitForSequenceValue(t *testing.T, conn *mysql.Conn, database, sequence string) int64 {
+	query := fmt.Sprintf("select next value from %s.%s", database, sequence)
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	for {
+		qr, err := conn.ExecuteFetch(query, 1, false)
+		if err == nil && qr != nil && len(qr.Rows) == 1 { // We got a value back
+			val, err := qr.Rows[0][0].ToInt64()
+			require.NoError(t, err)
+			return val
+		}
+		select {
+		case <-timer.C:
+			require.FailNow(t, fmt.Sprintf("sequence %q did not provide a next value before the timeout of %s; last seen result: %+v, error: %v",
+				sequence, defaultTimeout, qr, err))
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
+}
+
 func executeOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) (int, []byte, int, []byte) {
 	queryStatsURL := fmt.Sprintf("http://%s:%d/debug/query_stats", tablet.TabletHostname, tablet.Port)
 
