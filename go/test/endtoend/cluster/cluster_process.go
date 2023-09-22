@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -189,18 +190,20 @@ func (shard *Shard) Replica() *Vttablet {
 	return nil
 }
 
-// CtrlCHandler handles the teardown for the ctrl-c.
-func (cluster *LocalProcessCluster) CtrlCHandler() {
+// SetupCtrlCHandler handles the teardown for the ctrl-c.
+func (cluster *LocalProcessCluster) SetupCtrlCHandler() {
 	cluster.Context, cluster.CancelFunc = context.WithCancel(context.Background())
 
-	c := make(chan os.Signal, 2)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	select {
-	case <-c:
-		cluster.Teardown()
-		os.Exit(0)
-	case <-cluster.Done():
-	}
+	go func() {
+		c := make(chan os.Signal, 2)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		select {
+		case <-c:
+			cluster.Teardown()
+			os.Exit(0)
+		case <-cluster.Done():
+		}
+	}()
 }
 
 // StartTopo starts topology server
@@ -715,7 +718,7 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 // NewBareCluster instantiates a new cluster and does not assume existence of any of the vitess processes
 func NewBareCluster(cell string, hostname string) *LocalProcessCluster {
 	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname, mx: new(sync.Mutex), DefaultCharset: "utf8mb4"}
-	go cluster.CtrlCHandler()
+	cluster.SetupCtrlCHandler()
 
 	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
 	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
@@ -941,28 +944,28 @@ func (cluster *LocalProcessCluster) StreamTabletHealthUntil(ctx context.Context,
 		return err
 	}
 
-	conditionSuccess := false
-	timeoutExceeded := false
+	var conditionSuccess atomic.Bool
+	var timeoutExceeded atomic.Bool
 	go func() {
 		time.Sleep(timeout)
-		timeoutExceeded = true
+		timeoutExceeded.Store(true)
 	}()
 
 	err = conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
 		if condition(shr) {
-			conditionSuccess = true
+			conditionSuccess.Store(true)
 		}
-		if timeoutExceeded || conditionSuccess {
+		if timeoutExceeded.Load() || conditionSuccess.Load() {
 			return io.EOF
 		}
 		return nil
 	})
 
-	if conditionSuccess {
+	if conditionSuccess.Load() {
 		return nil
 	}
 
-	if timeoutExceeded {
+	if timeoutExceeded.Load() {
 		return errors.New("timeout exceed while waiting for the condition in StreamHealth")
 	}
 	return err
