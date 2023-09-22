@@ -1,3 +1,19 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package smartconnpool
 
 import (
@@ -9,10 +25,18 @@ import (
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/vt/log"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
-const stackMask = 7
+var (
+	// ErrTimeout is returned if a connection get times out.
+	ErrTimeout = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "resource pool timed out")
+
+	// ErrCtxTimeout is returned if a ctx is already expired by the time the connection pool is used
+	ErrCtxTimeout = vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "resource pool context already expired")
+)
 
 type Metrics struct {
 	maxLifetimeClosed    atomic.Int64
@@ -57,6 +81,19 @@ func (m *Metrics) ResetSettingCount() int64 {
 	return m.resetSetting.Load()
 }
 
+type Connector[C Connection] func(ctx context.Context) (C, error)
+type RefreshCheck func() (bool, error)
+
+type Config[C Connection] struct {
+	Capacity        int64
+	IdleTimeout     time.Duration
+	MaxLifetime     time.Duration
+	RefreshInterval time.Duration
+	LogWait         func(time.Time)
+}
+
+const stackMask = 7
+
 type ConnPool[C Connection] struct {
 	clean              Stack[C]
 	settings           [stackMask + 1]Stack[C]
@@ -82,6 +119,155 @@ type ConnPool[C Connection] struct {
 	}
 
 	Metrics Metrics
+}
+
+func NewPool[C Connection](config *Config[C]) *ConnPool[C] {
+	pool := &ConnPool[C]{}
+	pool.freshSettingsStack.Store(-1)
+	pool.config.maxCapacity = config.Capacity
+	pool.config.maxLifetime.Store(config.MaxLifetime.Nanoseconds())
+	pool.config.idleTimeout.Store(config.IdleTimeout.Nanoseconds())
+	pool.config.refreshInterval.Store(config.RefreshInterval.Nanoseconds())
+	pool.config.logWait = config.LogWait
+	pool.wait.init()
+
+	return pool
+}
+
+func (pool *ConnPool[C]) runWorker(close <-chan struct{}, interval time.Duration, worker func(now time.Time) bool) {
+	pool.workers.Add(1)
+
+	go func() {
+		tick := time.NewTicker(interval)
+
+		defer tick.Stop()
+		defer pool.workers.Done()
+
+		for {
+			select {
+			case now := <-tick.C:
+				if !worker(now) {
+					return
+				}
+			case <-close:
+				return
+			}
+		}
+	}()
+}
+
+func (pool *ConnPool[C]) open() {
+	pool.close = make(chan struct{})
+	pool.capacity.Store(pool.config.maxCapacity)
+
+	pool.runWorker(pool.close, 1*time.Second, func(_ time.Time) bool {
+		force := pool.capacity.Load() == 0 && pool.borrowed.Load() == 0
+		_ = pool.wait.expire(force)
+		return true
+	})
+
+	idleTimeout := pool.IdleTimeout()
+	if idleTimeout != 0 {
+		pool.runWorker(pool.close, idleTimeout/10, func(now time.Time) bool {
+			pool.closeIdleResources(now)
+			return true
+		})
+	}
+
+	refreshInterval := pool.RefreshInterval()
+	if refreshInterval != 0 && pool.config.refresh != nil {
+		pool.runWorker(pool.close, refreshInterval, func(_ time.Time) bool {
+			refresh, err := pool.config.refresh()
+			if err != nil {
+				log.Error(err)
+			}
+			if refresh {
+				go pool.reopen()
+				return false
+			}
+			return true
+		})
+	}
+}
+
+func (pool *ConnPool[C]) Open(connect Connector[C], refresh RefreshCheck) *ConnPool[C] {
+	if pool.close != nil {
+		// already open
+		return pool
+	}
+
+	pool.config.connect = connect
+	pool.config.refresh = refresh
+	pool.open()
+	return pool
+}
+
+func (pool *ConnPool[D]) Close() {
+	if pool.close == nil {
+		// already closed
+		return
+	}
+
+	pool.SetCapacity(0)
+
+	close(pool.close)
+	pool.workers.Wait()
+	pool.close = nil
+}
+
+func (pool *ConnPool[D]) reopen() {
+	capacity := pool.capacity.Load()
+	if capacity == 0 {
+		return
+	}
+
+	pool.Close()
+	pool.open()
+	pool.SetCapacity(capacity)
+}
+
+func (pool *ConnPool[C]) IsOpen() bool {
+	return pool.close != nil
+}
+
+func (pool *ConnPool[C]) Capacity() int64 {
+	return pool.capacity.Load()
+}
+
+func (pool *ConnPool[C]) MaxCapacity() int64 {
+	return pool.config.maxCapacity
+}
+
+func (pool *ConnPool[C]) InUse() int64 {
+	return pool.borrowed.Load()
+}
+
+func (pool *ConnPool[C]) Available() int64 {
+	return pool.capacity.Load() - pool.borrowed.Load()
+}
+
+func (pool *ConnPool[C]) Active() int64 {
+	return pool.active.Load()
+}
+
+func (pool *ConnPool[D]) IdleTimeout() time.Duration {
+	return time.Duration(pool.config.idleTimeout.Load())
+}
+
+func (pool *ConnPool[C]) SetIdleTimeout(duration time.Duration) {
+	pool.config.idleTimeout.Store(duration.Nanoseconds())
+}
+
+func (pool *ConnPool[D]) RefreshInterval() time.Duration {
+	return time.Duration(pool.config.refreshInterval.Load())
+}
+
+func (pool *ConnPool[C]) recordWait(start time.Time) {
+	pool.Metrics.waitCount.Add(1)
+	pool.Metrics.waitTime.Add(time.Since(start).Nanoseconds())
+	if pool.config.logWait != nil {
+		pool.config.logWait(start)
+	}
 }
 
 func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C], error) {
@@ -348,38 +534,6 @@ func (pool *ConnPool[C]) SetCapacity(newcap int64) {
 	}
 }
 
-type RefreshCheck func() (bool, error)
-
-func (pool *ConnPool[C]) runWorker(close <-chan struct{}, interval time.Duration, worker func(now time.Time) bool) {
-	pool.workers.Add(1)
-
-	go func() {
-		tick := time.NewTicker(interval)
-
-		defer tick.Stop()
-		defer pool.workers.Done()
-
-		for {
-			select {
-			case now := <-tick.C:
-				if !worker(now) {
-					return
-				}
-			case <-close:
-				return
-			}
-		}
-	}()
-}
-
-func (pool *ConnPool[D]) IdleTimeout() time.Duration {
-	return time.Duration(pool.config.idleTimeout.Load())
-}
-
-func (pool *ConnPool[D]) RefreshInterval() time.Duration {
-	return time.Duration(pool.config.refreshInterval.Load())
-}
-
 func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 	timeout := pool.IdleTimeout()
 	if timeout == 0 {
@@ -414,131 +568,6 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 		closeInStack(&pool.settings[i])
 	}
 	closeInStack(&pool.clean)
-}
-
-type Connector[C Connection] func(ctx context.Context) (C, error)
-
-type Config[C Connection] struct {
-	Capacity        int64
-	IdleTimeout     time.Duration
-	MaxLifetime     time.Duration
-	RefreshInterval time.Duration
-	LogWait         func(time.Time)
-}
-
-func NewPool[C Connection](config *Config[C]) *ConnPool[C] {
-	pool := &ConnPool[C]{}
-	pool.freshSettingsStack.Store(-1)
-	pool.config.maxCapacity = config.Capacity
-	pool.config.maxLifetime.Store(config.MaxLifetime.Nanoseconds())
-	pool.config.idleTimeout.Store(config.IdleTimeout.Nanoseconds())
-	pool.config.refreshInterval.Store(config.RefreshInterval.Nanoseconds())
-	pool.config.logWait = config.LogWait
-	pool.wait.init()
-
-	return pool
-}
-
-func (pool *ConnPool[D]) reopen() {
-	capacity := pool.capacity.Load()
-	if capacity == 0 {
-		return
-	}
-
-	pool.Close()
-	pool.open()
-	pool.SetCapacity(capacity)
-}
-
-func (pool *ConnPool[D]) Close() {
-	if pool.close == nil {
-		// already closed
-		return
-	}
-
-	pool.SetCapacity(0)
-
-	close(pool.close)
-	pool.workers.Wait()
-	pool.close = nil
-}
-
-func (pool *ConnPool[C]) IsOpen() bool {
-	return pool.close != nil
-}
-
-func (pool *ConnPool[C]) Open(connect Connector[C], refresh RefreshCheck) *ConnPool[C] {
-	if pool.close != nil {
-		// already open
-		return pool
-	}
-
-	pool.config.connect = connect
-	pool.config.refresh = refresh
-	pool.open()
-	return pool
-}
-
-func (pool *ConnPool[C]) open() {
-	pool.close = make(chan struct{})
-	pool.capacity.Store(pool.config.maxCapacity)
-
-	pool.runWorker(pool.close, 1*time.Second, func(_ time.Time) bool {
-		force := pool.capacity.Load() == 0 && pool.borrowed.Load() == 0
-		_ = pool.wait.expire(force)
-		return true
-	})
-
-	idleTimeout := pool.IdleTimeout()
-	if idleTimeout != 0 {
-		pool.runWorker(pool.close, idleTimeout/10, func(now time.Time) bool {
-			pool.closeIdleResources(now)
-			return true
-		})
-	}
-
-	refreshInterval := pool.RefreshInterval()
-	if refreshInterval != 0 && pool.config.refresh != nil {
-		pool.runWorker(pool.close, refreshInterval, func(_ time.Time) bool {
-			refresh, err := pool.config.refresh()
-			if err != nil {
-				log.Error(err)
-			}
-			if refresh {
-				go pool.reopen()
-				return false
-			}
-			return true
-		})
-	}
-}
-
-func (pool *ConnPool[C]) Capacity() int64 {
-	return pool.capacity.Load()
-}
-
-func (pool *ConnPool[C]) MaxCapacity() int64 {
-	return pool.config.maxCapacity
-}
-
-func (pool *ConnPool[C]) InUse() int64 {
-	return pool.borrowed.Load()
-}
-
-func (pool *ConnPool[C]) Available() int64 {
-	return pool.capacity.Load() - pool.borrowed.Load()
-}
-
-func (pool *ConnPool[C]) Active() int64 {
-	return pool.active.Load()
-}
-
-func (pool *ConnPool[C]) recordWait(start time.Time) {
-	pool.Metrics.waitCount.Add(1)
-	pool.Metrics.waitTime.Add(time.Since(start).Nanoseconds())
-	if pool.config.logWait != nil {
-		pool.config.logWait(start)
-	}
 }
 
 func (pool *ConnPool[C]) StatsJSON() map[string]any {
@@ -603,8 +632,4 @@ func (pool *ConnPool[C]) RegisterStats(stats *servenv.Exporter, name string) {
 	stats.NewCounterFunc(name+"ResetSetting", "Number of times pool reset the setting", func() int64 {
 		return pool.Metrics.ResetSettingCount()
 	})
-}
-
-func (pool *ConnPool[C]) SetIdleTimeout(duration time.Duration) {
-	pool.config.idleTimeout.Store(duration.Nanoseconds())
 }
