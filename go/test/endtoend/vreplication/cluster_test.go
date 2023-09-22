@@ -573,12 +573,39 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				log.Infof("Waiting for mysql process for tablet %s", tablets[ind].Name)
 				if err := proc.Wait(); err != nil {
 					// Retry starting the database process before giving up.
-					t.Logf("%v :: Unable to start mysql server for %v. Will retry...", err, tablets[ind].Vttablet)
+					t.Logf("%v :: Unable to start mysql server for %v. Will cleanup files and processes, then retry...", err, tablets[ind].Vttablet)
 					tablets[ind].DbServer.CleanupFiles(tablets[ind].Vttablet.TabletUID)
-					time.Sleep(1 * time.Second)
+					// Kill any process that's listening on the port we want to
+					// use as that is the most common problem.
+					tablets[ind].DbServer.Stop()
+					killCmd := exec.Command("sudo", "fuser", "-n", "tcp", "-k", fmt.Sprintf("%d", tablets[ind].DbServer.MySQLPort))
+					if err := killCmd.Run(); err != nil {
+						log.Errorf("Failed to kill process listening on port %d: %v", tablets[ind].DbServer.MySQLPort, err)
+					}
+					// Sleep for the kernel's TCP TIME_WAIT timeout to avoid the
+					// port already in use error, which is the common cause for
+					// the process not starting. It's a long wait, but it's worth
+					// avoiding the test/workflow failure that otherwise occurs.
+					time.Sleep(60 * time.Second)
 					dbcmd, err := tablets[ind].DbServer.StartProcess()
 					require.NoError(t, err)
 					if err = dbcmd.Wait(); err != nil {
+						// Get logs to help understand why it failed...
+						vtdataroot := os.Getenv("VTDATAROOT")
+						mysqlctlLog := path.Join(vtdataroot, "/tmp/mysqlctl.INFO")
+						logBytes, ferr := os.ReadFile(mysqlctlLog)
+						if ferr == nil {
+							log.Errorf("mysqlctl log contents:\n%s", string(logBytes))
+						} else {
+							log.Errorf("Failed to read the mysqlctl log file %q: %v", mysqlctlLog, ferr)
+						}
+						mysqldLog := path.Join(vtdataroot, fmt.Sprintf("/vt_%010d/error.log", tablets[ind].Vttablet.TabletUID))
+						logBytes, ferr = os.ReadFile(mysqldLog)
+						if ferr == nil {
+							log.Errorf("mysqld error log contents:\n%s", string(logBytes))
+						} else {
+							log.Errorf("Failed to read the mysqld error log file %q: %v", mysqldLog, ferr)
+						}
 						output, _ := dbcmd.CombinedOutput()
 						t.Fatalf("%v :: Unable to start mysql server for %v; Output: %s", err,
 							tablets[ind].Vttablet, string(output))
