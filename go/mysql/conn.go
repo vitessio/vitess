@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"vitess.io/vitess/go/bucketpool"
@@ -1705,6 +1706,40 @@ func (c *Conn) IsMarkedForClose() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.closing
+}
+
+func (c *Conn) ConnCheck() error {
+	conn := c.conn
+	if tlsconn, ok := conn.(*tls.Conn); ok {
+		conn = tlsconn.NetConn()
+	}
+	if conn, ok := conn.(syscall.Conn); ok {
+		rc, err := conn.SyscallConn()
+		if err != nil {
+			return err
+		}
+
+		var n int
+		var buff [1]byte
+		rerr := rc.Read(func(fd uintptr) bool {
+			n, err = syscall.Read(int(fd), buff[:])
+			return true
+		})
+
+		switch {
+		case rerr != nil:
+			return rerr
+		case n == 0 && err == nil:
+			return io.EOF
+		case n > 0:
+			return sqlerror.NewSQLError(sqlerror.CRUnknownError, sqlerror.SSUnknownSQLState, "unexpected read from conn")
+		case err == syscall.EAGAIN || err == syscall.EWOULDBLOCK:
+			return nil
+		default:
+			return err
+		}
+	}
+	return nil
 }
 
 // GetTestConn returns a conn for testing purpose only.
