@@ -158,8 +158,9 @@ ssl_key={{.ServerKey}}
 		} else {
 			tmpProcess.Args = append(tmpProcess.Args, "start")
 		}
+	} else {
+		tmpProcess.Args = append(tmpProcess.Args, "start")
 	}
-	tmpProcess.Args = append(tmpProcess.Args, "start")
 	log.Infof("Starting mysqlctl with command: %v", tmpProcess.Args)
 	return tmpProcess, tmpProcess.Start()
 }
