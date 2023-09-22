@@ -51,17 +51,18 @@ func TestMigrate(t *testing.T) {
 	allCellNames = "zone1"
 	vc = NewVitessCluster(t, "TestMigrate", cells, mainClusterConfig)
 
-	require.NotNil(t, vc)
+	require.NotNil(t, vc, "failed to create VitessCluster")
 	defaultReplicas = 0
 	defaultRdonly = 0
 	defer vc.TearDown(t)
 
 	defaultCell = vc.Cells[defaultCellName]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
-	require.NoError(t, err)
+	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
+	require.NoError(t, err, "failed to create product keyspace")
+	err = cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
+	require.NoError(t, err, "product shard did not become healthy")
 	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
+	require.NotNil(t, vtgate, "failed to get vtgate")
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
