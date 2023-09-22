@@ -986,29 +986,14 @@ func (node *Select) GetParsedComments() *ParsedComments {
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Select) AddWhere(expr Expr) {
-	if node.Where == nil {
-		node.Where = &Where{
-			Type: WhereClause,
-			Expr: expr,
-		}
-		return
-	}
-	exprs := SplitAndExpression(nil, node.Where.Expr)
-	node.Where.Expr = AndExpressions(append(exprs, expr)...)
+	node.Where = addPredicate(node.Where, expr)
 }
 
 // AddHaving adds the boolean expression to the
 // HAVING clause as an AND condition.
 func (node *Select) AddHaving(expr Expr) {
-	if node.Having == nil {
-		node.Having = &Where{
-			Type: HavingClause,
-			Expr: expr,
-		}
-		return
-	}
-	exprs := SplitAndExpression(nil, node.Having.Expr)
-	node.Having.Expr = AndExpressions(append(exprs, expr)...)
+	node.Having = addPredicate(node.Having, expr)
+	node.Having.Type = HavingClause
 }
 
 // AddGroupBy adds a grouping expression, unless it's already present
@@ -1025,17 +1010,21 @@ func (node *Select) AddGroupBy(expr Expr) {
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Update) AddWhere(expr Expr) {
-	if node.Where == nil {
-		node.Where = &Where{
+	node.Where = addPredicate(node.Where, expr)
+}
+
+func addPredicate(where *Where, pred Expr) *Where {
+	if where == nil {
+		return &Where{
 			Type: WhereClause,
-			Expr: expr,
+			Expr: pred,
 		}
-		return
 	}
-	node.Where.Expr = &AndExpr{
-		Left:  node.Where.Expr,
-		Right: expr,
+	where.Expr = &AndExpr{
+		Left:  where.Expr,
+		Right: pred,
 	}
+	return where
 }
 
 // AddOrder adds an order by element
