@@ -1,4 +1,47 @@
-Usage of vtbackup:
+vtbackup is a batch command to perform a single pass of backup maintenance for a shard.
+
+When run periodically for each shard, vtbackup can ensure these configurable policies:
+	* There is always a recent backup for the shard.
+	* Old backups for the shard are removed.
+
+Whatever system launches vtbackup is responsible for the following:
+	- Running vtbackup with similar flags that would be used for a vttablet and
+    mysqlctld in the target shard to be backed up.
+	- Provisioning as much disk space for vtbackup as would be given to vttablet.
+    The data directory MUST be empty at startup. Do NOT reuse a persistent disk.
+	- Running vtbackup periodically for each shard, for each backup storage location.
+	- Ensuring that at most one instance runs at a time for a given pair of shard
+    and backup storage location.
+	- Retrying vtbackup if it fails.
+	- Alerting human operators if the failure is persistent.
+
+The process vtbackup follows to take a new backup has the following steps:
+ 1. Restore from the most recent backup.
+ 2. Start a mysqld instance (but no vttablet) from the restored data.
+ 3. Instruct mysqld to connect to the current shard primary and replicate any
+    transactions that are new since the last backup.
+ 4. Ask the primary for its current replication position and set that as the goal
+    for catching up on replication before taking the backup, so the goalposts
+    don't move.
+ 5. Wait until replication is caught up to the goal position or beyond.
+ 6. Stop mysqld and take a new backup.
+
+Aside from additional replication load while vtbackup's mysqld catches up on
+new transactions, the shard should be otherwise unaffected. Existing tablets
+will continue to serve, and no new tablets will appear in topology, meaning no
+query traffic will ever be routed to vtbackup's mysqld. This silent operation
+mode helps make backups minimally disruptive to serving capacity and orthogonal
+to the handling of the query path.
+
+The command-line parameters to vtbackup specify a policy for when a new backup
+is needed, and when old backups should be removed. If the existing backups
+already satisfy the policy, then vtbackup will do nothing and return success
+immediately.
+
+Usage:
+  vtbackup [flags]
+
+Flags:
       --allow_first_backup                                          Allow this job to take the first backup of an existing shard.
       --alsologtostderr                                             log to standard error as well as files
       --azblob_backup_account_key_file string                       Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
@@ -92,7 +135,7 @@ Usage of vtbackup:
       --grpc_keepalive_timeout duration                             After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
       --grpc_max_message_size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
       --grpc_prometheus                                             Enable gRPC monitoring with Prometheus.
-  -h, --help                                                        display usage and exit
+  -h, --help                                                        help for vtbackup
       --incremental_from_pos string                                 Position of previous backup. Default: empty. If given, then this backup becomes an incremental backup from given position. If value is 'auto', backup taken from last successful backup position
       --init_db_name_override string                                (init parameter) override the name of the db used by vttablet
       --init_db_sql_file string                                     path to .sql file to run after mysql_install_db
@@ -134,13 +177,12 @@ Usage of vtbackup:
       --mysql_server_version string                                 MySQL server version to advertise. (default "8.0.30-Vitess")
       --mysql_socket string                                         path to the mysql socket
       --mysql_timeout duration                                      how long to wait for mysqld startup (default 5m0s)
+      --opentsdb_uri string                                         URI of opentsdb /api/put method
       --port int                                                    port for the server
       --pprof strings                                               enable profiling
       --purge_logs_interval duration                                how often try to remove old logs (default 1h0m0s)
       --remote_operation_timeout duration                           time to wait for a remote operation (default 15s)
       --restart_before_backup                                       Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.
-      --s2a_enable_appengine_dialer                                 If true, opportunistically use AppEngine-specific dialer to call S2A.
-      --s2a_timeout duration                                        Timeout enforced on the connection to the S2A service for handshake. (default 3s)
       --s3_backup_aws_endpoint string                               endpoint of the S3 backend (region must be provided).
       --s3_backup_aws_region string                                 AWS region to use. (default "us-east-1")
       --s3_backup_aws_retries int                                   AWS request retries. (default -1)

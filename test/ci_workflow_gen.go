@@ -111,6 +111,7 @@ var (
 		"vtgate_vschema",
 		"vtgate_queries",
 		"vtgate_schema_tracker",
+		"vtgate_foreignkey_stress",
 		"vtorc",
 		"xb_recovery",
 		"mysql80",

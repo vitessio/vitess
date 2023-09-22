@@ -126,7 +126,7 @@ func (c *Cursor) ReplacerF() func(newNode SQLNode) {
 // and the new node visited.
 func (c *Cursor) ReplaceAndRevisit(newNode SQLNode) {
 	switch newNode.(type) {
-	case SelectExprs:
+	case SelectExprs, Expr:
 	default:
 		// We need to add support to the generated code for when to look at the revisit flag. At the moment it is only
 		// there for slices of SQLNode implementations

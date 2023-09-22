@@ -131,7 +131,6 @@ BEGIN
 	insert into allDefaults () values ();
     select * from allDefaults;
 	delete from allDefaults;
-    set autocommit = 0;
 END;
 
 CREATE PROCEDURE in_parameter(IN val int)

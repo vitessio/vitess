@@ -48,12 +48,15 @@ var (
 	useEffective                    bool
 	useEffectiveGroups              bool
 	useStaticAuthenticationIdentity bool
+
+	sendSessionInStreaming bool
 )
 
 func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&useEffective, "grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
 	fs.BoolVar(&useEffectiveGroups, "grpc-use-effective-groups", false, "If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.")
 	fs.BoolVar(&useStaticAuthenticationIdentity, "grpc-use-static-authentication-callerid", false, "If set, will set the immediate caller id to the username authenticated by the static auth plugin.")
+	fs.BoolVar(&sendSessionInStreaming, "grpc-send-session-in-streaming", false, "If set, will send the session as last packet in streaming api to support transactions in streaming")
 }
 
 func init() {
@@ -192,19 +195,22 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 		})
 	})
 
-	// even if there is an error, session could have been modified.
-	// So, this needs to be sent back to the client. Session is sent in the last stream response.
-	lastErr := stream.Send(&vtgatepb.StreamExecuteResponse{
-		Session: session,
-	})
-
 	var errs []error
 	if vtgErr != nil {
 		errs = append(errs, vtgErr)
 	}
-	if lastErr != nil {
-		errs = append(errs, lastErr)
+
+	if sendSessionInStreaming {
+		// even if there is an error, session could have been modified.
+		// So, this needs to be sent back to the client. Session is sent in the last stream response.
+		lastErr := stream.Send(&vtgatepb.StreamExecuteResponse{
+			Session: session,
+		})
+		if lastErr != nil {
+			errs = append(errs, lastErr)
+		}
 	}
+
 	return vterrors.ToGRPC(vterrors.Aggregate(errs))
 }
 
