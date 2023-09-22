@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"math"
 	"reflect"
 	"sort"
@@ -237,7 +238,7 @@ type simpleResponse struct {
 // displaySimpleResponse displays a simple standard response for the
 // resume, stop, and delete commands after the client command completes
 // without an error.
-func displaySimpleResponse(format string, action vdiff.VDiffAction) {
+func displaySimpleResponse(out io.Writer, format string, action vdiff.VDiffAction) {
 	status := "completed"
 	if action == vdiff.ResumeAction {
 		status = "scheduled"
@@ -248,9 +249,9 @@ func displaySimpleResponse(format string, action vdiff.VDiffAction) {
 			Status: status,
 		}
 		jsonText, _ := cli.MarshalJSONPretty(resp)
-		fmt.Println(string(jsonText))
+		fmt.Fprintln(out, string(jsonText))
 	} else {
-		fmt.Printf("VDiff %s %s\n", action, status)
+		fmt.Fprintf(out, "VDiff %s %s\n", action, status)
 	}
 }
 
@@ -306,7 +307,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 				if err != nil {
 					return err
 				}
-				if state, err = displayShowSingleSummary(format, common.BaseOptions.TargetKeyspace, common.BaseOptions.Workflow, uuidStr, resp, false); err != nil {
+				if state, err = displayShowSingleSummary(cmd.OutOrStdout(), format, common.BaseOptions.TargetKeyspace, common.BaseOptions.Workflow, uuidStr, resp, false); err != nil {
 					return err
 				}
 				if state == vdiff.CompletedState {
@@ -347,7 +348,7 @@ func commandDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	displaySimpleResponse(format, vdiff.DeleteAction)
+	displaySimpleResponse(cmd.OutOrStdout(), format, vdiff.DeleteAction)
 
 	return nil
 }
@@ -369,7 +370,7 @@ func commandResume(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	displaySimpleResponse(format, vdiff.ResumeAction)
+	displaySimpleResponse(cmd.OutOrStdout(), format, vdiff.ResumeAction)
 
 	return nil
 }
@@ -448,7 +449,7 @@ func getStructFieldNames(s any) []string {
 	return names
 }
 
-func displayListings(listings []*listing) string {
+func buildListings(listings []*listing) string {
 	var values []string
 	var lines [][]string
 	var result string
@@ -472,20 +473,20 @@ func displayListings(listings []*listing) string {
 	return result
 }
 
-func displayShowResponse(format, keyspace, workflowName, actionArg string, resp *vtctldatapb.VDiffShowResponse, verbose bool) error {
+func displayShowResponse(out io.Writer, format, keyspace, workflowName, actionArg string, resp *vtctldatapb.VDiffShowResponse, verbose bool) error {
 	var vdiffUUID uuid.UUID
 	var err error
 	switch actionArg {
 	case vdiff.AllActionArg:
-		return displayShowRecent(format, keyspace, workflowName, actionArg, resp)
+		return displayShowRecent(out, format, keyspace, workflowName, actionArg, resp)
 	case vdiff.LastActionArg:
 		for _, resp := range resp.TabletResponses {
 			vdiffUUID, err = uuid.Parse(resp.VdiffUuid)
 			if err != nil {
 				if format == "json" {
-					fmt.Println("{}")
+					fmt.Fprintln(out, "{}")
 				} else {
-					fmt.Printf("No previous vdiff found for %s.%s\n", keyspace, workflowName)
+					fmt.Fprintf(out, "No previous vdiff found for %s.%s\n", keyspace, workflowName)
 				}
 				return nil
 			}
@@ -502,12 +503,12 @@ func displayShowResponse(format, keyspace, workflowName, actionArg string, resp 
 		if len(resp.TabletResponses) == 0 {
 			return fmt.Errorf("no response received for vdiff show of %s.%s (%s)", keyspace, workflowName, vdiffUUID.String())
 		}
-		_, err = displayShowSingleSummary(format, keyspace, workflowName, vdiffUUID.String(), resp, verbose)
+		_, err = displayShowSingleSummary(out, format, keyspace, workflowName, vdiffUUID.String(), resp, verbose)
 		return err
 	}
 }
 
-func displayShowRecent(format, keyspace, workflowName, subCommand string, resp *vtctldatapb.VDiffShowResponse) error {
+func displayShowRecent(out io.Writer, format, keyspace, workflowName, subCommand string, resp *vtctldatapb.VDiffShowResponse) error {
 	output := ""
 	recentListings, err := buildRecentListings(resp)
 	if err != nil {
@@ -523,12 +524,12 @@ func displayShowRecent(format, keyspace, workflowName, subCommand string, resp *
 			output = "[]"
 		}
 	} else {
-		output = displayListings(recentListings)
+		output = buildListings(recentListings)
 		if output == "" {
 			output = fmt.Sprintf("No vdiffs found for %s.%s", keyspace, workflowName)
 		}
 	}
-	fmt.Println(output)
+	fmt.Fprintln(out, output)
 	return nil
 }
 
@@ -551,7 +552,7 @@ func buildRecentListings(resp *vtctldatapb.VDiffShowResponse) ([]*listing, error
 	return listings, nil
 }
 
-func displayShowSingleSummary(format, keyspace, workflowName, uuid string, resp *vtctldatapb.VDiffShowResponse, verbose bool) (vdiff.VDiffState, error) {
+func displayShowSingleSummary(out io.Writer, format, keyspace, workflowName, uuid string, resp *vtctldatapb.VDiffShowResponse, verbose bool) (vdiff.VDiffState, error) {
 	state := vdiff.UnknownState
 	var output string
 	summary, err := buildSingleSummary(keyspace, workflowName, uuid, resp, verbose)
@@ -587,7 +588,7 @@ func displayShowSingleSummary(format, keyspace, workflowName, uuid string, resp 
 			output = str
 		}
 	}
-	fmt.Println(output)
+	fmt.Fprintln(out, output)
 	return state, nil
 }
 
@@ -824,7 +825,7 @@ func commandShow(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err = displayShowResponse(format, common.BaseOptions.TargetKeyspace, common.BaseOptions.Workflow, showOptions.Arg, resp, showOptions.Verbose); err != nil {
+	if err = displayShowResponse(cmd.OutOrStdout(), format, common.BaseOptions.TargetKeyspace, common.BaseOptions.Workflow, showOptions.Arg, resp, showOptions.Verbose); err != nil {
 		return err
 	}
 
@@ -848,7 +849,7 @@ func commandStop(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	displaySimpleResponse(format, vdiff.StopAction)
+	displaySimpleResponse(cmd.OutOrStdout(), format, vdiff.StopAction)
 
 	return nil
 }

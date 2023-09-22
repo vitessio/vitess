@@ -286,12 +286,11 @@ func TestVDiffUnsharded(t *testing.T) {
 
 			resp, err := env.ws.VDiffShow(context.Background(), req)
 			require.NoError(t, err)
-			vds, err := displayShowSingleSummary(options.ReportOptions.Format, env.targetKeyspace, env.workflow, UUID, resp, false)
+			vds, err := displayShowSingleSummary(env.out, options.ReportOptions.Format, env.targetKeyspace, env.workflow, UUID, resp, false)
 			require.NoError(t, err)
 			require.Equal(t, vdiff.CompletedState, vds)
 
-			output := env.getOutput()
-			require.Equal(t, tcase.report, output)
+			require.Equal(t, tcase.report, env.getOutput())
 			env.resetOutput()
 		})
 	}
@@ -399,12 +398,11 @@ func TestVDiffSharded(t *testing.T) {
 
 			resp, err := env.ws.VDiffShow(context.Background(), req)
 			require.NoError(t, err)
-			vds, err := displayShowSingleSummary(options.ReportOptions.Format, env.targetKeyspace, env.workflow, UUID, resp, true)
+			vds, err := displayShowSingleSummary(env.out, options.ReportOptions.Format, env.targetKeyspace, env.workflow, UUID, resp, true)
 			require.NoError(t, err)
 			require.Equal(t, vdiff.CompletedState, vds)
 
-			output := env.getOutput()
-			require.Equal(t, tcase.report, output)
+			require.Equal(t, tcase.report, env.getOutput())
 			env.resetOutput()
 		})
 	}

@@ -22,13 +22,11 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"os"
 	"sync"
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
@@ -65,7 +63,7 @@ type testVDiffEnv struct {
 	cell           string
 	tabletType     topodatapb.TabletType
 	tmc            *testVDiffTMClient
-	getOutput      func() string
+	out            io.Writer // Capture command output
 
 	mu      sync.Mutex
 	tablets map[int]*testVDiffTablet
@@ -178,22 +176,20 @@ func newTestVDiffEnv(t testing.TB, ctx context.Context, sourceShards, targetShar
 	return env
 }
 
+func (env *testVDiffEnv) getOutput() string {
+	env.mu.Lock()
+	defer env.mu.Unlock()
+	bb, ok := env.out.(*bytes.Buffer)
+	if !ok {
+		panic(fmt.Sprintf("unexpected output type for test env: %T", env.out))
+	}
+	return bb.String()
+}
+
 func (env *testVDiffEnv) resetOutput() {
 	env.mu.Lock()
 	defer env.mu.Unlock()
-	ogstdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		log.Errorf("os.Pipe() err: %v", err)
-	}
-	os.Stdout = w
-	env.getOutput = func() string {
-		w.Close()
-		os.Stdout = ogstdout
-		var buf bytes.Buffer
-		_, _ = io.Copy(&buf, r)
-		return buf.String()
-	}
+	env.out = &bytes.Buffer{}
 }
 
 func (env *testVDiffEnv) close() {
