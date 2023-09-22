@@ -175,10 +175,10 @@ func testPlayerCopyCharPK(t *testing.T) {
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
-		"insert into dst(idc,val) values ('a\\0',1)",
+		"insert /*+ MAX_EXECUTION_TIME(500) */ into dst(idc,val) values ('a\\0',1)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:BINARY charset:63 flags:20611} rows:{lengths:2 values:\\"a\\\\x00\\"}'.*`,
-		`update dst set val=3 where idc='a\0' and ('a\0') <= ('a\0')`,
-		"insert into dst(idc,val) values ('c\\0',2)",
+		`update /*+ MAX_EXECUTION_TIME(500) */ dst set val=3 where idc='a\0' and ('a\0') <= ('a\0')`,
+		"insert /*+ MAX_EXECUTION_TIME(500) */ into dst(idc,val) values ('c\\0',2)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:BINARY charset:63 flags:20611} rows:{lengths:2 values:\\"c\\\\x00\\"}'.*`,
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
 		"/update _vt.vreplication set state='Running",
@@ -283,21 +283,21 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		// Copy mode.
-		"insert into dst(idc,val) values ('a',1)",
+		"insert /*+ MAX_EXECUTION_TIME(500) */ into dst(idc,val) values ('a',1)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR charset:45 flags:20483} rows:{lengths:1 values:\\"a\\"}'.*`,
 		// Copy-catchup mode.
-		`/insert into dst\(idc,val\) select 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`,
+		`/insert /\*\+ MAX_EXECUTION_TIME\(500\) \*/ into dst\(idc,val\) select /\*\+ MAX_EXECUTION_TIME\(500\) \*/ 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`,
 	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
 		// Back to copy mode.
 		// Inserts can happen out of order.
 		// Updates must happen in order.
 		//upd1 := expect.
 		upd1 := expect.Then(qh.Eventually(
-			"insert into dst(idc,val) values ('B',3)",
+			"insert /*+ MAX_EXECUTION_TIME(500) */ into dst(idc,val) values ('B',3)",
 			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR charset:45 flags:20483} rows:{lengths:1 values:\\"B\\"}'.*`,
 		))
 		upd2 := expect.Then(qh.Eventually(
-			"insert into dst(idc,val) values ('c',2)",
+			"insert /*+ MAX_EXECUTION_TIME(500) */ into dst(idc,val) values ('c',2)",
 			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR charset:45 flags:20483} rows:{lengths:1 values:\\"c\\"}'.*`,
 		))
 		upd1.Then(upd2.Eventually())
@@ -406,12 +406,12 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		// Copy mode.
-		"insert into dst(id,idc,idc2,val) values (1,'a','a',1)",
+		"insert /*+ MAX_EXECUTION_TIME(500) */ into dst(id,idc,idc2,val) values (1,'a','a',1)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} fields:{name:\\"idc\\" type:VARBINARY charset:63 flags:20611} fields:{name:\\"idc2\\" type:VARBINARY charset:63 flags:20611} rows:{lengths:1 lengths:1 lengths:1 values:\\"1aa\\"}'.*`,
 		// Copy-catchup mode.
-		`insert into dst(id,idc,idc2,val) select 1, 'B', 'B', 3 from dual where (1,'B','B') <= (1,'a','a')`,
+		`insert /*+ MAX_EXECUTION_TIME(500) */ into dst(id,idc,idc2,val) select /*+ MAX_EXECUTION_TIME(500) */ 1, 'B', 'B', 3 from dual where (1,'B','B') <= (1,'a','a')`,
 		// Copy mode.
-		"insert into dst(id,idc,idc2,val) values (1,'c','c',2)",
+		"insert /*+ MAX_EXECUTION_TIME(500) */ into dst(id,idc,idc2,val) values (1,'c','c',2)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} fields:{name:\\"idc\\" type:VARBINARY charset:63 flags:20611} fields:{name:\\"idc2\\" type:VARBINARY charset:63 flags:20611} rows:{lengths:1 lengths:1 lengths:1 values:\\"1cc\\"}'.*`,
 		// Wrap-up.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
@@ -496,7 +496,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		// Copy.
 		// Inserts may happen out-of-order. Update happen in-order.
 		"begin",
-		"insert into dst1(id,id2) values (1,1), (2,2)",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,id2) values (1,1), (2,2)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 	)).Then(qh.Immediately(
@@ -517,7 +517,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 	}).Then(qh.Eventually(
 		// copy dst2
 		"begin",
-		"insert into dst2(id,id2) values (1,21), (2,22)",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst2(id,id2) values (1,21), (2,22)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 	)).Then(qh.Immediately(
@@ -617,7 +617,7 @@ func testPlayerCopyTables(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
 		"begin",
-		"insert into dst1(id,val,val2,d,j) values (1,'aaa','aaa',0,JSON_ARRAY(123456789012345678901234567890, _utf8mb4'abcd')), (2,'bbb','bbb',1,JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar')), (3,'ccc','ccc',2,CAST(_utf8mb4'null' as JSON)), (4,'ddd','ddd',3,JSON_OBJECT(_utf8mb4'name', _utf8mb4'matt', _utf8mb4'size', null)), (5,'eee','eee',4,null)",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val,val2,d,j) values (1,'aaa','aaa',0,JSON_ARRAY(123456789012345678901234567890, _utf8mb4'abcd')), (2,'bbb','bbb',1,JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar')), (3,'ccc','ccc',2,CAST(_utf8mb4'null' as JSON)), (4,'ddd','ddd',3,JSON_OBJECT(_utf8mb4'name', _utf8mb4'matt', _utf8mb4'size', null)), (5,'eee','eee',4,null)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"5\\"}'.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
@@ -754,10 +754,10 @@ func testPlayerCopyBigTable(t *testing.T) {
 		"/insert into _vt.copy_state",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set state='Copying'",
-		"insert into dst(id,val) values (1,'aaa')",
+		"insert /*+ MAX_EXECUTION_TIME(500) */ into dst(id,val) values (1,'aaa')",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"1\\"}'.*`,
 		// The next catchup executes the new row insert, but will be a no-op.
-		"insert into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
+		"insert /*+ MAX_EXECUTION_TIME(500) */ into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
 		// Back to copy mode.
 		// Inserts can happen out-of-order.
@@ -884,21 +884,21 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		// The first fast-forward has no starting point. So, it just saves the current position.
-		"insert into src(id,val) values (1,'aaa')",
+		"insert /*+ MAX_EXECUTION_TIME(500) */ into src(id,val) values (1,'aaa')",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"1\\"}'.*`,
 		// The next catchup executes the new row insert, but will be a no-op.
-		"insert into src(id,val) select 3, 'ccc' from dual where (3) <= (1)",
+		"insert /*+ MAX_EXECUTION_TIME(500) */ into src(id,val) select /*+ MAX_EXECUTION_TIME(500) */ 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
 		// Return to copy mode.
 		// Inserts can happen out-of-order.
 		// Updates happen in-order.
 	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
-		ins1 := expect.Then(qh.Eventually("insert into src(id,val) values (2,'bbb')"))
+		ins1 := expect.Then(qh.Eventually("insert /*+ MAX_EXECUTION_TIME(500) */ into src(id,val) values (2,'bbb')"))
 		upd1 := ins1.Then(qh.Eventually(
 			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"2\\"}'.*`,
 		))
 		// Third row copied without going back to catchup state.
-		ins3 := expect.Then(qh.Eventually("insert into src(id,val) values (3,'ccc')"))
+		ins3 := expect.Then(qh.Eventually("insert /*+ MAX_EXECUTION_TIME(500) */ into src(id,val) values (3,'ccc')"))
 		upd3 := ins3.Then(qh.Eventually(
 			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"3\\"}'.*`,
 		))
@@ -1042,23 +1042,23 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 	expectNontxQueries(t, qh.Expect(
 		// Catchup
 		"/update _vt.vreplication set message='Picked source tablet.*",
-		"insert into dst1(id,val) select 1, 'insert in' from dual where (1,1) <= (6,6)",
-		"insert into dst1(id,val) select 7, 'insert out' from dual where (7,7) <= (6,6)",
-		"update dst1 set val='updated' where id=3 and (3,3) <= (6,6)",
-		"update dst1 set val='updated' where id=10 and (10,10) <= (6,6)",
-		"delete from dst1 where id=4 and (4,4) <= (6,6)",
-		"delete from dst1 where id=9 and (9,9) <= (6,6)",
-		"delete from dst1 where id=5 and (5,5) <= (6,6)",
-		"insert into dst1(id,val) select 5, 'move within' from dual where (5,10) <= (6,6)",
-		"delete from dst1 where id=6 and (6,6) <= (6,6)",
-		"insert into dst1(id,val) select 12, 'move out' from dual where (12,6) <= (6,6)",
-		"delete from dst1 where id=11 and (11,11) <= (6,6)",
-		"insert into dst1(id,val) select 4, 'move in' from dual where (4,11) <= (6,6)",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) select 1, 'insert in' from dual where (1,1) <= (6,6)",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) select 7, 'insert out' from dual where (7,7) <= (6,6)",
+		"update /*+ MAX_EXECUTION_TIME(3600000) */ dst1 set val='updated' where id=3 and (3,3) <= (6,6)",
+		"update /*+ MAX_EXECUTION_TIME(3600000) */ dst1 set val='updated' where id=10 and (10,10) <= (6,6)",
+		"delete /*+ MAX_EXECUTION_TIME(3600000) */ from dst1 where id=4 and (4,4) <= (6,6)",
+		"delete /*+ MAX_EXECUTION_TIME(3600000) */ from dst1 where id=9 and (9,9) <= (6,6)",
+		"delete /*+ MAX_EXECUTION_TIME(3600000) */ from dst1 where id=5 and (5,5) <= (6,6)",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) select /*+ MAX_EXECUTION_TIME(3600000) */ 5, 'move within' from dual where (5,10) <= (6,6)",
+		"delete /*+ MAX_EXECUTION_TIME(3600000) */ from dst1 where id=6 and (6,6) <= (6,6)",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) select /*+ MAX_EXECUTION_TIME(3600000) */ 12, 'move out' from dual where (12,6) <= (6,6)",
+		"delete /*+ MAX_EXECUTION_TIME(3600000) */ from dst1 where id=11 and (11,11) <= (6,6)",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) select /*+ MAX_EXECUTION_TIME(3600000) */ 4, 'move in' from dual where (4,11) <= (6,6)",
 		"update copied set val='bbb' where id=1",
 		// Fast-forward
-		"update dst1 set val='updated again' where id=3 and (3,3) <= (6,6)",
+		"update /*+ MAX_EXECUTION_TIME(3600000) */ dst1 set val='updated again' where id=3 and (3,3) <= (6,6)",
 	).Then(qh.Immediately(
-		"insert into dst1(id,val) values (7,'insert out'), (8,'no change'), (10,'updated'), (12,'move out')",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) values (7,'insert out'), (8,'no change'), (10,'updated'), (12,'move out')",
 	)).Then(qh.Eventually(
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id1\\" type:INT32 charset:63 flags:53251} fields:{name:\\"id2\\" type:INT32 charset:63 flags:53251} rows:{lengths:2 lengths:1 values:\\"126\\"}'.*`,
 	)).Then(qh.Immediately(
@@ -1174,9 +1174,9 @@ func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 		"/update _vt.vreplication set message='Picked source tablet.*",
 	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
 		if !optimizeInsertsEnabled {
-			expect = expect.Then(qh.Immediately("insert into dst(id,val) select 4, 'new' from dual where (4) <= (2)"))
+			expect = expect.Then(qh.Immediately("insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst(id,val) select /*+ MAX_EXECUTION_TIME(3600000) */ 4, 'new' from dual where (4) <= (2)"))
 		}
-		return expect.Then(qh.Immediately("insert into dst(id,val) values (3,'uncopied'), (4,'new')"))
+		return expect.Then(qh.Immediately("insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst(id,val) values (3,'uncopied'), (4,'new')"))
 	}).Then(qh.Immediately(
 		`/insert into _vt.copy_state .*`,
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
@@ -1269,7 +1269,7 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 		"/update _vt.vreplication set state = 'Copying'",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		// Copy
-		"insert into dst(id,val) values (3,'uncopied'), (4,'new')",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst(id,val) values (3,'uncopied'), (4,'new')",
 		`/insert into _vt.copy_state .*`,
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
 		"/update _vt.vreplication set state='Running'",
@@ -1473,7 +1473,7 @@ func testPlayerCopyTablesGIPK(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 	).Then(qh.Eventually(
 		"begin",
-		"insert into dst1(my_row_id,val) values (1,'aaa'), (2,'bbb')",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(my_row_id,val) values (1,'aaa'), (2,'bbb')",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"my_row_id\\" type:UINT64 charset:63 flags:49699} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 	)).Then(qh.Immediately(
@@ -1484,7 +1484,7 @@ func testPlayerCopyTablesGIPK(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 		"commit",
 		"begin",
-		"insert into dst2(my_row_id,val) values (1,'aaa'), (2,'bbb')",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst2(my_row_id,val) values (1,'aaa'), (2,'bbb')",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"my_row_id\\" type:UINT64 charset:63 flags:49699} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 	)).Then(qh.Immediately(
@@ -1574,7 +1574,7 @@ func testPlayerCopyTableCancel(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 	).Then(qh.Eventually(
 		"begin",
-		"insert into dst1(id,val) values (1,'aaa'), (2,'bbb')",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) values (1,'aaa'), (2,'bbb')",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 	)).Then(qh.Immediately(
@@ -1648,11 +1648,11 @@ func testPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state",
 		// The first fast-forward has no starting point. So, it just saves the current position.
-		"insert into dst1(id,val,val3,id2) values (1,'aaa','aaa1',10), (2,'bbb','bbb2',20)",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val,val3,id2) values (1,'aaa','aaa1',10), (2,'bbb','bbb2',20)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"2\\"}'.*`,
 		// copy of dst1 is done: delete from copy_state.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
-		"insert into dst2(val3,val,id2) values ('aaa1','aaa',10), ('bbb2','bbb',20)",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst2(val3,val,id2) values ('aaa1','aaa',10), ('bbb2','bbb',20)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"2\\"}'.*`,
 		// copy of dst2 is done: delete from copy_state.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst2",
@@ -1726,7 +1726,7 @@ func testCopyTablesWithInvalidDates(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 	).Then(qh.Eventually(
 		"begin",
-		"insert into dst1(id,dt) values (1,'2020-01-12'), (2,'0000-00-00')",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,dt) values (1,'2020-01-12'), (2,'0000-00-00')",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 	)).Then(qh.Immediately(
@@ -1816,7 +1816,7 @@ func testCopyInvisibleColumns(t *testing.T) {
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		// The first fast-forward has no starting point. So, it just saves the current position.
-		"insert into dst1(id,id2,inv1,inv2) values (1,10,100,1000), (2,20,200,2000)",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,id2,inv1,inv2) values (1,10,100,1000), (2,20,200,2000)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} fields:{name:\\"inv1\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 lengths:3 values:\\"2200\\"}'.*`,
 		// copy of dst1 is done: delete from copy_state.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
