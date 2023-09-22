@@ -105,10 +105,9 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	if sel.Having != nil {
-		op = &Filter{
-			Source:               op,
-			Predicates:           sqlparser.SplitAndExpression(nil, sel.Having.Expr),
-			PredicateWithOffsets: nil,
+		op, err = addWherePredicates(ctx, sel.Having.Expr, op)
+		if err != nil {
+			return nil, nil, err
 		}
 		extracted = append(extracted, "Filter")
 	}

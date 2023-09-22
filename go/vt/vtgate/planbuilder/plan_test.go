@@ -276,6 +276,8 @@ func TestOneWithUserAsDefault(t *testing.T) {
 }
 
 func TestOneWithTPCHVSchema(t *testing.T) {
+	reset := oprewriters.EnableDebugPrinting()
+	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/tpch_schema.json", true),
 		SysVarEnabled: true,

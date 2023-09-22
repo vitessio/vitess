@@ -82,12 +82,10 @@ func (a *Aggregator) SetInputs(operators []ops.Operator) {
 }
 
 func (a *Aggregator) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newOp, err := a.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	a.Source = newOp
-	return a, nil
+	return &Filter{
+		Source:     a,
+		Predicates: []sqlparser.Expr{expr},
+	}, nil
 }
 
 func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {

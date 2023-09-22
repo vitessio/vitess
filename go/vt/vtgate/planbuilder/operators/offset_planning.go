@@ -87,7 +87,7 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Op
 		return nil
 	}
 
-	visitor := getVisitor(ctx, in.FindCol, found, notFound)
+	visitor := getOffsetRewritingVisitor(ctx, in.FindCol, found, notFound)
 
 	// The cursor replace is not available while walking `down`, so `up` is used to do the replacement.
 	up := func(cursor *sqlparser.CopyOnWriteCursor) {
@@ -127,7 +127,7 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root ops.Operator) (ops
 			addedColumns = true
 			return nil
 		}
-		visitor := getVisitor(ctx, proj.FindCol, found, notFound)
+		visitor := getOffsetRewritingVisitor(ctx, proj.FindCol, found, notFound)
 
 		for _, expr := range filter.Predicates {
 			_ = sqlparser.CopyOnRewrite(expr, visitor, nil, ctx.SemTable.CopySemanticInfo)
@@ -163,10 +163,13 @@ func pullDistinctFromUNION(_ *plancontext.PlanningContext, root ops.Operator) (o
 	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
 }
 
-func getVisitor(
+func getOffsetRewritingVisitor(
 	ctx *plancontext.PlanningContext,
+	// this is the function that will be called to try to find the offset for an expression
 	findCol func(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error),
+	// this function will be called when an expression has been found on the input
 	found func(sqlparser.Expr, int),
+	// if we have an expression that mush be fetched, this method will be called
 	notFound func(sqlparser.Expr) error,
 ) func(node, parent sqlparser.SQLNode) bool {
 	var err error
