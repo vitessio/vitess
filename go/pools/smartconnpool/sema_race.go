@@ -23,6 +23,10 @@ import (
 	"time"
 )
 
+// semaphore is a slow implementation of a single-use synchronization primitive.
+// We use this inefficient implementation when running under the race detector
+// because the detector doesn't understand the synchronization performed by the
+// runtime's semaphore.
 type semaphore struct {
 	b atomic.Bool
 }

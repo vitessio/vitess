@@ -154,16 +154,6 @@ func TestConnPoolGetAppDebug(t *testing.T) {
 	}
 }
 
-func TestConnPoolPutWhilePoolIsClosed(t *testing.T) {
-	connPool := newPool()
-	defer func() {
-		if recover() == nil {
-			t.Fatalf("pool is closed, should get an error")
-		}
-	}()
-	connPool.Put(nil)
-}
-
 func TestConnPoolSetCapacity(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()

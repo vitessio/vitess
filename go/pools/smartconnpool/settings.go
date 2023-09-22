@@ -20,6 +20,10 @@ import (
 	"sync/atomic"
 )
 
+// Setting is a setting applied to a connection in this pool.
+// Setting values must be interned for optimal usage (i.e. a Setting
+// that represents a specific set of SQL connection settings should
+// always have the same pointer value).
 type Setting struct {
 	queryApply string
 	queryReset string

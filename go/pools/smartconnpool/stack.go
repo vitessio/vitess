@@ -21,11 +21,13 @@ import (
 	"sync/atomic"
 )
 
-type Stack[C Connection] struct {
+// connStack is a lock-free stack for Connection objects. It is safe to
+// use from several goroutines.
+type connStack[C Connection] struct {
 	top atomic.Pointer[Pooled[C]]
 }
 
-func (s *Stack[C]) Push(item *Pooled[C]) {
+func (s *connStack[C]) Push(item *Pooled[C]) {
 	for {
 		oldHead := s.top.Load()
 		item.next.Store(oldHead)
@@ -36,7 +38,7 @@ func (s *Stack[C]) Push(item *Pooled[C]) {
 	}
 }
 
-func (s *Stack[C]) Pop() (*Pooled[C], bool) {
+func (s *connStack[C]) Pop() (*Pooled[C], bool) {
 	var oldHead *Pooled[C]
 	var newHead *Pooled[C]
 
@@ -54,7 +56,7 @@ func (s *Stack[C]) Pop() (*Pooled[C], bool) {
 	}
 }
 
-func (s *Stack[C]) PopAll(out []*Pooled[C]) []*Pooled[C] {
+func (s *connStack[C]) PopAll(out []*Pooled[C]) []*Pooled[C] {
 	var oldHead *Pooled[C]
 
 	for {

@@ -26,6 +26,8 @@ func sync_runtime_Semacquire(addr *uint32)
 //go:linkname sync_runtime_Semrelease sync.runtime_Semrelease
 func sync_runtime_Semrelease(addr *uint32, handoff bool, skipframes int)
 
+// semaphore is a single-use synchronization primitive that allows a Goroutine
+// to wait until signaled. We use the Go runtime's internal implementation.
 type semaphore struct {
 	f uint32
 }

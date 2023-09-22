@@ -92,35 +92,60 @@ type Config[C Connection] struct {
 	LogWait         func(time.Time)
 }
 
+// stackMask is the number of connection setting stacks minus one;
+// the number of stacks must always be a power of two
 const stackMask = 7
 
+// ConnPool is a connection pool for generic connections
 type ConnPool[C Connection] struct {
-	clean              Stack[C]
-	settings           [stackMask + 1]Stack[C]
+	// clean is a connections stack for connections with no Setting applied
+	clean connStack[C]
+	// settings are N connection stacks for connections with a Setting applied
+	// connections are distributed between stacks based on their Setting.bucket
+	settings [stackMask + 1]connStack[C]
+	// freshSettingStack is the index in settings to the last stack when a connection
+	// was pushed, or -1 if no connection with a Setting has been opened in this pool
 	freshSettingsStack atomic.Int64
-	wait               waitlist[C]
+	// wait is the list of clients waiting for a connection to be returned to the pool
+	wait waitlist[C]
 
+	// borrowed is the number of connections that the pool has given out to clients
+	// and that haven't been returned yet
 	borrowed atomic.Int64
-	active   atomic.Int64
+	// active is the number of connections that the pool has opened; this includes connections
+	// in the pool and borrowed by clients
+	active atomic.Int64
+	// capacity is the maximum number of connections that this pool can open
 	capacity atomic.Int64
 
+	// workers is a waitgroup for all the currently running worker goroutines
 	workers sync.WaitGroup
 	close   chan struct{}
 
 	config struct {
+		// connect is the callback to create a new connection for the pool
 		connect Connector[C]
+		// refresh is the callback to check whether the pool needs to be refreshed
 		refresh RefreshCheck
 
-		maxCapacity     int64
-		maxLifetime     atomic.Int64
-		idleTimeout     atomic.Int64
+		// maxCapacity is the maximum value to which capacity can be set; when the pool
+		// is re-opened, it defaults to this capacity
+		maxCapacity int64
+		// maxLifetime is the maximum time a connection can be open
+		maxLifetime atomic.Int64
+		// idleTimeout is the maximum time a connection can remain idle
+		idleTimeout atomic.Int64
+		// refreshInterval is how often to call the refresh check
 		refreshInterval atomic.Int64
-		logWait         func(time.Time)
+		// logWait is called every time a client must block waiting for a connection
+		logWait func(time.Time)
 	}
 
 	Metrics Metrics
 }
 
+// NewPool creates a new connection pool with the given Config.
+// The pool must be ConnPool.Open before it can start giving out connections
 func NewPool[C Connection](config *Config[C]) *ConnPool[C] {
 	pool := &ConnPool[C]{}
 	pool.freshSettingsStack.Store(-1)
@@ -190,6 +215,8 @@ func (pool *ConnPool[C]) open() {
 	}
 }
 
+// Open starts the background workers that manage the pool and gets it ready
+// to start serving out connections.
 func (pool *ConnPool[C]) Open(connect Connector[C], refresh RefreshCheck) *ConnPool[C] {
 	if pool.close != nil {
 		// already open
@@ -202,7 +229,10 @@ func (pool *ConnPool[C]) Open(connect Connector[C], refresh RefreshCheck) *ConnP
 	return pool
 }
 
-func (pool *ConnPool[D]) Close() {
+// Close shuts down the pool. No connections will be returned from ConnPool.Get after calling this,
+// but calling ConnPool.Put is still allowed. This function will not return until all of the pool's
+// connections have been returned.
+func (pool *ConnPool[C]) Close() {
 	if pool.close == nil {
 		// already closed
 		return
@@ -215,7 +245,7 @@ func (pool *ConnPool[D]) Close() {
 	pool.close = nil
 }
 
-func (pool *ConnPool[D]) reopen() {
+func (pool *ConnPool[C]) reopen() {
 	capacity := pool.capacity.Load()
 	if capacity == 0 {
 		return
@@ -226,26 +256,34 @@ func (pool *ConnPool[D]) reopen() {
 	pool.SetCapacity(capacity)
 }
 
+// IsOpen returns whether the pool is open
 func (pool *ConnPool[C]) IsOpen() bool {
 	return pool.close != nil
 }
 
+// Capacity returns the maximum amount of connections that this pool can maintain open
 func (pool *ConnPool[C]) Capacity() int64 {
 	return pool.capacity.Load()
 }
 
+// MaxCapacity returns the maximum value to which Capacity can be set via ConnPool.SetCapacity
 func (pool *ConnPool[C]) MaxCapacity() int64 {
 	return pool.config.maxCapacity
 }
 
+// InUse returns the number of connections that the pool has lent out to clients and that
+// haven't been returned yet.
 func (pool *ConnPool[C]) InUse() int64 {
 	return pool.borrowed.Load()
 }
 
+// Available returns the number of connections that the pool can immediately lend out to
+// clients without blocking.
 func (pool *ConnPool[C]) Available() int64 {
 	return pool.capacity.Load() - pool.borrowed.Load()
 }
 
+// Active returns the numer of connections that the pool has currently open.
 func (pool *ConnPool[C]) Active() int64 {
 	return pool.active.Load()
 }
@@ -270,6 +308,10 @@ func (pool *ConnPool[C]) recordWait(start time.Time) {
 	}
 }
 
+// Get returns a connection from the pool with the given Setting applied.
+// If there are no connections in the pool to be returned, Get blocks until one
+// is returned, or until the given ctx is cancelled.
+// The connection must be returned to the pool once it's not needed by calling Pooled.Recycle
 func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C], error) {
 	if ctx.Err() != nil {
 		return nil, ErrCtxTimeout
@@ -280,7 +322,9 @@ func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C],
 	return pool.getWithSetting(ctx, setting)
 }
 
-func (pool *ConnPool[C]) Put(conn *Pooled[C]) {
+// put returns a connection to the pool. This is a private API.
+// Return connections to the pool by calling Pooled.Recycle
+func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 	pool.borrowed.Add(-1)
 
 	if conn != nil {
@@ -391,21 +435,27 @@ func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
 	}
 }
 
+// get returns a pooled connection with no Setting applied
 func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	pool.Metrics.getCount.Add(1)
 
+	// best case: if there's a connection in the clean stack, return it right away
 	if conn, ok := pool.clean.Pop(); ok {
 		pool.borrowed.Add(1)
 		return conn, nil
 	}
 
+	// check if we have enough capacity to open a brand new connection to return
 	conn, err := pool.getNew(ctx)
 	if err != nil {
 		return nil, err
 	}
+	// if we don't have capacity, try popping a connection from any of the setting stacks
 	if conn == nil {
 		conn = pool.getFromSettingsStack(nil)
 	}
+	// if there are no connections in the setting stacks and we've lent out connections
+	// to other clients, wait until one of the connections is returned
 	if conn == nil && pool.borrowed.Load() > 0 {
 		start := time.Now()
 		conn, err = pool.wait.waitForConn(ctx, nil)
@@ -413,16 +463,18 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 			if conn != nil {
 				// our context expired but we managed to get a conn from
 				// the waitlist; put it back!
-				pool.Put(conn)
+				pool.put(conn)
 			}
 			return nil, ErrTimeout
 		}
 		pool.recordWait(start)
 	}
+	// no connections available and no connections to wait for (pool is closed)
 	if conn == nil {
 		return nil, ErrTimeout
 	}
 
+	// if the connection we've acquired has a Setting applied, we must reset it before returning
 	if conn.Conn.Setting() != nil {
 		pool.Metrics.resetSetting.Add(1)
 
@@ -441,23 +493,31 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	return conn, nil
 }
 
+// getWithSetting returns a connection from the pool with the given Setting applied
 func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (*Pooled[C], error) {
 	pool.Metrics.getWithSettingsCount.Add(1)
 
 	var err error
+	// best case: check if there's a connection in the setting stack where our Setting belongs
 	conn, _ := pool.settings[setting.bucket&stackMask].Pop()
+	// if there's connection with our setting, try popping a clean connection
 	if conn == nil {
 		conn, _ = pool.clean.Pop()
 	}
+	// otherwise try opening a brand new connection and we'll apply the setting to it
 	if conn == nil {
 		conn, err = pool.getNew(ctx)
 		if err != nil {
 			return nil, err
 		}
 	}
+	// try on the _other_ setting stacks, even if we have to reset the Setting for the returned
+	// connection
 	if conn == nil {
 		conn = pool.getFromSettingsStack(setting)
 	}
+	// no connections anywhere in the pool; if we've lent out connections to other clients
+	// wait for one of them
 	if conn == nil && pool.borrowed.Load() > 0 {
 		start := time.Now()
 		conn, err = pool.wait.waitForConn(ctx, setting)
@@ -465,18 +525,21 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 			if conn != nil {
 				// our context expired but we managed to get a conn from
 				// the waitlist; put it back!
-				pool.Put(conn)
+				pool.put(conn)
 			}
 			return nil, ErrTimeout
 		}
 		pool.recordWait(start)
 	}
+	// no connections available and no connections to wait for (pool is closed)
 	if conn == nil {
 		return nil, ErrTimeout
 	}
 
+	// ensure that the setting applied to the connection matches the one we want
 	connSetting := conn.Conn.Setting()
 	if connSetting != setting {
+		// if there's another setting applied, reset it before applying our setting
 		if connSetting != nil {
 			pool.Metrics.diffSetting.Add(1)
 
@@ -490,6 +553,8 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 				}
 			}
 		}
+		// apply our setting now; if we can't we assume that the conn is broken
+		// and close it without returning to the pool
 		if err := conn.Conn.ApplySetting(ctx, setting); err != nil {
 			conn.Close()
 			pool.active.Add(-1)
@@ -501,6 +566,10 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 	return conn, nil
 }
 
+// SetCapacity changes the capacity (number of open connections) on the pool.
+// If the capacity is smaller than the number of connections that there are
+// currently open, we'll close enough connections before returning, even if
+// that means waiting for clients to return connections to the pool.
 func (pool *ConnPool[C]) SetCapacity(newcap int64) {
 	if newcap < 0 {
 		panic("negative capacity")
@@ -518,11 +587,15 @@ func (pool *ConnPool[C]) SetCapacity(newcap int64) {
 		}
 	}
 
+	// close connections until we're under capacity
 	for pool.active.Load() > newcap {
+		// try closing from connections which are currently idle in the stacks
 		conn := pool.getFromSettingsStack(nil)
 		if conn == nil {
 			conn, _ = pool.clean.Pop()
 		}
+		// if we can't find connections in the stacks, try waiting for clients
+		// to return one
 		if conn == nil {
 			conn, _ = pool.wait.waitForConn(context.Background(), nil)
 		}
@@ -545,7 +618,7 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 
 	var conns []*Pooled[C]
 
-	closeInStack := func(s *Stack[C]) {
+	closeInStack := func(s *connStack[C]) {
 		conns = s.PopAll(conns[:0])
 		slices.Reverse(conns)
 
@@ -584,6 +657,7 @@ func (pool *ConnPool[C]) StatsJSON() map[string]any {
 	}
 }
 
+// RegisterStats registers this pool's metrics into a stats Exporter
 func (pool *ConnPool[C]) RegisterStats(stats *servenv.Exporter, name string) {
 	if stats == nil || name == "" {
 		return

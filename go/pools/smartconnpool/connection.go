@@ -49,9 +49,9 @@ func (dbc *Pooled[C]) Recycle() {
 	case dbc.pool == nil:
 		dbc.Conn.Close()
 	case dbc.Conn.IsClosed():
-		dbc.pool.Put(nil)
+		dbc.pool.put(nil)
 	default:
-		dbc.pool.Put(dbc)
+		dbc.pool.put(dbc)
 	}
 }
 
@@ -59,6 +59,6 @@ func (dbc *Pooled[C]) Taint() {
 	if dbc.pool == nil {
 		return
 	}
-	dbc.pool.Put(nil)
+	dbc.pool.put(nil)
 	dbc.pool = nil
 }
