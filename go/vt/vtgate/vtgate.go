@@ -114,7 +114,7 @@ var (
 
 	warmingReadsPercent      = 0
 	warmingReadsQueryTimeout = 5 * time.Second
-	warmingReadsPoolSize     = 100
+	warmingReadsPoolSize     = 500
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -149,7 +149,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&enableViews, "enable-views", enableViews, "Enable views support in vtgate.")
 	fs.BoolVar(&allowKillStmt, "allow-kill-statement", allowKillStmt, "Allows the execution of kill statement")
 	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm (default 0)")
-	fs.IntVar(&warmingReadsPoolSize, "warming-reads-pool-size", 100, "Size of goroutine pool for warming reads (default 100)")
+	fs.IntVar(&warmingReadsPoolSize, "warming-reads-pool-size", 500, "Size of goroutine pool for warming reads (default 500)")
 	fs.DurationVar(&warmingReadsQueryTimeout, "warming-reads-query-timeout", 5*time.Second, "Timeout of warming read queries (default 5s)")
 
 	_ = fs.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")

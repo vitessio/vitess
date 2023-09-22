@@ -230,7 +230,7 @@ Flags:
       --vschema_ddl_authorized_users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
       --vtgate-config-terse-errors                                       prevent bind vars from escaping in returned errors
       --warming-reads-percent int                                        Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm. (default 0)
-      --warming-reads-pool-size int                                      Size of goroutine pool for warming reads (default 100)
+      --warming-reads-pool-size int                                      Size of goroutine pool for warming reads (default 500)
       --warming-reads-query-timeout duration                             Timeout of warming read queries (default 5s)
       --warn_memory_rows int                                             Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented. (default 30000)
       --warn_payload_size int                                            The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.

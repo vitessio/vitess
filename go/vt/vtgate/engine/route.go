@@ -628,5 +628,6 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 			}
 		}(replicaVCursor)
 	default:
+		log.Warning("Failed to execute warming replica read as pool is full")
 	}
 }
