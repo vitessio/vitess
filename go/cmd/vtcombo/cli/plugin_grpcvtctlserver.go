@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,8 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
 import (
-	_ "vitess.io/vitess/go/vt/mysqlctl/azblobbackupstorage"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctlserver"
 )
+
+func init() {
+	servenv.OnRun(func() {
+		if servenv.GRPCCheckServiceMap("vtctl") {
+			grpcvtctlserver.StartServer(servenv.GRPCServer, ts)
+		}
+	})
+}
