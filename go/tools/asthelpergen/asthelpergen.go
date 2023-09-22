@@ -208,10 +208,10 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 		return nil, err
 	}
 
-	exprType, err := findTypeObject(exprInterfacePath, scopes)
-	exprInterface := exprType.Type().(*types.Named).Underlying().(*types.Interface)
-	if err != nil {
-		return nil, err
+	exprType, _ := findTypeObject(exprInterfacePath, scopes)
+	var exprInterface *types.Interface
+	if exprType != nil {
+		exprInterface = exprType.Type().(*types.Named).Underlying().(*types.Interface)
 	}
 
 	nt := tt.Type().(*types.Named)

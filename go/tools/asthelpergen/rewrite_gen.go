@@ -230,7 +230,7 @@ func setupCursor() []jen.Code {
 }
 func (r *rewriteGen) executePre(t types.Type) jen.Code {
 	curStmts := setupCursor()
-	if types.Implements(t, r.exprInterface) {
+	if r.exprInterface != nil && types.Implements(t, r.exprInterface) {
 		curStmts = append(curStmts, jen.Id("kontinue").Op(":=").Id("!a.pre(&a.cur)"),
 			jen.If(jen.Id("a.cur.revisit").Block(
 				jen.Id("a.cur.revisit").Op("=").False(),
