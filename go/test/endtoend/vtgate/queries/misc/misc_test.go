@@ -244,3 +244,11 @@ func TestBuggyOuterJoin(t *testing.T) {
 
 	mcmp.Exec("select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2")
 }
+
+func TestLeftJoinUsingUnsharded(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=2000 */ into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
+	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=2000 */ * from uks.unsharded as A left join uks.unsharded as B using(id1)")
+}

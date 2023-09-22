@@ -42,7 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-const vttabletStateTimeout = 30 * time.Second
+const vttabletStateTimeout = 60 * time.Second
 
 // VttabletProcess is a generic handle for a running vttablet .
 // It can be spawned manually
@@ -71,6 +71,7 @@ type VttabletProcess struct {
 	QueryzURL                   string
 	StatusDetailsURL            string
 	SupportsBackup              bool
+	ExplicitServingStatus       bool
 	ServingStatus               string
 	DbPassword                  string
 	DbPort                      int
@@ -79,7 +80,7 @@ type VttabletProcess struct {
 	Charset                     string
 	ConsolidationsURL           string
 
-	//Extra Args to be set before starting the vttablet process
+	// Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
 	proc *exec.Cmd
@@ -149,7 +150,15 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	}()
 
 	if vttablet.ServingStatus != "" {
-		if err = vttablet.WaitForTabletStatus(vttablet.ServingStatus); err != nil {
+		// If the tablet has an explicit serving status we use the serving status
+		// otherwise we wait for any serving status to show up in the healthcheck.
+		var servingStatus []string
+		if vttablet.ExplicitServingStatus {
+			servingStatus = append(servingStatus, vttablet.ServingStatus)
+		} else {
+			servingStatus = append(servingStatus, "SERVING", "NOT_SERVING")
+		}
+		if err = vttablet.WaitForTabletStatuses(servingStatus); err != nil {
 			errFileContent, _ := os.ReadFile(fname)
 			if errFileContent != nil {
 				log.Infof("vttablet error:\n%s\n", string(errFileContent))
