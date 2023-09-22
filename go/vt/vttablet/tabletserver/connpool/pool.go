@@ -45,7 +45,7 @@ const (
 	getWithS    = "GetWithSettings"
 )
 
-type DBConn = smartconnpool.Pooled[*Connection]
+type PooledConn = smartconnpool.Pooled[*Conn]
 
 // Pool implements a custom connection pool for tabletserver.
 // It's similar to dbconnpool.ConnPool, but the connections it creates
@@ -54,7 +54,7 @@ type DBConn = smartconnpool.Pooled[*Connection]
 // Other than the connection type, ConnPool maintains an additional
 // pool of dba connections that are used to kill connections.
 type Pool struct {
-	*smartconnpool.ConnPool[*Connection]
+	*smartconnpool.ConnPool[*Conn]
 	dbaPool *dbconnpool.ConnectionPool
 
 	timeout time.Duration
@@ -72,7 +72,7 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 		env:     env,
 	}
 
-	config := smartconnpool.Config[*Connection]{
+	config := smartconnpool.Config[*Conn]{
 		Capacity:        int64(cfg.Size),
 		IdleTimeout:     cfg.IdleTimeoutSeconds.Get(),
 		MaxLifetime:     cfg.MaxLifetimeSeconds.Get(),
@@ -104,8 +104,8 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 		refresh = netutil.DNSTracker(appParams.Host())
 	}
 
-	connect := func(ctx context.Context) (*Connection, error) {
-		return newPooledConnection(ctx, cp, appParams)
+	connect := func(ctx context.Context) (*Conn, error) {
+		return newPooledConn(ctx, cp, appParams)
 	}
 
 	cp.ConnPool.Open(connect, refresh)
@@ -121,16 +121,16 @@ func (cp *Pool) Close() {
 
 // Get returns a connection.
 // You must call Recycle on DBConn once done.
-func (cp *Pool) Get(ctx context.Context, setting *smartconnpool.Setting) (*DBConn, error) {
+func (cp *Pool) Get(ctx context.Context, setting *smartconnpool.Setting) (*PooledConn, error) {
 	span, ctx := trace.NewSpan(ctx, "Pool.Get")
 	defer span.Finish()
 
 	if cp.isCallerIDAppDebug(ctx) {
-		conn, err := NewConnectionNoPool(ctx, cp.appDebugParams, cp.dbaPool, setting)
+		conn, err := NewConn(ctx, cp.appDebugParams, cp.dbaPool, setting)
 		if err != nil {
 			return nil, err
 		}
-		return &smartconnpool.Pooled[*Connection]{Conn: conn}, nil
+		return &smartconnpool.Pooled[*Conn]{Conn: conn}, nil
 	}
 	span.Annotate("capacity", cp.Capacity())
 	span.Annotate("in_use", cp.InUse())

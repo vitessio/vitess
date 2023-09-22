@@ -40,12 +40,12 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// Connection is a db connection for tabletserver.
+// Conn is a db connection for tabletserver.
 // It performs automatic reconnects as needed.
 // Its Execute function has a timeout that can kill
 // its own queries and the underlying connection.
 // It will also trigger a CheckMySQL whenever applicable.
-type Connection struct {
+type Conn struct {
 	conn    *dbconnpool.DBConnection
 	setting *smartconnpool.Setting
 
@@ -60,7 +60,7 @@ type Connection struct {
 }
 
 // NewConnection creates a new DBConn. It triggers a CheckMySQL if creation fails.
-func newPooledConnection(ctx context.Context, pool *Pool, appParams dbconfigs.Connector) (*Connection, error) {
+func newPooledConn(ctx context.Context, pool *Pool, appParams dbconfigs.Connector) (*Conn, error) {
 	start := time.Now()
 	defer pool.env.Stats().MySQLTimings.Record("Connect", start)
 
@@ -70,7 +70,7 @@ func newPooledConnection(ctx context.Context, pool *Pool, appParams dbconfigs.Co
 		pool.env.CheckMySQL()
 		return nil, err
 	}
-	db := &Connection{
+	db := &Conn{
 		conn:    c,
 		env:     pool.env,
 		stats:   pool.env.Stats(),
@@ -80,13 +80,13 @@ func newPooledConnection(ctx context.Context, pool *Pool, appParams dbconfigs.Co
 	return db, nil
 }
 
-// NewConnectionNoPool creates a new DBConn without a pool.
-func NewConnectionNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool, setting *smartconnpool.Setting) (*Connection, error) {
+// NewConn creates a new Conn without a pool.
+func NewConn(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool, setting *smartconnpool.Setting) (*Conn, error) {
 	c, err := dbconnpool.NewDBConnection(ctx, params)
 	if err != nil {
 		return nil, err
 	}
-	dbconn := &Connection{
+	dbconn := &Conn{
 		conn:    c,
 		dbaPool: dbaPool,
 		stats:   tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
@@ -104,7 +104,7 @@ func NewConnectionNoPool(ctx context.Context, params dbconfigs.Connector, dbaPoo
 
 // Err returns an error if there was a client initiated error
 // like a query kill.
-func (dbc *Connection) Err() error {
+func (dbc *Conn) Err() error {
 	dbc.errmu.Lock()
 	defer dbc.errmu.Unlock()
 	return dbc.err
@@ -112,7 +112,7 @@ func (dbc *Connection) Err() error {
 
 // Exec executes the specified query. If there is a connection error, it will reconnect
 // and retry. A failed reconnect will trigger a CheckMySQL.
-func (dbc *Connection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+func (dbc *Conn) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	span, ctx := trace.NewSpan(ctx, "DBConn.Exec")
 	defer span.Finish()
 
@@ -133,7 +133,7 @@ func (dbc *Connection) Exec(ctx context.Context, query string, maxrows int, want
 			return nil, err
 		}
 
-		// Connection error. Retry if context has not expired.
+		// Conn error. Retry if context has not expired.
 		select {
 		case <-ctx.Done():
 			return nil, err
@@ -151,7 +151,7 @@ func (dbc *Connection) Exec(ctx context.Context, query string, maxrows int, want
 	panic("unreachable")
 }
 
-func (dbc *Connection) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	dbc.current.Store(query)
 	defer dbc.current.Store("")
 
@@ -177,12 +177,12 @@ func (dbc *Connection) execOnce(ctx context.Context, query string, maxrows int, 
 }
 
 // ExecOnce executes the specified query, but does not retry on connection errors.
-func (dbc *Connection) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+func (dbc *Conn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	return dbc.execOnce(ctx, query, maxrows, wantfields)
 }
 
 // FetchNext returns the next result set.
-func (dbc *Connection) FetchNext(ctx context.Context, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+func (dbc *Conn) FetchNext(ctx context.Context, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	// Check if the context is already past its deadline before
 	// trying to fetch the next result.
 	if err := ctx.Err(); err != nil {
@@ -197,7 +197,7 @@ func (dbc *Connection) FetchNext(ctx context.Context, maxrows int, wantfields bo
 }
 
 // Stream executes the query and streams the results.
-func (dbc *Connection) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
+func (dbc *Conn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
 	span, ctx := trace.NewSpan(ctx, "DBConn.Stream")
 	trace.AnnotateSQL(span, sqlparser.Preview(query))
 	defer span.Finish()
@@ -235,7 +235,7 @@ func (dbc *Connection) Stream(ctx context.Context, query string, callback func(*
 			return err
 		}
 
-		// Connection error. Retry if context has not expired.
+		// Conn error. Retry if context has not expired.
 		if ctx.Err() != nil {
 			return err
 		}
@@ -248,7 +248,7 @@ func (dbc *Connection) Stream(ctx context.Context, query string, callback func(*
 	panic("unreachable")
 }
 
-func (dbc *Connection) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int) error {
+func (dbc *Conn) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int) error {
 	defer dbc.stats.MySQLTimings.Record("ExecStream", time.Now())
 
 	dbc.current.Store(query)
@@ -268,7 +268,7 @@ func (dbc *Connection) streamOnce(ctx context.Context, query string, callback fu
 }
 
 // StreamOnce executes the query and streams the results. But, does not retry on connection errors.
-func (dbc *Connection) StreamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
+func (dbc *Conn) StreamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
 	resultSent := false
 	return dbc.streamOnce(
 		ctx,
@@ -293,7 +293,7 @@ var (
 
 // VerifyMode is a helper method to verify mysql is running with
 // sql_mode = STRICT_TRANS_TABLES or STRICT_ALL_TABLES and autocommit=ON.
-func (dbc *Connection) VerifyMode(strictTransTables bool) error {
+func (dbc *Conn) VerifyMode(strictTransTables bool) error {
 	if strictTransTables {
 		qr, err := dbc.conn.ExecuteFetch(getModeSQL, 2, false)
 		if err != nil {
@@ -331,12 +331,12 @@ func (dbc *Connection) VerifyMode(strictTransTables bool) error {
 }
 
 // Close closes the DBConn.
-func (dbc *Connection) Close() {
+func (dbc *Conn) Close() {
 	dbc.conn.Close()
 }
 
 // ApplySetting implements the pools.Resource interface.
-func (dbc *Connection) ApplySetting(ctx context.Context, setting *smartconnpool.Setting) error {
+func (dbc *Conn) ApplySetting(ctx context.Context, setting *smartconnpool.Setting) error {
 	if _, err := dbc.execOnce(ctx, setting.ApplyQuery(), 1, false); err != nil {
 		return err
 	}
@@ -345,7 +345,7 @@ func (dbc *Connection) ApplySetting(ctx context.Context, setting *smartconnpool.
 }
 
 // ResetSetting implements the pools.Resource interface.
-func (dbc *Connection) ResetSetting(ctx context.Context) error {
+func (dbc *Conn) ResetSetting(ctx context.Context) error {
 	if _, err := dbc.execOnce(ctx, dbc.setting.ResetQuery(), 1, false); err != nil {
 		return err
 	}
@@ -353,19 +353,19 @@ func (dbc *Connection) ResetSetting(ctx context.Context) error {
 	return nil
 }
 
-func (dbc *Connection) Setting() *smartconnpool.Setting {
+func (dbc *Conn) Setting() *smartconnpool.Setting {
 	return dbc.setting
 }
 
 // IsClosed returns true if DBConn is closed.
-func (dbc *Connection) IsClosed() bool {
+func (dbc *Conn) IsClosed() bool {
 	return dbc.conn.IsClosed()
 }
 
 // Kill kills the currently executing query both on MySQL side
 // and on the connection side. If no query is executing, it's a no-op.
 // Kill will also not kill a query more than once.
-func (dbc *Connection) Kill(reason string, elapsed time.Duration) error {
+func (dbc *Conn) Kill(reason string, elapsed time.Duration) error {
 	dbc.stats.KillCounters.Add("Queries", 1)
 	log.Infof("Due to %s, elapsed time: %v, killing query ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.CurrentForLogging())
 
@@ -393,33 +393,33 @@ func (dbc *Connection) Kill(reason string, elapsed time.Duration) error {
 }
 
 // Current returns the currently executing query.
-func (dbc *Connection) Current() string {
+func (dbc *Conn) Current() string {
 	return dbc.current.Load().(string)
 }
 
 // ID returns the connection id.
-func (dbc *Connection) ID() int64 {
+func (dbc *Conn) ID() int64 {
 	return dbc.conn.ID()
 }
 
 // BaseShowTables returns a query that shows tables
-func (dbc *Connection) BaseShowTables() string {
+func (dbc *Conn) BaseShowTables() string {
 	return dbc.conn.BaseShowTables()
 }
 
 // BaseShowTablesWithSizes returns a query that shows tables and their sizes
-func (dbc *Connection) BaseShowTablesWithSizes() string {
+func (dbc *Conn) BaseShowTablesWithSizes() string {
 	return dbc.conn.BaseShowTablesWithSizes()
 }
 
-func (dbc *Connection) ConnCheck(ctx context.Context) error {
+func (dbc *Conn) ConnCheck(ctx context.Context) error {
 	if err := dbc.conn.ConnCheck(); err != nil {
 		return dbc.Reconnect(ctx)
 	}
 	return nil
 }
 
-func (dbc *Connection) Reconnect(ctx context.Context) error {
+func (dbc *Conn) Reconnect(ctx context.Context) error {
 	err := dbc.conn.Reconnect(ctx)
 	if err != nil {
 		return err
@@ -440,7 +440,7 @@ func (dbc *Connection) Reconnect(ctx context.Context) error {
 // if the deadline is exceeded. It returns a channel and a waitgroup. After the
 // query is done executing, the caller is required to close the done channel
 // and wait for the waitgroup to make sure that the necessary cleanup is done.
-func (dbc *Connection) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup) {
+func (dbc *Conn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup) {
 	if ctx.Done() == nil {
 		return nil, nil
 	}
@@ -478,7 +478,7 @@ func (dbc *Connection) setDeadline(ctx context.Context) (chan bool, *sync.WaitGr
 // CurrentForLogging applies transformations to the query making it suitable to log.
 // It applies sanitization rules based on tablet settings and limits the max length of
 // queries.
-func (dbc *Connection) CurrentForLogging() string {
+func (dbc *Conn) CurrentForLogging() string {
 	var queryToLog string
 	if dbc.env != nil && dbc.env.Config() != nil && !dbc.env.Config().SanitizeLogMessages {
 		queryToLog = dbc.Current()
@@ -488,7 +488,7 @@ func (dbc *Connection) CurrentForLogging() string {
 	return sqlparser.TruncateForLog(queryToLog)
 }
 
-func (dbc *Connection) applySameSetting(ctx context.Context) (err error) {
+func (dbc *Conn) applySameSetting(ctx context.Context) (err error) {
 	_, err = dbc.execOnce(ctx, dbc.setting.ApplyQuery(), 1, false)
 	return
 }

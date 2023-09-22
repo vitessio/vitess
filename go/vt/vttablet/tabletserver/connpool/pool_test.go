@@ -289,7 +289,7 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	// Steps 4: acquire a connection with different setting - this will show diff setting count
 
 	// Step 1
-	var conns []*DBConn
+	var conns []*PooledConn
 	for i := 0; i < capacity; i++ {
 		dbConn, err = connPool.Get(context.Background(), sa)
 		require.NoError(t, err)

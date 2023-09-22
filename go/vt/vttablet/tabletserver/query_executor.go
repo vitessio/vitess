@@ -362,7 +362,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	// if we have a transaction id, let's use the txPool for this query
-	var conn *connpool.DBConn
+	var conn *connpool.PooledConn
 	if qre.connID != 0 {
 		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for streaming query")
 		if err != nil {
@@ -768,7 +768,7 @@ func (qre *QueryExecutor) execOther() (*sqltypes.Result, error) {
 	return qre.execDBConn(conn.Conn, qre.query, true)
 }
 
-func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
+func (qre *QueryExecutor) getConn() (*connpool.PooledConn, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getConn")
 	defer span.Finish()
 
@@ -785,7 +785,7 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 	return nil, err
 }
 
-func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
+func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getStreamConn")
 	defer span.Finish()
 
@@ -1047,7 +1047,7 @@ func (qre *QueryExecutor) execShowThrottlerStatus() (*sqltypes.Result, error) {
 	return result, nil
 }
 
-func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.Connection) error {
+func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.Conn) error {
 	more := true
 	for more {
 		qr, err := conn.FetchNext(qre.ctx, int(qre.getSelectLimit()), true)
@@ -1063,7 +1063,7 @@ func (qre *QueryExecutor) getSelectLimit() int64 {
 	return qre.tsv.qe.maxResultSize.Load()
 }
 
-func (qre *QueryExecutor) execDBConn(conn *connpool.Connection, sql string, wantfields bool) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields bool) (*sqltypes.Result, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execDBConn")
 	defer span.Finish()
 
@@ -1089,7 +1089,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
 }
 
-func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	callBackClosingSpan := func(result *sqltypes.Result) error {

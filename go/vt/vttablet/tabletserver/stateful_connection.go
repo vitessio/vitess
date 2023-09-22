@@ -40,7 +40,7 @@ import (
 // NOTE: After use, if must be returned either by doing a Unlock() or a Release().
 type StatefulConnection struct {
 	pool           *StatefulConnectionPool
-	dbConn         *connpool.DBConn
+	dbConn         *connpool.PooledConn
 	ConnID         tx.ConnID
 	env            tabletenv.Env
 	txProps        *tx.Properties
@@ -218,7 +218,7 @@ func (sc *StatefulConnection) ReservedID() tx.ConnID {
 }
 
 // UnderlyingDBConn returns the underlying database connection
-func (sc *StatefulConnection) UnderlyingDBConn() *connpool.DBConn {
+func (sc *StatefulConnection) UnderlyingDBConn() *connpool.PooledConn {
 	return sc.dbConn
 }
 

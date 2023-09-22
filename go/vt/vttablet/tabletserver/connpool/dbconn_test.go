@@ -66,7 +66,7 @@ func TestDBConnExec(t *testing.T) {
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
-	dbConn, err := newPooledConnection(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -139,7 +139,7 @@ func TestDBConnExecLost(t *testing.T) {
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
-	dbConn, err := newPooledConnection(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -200,7 +200,7 @@ func TestDBConnDeadline(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(50*time.Millisecond))
 	defer cancel()
 
-	dbConn, err := newPooledConnection(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -253,7 +253,7 @@ func TestDBConnKill(t *testing.T) {
 	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	dbConn, err := newPooledConnection(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -299,7 +299,7 @@ func TestDBConnClose(t *testing.T) {
 	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	dbConn, err := newPooledConnection(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	require.NoError(t, err)
 	defer dbConn.Close()
 
@@ -324,7 +324,7 @@ func TestDBNoPoolConnKill(t *testing.T) {
 	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	dbConn, err := NewConnectionNoPool(context.Background(), db.ConnParams(), connPool.dbaPool, nil)
+	dbConn, err := NewConn(context.Background(), db.ConnParams(), connPool.dbaPool, nil)
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -380,7 +380,7 @@ func TestDBConnStream(t *testing.T) {
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
-	dbConn, err := newPooledConnection(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -438,7 +438,7 @@ func TestDBConnStreamKill(t *testing.T) {
 	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	dbConn, err := newPooledConnection(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	require.NoError(t, err)
 	defer dbConn.Close()
 
@@ -468,7 +468,7 @@ func TestDBConnReconnect(t *testing.T) {
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 
-	dbConn, err := newPooledConnection(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	require.NoError(t, err)
 	defer dbConn.Close()
 
@@ -494,7 +494,7 @@ func TestDBConnReApplySetting(t *testing.T) {
 	defer connPool.Close()
 
 	ctx := context.Background()
-	dbConn, err := newPooledConnection(ctx, connPool, db.ConnParams())
+	dbConn, err := newPooledConn(ctx, connPool, db.ConnParams())
 	require.NoError(t, err)
 	defer dbConn.Close()
 

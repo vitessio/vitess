@@ -589,7 +589,7 @@ func (se *Engine) getDroppedTables(curTables map[string]bool, changedViews map[s
 	return maps2.Values(dropped)
 }
 
-func getTableData(ctx context.Context, conn *connpool.Connection, includeStats bool) (*sqltypes.Result, error) {
+func getTableData(ctx context.Context, conn *connpool.Conn, includeStats bool) (*sqltypes.Result, error) {
 	var showTablesQuery string
 	if includeStats {
 		showTablesQuery = conn.BaseShowTablesWithSizes()
@@ -599,7 +599,7 @@ func getTableData(ctx context.Context, conn *connpool.Connection, includeStats b
 	return conn.Exec(ctx, showTablesQuery, maxTableCount, false)
 }
 
-func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.Connection) error {
+func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.Conn) error {
 	readRowsData, err := conn.Exec(ctx, mysql.ShowRowsRead, 10, false)
 	if err != nil {
 		return err
@@ -618,7 +618,7 @@ func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.Conne
 	return nil
 }
 
-func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.Connection) (int64, error) {
+func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.Conn) (int64, error) {
 	// Keep `SELECT UNIX_TIMESTAMP` is in uppercase because binlog server queries are case sensitive and expect it to be so.
 	tm, err := conn.Exec(ctx, "SELECT UNIX_TIMESTAMP()", 1, false)
 	if err != nil {
@@ -635,7 +635,7 @@ func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.Connection) (int
 }
 
 // populatePrimaryKeys populates the PKColumns for the specified tables.
-func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.Connection, tables map[string]*Table) error {
+func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.Conn, tables map[string]*Table) error {
 	pkData, err := conn.Exec(ctx, mysql.BaseShowPrimary, maxTableCount, false)
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get table primary key info: %v", err)
@@ -789,7 +789,7 @@ func newMinimalTable(st *Table) *binlogdatapb.MinimalTable {
 }
 
 // GetConnection returns a connection from the pool
-func (se *Engine) GetConnection(ctx context.Context) (*connpool.DBConn, error) {
+func (se *Engine) GetConnection(ctx context.Context) (*connpool.PooledConn, error) {
 	return se.conns.Get(ctx, nil)
 }
 
