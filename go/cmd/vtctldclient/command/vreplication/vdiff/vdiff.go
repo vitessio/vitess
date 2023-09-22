@@ -154,7 +154,8 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 			case "all":
 			default:
 				if _, err := uuid.Parse(args[0]); err != nil {
-					return fmt.Errorf("invalid UUID provided: %v", err)
+					return fmt.Errorf("invalid argument provided (%s), valid arguments are 'all' or a valid UUID",
+						args[0])
 				}
 			}
 			deleteOptions.Arg = larg
@@ -198,7 +199,8 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 			case "last", "all":
 			default:
 				if _, err := uuid.Parse(args[0]); err != nil {
-					return fmt.Errorf("invalid UUID provided: %v", err)
+					return fmt.Errorf("invalid argument provided (%s), valid arguments are 'all', 'last', or a valid UUID",
+						args[0])
 				}
 			}
 			showOptions.Arg = larg
@@ -372,7 +374,7 @@ func commandResume(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// tableSummary aggregates/selects the current state of the table diff from all shards.
+// tableSummary aggregates the current state of the table diff from all shards.
 type tableSummary struct {
 	TableName       string
 	State           vdiff.VDiffState
@@ -384,7 +386,7 @@ type tableSummary struct {
 	LastUpdated     string `json:"LastUpdated,omitempty"`
 }
 
-// summary aggregates/selects the current state of the vdiff from all shards.
+// summary aggregates the current state of the vdiff from all shards.
 type summary struct {
 	Workflow, Keyspace string
 	State              vdiff.VDiffState
@@ -447,25 +449,25 @@ func getStructFieldNames(s any) []string {
 }
 
 func displayListings(listings []*listing) string {
-	var strArray2 [][]string
-	var strArray []string
+	var values []string
+	var lines [][]string
 	var result string
 
 	if len(listings) == 0 {
 		return ""
 	}
+	// Get the column headers.
 	fields := getStructFieldNames(listing{})
-	strArray = append(strArray, fields...)
-	strArray2 = append(strArray2, strArray)
+	// The header is the first row.
+	lines = append(lines, fields)
 	for _, listing := range listings {
-		strArray = nil
 		v := reflect.ValueOf(*listing)
 		for _, field := range fields {
-			strArray = append(strArray, v.FieldByName(field).String())
+			values = append(values, v.FieldByName(field).String())
 		}
-		strArray2 = append(strArray2, strArray)
+		lines = append(lines, values)
 	}
-	t := gotabulate.Create(strArray2)
+	t := gotabulate.Create(lines)
 	result = t.Render("grid")
 	return result
 }
@@ -481,7 +483,7 @@ func displayShowResponse(format, keyspace, workflowName, actionArg string, resp 
 			vdiffUUID, err = uuid.Parse(resp.VdiffUuid)
 			if err != nil {
 				if format == "json" {
-					fmt.Printf("{}\n")
+					fmt.Println("{}")
 				} else {
 					fmt.Printf("No previous vdiff found for %s.%s\n", keyspace, workflowName)
 				}
@@ -507,12 +509,12 @@ func displayShowResponse(format, keyspace, workflowName, actionArg string, resp 
 
 func displayShowRecent(format, keyspace, workflowName, subCommand string, resp *vtctldatapb.VDiffShowResponse) error {
 	output := ""
-	recent, err := buildRecentListings(resp)
+	recentListings, err := buildRecentListings(resp)
 	if err != nil {
 		return err
 	}
 	if format == "json" {
-		jsonText, err := cli.MarshalJSONPretty(recent)
+		jsonText, err := cli.MarshalJSONPretty(recentListings)
 		if err != nil {
 			return err
 		}
@@ -521,7 +523,7 @@ func displayShowRecent(format, keyspace, workflowName, subCommand string, resp *
 			output = "[]"
 		}
 	} else {
-		output = displayListings(recent)
+		output = displayListings(recentListings)
 		if output == "" {
 			output = fmt.Sprintf("No vdiffs found for %s.%s", keyspace, workflowName)
 		}
@@ -556,6 +558,9 @@ func displayShowSingleSummary(format, keyspace, workflowName, uuid string, resp 
 	if err != nil {
 		return state, err
 	}
+	if summary == nil { // Should never happen
+		return state, fmt.Errorf("no report to show for vdiff %s.%s (%s)", keyspace, workflowName, uuid)
+	}
 	state = summary.State
 	if format == "json" {
 		jsonText, err := cli.MarshalJSONPretty(summary)
@@ -564,7 +569,7 @@ func displayShowSingleSummary(format, keyspace, workflowName, uuid string, resp 
 		}
 		output = string(jsonText)
 	} else {
-		tmpl, err := template.New("test").Parse(summaryTextTemplate)
+		tmpl, err := template.New("summary").Parse(summaryTextTemplate)
 		if err != nil {
 			return state, err
 		}
@@ -637,12 +642,12 @@ func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiff
 			}
 			for _, row := range qr.Named().Rows {
 				// Update the global VDiff summary based on the per shard level summary.
-				// Since these values will be the same for all subsequent rows we only use the
-				// first row.
+				// Since these values will be the same for all subsequent rows we only use
+				// the first row.
 				if first {
 					first = false
-					// Our timestamps are strings in `2022-06-26 20:43:25` format so we sort them
-					// lexicographically.
+					// Our timestamps are strings in `2022-06-26 20:43:25` format so we sort
+					// them lexicographically.
 					// We should use the earliest started_at across all shards.
 					if sa := row.AsString("started_at", ""); summary.StartedAt == "" || sa < summary.StartedAt {
 						summary.StartedAt = sa
@@ -762,7 +767,7 @@ func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiff
 		buildProgressReport(summary, totalRowsToCompare)
 	}
 
-	sort.Strings(shards) // sort for predictable output
+	sort.Strings(shards) // Sort for predictable output
 	summary.Shards = strings.Join(shards, ",")
 	summary.TableSummaryMap = tableSummaryMap
 	summary.Reports = reports
@@ -819,9 +824,10 @@ func commandShow(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := displayShowResponse(format, common.BaseOptions.TargetKeyspace, common.BaseOptions.Workflow, showOptions.Arg, resp, showOptions.Verbose); err != nil {
+	if err = displayShowResponse(format, common.BaseOptions.TargetKeyspace, common.BaseOptions.Workflow, showOptions.Arg, resp, showOptions.Verbose); err != nil {
 		return err
 	}
+
 	return nil
 }
 

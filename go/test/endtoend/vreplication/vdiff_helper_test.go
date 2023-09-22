@@ -47,6 +47,8 @@ func vdiff(t *testing.T, keyspace, workflow, cells string, vtctlclient, vtctldcl
 	}
 }
 
+// vdiffSideBySide will run the VDiff command using both vtctlclient
+// and vtctldclient.
 func vdiffSideBySide(t *testing.T, ksWorkflow, cells string) {
 	arr := strings.Split(ksWorkflow, ".")
 	keyspace := arr[0]
@@ -64,7 +66,6 @@ func doVtctlclientVDiff(t *testing.T, keyspace, workflow, cells string, want *ex
 		// update-table-stats is needed in order to test progress reports.
 		uuid, _ := performVDiff2Action(t, true, ksWorkflow, cells, "create", "", false, "--auto-retry", "--update-table-stats")
 		info := waitForVDiff2ToComplete(t, true, ksWorkflow, cells, uuid, time.Time{})
-
 		require.Equal(t, workflow, info.Workflow)
 		require.Equal(t, keyspace, info.Keyspace)
 		if want != nil {
@@ -182,11 +183,11 @@ func performVDiff2Action(t *testing.T, useVtctlclient bool, ksWorkflow, cells, a
 		}
 		args = append(args, ksWorkflow, action, actionArg)
 		output, err = vc.VtctlClient.ExecuteCommandWithOutput(args...)
-		log.Infof("vdiff2 output: %+v (err: %+v)", output, err)
+		log.Infof("vdiff output: %+v (err: %+v)", output, err)
 		if !expectError {
 			require.Nil(t, err)
 			uuid = gjson.Get(output, "UUID").String()
-			if action != "delete" && !(action == "show" && actionArg == "all") { // a UUID is not required
+			if action != "delete" && !(action == "show" && actionArg == "all") { // A UUID is not required
 				require.NoError(t, err)
 				require.NotEmpty(t, uuid)
 			}
@@ -203,7 +204,7 @@ func performVDiff2Action(t *testing.T, useVtctlclient bool, ksWorkflow, cells, a
 			args = append(args, actionArg)
 		}
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...)
-		log.Infof("vdiff2 output: %+v (err: %+v)", output, err)
+		log.Infof("vdiff output: %+v (err: %+v)", output, err)
 		if !expectError {
 			require.NoError(t, err)
 			ouuid := gjson.Get(output, "UUID").String()

@@ -57,13 +57,15 @@ const (
 )
 
 type testVDiffEnv struct {
-	ws         *workflow.Server
-	workflow   string
-	topoServ   *topo.Server
-	cell       string
-	tabletType topodatapb.TabletType
-	tmc        *testVDiffTMClient
-	getOutput  func() string
+	ws             *workflow.Server
+	sourceKeyspace string
+	targetKeyspace string
+	workflow       string
+	topoServ       *topo.Server
+	cell           string
+	tabletType     topodatapb.TabletType
+	tmc            *testVDiffTMClient
+	getOutput      func() string
 
 	mu      sync.Mutex
 	tablets map[int]*testVDiffTablet
@@ -74,12 +76,14 @@ type testVDiffEnv struct {
 
 func newTestVDiffEnv(t testing.TB, ctx context.Context, sourceShards, targetShards []string, query string, positions map[string]string) *testVDiffEnv {
 	env := &testVDiffEnv{
-		workflow:   "vdiffTest",
-		tablets:    make(map[int]*testVDiffTablet),
-		topoServ:   memorytopo.NewServer(ctx, "cell"),
-		cell:       "cell",
-		tabletType: topodatapb.TabletType_REPLICA,
-		tmc:        newTestVDiffTMClient(),
+		sourceKeyspace: "sourceks",
+		targetKeyspace: "targetks",
+		workflow:       "vdiffTest",
+		tablets:        make(map[int]*testVDiffTablet),
+		topoServ:       memorytopo.NewServer(ctx, "cell"),
+		cell:           "cell",
+		tabletType:     topodatapb.TabletType_REPLICA,
+		tmc:            newTestVDiffTMClient(),
 	}
 	env.ws = workflow.NewServer(env.topoServ, env.tmc)
 	env.tmc.testEnv = env
@@ -98,20 +102,20 @@ func newTestVDiffEnv(t testing.TB, ctx context.Context, sourceShards, targetShar
 
 	tabletID := 100
 	for _, shard := range sourceShards {
-		_ = env.addTablet(tabletID, "source", shard, topodatapb.TabletType_PRIMARY)
+		_ = env.addTablet(tabletID, env.sourceKeyspace, shard, topodatapb.TabletType_PRIMARY)
 		env.tmc.waitpos[tabletID+1] = vdiffStopPosition
 
 		tabletID += 10
 	}
 	tabletID = 200
 	for _, shard := range targetShards {
-		primary := env.addTablet(tabletID, "target", shard, topodatapb.TabletType_PRIMARY)
+		primary := env.addTablet(tabletID, env.targetKeyspace, shard, topodatapb.TabletType_PRIMARY)
 
 		var rows []string
 		var posRows []string
 		for j, sourceShard := range sourceShards {
 			bls := &binlogdatapb.BinlogSource{
-				Keyspace: "source",
+				Keyspace: env.sourceKeyspace,
 				Shard:    sourceShard,
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
@@ -273,7 +277,7 @@ type testVDiffTMClient struct {
 	vrpos      map[int]string
 	pos        map[int]string
 
-	testEnv *testVDiffEnv
+	testEnv *testVDiffEnv // For access to the test environment
 }
 
 func newTestVDiffTMClient() *testVDiffTMClient {
@@ -326,13 +330,13 @@ func (tmc *testVDiffTMClient) ReadVReplicationWorkflow(ctx context.Context, tabl
 		Workflow: "vdiffTest",
 	}
 
-	sourceShards, _ := tmc.testEnv.topoServ.GetShardNames(ctx, "source")
+	sourceShards, _ := tmc.testEnv.topoServ.GetShardNames(ctx, tmc.testEnv.sourceKeyspace)
 	streams := make([]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, 0, len(sourceShards))
 	for _, shard := range sourceShards {
 		streams = append(streams, &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
 			Id: id,
 			Bls: &binlogdatapb.BinlogSource{
-				Keyspace: "source",
+				Keyspace: tmc.testEnv.sourceKeyspace,
 				Shard:    shard,
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{

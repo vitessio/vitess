@@ -25,7 +25,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"gotest.tools/assert"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
@@ -60,7 +59,7 @@ func TestVDiffUnsharded(t *testing.T) {
 
 	UUID := uuid.New().String()
 	req := &tabletmanagerdatapb.VDiffRequest{
-		Keyspace:  "target",
+		Keyspace:  env.targetKeyspace,
 		Workflow:  env.workflow,
 		Action:    string(vdiff.ShowAction),
 		ActionArg: UUID,
@@ -69,7 +68,7 @@ func TestVDiffUnsharded(t *testing.T) {
 	comptime := time.Now().Add(1 * time.Second).UTC().Format(vdiff.TimestampFormat)
 	goodReportfmt := `{
   "Workflow": "vdiffTest",
-  "Keyspace": "target",
+  "Keyspace": "%s",
   "State": "completed",
   "UUID": "%s",
   "RowsCompared": %d,
@@ -82,7 +81,7 @@ func TestVDiffUnsharded(t *testing.T) {
 
 	badReportfmt := `{
   "Workflow": "vdiffTest",
-  "Keyspace": "target",
+  "Keyspace": "%s",
   "State": "completed",
   "UUID": "%s",
   "RowsCompared": %d,
@@ -128,7 +127,7 @@ func TestVDiffUnsharded(t *testing.T) {
 				`{"TableName": "t1", "MatchingRows": 3, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 0, `+
 				`"ExtraRowsTarget": 0}`),
 		report: fmt.Sprintf(goodReportfmt,
-			UUID, 3, false, starttime, comptime,
+			env.targetKeyspace, UUID, 3, false, starttime, comptime,
 		),
 	}, {
 		id: "2",
@@ -137,7 +136,7 @@ func TestVDiffUnsharded(t *testing.T) {
 				`{"TableName": "t1", "MatchingRows": 1, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 0, `+
 				`"ExtraRowsTarget": 2, "ExtraRowsTargetSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
 		report: fmt.Sprintf(badReportfmt,
-			UUID, 3, true, starttime, comptime, 3, 1, 0, 0, 2, 3, 1, 0, 0, 2,
+			env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 1, 0, 0, 2, 3, 1, 0, 0, 2,
 			`"ExtraRowsTargetSample": [
           {
             "Row": {
@@ -153,7 +152,7 @@ func TestVDiffUnsharded(t *testing.T) {
 				`{"TableName": "t1", "MatchingRows": 1, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 2, `+
 				`"ExtraRowsTarget": 0, "ExtraRowsSourceSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
 		report: fmt.Sprintf(badReportfmt,
-			UUID, 3, true, starttime, comptime, 3, 1, 0, 2, 0, 3, 1, 0, 2, 0,
+			env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 1, 0, 2, 0, 3, 1, 0, 2, 0,
 			`"ExtraRowsSourceSample": [
           {
             "Row": {
@@ -169,7 +168,7 @@ func TestVDiffUnsharded(t *testing.T) {
 				`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 1, `+
 				`"ExtraRowsTarget": 0, "ExtraRowsSourceSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
 		report: fmt.Sprintf(badReportfmt,
-			UUID, 3, true, starttime, comptime, 3, 2, 0, 1, 0, 3, 2, 0, 1, 0,
+			env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 2, 0, 1, 0, 3, 2, 0, 1, 0,
 			`"ExtraRowsSourceSample": [
           {
             "Row": {
@@ -185,7 +184,7 @@ func TestVDiffUnsharded(t *testing.T) {
 				`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 1, `+
 				`"ExtraRowsTarget": 0, "ExtraRowsSourceSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
 		report: fmt.Sprintf(badReportfmt,
-			UUID, 3, true, starttime, comptime, 3, 2, 0, 1, 0, 3, 2, 0, 1, 0,
+			env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 2, 0, 1, 0, 3, 2, 0, 1, 0,
 			`"ExtraRowsSourceSample": [
           {
             "Row": {
@@ -202,7 +201,7 @@ func TestVDiffUnsharded(t *testing.T) {
 				`"ExtraRowsTarget": 0, "MismatchedRowsSample": [{"Source": {"Row": {"c1": "2", "c2": "3"}}, `+
 				`"Target": {"Row": {"c1": "2", "c2": "4"}}}]}`),
 		report: fmt.Sprintf(badReportfmt,
-			UUID, 3, true, starttime, comptime, 3, 2, 1, 0, 0, 3, 2, 1, 0, 0,
+			env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 2, 1, 0, 0, 3, 2, 1, 0, 0,
 			`"MismatchedRowsSample": [
           {
             "Source": {
@@ -227,7 +226,7 @@ func TestVDiffUnsharded(t *testing.T) {
 				`"ExtraRowsTarget": 0, "MismatchedRowsSample": [{"Source": {"Row": {"c1": "2"}}, `+
 				`"Target": {"Row": {"c1": "2"}}}]}`),
 		report: fmt.Sprintf(badReportfmt,
-			UUID, 3, true, starttime, comptime, 3, 2, 1, 0, 0, 3, 2, 1, 0, 0,
+			env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 2, 1, 0, 0, 3, 2, 1, 0, 0,
 			`"MismatchedRowsSample": [
           {
             "Source": {
@@ -250,7 +249,7 @@ func TestVDiffUnsharded(t *testing.T) {
 				`"ExtraRowsTarget": 0, "MismatchedRowsSample": [{"Source": {"Row": {"c1": "2", "c2": "3"}, "Query": "select c1, c2 from t1 where c1=2;"}, `+
 				`"Target": {"Row": {"c1": "2", "c2": "4"}, "Query": "select c1, c2 from t1 where c1=2;"}}]}`),
 		report: fmt.Sprintf(badReportfmt,
-			UUID, 3, true, starttime, comptime, 3, 2, 1, 0, 0, 3, 2, 1, 0, 0,
+			env.targetKeyspace, UUID, 3, true, starttime, comptime, 3, 2, 1, 0, 0, 3, 2, 1, 0, 0,
 			`"MismatchedRowsSample": [
           {
             "Source": {
@@ -280,19 +279,19 @@ func TestVDiffUnsharded(t *testing.T) {
 			}
 			env.tmc.setVDResults(env.tablets[200].tablet, req, res)
 			req := &vtctldatapb.VDiffShowRequest{
-				TargetKeyspace: "target",
+				TargetKeyspace: env.targetKeyspace,
 				Workflow:       env.workflow,
 				Arg:            UUID,
 			}
 
 			resp, err := env.ws.VDiffShow(context.Background(), req)
 			require.NoError(t, err)
-			vds, err := displayShowSingleSummary(options.ReportOptions.Format, "target", env.workflow, UUID, resp, false)
+			vds, err := displayShowSingleSummary(options.ReportOptions.Format, env.targetKeyspace, env.workflow, UUID, resp, false)
 			require.NoError(t, err)
 			require.Equal(t, vdiff.CompletedState, vds)
 
 			output := env.getOutput()
-			assert.Equal(t, tcase.report, output)
+			require.Equal(t, tcase.report, output)
 			env.resetOutput()
 		})
 	}
@@ -309,7 +308,7 @@ func TestVDiffSharded(t *testing.T) {
 
 	UUID := uuid.New().String()
 	req := &tabletmanagerdatapb.VDiffRequest{
-		Keyspace:  "target",
+		Keyspace:  env.targetKeyspace,
 		Workflow:  env.workflow,
 		Action:    string(vdiff.ShowAction),
 		ActionArg: UUID,
@@ -318,7 +317,7 @@ func TestVDiffSharded(t *testing.T) {
 	comptime := time.Now().Add(1 * time.Second).UTC().Format(vdiff.TimestampFormat)
 	verbosefmt := `{
   "Workflow": "vdiffTest",
-  "Keyspace": "target",
+  "Keyspace": "%s",
   "State": "completed",
   "UUID": "%s",
   "RowsCompared": %d,
@@ -376,7 +375,7 @@ func TestVDiffSharded(t *testing.T) {
 				`{"TableName": "t1", "MatchingRows": 3, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 0, `+
 				`"ExtraRowsTarget": 0}`),
 		report: fmt.Sprintf(verbosefmt,
-			UUID, 6, false, starttime, comptime, 6, 6, 0, 0, 0, 3, 3, 0, 0, 0, 3, 3, 0, 0, 0,
+			env.targetKeyspace, UUID, 6, false, starttime, comptime, 6, 6, 0, 0, 0, 3, 3, 0, 0, 0, 3, 3, 0, 0, 0,
 		),
 	}}
 
@@ -393,19 +392,19 @@ func TestVDiffSharded(t *testing.T) {
 			env.tmc.setVDResults(env.tablets[200].tablet, req, shard1Res)
 			env.tmc.setVDResults(env.tablets[210].tablet, req, shard2Res)
 			req := &vtctldatapb.VDiffShowRequest{
-				TargetKeyspace: "target",
+				TargetKeyspace: env.targetKeyspace,
 				Workflow:       env.workflow,
 				Arg:            UUID,
 			}
 
 			resp, err := env.ws.VDiffShow(context.Background(), req)
 			require.NoError(t, err)
-			vds, err := displayShowSingleSummary(options.ReportOptions.Format, "target", env.workflow, UUID, resp, true)
+			vds, err := displayShowSingleSummary(options.ReportOptions.Format, env.targetKeyspace, env.workflow, UUID, resp, true)
 			require.NoError(t, err)
 			require.Equal(t, vdiff.CompletedState, vds)
 
 			output := env.getOutput()
-			assert.Equal(t, tcase.report, output)
+			require.Equal(t, tcase.report, output)
 			env.resetOutput()
 		})
 	}

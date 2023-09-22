@@ -188,7 +188,8 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 		}
 	}
 	if action == CreateAction {
-		// Use options created from the command.
+		// Use options specified for the workflow via the create
+		// command, which are stored in the vdiff record.
 		if options, err = vde.fixupOptions(options); err != nil {
 			return err
 		}
