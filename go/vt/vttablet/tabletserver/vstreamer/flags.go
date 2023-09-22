@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"time"
+
 	"vitess.io/vitess/go/vt/servenv"
 
 	"github.com/spf13/pflag"
