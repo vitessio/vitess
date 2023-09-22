@@ -575,7 +575,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 					// Retry starting the database process before giving up.
 					t.Logf("%v :: Unable to start mysql server for %v. Will retry...", err, tablets[ind].Vttablet)
 					tablets[ind].DbServer.CleanupFiles(tablets[ind].Vttablet.TabletUID)
-					time.Sleep(1 * time.Second)
+					time.Sleep(2 * time.Second)
 					dbcmd, err := tablets[ind].DbServer.StartProcess()
 					require.NoError(t, err)
 					if err = dbcmd.Wait(); err != nil {
