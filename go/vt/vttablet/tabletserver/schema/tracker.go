@@ -170,7 +170,7 @@ func (tr *Tracker) isSchemaVersionTableEmpty(ctx context.Context) (bool, error) 
 		return false, err
 	}
 	defer conn.Recycle()
-	result, err := conn.Exec(ctx, sqlparser.BuildParsedQuery("select id from %s.schema_version limit 1",
+	result, err := conn.Conn.Exec(ctx, sqlparser.BuildParsedQuery("select id from %s.schema_version limit 1",
 		sidecar.GetIdentifier()).Query, 1, false)
 	if err != nil {
 		return false, err
@@ -234,7 +234,7 @@ func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, 
 		"(pos, ddl, schemax, time_updated) "+
 		"values (%s, %s, %s, %d)", sidecar.GetIdentifier(), encodeString(gtid),
 		encodeString(ddl), encodeString(string(blob)), timestamp).Query
-	_, err = conn.Exec(ctx, query, 1, false)
+	_, err = conn.Conn.Exec(ctx, query, 1, false)
 	if err != nil {
 		return err
 	}

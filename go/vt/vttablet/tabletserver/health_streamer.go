@@ -409,23 +409,23 @@ func (hs *healthStreamer) reloadTables(ctx context.Context, conn *connpool.DBCon
 	upd := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecar.GetIdentifier()).Query, tableNamePredicate)
 
 	// Reload the schema in a transaction.
-	_, err := conn.Exec(ctx, "begin", 1, false)
+	_, err := conn.Conn.Exec(ctx, "begin", 1, false)
 	if err != nil {
 		return err
 	}
-	defer conn.Exec(ctx, "rollback", 1, false)
+	defer conn.Conn.Exec(ctx, "rollback", 1, false)
 
-	_, err = conn.Exec(ctx, del, 1, false)
-	if err != nil {
-		return err
-	}
-
-	_, err = conn.Exec(ctx, upd, 1, false)
+	_, err = conn.Conn.Exec(ctx, del, 1, false)
 	if err != nil {
 		return err
 	}
 
-	_, err = conn.Exec(ctx, "commit", 1, false)
+	_, err = conn.Conn.Exec(ctx, upd, 1, false)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Conn.Exec(ctx, "commit", 1, false)
 	if err != nil {
 		return err
 	}

@@ -214,7 +214,7 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*tx.Prepa
 	}
 	defer conn.Recycle()
 
-	qr, err := conn.Exec(ctx, tpc.readAllRedo, 10000, false)
+	qr, err := conn.Conn.Exec(ctx, tpc.readAllRedo, 10000, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -419,7 +419,7 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*tx.DistributedTx,
 	}
 	defer conn.Recycle()
 
-	qr, err := conn.Exec(ctx, tpc.readAllTransactions, 10000, false)
+	qr, err := conn.Conn.Exec(ctx, tpc.readAllTransactions, 10000, false)
 	if err != nil {
 		return nil, err
 	}
@@ -471,5 +471,5 @@ func (tpc *TwoPC) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser
 	if err != nil {
 		return nil, err
 	}
-	return conn.Exec(ctx, q, 10000, false)
+	return conn.Conn.Exec(ctx, q, 10000, false)
 }

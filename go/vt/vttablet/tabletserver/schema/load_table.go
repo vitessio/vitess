@@ -58,7 +58,7 @@ func LoadTable(conn *connpool.DBConn, databaseName, tableName, tableType string,
 func fetchColumns(ta *Table, conn *connpool.DBConn, databaseName, sqlTableName string) error {
 	ctx := context.Background()
 	exec := func(query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
-		return conn.Exec(ctx, query, maxRows, wantFields)
+		return conn.Conn.Exec(ctx, query, maxRows, wantFields)
 	}
 	fields, _, err := mysqlctl.GetColumns(databaseName, sqlTableName, exec)
 	if err != nil {

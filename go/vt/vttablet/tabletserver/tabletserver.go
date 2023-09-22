@@ -34,9 +34,9 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/pools/smartconnpool"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
@@ -496,7 +496,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 			if tsv.txThrottler.Throttle(tsv.getPriorityFromOptions(options), options.GetWorkloadName()) {
 				return errTxThrottled
 			}
-			var connSetting *pools.Setting
+			var connSetting *smartconnpool.Setting
 			if len(settings) > 0 {
 				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
 				if err != nil {
@@ -794,7 +794,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			logStats.ReservedID = reservedID
 			logStats.TransactionID = transactionID
 
-			var connSetting *pools.Setting
+			var connSetting *smartconnpool.Setting
 			if len(settings) > 0 {
 				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
 				if err != nil {
@@ -896,7 +896,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 			logStats.ReservedID = reservedID
 			logStats.TransactionID = transactionID
 
-			var connSetting *pools.Setting
+			var connSetting *smartconnpool.Setting
 			if len(settings) > 0 {
 				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
 				if err != nil {
@@ -1927,7 +1927,7 @@ func (tsv *TabletServer) SetPoolSize(val int) {
 	if val <= 0 {
 		return
 	}
-	tsv.qe.conns.SetCapacity(val)
+	tsv.qe.conns.SetCapacity(int64(val))
 }
 
 // PoolSize returns the pool size.
@@ -1937,7 +1937,7 @@ func (tsv *TabletServer) PoolSize() int {
 
 // SetStreamPoolSize changes the pool size to the specified value.
 func (tsv *TabletServer) SetStreamPoolSize(val int) {
-	tsv.qe.streamConns.SetCapacity(val)
+	tsv.qe.streamConns.SetCapacity(int64(val))
 }
 
 // SetStreamConsolidationBlocking sets whether the stream consolidator should wait for slow clients
@@ -1952,7 +1952,7 @@ func (tsv *TabletServer) StreamPoolSize() int {
 
 // SetTxPoolSize changes the tx pool size to the specified value.
 func (tsv *TabletServer) SetTxPoolSize(val int) {
-	tsv.te.txPool.scp.conns.SetCapacity(val)
+	tsv.te.txPool.scp.conns.SetCapacity(int64(val))
 }
 
 // TxPoolSize returns the tx pool size.
