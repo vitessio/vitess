@@ -1708,6 +1708,10 @@ func (c *Conn) IsMarkedForClose() bool {
 	return c.closing
 }
 
+// ConnCheck ensures that this connection to the MySQL server hasn't been broken.
+// This is a fast, non-blocking check. For details on its implementation, please read
+// "Three Bugs in the Go MySQL Driver" (Vicent Marti, GitHub, 2020)
+// https://github.blog/2020-05-20-three-bugs-in-the-go-mysql-driver/
 func (c *Conn) ConnCheck() error {
 	conn := c.conn
 	if tlsconn, ok := conn.(*tls.Conn); ok {
