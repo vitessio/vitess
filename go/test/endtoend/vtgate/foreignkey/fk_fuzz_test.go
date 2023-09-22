@@ -33,16 +33,24 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+type QueryFormat string
+
+const (
+	SQLQueries              QueryFormat = "SQLQueries"
+	PreparedStatmentQueries QueryFormat = "PreparedStatmentQueries"
+	PreparedStatementPacket QueryFormat = "PreparedStatementPacket"
+)
+
 // fuzzer runs threads that runs queries against the databases.
 // It has parameters that define the way the queries are constructed.
 type fuzzer struct {
-	maxValForId   int
-	maxValForCol  int
-	insertShare   int
-	deleteShare   int
-	updateShare   int
-	concurrency   int
-	preparedStmts bool
+	maxValForId  int
+	maxValForCol int
+	insertShare  int
+	deleteShare  int
+	updateShare  int
+	concurrency  int
+	queryFormat  QueryFormat
 
 	// shouldStop is an internal state variable, that tells the fuzzer
 	// whether it should stop or not.
@@ -62,16 +70,16 @@ type debugInfo struct {
 }
 
 // newFuzzer creates a new fuzzer struct.
-func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare int, deleteShare int, updateShare int, preparedStmts bool) *fuzzer {
+func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare int, deleteShare int, updateShare int, queryFormat QueryFormat) *fuzzer {
 	fz := &fuzzer{
-		concurrency:   concurrency,
-		maxValForId:   maxValForId,
-		maxValForCol:  maxValForCol,
-		insertShare:   insertShare,
-		deleteShare:   deleteShare,
-		updateShare:   updateShare,
-		preparedStmts: preparedStmts,
-		wg:            sync.WaitGroup{},
+		concurrency:  concurrency,
+		maxValForId:  maxValForId,
+		maxValForCol: maxValForCol,
+		insertShare:  insertShare,
+		deleteShare:  deleteShare,
+		updateShare:  updateShare,
+		queryFormat:  queryFormat,
+		wg:           sync.WaitGroup{},
 	}
 	// Initially the fuzzer thread is stopped.
 	fz.shouldStop.Store(true)
@@ -84,21 +92,33 @@ func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare i
 func (fz *fuzzer) generateQuery() []string {
 	val := rand.Intn(fz.insertShare + fz.updateShare + fz.deleteShare)
 	if val < fz.insertShare {
-		if fz.preparedStmts {
+		switch fz.queryFormat {
+		case SQLQueries:
+			return []string{fz.generateInsertDMLQuery()}
+		case PreparedStatmentQueries:
 			return fz.getPreparedInsertQueries()
+		default:
+			panic("Unknown query type")
 		}
-		return []string{fz.generateInsertDMLQuery()}
 	}
 	if val < fz.insertShare+fz.updateShare {
-		if fz.preparedStmts {
+		switch fz.queryFormat {
+		case SQLQueries:
+			return []string{fz.generateUpdateDMLQuery()}
+		case PreparedStatmentQueries:
 			return fz.getPreparedUpdateQueries()
+		default:
+			panic("Unknown query type")
 		}
-		return []string{fz.generateUpdateDMLQuery()}
 	}
-	if fz.preparedStmts {
+	switch fz.queryFormat {
+	case SQLQueries:
+		return []string{fz.generateDeleteDMLQuery()}
+	case PreparedStatmentQueries:
 		return fz.getPreparedDeleteQueries()
+	default:
+		panic("Unknown query type")
 	}
-	return []string{fz.generateDeleteDMLQuery()}
 }
 
 // generateInsertDMLQuery generates an INSERT query from the parameters for the fuzzer.
@@ -453,8 +473,8 @@ func TestFkFuzzTest(t *testing.T) {
 
 	for _, tt := range testcases {
 		for _, testSharded := range []bool{false, true} {
-			for _, preparedStmts := range []bool{false, true} {
-				t.Run(getTestName(tt.name, testSharded)+fmt.Sprintf(" Prepared - %v", preparedStmts), func(t *testing.T) {
+			for _, queryFormat := range []QueryFormat{SQLQueries, PreparedStatmentQueries, PreparedStatementPacket} {
+				t.Run(getTestName(tt.name, testSharded)+fmt.Sprintf(" QueryFormat - %v", queryFormat), func(t *testing.T) {
 					mcmp, closer := start(t)
 					defer closer()
 					// Set the correct keyspace to use from VtGates.
@@ -469,7 +489,7 @@ func TestFkFuzzTest(t *testing.T) {
 					ensureDatabaseState(t, mcmp.MySQLConn, true)
 
 					// Create the fuzzer.
-					fz := newFuzzer(tt.concurrency, tt.maxValForId, tt.maxValForCol, tt.insertShare, tt.deleteShare, tt.updateShare, preparedStmts)
+					fz := newFuzzer(tt.concurrency, tt.maxValForId, tt.maxValForCol, tt.insertShare, tt.deleteShare, tt.updateShare, queryFormat)
 
 					// Start the fuzzer.
 					fz.start(t, testSharded)
