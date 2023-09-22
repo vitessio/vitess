@@ -96,10 +96,10 @@ func testPlayerCopyCharPK(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := copyPhaseDuration
+	savedCopyPhaseDuration := vstreamer.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	copyPhaseDuration = 500 * time.Millisecond
-	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
+	vstreamer.CopyPhaseDuration = 500 * time.Millisecond
+	defer func() { vstreamer.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -203,10 +203,10 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := copyPhaseDuration
+	savedCopyPhaseDuration := vstreamer.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	copyPhaseDuration = 500 * time.Millisecond
-	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
+	vstreamer.CopyPhaseDuration = 500 * time.Millisecond
+	defer func() { vstreamer.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multiple times.
@@ -326,10 +326,10 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := copyPhaseDuration
+	savedCopyPhaseDuration := vstreamer.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	copyPhaseDuration = 500 * time.Millisecond
-	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
+	vstreamer.CopyPhaseDuration = 500 * time.Millisecond
+	defer func() { vstreamer.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -674,10 +674,10 @@ func testPlayerCopyBigTable(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := copyPhaseDuration
+	savedCopyPhaseDuration := vstreamer.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	copyPhaseDuration = 500 * time.Millisecond
-	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
+	vstreamer.CopyPhaseDuration = 500 * time.Millisecond
+	defer func() { vstreamer.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multiple times.
@@ -805,10 +805,10 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := copyPhaseDuration
+	savedCopyPhaseDuration := vstreamer.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	copyPhaseDuration = 500 * time.Millisecond
-	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
+	vstreamer.CopyPhaseDuration = 500 * time.Millisecond
+	defer func() { vstreamer.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -1522,14 +1522,14 @@ func testPlayerCopyTableCancel(t *testing.T) {
 	})
 	env.SchemaEngine.Reload(context.Background())
 
-	saveTimeout := copyPhaseDuration
-	copyPhaseDuration = 1 * time.Millisecond
-	defer func() { copyPhaseDuration = saveTimeout }()
+	saveTimeout := vstreamer.CopyPhaseDuration
+	vstreamer.CopyPhaseDuration = 1 * time.Millisecond
+	defer func() { vstreamer.CopyPhaseDuration = saveTimeout }()
 
 	// Set a hook to reset the copy timeout after first call.
 	vstreamRowsHook = func(ctx context.Context) {
 		<-ctx.Done()
-		copyPhaseDuration = saveTimeout
+		vstreamer.CopyPhaseDuration = saveTimeout
 		vstreamRowsHook = nil
 	}
 

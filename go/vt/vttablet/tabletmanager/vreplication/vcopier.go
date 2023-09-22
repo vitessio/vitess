@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -393,7 +394,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return fmt.Errorf("plan not found for table: %s, current plans are: %#v", tableName, plan.TargetTables)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, copyPhaseDuration)
+	ctx, cancel := context.WithTimeout(ctx, vstreamer.CopyPhaseDuration)
 	defer cancel()
 
 	var lastpkpb *querypb.QueryResult

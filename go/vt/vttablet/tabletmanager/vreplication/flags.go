@@ -33,7 +33,6 @@ var (
 	relayLogMaxSize  = 250000
 	relayLogMaxItems = 5000
 
-	copyPhaseDuration   = 1 * time.Hour
 	replicaLagTolerance = 1 * time.Minute
 
 	vreplicationHeartbeatUpdateInterval = 1
@@ -53,7 +52,6 @@ func registerVReplicationFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&relayLogMaxSize, "relay_log_max_size", relayLogMaxSize, "Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
 	fs.IntVar(&relayLogMaxItems, "relay_log_max_items", relayLogMaxItems, "Maximum number of rows for VReplication target buffering.")
 
-	fs.DurationVar(&copyPhaseDuration, "vreplication_copy_phase_duration", copyPhaseDuration, "Duration for each copy phase loop (before running the next catchup: default 1h)")
 	fs.DurationVar(&replicaLagTolerance, "vreplication_replica_lag_tolerance", replicaLagTolerance, "Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase")
 
 	// vreplicationHeartbeatUpdateInterval determines how often the time_updated column is updated if there are no real events on the source and the source

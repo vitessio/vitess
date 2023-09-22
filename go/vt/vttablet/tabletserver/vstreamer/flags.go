@@ -24,12 +24,11 @@ import (
 )
 
 var (
-	vreplicationMaxExecutionTimeUnset = -1 * time.Millisecond
-	vreplicationMaxExecutionTime      = vreplicationMaxExecutionTimeUnset
+	CopyPhaseDuration = 1 * time.Hour
 )
 
 func registerVStreamerFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&vreplicationMaxExecutionTime, "vreplication_max_execution_time", vreplicationMaxExecutionTimeUnset, "If set, controls the mysql MAX_EXCUTION_TIME query hint for vreplication queries (default -1, unset)")
+	fs.DurationVar(&CopyPhaseDuration, "vreplication_copy_phase_duration", CopyPhaseDuration, "Duration for each copy phase loop (before running the next catchup: default 1h)")
 }
 
 func init() {
