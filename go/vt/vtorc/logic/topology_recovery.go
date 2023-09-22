@@ -770,7 +770,7 @@ func CheckAndRecover() {
 	// Regardless of if the problem is solved or not we want to monitor active
 	// issues, we use a map of labels and set a counter to `1` for each problem
 	// then we reset any counter that is not present in the current analysis.
-	active := make(map[string][]string)
+	active := make(map[string]struct{})
 	for _, e := range replicationAnalysis {
 		if e.Analysis != inst.NoProblem {
 			names := [...]string{
@@ -781,15 +781,15 @@ func CheckAndRecover() {
 			}
 
 			key := detectedProblems.GetLabelName(names[:]...)
-			active[key] = names[:]
+			active[key] = struct{}{}
 			detectedProblems.Set(names[:], 1)
 		}
 	}
 
 	// Reset any non-active problems.
 	for key := range detectedProblems.Counts() {
-		if names, ok := active[key]; !ok {
-			detectedProblems.Set(names, 0)
+		if _, ok := active[key]; !ok {
+			detectedProblems.ResetKey(key)
 		}
 	}
 
