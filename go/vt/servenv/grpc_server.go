@@ -55,8 +55,8 @@ import (
 // Note servenv.GRPCServer can only be used in servenv.OnRun,
 // and not before, as it is initialized right before calling OnRun.
 var (
-	// gRPCAuth specifies which auth plugin to use. Currently only "static" and
-	// "mtls" are supported.
+	// gRPCAuth specifies which auth plugin to use. Currently only "static",
+	// "mtls", and "spiffe" are supported.
 	//
 	// To expose this flag, call RegisterGRPCAuthServerFlags before ParseFlags.
 	gRPCAuth string

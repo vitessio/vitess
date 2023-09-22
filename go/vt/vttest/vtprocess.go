@@ -258,6 +258,15 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if servenv.GRPCAuth() == "mtls" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc_auth_mode", servenv.GRPCAuth(), "--grpc_key", servenv.GRPCKey(), "--grpc_cert", servenv.GRPCCert(), "--grpc_ca", servenv.GRPCCertificateAuthority(), "--grpc_auth_mtls_allowed_substrings", servenv.ClientCertSubstrings()}...)
 	}
+	if servenv.GRPCAuth() == "spiffe" {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{
+			"--grpc_auth_mode", servenv.GRPCAuth(),
+			"--grpc_key", servenv.GRPCKey(),
+			"--grpc_cert", servenv.GRPCCert(),
+			"--grpc_ca", servenv.GRPCCertificateAuthority(),
+			"--grpc_auth_spiffe_allowed_trust_domains", servenv.SPIFFETrustDomains(),
+		}...)
+	}
 	if args.VSchemaDDLAuthorizedUsers != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
 	}

@@ -105,11 +105,27 @@ func immediateCallerIdFromStaticAuthentication(ctx context.Context) (string, []s
 	return "", nil
 }
 
+// immediateCallerIdFromSPIFFEAuthentication extracts the SPIFFE ID of the current
+// authentication context and returns that to the caller. It does not currently provide
+// any security groups.
+func immediateCallerIdFromSPIFFEAuthentication(ctx context.Context) (string, []string) {
+	if immediateUrl := servenv.SPIFFEIdFromContext(ctx); immediateUrl.Scheme == "spiffe" {
+		return immediateUrl.String(), nil
+	}
+
+	return "", nil
+}
+
 // withCallerIDContext creates a context that extracts what we need
 // from the incoming call and can be forwarded for use when talking to vttablet.
 func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerID) context.Context {
+	// The SPIFFE ID (if using SPIFFE authentication)
+	immediate, securityGroups := immediateCallerIdFromSPIFFEAuthentication(ctx)
+
 	// The client cert common name (if using mTLS)
-	immediate, securityGroups := immediateCallerIDFromCert(ctx)
+	if immediate == "" {
+		immediate, securityGroups = immediateCallerIDFromCert(ctx)
+	}
 
 	// The effective caller id (if --grpc_use_effective_callerid=true)
 	if immediate == "" && useEffective && effectiveCallerID != nil {

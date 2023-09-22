@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -301,6 +302,96 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 		fmt.Sprintf("--vtctld_grpc_cert=%s", clientCert),
 		fmt.Sprintf("--vtctld_grpc_ca=%s", caCert),
 		fmt.Sprintf("--grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
+	defer cluster.TearDown()
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "code = Unauthenticated desc = client certificate not authorized")
+}
+
+func TestSPIFFEAuth(t *testing.T) {
+	args := os.Args
+	conf := config
+	defer resetFlags(args, conf)
+
+	// Our test root.
+	root := t.TempDir()
+
+	// Create the certs and configs.
+	tlstest.CreateCA(root)
+	caCert := path.Join(root, "ca-cert.pem")
+
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "vtctld", "vtctld.example.com")
+	cert := path.Join(root, "vtctld-cert.pem")
+	key := path.Join(root, "vtctld-key.pem")
+
+	clientSPIFFEId := &url.URL{
+		Scheme: "spiffe",
+		Host:   "auth.example.com",
+		Path:   "/client",
+	}
+	tlstest.CreateSignedSvid(root, tlstest.CA, "02", "client", "ClientApp", clientSPIFFEId)
+	clientCert := path.Join(root, "client-cert.pem")
+	clientKey := path.Join(root, "client-key.pem")
+
+	// When cluster starts it will apply SQL and VSchema migrations in the configured schema_dir folder
+	// With SPIFFE authorization enabled, the certificate/SVID's SPIFFE ID must be in one of the allowed trust domains
+	cluster, err := startCluster(
+		"--grpc_auth_mode=spiffe",
+		fmt.Sprintf("--grpc_key=%s", key),
+		fmt.Sprintf("--grpc_cert=%s", cert),
+		fmt.Sprintf("--grpc_ca=%s", caCert),
+		fmt.Sprintf("--vtctld_grpc_key=%s", clientKey),
+		fmt.Sprintf("--vtctld_grpc_cert=%s", clientCert),
+		fmt.Sprintf("--vtctld_grpc_ca=%s", caCert),
+		fmt.Sprintf("--grpc_auth_spiffe_allowed_trust_domains=%s", "auth.example.com"))
+	assert.NoError(t, err)
+	defer func() {
+		cluster.PersistentMode = false // Cleanup the tmpdir as we're done
+		cluster.TearDown()
+	}()
+
+	// startCluster will apply vschema migrations using vtctl grpc and the clientCert.
+	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
+	assertColumnVindex(t, cluster, columnVindex{keyspace: "app_customer", table: "customers", vindex: "hash", vindexType: "hash", column: "id"})
+}
+
+func TestSPIFFEAuthUnauthorizedFails(t *testing.T) {
+	args := os.Args
+	conf := config
+	defer resetFlags(args, conf)
+
+	// Our test root.
+	root := t.TempDir()
+
+	// Create the certs and configs.
+	tlstest.CreateCA(root)
+	caCert := path.Join(root, "ca-cert.pem")
+
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "vtctld", "vtctld.example.com")
+	cert := path.Join(root, "vtctld-cert.pem")
+	key := path.Join(root, "vtctld-key.pem")
+
+	clientSPIFFEId := &url.URL{
+		Scheme: "spiffe",
+		Host:   "some.otherdomain.com",
+		Path:   "/anotherclient",
+	}
+	tlstest.CreateSignedSvid(root, tlstest.CA, "02", "client", "AnotherApp", clientSPIFFEId)
+	clientCert := path.Join(root, "client-cert.pem")
+	clientKey := path.Join(root, "client-key.pem")
+
+	// When cluster starts it will apply SQL and VSchema migrations in the configured schema_dir folder
+	// Force SPIFFE authorization failure by providing a client certificate with SPIFFE ID for a domain
+	// that is not in the list of allowed trust domains
+	cluster, err := startCluster(
+		"--grpc_auth_mode=spiffe",
+		fmt.Sprintf("--grpc_key=%s", key),
+		fmt.Sprintf("--grpc_cert=%s", cert),
+		fmt.Sprintf("--grpc_ca=%s", caCert),
+		fmt.Sprintf("--vtctld_grpc_key=%s", clientKey),
+		fmt.Sprintf("--vtctld_grpc_cert=%s", clientCert),
+		fmt.Sprintf("--vtctld_grpc_ca=%s", caCert),
+		fmt.Sprintf("--grpc_auth_spiffe_allowed_trust_domains=%s", "auth.example.com"))
 	defer cluster.TearDown()
 
 	assert.Error(t, err)

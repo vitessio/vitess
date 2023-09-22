@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -160,6 +161,53 @@ func signCert(parent *x509.Certificate, parentPriv crypto.PrivateKey, certPub cr
 	return x509.ParseCertificate(certificate)
 }
 
+// signSvid is a helper function to sign a SVID (SPIFFE Verifiable Identity Document)
+func signSvid(parent *x509.Certificate, parentPriv crypto.PrivateKey, certPub crypto.PublicKey, commonName string, serial int64, ca bool, spiffeId *url.URL) (*x509.Certificate, error) {
+	keyUsage := x509.KeyUsageDigitalSignature
+	var extKeyUsage []x509.ExtKeyUsage
+	var dnsNames []string
+	var ipAddresses []net.IP
+	var spiffeURIs []*url.URL
+
+	if ca {
+		keyUsage = keyUsage | x509.KeyUsageCRLSign | x509.KeyUsageCertSign
+	} else {
+		extKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
+		dnsNames = []string{"localhost", commonName}
+		if spiffeId.String() != "" {
+			spiffeURIs = append(spiffeURIs, spiffeId)
+		}
+		ipAddresses = []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}
+	}
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(serial),
+		Subject: pkix.Name{
+			CommonName: commonName,
+		},
+		NotBefore:             time.Now().Add(-30 * time.Second),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              keyUsage,
+		ExtKeyUsage:           extKeyUsage,
+		BasicConstraintsValid: true,
+		IsCA:                  ca,
+		DNSNames:              dnsNames,
+		IPAddresses:           ipAddresses,
+		URIs:                  spiffeURIs,
+	}
+
+	// No parent defined means we create a self signed one.
+	if parent == nil {
+		parent = &template
+	}
+
+	certificate, err := x509.CreateCertificate(rand.Reader, &template, parent, certPub, parentPriv)
+	if err != nil {
+		return nil, err
+	}
+	return x509.ParseCertificate(certificate)
+}
+
 // CreateCA creates the toplevel 'ca' certificate and key, and places it
 // in the provided directory. Temporary files are also created in that
 // directory.
@@ -265,6 +313,52 @@ func CreateSignedCert(root, parent, serial, name, commonName string) {
 	}
 
 	leaf, err := signCert(caCert, caKey, publicKey(priv), commonName, serialNr, false)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = saveCert(leaf, certPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// CreateSignedSvid creates a new SVID signed by the provided parent,
+// with the provided serial number, name, common name, and SPIFFE ID.
+// name is the file name to use. Common Name is the certificate common name.
+func CreateSignedSvid(root, parent, serial, name, commonName string, spiffeId *url.URL) {
+	log.Infof("Creating signed cert and key %v (%v)", commonName, spiffeId)
+
+	caKeyPath := path.Join(root, parent+"-key.pem")
+	caCertPath := path.Join(root, parent+"-cert.pem")
+	keyPath := path.Join(root, name+"-key.pem")
+	certPath := path.Join(root, name+"-cert.pem")
+
+	caKey, err := loadKey(caKeyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	caCert, err := loadCert(caCertPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	priv, err := generateKey()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = saveKey(priv, keyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	serialNr, err := strconv.ParseInt(serial, 10, 64)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	leaf, err := signSvid(caCert, caKey, publicKey(priv), commonName, serialNr, false, spiffeId)
 	if err != nil {
 		log.Fatal(err)
 	}
