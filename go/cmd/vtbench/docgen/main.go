@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,8 +13,25 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package main
 
 import (
-	_ "vitess.io/vitess/go/vt/mysqlctl/s3backupstorage"
+	"github.com/spf13/cobra"
+
+	"vitess.io/vitess/go/cmd/internal/docgen"
+	"vitess.io/vitess/go/cmd/vtbench/cli"
 )
+
+func main() {
+	var dir string
+	cmd := cobra.Command{
+		Use: "docgen [-d <dir>]",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return docgen.GenerateMarkdownTree(cli.Main, dir)
+		},
+	}
+
+	cmd.Flags().StringVarP(&dir, "dir", "d", "doc", "output directory to write documentation")
+	_ = cmd.Execute()
+}
