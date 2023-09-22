@@ -575,10 +575,10 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 					// Retry starting the database process before giving up.
 					t.Logf("%v :: Unable to start mysql server for %v. Will cleanup files and processes, then retry...", err, tablets[ind].Vttablet)
 					tablets[ind].DbServer.CleanupFiles(tablets[ind].Vttablet.TabletUID)
-					// Kill any process that's listening on the port we want to
-					// use as that is the most common problem.
+					// Kill any process we own that's listening on the port we
+					// want to use as that is the most common problem.
 					tablets[ind].DbServer.Stop()
-					killCmd := exec.Command("sudo", "fuser", "-n", "tcp", "-k", fmt.Sprintf("%d", tablets[ind].DbServer.MySQLPort))
+					killCmd := exec.Command("fuser", "-n", "tcp", "-k", fmt.Sprintf("%d", tablets[ind].DbServer.MySQLPort))
 					if err := killCmd.Run(); err != nil {
 						log.Errorf("Failed to kill process listening on port %d: %v", tablets[ind].DbServer.MySQLPort, err)
 					}
