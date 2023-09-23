@@ -578,8 +578,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 					// Kill any process we own that's listening on the port we
 					// want to use as that is the most common problem.
 					tablets[ind].DbServer.Stop()
-					killCmd := exec.Command("fuser", "-n", "tcp", "-k", fmt.Sprintf("%d", tablets[ind].DbServer.MySQLPort))
-					if err := killCmd.Run(); err != nil {
+					if _, err = exec.Command("fuser", "-n", "tcp", "-k", fmt.Sprintf("%d", tablets[ind].DbServer.MySQLPort)).Output(); err != nil {
 						log.Errorf("Failed to kill process listening on port %d: %v", tablets[ind].DbServer.MySQLPort, err)
 					}
 					// Sleep for the kernel's TCP TIME_WAIT timeout to avoid the
