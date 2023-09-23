@@ -9,6 +9,7 @@
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
     - [VTOrc flag `--change-tablets-with-errant-gtid-to-drained`](#new-flag-errant-gtid-convert)
     - [ERS sub flag `--wait-for-all-tablets`](#new-ers-subflag)
+    - [VTGate flag `--grpc-send-session-in-streaming`](#new-vtgate-streaming-sesion)
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v18.16.0](#update-node)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
@@ -16,11 +17,13 @@
     - [Deleted `V3` planner](#deleted-v3)
     - [Deleted `k8stopo`](#deleted-k8stopo)
     - [Deleted `vtgr`](#deleted-vtgr)
+    - [Deleted `query_analyzer`](#deleted-query_analyzer)
     - [Deprecated VTBackup stat `DurationByPhase`](#deprecated-vtbackup-stat-duration-by-phase)
   - **[New stats](#new-stats)**
     - [VTGate Vindex unknown parameters](#vtgate-vindex-unknown-parameters)
     - [VTBackup stat `Phase`](#vtbackup-stat-phase)
     - [VTBackup stat `PhaseStatus`](#vtbackup-stat-phase-status)
+    - [Backup and restore metrics for AWS S3](#backup-restore-metrics-aws-s3)
   - **[VTTablet](#vttablet)**
     - [VTTablet: New ResetSequences RPC](#vttablet-new-rpc-reset-sequences)
   - **[Docker](#docker)**
@@ -64,6 +67,14 @@ Running `EmergencyReparentShard` from the vtctldclient has a new sub-flag `--wai
 for a response from all the tablets. Originally `EmergencyReparentShard` was meant only to be run when a primary tablet is unreachable.
 We have realized now that there are cases when the replication is broken but all the tablets are reachable. In these cases, it is advisable to 
 call `EmergencyReparentShard` with `--wait-for-all-tablets` so that it doesn't ignore one of the tablets.
+
+#### <a id="new-vtgate-streaming-sesion"/>VTGate GRPC stream execute session flag `--grpc-send-session-in-streaming`
+
+This flag enables transaction support on `StreamExecute` api.
+One enabled, VTGate `StreamExecute` grpc api will send session as the last packet in the response.
+The client should enable it only when they have made the required changes to expect such a packet.
+
+It is disabled by default.
 
 ### <a id="vtadmin"/>VTAdmin
 
@@ -117,6 +128,10 @@ the `k8stopo` has been removed.
 
 The `vtgr` has been deprecated in Vitess 17, also see https://github.com/vitessio/vitess/issues/13300. With Vitess 18 `vtgr` has been removed.
 
+#### <a id="deleted-query_analyzer"/>Deleted `query_analyzer`
+
+The undocumented `query_analyzer` binary has been removed in Vitess 18, see https://github.com/vitessio/vitess/issues/14054.
+
 #### <a id="deprecated-vtbackup-stat-duration-by-phase"/>Deprecated VTbackup stat `DurationByPhase`
 
 VTBackup stat `DurationByPhase` is deprecated. Use the binary-valued `Phase` stat instead.
@@ -150,6 +165,17 @@ sum_over_time(vtbackup_phase{phase="TakeNewBackup"}) * <interval>
  * `CatchupReplication` phase has statuses `Stalled` and `Stopped`.
     * `Stalled` is set to `1` when replication stops advancing.
     * `Stopped` is set to `1` when replication stops before `vtbackup` catches up with the primary.
+
+#### <a id="backup-restore-metrics-aws-s3"/>Backup and restore metrics for AWS S3
+
+Requests to AWS S3 are instrumented in backup and restore metrics. For example:
+
+```
+vtbackup_backup_count{component="BackupStorage",implementation="S3",operation="AWS:Request:Send"} 823
+vtbackup_backup_duration_nanoseconds{component="BackupStorage",implementation="S3",operation="AWS:Request:Send"} 1.33632421437e+11
+vtbackup_restore_count{component="BackupStorage",implementation="S3",operation="AWS:Request:Send"} 165
+vtbackup_restore_count{component="BackupStorage",implementation="S3",operation="AWS:Request:Send"} 165
+```
 
 ### <a id="vttablet"/>VTTablet
 

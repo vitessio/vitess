@@ -359,10 +359,18 @@ func (node *AlterVschema) formatFast(buf *TrackedBuffer) {
 	case AddSequenceDDLAction:
 		buf.WriteString("alter vschema add sequence ")
 		node.Table.formatFast(buf)
+	case DropSequenceDDLAction:
+		buf.WriteString("alter vschema drop sequence ")
+		node.Table.formatFast(buf)
 	case AddAutoIncDDLAction:
 		buf.WriteString("alter vschema on ")
 		node.Table.formatFast(buf)
 		buf.WriteString(" add auto_increment ")
+		node.AutoIncSpec.formatFast(buf)
+	case DropAutoIncDDLAction:
+		buf.WriteString("alter vschema on ")
+		node.Table.formatFast(buf)
+		buf.WriteString(" drop auto_increment ")
 		node.AutoIncSpec.formatFast(buf)
 	default:
 		buf.WriteString(node.Action.ToString())

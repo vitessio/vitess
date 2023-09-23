@@ -1271,8 +1271,12 @@ func (action DDLAction) ToString() string {
 		return DropColVindexStr
 	case AddSequenceDDLAction:
 		return AddSequenceStr
+	case DropSequenceDDLAction:
+		return DropSequenceStr
 	case AddAutoIncDDLAction:
 		return AddAutoIncStr
+	case DropAutoIncDDLAction:
+		return DropAutoIncStr
 	default:
 		return "Unknown DDL Action"
 	}

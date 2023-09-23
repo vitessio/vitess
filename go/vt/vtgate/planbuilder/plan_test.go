@@ -102,7 +102,8 @@ func TestForeignKeyPlanning(t *testing.T) {
 	vschema := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, vschema)
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
-		V: vschema,
+		V:           vschema,
+		TestBuilder: TestBuilder,
 	}
 
 	testOutputTempDir := makeTestOutput(t)
@@ -225,7 +226,8 @@ func TestOne(t *testing.T) {
 	lv := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, lv)
 	vschema := &vschemawrapper.VSchemaWrapper{
-		V: lv,
+		V:           lv,
+		TestBuilder: TestBuilder,
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)
