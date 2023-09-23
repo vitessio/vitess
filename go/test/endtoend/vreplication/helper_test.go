@@ -52,7 +52,7 @@ import (
 
 const (
 	defaultTick          = 1 * time.Second
-	defaultTimeout       = 30 * time.Second
+	defaultTimeout       = 60 * time.Second
 	workflowStateTimeout = 90 * time.Second
 )
 

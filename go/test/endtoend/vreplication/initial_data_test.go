@@ -81,8 +81,8 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 	// from the max.
 	cid := maxID - int64(numCustomers)
 
-	// Now let's insert the rest of the records using the
-	// sequence values we reserved.
+	// Now let's insert the records using the sequence
+	// values we reserved.
 	sql := "insert into customer (cid, name) values "
 	for i := 1; i <= numCustomers; i++ {
 		sql += fmt.Sprintf("(%d, 'customer%d')", cid, i)
