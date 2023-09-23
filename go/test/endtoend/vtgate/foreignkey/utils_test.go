@@ -17,6 +17,7 @@ limitations under the License.
 package foreignkey
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 	"testing"
@@ -109,4 +110,35 @@ func checkReplicationHealthy(t *testing.T, vttablet *cluster.Vttablet) {
 	}
 	require.Equal(t, "Yes", sqlThreadRunning, "SQL Thread isn't happy on %v, Replica status - %v", vttablet.Alias, rs.Rows)
 	require.Equal(t, "Yes", ioThreadRunning, "IO Thread isn't happy on %v, Replica status - %v", vttablet.Alias, rs.Rows)
+}
+
+// compareVitessAndMySQLResults compares Vitess and MySQL results and reports if they don't report the same number of rows affected.
+func compareVitessAndMySQLResults(t *testing.T, vtRes sql.Result, mysqlRes sql.Result) {
+	if vtRes == nil && mysqlRes == nil {
+		return
+	}
+	if vtRes == nil {
+		t.Error("Vitess result is 'nil' while MySQL's is not.")
+		return
+	}
+	if mysqlRes == nil {
+		t.Error("MySQL result is 'nil' while Vitess' is not.")
+		return
+	}
+	vtRa, err := vtRes.RowsAffected()
+	require.NoError(t, err)
+	mysqlRa, err := mysqlRes.RowsAffected()
+	require.NoError(t, err)
+	if mysqlRa != vtRa {
+		t.Errorf("Vitess and MySQL don't agree on the rows affected. Vitess rows affected - %v, MySQL rows affected - %v", vtRa, mysqlRa)
+	}
+}
+
+// compareVitessAndMySQLErrors compares Vitess and MySQL errors and reports if one errors and the other doesn't.
+func compareVitessAndMySQLErrors(t *testing.T, vtErr, mysqlErr error) {
+	if vtErr != nil && mysqlErr != nil || vtErr == nil && mysqlErr == nil {
+		return
+	}
+	out := fmt.Sprintf("Vitess and MySQL are not erroring the same way.\nVitess error: %v\nMySQL error: %v", vtErr, mysqlErr)
+	t.Error(out)
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package foreignkey
 
 import (
+	"database/sql"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -24,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -194,42 +196,116 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, sharded bool, fuzzerThreadId int
 	defer func() {
 		fz.wg.Done()
 	}()
+	// Create a MySQL Compare that connects to both Vitess and MySQL and runs the queries against both.
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
 	require.NoError(t, err)
+	var vitessDb, mysqlDb *sql.DB
+	if fz.queryFormat == PreparedStatementPacket {
+		// Open another connection to Vitess using the go-sql-driver so that we can send prepared statements as COM_STMT_PREPARE packets.
+		vitessDb, err = sql.Open("mysql", fmt.Sprintf("@tcp(%s:%v)/%s", vtParams.Host, vtParams.Port, vtParams.DbName))
+		require.NoError(t, err)
+		defer vitessDb.Close()
+		// Open a similar connection to MySQL
+		mysqlDb, err = sql.Open("mysql", fmt.Sprintf("%v:%v@unix(%s)/%s", mysqlParams.Uname, mysqlParams.Pass, mysqlParams.UnixSocket, mysqlParams.DbName))
+		require.NoError(t, err)
+		defer mysqlDb.Close()
+	}
 	// Set the correct keyspace to use from VtGates.
 	if sharded {
 		_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
+		if vitessDb != nil {
+			_, _ = vitessDb.Exec("use `ks`")
+		}
 	} else {
 		_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
+		if vitessDb != nil {
+			_, _ = vitessDb.Exec("use `uks`")
+		}
 	}
 	for {
 		// If fuzzer thread is marked to be stopped, then we should exit this go routine.
 		if fz.shouldStop.Load() == true {
 			return
 		}
-		// Get a query and execute it.
-		queries := fz.generateQuery()
-		// We get a set of queries only when we are using prepared statements, which require running `SET` queries before running the actual DML query.
-		for _, query := range queries {
-			// When the concurrency is 1, then we run the query both on MySQL and Vitess.
-			if fz.concurrency == 1 {
-				_, _ = mcmp.ExecAllowAndCompareError(query)
-				// If t is marked failed, we have encountered our first failure.
-				// Let's collect the required information and finish execution.
-				if t.Failed() {
-					fz.firstFailureInfo = &debugInfo{
-						queryToFail: queries,
-						mysqlState:  collectFkTablesState(mcmp.MySQLConn),
-						vitessState: collectFkTablesState(mcmp.VtConn),
-					}
-					return
-				}
-			} else {
-				// When we are running concurrent threads, then we run all the queries on Vitess.
-				_, _ = utils.ExecAllowError(t, mcmp.VtConn, query)
+		switch fz.queryFormat {
+		case SQLQueries, PreparedStatmentQueries:
+			if fz.generateAndExecuteStatementQuery(t, mcmp) {
+				return
 			}
+		case PreparedStatementPacket:
+			if fz.generateAndExecutePreparedPacketQuery(t, mysqlDb, vitessDb, mcmp) {
+				return
+			}
+		default:
+			panic("Unknown query format")
+		}
+
+	}
+}
+
+// generateAndExecuteStatementQuery generates a query and runs it on Vitess (and possibly MySQL).
+// In this function we send the queries to Vitess always using COM_QUERY packets.
+// We handle 2 query formats in this function:
+//  1. SQLQueries: DML queries are run as a single SQL query.
+//  2. PreparedStatmentQueries: We execute a prepared statement as a SQL query, SET user defined variables and then Execute the DML.
+func (fz *fuzzer) generateAndExecuteStatementQuery(t *testing.T, mcmp utils.MySQLCompare) (exit bool) {
+	// Get a query and execute it.
+	queries := fz.generateQuery()
+	// We get a set of queries only when we are using prepared statements, which require running `SET` queries before running the actual DML query.
+	for _, query := range queries {
+		// When the concurrency is 1, then we run the query both on MySQL and Vitess.
+		if fz.concurrency == 1 {
+			_, _ = mcmp.ExecAllowAndCompareError(query)
+			// If t is marked failed, we have encountered our first failure.
+			// Let's collect the required information and finish execution.
+			if t.Failed() {
+				fz.firstFailureInfo = &debugInfo{
+					queryToFail: queries,
+					mysqlState:  collectFkTablesState(mcmp.MySQLConn),
+					vitessState: collectFkTablesState(mcmp.VtConn),
+				}
+				return true
+			}
+		} else {
+			// When we are running concurrent threads, then we run all the queries on Vitess.
+			_, _ = utils.ExecAllowError(t, mcmp.VtConn, query)
 		}
 	}
+	return false
+}
+
+// generateAndExecutePreparedPacketQuery generates a query and runs it on Vitess (and possibly MySQL).
+// This function handles the query format PreparedStatementPacket. Here we send the prepared statement as a COM_STMT_PREPARE packet.
+// Following which we execute it. To this end, we use the go-sql-driver.
+func (fz *fuzzer) generateAndExecutePreparedPacketQuery(t *testing.T, mysqlDB *sql.DB, vitessDb *sql.DB, mcmp utils.MySQLCompare) bool {
+	query, params := fz.generateParameterizedQuery()
+	// When the concurrency is 1, then we run the query both on MySQL and Vitess.
+	if fz.concurrency == 1 {
+		// When the concurrency is 1, then we run the query both on MySQL and Vitess.
+		fz.execAndCompareMySQlAndVitess(t, mysqlDB, vitessDb, query, params)
+		// If t is marked failed, we have encountered our first failure.
+		// Let's collect the required information and finish execution.
+		if t.Failed() {
+			fz.firstFailureInfo = &debugInfo{
+				queryToFail: []string{query},
+				mysqlState:  collectFkTablesState(mcmp.MySQLConn),
+				vitessState: collectFkTablesState(mcmp.VtConn),
+			}
+			return true
+		}
+	} else {
+		// When we are running concurrent threads, then we run all the queries on Vitess.
+		_, _ = vitessDb.Exec(query, params...)
+	}
+	return false
+}
+
+// execAndCompareMySQlAndVitess executes the given query with the parameters on MySQL and Vitess and compares their results.
+func (fz *fuzzer) execAndCompareMySQlAndVitess(t *testing.T, mysqlDB *sql.DB, vitessDb *sql.DB, query string, params []any) {
+	mysqlRes, mysqlErr := mysqlDB.Exec(query, params...)
+	vtRes, vtErr := vitessDb.Exec(query, params...)
+	compareVitessAndMySQLErrors(t, vtErr, mysqlErr)
+	compareVitessAndMySQLResults(t, vtRes, mysqlRes)
 }
 
 // stop stops the fuzzer and waits for it to finish execution.
@@ -321,6 +397,63 @@ func (fz *fuzzer) getPreparedUpdateQueries() []string {
 			"execute stmt_update using @col, @id",
 		}
 	}
+}
+
+// generateParameterizedQuery generates a parameterized query for the query format PreparedStatementPacket.
+func (fz *fuzzer) generateParameterizedQuery() (query string, params []any) {
+	val := rand.Intn(fz.insertShare + fz.updateShare + fz.deleteShare)
+	if val < fz.insertShare {
+		return fz.generateParameterizedInsertQuery()
+	}
+	if val < fz.insertShare+fz.updateShare {
+		return fz.generateParameterizedUpdateQuery()
+	}
+	return fz.generateParameterizedDeleteQuery()
+}
+
+// generateParameterizedInsertQuery generates a parameterized INSERT query for the query format PreparedStatementPacket.
+func (fz *fuzzer) generateParameterizedInsertQuery() (query string, params []any) {
+	tableId := rand.Intn(len(fkTables))
+	idValue := 1 + rand.Intn(fz.maxValForId)
+	tableName := fkTables[tableId]
+	if tableName == "fk_t20" {
+		colValue := rand.Intn(1 + fz.maxValForCol)
+		col2Value := rand.Intn(1 + fz.maxValForCol)
+		return fmt.Sprintf("insert into %v (id, col, col2) values (?, ?, ?)", tableName), []any{idValue, convertColValueToString(colValue), convertColValueToString(col2Value)}
+	} else if isMultiColFkTable(tableName) {
+		colaValue := rand.Intn(1 + fz.maxValForCol)
+		colbValue := rand.Intn(1 + fz.maxValForCol)
+		return fmt.Sprintf("insert into %v (id, cola, colb) values (?, ?, ?)", tableName), []any{idValue, convertColValueToString(colaValue), convertColValueToString(colbValue)}
+	} else {
+		colValue := rand.Intn(1 + fz.maxValForCol)
+		return fmt.Sprintf("insert into %v (id, col) values (?, ?)", tableName), []any{idValue, convertColValueToString(colValue)}
+	}
+}
+
+// generateParameterizedUpdateQuery generates a parameterized UPDATE query for the query format PreparedStatementPacket.
+func (fz *fuzzer) generateParameterizedUpdateQuery() (query string, params []any) {
+	tableId := rand.Intn(len(fkTables))
+	idValue := 1 + rand.Intn(fz.maxValForId)
+	tableName := fkTables[tableId]
+	if tableName == "fk_t20" {
+		colValue := rand.Intn(1 + fz.maxValForCol)
+		col2Value := rand.Intn(1 + fz.maxValForCol)
+		return fmt.Sprintf("update %v set col = ?, col2 = ? where id = ?", tableName), []any{convertColValueToString(colValue), convertColValueToString(col2Value), idValue}
+	} else if isMultiColFkTable(tableName) {
+		colaValue := rand.Intn(1 + fz.maxValForCol)
+		colbValue := rand.Intn(1 + fz.maxValForCol)
+		return fmt.Sprintf("update %v set cola = ?, colb = ? where id = ?", tableName), []any{convertColValueToString(colaValue), convertColValueToString(colbValue), idValue}
+	} else {
+		colValue := rand.Intn(1 + fz.maxValForCol)
+		return fmt.Sprintf("update %v set col = ? where id = ?", tableName), []any{convertColValueToString(colValue), idValue}
+	}
+}
+
+// generateParameterizedDeleteQuery generates a parameterized DELETE query for the query format PreparedStatementPacket.
+func (fz *fuzzer) generateParameterizedDeleteQuery() (query string, params []any) {
+	tableId := rand.Intn(len(fkTables))
+	idValue := 1 + rand.Intn(fz.maxValForId)
+	return fmt.Sprintf("delete from %v where id = ?", fkTables[tableId]), []any{idValue}
 }
 
 // TestFkFuzzTest is a fuzzer test that works by querying the database concurrently.
