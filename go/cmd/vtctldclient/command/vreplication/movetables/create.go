@@ -44,7 +44,7 @@ var (
 	// moveTablesCreate makes a moveTablesCreate gRPC call to a vtctld.
 	moveTablesCreate = &cobra.Command{
 		Use:                   "create",
-		Short:                 "Create and optionally run a moveTables VReplication workflow.",
+		Short:                 "Create and optionally run a MoveTables VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 movetables --workflow commerce2customer --target-keyspace customer create --source-keyspace commerce --cells zone1 --cells zone2 --tablet-types replica`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
@@ -123,7 +123,7 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 
 func registerCreateCommand(root *cobra.Command) {
 	common.AddCommonCreateFlags(moveTablesCreate)
-	moveTablesCreate.PersistentFlags().StringVar(&moveTablesCreateOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables are being moved from (required).")
+	moveTablesCreate.PersistentFlags().StringVar(&moveTablesCreateOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables are being moved from.")
 	moveTablesCreate.MarkPersistentFlagRequired("source-keyspace")
 	moveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.SourceShards, "source-shards", nil, "Source shards to copy data from when performing a partial moveTables (experimental).")
 	moveTablesCreate.Flags().StringVar(&moveTablesCreateOptions.SourceTimeZone, "source-time-zone", "", "Specifying this causes any DATETIME fields to be converted from the given time zone into UTC.")

@@ -261,7 +261,7 @@ func (wf *workflow) create() {
 		catchup(t, tab, wf.name, wf.typ)
 		i += 100
 	}
-	doVdiff2(t, wf.toKeyspace, wf.name, cell, nil)
+	doVtctldclientVDiff(t, wf.toKeyspace, wf.name, cell, nil)
 
 }
 
