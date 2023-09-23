@@ -236,15 +236,17 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 // with queries that rely on the sequence working as expected.
 // The read next value is also returned so that the caller can
 // use it if they want.
-func waitForSequenceValue(t *testing.T, conn *mysql.Conn, database, sequence string) int64 {
-	query := fmt.Sprintf("select next value from %s.%s", database, sequence)
+// Note: you specify the number of values that you want to reserve
+// and you get back the max value reserved.
+func waitForSequenceValue(t *testing.T, conn *mysql.Conn, database, sequence string, numVals int) int64 {
+	query := fmt.Sprintf("select next %d values from %s.%s", numVals, database, sequence)
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
 		qr, err := conn.ExecuteFetch(query, 1, false)
 		if err == nil && qr != nil && len(qr.Rows) == 1 { // We got a value back
 			val, err := qr.Rows[0][0].ToInt64()
-			require.NoError(t, err)
+			require.NoError(t, err, "invalid sequence value: %v", qr.Rows[0][0])
 			return val
 		}
 		select {
