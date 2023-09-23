@@ -73,7 +73,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 		Id:     0,
 		Output: nil,
 	}
-	// We use the db_filtered user for vreplication related work
+	// We use the db_filtered user for vreplication related work.
 	dbClient := vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -188,8 +188,8 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 		}
 	}
 	if action == CreateAction {
-		// Use options specified for the workflow via the create
-		// command, which are stored in the vdiff record.
+		// Use the options specified via the vdiff create client
+		// command, which we'll then store in the vdiff record.
 		if options, err = vde.fixupOptions(options); err != nil {
 			return err
 		}
@@ -244,13 +244,13 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 	}
 	vdiffRecord := qr.Named().Row()
 	if vdiffRecord == nil {
-		return fmt.Errorf("unable to resume vdiff for UUID %s as it was not found on tablet %v (%w)",
-			req.VdiffUuid, vde.thisTablet.Alias, err)
+		return fmt.Errorf("unable to %s vdiff for UUID %s as it was not found on tablet %v (%w)",
+			action, req.VdiffUuid, vde.thisTablet.Alias, err)
 	}
 	if action == ResumeAction {
-		// Use existing options for the vdiff.
+		// Use the existing options from the vdiff record.
 		options = optionsZeroVal
-		err = protojson.Unmarshal(vdiffRecord.AsBytes("options", []byte{}), options)
+		err = protojson.Unmarshal(vdiffRecord.AsBytes("options", []byte("{}")), options)
 		if err != nil {
 			return err
 		}
