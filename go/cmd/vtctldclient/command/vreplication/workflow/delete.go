@@ -66,7 +66,7 @@ func commandWorkflowDelete(cmd *cobra.Command, args []string) error {
 		return resp.Details[i].Tablet.String() < resp.Details[j].Tablet.String()
 	})
 
-	data, err := cli.MarshalJSON(resp)
+	data, err := cli.MarshalJSONPretty(resp)
 	if err != nil {
 		return err
 	}
