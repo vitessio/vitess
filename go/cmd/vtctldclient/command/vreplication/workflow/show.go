@@ -71,9 +71,9 @@ func commandWorkflowShow(cmd *cobra.Command, args []string) error {
 		for i, wf := range resp.Workflows {
 			Names[i] = wf.Name
 		}
-		data, err = cli.MarshalJSON(Names)
+		data, err = cli.MarshalJSONPretty(Names)
 	} else {
-		data, err = cli.MarshalJSON(resp)
+		data, err = cli.MarshalJSONPretty(resp)
 	}
 	if err != nil {
 		return err

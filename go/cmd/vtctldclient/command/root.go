@@ -30,6 +30,7 @@ import (
 	vreplcommon "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/movetables"
 	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/reshard"
+	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/vdiff"
 	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/workflow"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/logutil"

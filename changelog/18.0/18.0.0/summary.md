@@ -20,6 +20,7 @@
     - [Deleted `vtgr`](#deleted-vtgr)
     - [Deleted `query_analyzer`](#deleted-query_analyzer)
     - [Deprecated VTBackup stat `DurationByPhase`](#deprecated-vtbackup-stat-duration-by-phase)
+    - [Deprecated VDiff v1](#deprecated-vdiff-v1)
   - **[New stats](#new-stats)**
     - [VTGate Vindex unknown parameters](#vtgate-vindex-unknown-parameters)
     - [VTBackup stat `Phase`](#vtbackup-stat-phase)
@@ -161,6 +162,10 @@ The `vtgr` has been deprecated in Vitess 17, also see https://github.com/vitessi
 #### <a id="deleted-query_analyzer"/>Deleted `query_analyzer`
 
 The undocumented `query_analyzer` binary has been removed in Vitess 18, see https://github.com/vitessio/vitess/issues/14054.
+
+#### <a id="deprecated-vdiff-v1"/>Deprecated VDiff v1
+
+[VDiff v2 was added in Vitess 15.0](https://vitess.io/blog/2022-11-22-vdiff-v2/) and marked as GA in 16.0. The [legacy v1 client command](https://vitess.io/docs/18.0/reference/vreplication/vdiffv1/) is now deprecated in Vitess 18.0 and will be **removed** in 19.0. Please switch all of your usage to the [new VDiff client](https://vitess.io/docs/18.0/reference/vreplication/vdiff/) command ASAP.
 
 #### <a id="deprecated-vtbackup-stat-duration-by-phase"/>Deprecated VTbackup stat `DurationByPhase`
 
