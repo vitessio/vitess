@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,19 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package command
 
-import (
-	"vitess.io/vitess/go/cmd/zkctl/command"
-	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/log"
-)
+import "github.com/spf13/cobra"
 
-func main() {
-	defer exit.Recover()
+var Init = &cobra.Command{
+	Use:   "init",
+	Short: "Generates a new config and then starts zookeeper.",
+	Args:  cobra.ExactArgs(0),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return zkd.Init()
+	},
+}
 
-	if err := command.Root.Execute(); err != nil {
-		log.Error(err)
-		exit.Return(1)
-	}
+func init() {
+	Root.AddCommand(Init)
 }
