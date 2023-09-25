@@ -520,7 +520,8 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	for {
 		kontinue := c.handleNextCommand(l.handler)
-		if !kontinue {
+		// before going for next command check if the connection should be closed or not.
+		if !kontinue || c.IsMarkedForClose() {
 			return
 		}
 	}
