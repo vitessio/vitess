@@ -267,7 +267,7 @@ func FireRunHooks() {
 func RegisterDefaultFlags() {
 	OnParse(func(fs *pflag.FlagSet) {
 		fs.IntVar(&port, "port", port, "port for the server")
-		fs.StringVar(&bindAddress, "bind_address", bindAddress, "bind address for the server")
+		fs.StringVar(&bindAddress, "bind_address", bindAddress, "Bind address for the server")
 	})
 }
 
