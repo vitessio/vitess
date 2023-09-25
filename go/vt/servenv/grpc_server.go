@@ -19,9 +19,9 @@ package servenv
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"math"
 	"net"
+	"strconv"
 	"time"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -288,7 +288,7 @@ func serveGRPC() {
 
 	// listen on the port
 	log.Infof("Listening for gRPC calls on port %v", gRPCPort)
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", gRPCBindAddress, gRPCPort))
+	listener, err := net.Listen("tcp", net.JoinHostPort(gRPCBindAddress, strconv.Itoa(gRPCPort)))
 	if err != nil {
 		log.Exitf("Cannot listen on port %v for gRPC: %v", gRPCPort, err)
 	}
