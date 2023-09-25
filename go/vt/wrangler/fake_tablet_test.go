@@ -164,7 +164,7 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 
 	// Listen on a random port for gRPC.
 	var err error
-	ft.Listener, err = net.Listen("tcp", ":0")
+	ft.Listener, err = net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
@@ -173,7 +173,7 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 	// If needed, listen on a random port for HTTP.
 	vtPort := ft.Tablet.PortMap["vt"]
 	if ft.StartHTTPServer {
-		ft.HTTPListener, err = net.Listen("tcp", ":0")
+		ft.HTTPListener, err = net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("Cannot listen on http port: %v", err)
 		}
@@ -186,6 +186,7 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 	}
 	ft.Tablet.PortMap["vt"] = vtPort
 	ft.Tablet.PortMap["grpc"] = gRPCPort
+	ft.Tablet.Hostname = "127.0.0.1"
 
 	// Create a test tm on that port, and re-read the record
 	// (it has new ports and IP).
