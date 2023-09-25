@@ -23,6 +23,8 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/binlog"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -44,11 +46,14 @@ func TestStreamerParseRBREvents(t *testing.T) {
 	se.SetTableForTests(&schema.Table{
 		Name: sqlparser.NewIdentifierCS("vt_a"),
 		Fields: []*querypb.Field{{
-			Name: "id",
-			Type: querypb.Type_INT64,
+			Name:    "id",
+			Type:    querypb.Type_INT64,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 		}, {
-			Name: "message",
-			Type: querypb.Type_VARCHAR,
+			Name:    "message",
+			Type:    querypb.Type_VARCHAR,
+			Charset: uint32(collations.Default()),
 		}},
 	})
 
@@ -163,7 +168,7 @@ func TestStreamerParseRBREvents(t *testing.T) {
 		mysql.NewRotateEvent(f, s, 0, ""),
 		mysql.NewFormatDescriptionEvent(f, s),
 		mysql.NewTableMapEvent(f, s, tableID, tm),
-		mysql.NewMariaDBGTIDEvent(f, s, mysql.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}),
@@ -235,9 +240,9 @@ func TestStreamerParseRBREvents(t *testing.T) {
 			},
 			eventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
-				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTIDSet{
-						0: mysql.MariadbGTID{
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -261,7 +266,7 @@ func TestStreamerParseRBREvents(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, se, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(dbcfgs, se, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
@@ -290,11 +295,14 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 	se.SetTableForTests(&schema.Table{
 		Name: sqlparser.NewIdentifierCS("insert"),
 		Fields: []*querypb.Field{{
-			Name: "update",
-			Type: querypb.Type_INT64,
+			Name:    "update",
+			Type:    querypb.Type_INT64,
+			Charset: collations.CollationBinaryID,
+			Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 		}, {
-			Name: "delete",
-			Type: querypb.Type_VARCHAR,
+			Name:    "delete",
+			Type:    querypb.Type_VARCHAR,
+			Charset: uint32(collations.Default()),
 		}},
 	})
 
@@ -409,7 +417,7 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 		mysql.NewRotateEvent(f, s, 0, ""),
 		mysql.NewFormatDescriptionEvent(f, s),
 		mysql.NewTableMapEvent(f, s, tableID, tm),
-		mysql.NewMariaDBGTIDEvent(f, s, mysql.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}),
@@ -481,9 +489,9 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 			},
 			eventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
-				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTIDSet{
-						0: mysql.MariadbGTID{
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -507,7 +515,7 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, se, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(dbcfgs, se, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)

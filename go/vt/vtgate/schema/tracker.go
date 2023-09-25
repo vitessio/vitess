@@ -18,25 +18,17 @@ package schema
 
 import (
 	"context"
+	"maps"
+	"strings"
 	"sync"
 	"time"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sidecardb"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/vt/callerid"
-
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
 
 type (
@@ -64,22 +56,12 @@ type (
 // defaultConsumeDelay is the default time, the updateController will wait before checking the schema fetch request queue.
 const defaultConsumeDelay = 1 * time.Second
 
-// aclErrorMessageLog is for logging a warning when an acl error message is received for querying schema tracking table.
-const aclErrorMessageLog = "Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. Check 'schema tracking' docs on vitess.io"
-
 // NewTracker creates the tracker object.
-func NewTracker(ch chan *discovery.TabletHealth, user string, enableViews bool) *Tracker {
-	ctx := context.Background()
-	// Set the caller on the context if the user is provided.
-	// This user that will be sent down to vttablet calls.
-	if user != "" {
-		ctx = callerid.NewContext(ctx, nil, callerid.NewImmediateCallerID(user))
-	}
-
+func NewTracker(ch chan *discovery.TabletHealth, enableViews bool) *Tracker {
 	t := &Tracker{
-		ctx:          ctx,
+		ctx:          context.Background(),
 		ch:           ch,
-		tables:       &tableMap{m: map[keyspaceStr]map[tableNameStr][]vindexes.Column{}},
+		tables:       &tableMap{m: make(map[keyspaceStr]map[tableNameStr]*vindexes.TableInfo)},
 		tracked:      map[keyspaceStr]*updateController{},
 		consumeDelay: defaultConsumeDelay,
 	}
@@ -111,17 +93,6 @@ func (t *Tracker) loadTables(conn queryservice.QueryService, target *querypb.Tar
 		return nil
 	}
 
-	sidecarDBID, err := sidecardb.GetIdentifierForKeyspace(target.Keyspace)
-	if err != nil {
-		return vterrors.VT14005(target.Keyspace)
-	}
-
-	ftRes, err := conn.Execute(t.ctx, target,
-		sqlparser.BuildParsedQuery(mysql.FetchTables, sidecarDBID).Query,
-		nil, 0, 0, nil)
-	if err != nil {
-		return err
-	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -130,8 +101,17 @@ func (t *Tracker) loadTables(conn queryservice.QueryService, target *querypb.Tar
 	// clearing out the previous schema we can end up with duplicate entries when the
 	// tablet is simply restarted or potentially when we elect a new primary.
 	t.clearKeyspaceTables(target.Keyspace)
-	t.updateTables(target.Keyspace, ftRes)
-	log.Infof("finished loading schema for keyspace %s. Found %d columns in total across the tables", target.Keyspace, len(ftRes.Rows))
+
+	var numTables int
+	err := conn.GetSchema(t.ctx, target, querypb.SchemaTableType_TABLES, nil, func(schemaRes *querypb.GetSchemaResponse) error {
+		t.updateTables(target.Keyspace, schemaRes.TableDefinition)
+		numTables += len(schemaRes.TableDefinition)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof("finished loading tables for keyspace %s. Found %d tables", target.Keyspace, numTables)
 
 	return nil
 }
@@ -171,6 +151,10 @@ func (t *Tracker) Start() {
 		for {
 			select {
 			case th := <-t.ch:
+				if th == nil {
+					// channel closed
+					return
+				}
 				ksUpdater := t.getKeyspaceUpdateController(th)
 				ksUpdater.add(th)
 			case <-ctx.Done():
@@ -203,10 +187,6 @@ func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
 	err := t.LoadKeyspace(th.Conn, th.Target)
 	if err != nil {
 		log.Warningf("Unable to add the %s keyspace to the schema tracker: %v", th.Target.Keyspace, err)
-		code := vterrors.Code(err)
-		if code == vtrpcpb.Code_UNAUTHENTICATED || code == vtrpcpb.Code_PERMISSION_DENIED {
-			log.Warning(aclErrorMessageLog)
-		}
 		return err
 	}
 	return nil
@@ -223,20 +203,30 @@ func (t *Tracker) GetColumns(ks string, tbl string) []vindexes.Column {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	return t.tables.get(ks, tbl)
+	tblInfo := t.tables.get(ks, tbl)
+	return tblInfo.Columns
+}
+
+// GetForeignKeys returns the foreign keys for table in the given keyspace.
+func (t *Tracker) GetForeignKeys(ks string, tbl string) []*sqlparser.ForeignKeyDefinition {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	tblInfo := t.tables.get(ks, tbl)
+	return tblInfo.ForeignKeys
 }
 
 // Tables returns a map with the columns for all known tables in the keyspace
-func (t *Tracker) Tables(ks string) map[string][]vindexes.Column {
+func (t *Tracker) Tables(ks string) map[string]*vindexes.TableInfo {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	m := t.tables.m[ks]
 	if m == nil {
-		return map[string][]vindexes.Column{} // we know nothing about this KS, so that is the info we can give out
+		return map[string]*vindexes.TableInfo{} // we know nothing about this KS, so that is the info we can give out
 	}
 
-	return m
+	return maps.Clone(m)
 }
 
 // Views returns all known views in the keyspace with their definition.
@@ -247,7 +237,9 @@ func (t *Tracker) Views(ks string) map[string]sqlparser.SelectStatement {
 	if t.views == nil {
 		return nil
 	}
-	return t.views.m[ks]
+
+	m := t.views.m[ks]
+	return maps.Clone(m)
 }
 
 func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
@@ -263,60 +255,96 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 }
 
 func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
-	tablesUpdated := th.Stats.TableSchemaChanged
-	tables, err := sqltypes.BuildBindVariable(tablesUpdated)
-	if err != nil {
-		log.Errorf("Failed to read updated tables from TabletHealth: %v", err)
-		return false
-	}
-
-	sidecarDBID, err := sidecardb.GetIdentifierForKeyspace(th.Target.Keyspace)
-	if err != nil {
-		log.Errorf("Failed to read sidecar database identifier for keyspace %q from the cache: %v",
-			th.Target.Keyspace, err)
-		return false
-	}
-
-	bv := map[string]*querypb.BindVariable{"tableNames": tables}
-	res, err := th.Conn.Execute(t.ctx, th.Target,
-		sqlparser.BuildParsedQuery(mysql.FetchUpdatedTables, sidecarDBID).Query,
-		bv, 0, 0, nil)
-	if err != nil {
-		t.tracked[th.Target.Keyspace].setLoaded(false)
-		// TODO: optimize for the tables that got errored out.
-		log.Warningf("error fetching new schema for %v, making them non-authoritative: %v", tablesUpdated, err)
-		code := vterrors.Code(err)
-		if code == vtrpcpb.Code_UNAUTHENTICATED || code == vtrpcpb.Code_PERMISSION_DENIED {
-			log.Warning(aclErrorMessageLog)
-		}
-		return false
-	}
-
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	tablesUpdated := th.Stats.TableSchemaChanged
 
 	// first we empty all prior schema. deleted tables will not show up in the result,
 	// so this is the only chance to delete
 	for _, tbl := range tablesUpdated {
 		t.tables.delete(th.Target.Keyspace, tbl)
 	}
-	t.updateTables(th.Target.Keyspace, res)
+	err := th.Conn.GetSchema(t.ctx, th.Target, querypb.SchemaTableType_TABLES, tablesUpdated, func(schemaRes *querypb.GetSchemaResponse) error {
+		t.updateTables(th.Target.Keyspace, schemaRes.TableDefinition)
+		return nil
+	})
+	if err != nil {
+		t.tracked[th.Target.Keyspace].setLoaded(false)
+		// TODO: optimize for the tables that got errored out.
+		log.Warningf("error fetching new schema for %v, making them non-authoritative: %v", tablesUpdated, err)
+		return false
+	}
 	return true
 }
 
-func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
-	for _, row := range res.Rows {
-		tbl := row[0].ToString()
-		colName := row[1].ToString()
-		colType := row[2].ToString()
-		collation := row[3].ToString()
+func (t *Tracker) updateTables(keyspace string, res map[string]string) {
+	for tableName, tableDef := range res {
+		stmt, err := sqlparser.Parse(tableDef)
+		if err != nil {
+			log.Warningf("error parsing table definition for %s: %v", tableName, err)
+			continue
+		}
+		ddl, ok := stmt.(*sqlparser.CreateTable)
+		if !ok {
+			log.Warningf("parsed table definition for '%s' is not a create table definition", tableName)
+			continue
+		}
 
-		cType := sqlparser.ColumnType{Type: colType}
-		col := vindexes.Column{Name: sqlparser.NewIdentifierCI(colName), Type: cType.SQLType(), CollationName: collation}
-		cols := t.tables.get(keyspace, tbl)
-
-		t.tables.set(keyspace, tbl, append(cols, col))
+		cols := getColumns(ddl.TableSpec)
+		fks := getForeignKeys(ddl.TableSpec)
+		t.tables.set(keyspace, tableName, cols, fks)
 	}
+}
+
+func getColumns(tblSpec *sqlparser.TableSpec) []vindexes.Column {
+	tblCollation := getTableCollation(tblSpec)
+	cols := make([]vindexes.Column, 0, len(tblSpec.Columns))
+	for _, column := range tblSpec.Columns {
+		colCollation := getColumnCollation(tblCollation, column)
+		cols = append(cols,
+			vindexes.Column{
+				Name:          column.Name,
+				Type:          column.Type.SQLType(),
+				CollationName: colCollation,
+			})
+	}
+	return cols
+}
+
+func getForeignKeys(tblSpec *sqlparser.TableSpec) []*sqlparser.ForeignKeyDefinition {
+	if tblSpec.Constraints == nil {
+		return nil
+	}
+	var fks []*sqlparser.ForeignKeyDefinition
+	for _, constraint := range tblSpec.Constraints {
+		fkDef, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition)
+		if !ok {
+			continue
+		}
+		fks = append(fks, fkDef)
+	}
+	return fks
+}
+
+func getTableCollation(tblSpec *sqlparser.TableSpec) string {
+	if tblSpec.Options == nil {
+		return ""
+	}
+	collate := sqlparser.KeywordString(sqlparser.COLLATE)
+	for _, option := range tblSpec.Options {
+		if strings.EqualFold(option.Name, collate) {
+			return option.String
+		}
+	}
+	return ""
+}
+
+func getColumnCollation(defaultCollation string, column *sqlparser.ColumnDefinition) string {
+	if column.Type.Options == nil || column.Type.Options.Collate == "" {
+		return defaultCollation
+	}
+	return column.Type.Options.Collate
 }
 
 func (t *Tracker) updatedViewSchema(th *discovery.TabletHealth) bool {
@@ -371,22 +399,22 @@ func (t *Tracker) AddNewKeyspace(conn queryservice.QueryService, target *querypb
 }
 
 type tableMap struct {
-	m map[keyspaceStr]map[tableNameStr][]vindexes.Column
+	m map[keyspaceStr]map[tableNameStr]*vindexes.TableInfo
 }
 
-func (tm *tableMap) set(ks, tbl string, cols []vindexes.Column) {
+func (tm *tableMap) set(ks, tbl string, cols []vindexes.Column, fks []*sqlparser.ForeignKeyDefinition) {
 	m := tm.m[ks]
 	if m == nil {
-		m = make(map[tableNameStr][]vindexes.Column)
+		m = make(map[tableNameStr]*vindexes.TableInfo)
 		tm.m[ks] = m
 	}
-	m[tbl] = cols
+	m[tbl] = &vindexes.TableInfo{Columns: cols, ForeignKeys: fks}
 }
 
-func (tm *tableMap) get(ks, tbl string) []vindexes.Column {
+func (tm *tableMap) get(ks, tbl string) *vindexes.TableInfo {
 	m := tm.m[ks]
 	if m == nil {
-		return nil
+		return &vindexes.TableInfo{}
 	}
 	return m[tbl]
 }

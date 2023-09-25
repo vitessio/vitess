@@ -43,6 +43,7 @@ type VtgateProcess struct {
 	Binary                string
 	CommonArg             VtctlProcess
 	LogDir                string
+	ErrorLog              string
 	FileToLogQueries      string
 	Port                  int
 	GrpcPort              int
@@ -65,7 +66,7 @@ type VtgateProcess struct {
 	exit chan error
 }
 
-const defaultVtGatePlannerVersion = planbuilder.Gen4CompareV3
+const defaultVtGatePlannerVersion = planbuilder.Gen4
 
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
@@ -129,6 +130,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	vtgate.proc.Stderr = errFile
 
 	vtgate.proc.Env = append(vtgate.proc.Env, os.Environ()...)
+	vtgate.proc.Env = append(vtgate.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Running vtgate with command: %v", strings.Join(vtgate.proc.Args, " "))
 
@@ -151,6 +153,12 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		}
 		select {
 		case err := <-vtgate.exit:
+			errBytes, ferr := os.ReadFile(vtgate.ErrorLog)
+			if ferr == nil {
+				log.Errorf("vtgate error log contents:\n%s", string(errBytes))
+			} else {
+				log.Errorf("Failed to read the vtgate error log file %q: %v", vtgate.ErrorLog, ferr)
+			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtgate.Name, err)
 		default:
 			time.Sleep(300 * time.Millisecond)

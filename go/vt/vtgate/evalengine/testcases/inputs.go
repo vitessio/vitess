@@ -133,6 +133,35 @@ var inputConversions = []string{
 	"cast(time '12:34:56' as json)", "cast(time '12:34:58' as json)", "cast(time '5 12:34:58' as json)",
 }
 
+var regexInputs = []string{
+	"0", "1", "' 0 '", `'\t1foo\t'`,
+	`'foobar'`, `_utf8 'foobar'`, `''`, `_binary 'foobar'`,
+	`0x0`, `0x1`, `0xff`,
+	"NULL", "true", "false",
+	"0xFF666F6F626172FF",
+	"time '10:04:58'", "date '2000-01-01'",
+	"timestamp '2000-01-01 10:34:58'",
+	"cast(0 as json)", "cast(1 as json)",
+	"cast(true as json)", "cast(false as json)",
+	// JSON numbers
+	"cast(2 as json)", "cast(1.1 as json)", "cast(-1.1 as json)",
+	// JSON strings
+	"cast('\"foo\"' as json)",
+	// JSON binary values
+	"cast(_binary' \"foo\"' as json)",
+	"cast(0xFF666F6F626172FF as json)",
+	"cast(0b01 as json)",
+	// JSON arrays
+	"cast('[\"a\"]' as json)",
+	// JSON objects
+	"cast('{\"a\": 1, \"b\": 2}' as json)",
+}
+
+var regexMatchStrings = []string{
+	"NULL",
+	"'c'", "'i'", "'m'", "'n'", "'u'", "'cimnu'", "'cimnuunmic'",
+}
+
 const inputPi = "314159265358979323846264338327950288419716939937510582097494459"
 
 var inputStrings = []string{
@@ -157,6 +186,7 @@ var inputStrings = []string{
 	"-999999999999999999999999",
 	"_binary 'Müller' ",
 	"_utf8mb4 'abcABCÅå'",
+	"_latin1 0xFF",
 	// TODO: support other multibyte encodings
 	// "_dec8 'ÒòÅå'",
 	// "_utf8mb3 'abcABCÅå'",
@@ -238,9 +268,8 @@ var inputTrimStrings = []string{
 	"_utf8mb4 '\nabcABCÅå '",
 	// utf8mb4 version of the non-breaking space
 	"_utf8mb4 0xC2A078C2A0",
-	// TODO: support other multibyte encodings
 	// latin1 version of the non-breaking space
-	///"_latin1 0xA078A0",
+	"_latin1 0xA078A0",
 }
 
 var ipInputs = []string{
@@ -284,4 +313,26 @@ var uuidInputs = []string{
 	"0x0000000000000000000000000A000509",
 	"0x09DB81F6F26611EDA6F920FC8FD6830E",
 	"0x11EDF26609DB81F6A6F920FC8FD6830E",
+}
+
+var inputIntervals = []string{"day",
+	"week",
+	"month",
+	"year",
+	"day_hour",
+	"day_microsecond",
+	"day_minute",
+	"day_second",
+	"hour",
+	"hour_microsecond",
+	"hour_minute",
+	"hour_second",
+	"microsecond",
+	"minute",
+	"minute_microsecond",
+	"minute_second",
+	"quarter",
+	"second",
+	"second_microsecond",
+	"year_month",
 }

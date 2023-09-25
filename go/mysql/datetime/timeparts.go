@@ -48,7 +48,7 @@ func (tp *timeparts) toDateTime(prec int) (DateTime, int, bool) {
 	if tp.yday > 0 {
 		return DateTime{}, 0, false
 	} else {
-		if tp.month < 0 {
+		if tp.month < 1 {
 			tp.month = int(time.January)
 		}
 		if tp.day < 0 {
@@ -85,4 +85,8 @@ func (tp *timeparts) toDateTime(prec int) (DateTime, int, bool) {
 
 func (tp *timeparts) isZero() bool {
 	return tp.year == 0 && tp.month == 0 && tp.day == 0 && tp.hour == 0 && tp.min == 0 && tp.sec == 0 && tp.nsec == 0
+}
+
+func (tp *timeparts) toSeconds() int {
+	return tp.day*secondsPerDay + tp.hour*3600 + tp.min*60 + tp.sec
 }

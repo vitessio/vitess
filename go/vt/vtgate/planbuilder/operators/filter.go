@@ -17,7 +17,12 @@ limitations under the License.
 package operators
 
 import (
+	"slices"
+	"strings"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
@@ -32,6 +37,8 @@ type Filter struct {
 	// FinalPredicate is the evalengine expression that will finally be used.
 	// It contains the ANDed predicates in Predicates, with ColName:s replaced by Offset:s
 	FinalPredicate evalengine.Expr
+
+	Truncate int
 }
 
 func newFilter(op ops.Operator, expr sqlparser.Expr) ops.Operator {
@@ -42,11 +49,11 @@ func newFilter(op ops.Operator, expr sqlparser.Expr) ops.Operator {
 
 // Clone implements the Operator interface
 func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
-	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
-	copy(predicatesClone, f.Predicates)
 	return &Filter{
-		Source:     inputs[0],
-		Predicates: predicatesClone,
+		Source:         inputs[0],
+		Predicates:     slices.Clone(f.Predicates),
+		FinalPredicate: f.FinalPredicate,
+		Truncate:       f.Truncate,
 	}
 }
 
@@ -82,17 +89,20 @@ func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	return f, nil
 }
 
-func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
-	newSrc, offset, err := f.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
-	if err != nil {
-		return nil, 0, err
-	}
-	f.Source = newSrc
-	return f, offset, nil
+func (f *Filter) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+	return f.Source.AddColumns(ctx, reuse, addToGroupBy, exprs)
 }
 
-func (f *Filter) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return f.Source.GetColumns()
+func (f *Filter) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+	return f.Source.FindCol(ctx, expr, underRoute)
+}
+
+func (f *Filter) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return f.Source.GetColumns(ctx)
+}
+
+func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return f.Source.GetSelectExprs(ctx)
 }
 
 func (f *Filter) GetOrdering() ([]ops.OrderBy, error) {
@@ -114,22 +124,21 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.A
 }
 
 func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
-	resolveColumn := func(col *sqlparser.ColName) (int, error) {
-		newSrc, offset, err := f.Source.AddColumn(ctx, aeWrap(col), true, false)
-		if err != nil {
-			return 0, err
-		}
-		f.Source = newSrc
-		return offset, nil
-	}
 	cfg := &evalengine.Config{
-		ResolveType:   ctx.SemTable.TypeForExpr,
-		Collation:     ctx.SemTable.Collation,
-		ResolveColumn: resolveColumn,
+		ResolveType: ctx.SemTable.TypeForExpr,
+		Collation:   ctx.SemTable.Collation,
 	}
 
-	eexpr, err := evalengine.Translate(sqlparser.AndExpressions(f.Predicates...), cfg)
+	predicate := sqlparser.AndExpressions(f.Predicates...)
+	rewritten, err := useOffsets(ctx, predicate, f)
 	if err != nil {
+		return err
+	}
+	eexpr, err := evalengine.Translate(rewritten, cfg)
+	if err != nil {
+		if strings.HasPrefix(err.Error(), evalengine.ErrTranslateExprNotSupported) {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", evalengine.ErrTranslateExprNotSupported, sqlparser.String(predicate))
+		}
 		return err
 	}
 
@@ -137,15 +146,10 @@ func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
 	return nil
 }
 
-func (f *Filter) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Filter",
-		Other: map[string]any{
-			"Predicate": sqlparser.String(sqlparser.AndExpressions(f.Predicates...)),
-		},
-	}
-}
-
 func (f *Filter) ShortDescription() string {
 	return sqlparser.String(sqlparser.AndExpressions(f.Predicates...))
+}
+
+func (f *Filter) setTruncateColumnCount(offset int) {
+	f.Truncate = offset
 }

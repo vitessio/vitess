@@ -20,15 +20,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/google/uuid"
-
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vterrors"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -48,6 +52,13 @@ const (
 var (
 	Actions    = []VDiffAction{CreateAction, ShowAction, StopAction, ResumeAction, DeleteAction}
 	ActionArgs = []string{AllActionArg, LastActionArg}
+
+	// The real zero value has nested nil pointers.
+	optionsZeroVal = &tabletmanagerdatapb.VDiffOptions{
+		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{},
+		CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
+		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{},
+	}
 )
 
 func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
@@ -62,7 +73,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 		Id:     0,
 		Output: nil,
 	}
-	// We use the db_filtered user for vreplication related work
+	// We use the db_filtered user for vreplication related work.
 	dbClient := vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -97,7 +108,10 @@ func (vde *Engine) getVDiffSummary(vdiffID int64, dbClient binlogplayer.DBClient
 	var qr *sqltypes.Result
 	var err error
 
-	query := fmt.Sprintf(sqlVDiffSummary, vdiffID)
+	query, err := sqlparser.ParseAndBind(sqlVDiffSummary, sqltypes.Int64BindVariable(vdiffID))
+	if err != nil {
+		return nil, err
+	}
 	if qr, err = dbClient.ExecuteFetch(query, -1); err != nil {
 		return nil, err
 	}
@@ -108,6 +122,9 @@ func (vde *Engine) getVDiffSummary(vdiffID int64, dbClient binlogplayer.DBClient
 // Validate vdiff options. Also setup defaults where applicable.
 func (vde *Engine) fixupOptions(options *tabletmanagerdatapb.VDiffOptions) (*tabletmanagerdatapb.VDiffOptions, error) {
 	// Assign defaults to sourceCell and targetCell if not specified.
+	if options == nil {
+		options = optionsZeroVal
+	}
 	sourceCell := options.PickerOptions.SourceCell
 	targetCell := options.PickerOptions.TargetCell
 	var defaultCell string
@@ -118,10 +135,10 @@ func (vde *Engine) fixupOptions(options *tabletmanagerdatapb.VDiffOptions) (*tab
 			return nil, err
 		}
 	}
-	if sourceCell == "" {
+	if sourceCell == "" { // Default is all cells
 		sourceCell = defaultCell
 	}
-	if targetCell == "" {
+	if targetCell == "" { // Default is all cells
 		targetCell = defaultCell
 	}
 	options.PickerOptions.SourceCell = sourceCell
@@ -130,6 +147,8 @@ func (vde *Engine) fixupOptions(options *tabletmanagerdatapb.VDiffOptions) (*tab
 	return options, nil
 }
 
+// getDefaultCell returns all of the cells in the topo as a comma
+// separated string as the default value is all available cells.
 func (vde *Engine) getDefaultCell() (string, error) {
 	cells, err := vde.ts.GetCellInfoNames(vde.ctx)
 	if err != nil {
@@ -139,15 +158,18 @@ func (vde *Engine) getDefaultCell() (string, error) {
 		// Unreachable
 		return "", fmt.Errorf("there are no cells in the topo")
 	}
-	return cells[0], nil
+	sort.Strings(cells) // Ensure that the resulting value is deterministic
+	return strings.Join(cells, ","), nil
 }
 
 func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
 	var qr *sqltypes.Result
-	var err error
 	options := req.Options
 
-	query := fmt.Sprintf(sqlGetVDiffID, encodeString(req.VdiffUuid))
+	query, err := sqlparser.ParseAndBind(sqlGetVDiffID, sqltypes.StringBindVariable(req.VdiffUuid))
+	if err != nil {
+		return err
+	}
 	if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
@@ -165,17 +187,28 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 				vde.thisTablet.Alias, err)
 		}
 	}
-	if options, err = vde.fixupOptions(options); err != nil {
-		return err
-	}
-	optionsJSON, err := json.Marshal(options)
-	if err != nil {
-		return err
-	}
 	if action == CreateAction {
-		query := fmt.Sprintf(sqlNewVDiff,
-			encodeString(req.Keyspace), encodeString(req.Workflow), "pending", encodeString(string(optionsJSON)),
-			vde.thisTablet.Shard, topoproto.TabletDbName(vde.thisTablet), req.VdiffUuid)
+		// Use the options specified via the vdiff create client
+		// command, which we'll then store in the vdiff record.
+		if options, err = vde.fixupOptions(options); err != nil {
+			return err
+		}
+		optionsJSON, err := json.Marshal(options)
+		if err != nil {
+			return err
+		}
+		query, err := sqlparser.ParseAndBind(sqlNewVDiff,
+			sqltypes.StringBindVariable(req.Keyspace),
+			sqltypes.StringBindVariable(req.Workflow),
+			sqltypes.StringBindVariable("pending"),
+			sqltypes.StringBindVariable(string(optionsJSON)),
+			sqltypes.StringBindVariable(vde.thisTablet.Shard),
+			sqltypes.StringBindVariable(topoproto.TabletDbName(vde.thisTablet)),
+			sqltypes.StringBindVariable(req.VdiffUuid),
+		)
+		if err != nil {
+			return err
+		}
 		if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
 			return err
 		}
@@ -185,7 +218,12 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 		}
 		resp.Id = int64(qr.InsertID)
 	} else {
-		query := fmt.Sprintf(sqlResumeVDiff, encodeString(string(optionsJSON)), encodeString(req.VdiffUuid))
+		query, err := sqlparser.ParseAndBind(sqlResumeVDiff,
+			sqltypes.StringBindVariable(req.VdiffUuid),
+		)
+		if err != nil {
+			return err
+		}
 		if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
 			return err
 		}
@@ -204,9 +242,23 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 	if err != nil {
 		return err
 	}
+	vdiffRecord := qr.Named().Row()
+	if vdiffRecord == nil {
+		return fmt.Errorf("unable to %s vdiff for UUID %s as it was not found on tablet %v (%w)",
+			action, req.VdiffUuid, vde.thisTablet.Alias, err)
+	}
+	if action == ResumeAction {
+		// Use the existing options from the vdiff record.
+		options = optionsZeroVal
+		err = protojson.Unmarshal(vdiffRecord.AsBytes("options", []byte("{}")), options)
+		if err != nil {
+			return err
+		}
+	}
+
 	vde.mu.Lock()
 	defer vde.mu.Unlock()
-	if err := vde.addController(qr.Named().Row(), options); err != nil {
+	if err := vde.addController(vdiffRecord, options); err != nil {
 		return err
 	}
 
@@ -219,7 +271,13 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 	vdiffUUID := ""
 
 	if req.ActionArg == LastActionArg {
-		query := fmt.Sprintf(sqlGetMostRecentVDiff, encodeString(req.Keyspace), encodeString(req.Workflow))
+		query, err := sqlparser.ParseAndBind(sqlGetMostRecentVDiff,
+			sqltypes.StringBindVariable(req.Keyspace),
+			sqltypes.StringBindVariable(req.Workflow),
+		)
+		if err != nil {
+			return err
+		}
 		if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
 			return err
 		}
@@ -234,7 +292,14 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 	}
 	if vdiffUUID != "" {
 		resp.VdiffUuid = vdiffUUID
-		query := fmt.Sprintf(sqlGetVDiffByKeyspaceWorkflowUUID, encodeString(req.Keyspace), encodeString(req.Workflow), encodeString(vdiffUUID))
+		query, err := sqlparser.ParseAndBind(sqlGetVDiffByKeyspaceWorkflowUUID,
+			sqltypes.StringBindVariable(req.Keyspace),
+			sqltypes.StringBindVariable(req.Workflow),
+			sqltypes.StringBindVariable(vdiffUUID),
+		)
+		if err != nil {
+			return err
+		}
 		if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
 			return err
 		}
@@ -278,7 +343,7 @@ func (vde *Engine) handleStopAction(ctx context.Context, dbClient binlogplayer.D
 		if controller.uuid == req.VdiffUuid {
 			controller.Stop()
 			if err := controller.markStoppedByRequest(); err != nil {
-				return err
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "encountered an error marking vdiff %s as stopped: %v", controller.uuid, err)
 			}
 			break
 		}
@@ -292,13 +357,22 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 
 	switch req.ActionArg {
 	case AllActionArg:
-		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(req.Keyspace), encodeString(req.Workflow))
+		query, err = sqlparser.ParseAndBind(sqlDeleteVDiffs,
+			sqltypes.StringBindVariable(req.Keyspace),
+			sqltypes.StringBindVariable(req.Workflow),
+		)
+		if err != nil {
+			return err
+		}
 	default:
 		uuid, err := uuid.Parse(req.ActionArg)
 		if err != nil {
 			return fmt.Errorf("action argument %s not supported", req.ActionArg)
 		}
-		query = fmt.Sprintf(sqlDeleteVDiffByUUID, encodeString(uuid.String()))
+		query, err = sqlparser.ParseAndBind(sqlDeleteVDiffByUUID, sqltypes.StringBindVariable(uuid.String()))
+		if err != nil {
+			return err
+		}
 	}
 	if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
 		return err

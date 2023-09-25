@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/log"
+
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/require"
@@ -53,11 +55,11 @@ limit 123 offset 456
 	require.NoError(t, err)
 	visitAllExpressionsInAST(ast.(sqlparser.SelectStatement), func(cursor expressionCursor) bool {
 		fmt.Printf(">> found expression: %s\n", sqlparser.String(cursor.expr))
-		cursor.replace(sqlparser.NewIntLiteral("1"))
+		cursor.remove()
 		fmt.Printf("remove: %s\n", sqlparser.String(ast))
 		cursor.restore()
 		fmt.Printf("restore: %s\n", sqlparser.String(ast))
-		cursor.remove()
+		cursor.replace(sqlparser.NewIntLiteral("1"))
 		fmt.Printf("replace it with literal: %s\n", sqlparser.String(ast))
 		cursor.restore()
 		fmt.Printf("restore: %s\n", sqlparser.String(ast))
@@ -81,26 +83,35 @@ func TestAbortExpressionCursor(t *testing.T) {
 
 func TestSimplifyEvalEngineExpr(t *testing.T) {
 	// ast struct for L0         +
-	// L1                +            +
-	// L2             +     +      +     +
-	// L3            1 2   3 4    5 6   7 8
+	// L1                 +             +
+	// L2              +     +      +       +
+	// L3             1 2   3 4    5 6   +     +
+	// L4							    7 8   9 10
+
+	// L4
+	i7, i8, i9, i10 :=
+		sqlparser.NewIntLiteral("7"),
+		sqlparser.NewIntLiteral("8"),
+		sqlparser.NewIntLiteral("9"),
+		sqlparser.NewIntLiteral("10")
 
 	// L3
-	i1, i2, i3, i4, i5, i6, i7, i8 :=
+	i1, i2, i3, i4, i5, i6, p31, p32 :=
 		sqlparser.NewIntLiteral("1"),
 		sqlparser.NewIntLiteral("2"),
 		sqlparser.NewIntLiteral("3"),
 		sqlparser.NewIntLiteral("4"),
 		sqlparser.NewIntLiteral("5"),
 		sqlparser.NewIntLiteral("6"),
-		sqlparser.NewIntLiteral("7"),
-		sqlparser.NewIntLiteral("8")
+		plus(i7, i8),
+		plus(i9, i10)
+
 	// L2
 	p21, p22, p23, p24 :=
 		plus(i1, i2),
 		plus(i3, i4),
 		plus(i5, i6),
-		plus(i7, i8)
+		plus(p31, p32)
 
 	// L1
 	p11, p12 :=
@@ -119,13 +130,13 @@ func TestSimplifyEvalEngineExpr(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		toInt64, err := res.Value().ToInt64()
+		toInt64, err := res.Value(collations.Default()).ToInt64()
 		if err != nil {
 			return false
 		}
 		return toInt64 >= 8
 	})
-	log.Infof("simplest expr to evaluate to >= 8: [%s], started from: [%s]", sqlparser.String(expr), sqlparser.String(p0))
+	log.Errorf("simplest expr to evaluate to >= 8: [%s], started from: [%s]", sqlparser.String(expr), sqlparser.String(p0))
 }
 
 func plus(a, b sqlparser.Expr) sqlparser.Expr {

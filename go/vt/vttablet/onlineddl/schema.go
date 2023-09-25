@@ -66,7 +66,8 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateMigrationStatusFailedOrCancelled = `UPDATE _vt.schema_migrations
-			SET migration_status=IF(cancelled_timestamp IS NULL, 'failed', 'cancelled')
+			SET migration_status=IF(cancelled_timestamp IS NULL, 'failed', 'cancelled'),
+			completed_timestamp=NOW(6)
 		WHERE
 			migration_uuid=%a
 	`
@@ -213,6 +214,7 @@ const (
 	`
 	sqlUpdateMigrationProgressByRowsCopied = `UPDATE _vt.schema_migrations
 			SET
+				table_rows=GREATEST(table_rows, %a),
 				progress=CASE
 					WHEN table_rows=0 THEN 100
 					ELSE LEAST(100, 100*%a/table_rows)
@@ -344,7 +346,7 @@ const (
 			log_path
 		FROM _vt.schema_migrations
 		WHERE
-			migration_status IN ('complete', 'failed')
+			migration_status IN ('complete', 'cancelled', 'failed')
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp <= IF(retain_artifacts_seconds=0,
 				NOW() - INTERVAL %a SECOND,
@@ -355,7 +357,7 @@ const (
 		SET
 			completed_timestamp=NOW(6)
 		WHERE
-			migration_status='failed'
+			migration_status IN ('cancelled', 'failed')
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp IS NULL
 	`
@@ -520,6 +522,7 @@ const (
 	sqlDropTableIfExists = "DROP TABLE IF EXISTS `%a`"
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
 	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
+	sqlAnalyzeTable      = "ANALYZE NO_WRITE_TO_BINLOG TABLE `%a`"
 	sqlShowCreateTable   = "SHOW CREATE TABLE `%a`"
 	sqlGetAutoIncrement  = `
 		SELECT
@@ -566,13 +569,6 @@ const (
 	sqlUnlockTables       = "UNLOCK TABLES"
 	sqlCreateSentryTable  = "CREATE TABLE IF NOT EXISTS `%a` (id INT PRIMARY KEY)"
 	sqlFindProcess        = "SELECT id, Info as info FROM information_schema.processlist WHERE id=%a AND Info LIKE %a"
-)
-
-const (
-	retryMigrationHint     = "retry"
-	cancelMigrationHint    = "cancel"
-	cancelAllMigrationHint = "cancel-all"
-	completeMigrationHint  = "complete"
 )
 
 var (

@@ -35,6 +35,7 @@ type MysqlctldProcess struct {
 	Name               string
 	Binary             string
 	LogDirectory       string
+	ErrorLog           string
 	Password           string
 	TabletUID          int
 	MySQLPort          int
@@ -43,17 +44,24 @@ type MysqlctldProcess struct {
 	process            *exec.Cmd
 	exit               chan error
 	InitMysql          bool
+	SocketFile         string
 	exitSignalReceived bool
 }
 
 // InitDb executes mysqlctld command to add cell info
 func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
-	tmpProcess := exec.Command(
-		mysqlctld.Binary,
+	args := []string{
 		"--log_dir", mysqlctld.LogDirectory,
 		"--tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
 		"--mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
 		"--init_db_sql_file", mysqlctld.InitDBFile,
+	}
+	if mysqlctld.SocketFile != "" {
+		args = append(args, "--socket_file", mysqlctld.SocketFile)
+	}
+	tmpProcess := exec.Command(
+		mysqlctld.Binary,
+		args...,
 	)
 	return tmpProcess.Run()
 }
@@ -64,11 +72,17 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 		return fmt.Errorf("process is already running")
 	}
 	_ = createDirectory(mysqlctld.LogDirectory, 0700)
-	tempProcess := exec.Command(
-		mysqlctld.Binary,
+	args := []string{
 		"--log_dir", mysqlctld.LogDirectory,
 		"--tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
 		"--mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
+	}
+	if mysqlctld.SocketFile != "" {
+		args = append(args, "--socket_file", mysqlctld.SocketFile)
+	}
+	tempProcess := exec.Command(
+		mysqlctld.Binary,
+		args...,
 	)
 
 	tempProcess.Args = append(tempProcess.Args, mysqlctld.ExtraArgs...)
@@ -82,8 +96,10 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	tempProcess.Stderr = errFile
 
 	tempProcess.Env = append(tempProcess.Env, os.Environ()...)
+	tempProcess.Env = append(tempProcess.Env, DefaultVttestEnv)
 	tempProcess.Stdout = os.Stdout
 	tempProcess.Stderr = os.Stderr
+	mysqlctld.ErrorLog = errFile.Name()
 
 	log.Infof("%v", strings.Join(tempProcess.Args, " "))
 
@@ -98,6 +114,12 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	go func(mysqlctld *MysqlctldProcess) {
 		err := mysqlctld.process.Wait()
 		if !mysqlctld.exitSignalReceived {
+			errBytes, ferr := os.ReadFile(mysqlctld.ErrorLog)
+			if ferr == nil {
+				log.Errorf("mysqlctld error log contents:\n%s", string(errBytes))
+			} else {
+				log.Errorf("Failed to read the mysqlctld error log file %q: %v", mysqlctld.ErrorLog, ferr)
+			}
 			fmt.Printf("mysqlctld stopped unexpectedly, tabletUID %v, mysql port %v, PID %v\n", mysqlctld.TabletUID, mysqlctld.MySQLPort, mysqlctld.process.Process.Pid)
 		}
 		mysqlctld.process = nil

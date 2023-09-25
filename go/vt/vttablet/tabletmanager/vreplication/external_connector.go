@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
@@ -51,6 +52,9 @@ type VStreamerClient interface {
 
 	// VStreamRows streams rows of a table from the specified starting point.
 	VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error
+
+	// VStreamTables streams rows of a table from the specified starting point.
+	VStreamTables(ctx context.Context, send func(*binlogdatapb.VStreamTablesResponse) error) error
 }
 
 type externalConnector struct {
@@ -126,7 +130,7 @@ func (c *mysqlConnector) Close(ctx context.Context) error {
 }
 
 func (c *mysqlConnector) VStream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return c.vstreamer.Stream(ctx, startPos, tablePKs, filter, send)
+	return c.vstreamer.Stream(ctx, startPos, tablePKs, filter, throttlerapp.ExternalConnectorName, send)
 }
 
 func (c *mysqlConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
@@ -139,6 +143,10 @@ func (c *mysqlConnector) VStreamRows(ctx context.Context, query string, lastpk *
 		row = r.Rows[0]
 	}
 	return c.vstreamer.StreamRows(ctx, query, row, send)
+}
+
+func (c *mysqlConnector) VStreamTables(ctx context.Context, send func(response *binlogdatapb.VStreamTablesResponse) error) error {
+	return c.vstreamer.StreamTables(ctx, send)
 }
 
 //-----------------------------------------------------------
@@ -178,4 +186,9 @@ func (tc *tabletConnector) VStream(ctx context.Context, startPos string, tablePK
 func (tc *tabletConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	req := &binlogdatapb.VStreamRowsRequest{Target: tc.target, Query: query, Lastpk: lastpk}
 	return tc.qs.VStreamRows(ctx, req, send)
+}
+
+func (tc *tabletConnector) VStreamTables(ctx context.Context, send func(*binlogdatapb.VStreamTablesResponse) error) error {
+	req := &binlogdatapb.VStreamTablesRequest{Target: tc.target}
+	return tc.qs.VStreamTables(ctx, req, send)
 }

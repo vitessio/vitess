@@ -18,8 +18,6 @@ package inst
 
 import (
 	"encoding/json"
-	"fmt"
-	"strings"
 	"time"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -32,6 +30,9 @@ type StructureAnalysisCode string
 const (
 	NoProblem                              AnalysisCode = "NoProblem"
 	ClusterHasNoPrimary                    AnalysisCode = "ClusterHasNoPrimary"
+	PrimaryTabletDeleted                   AnalysisCode = "PrimaryTabletDeleted"
+	InvalidPrimary                         AnalysisCode = "InvalidPrimary"
+	InvalidReplica                         AnalysisCode = "InvalidReplica"
 	DeadPrimaryWithoutReplicas             AnalysisCode = "DeadPrimaryWithoutReplicas"
 	DeadPrimary                            AnalysisCode = "DeadPrimary"
 	DeadPrimaryAndReplicas                 AnalysisCode = "DeadPrimaryAndReplicas"
@@ -57,6 +58,7 @@ const (
 	PrimaryWithoutReplicas                 AnalysisCode = "PrimaryWithoutReplicas"
 	BinlogServerFailingToConnectToPrimary  AnalysisCode = "BinlogServerFailingToConnectToPrimary"
 	GraceFulPrimaryTakeover                AnalysisCode = "GracefulPrimaryTakeover"
+	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
 )
 
 const (
@@ -72,37 +74,13 @@ const (
 	NotEnoughValidSemiSyncReplicasStructureWarning       StructureAnalysisCode = "NotEnoughValidSemiSyncReplicasStructureWarning"
 )
 
-type InstanceAnalysis struct {
-	key      *InstanceKey
-	analysis AnalysisCode
-}
-
-func NewInstanceAnalysis(instanceKey *InstanceKey, analysis AnalysisCode) *InstanceAnalysis {
-	return &InstanceAnalysis{
-		key:      instanceKey,
-		analysis: analysis,
-	}
-}
-
-func (instanceAnalysis *InstanceAnalysis) String() string {
-	return fmt.Sprintf("%s/%s", instanceAnalysis.key.StringCode(), string(instanceAnalysis.analysis))
-}
-
 // PeerAnalysisMap indicates the number of peers agreeing on an analysis.
 // Key of this map is a InstanceAnalysis.String()
 type PeerAnalysisMap map[string]int
 
 type ReplicationAnalysisHints struct {
-	IncludeDowntimed bool
-	IncludeNoProblem bool
-	AuditAnalysis    bool
+	AuditAnalysis bool
 }
-
-const (
-	ForcePrimaryFailoverCommandHint    string = "force-primary-failover"
-	ForcePrimaryTakeoverCommandHint    string = "force-primary-takeover"
-	GracefulPrimaryTakeoverCommandHint string = "graceful-primary-takeover"
-)
 
 type AnalysisInstanceType string
 
@@ -114,16 +92,19 @@ const (
 
 // ReplicationAnalysis notes analysis on replication chain status, per instance
 type ReplicationAnalysis struct {
-	AnalyzedInstanceKey                       InstanceKey
-	AnalyzedInstanceAlias                     *topodatapb.TabletAlias
-	AnalyzedInstancePrimaryKey                InstanceKey
-	TabletType                                topodatapb.TabletType
-	PrimaryTimeStamp                          time.Time
-	ClusterDetails                            ClusterInfo
-	AnalyzedInstanceDataCenter                string
-	AnalyzedInstanceRegion                    string
-	AnalyzedKeyspace                          string
-	AnalyzedShard                             string
+	AnalyzedInstanceHostname     string
+	AnalyzedInstancePort         int
+	AnalyzedInstanceAlias        string
+	AnalyzedInstancePrimaryAlias string
+	TabletType                   topodatapb.TabletType
+	PrimaryTimeStamp             time.Time
+	ClusterDetails               ClusterInfo
+	AnalyzedInstanceDataCenter   string
+	AnalyzedInstanceRegion       string
+	AnalyzedKeyspace             string
+	AnalyzedShard                string
+	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
+	ShardPrimaryTermTimestamp                 string
 	AnalyzedInstancePhysicalEnvironment       string
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
 	IsPrimary                                 bool
@@ -135,17 +116,13 @@ type ReplicationAnalysis struct {
 	CountValidReplicas                        uint
 	CountValidReplicatingReplicas             uint
 	CountReplicasFailingToConnectToPrimary    uint
-	CountDowntimedReplicas                    uint
 	ReplicationDepth                          uint
 	IsFailingToConnectToPrimary               bool
 	ReplicationStopped                        bool
+	ErrantGTID                                string
 	Analysis                                  AnalysisCode
 	Description                               string
 	StructureAnalysis                         []StructureAnalysisCode
-	IsDowntimed                               bool
-	IsReplicasDowntimed                       bool // as good as downtimed because all replicas are downtimed AND analysis is all about the replicas (e.e. AllPrimaryReplicasNotReplicating)
-	DowntimeEndTimestamp                      string
-	DowntimeRemainingSeconds                  int
 	IsBinlogServer                            bool
 	OracleGTIDImmediateTopology               bool
 	MariaDBGTIDImmediateTopology              bool
@@ -166,22 +143,12 @@ type ReplicationAnalysis struct {
 	IsActionableRecovery                      bool
 	ProcessingNodeHostname                    string
 	ProcessingNodeToken                       string
-	CountAdditionalAgreeingNodes              int
 	StartActivePeriod                         string
-	SkippableDueToDowntime                    bool
 	GTIDMode                                  string
 	MinReplicaGTIDMode                        string
 	MaxReplicaGTIDMode                        string
 	MaxReplicaGTIDErrant                      string
-	CommandHint                               string
 	IsReadOnly                                bool
-}
-
-type AnalysisMap map[string](*ReplicationAnalysis)
-
-type ReplicationAnalysisChangelog struct {
-	AnalyzedInstanceKey InstanceKey
-	Changelog           []string
 }
 
 func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
@@ -191,18 +158,6 @@ func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
 	i.ReplicationAnalysis = *replicationAnalysis
 
 	return json.Marshal(i)
-}
-
-// AnalysisString returns a human friendly description of all analysis issues
-func (replicationAnalysis *ReplicationAnalysis) AnalysisString() string {
-	result := []string{}
-	if replicationAnalysis.Analysis != NoProblem {
-		result = append(result, string(replicationAnalysis.Analysis))
-	}
-	for _, structureAnalysis := range replicationAnalysis.StructureAnalysis {
-		result = append(result, string(structureAnalysis))
-	}
-	return strings.Join(result, ", ")
 }
 
 // Get a string description of the analyzed instance type (primary? co-primary? intermediate-primary?)

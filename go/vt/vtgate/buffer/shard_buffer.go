@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/discovery"
+
 	"vitess.io/vitess/go/vt/vtgate/errorsanitizer"
 
 	"vitess.io/vitess/go/vt/log"
@@ -93,14 +95,6 @@ type shardBuffer struct {
 	state bufferState
 	// queue is the list of buffered requests (ordered by arrival).
 	queue []*entry
-	// externallyReparented is the maximum value of all seen
-	// "StreamHealthResponse.TabletexternallyReparentedTimestamp" values across
-	// all PRIMARY tablets of this shard.
-	// In practice, it is a) the last time the shard was reparented or b) the last
-	// time the TabletExternallyReparented RPC was called on the tablet to confirm
-	// that the tablet is the current PRIMARY.
-	// We assume the value is a Unix timestamp in seconds.
-	externallyReparented int64
 	// lastStart is the last time we saw the start of a failover.
 	lastStart time.Time
 	// lastEnd is the last time we saw the end of a failover.
@@ -476,11 +470,12 @@ func (sb *shardBuffer) remove(toRemove *entry) {
 	// Entry was already removed. Keep the queue as it is.
 }
 
-func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillServing bool) {
+func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillServing bool, keyspaceEvent *discovery.KeyspaceEvent) {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
-	log.Infof("disruption in shard %s/%s resolved (serving: %v)", sb.keyspace, sb.shard, stillServing)
+	log.Infof("disruption in shard %s/%s resolved (serving: %v), movetable state %#v",
+		sb.keyspace, sb.shard, stillServing, keyspaceEvent.MoveTablesState)
 
 	if !topoproto.TabletAliasEqual(alias, sb.currentPrimary) {
 		if sb.currentPrimary != nil {
@@ -488,42 +483,26 @@ func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillS
 		}
 		sb.currentPrimary = alias
 	}
-	if stillServing {
-		sb.stopBufferingLocked(stopFailoverEndDetected, "a primary promotion has been detected")
-	} else {
-		sb.stopBufferingLocked(stopShardMissing, "the keyspace has been resharded")
-	}
-}
+	var reason stopReason
+	var msg string
 
-func (sb *shardBuffer) recordExternallyReparentedTimestamp(timestamp int64, alias *topodatapb.TabletAlias) {
-	// Fast path (read lock): Check if new timestamp is higher.
-	sb.mu.RLock()
-	if timestamp <= sb.externallyReparented {
-		// Do nothing. Equal values are reported if the primary has not changed.
-		// Smaller values can be reported during the failover by the old primary
-		// after the new primary already took over.
-		sb.mu.RUnlock()
-		return
+	// heuristically determine the reason why vtgate is currently buffering
+	moveTablesSwitched := false
+	if keyspaceEvent.MoveTablesState.State == discovery.MoveTablesSwitched {
+		moveTablesSwitched = true
 	}
-	sb.mu.RUnlock()
-
-	// New timestamp is higher. Stop buffering if running.
-	sb.mu.Lock()
-	defer sb.mu.Unlock()
-
-	// Re-check value after acquiring write lock.
-	if timestamp <= sb.externallyReparented {
-		return
+	switch {
+	case moveTablesSwitched:
+		reason = stopMoveTablesSwitchingTraffic
+		msg = stopMoveTablesSwitchingTrafficMessage
+	case stillServing:
+		reason = stopFailoverEndDetected
+		msg = stopFailoverEndDetectedMessage
+	default:
+		reason = stopShardMissing
+		msg = stopShardMissingMessage
 	}
-
-	sb.externallyReparented = timestamp
-	if !topoproto.TabletAliasEqual(alias, sb.currentPrimary) {
-		if sb.currentPrimary != nil {
-			sb.lastReparent = sb.timeNow()
-		}
-		sb.currentPrimary = alias
-	}
-	sb.stopBufferingLocked(stopFailoverEndDetected, "failover end detected")
+	sb.stopBufferingLocked(reason, msg)
 }
 
 func (sb *shardBuffer) stopBufferingDueToMaxDuration() {
@@ -569,7 +548,8 @@ func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
 	if sb.mode == bufferModeDryRun {
 		msg = "Dry-run: Would have stopped buffering"
 	}
-	log.Infof("%v for shard: %s after: %.1f seconds due to: %v. Draining %d buffered requests now.", msg, topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d.Seconds(), details, len(q))
+	log.Infof("%v for shard: %s after: %.1f seconds due to: %v. Draining %d buffered requests now.",
+		msg, topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d.Seconds(), details, len(q))
 
 	var clientEntryError error
 	if reason == stopShardMissing {

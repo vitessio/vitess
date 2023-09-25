@@ -43,14 +43,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-)
-
-const (
-	throttlerAppName = "vstreamer"
 )
 
 // Engine is the engine for handling vreplication streaming requests.
@@ -73,6 +70,7 @@ type Engine struct {
 	streamIdx       int
 	streamers       map[int]*uvstreamer
 	rowStreamers    map[int]*rowStreamer
+	tableStreamers  map[int]*tableStreamer
 	resultStreamers map[int]*resultStreamer
 
 	// watcherOnce is used for initializing vschema
@@ -102,6 +100,7 @@ type Engine struct {
 	vstreamersCreated                      *stats.Counter
 	vstreamersEndedWithErrors              *stats.Counter
 	vstreamerFlushedBinlogs                *stats.Counter
+	tableStreamerNumTables                 *stats.Counter
 
 	throttlerClient *throttle.Client
 }
@@ -115,10 +114,11 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		ts:              ts,
 		se:              se,
 		cell:            cell,
-		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckSelf),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VStreamerName, throttle.ThrottleCheckSelf),
 
 		streamers:       make(map[int]*uvstreamer),
 		rowStreamers:    make(map[int]*rowStreamer),
+		tableStreamers:  make(map[int]*tableStreamer),
 		resultStreamers: make(map[int]*resultStreamer),
 
 		lvschema: &localVSchema{vschema: &vindexes.VSchema{}},
@@ -138,6 +138,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		rowStreamerNumRows:                     env.Exporter().NewCounter("RowStreamerNumRows", "Number of rows sent in row streamer"),
 		rowStreamerWaits:                       env.Exporter().NewTimings("RowStreamerWaits", "Total counts and time we've waited when streaming rows in the vstream copy phase", "copy-phase-waits"),
 		vstreamersCreated:                      env.Exporter().NewCounter("VStreamersCreated", "Count of vstreamers created"),
+		tableStreamerNumTables:                 env.Exporter().NewCounter("TableStreamerNumTables", "Number of tables streamed by the table streamer"),
 		vstreamersEndedWithErrors:              env.Exporter().NewCounter("VStreamersEndedWithErrors", "Count of vstreamers that ended with errors"),
 		errorCounts:                            env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),
 		vstreamerFlushedBinlogs:                env.Exporter().NewCounter("VStreamerFlushedBinlogs", "Number of times we've successfully executed a FLUSH BINARY LOGS statement when starting a vstream"),
@@ -226,7 +227,7 @@ func (vse *Engine) validateBinlogRowImage(ctx context.Context, db dbconfigs.Conn
 
 // Stream starts a new stream.
 // This streams events from the binary logs
-func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) error {
 
 	if err := vse.validateBinlogRowImage(ctx, vse.se.GetDBConnector()); err != nil {
 		return err
@@ -244,7 +245,7 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 		}
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
-		streamer := newUVStreamer(ctx, vse, vse.env.Config().DB.FilteredWithDB(), vse.se, startPos, tablePKs, filter, vse.lvschema, send)
+		streamer := newUVStreamer(ctx, vse, vse.env.Config().DB.FilteredWithDB(), vse.se, startPos, tablePKs, filter, vse.lvschema, throttlerApp, send)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++
@@ -286,7 +287,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
 
-		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, query, lastpk, vse.lvschema, send, vse)
+		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, query, lastpk, vse.lvschema, send, vse, RowStreamerModeSingleTable, nil)
 		idx := vse.streamIdx
 		vse.rowStreamers[idx] = rowStreamer
 		vse.streamIdx++
@@ -309,6 +310,47 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 
 	// No lock is held while streaming, but wg is incremented.
 	return rowStreamer.Stream()
+}
+
+// StreamTables streams all tables.
+func (vse *Engine) StreamTables(ctx context.Context, send func(*binlogdatapb.VStreamTablesResponse) error) error {
+	// Ensure vschema is initialized and the watcher is started.
+	// Starting of the watcher is delayed till the first call to StreamTables
+	// so that this overhead is incurred only if someone uses this feature.
+	vse.watcherOnce.Do(vse.setWatch)
+	log.Infof("Streaming all tables")
+
+	// Create stream and add it to the map.
+	tableStreamer, idx, err := func() (*tableStreamer, int, error) {
+		if atomic.LoadInt32(&vse.isOpen) == 0 {
+			return nil, 0, errors.New("VStreamer is not open")
+		}
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
+
+		tableStreamer := newTableStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, vse.lvschema, send, vse)
+		idx := vse.streamIdx
+		vse.tableStreamers[idx] = tableStreamer
+		vse.streamIdx++
+		// Now that we've added the stream, increment wg.
+		// This must be done before releasing the lock.
+		vse.wg.Add(1)
+		return tableStreamer, idx, nil
+	}()
+	if err != nil {
+		return err
+	}
+
+	// Remove stream from map and decrement wg when it ends.
+	defer func() {
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
+		delete(vse.tableStreamers, idx)
+		vse.wg.Done()
+	}()
+
+	// No lock is held while streaming, but wg is incremented.
+	return tableStreamer.Stream()
 }
 
 // StreamResults streams results of the query with the gtid.

@@ -17,12 +17,12 @@ limitations under the License.
 package endtoend
 
 import (
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
@@ -31,38 +31,51 @@ func TestSchemaChange(t *testing.T) {
 	client := framework.NewClient()
 
 	tcs := []struct {
-		tName    string
-		response []string
-		ddl      string
+		tName          string
+		expectedChange string
+		ddl            string
+		expectTimeout  bool
 	}{
 		{
 			"create table 1",
-			[]string{"vitess_sc1"},
+			"vitess_sc1",
 			"create table vitess_sc1(id bigint primary key)",
+			false,
 		}, {
 			"create table 2",
-			[]string{"vitess_sc2"},
+			"vitess_sc2",
 			"create table vitess_sc2(id bigint primary key)",
+			false,
+		}, {
+			"create internal table",
+			"_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			"create table _vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410(id bigint primary key)",
+			true,
 		}, {
 			"add column 1",
-			[]string{"vitess_sc1"},
+			"vitess_sc1",
 			"alter table vitess_sc1 add column newCol varchar(50)",
+			false,
 		}, {
 			"add column 2",
-			[]string{"vitess_sc2"},
+			"vitess_sc2",
 			"alter table vitess_sc2 add column newCol varchar(50)",
+			false,
 		}, {
 			"remove column",
-			[]string{"vitess_sc1"},
+			"vitess_sc1",
 			"alter table vitess_sc1 drop column newCol",
+			false,
 		}, {
 			"drop table 2",
-			[]string{"vitess_sc2"},
+			"vitess_sc2",
 			"drop table vitess_sc2",
+			false,
 		}, {
 			"drop table 1",
-			[]string{"vitess_sc1"},
+			"vitess_sc1",
 			"drop table vitess_sc1",
+			false,
 		},
 	}
 
@@ -76,24 +89,26 @@ func TestSchemaChange(t *testing.T) {
 		})
 	}(ch)
 
-	select {
-	case <-ch: // get the schema notification
-	case <-time.After(3 * time.Second):
-		// We might not see the initial changes
-		// as the health stream ticker would have started very early on and
-		// this test client might not be even registered.
-	}
-
 	for _, tc := range tcs {
 		t.Run(tc.tName, func(t *testing.T) {
 			_, err := client.Execute(tc.ddl, nil)
 			assert.NoError(t, err)
-			select {
-			case res := <-ch: // get the schema notification
-				utils.MustMatch(t, tc.response, res, "")
-			case <-time.After(5 * time.Second):
-				t.Errorf("timed out")
-				return
+			timeout := time.After(5 * time.Second)
+			for {
+				select {
+				case res := <-ch: // get the schema notification
+					if slices.Contains(res, tc.expectedChange) {
+						assert.False(t, tc.expectTimeout)
+						return
+					}
+				case <-timeout:
+					if tc.expectTimeout {
+						// This is what we wanted!
+						return
+					}
+					t.Errorf("timed out waiting for a schema notification")
+					return
+				}
 			}
 		})
 	}

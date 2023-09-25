@@ -46,6 +46,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -57,6 +58,10 @@ import (
 // written to `dir`. The root command is also renamed to _index.md to remain
 // compatible with the vitessio/website content structure expectations.
 func GenerateMarkdownTree(cmd *cobra.Command, dir string) error {
+	sha, err := getCommitID("HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to get commit id for HEAD: %w", err)
+	}
 	switch fi, err := os.Stat(dir); {
 	case errors.Is(err, fs.ErrNotExist):
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -69,7 +74,7 @@ func GenerateMarkdownTree(cmd *cobra.Command, dir string) error {
 	}
 
 	recursivelyDisableAutoGenTags(cmd)
-	if err := doc.GenMarkdownTreeCustom(cmd, dir, frontmatterFilePrepender, linkHandler); err != nil {
+	if err := doc.GenMarkdownTreeCustom(cmd, dir, frontmatterFilePrepender(sha), linkHandler); err != nil {
 		return err
 	}
 
@@ -79,7 +84,83 @@ func GenerateMarkdownTree(cmd *cobra.Command, dir string) error {
 		return fmt.Errorf("failed to index doc (generated at %s) into proper position (%s): %w", rootDocPath, indexDocPath, err)
 	}
 
+	if err := restructure(dir, dir, cmd.Name(), cmd.Commands()); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+/*
+_index.md (aka vtctldclient.md)
+vtctldclient_AddCellInfo.md
+vtctldclient_movetables.md
+vtctldclient_movetables_show.md
+
+becomes
+
+_index.md
+vtctldclient_AddCellInfo.md
+vtctldclient_movetables/
+	_index.md
+	vtctldclient_movetables_show.md
+*/
+
+func restructure(rootDir string, dir string, name string, commands []*cobra.Command) error {
+	for _, cmd := range commands {
+		fullCmdFilename := strings.Join([]string{name, cmd.Name()}, "_")
+
+		children := cmd.Commands()
+
+		switch {
+		case len(children) > 0:
+			// Command (top-level or not) with children.
+			// 1. Set up a directory for its children.
+			// 2. Move its doc into that dir as "_index.md"
+			// 3. Restructure its children.
+			cmdDir := filepath.Join(dir, fullCmdFilename)
+			if err := os.MkdirAll(cmdDir, 0755); err != nil {
+				return fmt.Errorf("failed to create subdir for %s: %w", fullCmdFilename, err)
+			}
+
+			if err := os.Rename(filepath.Join(rootDir, fullCmdFilename+".md"), filepath.Join(cmdDir, "_index.md")); err != nil {
+				return fmt.Errorf("failed to move index doc for command %s with children: %w", fullCmdFilename, err)
+			}
+
+			if err := restructure(rootDir, cmdDir, fullCmdFilename, children); err != nil {
+				return fmt.Errorf("failed to restructure child commands for %s: %w", fullCmdFilename, err)
+			}
+		case rootDir != dir:
+			// Sub-command without children.
+			// 1. Move its doc into the directory for its parent, name unchanged.
+			if cmd.Name() == "help" {
+				// all commands with children have their own "help" subcommand,
+				// which we do not generate docs for
+				continue
+			}
+
+			oldName := filepath.Join(rootDir, fullCmdFilename+".md")
+			newName := filepath.Join(dir, fullCmdFilename+".md")
+
+			if err := os.Rename(oldName, newName); err != nil {
+				return fmt.Errorf("failed to move child command %s to its parent's dir: %w", fullCmdFilename, err)
+			}
+
+			sed := newParentLinkSedCommand(name, newName)
+			if out, err := sed.CombinedOutput(); err != nil {
+				return fmt.Errorf("failed to rewrite links to parent command in child %s: %w (extra: %s)", newName, err, out)
+			}
+		default:
+			// Top-level command without children. Nothing to restructure.
+			continue
+		}
+	}
+
+	return nil
+}
+
+func newParentLinkSedCommand(parent string, file string) *exec.Cmd {
+	return exec.Command("sed", "-i", "", "-e", fmt.Sprintf("s:(./%s/):(../):i", parent), file)
 }
 
 func recursivelyDisableAutoGenTags(root *cobra.Command) {
@@ -91,31 +172,47 @@ func recursivelyDisableAutoGenTags(root *cobra.Command) {
 	}
 }
 
+func getCommitID(ref string) (string, error) {
+	gitShow := exec.Command("git", "show", "--pretty=format:%H", "--no-patch", ref)
+	out, err := gitShow.Output()
+	if err != nil {
+		return "", err
+	}
+
+	return string(out), nil
+}
+
 const frontmatter = `---
 title: %s
 series: %s
+commit: %s
 ---
 `
 
-func frontmatterFilePrepender(filename string) string {
-	name := filepath.Base(filename)
-	base := strings.TrimSuffix(name, filepath.Ext(name))
+func frontmatterFilePrepender(sha string) func(filename string) string {
+	return func(filename string) string {
+		name := filepath.Base(filename)
+		base := strings.TrimSuffix(name, filepath.Ext(name))
 
-	root, cmdName, ok := strings.Cut(base, "_")
-	if !ok { // no `_`, so not a subcommand
-		cmdName = root
+		root, cmdName, ok := strings.Cut(base, "_")
+		if !ok { // no `_`, so not a subcommand
+			cmdName = root
+		}
+
+		cmdName = strings.ReplaceAll(cmdName, "_", " ")
+
+		return fmt.Sprintf(frontmatter, cmdName, root, sha)
 	}
-
-	return fmt.Sprintf(frontmatter, cmdName, root)
 }
 
 func linkHandler(filename string) string {
-	name := filepath.Base(filename)
-	base := strings.TrimSuffix(name, filepath.Ext(name))
+	base := filepath.Base(filename)
+	name := strings.TrimSuffix(base, filepath.Ext(base))
 
-	if _, _, ok := strings.Cut(base, "_"); !ok {
+	_, _, ok := strings.Cut(name, "_")
+	if !ok {
 		return "../"
 	}
 
-	return fmt.Sprintf("./%s/", strings.ToLower(base))
+	return fmt.Sprintf("./%s/", strings.ToLower(name))
 }

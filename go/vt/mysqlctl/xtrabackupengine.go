@@ -32,9 +32,11 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/ioutil"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -70,9 +72,6 @@ const (
 	xtrabackupBinaryName = "xtrabackup"
 	xtrabackupEngineName = "xtrabackup"
 	xbstream             = "xbstream"
-
-	// closeTimeout is the timeout for closing backup files after writing.
-	closeTimeout = 10 * time.Minute
 )
 
 // xtraBackupManifest represents a backup.
@@ -167,10 +166,18 @@ func closeFile(wc io.WriteCloser, fileName string, logger logutil.Logger, finalE
 	}
 }
 
-// ExecuteBackup returns a boolean that indicates if the backup is usable,
-// and an overall error.
-func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (complete bool, finalErr error) {
+// ExecuteBackup runs a backup based on given params. This could be a full or incremental backup.
+// The function returns a boolean that indicates if the backup is usable, and an overall error.
+func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
+	params.Logger.Infof("Executing Backup at %v for keyspace/shard %v/%v on tablet %v, concurrency: %v, compress: %v, incrementalFromPos: %v",
+		params.BackupTime, params.Keyspace, params.Shard, params.TabletAlias, params.Concurrency, backupStorageCompress, params.IncrementalFromPos)
 
+	return be.executeFullBackup(ctx, params, bh)
+}
+
+// executeFullBackup returns a boolean that indicates if the backup is usable,
+// and an overall error.
+func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (complete bool, finalErr error) {
 	if params.IncrementalFromPos != "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "incremental backups not supported in xtrabackup engine.")
 	}
@@ -200,6 +207,11 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	serverUUID, err := conn.GetServerUUID()
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't get server uuid")
+	}
+
+	mysqlVersion, err := params.Mysqld.GetVersionString(ctx)
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get MySQL version")
 	}
 
 	flavor := pos.GTIDSet.Flavor()
@@ -232,14 +244,19 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	bm := &xtraBackupManifest{
 		// Common base fields
 		BackupManifest: BackupManifest{
-			BackupMethod: xtrabackupEngineName,
-			Position:     replicationPosition,
-			ServerUUID:   serverUUID,
-			TabletAlias:  params.TabletAlias,
-			Keyspace:     params.Keyspace,
-			Shard:        params.Shard,
-			BackupTime:   params.BackupTime.UTC().Format(time.RFC3339),
-			FinishedTime: time.Now().UTC().Format(time.RFC3339),
+			BackupMethod:   xtrabackupEngineName,
+			Position:       replicationPosition,
+			PurgedPosition: replicationPosition,
+			ServerUUID:     serverUUID,
+			TabletAlias:    params.TabletAlias,
+			Keyspace:       params.Keyspace,
+			Shard:          params.Shard,
+			BackupTime:     FormatRFC3339(params.BackupTime.UTC()),
+			FinishedTime:   FormatRFC3339(time.Now().UTC()),
+			MySQLVersion:   mysqlVersion,
+			// xtrabackup backups are always created such that they
+			// are safe to use for upgrades later on.
+			UpgradeSafe: true,
 		},
 
 		// XtraBackup-specific fields
@@ -266,7 +283,14 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	return true, nil
 }
 
-func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, backupFileName string, numStripes int, flavor string) (replicationPosition mysql.Position, finalErr error) {
+func (be *XtrabackupEngine) backupFiles(
+	ctx context.Context,
+	params BackupParams,
+	bh backupstorage.BackupHandle,
+	backupFileName string,
+	numStripes int,
+	flavor string,
+) (replicationPosition replication.Position, finalErr error) {
 
 	backupProgram := path.Join(xtrabackupEnginePath, xtrabackupBinaryName)
 	flagsToExec := []string{"--defaults-file=" + params.Cnf.Path,
@@ -338,7 +362,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 
 	destWriters := []io.Writer{}
 	destBuffers := []*bufio.Writer{}
-	destCompressors := []io.WriteCloser{}
+	destCompressors := []io.Closer{}
 	for _, file := range destFiles {
 		buffer := bufio.NewWriterSize(file, writerBufferSize)
 		destBuffers = append(destBuffers, buffer)
@@ -358,7 +382,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 			}
 
 			writer = compressor
-			destCompressors = append(destCompressors, compressor)
+			destCompressors = append(destCompressors, ioutil.NewTimeoutCloser(ctx, compressor, closeTimeout))
 		}
 
 		destWriters = append(destWriters, writer)
@@ -606,7 +630,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	}()
 
 	srcReaders := []io.Reader{}
-	srcDecompressors := []io.ReadCloser{}
+	srcDecompressors := []io.Closer{}
 	for _, file := range srcFiles {
 		reader := io.Reader(file)
 
@@ -639,7 +663,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 			if err != nil {
 				return vterrors.Wrap(err, "can't create decompressor")
 			}
-			srcDecompressors = append(srcDecompressors, decompressor)
+			srcDecompressors = append(srcDecompressors, ioutil.NewTimeoutCloser(ctx, decompressor, closeTimeout))
 			reader = decompressor
 		}
 
@@ -728,10 +752,10 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 
 var xtrabackupReplicationPositionRegexp = regexp.MustCompile(`GTID of the last change '([^']*)'`)
 
-func findReplicationPosition(input, flavor string, logger logutil.Logger) (mysql.Position, error) {
+func findReplicationPosition(input, flavor string, logger logutil.Logger) (replication.Position, error) {
 	match := xtrabackupReplicationPositionRegexp.FindStringSubmatch(input)
 	if match == nil || len(match) != 2 {
-		return mysql.Position{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "couldn't find replication position in xtrabackup stderr output")
+		return replication.Position{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "couldn't find replication position in xtrabackup stderr output")
 	}
 	position := match[1]
 	// Remove all spaces, tabs, and newlines.
@@ -740,13 +764,13 @@ func findReplicationPosition(input, flavor string, logger logutil.Logger) (mysql
 	position = strings.Replace(position, "\n", "", -1)
 	logger.Infof("Found position: %v", position)
 	if position == "" {
-		return mysql.Position{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "empty replication position from xtrabackup")
+		return replication.Position{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "empty replication position from xtrabackup")
 	}
 
 	// flavor is required to parse a string into a mysql.Position
-	replicationPosition, err := mysql.ParsePosition(flavor, position)
+	replicationPosition, err := replication.ParsePosition(flavor, position)
 	if err != nil {
-		return mysql.Position{}, vterrors.Wrapf(err, "can't parse replication position from xtrabackup: %v", position)
+		return replication.Position{}, vterrors.Wrapf(err, "can't parse replication position from xtrabackup: %v", position)
 	}
 	return replicationPosition, nil
 }
@@ -927,7 +951,7 @@ func stripeReader(readers []io.Reader, blockSize int64) io.Reader {
 
 // ShouldDrainForBackup satisfies the BackupEngine interface
 // xtrabackup can run while tablet is serving, hence false
-func (be *XtrabackupEngine) ShouldDrainForBackup() bool {
+func (be *XtrabackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.BackupRequest) bool {
 	return false
 }
 

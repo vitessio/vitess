@@ -1,4 +1,22 @@
-Usage of vtorc:
+VTOrc is the automated fault detection and repair tool in Vitess.
+
+Usage:
+  vtorc [flags]
+
+Examples:
+vtorc \
+	--topo_implementation etcd2 \
+	--topo_global_server_address localhost:2379 \
+	--topo_global_root /vitess/global \
+	--log_dir $VTDATAROOT/tmp \
+	--port 15000 \
+	--recovery-period-block-duration "10m" \
+	--instance-poll-time "1s" \
+	--topo-information-refresh-duration "30s" \
+	--alsologtostderr
+
+Flags:
+      --allow-emergency-reparent                                    Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary (default true)
       --alsologtostderr                                             log to standard error as well as files
       --audit-file-location string                                  File location where the audit logs are to be stored
       --audit-purge-duration duration                               Duration for which audit logs are held before being purged. Should be in multiples of days (default 168h0m0s)
@@ -6,12 +24,13 @@ Usage of vtorc:
       --audit-to-syslog                                             Whether to store the audit log in the syslog
       --bind_address string                                         bind address for the server
       --catch-sigpipe                                               catch and ignore SIGPIPE on stdout and stderr if specified
+      --change-tablets-with-errant-gtid-to-drained                  Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED
       --clusters_to_watch strings                                   Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: "ks1,ks2/-80"
       --config string                                               config file name
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling   Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
       --config-name string                                          Name of the config file (without extension) to search for. (default "vtconfig")
-      --config-path strings                                         Paths to search for config files in. (default [{{.Workdir}}])
+      --config-path strings                                         Paths to search for config files in. (default [{{ .Workdir }}])
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --consul_auth_static_file string                              JSON File to read the topos/tokens from.
@@ -25,7 +44,7 @@ Usage of vtorc:
       --grpc_keepalive_timeout duration                             After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
       --grpc_max_message_size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
       --grpc_prometheus                                             Enable gRPC monitoring with Prometheus.
-  -h, --help                                                        display usage and exit
+  -h, --help                                                        help for vtorc
       --instance-poll-time duration                                 Timer duration on which VTOrc refreshes MySQL information (default 5s)
       --keep_logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
@@ -79,9 +98,6 @@ Usage of vtorc:
       --topo_global_root string                                     the path of the global topology data in the global topology server
       --topo_global_server_address string                           the address of the global topology server
       --topo_implementation string                                  the topology implementation to use
-      --topo_k8s_context string                                     The kubeconfig context to use, overrides the 'current-context' from the config
-      --topo_k8s_kubeconfig string                                  Path to a valid kubeconfig file. When running as a k8s pod inside the same cluster you wish to use as the topo, you may omit this and the below arguments, and Vitess is capable of auto-discovering the correct values. https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod
-      --topo_k8s_namespace string                                   The kubernetes namespace to use for all objects. Default comes from the context or in-cluster config
       --topo_zk_auth_file string                                    auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
       --topo_zk_base_timeout duration                               zk base timeout (see zk.Connect) (default 30s)
       --topo_zk_max_concurrency int                                 maximum number of pending requests to send to a Zookeeper server. (default 64)

@@ -27,6 +27,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/vt/discovery"
 
 	"vitess.io/vitess/go/mysql"
@@ -83,10 +85,11 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
@@ -145,9 +148,9 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
-	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -165,9 +168,9 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
 	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
-	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -175,9 +178,8 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		},
 	}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 4 statements come from tablet startup
+		// These 3 statements come from tablet startup
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 		// This first set of STOP and START commands come from
@@ -186,11 +188,15 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		"STOP SLAVE",
 		"START SLAVE",
 		// These commands come from SetReplicationSource RPC called
-		// to set the correct primary and semi-sync after Backup has concluded
+		// to set the correct primary and semi-sync after Backup has concluded.
+		// Since the primary hasn't changed, we only restart replication after fixing semi-sync.
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
-		"FAKE SET MASTER",
 		"START SLAVE",
+	}
+	sourceTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SHOW DATABASES":         {},
+		"RESET MASTER":           {},
+		"SET GLOBAL gtid_purged": {},
 	}
 	sourceTablet.StartActionLoop(t, wr)
 	defer sourceTablet.StopActionLoop(t)
@@ -215,9 +221,9 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
-	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -225,21 +231,21 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		},
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 4 statements come from tablet startup
+		// These 3 statements come from tablet startup
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES": {},
+		"SHOW DATABASES":         {},
+		"RESET MASTER":           {},
+		"SET GLOBAL gtid_purged": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
 	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
@@ -281,13 +287,14 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	}
 
 	primary.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES": {},
+		"SHOW DATABASES":         {},
+		"RESET MASTER":           {},
+		"SET GLOBAL gtid_purged": {},
 	}
 	primary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
-		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -330,10 +337,11 @@ func TestBackupRestoreLagged(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
@@ -378,9 +386,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
-	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -397,9 +405,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
-	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 456,
@@ -408,9 +416,8 @@ func TestBackupRestoreLagged(t *testing.T) {
 	}
 	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 4 statements come from tablet startup
+		// These 3 statements come from tablet startup
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 		// This first set of STOP and START commands come from
@@ -419,10 +426,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 		"STOP SLAVE",
 		"START SLAVE",
 		// These commands come from SetReplicationSource RPC called
-		// to set the correct primary and semi-sync after Backup has concluded
+		// to set the correct primary and semi-sync after Backup has concluded.
+		// Since the primary hasn't changed, we only restart replication after fixing semi-sync.
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)
@@ -441,9 +447,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 
 	timer := time.NewTicker(1 * time.Second)
 	<-timer.C
-	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPositionLocked(mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPositionLocked(replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -469,9 +475,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
-	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 456,
@@ -479,21 +485,21 @@ func TestBackupRestoreLagged(t *testing.T) {
 		},
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 4 statements come from tablet startup
+		// These 3 statements come from tablet startup
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES": {},
+		"SHOW DATABASES":         {},
+		"RESET MASTER":           {},
+		"SET GLOBAL gtid_purged": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = destTablet.FakeMysqlDaemon.CurrentPrimaryPosition
 	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
@@ -518,9 +524,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 
 	timer = time.NewTicker(1 * time.Second)
 	<-timer.C
-	destTablet.FakeMysqlDaemon.CurrentPrimaryPositionLocked(mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	destTablet.FakeMysqlDaemon.CurrentPrimaryPositionLocked(replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -550,10 +556,11 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
-	ts := memorytopo.NewServer("cell1")
+	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
@@ -598,9 +605,9 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
-	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -616,9 +623,9 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
-	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -627,9 +634,8 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	}
 	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 4 statements come from tablet startup
+		// These 3 statements come from tablet startup
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 		// This first set of STOP and START commands come from
@@ -638,10 +644,9 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		"STOP SLAVE",
 		"START SLAVE",
 		// These commands come from SetReplicationSource RPC called
-		// to set the correct primary and semi-sync after Backup has concluded
+		// to set the correct primary and semi-sync after Backup has concluded.
+		// Since the primary hasn't changed, we only restart replication after fixing semi-sync.
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)
@@ -660,9 +665,9 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
-	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -670,21 +675,21 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		},
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 4 statements come from tablet startup
+		// These 3 statements come from tablet startup
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES": {},
+		"SHOW DATABASES":         {},
+		"RESET MASTER":           {},
+		"SET GLOBAL gtid_purged": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
 	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
@@ -726,10 +731,11 @@ func TestDisableActiveReparents(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
@@ -774,9 +780,9 @@ func TestDisableActiveReparents(t *testing.T) {
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
-	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -793,9 +799,9 @@ func TestDisableActiveReparents(t *testing.T) {
 	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
-	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -826,9 +832,9 @@ func TestDisableActiveReparents(t *testing.T) {
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
-	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
+	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+		GTIDSet: replication.MariadbGTIDSet{
+			2: replication.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -841,7 +847,9 @@ func TestDisableActiveReparents(t *testing.T) {
 		"FAKE SET SLAVE POSITION",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES": {},
+		"SHOW DATABASES":         {},
+		"RESET MASTER":           {},
+		"SET GLOBAL gtid_purged": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
 	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))

@@ -24,8 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 )
 
@@ -225,7 +223,7 @@ func TestManager_UpdateConfiguration_ZeroValues(t *testing.T) {
 	defer f.tearDown()
 
 	// Test the explicit copy of zero values.
-	zeroValueConfig := proto.Clone(defaultMaxReplicationLagModuleConfig.Configuration).(*throttlerdatapb.Configuration)
+	zeroValueConfig := defaultMaxReplicationLagModuleConfig.Configuration.CloneVT()
 	zeroValueConfig.IgnoreNSlowestReplicas = 0
 	names, err := f.m.UpdateConfiguration("t2", zeroValueConfig, true /* copyZeroValues */)
 	if err != nil {

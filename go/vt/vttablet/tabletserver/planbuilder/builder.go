@@ -123,8 +123,11 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 		FullQuery: GenerateFullQuery(ins),
 	}
 
-	tableName := sqlparser.GetTableName(ins.Table)
-	plan.Table = tables[tableName.String()]
+	tableName, err := ins.Table.TableName()
+	if err != nil {
+		return nil, err
+	}
+	plan.Table = tables[sqlparser.GetTableName(tableName).String()]
 	return plan, nil
 }
 

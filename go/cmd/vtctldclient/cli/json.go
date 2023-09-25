@@ -25,6 +25,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const (
+	jsonIndent = "  "
+	jsonPrefix = ""
+)
+
 // MarshalJSON marshals obj to a JSON string. It uses the jsonpb marshaler for
 // proto.Message types, with some sensible defaults, and falls back to the
 // standard Go marshaler otherwise. In both cases, the marshaled JSON is
@@ -39,14 +44,37 @@ func MarshalJSON(obj any) ([]byte, error) {
 	case proto.Message:
 		m := protojson.MarshalOptions{
 			Multiline:       true,
-			Indent:          "  ",
+			Indent:          jsonIndent,
 			UseEnumNumbers:  true,
 			UseProtoNames:   true,
 			EmitUnpopulated: true,
 		}
 		return m.Marshal(obj)
 	default:
-		data, err := json.MarshalIndent(obj, "", "  ")
+		data, err := json.MarshalIndent(obj, jsonPrefix, jsonIndent)
+		if err != nil {
+			return nil, fmt.Errorf("json.Marshal = %v", err)
+		}
+
+		return data, nil
+	}
+}
+
+// MarshalJSONPretty works the same as MarshalJSON but elides zero value
+// elements and uses ENUM names instead of numbers.
+func MarshalJSONPretty(obj any) ([]byte, error) {
+	switch obj := obj.(type) {
+	case proto.Message:
+		m := protojson.MarshalOptions{
+			Multiline:       true,
+			Indent:          jsonIndent,
+			UseEnumNumbers:  false,
+			UseProtoNames:   true,
+			EmitUnpopulated: false, // elide zero value elements
+		}
+		return m.Marshal(obj)
+	default:
+		data, err := json.MarshalIndent(obj, jsonPrefix, jsonIndent)
 		if err != nil {
 			return nil, fmt.Errorf("json.Marshal = %v", err)
 		}

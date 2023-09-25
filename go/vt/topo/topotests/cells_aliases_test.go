@@ -33,8 +33,10 @@ func TestCellsAliases(t *testing.T) {
 	// Create an alias
 
 	cell := "cell1"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell)
+	defer ts.Close()
 
 	if err := ts.CreateCellsAlias(ctx, "alias", &topodatapb.CellsAlias{Cells: []string{"cell1", "cell2"}}); err != nil {
 		t.Fatalf("CreateCellsAlias failed: %v", err)

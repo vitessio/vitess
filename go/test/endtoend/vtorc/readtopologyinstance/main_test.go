@@ -41,6 +41,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	defer func() {
 		clusterInfo.ClusterInstance.Teardown()
 	}()
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	oldArgs := os.Args
@@ -71,12 +72,11 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 		}
 	}
 
-	primaryInstance, err := inst.ReadTopologyInstanceBufferable(&inst.InstanceKey{
-		Hostname: utils.Hostname,
-		Port:     primary.MySQLPort,
-	}, nil)
+	primaryInstance, err := inst.ReadTopologyInstanceBufferable(primary.Alias, nil)
 	require.NoError(t, err)
 	require.NotNil(t, primaryInstance)
+	assert.Equal(t, utils.Hostname, primaryInstance.Hostname)
+	assert.Equal(t, primary.MySQLPort, primaryInstance.Port)
 	assert.Contains(t, primaryInstance.InstanceAlias, "zone1")
 	assert.NotEqual(t, 0, primaryInstance.ServerID)
 	assert.Greater(t, len(primaryInstance.ServerUUID), 10)
@@ -120,12 +120,11 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	err = logic.EnableRecovery()
 	require.NoError(t, err)
 
-	replicaInstance, err := inst.ReadTopologyInstanceBufferable(&inst.InstanceKey{
-		Hostname: utils.Hostname,
-		Port:     replica.MySQLPort,
-	}, nil)
+	replicaInstance, err := inst.ReadTopologyInstanceBufferable(replica.Alias, nil)
 	require.NoError(t, err)
 	require.NotNil(t, replicaInstance)
+	assert.Equal(t, utils.Hostname, replicaInstance.Hostname)
+	assert.Equal(t, replica.MySQLPort, replicaInstance.Port)
 	assert.Contains(t, replicaInstance.InstanceAlias, "zone1")
 	assert.NotEqual(t, 0, replicaInstance.ServerID)
 	assert.Greater(t, len(replicaInstance.ServerUUID), 10)
@@ -137,6 +136,8 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Equal(t, "ROW", replicaInstance.BinlogFormat)
 	assert.Equal(t, "ON", replicaInstance.GTIDMode)
 	assert.Equal(t, "FULL", replicaInstance.BinlogRowImage)
+	assert.Equal(t, utils.Hostname, replicaInstance.SourceHost)
+	assert.Equal(t, primary.MySQLPort, replicaInstance.SourcePort)
 	assert.Contains(t, replicaInstance.SelfBinlogCoordinates.LogFile, fmt.Sprintf("vt-0000000%d-bin", replica.TabletUID))
 	assert.Greater(t, replicaInstance.SelfBinlogCoordinates.LogPos, uint32(0))
 	assert.False(t, replicaInstance.SemiSyncPrimaryEnabled)
@@ -158,7 +159,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Equal(t, replicaInstance.ReadBinlogCoordinates.LogFile, primaryInstance.SelfBinlogCoordinates.LogFile)
 	assert.Greater(t, replicaInstance.ReadBinlogCoordinates.LogPos, uint32(0))
 	assert.Equal(t, replicaInstance.ExecBinlogCoordinates.LogFile, primaryInstance.SelfBinlogCoordinates.LogFile)
-	assert.LessOrEqual(t, replicaInstance.ExecBinlogCoordinates.LogPos, replicaInstance.ReadBinlogCoordinates.LogPos)
+	assert.Greater(t, replicaInstance.ExecBinlogCoordinates.LogPos, uint32(0))
 	assert.Contains(t, replicaInstance.RelaylogCoordinates.LogFile, fmt.Sprintf("vt-0000000%d-relay", replica.TabletUID))
 	assert.Greater(t, replicaInstance.RelaylogCoordinates.LogPos, uint32(0))
 	assert.Empty(t, replicaInstance.LastIOError)

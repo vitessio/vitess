@@ -19,16 +19,13 @@ package operators
 import (
 	"testing"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 func TestQP(t *testing.T) {
@@ -57,7 +54,6 @@ func TestQP(t *testing.T) {
 			sql: "select id from user order by col, id, 1",
 			expOrder: []ops.OrderBy{
 				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("col")}, SimplifiedExpr: sqlparser.NewColName("col")},
-				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, SimplifiedExpr: sqlparser.NewColName("id")},
 				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, SimplifiedExpr: sqlparser.NewColName("id")},
 			},
 		},
@@ -91,7 +87,7 @@ func TestQP(t *testing.T) {
 			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
 			require.NoError(t, err)
 
-			qp, err := CreateQPFromSelect(ctx, sel)
+			qp, err := createQPFromSelect(ctx, sel)
 			if tcase.expErr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tcase.expErr)
@@ -198,7 +194,7 @@ func TestQPSimplifiedExpr(t *testing.T) {
 			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
 			require.NoError(t, err)
 			ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
-			qp, err := CreateQPFromSelect(ctx, sel)
+			qp, err := createQPFromSelect(ctx, sel)
 			require.NoError(t, err)
 			require.Equal(t, tc.expected[1:], qp.toString())
 		})

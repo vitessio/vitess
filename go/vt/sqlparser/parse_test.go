@@ -44,17 +44,25 @@ var (
 		partialDDL           bool
 		ignoreNormalizerTest bool
 	}{{
+		input: "select * from foo limit 5 + 5",
+	}, {
 		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
 		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT (CURRENT_TIMESTAMP))",
-		output: "create table t (\n\tid int primary key,\n\tdt datetime default current_timestamp()\n)",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default (current_timestamp())\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT now())",
 		output: "create table t (\n\tid int primary key,\n\tdt datetime default now()\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT (now()))",
-		output: "create table t (\n\tid int primary key,\n\tdt datetime default now()\n)",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default (now())\n)",
+	}, {
+		input:  "create table t (id int primary key, dt datetime(6) DEFAULT (now()))",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime(6) default (now())\n)",
+	}, {
+		input:  "create table t (id int primary key, dt datetime DEFAULT (now() + 1))",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default (now() + 1)\n)",
 	}, {
 		input:  "create table x (e enum('red','yellow') null collate 'utf8_bin')",
 		output: "create table x (\n\te enum('red', 'yellow') collate 'utf8_bin' null\n)",
@@ -93,52 +101,52 @@ var (
 		output: "select extract(microsecond from '2003-01-02 10:30:00.000123') from dual",
 	}, {
 		input:  "CREATE TABLE t2 (b BLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb BLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b blob DEFAULT 'abc')",
-		output: "create table t2 (\n\tb blob default ('abc')\n)",
+		output: "create table t2 (\n\tb blob default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b BLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb TINYBLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb MEDIUMBLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
+		output: "create table t2 (\n\tb LONGBLOB default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb TEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb TINYTEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb MEDIUMTEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT 'abc')",
-		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
+		output: "create table t2 (\n\tb LONGTEXT default 'abc'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
@@ -147,16 +155,16 @@ var (
 		output: "create table t2 (\n\tb JSON default null\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b JSON DEFAULT (null))",
-		output: "create table t2 (\n\tb JSON default null\n)",
+		output: "create table t2 (\n\tb JSON default (null)\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b JSON DEFAULT '{name:abc}')",
-		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
+		output: "create table t2 (\n\tb JSON default '{name:abc}'\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b JSON DEFAULT ('{name:abc}'))",
 		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
 	}, {
 		input:  "create table x(location POINT DEFAULT 7.0)",
-		output: "create table x (\n\tlocation POINT default (7.0)\n)",
+		output: "create table x (\n\tlocation POINT default 7.0\n)",
 	}, {
 		input:  "create table x(location POINT DEFAULT (7.0))",
 		output: "create table x (\n\tlocation POINT default (7.0)\n)",
@@ -1160,16 +1168,16 @@ var (
 		input: "select /* interval keyword */ adddate('2008-01-02', interval 1 year) from t",
 	}, {
 		input:  "select /* TIMESTAMPADD */ TIMESTAMPADD(MINUTE, 1, '2008-01-04') from t",
-		output: "select /* TIMESTAMPADD */ timestampadd(MINUTE, 1, '2008-01-04') from t",
+		output: "select /* TIMESTAMPADD */ timestampadd(minute, 1, '2008-01-04') from t",
 	}, {
 		input:  "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
-		output: "select /* TIMESTAMPDIFF */ timestampdiff(MINUTE, '2008-01-02', '2008-01-04') from t",
+		output: "select /* TIMESTAMPDIFF */ timestampdiff(minute, '2008-01-02', '2008-01-04') from t",
 	}, {
 		input:  "select DATE_ADD(MIN(FROM_UNIXTIME(1673444922)),interval -DAYOFWEEK(MIN(FROM_UNIXTIME(1673444922)))+1 DAY)",
-		output: "select DATE_ADD(min(FROM_UNIXTIME(1673444922)), interval (-DAYOFWEEK(min(FROM_UNIXTIME(1673444922))) + 1) DAY) from dual",
+		output: "select date_add(min(FROM_UNIXTIME(1673444922)), interval -DAYOFWEEK(min(FROM_UNIXTIME(1673444922))) + 1 day) from dual",
 	}, {
 		input:  "select '2020-01-01' + interval month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month))-1 month",
-		output: "select '2020-01-01' + interval (month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month)) - 1) month from dual",
+		output: "select '2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month)) - 1 month from dual",
 	}, {
 		input: "select /* dual */ 1 from dual",
 	}, {
@@ -2599,7 +2607,8 @@ var (
 	}, {
 		input: "select 1 from t where foo = _binary 'bar'",
 	}, {
-		input: "select 1 from t where foo = _utf8 'bar' and bar = _latin1 'sjösjuk'",
+		input:  "select 1 from t where foo = _utf8 'bar' and bar = _latin1 'sjösjuk'",
+		output: "select 1 from t where foo = _utf8mb3 'bar' and bar = _latin1 'sjösjuk'",
 	}, {
 		input:  "select 1 from t where foo = _binary'bar'",
 		output: "select 1 from t where foo = _binary 'bar'",
@@ -2610,10 +2619,10 @@ var (
 		output: "select 1 from t where foo = _utf8mb4 'bar'",
 	}, {
 		input:  "select 1 from t where foo = _utf8mb3 'bar'",
-		output: "select 1 from t where foo = _utf8 'bar'",
+		output: "select 1 from t where foo = _utf8mb3 'bar'",
 	}, {
-		input:  "select 1 from t where foo = _utf8mb3'bar'",
-		output: "select 1 from t where foo = _utf8 'bar'",
+		input:  "select 1 from t where foo = _utf8'bar'",
+		output: "select 1 from t where foo = _utf8mb3 'bar'",
 	}, {
 		input: "select match(a) against ('foo') from t",
 	}, {
@@ -2641,6 +2650,8 @@ var (
 	}, {
 		input:  "select name, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by name",
 		output: "select `name`, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by `name`",
+	}, {
+		input: "select foo, any_value(id) from tbl group by foo",
 	}, {
 		input: "select * from t partition (p0)",
 	}, {
@@ -3511,13 +3522,13 @@ var (
 		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc range 10 preceding)",
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ROWS INTERVAL 5 DAY PRECEDING);",
-		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc rows interval 5 DAY preceding)",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc rows interval 5 day preceding)",
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time RANGE 5 FOLLOWING);",
 		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc range 5 following)",
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ROWS INTERVAL '2:30' MINUTE_SECOND FOLLOWING);",
-		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc rows interval '2:30' MINUTE_SECOND following)",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc rows interval '2:30' minute_second following)",
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ASC RANGE BETWEEN 10 PRECEDING AND 10 FOLLOWING);",
 		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc range between 10 preceding and 10 following)",
@@ -3647,6 +3658,13 @@ var (
 	}, {
 		input:  `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
 		output: `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
+	}, {
+		input: `kill connection 18446744073709551615`,
+	}, {
+		input: `kill query 18446744073709551615`,
+	}, {
+		input:  `kill 18446744073709551615`,
+		output: `kill connection 18446744073709551615`,
 	}}
 )
 
@@ -4027,13 +4045,13 @@ func TestIntroducers(t *testing.T) {
 		output: "select _utf32 'x' from dual",
 	}, {
 		input:  "select _utf8 'x'",
-		output: "select _utf8 'x' from dual",
+		output: "select _utf8mb3 'x' from dual",
 	}, {
 		input:  "select _utf8mb4 'x'",
 		output: "select _utf8mb4 'x' from dual",
 	}, {
 		input:  "select _utf8mb3 'x'",
-		output: "select _utf8 'x' from dual",
+		output: "select _utf8mb3 'x' from dual",
 	}}
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -4197,7 +4215,7 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input: "select left(a, 5) from t",
 	}, {
-		input: "update t set d = adddate(date('2003-12-31 01:02:03'), interval 5 days)",
+		input: "update t set d = adddate(date('2003-12-31 01:02:03'), interval 5 day)",
 	}, {
 		input: "insert into t(a, b) values (left('foo', 1), 'b')",
 	}, {
@@ -4991,7 +5009,7 @@ func TestCreateTable(t *testing.T) {
 			output: `create table t (
 	time1 timestamp default now(),
 	time2 timestamp default now(),
-	time3 timestamp default now(),
+	time3 timestamp default (now()),
 	time4 timestamp default now() on update now(),
 	time5 timestamp default now() on update now(),
 	time6 timestamp(3) default now(3) on update now(3)
@@ -6177,7 +6195,7 @@ func testFile(t *testing.T, filename, tempDir string) {
 		if fail && tempDir != "" {
 			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
 			_ = os.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
-			fmt.Println(fmt.Sprintf("Errors found in parse tests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) // nolint
+			fmt.Printf("Errors found in parse tests. If the output is correct, run `cp %s/* testdata/` to update test expectations\n", tempDir)
 		}
 	})
 }

@@ -18,10 +18,10 @@ package throttler
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/google/safehtml/template"
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"

@@ -21,7 +21,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,7 +34,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -73,7 +74,7 @@ func TestTabletReshuffle(t *testing.T) {
 
 	// SupportsBackup=False prevents vttablet from trying to restore
 	// Start vttablet process
-	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = clusterInstance.StartVttablet(rTablet, false, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 
 	sql := "select value from t1"
@@ -87,13 +88,15 @@ func TestTabletReshuffle(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", rTablet.Alias)
 	assert.Error(t, err, "cannot perform backup without my.cnf")
 
-	killTablets(t, rTablet)
+	killTablets(rTablet)
 }
 
 func TestHealthCheck(t *testing.T) {
 	// Add one replica that starts not initialized
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
+	clusterInstance.DisableVTOrcRecoveries(t)
+	defer clusterInstance.EnableVTOrcRecoveries(t)
 
 	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
@@ -104,7 +107,7 @@ func TestHealthCheck(t *testing.T) {
 	defer replicaConn.Close()
 
 	// start vttablet process, should be in SERVING state as we already have a primary
-	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = clusterInstance.StartVttablet(rTablet, true, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
@@ -192,7 +195,144 @@ func TestHealthCheck(t *testing.T) {
 	}
 
 	// Manual cleanup of processes
-	killTablets(t, rTablet)
+	killTablets(rTablet)
+}
+
+// TestHealthCheckSchemaChangeSignal tests the tables and views, which report their schemas have changed in the output of a StreamHealth.
+func TestHealthCheckSchemaChangeSignal(t *testing.T) {
+	// Add one replica that starts not initialized
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+
+	vtParams := clusterInstance.GetVTParams(keyspaceName)
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Make sure the primary is the primary when the test starts.
+	// This state should be ensured before we actually test anything.
+	checkTabletType(t, primaryTablet.Alias, "PRIMARY")
+
+	// Run a bunch of DDL queries and verify that the tables/views changed show up in the health stream.
+	// These tests are for the part where `--queryserver-enable-views` flag is not set.
+	verifyHealthStreamSchemaChangeSignals(t, conn, &primaryTablet, false)
+
+	// We start a new vttablet, this time with `--queryserver-enable-views` flag specified.
+	tempTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
+	// Start Mysql Processes and return connection
+	_, err = cluster.StartMySQLAndGetConnection(ctx, tempTablet, username, clusterInstance.TmpDirectory)
+	require.NoError(t, err)
+	oldArgs := clusterInstance.VtTabletExtraArgs
+	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-views")
+	defer func() {
+		clusterInstance.VtTabletExtraArgs = oldArgs
+	}()
+	// start vttablet process, should be in SERVING state as we already have a primary.
+	err = clusterInstance.StartVttablet(tempTablet, false, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	require.NoError(t, err)
+
+	defer func() {
+		// Restore the primary tablet back to the original.
+		err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shardName, primaryTablet.Alias)
+		require.NoError(t, err)
+		// Manual cleanup of processes
+		killTablets(tempTablet)
+	}()
+
+	// Now we reparent the cluster to the new tablet we have.
+	err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shardName, tempTablet.Alias)
+	require.NoError(t, err)
+
+	checkTabletType(t, tempTablet.Alias, "PRIMARY")
+	// Run a bunch of DDL queries and verify that the tables/views changed show up in the health stream.
+	// These tests are for the part where `--queryserver-enable-views` flag is set.
+	verifyHealthStreamSchemaChangeSignals(t, conn, tempTablet, true)
+}
+
+func verifyHealthStreamSchemaChangeSignals(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, viewsEnabled bool) {
+	var streamErr error
+	var wg sync.WaitGroup
+	var ranOnce atomic.Bool
+	var finished atomic.Bool
+
+	wg.Add(1)
+	ch := make(chan *querypb.StreamHealthResponse)
+
+	go func() {
+		defer wg.Done()
+		streamErr = clusterInstance.StreamTabletHealthUntil(context.Background(), primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+			ranOnce.Store(true)
+			// If we are finished, then close the channel and end the stream.
+			if finished.Load() {
+				close(ch)
+				return true
+			}
+			// Put the response in the channel.
+			ch <- shr
+			return false
+		})
+	}()
+	// The test becomes flaky if we run the DDL immediately after starting the above go routine because the client for the Stream
+	// sometimes isn't registered by the time DDL runs, and it misses the update we get. To prevent this situation, we wait for one Stream packet
+	// to have returned. Once we know we received a Stream packet, then we know that we are registered for the health stream and can execute the DDL.
+	for i := 0; i < 30 && !ranOnce.Load(); i++ {
+		time.Sleep(1 * time.Second)
+	}
+
+	if !ranOnce.Load() {
+		t.Fatalf("HealthCheck did not ran?")
+	}
+
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "CREATE TABLE `area` (`id` int NOT NULL, `country` varchar(30), PRIMARY KEY (`id`))", "area")
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "CREATE TABLE `area2` (`id` int NOT NULL, PRIMARY KEY (`id`))", "area2")
+	verifyViewDDLSchemaChangeSignal(t, vtgateConn, ch, "CREATE VIEW v2 as select * from t1", viewsEnabled)
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "ALTER TABLE `area` ADD COLUMN name varchar(30) NOT NULL", "area")
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "DROP TABLE `area2`", "area2")
+	verifyViewDDLSchemaChangeSignal(t, vtgateConn, ch, "ALTER VIEW v2 as select id from t1", viewsEnabled)
+	verifyViewDDLSchemaChangeSignal(t, vtgateConn, ch, "DROP VIEW v2", viewsEnabled)
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "DROP TABLE `area`", "area")
+
+	finished.Store(true)
+	wg.Wait()
+	require.NoError(t, streamErr)
+}
+
+func verifyTableDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, ch chan *querypb.StreamHealthResponse, query string, table string) {
+	_, err := vtgateConn.ExecuteFetch(query, 10000, false)
+	require.NoError(t, err)
+
+	timeout := time.After(15 * time.Second)
+	for {
+		select {
+		case shr := <-ch:
+			if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, table) {
+				return
+			}
+		case <-timeout:
+			t.Errorf("didn't get the correct tables changed in stream response until timeout")
+		}
+	}
+}
+
+func verifyViewDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, ch chan *querypb.StreamHealthResponse, query string, viewsEnabled bool) {
+	_, err := vtgateConn.ExecuteFetch(query, 10000, false)
+	require.NoError(t, err)
+
+	timeout := time.After(15 * time.Second)
+	for {
+		select {
+		case shr := <-ch:
+			listToUse := shr.RealtimeStats.TableSchemaChanged
+			if viewsEnabled {
+				listToUse = shr.RealtimeStats.ViewSchemaChanged
+			}
+			if shr != nil && shr.RealtimeStats != nil && slices.Contains(listToUse, "v2") {
+				return
+			}
+		case <-timeout:
+			t.Errorf("didn't get the correct views changed in stream response until timeout")
+		}
+	}
 }
 
 func checkHealth(t *testing.T, port int, shouldError bool) {
@@ -245,8 +385,10 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	// - the second tablet will be set to 'drained' and we expect that
 	// - the query service won't be shutdown
 
-	//Wait if tablet is not in service state
+	// Wait if tablet is not in service state
 	defer cluster.PanicHandler(t)
+	clusterInstance.DisableVTOrcRecoveries(t)
+	defer clusterInstance.EnableVTOrcRecoveries(t)
 	err := rdonlyTablet.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
 
@@ -284,7 +426,7 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	checkHealth(t, rdonlyTablet.HTTPPort, false)
 }
 
-func killTablets(t *testing.T, tablets ...*cluster.Vttablet) {
+func killTablets(tablets ...*cluster.Vttablet) {
 	var wg sync.WaitGroup
 	for _, tablet := range tablets {
 		wg.Add(1)
@@ -292,6 +434,7 @@ func killTablets(t *testing.T, tablets ...*cluster.Vttablet) {
 			defer wg.Done()
 			_ = tablet.VttabletProcess.TearDown()
 			_ = tablet.MysqlctlProcess.Stop()
+			_ = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
 		}(tablet)
 	}
 	wg.Wait()

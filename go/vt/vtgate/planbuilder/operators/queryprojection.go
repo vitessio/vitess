@@ -19,19 +19,18 @@ package operators
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
-	"golang.org/x/exp/slices"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
@@ -56,7 +55,7 @@ type (
 
 		hasCheckedAlignment bool
 
-		// TODO Remove once all of horizon planning is done on the operators
+		// TODO Remove once all horizon planning is done on the operators
 		CanPushDownSorting bool
 	}
 
@@ -91,11 +90,16 @@ type (
 		OriginalOpCode opcode.AggregateOpcode
 
 		Alias string
+
 		// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
-		Index    *int
+		// Only used in the old Horizon Planner
+		Index *int
+
 		Distinct bool
 
-		ColOffset int // points to the column on the same aggregator
+		// the offsets point to columns on the same aggregator
+		ColOffset int
+		WSOffset  int
 	}
 
 	AggrRewriter struct {
@@ -105,6 +109,23 @@ type (
 	}
 )
 
+func (aggr Aggr) NeedsWeightString(ctx *plancontext.PlanningContext) bool {
+	return aggr.OpCode.NeedsComparableValues() && ctx.SemTable.NeedsWeightString(aggr.Func.GetArg())
+}
+
+func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) (sqltypes.Type, collations.ID) {
+	if aggr.Func == nil {
+		return sqltypes.Unknown, collations.Unknown
+	}
+	switch aggr.OpCode {
+	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
+		typ, col, _ := ctx.SemTable.TypeForExpr(aggr.Func.GetArg())
+		return typ, col
+
+	}
+	return sqltypes.Unknown, collations.Unknown
+}
+
 // NewGroupBy creates a new group by from the given fields.
 func NewGroupBy(inner, simplified sqlparser.Expr, aliasedExpr *sqlparser.AliasedExpr) GroupBy {
 	return GroupBy{
@@ -113,6 +134,17 @@ func NewGroupBy(inner, simplified sqlparser.Expr, aliasedExpr *sqlparser.Aliased
 		aliasedExpr:    aliasedExpr,
 		ColOffset:      -1,
 		WSOffset:       -1,
+	}
+}
+
+func NewAggr(opCode opcode.AggregateOpcode, f sqlparser.AggrFunc, original *sqlparser.AliasedExpr, alias string) Aggr {
+	return Aggr{
+		Original:  original,
+		Func:      f,
+		OpCode:    opCode,
+		Alias:     alias,
+		ColOffset: -1,
+		WSOffset:  -1,
 	}
 }
 
@@ -169,38 +201,25 @@ func (s SelectExpr) GetAliasedExpr() (*sqlparser.AliasedExpr, error) {
 	}
 }
 
-// CreateQPFromSelect creates the QueryProjection for the input *sqlparser.Select
-func CreateQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (*QueryProjection, error) {
+// createQPFromSelect creates the QueryProjection for the input *sqlparser.Select
+func createQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (*QueryProjection, error) {
 	qp := &QueryProjection{
 		Distinct: sel.Distinct,
 	}
 
-	err := qp.addSelectExpressions(sel)
-	if err != nil {
+	if err := qp.addSelectExpressions(sel); err != nil {
 		return nil, err
 	}
-	for _, group := range sel.GroupBy {
-		selectExprIdx, aliasExpr := qp.FindSelectExprIndexForExpr(ctx, group)
-		weightStrExpr := qp.GetSimplifiedExpr(group)
-		err = checkForInvalidGroupingExpressions(weightStrExpr)
-		if err != nil {
-			return nil, err
-		}
-
-		groupBy := NewGroupBy(group, weightStrExpr, aliasExpr)
-		groupBy.InnerIndex = selectExprIdx
-
-		qp.groupByExprs = append(qp.groupByExprs, groupBy)
-	}
-
-	err = qp.addOrderBy(sel.OrderBy)
-	if err != nil {
+	if err := qp.addGroupBy(ctx, sel.GroupBy); err != nil {
 		return nil, err
 	}
-
-	if qp.Distinct && !qp.HasAggr {
-		qp.groupByExprs = nil
+	if err := qp.addOrderBy(ctx, sel.OrderBy); err != nil {
+		return nil, err
 	}
+	if !qp.HasAggr && sel.Having != nil {
+		qp.HasAggr = sqlparser.ContainsAggregation(sel.Having.Expr)
+	}
+	qp.calculateDistinct(ctx)
 
 	return qp, nil
 }
@@ -290,8 +309,8 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 	return nil
 }
 
-// CreateQPFromUnion creates the QueryProjection for the input *sqlparser.Union
-func CreateQPFromUnion(union *sqlparser.Union) (*QueryProjection, error) {
+// createQPFromUnion creates the QueryProjection for the input *sqlparser.Union
+func createQPFromUnion(ctx *plancontext.PlanningContext, union *sqlparser.Union) (*QueryProjection, error) {
 	qp := &QueryProjection{}
 
 	sel := sqlparser.GetFirstSelect(union)
@@ -300,7 +319,7 @@ func CreateQPFromUnion(union *sqlparser.Union) (*QueryProjection, error) {
 		return nil, err
 	}
 
-	err = qp.addOrderBy(union.OrderBy)
+	err = qp.addOrderBy(ctx, union.OrderBy)
 	if err != nil {
 		return nil, err
 	}
@@ -308,21 +327,96 @@ func CreateQPFromUnion(union *sqlparser.Union) (*QueryProjection, error) {
 	return qp, nil
 }
 
-func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy) error {
+type expressionSet struct {
+	exprs []sqlparser.Expr
+}
+
+func (es *expressionSet) add(ctx *plancontext.PlanningContext, e sqlparser.Expr) bool {
+	idx := slices.IndexFunc(es.exprs, func(expr sqlparser.Expr) bool {
+		return ctx.SemTable.EqualsExprWithDeps(e, expr)
+	})
+
+	// if we already have this expression, there is no need to repeat it
+	if idx >= 0 {
+		return false
+	}
+	es.exprs = append(es.exprs, e)
+	return true
+}
+
+func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy sqlparser.OrderBy) error {
 	canPushDownSorting := true
+	es := &expressionSet{}
 	for _, order := range orderBy {
-		weightStrExpr := qp.GetSimplifiedExpr(order.Expr)
-		if sqlparser.IsNull(weightStrExpr) {
+		simpleExpr := qp.GetSimplifiedExpr(order.Expr)
+		if sqlparser.IsNull(simpleExpr) {
 			// ORDER BY null can safely be ignored
+			continue
+		}
+		if !es.add(ctx, simpleExpr) {
 			continue
 		}
 		qp.OrderExprs = append(qp.OrderExprs, ops.OrderBy{
 			Inner:          sqlparser.CloneRefOfOrder(order),
-			SimplifiedExpr: weightStrExpr,
+			SimplifiedExpr: simpleExpr,
 		})
-		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
+		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(simpleExpr)
 	}
 	qp.CanPushDownSorting = canPushDownSorting
+	return nil
+}
+
+func (qp *QueryProjection) calculateDistinct(ctx *plancontext.PlanningContext) {
+	if qp.Distinct && !qp.HasAggr {
+		// grouping and distinct both lead to unique results, so we don't need
+		qp.groupByExprs = nil
+	}
+
+	if qp.HasAggr && len(qp.groupByExprs) == 0 {
+		// this is a scalar aggregation and is inherently distinct
+		qp.Distinct = false
+	}
+
+	if !qp.Distinct || len(qp.groupByExprs) == 0 {
+		return
+	}
+
+	for _, gb := range qp.groupByExprs {
+		_, found := canReuseColumn(ctx, qp.SelectExprs, gb.SimplifiedExpr, func(expr SelectExpr) sqlparser.Expr {
+			getExpr, err := expr.GetExpr()
+			if err != nil {
+				panic(err)
+			}
+			return getExpr
+		})
+		if !found {
+			return
+		}
+	}
+
+	// since we are returning all grouping expressions, we know the results are guaranteed to be unique
+	qp.Distinct = false
+}
+
+func (qp *QueryProjection) addGroupBy(ctx *plancontext.PlanningContext, groupBy sqlparser.GroupBy) error {
+	es := &expressionSet{}
+	for _, group := range groupBy {
+		selectExprIdx, aliasExpr := qp.FindSelectExprIndexForExpr(ctx, group)
+		simpleExpr := qp.GetSimplifiedExpr(group)
+		err := checkForInvalidGroupingExpressions(simpleExpr)
+		if err != nil {
+			return err
+		}
+
+		if !es.add(ctx, simpleExpr) {
+			continue
+		}
+
+		groupBy := NewGroupBy(group, simpleExpr, aliasExpr)
+		groupBy.InnerIndex = selectExprIdx
+
+		qp.groupByExprs = append(qp.groupByExprs, groupBy)
+	}
 	return nil
 }
 
@@ -333,25 +427,22 @@ func (qp *QueryProjection) GetGrouping() []GroupBy {
 
 func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		if aggrFunc, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
-			if aggrFunc.GetArgs() != nil &&
-				len(aggrFunc.GetArgs()) != 1 {
-				return false, vterrors.VT03001(sqlparser.String(node))
-			}
+		aggrFunc, isAggregate := node.(sqlparser.AggrFunc)
+		if !isAggregate {
 			return true, nil
 		}
-
+		args := aggrFunc.GetArgs()
+		if args != nil && len(args) != 1 {
+			return false, vterrors.VT03001(sqlparser.String(node))
+		}
 		return true, nil
+
 	}, exp.Expr)
 }
 
-func (qp *QueryProjection) isExprInGroupByExprs(ctx *plancontext.PlanningContext, expr SelectExpr) bool {
+func (qp *QueryProjection) isExprInGroupByExprs(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
 	for _, groupByExpr := range qp.groupByExprs {
-		exp, err := expr.GetExpr()
-		if err != nil {
-			return false
-		}
-		if ctx.SemTable.EqualsExprWithDeps(groupByExpr.SimplifiedExpr, exp) {
+		if ctx.SemTable.EqualsExprWithDeps(groupByExpr.SimplifiedExpr, expr) {
 			return true
 		}
 	}
@@ -360,6 +451,9 @@ func (qp *QueryProjection) isExprInGroupByExprs(ctx *plancontext.PlanningContext
 
 // GetSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
 func (qp *QueryProjection) GetSimplifiedExpr(e sqlparser.Expr) sqlparser.Expr {
+	if qp == nil {
+		return e
+	}
 	// If the ORDER BY is against a column alias, we need to remember the expression
 	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
 	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
@@ -524,7 +618,7 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 	return true
 }
 
-func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningContext) (out []Aggr, err error) {
+func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningContext, allowComplexExpression bool) (out []Aggr, complex bool, err error) {
 orderBy:
 	for _, orderExpr := range qp.OrderExprs {
 		orderExpr := orderExpr.SimplifiedExpr
@@ -550,56 +644,80 @@ orderBy:
 	for idx, expr := range qp.SelectExprs {
 		aliasedExpr, err := expr.GetAliasedExpr()
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		idxCopy := idx
 
 		if !sqlparser.ContainsAggregation(expr.Col) {
-			if !qp.isExprInGroupByExprs(ctx, expr) {
-				out = append(out, Aggr{
-					Original: aliasedExpr,
-					OpCode:   opcode.AggregateRandom,
-					Alias:    aliasedExpr.ColumnName(),
-					Index:    &idxCopy,
-				})
+			getExpr, err := expr.GetExpr()
+			if err != nil {
+				return nil, false, err
+			}
+			if !qp.isExprInGroupByExprs(ctx, getExpr) {
+				aggr := NewAggr(opcode.AggregateAnyValue, nil, aliasedExpr, aliasedExpr.ColumnName())
+				aggr.Index = &idxCopy
+				out = append(out, aggr)
 			}
 			continue
 		}
-		fnc, isAggregate := aliasedExpr.Expr.(sqlparser.AggrFunc)
-		if !isAggregate {
-			return nil, vterrors.VT12001("in scatter query: complex aggregate expression")
+		_, isAggregate := aliasedExpr.Expr.(sqlparser.AggrFunc)
+		if !isAggregate && !allowComplexExpression {
+			return nil, false, vterrors.VT12001("in scatter query: complex aggregate expression")
 		}
 
-		code := opcode.SupportedAggregates[strings.ToLower(fnc.AggrName())]
-
-		if code == opcode.AggregateCount {
-			if _, isStar := fnc.(*sqlparser.CountStar); isStar {
-				code = opcode.AggregateCountStar
+		sqlparser.CopyOnRewrite(aliasedExpr.Expr, func(node, parent sqlparser.SQLNode) bool {
+			ex, isExpr := node.(sqlparser.Expr)
+			if !isExpr {
+				return true
 			}
-		}
-
-		aggr, _ := aliasedExpr.Expr.(sqlparser.AggrFunc)
-
-		if aggr.IsDistinct() {
-			switch code {
-			case opcode.AggregateCount:
-				code = opcode.AggregateCountDistinct
-			case opcode.AggregateSum:
-				code = opcode.AggregateSumDistinct
+			if aggr, isAggr := node.(sqlparser.AggrFunc); isAggr {
+				ae := aeWrap(aggr)
+				if aggr == aliasedExpr.Expr {
+					ae = aliasedExpr
+				}
+				aggrFunc := createAggrFromAggrFunc(aggr, ae)
+				aggrFunc.Index = &idxCopy
+				out = append(out, aggrFunc)
+				return false
 			}
-		}
-
-		out = append(out, Aggr{
-			Original: aliasedExpr,
-			Func:     aggr,
-			OpCode:   code,
-			Alias:    aliasedExpr.ColumnName(),
-			Index:    &idxCopy,
-			Distinct: aggr.IsDistinct(),
-		})
+			if sqlparser.ContainsAggregation(node) {
+				complex = true
+				return true
+			}
+			if !qp.isExprInGroupByExprs(ctx, ex) {
+				aggr := NewAggr(opcode.AggregateAnyValue, nil, aeWrap(ex), "")
+				aggr.Index = &idxCopy
+				out = append(out, aggr)
+			}
+			return false
+		}, nil, nil)
 	}
 	return
+}
+
+func createAggrFromAggrFunc(fnc sqlparser.AggrFunc, aliasedExpr *sqlparser.AliasedExpr) Aggr {
+	code := opcode.SupportedAggregates[fnc.AggrName()]
+
+	if code == opcode.AggregateCount {
+		if _, isStar := fnc.(*sqlparser.CountStar); isStar {
+			code = opcode.AggregateCountStar
+		}
+	}
+
+	distinct := sqlparser.IsDistinct(fnc)
+	if distinct {
+		switch code {
+		case opcode.AggregateCount:
+			code = opcode.AggregateCountDistinct
+		case opcode.AggregateSum:
+			code = opcode.AggregateSumDistinct
+		}
+	}
+
+	aggr := NewAggr(code, fnc, aliasedExpr, aliasedExpr.ColumnName())
+	aggr.Distinct = distinct
+	return aggr
 }
 
 // FindSelectExprIndexForExpr returns the index of the given expression in the select expressions, if it is part of it
@@ -671,6 +789,9 @@ func (qp *QueryProjection) OldAlignGroupByAndOrderBy(ctx *plancontext.PlanningCo
 // We are also free to add more ORDER BY columns than the user asked for which we leverage,
 // so the input is already ordered according to the GROUP BY columns used
 func (qp *QueryProjection) AlignGroupByAndOrderBy(ctx *plancontext.PlanningContext) bool {
+	if qp == nil {
+		return false
+	}
 	if qp.hasCheckedAlignment {
 		return false
 	}
@@ -710,19 +831,6 @@ func (qp *QueryProjection) GetColumnCount() int {
 	return len(qp.SelectExprs) - qp.AddedColumn
 }
 
-// checkAggregationSupported checks if the aggregation is supported on the given operator tree or not.
-// We don't currently support planning for operators having derived tables.
-func checkAggregationSupported(op ops.Operator) error {
-	return rewrite.Visit(op, func(operator ops.Operator) error {
-		_, isDerived := operator.(*Derived)
-		projection, isProjection := operator.(*Projection)
-		if isDerived || (isProjection && projection.TableID != nil) {
-			return errHorizonNotPlanned()
-		}
-		return nil
-	})
-}
-
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		if _, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
@@ -759,4 +867,14 @@ func CompareRefInt(a *int, b *int) bool {
 		return true
 	}
 	return *a < *b
+}
+
+func CreateQPFromSelectStatement(ctx *plancontext.PlanningContext, stmt sqlparser.SelectStatement) (*QueryProjection, error) {
+	switch sel := stmt.(type) {
+	case *sqlparser.Select:
+		return createQPFromSelect(ctx, sel)
+	case *sqlparser.Union:
+		return createQPFromUnion(ctx, sel)
+	}
+	return nil, vterrors.VT13001("can only create query projection from Union and Select statements")
 }

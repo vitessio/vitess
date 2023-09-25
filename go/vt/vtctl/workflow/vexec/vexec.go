@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -277,7 +276,7 @@ func (vx *VExec) getPlanner(ctx context.Context, table string) (QueryPlanner, er
 			tabletStreamIDMap[aliasStr] = make([]int64, len(qr.Rows))
 
 			for i, row := range qr.Rows {
-				id, err := evalengine.ToInt64(row[0])
+				id, err := row[0].ToCastInt64()
 				if err != nil {
 					return nil, err
 				}

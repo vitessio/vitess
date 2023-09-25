@@ -16,6 +16,8 @@ limitations under the License.
 
 package sqlparser
 
+import "vitess.io/vitess/go/mysql/datetime"
+
 // String constants to be used in ast.
 const (
 	// Select.Distinct
@@ -63,7 +65,9 @@ const (
 	AddColVindexStr     = "on table add vindex"
 	DropColVindexStr    = "on table drop vindex"
 	AddSequenceStr      = "add sequence"
+	DropSequenceStr     = "drop sequence"
 	AddAutoIncStr       = "add auto_increment"
+	DropAutoIncStr      = "drop auto_increment"
 
 	// ALTER TABLE ALGORITHM string.
 	DefaultStr = "default"
@@ -209,7 +213,7 @@ const (
 	Utf16Str    = "_utf16"
 	Utf16leStr  = "_utf16le"
 	Utf32Str    = "_utf32"
-	Utf8Str     = "_utf8"
+	Utf8mb3Str  = "_utf8mb3"
 	Utf8mb4Str  = "_utf8mb4"
 	NStringStr  = "N"
 
@@ -401,28 +405,6 @@ const (
 	DefaultTypeStr   = "default"
 	ExclusiveTypeStr = "exclusive"
 
-	// IntervalTypes strings
-	DayStr               = "day"
-	WeekStr              = "week"
-	MonthStr             = "month"
-	YearStr              = "year"
-	DayHourStr           = "day_hour"
-	DayMicrosecondStr    = "day_microsecond"
-	DayMinuteStr         = "day_minute"
-	DaySecondStr         = "day_second"
-	HourStr              = "hour"
-	HourMicrosecondStr   = "hour_microsecond"
-	HourMinuteStr        = "hour_minute"
-	HourSecondStr        = "hour_second"
-	MicrosecondStr       = "microsecond"
-	MinuteStr            = "minute"
-	MinuteMicrosecondStr = "minute_microsecond"
-	MinuteSecondStr      = "minute_second"
-	QuarterStr           = "quarter"
-	SecondStr            = "second"
-	SecondMicrosecondStr = "second_microsecond"
-	YearMonthStr         = "year_month"
-
 	// GeomeFromWktType strings
 	GeometryFromTextStr           = "st_geometryfromtext"
 	GeometryCollectionFromTextStr = "st_geometrycollectionfromtext"
@@ -483,6 +465,10 @@ const (
 	LatitudeFromHashStr  = "st_latfromgeohash"
 	LongitudeFromHashStr = "st_longfromgeohash"
 	PointFromHashStr     = "st_pointfromgeohash"
+
+	// KillType strings
+	ConnectionStr = "connection"
+	QueryStr      = "query"
 )
 
 // Constants for Enum Type - Insert.Action
@@ -505,7 +491,9 @@ const (
 	AddColVindexDDLAction
 	DropColVindexDDLAction
 	AddSequenceDDLAction
+	DropSequenceDDLAction
 	AddAutoIncDDLAction
+	DropAutoIncDDLAction
 	RevertDDLAction
 )
 
@@ -912,30 +900,6 @@ const (
 	DefaultFormat
 )
 
-// IntervalTypes constants
-const (
-	IntervalYear IntervalTypes = iota
-	IntervalQuarter
-	IntervalMonth
-	IntervalWeek
-	IntervalDay
-	IntervalHour
-	IntervalMinute
-	IntervalSecond
-	IntervalMicrosecond
-	IntervalYearMonth
-	IntervalDayHour
-	IntervalDayMinute
-	IntervalDaySecond
-	IntervalHourMinute
-	IntervalHourSecond
-	IntervalMinuteSecond
-	IntervalDayMicrosecond
-	IntervalHourMicrosecond
-	IntervalMinuteMicrosecond
-	IntervalSecondMicrosecond
-)
-
 // Transaction access mode
 const (
 	WithConsistentSnapshot TxAccessMode = iota
@@ -1020,4 +984,49 @@ const (
 	LatitudeFromHash GeomFromHashType = iota
 	LongitudeFromHash
 	PointFromHash
+)
+
+// IntervalType constants
+const (
+	IntervalNone        = datetime.IntervalNone
+	IntervalMicrosecond = datetime.IntervalMicrosecond
+	IntervalSecond      = datetime.IntervalSecond
+	IntervalMinute      = datetime.IntervalMinute
+	IntervalHour        = datetime.IntervalHour
+	IntervalDay         = datetime.IntervalDay
+	IntervalWeek        = datetime.IntervalWeek
+	IntervalMonth       = datetime.IntervalMonth
+	IntervalQuarter     = datetime.IntervalQuarter
+	IntervalYear        = datetime.IntervalYear
+
+	IntervalSecondMicrosecond = datetime.IntervalSecondMicrosecond
+	IntervalMinuteMicrosecond = datetime.IntervalMinuteMicrosecond
+	IntervalMinuteSecond      = datetime.IntervalMinuteSecond
+	IntervalHourMicrosecond   = datetime.IntervalHourMicrosecond
+	IntervalHourSecond        = datetime.IntervalHourSecond
+	IntervalHourMinute        = datetime.IntervalHourMinute
+	IntervalDayMicrosecond    = datetime.IntervalDayMicrosecond
+	IntervalDaySecond         = datetime.IntervalDaySecond
+	IntervalDayMinute         = datetime.IntervalDayMinute
+	IntervalDayHour           = datetime.IntervalDayHour
+	IntervalYearMonth         = datetime.IntervalYearMonth
+)
+
+type IntervalExprSyntax int8
+
+const (
+	IntervalDateExprDateAdd IntervalExprSyntax = iota
+	IntervalDateExprDateSub
+	IntervalDateExprAdddate
+	IntervalDateExprSubdate
+	IntervalDateExprBinaryAdd
+	IntervalDateExprBinaryAddLeft
+	IntervalDateExprBinarySub
+	IntervalDateExprTimestampadd
+)
+
+// Constant for Enum Type - KillType
+const (
+	ConnectionType KillType = iota
+	QueryType
 )

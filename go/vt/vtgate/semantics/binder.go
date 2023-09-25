@@ -19,9 +19,8 @@ package semantics
 import (
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
-
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 // binder is responsible for finding all the column references in
@@ -62,6 +61,10 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Subquery:
 		currScope := b.scoper.currentScope()
+		// do not extract subquery in insert statement.
+		if _, isInsert := currScope.stmt.(*sqlparser.Insert); isInsert {
+			return nil
+		}
 		sq, err := b.createExtractedSubquery(cursor, currScope, node)
 		if err != nil {
 			return err
@@ -80,13 +83,6 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 				return err
 			}
 			currScope.joinUsing[ident.Lowered()] = deps.direct
-		}
-		if len(node.Using) > 0 {
-			err := rewriteJoinUsing(currScope, node.Using, b.org)
-			if err != nil {
-				return err
-			}
-			node.Using = nil
 		}
 	case *sqlparser.ColName:
 		currentScope := b.scoper.currentScope()
@@ -113,6 +109,20 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		}
 	case *sqlparser.CountStar:
 		b.bindCountStar(node)
+	case *sqlparser.Union:
+		info := b.tc.unionInfo[node]
+		// TODO: this check can be removed and available type information should be used.
+		if !info.isAuthoritative {
+			return nil
+		}
+
+		for i, expr := range info.exprs {
+			ae := expr.(*sqlparser.AliasedExpr)
+			b.recursive[ae.Expr] = info.recursive[i]
+			if t := info.types[i]; t != nil {
+				b.typer.exprTypes[ae.Expr] = *t
+			}
+		}
 	}
 	return nil
 }

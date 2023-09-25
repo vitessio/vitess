@@ -49,46 +49,35 @@ func TestAppend(t *testing.T) {
 }
 
 func TestSelect(t *testing.T) {
-	tree, err := Parse("select * from t where a = 1")
+	e1, err := ParseExpr("a = 1")
 	require.NoError(t, err)
-	expr := tree.(*Select).Where.Expr
-
-	sel := &Select{}
-	sel.AddWhere(expr)
-	buf := NewTrackedBuffer(nil)
-	sel.Where.Format(buf)
-	assert.Equal(t, " where a = 1", buf.String())
-	sel.AddWhere(expr)
-	buf = NewTrackedBuffer(nil)
-	sel.Where.Format(buf)
-	assert.Equal(t, " where a = 1", buf.String())
-
-	sel = &Select{}
-	sel.AddHaving(expr)
-	buf = NewTrackedBuffer(nil)
-	sel.Having.Format(buf)
-	assert.Equal(t, " having a = 1", buf.String())
-
-	sel.AddHaving(expr)
-	buf = NewTrackedBuffer(nil)
-	sel.Having.Format(buf)
-	assert.Equal(t, " having a = 1", buf.String())
-
-	tree, err = Parse("select * from t where a = 1 or b = 1")
+	e2, err := ParseExpr("b = 2")
 	require.NoError(t, err)
-	expr = tree.(*Select).Where.Expr
-	sel = &Select{}
-	sel.AddWhere(expr)
-	buf = NewTrackedBuffer(nil)
-	sel.Where.Format(buf)
-	assert.Equal(t, " where a = 1 or b = 1", buf.String())
+	t.Run("single predicate where", func(t *testing.T) {
+		sel := &Select{}
+		sel.AddWhere(e1)
+		assert.Equal(t, " where a = 1", String(sel.Where))
+	})
 
-	sel = &Select{}
-	sel.AddHaving(expr)
-	buf = NewTrackedBuffer(nil)
-	sel.Having.Format(buf)
-	assert.Equal(t, " having a = 1 or b = 1", buf.String())
+	t.Run("single predicate having", func(t *testing.T) {
+		sel := &Select{}
+		sel.AddHaving(e1)
+		assert.Equal(t, " having a = 1", String(sel.Having))
+	})
 
+	t.Run("double predicate where", func(t *testing.T) {
+		sel := &Select{}
+		sel.AddWhere(e1)
+		sel.AddWhere(e2)
+		assert.Equal(t, " where a = 1 and b = 2", String(sel.Where))
+	})
+
+	t.Run("double predicate having", func(t *testing.T) {
+		sel := &Select{}
+		sel.AddHaving(e1)
+		sel.AddHaving(e2)
+		assert.Equal(t, " having a = 1 and b = 2", String(sel.Having))
+	})
 }
 
 func TestUpdate(t *testing.T) {
@@ -261,7 +250,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "on" != v.Val {
+		if v.Val != "on" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -286,7 +275,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "on" != v.Val {
+		if v.Val != "on" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -313,7 +302,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "off" != v.Val {
+		if v.Val != "off" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -338,7 +327,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if "off" != v.Val {
+		if v.Val != "off" {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -359,23 +348,6 @@ func TestWhere(t *testing.T) {
 	w.Format(buf)
 	if buf.String() != "" {
 		t.Errorf("w.Format(&Where{nil}: %q, want \"\"", buf.String())
-	}
-}
-
-func TestIsAggregate(t *testing.T) {
-	f := FuncExpr{Name: NewIdentifierCI("avg")}
-	if !f.IsAggregate() {
-		t.Error("IsAggregate: false, want true")
-	}
-
-	f = FuncExpr{Name: NewIdentifierCI("Avg")}
-	if !f.IsAggregate() {
-		t.Error("IsAggregate: false, want true")
-	}
-
-	f = FuncExpr{Name: NewIdentifierCI("foo")}
-	if f.IsAggregate() {
-		t.Error("IsAggregate: true, want false")
 	}
 }
 
@@ -472,9 +444,6 @@ func TestReplaceExpr(t *testing.T) {
 	}, {
 		in:  "select * from t where -(select a from b)",
 		out: "-:a",
-	}, {
-		in:  "select * from t where interval (select a from b) aa",
-		out: "interval :a aa",
 	}, {
 		in:  "select * from t where (select a from b) collate utf8",
 		out: ":a collate utf8",
@@ -757,7 +726,22 @@ func TestSplitStatementToPieces(t *testing.T) {
 			"`createtime` datetime NOT NULL DEFAULT NOW() COMMENT 'create time;'," +
 			"`comment` varchar(100) NOT NULL DEFAULT '' COMMENT 'comment'," +
 			"PRIMARY KEY (`id`))",
-	}}
+	}, {
+		input:  "create table t1 (id int primary key); create table t2 (id int primary key);",
+		output: "create table t1 (id int primary key); create table t2 (id int primary key)",
+	}, {
+		input:  ";;; create table t1 (id int primary key);;; ;create table t2 (id int primary key);",
+		output: " create table t1 (id int primary key);create table t2 (id int primary key)",
+	}, {
+		// The input doesn't have to be valid SQL statements!
+		input:  ";create table t1 ;create table t2 (id;",
+		output: "create table t1 ;create table t2 (id",
+	}, {
+		// Ignore quoted semicolon
+		input:  ";create table t1 ';';;;create table t2 (id;",
+		output: "create table t1 ';';create table t2 (id",
+	},
+	}
 
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -819,5 +803,34 @@ func BenchmarkStringTraces(b *testing.B) {
 				}
 			}
 		})
+	}
+}
+
+func TestCloneComments(t *testing.T) {
+	c := []string{"/*vt+ a=b */"}
+	parsedComments := Comments(c).Parsed()
+	directives := parsedComments.Directives()
+	{
+		assert.NotEmpty(t, directives.m)
+		val, ok := directives.m["a"]
+		assert.Truef(t, ok, "directives map: %v", directives.m)
+		assert.Equal(t, "b", val)
+	}
+	cloned := CloneRefOfParsedComments(parsedComments)
+	cloned.ResetDirectives()
+	clonedDirectives := cloned.Directives()
+	{
+		assert.NotEmpty(t, clonedDirectives.m)
+		val, ok := clonedDirectives.m["a"]
+		assert.Truef(t, ok, "directives map: %v", directives.m)
+		assert.Equal(t, "b", val)
+	}
+	{
+		delete(directives.m, "a")
+		assert.Empty(t, directives.m)
+
+		val, ok := clonedDirectives.m["a"]
+		assert.Truef(t, ok, "directives map: %v", directives.m)
+		assert.Equal(t, "b", val)
 	}
 }

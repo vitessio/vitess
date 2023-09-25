@@ -2,6 +2,8 @@
 
 ### Table of Contents
 
+- **[Known Issues](#known-issues)**
+  - [Schema-initialization stuck on semi-sync ACKs while upgrading to v17.0.0](#schema-init-upgrade)
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [Default Local Cell Preference for TabletPicker](#tablet-picker-cell-preference)
@@ -10,25 +12,46 @@
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
     - [Shard name validation in TopoServer](#shard-name-validation)
     - [Compression CLI flags removed from vtctld and vtctldclient binaries](#remove-compression-flags-from-vtctld-binaries)
-    - [VtctldClient command RestoreFromBackup will now use the correct context](#VtctldClient-RestoreFromBackup)
+    - [VtctldClient command RestoreFromBackup will now use the correct context](#vtctldclient-command-restorefrombackup-will-now-use-the-correct-context)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
     - [Manifest backup external decompressor command](#manifest-backup-external-decompressor-command)
+    - [Throttler config via topo enabled by default](#throttler-config-via-topo)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
     - [VTtablet Error count with code](#vttablet-error-count-with-code)
     - [VReplication stream status for Prometheus](#vreplication-stream-status-for-prometheus)
-  - **[VReplication](#VReplication)**
+  - **[Online DDL](#online-ddl)**
+    - [--cut-over-threshold DDL strategy flag](#online-ddl-cut-over-threshold-flag)
+  - **[VReplication](#vreplication)**
     - [Support for MySQL 8.0 `binlog_transaction_compression`](#binlog-compression)
+    - [Support for the `noblob` binlog row image mode](#noblob)
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
-  - **[VReplication](#VReplication)**
-    - [Support for the `noblob` binlog row image mode](#noblob)
+    - [Vttablet Schema Reload Timeout](#vttablet-schema-reload-timeout)
+    - [Settings pool enabled](#settings-pool)
+  - **[VTGate](#vtgate)**
+    - [StreamExecute GRPC API](#stream-execute)
+    - [Insert Planner Gen4](#insert-planner)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
     - [Deprecated Stats](#deprecated-stats)
+    - [Deprecated `vtgr`](#deprecated-vtgr)
+    - [Deprecated `k8stopo`](#deprecated-k8stopo)
 
-## <a id="major-changes"/> Major Changes
+
+## <a id="known-issues"/>Known Issues
+### <a id="schema-init-upgrade"/>Schema-initialization stuck on semi-sync ACKs while upgrading to `v17.0.0`
+
+During upgrades from `<= v16.x.x` to `v17.0.0`, as part of `PromoteReplica` call, the schema-init realizes that there are schema diffs to apply and ends up writing to the database if [semi-sync](https://vitess.io/docs/17.0/reference/features/mysql-replication/#semi-sync) is enabled, all of these writes get blocked indefinitely.
+Eventually, `PromoteReplica` fails, and this fails the entire PRS call.
+
+A fix for this issue was merged on `release-17.0` in [PR#13441](https://github.com/vitessio/vitess/pull/13411), read the [corresponding bug report to learn more](https://github.com/vitessio/vitess/issues/13426).
+
+This issue is addressed in the `>= v17.0.1` patch releases.
+
+
+## <a id="major-changes"/>Major Changes
 
 ### <a id="breaking-changes"/>Breaking Changes
 
@@ -36,7 +59,7 @@
 
 We added options to the `TabletPicker` that allow for specifying a cell preference in addition to making the default behavior to give priority to the local cell *and any alias it belongs to*. We are also introducing a new way to select tablet type preference which should eventually replace the `in_order:` hint currently used as a prefix for tablet types. The signature for creating a new `TabletPicker` now looks like:
 
-```
+```go
 func NewTabletPicker(
 	ctx context.Context,
 	ts *topo.Server,
@@ -49,8 +72,8 @@ func NewTabletPicker(
 Where ctx, localCell, option are all new parameters.
 
 `option` is of type `TabletPickerOptions` and includes two fields, `CellPreference` and `TabletOrder`.
-CellPreference`: "PreferLocalWithAlias" (default) gives preference to vtgate's local cell, or "OnlySpecified" which only picks from the cells explicitly passed in by the client
-`TabletOrder`: "Any" (default) for no ordering or random, or "InOrder" to use the order specified by the client
+- `CellPreference`: "PreferLocalWithAlias" (default) gives preference to vtgate's local cell, or "OnlySpecified" which only picks from the cells explicitly passed in by the client
+- `TabletOrder`: "Any" (default) for no ordering or random, or "InOrder" to use the order specified by the client
 
 See [PR 12282 Description](https://github.com/vitessio/vitess/pull/12282) for examples on how this changes cell picking behavior.
 
@@ -58,13 +81,15 @@ See [PR 12282 Description](https://github.com/vitessio/vitess/pull/12282) for ex
 
 When using TLS with `vtgr`, we now default to TLS 1.2 if no other explicit version is configured. Configuration flags are provided to explicitly configure the minimum TLS version to be used.
 
-#### <a id="dedicated-vtgate-prepare-stats"> Dedicated stats for VTGate Prepare operations
+`vtgr` is now deprecated as part of `v17.0.0`, please see [the deprecation notice](#deprecated-vtgr).
 
-Prior to v17 Vitess incorrectly combined stats for VTGate Execute and Prepare operations under a single stats key (`Execute`). In v17 Execute and Prepare operations generate stats under independent stats keys.
+#### <a id="dedicated-vtgate-prepare-stats">Dedicated stats for VTGate Prepare operations
+
+Prior to v17 Vitess incorrectly combined stats for VTGate `Execute` and `Prepare` operations under a single stats key (`Execute`). In v17 `Execute` and `Prepare` operations generate stats under independent stats keys.
 
 Here is a (condensed) example of stats output:
 
-```
+```json
 {
   "VtgateApi": {
     "Histograms": {
@@ -84,6 +109,7 @@ Here is a (condensed) example of stats output:
 ```
 
 #### <a id="migrated-vtadmin"/>VTAdmin web migrated to vite
+
 Previously, VTAdmin web used the Create React App framework to test, build, and serve the application. In v17, Create React App has been removed, and [Vite](https://vitejs.dev/) is used in its place. Some of the main changes include:
 - Vite uses `VITE_*` environment variables instead of `REACT_APP_*` environment variables
 - Vite uses `import.meta.env` in place of `process.env`
@@ -91,19 +117,19 @@ Previously, VTAdmin web used the Create React App framework to test, build, and 
 - Our protobufjs generator now produces an es6 module instead of commonjs to better work with Vite's defaults
 - `public/index.html` has been moved to root directory in web/vtadmin
 
-#### <a id="keyspace-name-validation"> Keyspace name validation in TopoServer
+#### <a id="keyspace-name-validation">Keyspace name validation in TopoServer
 
 Prior to v17, it was possible to create a keyspace with invalid characters, which would then be inaccessible to various cluster management operations.
 
 Keyspace names are restricted to using only ASCII characters, digits and `_` and `-`. TopoServer's `GetKeyspace` and `CreateKeyspace` methods return an error if given an invalid name.
 
-#### <a id="shard-name-validation"> Shard name validation in TopoServer
+#### <a id="shard-name-validation">Shard name validation in TopoServer
 
 Prior to v17, it was possible to create a shard name with invalid characters, which would then be inaccessible to various cluster management operations.
 
 Shard names are restricted to using only ASCII characters, digits and `_` and `-`. TopoServer's `GetShard` and `CreateShard` methods return an error if given an invalid name.
 
-#### <a id="remove-compression-flags-from-vtctld-binaries"> Compression CLI flags remove from vtctld and vtctldclient binaries
+#### <a id="remove-compression-flags-from-vtctld-binaries">Compression CLI flags remove from vtctld and vtctldclient binaries
 
 The CLI flags below were mistakenly added to `vtctld` and `vtctldclient` in v15. In v17, they are no longer present in those binaries.
 
@@ -113,27 +139,28 @@ The CLI flags below were mistakenly added to `vtctld` and `vtctldclient` in v15.
  * `--external-compressor-extension`
  * `--external-decompressor`
 
-#### <a id="VtctldClient-RestoreFromBackup"> VtctldClient command RestoreFromBackup will now use the correct context
+#### <a id="VtctldClient-RestoreFromBackup">VtctldClient command RestoreFromBackup will now use the correct context
 
-The VtctldClient command RestoreFromBackup initiates an asynchronous process on the specified tablet to restore data from either the latest backup or the closest one before the specified backup-timestamp.
+The VtctldClient command `RestoreFromBackup` initiates an asynchronous process on the specified tablet to restore data from either the latest backup or the closest one before the specified backup-timestamp.
 Prior to v17, this asynchronous process could run indefinitely in the background since it was called using the background context. In v17 [PR#12830](https://github.com/vitessio/vitess/issues/12830),
 this behavior was changed to use a context with a timeout of `action_timeout`. If you are using VtctldClient to initiate a restore, make sure you provide an appropriate value for action_timeout to give enough
 time for the restore process to complete. Otherwise, the restore will throw an error if the context expires before it completes.
 
-### <a id="Vttablet-TxThrottler"> Vttablet's transaction throttler now also throttles DML outside of `BEGIN; ...; COMMIT;` blocks
+### <a id="Vttablet-TxThrottler">Vttablet's transaction throttler now also throttles DML outside of `BEGIN; ...; COMMIT;` blocks
+
 Prior to v17, `vttablet`'s transaction throttler (enabled with `--enable-tx-throttler`) would only throttle requests done inside an explicit transaction, i.e., a `BEGIN; ...; COMMIT;` block.
 In v17 [PR#13040](https://github.com/vitessio/vitess/issues/13037), this behavior was being changed so that it also throttles work outside of explicit transactions for `INSERT/UPDATE/DELETE/LOAD` queries.
 
-### <a id="new-flag"/> New command line flags and behavior
+### <a id="new-flag"/>New command line flags and behavior
 
-#### <a id="builtin-backup-read-buffering-flags" /> Backup --builtinbackup-file-read-buffer-size and --builtinbackup-file-write-buffer-size
+#### <a id="builtin-backup-read-buffering-flags"/>Backup --builtinbackup-file-read-buffer-size and --builtinbackup-file-write-buffer-size
 
-Prior to v17 the builtin Backup Engine does not use read buffering for restores, and for backups uses a hardcoded write buffer size of 2097152 bytes.
+Prior to v17 the builtin Backup Engine does not use read buffering for restores, and for backups uses a hardcoded write buffer size of `2097152 bytes`.
 
 In v17 these defaults may be tuned with, respectively `--builtinbackup-file-read-buffer-size` and `--builtinbackup-file-write-buffer-size`.
 
-- `--builtinbackup-file-read-buffer-size`:  read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
-- `--builtinbackup-file-write-buffer-size`: write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
+- `--builtinbackup-file-read-buffer-size`:  read files using an IO buffer of this many bytes. Golang defaults are used when set to `0`.
+- `--builtinbackup-file-write-buffer-size`: write files using an IO buffer of this many bytes. Golang defaults are used when set to `0`. (default `2097152`)
 
 These flags are applicable to the following programs:
 
@@ -142,7 +169,7 @@ These flags are applicable to the following programs:
 - `vttablet`
 - `vttestserver`
 
-#### <a id="manifest-backup-external-decompressor-command" /> Manifest backup external decompressor command
+#### <a id="manifest-backup-external-decompressor-command" />Manifest backup external decompressor command
 
 Add a new builtin/xtrabackup flag `--manifest-external-decompressor`. When set the value of that flag is stored in the manifest field `ExternalDecompressor`. This manifest field may be consulted when decompressing a backup that was compressed with an external command.
 
@@ -156,15 +183,23 @@ This feature enables the following flow:
     ```
  2. Restore that backup with a mere `Restore` command, without having to specify `--external-decompressor`.
 
-### <a id="new-stats"/> New stats
+#### <a id="throttler-config-via-topo" />vttablet --throttler-config-via-topo
 
-#### <a id="detailed-backup-and-restore-stats"/> Detailed backup and restore stats
+This flag was introduced in v16 and defaulted to `false`. In v17 it defaults to `true`, and there is no need to supply it.
+
+Note that this flag overrides `--enable-lag-throttler` and `--throttle-threshold`, which now give warnings, and will be removed in v18.
+
+### <a id="new-stats"/>New stats
+
+#### <a id="detailed-backup-and-restore-stats"/>Detailed backup and restore stats
 
 ##### Backup metrics
 
 Metrics related to backup operations are available in both Vtbackup and VTTablet.
 
-**BackupBytes, BackupCount, BackupDurationNanoseconds**
+- `BackupBytes`
+- `BackupCount`
+- `BackupDurationNanosecond`
 
 Depending on the Backup Engine and Backup Storage in-use, a backup may be a complex pipeline of operations, including but not limited to:
 
@@ -176,9 +211,11 @@ These operations are counted and timed, and the number of bytes consumed or prod
 
 ##### Restore metrics
 
-Metrics related to restore operations are available in both Vtbackup and VTTablet.
+Metrics related to restore operations are available in both Vtbackup and VTTablet:
 
-**RestoreBytes, RestoreCount, RestoreDurationNanoseconds**
+- `RestoreBytes`
+- `RestoreCount`
+- `RestoreDurationNanoseconds`
 
 Depending on the Backup Engine and Backup Storage in-use, a restore may be a complex pipeline of operations, including but not limited to:
 
@@ -190,13 +227,13 @@ These operations are counted and timed, and the number of bytes consumed or prod
 
 ##### Vtbackup metrics
 
-Vtbackup exports some metrics which are not available elsewhere.
+Vtbackup exports some metrics which are not available elsewhere:
 
-**DurationByPhaseSeconds**
+- `DurationByPhaseSeconds`
 
 Vtbackup fetches the last backup, restores it to an empty mysql installation, replicates recent changes into that installation, and then takes a backup of that installation.
 
-_DurationByPhaseSeconds_ exports timings for these individual phases.
+`DurationByPhaseSeconds` exports timings for these individual phases.
 
 ##### Example
 
@@ -204,7 +241,7 @@ _DurationByPhaseSeconds_ exports timings for these individual phases.
 
 (Processed with `jq` for readability.)
 
-```
+```json
 {
   "BackupBytes": {
     "BackupEngine.Builtin.Source:Read": 4777,
@@ -276,14 +313,14 @@ Some notes to help understand these metrics:
 * `DurationByPhaseSeconds["RestoreLastBackup"]` measures to the duration of the restore phase.
 * `RestoreDurationNanoseconds["-.-.Restore"]` also measures to the duration of the restore phase.
 
-#### <a id="vttablet-error-count-with-code"/> VTTablet error count with error code
+#### <a id="vttablet-error-count-with-code"/>VTTablet error count with error code
 
 ##### VTTablet Error Count
 
 We are introducing new error counter `QueryErrorCountsWithCode` for VTTablet. It is similar to existing [QueryErrorCounts](https://github.com/vitessio/vitess/blob/main/go/vt/vttablet/tabletserver/query_engine.go#L174) except it contains errorCode as additional dimension.
 We will deprecate `QueryErrorCounts` in v18.
 
-#### <a id="vreplication-stream-status-for-prometheus"/> VReplication stream status for Prometheus
+#### <a id="vreplication-stream-status-for-prometheus"/>VReplication stream status for Prometheus
 
 VReplication publishes the `VReplicationStreamState` status which reports the state of VReplication streams. For example, here's what it looks like in the local cluster example after the MoveTables step:
 
@@ -301,8 +338,10 @@ Prior to v17, this data was not available via the Prometheus backend. In v17, wo
 vttablet_v_replication_stream_state{counts="1",state="Running",workflow="commerce2customer"} 1
 ```
 
-### <a id="vttablet"/> VTTablet
-#### <a id="vttablet-initialization"/> Initializing all replicas with super_read_only
+### <a id="vttablet"/>VTTablet
+
+#### <a id="vttablet-initialization"/>Initializing all replicas with super_read_only
+
 In order to prevent SUPER privileged users like `root` or `vt_dba` from producing errant GTIDs on replicas, all the replica MySQL servers are initialized with the MySQL
 global variable `super_read_only` value set to `ON`. During failovers, we set `super_read_only` to `OFF` for the promoted primary tablet. This will allow the
 primary to accept writes. All of the shard's tablets, except the current primary, will still have their global variable `super_read_only` set to `ON`. This will make sure that apart from
@@ -315,9 +354,18 @@ This is even more important if you are running Vitess on the vitess-operator.
 You must ensure your `init_db.sql` is up-to-date with the new default for `v17.0.0`.
 The default file can be found in `./config/init_db.sql`.
 
-### Online DDL
+#### <a id="vttablet-schema-reload-timeout"/>Vttablet Schema Reload Timeout
 
-#### <a id="online-ddl-cut-over-threshold-flag" /> --cut-over-threshold DDL strategy flag
+A new flag, `--schema-change-reload-timeout` has been added to timeout the reload of the schema that Vttablet does periodically. This is required because sometimes this operation can get stuck after MySQL restarts, etc. More details available in the issue https://github.com/vitessio/vitess/issues/13001.
+
+#### <a id="settings-pool"/>Settings Pool
+
+This was introduced in v15 and it enables pooling the connection with modified connection settings.
+To know more what it does read the [v15 release notes](https://github.com/vitessio/vitess/releases/tag/v15.0.0) or the [blog](https://vitess.io/blog/2023-03-27-connection-pooling-in-vitess/) or [docs](https://vitess.io/docs/17.0/reference/query-serving/reserved-conn/)
+
+### <a id="online-ddl"/>Online DDL
+
+#### <a id="online-ddl-cut-over-threshold-flag" />--cut-over-threshold DDL strategy flag
 
 Online DDL's strategy now accepts `--cut-over-threshold` (type: `duration`) flag.
 
@@ -327,9 +375,10 @@ The value of the cut-over threshold should be high enough to support the async n
 
 Recommended range for this variable is `5s` - `30s`. Default: `10s`.
 
-### <a id="vreplication"/> VReplication
+### <a id="vreplication"/>VReplication
 
-#### <a id="noblob"/> Support for the `noblob` binlog row image mode 
+#### <a id="noblob"/>Support for the `noblob` binlog row image mode 
+
 The `noblob` binlog row image is now supported by the MoveTables and Reshard VReplication workflows. If the source 
 or target database has this mode, other workflows like OnlineDDL, Materialize and CreateLookupVindex will error out.
 The row events streamed by the VStream API, where blobs and text columns have not changed, will contain null values 
@@ -337,7 +386,8 @@ for those columns, indicated by a `length:-1`.
 
 Reference PR for this change is [PR #12905](https://github.com/vitessio/vitess/pull/12905)
 
-#### <a id="binlog-compression"/> Support for MySQL 8.0 binary log transaction compression
+#### <a id="binlog-compression"/>Support for MySQL 8.0 binary log transaction compression
+
 MySQL 8.0 added support for [binary log compression via transaction (GTID) compression in 8.0.20](https://dev.mysql.com/blog-archive/mysql-8-0-20-replication-enhancements/).
 You can read more about this feature here: https://dev.mysql.com/doc/refman/8.0/en/binary-log-transaction-compression.html
 
@@ -349,28 +399,50 @@ would not work. Given the criticality of VReplication workflows within Vitess, t
 We have addressed this issue in [PR #12950](https://github.com/vitessio/vitess/pull/12950) by adding support for processing the compressed transaction events in VReplication,
 without any (known) limitations.
 
-### <a id="deprecations-and-deletions"/> Deprecations and Deletions
+### <a id="vtgate"/>VTGate
 
-* The deprecated `automation` and `automationservice` protobuf definitions and associated client and server packages have been removed.
-* Auto-population of DDL revert actions and tables at execution-time has been removed. This is now handled entirely at enqueue-time.
-* Backwards-compatibility for failed migrations without a `completed_timestamp` has been removed (see https://github.com/vitessio/vitess/issues/8499).
-* The deprecated `Key`, `Name`, `Up`, and `TabletExternallyReparentedTimestamp` fields were removed from the JSON representation of `TabletHealth` structures.
-* The `MYSQL_FLAVOR` environment variable is no longer used.
-* The `--enable-query-plan-field-caching`/`--enable_query_plan_field_caching` vttablet flag was deprecated in v15 and has now been removed.
+#### <a id="stream-execute"/>Modified StreamExecute GRPC API
+
+Earlier VTGate grpc api for `StreamExecute` did not return the session in the response.
+Even though the underlying implementation supported transactions and other features that requires session persistence.
+With [PR #13131](https://github.com/vitessio/vitess/pull/13131) VTGate will return the session to the client
+so that it can be persisted with the client and sent back to VTGate on the next api call.
+
+This does not impact anyone using the mysql client library to connect to VTGate.
+This could be a breaking change for grpc api users based on how they have implemented their grpc clients.
+
+#### <a id="insert-planner"/> Insert Planning with Gen4
+
+Gen4 planner was made default in v14 for `SELECT` queries. In v15 `UPDATE` and `DELETE` queries were moved to Gen4 framework.
+With this release `INSERT` queries are moved to Gen4.
+
+Clients can move to old v3 planner for inserts by using `V3Insert` planner version with `--planner-version` vtgate flag or with comment directive /*vt+ planner=<planner_version>` for individual query.
+
+### <a id="deprecations-and-deletions"/>Deprecations and Deletions
+
+- The deprecated `automation` and `automationservice` protobuf definitions and associated client and server packages have been removed.
+- Auto-population of DDL revert actions and tables at execution-time has been removed. This is now handled entirely at enqueue-time.
+- Backwards-compatibility for failed migrations without a `completed_timestamp` has been removed (see https://github.com/vitessio/vitess/issues/8499).
+- The deprecated `Key`, `Name`, `Up`, and `TabletExternallyReparentedTimestamp` fields were removed from the JSON representation of `TabletHealth` structures.
+- The `MYSQL_FLAVOR` environment variable is no longer used.
+- The `--enable-query-plan-field-caching`/`--enable_query_plan_field_caching` vttablet flag was deprecated in v15 and has now been removed.
 
 #### <a id="deprecated-flags"/>Deprecated Command Line Flags
 
-* Flag `vtctld_addr` has been deprecated and will be deleted in a future release. This affects `vtgate`, `vttablet` and `vtcombo`.
-* The flag `schema_change_check_interval` used to accept either a Go duration value (e.g. `1m` or `30s`) or a bare integer, which was treated as seconds.
+- Flag `vtctld_addr` has been deprecated and will be deleted in a future release. This affects `vtgate`, `vttablet` and `vtcombo`.
+- The flag `schema_change_check_interval` used to accept either a Go duration value (e.g. `1m` or `30s`) or a bare integer, which was treated as seconds.
   This behavior was deprecated in v15.0.0 and has been removed.
   `schema_change_check_interval` now **only** accepts Go duration values. This affects `vtctld`.
-* The flag `durability_policy` is no longer used by vtctld. Instead it reads the durability policies for all keyspaces from the topology server.
-* The flag `use_super_read_only` is deprecated and will be removed in a later release. This affects `vttablet`.
+- The flag `durability_policy` is no longer used by vtctld. Instead it reads the durability policies for all keyspaces from the topology server.
+- The flag `use_super_read_only` is deprecated and will be removed in a later release. This affects `vttablet`.
+- The flag `queryserver-config-schema-change-signal-interval` is deprecated and will be removed in a later release. This affects `vttablet`.
+  Schema-tracking has been refactored in this release to not use polling anymore, therefore the signal interval isn't required anymore.
 
 In `vttablet` various flags that took float values as seconds have updated to take the standard duration syntax as well.
 Float-style parsing is now deprecated and will be removed in a later release.
 For example, instead of `--queryserver-config-query-pool-timeout 12.2`, use `--queryserver-config-query-pool-timeout 12s200ms`.
 Affected flags and YAML config keys:
+
 - `degraded_threshold`
 - `heartbeat_interval`
 - `heartbeat_on_demand_duration`
@@ -398,3 +470,11 @@ These stats are deprecated in v17.
 |-|-|
 | `backup_duration_seconds` | `BackupDurationNanoseconds` |
 | `restore_duration_seconds` | `RestoreDurationNanoseconds` |
+
+### <a id="deprecated-vtgr"/>Deprecated `vtgr`
+
+The `vtgr` component has been deprecated, also see https://github.com/vitessio/vitess/issues/13300. In Vitess 18 `vtgr` will be removed.
+
+#### <a id="deprecated-k8stopo"/>Deprecated `k8stopo`
+
+The `k8stopo` has been deprecated, also see https://github.com/vitessio/vitess/issues/13298. With Vitess 18 the `k8stopo` will be removed.

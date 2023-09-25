@@ -25,6 +25,8 @@ import (
 
 	golcs "github.com/yudai/golcs"
 
+	"vitess.io/vitess/go/mysql/collations/colldata"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -392,7 +394,7 @@ const mysqlCollationVersion = "8.0.0"
 var collationEnv = collations.NewEnvironment(mysqlCollationVersion)
 
 func defaultCharset() string {
-	collation := collations.ID(collationEnv.DefaultConnectionCharset()).Get()
+	collation := colldata.Lookup(collations.ID(collationEnv.DefaultConnectionCharset()))
 	if collation == nil {
 		return ""
 	}
@@ -401,10 +403,10 @@ func defaultCharset() string {
 
 func defaultCharsetCollation(charset string) string {
 	collation := collationEnv.DefaultCollationForCharset(charset)
-	if collation == nil {
+	if collation == collations.Unknown {
 		return ""
 	}
-	return collation.Name()
+	return collationEnv.LookupName(collation)
 }
 
 func (c *CreateTableEntity) normalizeColumnOptions() {
@@ -457,6 +459,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			// See also https://dev.mysql.com/doc/refman/8.0/en/data-type-defaults.html
 			if _, ok := col.Type.Options.Default.(*sqlparser.NullVal); ok {
 				col.Type.Options.Default = nil
+				col.Type.Options.DefaultLiteral = false
 			}
 		}
 
@@ -507,6 +510,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 						Type: sqlparser.StrVal,
 						Val:  defaultVal,
 					}
+					col.Type.Options.DefaultLiteral = true
 				} else {
 					col.Type.Options.Default = nil
 				}
@@ -877,7 +881,6 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	}
 	if tableSpecHasChanged {
 		parentAlterTableEntityDiff = newAlterTableEntityDiff(alterTable)
-
 	}
 	for _, superfluousFulltextKey := range superfluousFulltextKeys {
 		alterTable := &sqlparser.AlterTable{
@@ -2047,8 +2050,10 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					found = true
 					if opt.DropDefault {
 						col.Type.Options.Default = nil
+						col.Type.Options.DefaultLiteral = false
 					} else if opt.DefaultVal != nil {
 						col.Type.Options.Default = opt.DefaultVal
+						col.Type.Options.DefaultLiteral = opt.DefaultLiteral
 					}
 					col.Type.Options.Invisible = opt.Invisible
 					break

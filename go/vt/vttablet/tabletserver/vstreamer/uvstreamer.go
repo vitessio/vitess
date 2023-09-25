@@ -26,9 +26,9 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 var uvstreamerTestMode = false // Only used for testing
@@ -51,13 +52,18 @@ type uvstreamer struct {
 	cancel func()
 
 	// input parameters
-	vse        *Engine
-	send       func([]*binlogdatapb.VEvent) error
-	cp         dbconfigs.Connector
-	se         *schema.Engine
-	startPos   string
-	filter     *binlogdatapb.Filter
-	inTablePKs []*binlogdatapb.TableLastPK
+	vse      *Engine
+	send     func([]*binlogdatapb.VEvent) error
+	cp       dbconfigs.Connector
+	se       *schema.Engine
+	startPos string
+	// Are we currently in an explicit transaction?
+	// If we are not, and we're about to send ROW
+	// events, then we need to send a BEGIN event first.
+	inTransaction bool
+	filter        *binlogdatapb.Filter
+	inTablePKs    []*binlogdatapb.TableLastPK
+	throttlerApp  throttlerapp.Name
 
 	vschema *localVSchema
 
@@ -70,10 +76,10 @@ type uvstreamer struct {
 	pkfields []*querypb.Field
 
 	// current position in the binlog for this streamer
-	pos mysql.Position
+	pos replication.Position
 
 	// fast forward uses this to stop replicating upto the point of the last snapshot
-	stopPos mysql.Position
+	stopPos replication.Position
 
 	// lastTimestampNs is the last timestamp seen so far.
 	lastTimestampNs       int64
@@ -90,7 +96,7 @@ type uvstreamerConfig struct {
 	CatchupRetryTime  time.Duration
 }
 
-func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
+func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	config := &uvstreamerConfig{
 		MaxReplicationLag: 1 * time.Nanosecond,
@@ -105,17 +111,18 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 		return send(evs)
 	}
 	uvs := &uvstreamer{
-		ctx:        ctx,
-		cancel:     cancel,
-		vse:        vse,
-		send:       send2,
-		cp:         cp,
-		se:         se,
-		startPos:   startPos,
-		filter:     filter,
-		vschema:    vschema,
-		config:     config,
-		inTablePKs: tablePKs,
+		ctx:          ctx,
+		cancel:       cancel,
+		vse:          vse,
+		send:         send2,
+		cp:           cp,
+		se:           se,
+		startPos:     startPos,
+		filter:       filter,
+		vschema:      vschema,
+		config:       config,
+		inTablePKs:   tablePKs,
+		throttlerApp: throttlerApp,
 	}
 
 	return uvs
@@ -317,7 +324,7 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 	}
 	for _, ev := range evs2 {
 		if ev.Type == binlogdatapb.VEventType_GTID {
-			uvs.pos, _ = mysql.DecodePosition(ev.Gtid)
+			uvs.pos, _ = replication.DecodePosition(ev.Gtid)
 			if !uvs.stopPos.IsZero() && uvs.pos.AtLeast(uvs.stopPos) {
 				err = io.EOF
 			}
@@ -333,7 +340,7 @@ func (uvs *uvstreamer) sendEventsForCurrentPos() error {
 	log.Infof("sendEventsForCurrentPos")
 	evs := []*binlogdatapb.VEvent{{
 		Type: binlogdatapb.VEventType_GTID,
-		Gtid: mysql.EncodePosition(uvs.pos),
+		Gtid: replication.EncodePosition(uvs.pos),
 	}, {
 		Type: binlogdatapb.VEventType_OTHER,
 	}}
@@ -355,7 +362,7 @@ func (uvs *uvstreamer) setStreamStartPosition() error {
 		}
 		return nil
 	}
-	pos, err := mysql.DecodePosition(uvs.startPos)
+	pos, err := replication.DecodePosition(uvs.startPos)
 	if err != nil {
 		return vterrors.Wrap(err, "could not decode position")
 	}
@@ -363,16 +370,16 @@ func (uvs *uvstreamer) setStreamStartPosition() error {
 		uvs.vse.errorCounts.Add("GTIDSet Mismatch", 1)
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 			"GTIDSet Mismatch: requested source position:%v, current target vrep position: %v",
-			mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
+			replication.EncodePosition(pos), replication.EncodePosition(curPos))
 	}
 	uvs.pos = pos
 	return nil
 }
 
-func (uvs *uvstreamer) currentPosition() (mysql.Position, error) {
+func (uvs *uvstreamer) currentPosition() (replication.Position, error) {
 	conn, err := uvs.cp.Connect(uvs.ctx)
 	if err != nil {
-		return mysql.Position{}, err
+		return replication.Position{}, err
 	}
 	defer conn.Close()
 	return conn.PrimaryPosition()
@@ -417,8 +424,8 @@ func (uvs *uvstreamer) Stream() error {
 			return err
 		}
 	}
-	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos),
-		uvs.filter, uvs.getVSchema(), uvs.send, "replicate", uvs.vse)
+	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, replication.EncodePosition(uvs.pos), replication.EncodePosition(uvs.stopPos),
+		uvs.filter, uvs.getVSchema(), uvs.throttlerApp, uvs.send, "replicate", uvs.vse)
 
 	uvs.setVs(vs)
 	return vs.Stream()
@@ -512,7 +519,7 @@ func (uvs *uvstreamer) setPosition(gtid string, isInTx bool) error {
 	if gtid == "" {
 		return fmt.Errorf("empty gtid passed to setPosition")
 	}
-	pos, err := mysql.DecodePosition(gtid)
+	pos, err := replication.DecodePosition(gtid)
 	if err != nil {
 		return err
 	}

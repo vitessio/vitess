@@ -17,12 +17,10 @@ limitations under the License.
 package operators
 
 import (
+	"slices"
 	"strings"
 
-	"golang.org/x/exp/slices"
-
-	"vitess.io/vitess/go/slices2"
-
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -39,10 +37,11 @@ type Ordering struct {
 
 func (o *Ordering) Clone(inputs []ops.Operator) ops.Operator {
 	return &Ordering{
-		Source:  inputs[0],
-		Offset:  slices.Clone(o.Offset),
-		WOffset: slices.Clone(o.WOffset),
-		Order:   slices.Clone(o.Order),
+		Source:        inputs[0],
+		Offset:        slices.Clone(o.Offset),
+		WOffset:       slices.Clone(o.WOffset),
+		Order:         slices.Clone(o.Order),
+		ResultColumns: o.ResultColumns,
 	}
 }
 
@@ -63,17 +62,20 @@ func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser
 	return o, nil
 }
 
-func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
-	newSrc, offset, err := o.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
-	if err != nil {
-		return nil, 0, err
-	}
-	o.Source = newSrc
-	return o, offset, nil
+func (o *Ordering) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+	return o.Source.AddColumns(ctx, reuse, addToGroupBy, exprs)
 }
 
-func (o *Ordering) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return o.Source.GetColumns()
+func (o *Ordering) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+	return o.Source.FindCol(ctx, expr, underRoute)
+}
+
+func (o *Ordering) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return o.Source.GetColumns(ctx)
+}
+
+func (o *Ordering) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return o.Source.GetSelectExprs(ctx)
 }
 
 func (o *Ordering) GetOrdering() ([]ops.OrderBy, error) {
@@ -82,12 +84,11 @@ func (o *Ordering) GetOrdering() ([]ops.OrderBy, error) {
 
 func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 	for _, order := range o.Order {
-		newSrc, offset, err := o.Source.AddColumn(ctx, aeWrap(order.SimplifiedExpr), true, false)
+		offsets, err := o.Source.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(order.SimplifiedExpr)})
 		if err != nil {
 			return err
 		}
-		o.Source = newSrc
-		o.Offset = append(o.Offset, offset)
+		o.Offset = append(o.Offset, offsets[0])
 
 		if !ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
 			o.WOffset = append(o.WOffset, -1)
@@ -95,26 +96,18 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 
 		wsExpr := &sqlparser.WeightStringFuncExpr{Expr: order.SimplifiedExpr}
-		newSrc, offset, err = o.Source.AddColumn(ctx, aeWrap(wsExpr), true, false)
+		offsets, err = o.Source.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(wsExpr)})
 		if err != nil {
 			return err
 		}
-		o.Source = newSrc
-		o.WOffset = append(o.WOffset, offset)
+		o.WOffset = append(o.WOffset, offsets[0])
 	}
 
 	return nil
 }
 
-func (o *Ordering) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Ordering",
-		Other:        map[string]any{},
-	}
-}
-
 func (o *Ordering) ShortDescription() string {
-	ordering := slices2.Map(o.Order, func(o ops.OrderBy) string {
+	ordering := slice.Map(o.Order, func(o ops.OrderBy) string {
 		return sqlparser.String(o.Inner)
 	})
 	return strings.Join(ordering, ", ")

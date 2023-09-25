@@ -69,7 +69,6 @@ var _binaries = []string{ // binaries that require the flags in this package
 	"vtctl",
 	"vtctld",
 	"vtctldclient",
-	"vtgr",
 	"vtorc",
 	"vttablet",
 	"vttestserver",
@@ -359,6 +358,18 @@ func (client *Client) ReloadSchema(ctx context.Context, tablet *topodatapb.Table
 	defer closer.Close()
 	_, err = c.ReloadSchema(ctx, &tabletmanagerdatapb.ReloadSchemaRequest{
 		WaitPosition: waitPosition,
+	})
+	return err
+}
+
+func (client *Client) ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
+	_, err = c.ResetSequences(ctx, &tabletmanagerdatapb.ResetSequencesRequest{
+		Tables: tables,
 	})
 	return err
 }
@@ -679,6 +690,49 @@ func (client *Client) GetReplicas(ctx context.Context, tablet *topodatapb.Tablet
 	return response.Addrs, nil
 }
 
+//
+// VReplication related methods
+//
+
+func (client *Client) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.CreateVReplicationWorkflow(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (client *Client) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.DeleteVReplicationWorkflow(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (client *Client) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.ReadVReplicationWorkflow(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 // VReplicationExec is part of the tmclient.TabletManagerClient interface.
 func (client *Client) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
@@ -706,13 +760,13 @@ func (client *Client) VReplicationWaitForPos(ctx context.Context, tablet *topoda
 	return nil
 }
 
-func (client *Client) UpdateVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
+func (client *Client) UpdateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.UpdateVRWorkflow(ctx, request)
+	response, err := c.UpdateVReplicationWorkflow(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -945,6 +999,20 @@ func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, req
 		stream: stream,
 		closer: closer,
 	}, nil
+}
+
+// CheckThrottler is part of the tmclient.TabletManagerClient interface.
+func (client *Client) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.CheckThrottler(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
 }
 
 type restoreFromBackupStreamAdapter struct {

@@ -17056,8 +17056,6 @@ var decode = [...]uint16{
 	17629: 0x8A70,
 }
 
-const numEncodeTables = 7
-
 // encodeX are the encoding tables from Unicode to EUC-KR code,
 // sorted by decreasing length.
 // encode0: 20893 entries for runes in [19968, 40861).

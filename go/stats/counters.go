@@ -70,9 +70,7 @@ func (c *counters) ZeroAll() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for k := range c.counts {
-		c.counts[k] = 0
-	}
+	clear(c.counts)
 }
 
 // Counts returns a copy of the Counters' map.
@@ -321,6 +319,29 @@ func NewGaugesWithSingleLabel(name, help, label string, tags ...string) *GaugesW
 // Set sets the value of a named gauge.
 func (g *GaugesWithSingleLabel) Set(name string, value int64) {
 	g.counters.set(name, value)
+}
+
+// SyncGaugesWithSingleLabel is a GaugesWithSingleLabel that proactively pushes
+// stats to push-based backends when Set is called.
+type SyncGaugesWithSingleLabel struct {
+	GaugesWithSingleLabel
+	name string
+}
+
+// NewSyncGaugesWithSingleLabel creates a new SyncGaugesWithSingleLabel.
+func NewSyncGaugesWithSingleLabel(name, help, label string, tags ...string) *SyncGaugesWithSingleLabel {
+	return &SyncGaugesWithSingleLabel{
+		GaugesWithSingleLabel: *NewGaugesWithSingleLabel(name, help, label, tags...),
+		name:                  name,
+	}
+}
+
+// Set sets the value of a named gauge.
+func (sg *SyncGaugesWithSingleLabel) Set(name string, value int64) {
+	sg.GaugesWithSingleLabel.Set(name, value)
+	if sg.name != "" {
+		_ = pushOne(sg.name, &sg.GaugesWithSingleLabel)
+	}
 }
 
 // GaugesWithMultiLabels is a CountersWithMultiLabels implementation where

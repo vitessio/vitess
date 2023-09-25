@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -428,7 +428,7 @@ ts12 TIMESTAMP DEFAULT LOCALTIME()
 )`)
 	utils.Exec(t, conn, "drop table function_default")
 
-	utils.Exec(t, conn, `create table function_default (ts TIMESTAMP DEFAULT UTC_TIMESTAMP)`)
+	utils.Exec(t, conn, `create table function_default (ts TIMESTAMP DEFAULT (UTC_TIMESTAMP))`)
 	utils.Exec(t, conn, "drop table function_default")
 
 	utils.Exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
@@ -694,8 +694,8 @@ func TestDescribeVindex(t *testing.T) {
 
 	_, err := conn.ExecuteFetch("describe hash", 1000, false)
 	require.Error(t, err)
-	mysqlErr := err.(*mysql.SQLError)
-	assert.Equal(t, mysql.ERNoSuchTable, mysqlErr.Num)
+	mysqlErr := err.(*sqlerror.SQLError)
+	assert.Equal(t, sqlerror.ERNoSuchTable, mysqlErr.Num)
 	assert.Equal(t, "42S02", mysqlErr.State)
 	assert.Contains(t, mysqlErr.Message, "NotFound desc")
 }

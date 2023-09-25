@@ -173,11 +173,12 @@ func markBindVariable(yylex yyLexer, bvar string) {
   orderDirection  OrderDirection
   explainType 	  ExplainType
   vexplainType 	  VExplainType
-  intervalType	  IntervalTypes
+  intervalType	  IntervalType
   lockType LockType
   referenceDefinition *ReferenceDefinition
   txAccessModes []TxAccessMode
   txAccessMode TxAccessMode
+  killType KillType
 
   columnStorage ColumnStorage
   columnFormat ColumnFormat
@@ -247,6 +248,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
 %token <str> BOTH LEADING TRAILING
+%token <str> KILL
 
 %left EMPTY_FROM_CLAUSE
 %right INTO
@@ -334,10 +336,11 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> NAMES GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
-%token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE NOW
+%token <str> ADDDATE CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE DATE_ADD DATE_SUB NOW SUBDATE
 %token <str> CURTIME CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
 %token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE
 %token <str> DAY DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND HOUR HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND MICROSECOND MINUTE MINUTE_MICROSECOND MINUTE_SECOND MONTH QUARTER SECOND SECOND_MICROSECOND YEAR_MONTH WEEK
+%token <str> SQL_TSI_DAY SQL_TSI_WEEK SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_MICROSECOND SQL_TSI_YEAR
 %token <str> REPLACE
 %token <str> CONVERT CAST
 %token <str> SUBSTR SUBSTRING
@@ -348,7 +351,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> JSON_ARRAY JSON_OBJECT JSON_QUOTE
 %token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
 %token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
-%token <str> COUNT AVG MAX MIN SUM GROUP_CONCAT BIT_AND BIT_OR BIT_XOR STD STDDEV STDDEV_POP STDDEV_SAMP VAR_POP VAR_SAMP VARIANCE
+%token <str> COUNT AVG MAX MIN SUM GROUP_CONCAT BIT_AND BIT_OR BIT_XOR STD STDDEV STDDEV_POP STDDEV_SAMP VAR_POP VAR_SAMP VARIANCE ANY_VALUE
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
 %token <str> ExtractValue UpdateXML
 %token <str> GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
@@ -397,14 +400,12 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 %type <partitionByType> range_or_list
 %type <integer> partitions_opt algorithm_opt subpartitions_opt partition_max_rows partition_min_rows
-%type <statement> command
-%type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
-%type <statement> explain_statement explainable_statement
-%type <statement> prepare_statement
-%type <statement> vexplain_statement
-%type <statement> execute_statement deallocate_statement
+%type <statement> command kill_statement
+%type <statement> explain_statement explainable_statement vexplain_statement
+%type <statement> prepare_statement execute_statement deallocate_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
+%type <selStmt> select_statement select_stmt_with_into query_expression_parens query_expression query_expression_body query_primary
 %type <with> with_clause_opt with_clause
 %type <cte> common_table_expr
 %type <ctes> with_list
@@ -452,7 +453,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <subPartitionDefinition> subpartition_definition
 %type <subPartitionDefinitions> subpartition_definition_list subpartition_definition_list_with_brackets
 %type <subPartitionDefinitionOptions> subpartition_definition_attribute_list_opt
-%type <intervalType> interval_time_stamp interval
+%type <intervalType> interval timestampadd_interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
@@ -462,8 +463,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
-%type <expr> expression frame_expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
-%type <expr> interval_value simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions gtid_function_expressions
+%type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
+%type <expr> simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions gtid_function_expressions
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table json_table_function
 %type <jtColumnDefinition> jt_column
@@ -588,6 +589,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <literal> ratio_opt
 %type <txAccessModes> tx_chacteristics_opt tx_chars
 %type <txAccessMode> tx_char
+%type <killType> kill_type_opt
 %start any_command
 
 %%
@@ -649,6 +651,7 @@ command:
 | prepare_statement
 | execute_statement
 | deallocate_statement
+| kill_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -911,7 +914,7 @@ insert_statement:
     ins.Action = $1
     ins.Comments = Comments($2).Parsed()
     ins.Ignore = $3
-    ins.Table = $4
+    ins.Table = getAliasedTableExprFromTableName($4)
     ins.Partitions = $5
     ins.OnDup = OnDup($7)
     $$ = ins
@@ -924,7 +927,7 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $1, Comments: Comments($2).Parsed(), Ignore: $3, Table: $4, Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
+    $$ = &Insert{Action: $1, Comments: Comments($2).Parsed(), Ignore: $3, Table: getAliasedTableExprFromTableName($4), Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
   }
 
 insert_or_replace:
@@ -1479,6 +1482,7 @@ column_attribute_list_opt:
 | column_attribute_list_opt DEFAULT now_or_signed_literal
   {
     $1.Default = $3
+    $1.DefaultLiteral = true
     $$ = $1
   }
 | column_attribute_list_opt ON UPDATE function_call_nonkeyword
@@ -1892,7 +1896,7 @@ underscore_charsets:
   }
 | UNDERSCORE_UTF8
   {
-    $$ = Utf8Str
+    $$ = Utf8mb3Str
   }
 | UNDERSCORE_UTF8MB4
   {
@@ -1900,7 +1904,7 @@ underscore_charsets:
   }
 | UNDERSCORE_UTF8MB3
   {
-    $$ = Utf8Str
+    $$ = Utf8mb3Str
   }
 
 literal_or_null:
@@ -2823,7 +2827,7 @@ table_option:
   }
 | TABLESPACE equal_opt sql_id storage_opt
   {
-    $$ = &TableOption{Name:string($1), String: ($3.String() + $4)}
+    $$ = &TableOption{Name:string($1), String: ($3.String() + $4), CaseSensitive: true}
   }
 | UNION equal_opt '(' table_name_list ')'
   {
@@ -2988,9 +2992,9 @@ alter_option:
   {
     $$ = &AlterColumn{Column: $3, DropDefault:true}
   }
-| ALTER column_opt column_name SET DEFAULT signed_literal_or_null
+| ALTER column_opt column_name SET DEFAULT now_or_signed_literal
   {
-    $$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$6}
+    $$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$6, DefaultLiteral: true}
   }
 | ALTER column_opt column_name SET DEFAULT openb expression closeb
   {
@@ -3248,6 +3252,10 @@ alter_statement:
   {
     $$ = &AlterVschema{Action: AddSequenceDDLAction, Table: $6}
   }
+| ALTER comment_opt VSCHEMA DROP SEQUENCE table_name
+  {
+    $$ = &AlterVschema{Action: DropSequenceDDLAction, Table: $6}
+  }
 | ALTER comment_opt VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
   {
     $$ = &AlterVschema{
@@ -3257,6 +3265,13 @@ alter_statement:
             Column: $8,
             Sequence: $10,
         },
+    }
+  }
+| ALTER comment_opt VSCHEMA ON table_name DROP AUTO_INCREMENT
+  {
+    $$ = &AlterVschema{
+        Action: DropAutoIncDDLAction,
+        Table: $5,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING RETRY
@@ -5344,6 +5359,14 @@ bit_expr '|' bit_expr %prec '|'
   {
 	  $$ = &BinaryExpr{Left: $1, Operator: MinusOp, Right: $3}
   }
+| bit_expr '+' INTERVAL bit_expr interval %prec '+'
+  {
+	  $$ = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAdd, Date: $1, Unit: $5, Interval: $4}
+  }
+| bit_expr '-' INTERVAL bit_expr interval %prec '-'
+  {
+	  $$ = &IntervalDateExpr{Syntax: IntervalDateExprBinarySub, Date: $1, Unit: $5, Interval: $4}
+  }
 | bit_expr '*' bit_expr %prec '*'
   {
 	  $$ = &BinaryExpr{Left: $1, Operator: MultOp, Right: $3}
@@ -5462,18 +5485,14 @@ function_call_keyword
   {
 	 $$ = &Default{ColName: $2}
   }
-| interval_value
+| INTERVAL bit_expr interval '+' bit_expr %prec INTERVAL
   {
-	// INTERVAL can trigger a shift / reduce conflict. We want
-	// to shift here for the interval rule. In case we do have
-	// the additional expression_list below, we'd pick that path
-	// and thus properly parse it as a function when needed.
-	$$ = $1
+	  $$ = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAddLeft, Date: $5, Unit: $3, Interval: $2}
   }
 | INTERVAL openb expression ',' expression_list closeb
-{
-       $$ = &IntervalFuncExpr{Expr: $3, Exprs: $5}
-}
+  {
+    $$ = &IntervalFuncExpr{Expr: $3, Exprs: $5}
+  }
 | column_name_or_offset JSON_EXTRACT_OP text_literal_or_arg
   {
 	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
@@ -5481,12 +5500,6 @@ function_call_keyword
 | column_name_or_offset JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
 	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
-  }
-
-interval_value:
-  INTERVAL bit_expr sql_id
-  {
-     $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }
 
 column_names_opt_paren:
@@ -5569,23 +5582,21 @@ frame_point:
   {
     $$ = &FramePoint{Type:UnboundedFollowingType}
   }
-| frame_expression PRECEDING
+| NUM_literal PRECEDING
   {
     $$ = &FramePoint{Type:ExprPrecedingType, Expr:$1}
   }
-| frame_expression FOLLOWING
+| INTERVAL bit_expr interval PRECEDING
+  {
+    $$ = &FramePoint{Type:ExprPrecedingType, Expr:$2, Unit: $3}
+  }
+| NUM_literal FOLLOWING
   {
     $$ = &FramePoint{Type:ExprFollowingType, Expr:$1}
   }
-
-frame_expression:
-  NUM_literal
+| INTERVAL bit_expr interval FOLLOWING
   {
-    $$ = $1
-  }
-| interval_value
-  {
-    $$ = $1
+    $$ = &FramePoint{Type:ExprFollowingType, Expr:$2, Unit:$3}
   }
 
 frame_clause_opt:
@@ -5986,17 +5997,21 @@ UTC_DATE func_paren_opt
   {
     $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
   }
-| TIMESTAMPADD openb sql_id ',' expression ',' expression closeb
+| ANY_VALUE openb expression closeb
   {
-    $$ = &TimestampFuncExpr{Name:string("timestampadd"), Unit:$3.String(), Expr1:$5, Expr2:$7}
+    $$ = &AnyValue{Arg:$3}
   }
-| TIMESTAMPDIFF openb sql_id ',' expression ',' expression closeb
+| TIMESTAMPADD openb timestampadd_interval ',' expression ',' expression closeb
   {
-    $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprTimestampadd, Date: $7, Interval: $5, Unit: $3}
+  }
+| TIMESTAMPDIFF openb timestampadd_interval ',' expression ',' expression closeb
+  {
+    $$ = &TimestampDiffExpr{Unit:$3, Expr1:$5, Expr2:$7}
   }
 | EXTRACT openb interval FROM expression closeb
   {
-	$$ = &ExtractFuncExpr{IntervalTypes: $3, Expr: $5}
+    $$ = &ExtractFuncExpr{IntervalType: $3, Expr: $5}
   }
 | WEIGHT_STRING openb expression convert_type_weight_string closeb
   {
@@ -6610,6 +6625,30 @@ UTC_DATE func_paren_opt
   {
     $$ =  &LagLeadExpr{ Type:$1 , Expr: $3, N: $5, Default: $6, NullTreatmentClause:$8, OverClause: $9}
   }
+| ADDDATE openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: $3, Interval: $6, Unit: $7}
+  }
+| ADDDATE openb expression ',' expression closeb
+  {
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: $3, Interval: $5, Unit: IntervalNone}
+  }
+| DATE_ADD openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprDateAdd, Date: $3, Interval: $6, Unit: $7}
+  }
+| DATE_SUB openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprDateSub, Date: $3, Interval: $6, Unit: $7}
+  }
+| SUBDATE openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: $3, Interval: $6, Unit: $7}
+  }
+| SUBDATE openb expression ',' expression closeb
+  {
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: $3, Interval: $5, Unit: IntervalNone}
+  }
 | regular_expressions
 | xml_expressions
 | performance_schema_function_expressions
@@ -6775,9 +6814,7 @@ returning_type_opt:
   }
 
 interval:
- interval_time_stamp
- {}
-| DAY_HOUR
+  DAY_HOUR
   {
 	$$=IntervalDayHour
   }
@@ -6821,9 +6858,7 @@ interval:
   {
 	$$=IntervalYearMonth
   }
-
-interval_time_stamp:
- DAY
+| DAY
   {
  	$$=IntervalDay
   }
@@ -6858,6 +6893,80 @@ interval_time_stamp:
 | YEAR
   {
 	$$=IntervalYear
+  }
+
+timestampadd_interval:
+  DAY
+  {
+    $$=IntervalDay
+  }
+| WEEK
+  {
+    $$=IntervalWeek
+  }
+| HOUR
+  {
+    $$=IntervalHour
+  }
+| MINUTE
+  {
+    $$=IntervalMinute
+  }
+| MONTH
+  {
+    $$=IntervalMonth
+  }
+| QUARTER
+  {
+    $$=IntervalQuarter
+  }
+| SECOND
+  {
+    $$=IntervalSecond
+  }
+| MICROSECOND
+  {
+    $$=IntervalMicrosecond
+  }
+| YEAR
+  {
+    $$=IntervalYear
+  }
+| SQL_TSI_DAY
+  {
+    $$=IntervalDay
+  }
+| SQL_TSI_WEEK
+  {
+    $$=IntervalWeek
+  }
+| SQL_TSI_HOUR
+  {
+    $$=IntervalHour
+  }
+| SQL_TSI_MINUTE
+  {
+    $$=IntervalMinute
+  }
+| SQL_TSI_MONTH
+  {
+    $$=IntervalMonth
+  }
+| SQL_TSI_QUARTER
+  {
+    $$=IntervalQuarter
+  }
+| SQL_TSI_SECOND
+  {
+    $$=IntervalSecond
+  }
+| SQL_TSI_MICROSECOND
+  {
+    $$=IntervalMicrosecond
+  }
+| SQL_TSI_YEAR
+  {
+    $$=IntervalYear
   }
 
 func_paren_opt:
@@ -7778,6 +7887,28 @@ reserved_table_id:
   {
     $$ = NewIdentifierCS(string($1))
   }
+
+kill_statement:
+  KILL kill_type_opt INTEGRAL
+  {
+    $$ = &Kill{Type: $2, ProcesslistID: convertStringToUInt64($3)}
+  }
+
+kill_type_opt:
+  /* empty */
+  {
+    $$ = ConnectionType
+  }
+| CONNECTION
+  {
+    $$ = ConnectionType
+  }
+| QUERY
+  {
+    $$ = QueryType
+  }
+
+
 /*
   These are not all necessarily reserved in MySQL, but some are.
 
@@ -7856,6 +7987,7 @@ reserved_keyword:
 | JOIN
 | JSON_TABLE
 | KEY
+| KILL
 | LAG
 | LAST_VALUE
 | LATERAL
@@ -7917,8 +8049,6 @@ reserved_keyword:
 | SYSTEM
 | TABLE
 | THEN
-| TIMESTAMPADD
-| TIMESTAMPDIFF
 | TO
 | TRAILING
 | TRUE
@@ -7951,10 +8081,12 @@ non_reserved_keyword:
   AGAINST
 | ACTION
 | ACTIVE
+| ADDDATE %prec FUNCTION_CALL_NON_KEYWORD
 | ADMIN
 | AFTER
 | ALGORITHM
 | ALWAYS
+| ANY_VALUE %prec FUNCTION_CALL_NON_KEYWORD
 | ARRAY
 | ASCII
 | AUTO_INCREMENT
@@ -8003,6 +8135,8 @@ non_reserved_keyword:
 | CURRENT
 | DATA
 | DATE %prec STRING_TYPE_PREFIX_NON_KEYWORD
+| DATE_ADD %prec FUNCTION_CALL_NON_KEYWORD
+| DATE_SUB %prec FUNCTION_CALL_NON_KEYWORD
 | DATETIME
 | DEALLOCATE
 | DECIMAL_TYPE
@@ -8248,6 +8382,14 @@ non_reserved_keyword:
 | SMALLINT
 | SNAPSHOT
 | SQL
+| SQL_TSI_DAY
+| SQL_TSI_HOUR
+| SQL_TSI_MINUTE
+| SQL_TSI_MONTH
+| SQL_TSI_QUARTER
+| SQL_TSI_SECOND
+| SQL_TSI_WEEK
+| SQL_TSI_YEAR
 | SRID
 | START
 | STARTING
@@ -8307,6 +8449,7 @@ non_reserved_keyword:
 | ST_StartPoint %prec FUNCTION_CALL_NON_KEYWORD
 | ST_X %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Y %prec FUNCTION_CALL_NON_KEYWORD
+| SUBDATE %prec FUNCTION_CALL_NON_KEYWORD
 | SUBPARTITION
 | SUBPARTITIONS
 | SUM %prec FUNCTION_CALL_NON_KEYWORD
@@ -8322,6 +8465,8 @@ non_reserved_keyword:
 | TIES
 | TIME %prec STRING_TYPE_PREFIX_NON_KEYWORD
 | TIMESTAMP %prec STRING_TYPE_PREFIX_NON_KEYWORD
+| TIMESTAMPADD %prec FUNCTION_CALL_NON_KEYWORD
+| TIMESTAMPDIFF %prec FUNCTION_CALL_NON_KEYWORD
 | TINYBLOB
 | TINYINT
 | TINYTEXT
@@ -8373,6 +8518,7 @@ non_reserved_keyword:
 | WAIT_FOR_EXECUTED_GTID_SET %prec FUNCTION_CALL_NON_KEYWORD
 | WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS %prec FUNCTION_CALL_NON_KEYWORD
 | WARNINGS
+| WEEK %prec FUNCTION_CALL_NON_KEYWORD
 | WITHOUT
 | WORK
 | YEAR

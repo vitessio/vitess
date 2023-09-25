@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
@@ -32,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -126,13 +125,12 @@ func (tqsc *Controller) AddStatusPart() {
 func (tqsc *Controller) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.DBConfigs, _ mysqlctl.MysqlDaemon) error {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
-
-	tqsc.target = proto.Clone(target).(*querypb.Target)
+	tqsc.target = target.CloneVT()
 	return nil
 }
 
 // SetServingType is part of the tabletserver.Controller interface
-func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, terTime time.Time, serving bool, reason string) error {
+func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, ptsTime time.Time, serving bool, reason string) error {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 
@@ -160,7 +158,7 @@ func (tqsc *Controller) IsServing() bool {
 func (tqsc *Controller) CurrentTarget() *querypb.Target {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
-	return proto.Clone(tqsc.target).(*querypb.Target)
+	return tqsc.target.CloneVT()
 }
 
 // IsHealthy is part of the tabletserver.Controller interface
@@ -216,6 +214,11 @@ func (tqsc *Controller) BroadcastHealth() {
 // TopoServer is part of the tabletserver.Controller interface.
 func (tqsc *Controller) TopoServer() *topo.Server {
 	return tqsc.TS
+}
+
+// CheckThrottler is part of the tabletserver.Controller interface
+func (tqsc *Controller) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
+	return nil
 }
 
 // EnterLameduck implements tabletserver.Controller.

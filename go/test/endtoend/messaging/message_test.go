@@ -30,15 +30,15 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	cmp "vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/query"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
 var testMessage = "{\"message\": \"hello world\"}"
@@ -358,8 +358,8 @@ func getTimeEpoch(qr *sqltypes.Result) (int64, int64) {
 	if len(qr.Rows) != 1 {
 		return 0, 0
 	}
-	t, _ := evalengine.ToInt64(qr.Rows[0][0])
-	e, _ := evalengine.ToInt64(qr.Rows[0][1])
+	t, _ := qr.Rows[0][0].ToCastInt64()
+	e, _ := qr.Rows[0][1].ToCastInt64()
 	return t, e
 }
 
@@ -510,9 +510,9 @@ func testMessaging(t *testing.T, name, ks string) {
 	res, err := stream.MessageStream(ks, "", nil, name)
 	require.Nil(t, err)
 	require.Equal(t, 3, len(res.Fields))
-	validateField(t, res.Fields[0], "id", query.Type_INT64)
-	validateField(t, res.Fields[1], "tenant_id", query.Type_INT64)
-	validateField(t, res.Fields[2], "message", query.Type_JSON)
+	validateField(t, res.Fields[0], "id", querypb.Type_INT64)
+	validateField(t, res.Fields[1], "tenant_id", querypb.Type_INT64)
+	validateField(t, res.Fields[2], "message", querypb.Type_JSON)
 
 	// validate recieved msgs
 	resMap := make(map[string]string)
@@ -554,7 +554,7 @@ func testMessaging(t *testing.T, name, ks string) {
 	assert.Equal(t, uint64(1), qr.RowsAffected)
 }
 
-func validateField(t *testing.T, field *query.Field, name string, _type query.Type) {
+func validateField(t *testing.T, field *querypb.Field, name string, _type querypb.Type) {
 	assert.Equal(t, name, field.Name)
 	assert.Equal(t, _type, field.Type)
 }
@@ -582,7 +582,7 @@ func VtgateGrpcConn(ctx context.Context, cluster *cluster.LocalProcessCluster) (
 }
 
 // MessageStream strarts the stream for the corresponding connection.
-func (stream *VTGateStream) MessageStream(ks, shard string, keyRange *topodata.KeyRange, name string) (*sqltypes.Result, error) {
+func (stream *VTGateStream) MessageStream(ks, shard string, keyRange *topodatapb.KeyRange, name string) (*sqltypes.Result, error) {
 	// start message stream which send received message to the respChan
 	session := stream.Session("@primary", nil)
 	resultStream, err := session.StreamExecute(stream.ctx, fmt.Sprintf("stream * from %s", name), nil)

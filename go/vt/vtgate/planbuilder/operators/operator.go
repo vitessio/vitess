@@ -34,9 +34,13 @@ The operators go through a few phases while planning:
 package operators
 
 import (
+	"fmt"
+
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -52,9 +56,18 @@ type (
 )
 
 // PlanQuery creates a query plan for a given SQL statement
-func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (ops.Operator, error) {
-	op, err := createLogicalOperatorFromAST(ctx, selStmt)
+func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.Operator, error) {
+	op, err := translateQueryToOp(ctx, stmt)
 	if err != nil {
+		return nil, err
+	}
+
+	if rewrite.DebugOperatorTree {
+		fmt.Println("Initial tree:")
+		fmt.Println(ops.ToTree(op))
+	}
+
+	if op, err = compact(ctx, op); err != nil {
 		return nil, err
 	}
 
@@ -70,15 +83,14 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 		return nil, err
 	}
 
-	if op, err = compact(ctx, op); err != nil {
-		return nil, err
-	}
-
 	_, isRoute := op.(*Route)
 	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
 		// If we got here, we don't have a single shard plan
 		return nil, ctx.SemTable.NotSingleRouteErr
 	}
+
+	// set lock and comments on the route to be set on the sql query on conversion.
+	setCommentsAndLockOnRoute(op, stmt)
 
 	return op, err
 }
@@ -97,11 +109,22 @@ func (noInputs) SetInputs(ops []ops.Operator) {
 
 // AddColumn implements the Operator interface
 func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr, bool, bool) (ops.Operator, int, error) {
-	return nil, 0, vterrors.VT13001("the noColumns operator cannot accept columns")
+	return nil, 0, vterrors.VT13001("noColumns operators have no column")
 }
 
-func (noColumns) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return nil, vterrors.VT13001("the noColumns operator cannot accept columns")
+func (noColumns) AddColumns(*plancontext.PlanningContext, bool, []bool, []*sqlparser.AliasedExpr) ([]int, error) {
+	return nil, vterrors.VT13001("noColumns operators have no column")
+}
+
+func (noColumns) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return nil, vterrors.VT13001("noColumns operators have no column")
+}
+func (noColumns) FindCol(*plancontext.PlanningContext, sqlparser.Expr, bool) (int, error) {
+	return 0, vterrors.VT13001("noColumns operators have no column")
+}
+
+func (noColumns) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return nil, vterrors.VT13001("noColumns operators have no column")
 }
 
 // AddPredicate implements the Operator interface
@@ -134,4 +157,31 @@ func tryTruncateColumnsAt(op ops.Operator, truncateAt int) bool {
 	}
 
 	return tryTruncateColumnsAt(inputs[0], truncateAt)
+}
+
+func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op ops.Operator) (sqlparser.SelectExprs, error) {
+	columns, err := op.GetColumns(ctx)
+	if err != nil {
+		return nil, err
+	}
+	selExprs := slice.Map(columns, func(from *sqlparser.AliasedExpr) sqlparser.SelectExpr {
+		return from
+	})
+	return selExprs, nil
+}
+
+func setCommentsAndLockOnRoute(op ops.Operator, stmt sqlparser.Statement) {
+	_ = rewrite.Visit(op, func(op ops.Operator) error {
+		route, ok := op.(*Route)
+		if !ok {
+			return nil
+		}
+		if stmtWithComments, ok := stmt.(sqlparser.Commented); ok {
+			route.Comments = stmtWithComments.GetParsedComments()
+		}
+		if stmtWithLock, ok := stmt.(sqlparser.SelectStatement); ok {
+			route.Lock = stmtWithLock.GetLock()
+		}
+		return nil
+	})
 }

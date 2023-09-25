@@ -79,10 +79,7 @@ func (j *Join) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite
 		NoDeps:     ctx.SemTable.AndExpressions(lqg.NoDeps, rqg.NoDeps),
 	}
 	if j.Predicate != nil {
-		err := newOp.collectPredicate(ctx, j.Predicate)
-		if err != nil {
-			return nil, rewrite.SameTree, err
-		}
+		newOp.collectPredicate(ctx, j.Predicate)
 	}
 	return newOp, rewrite.NewTree("merge querygraphs into a single one", newOp), nil
 }
@@ -157,15 +154,6 @@ func (j *Join) IsInner() bool {
 func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	j.Predicate = ctx.SemTable.AndExpressions(j.Predicate, expr)
 	return nil
-}
-
-func (j *Join) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Join",
-		Other: map[string]any{
-			"Predicate": sqlparser.String(j.Predicate),
-		},
-	}
 }
 
 func (j *Join) ShortDescription() string {

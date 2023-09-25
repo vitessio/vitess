@@ -27,11 +27,9 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/event"
@@ -189,12 +187,12 @@ func (si *ShardInfo) HasPrimary() bool {
 
 // GetPrimaryTermStartTime returns the shard's primary term start time as a Time value.
 func (si *ShardInfo) GetPrimaryTermStartTime() time.Time {
-	return logutil.ProtoToTime(si.Shard.PrimaryTermStartTime)
+	return protoutil.TimeFromProto(si.Shard.PrimaryTermStartTime).UTC()
 }
 
 // SetPrimaryTermStartTime sets the shard's primary term start time as a Time value.
 func (si *ShardInfo) SetPrimaryTermStartTime(t time.Time) {
-	si.Shard.PrimaryTermStartTime = logutil.TimeToProto(t)
+	si.Shard.PrimaryTermStartTime = protoutil.TimeToProto(t)
 }
 
 // GetShard is a high level function to read shard data.
@@ -365,7 +363,7 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 	// fully initialize and perform certain operations (e.g.
 	// OnlineDDL or VReplication workflows) if they are using a
 	// different sidecar database name.
-	ksi := topodatapb.Keyspace{SidecarDbName: sidecardb.GetName()}
+	ksi := topodatapb.Keyspace{SidecarDbName: sidecar.GetName()}
 	if err = ts.CreateKeyspace(ctx, keyspace, &ksi); err != nil && !IsErrType(err, NodeExists) {
 		return nil, vterrors.Wrapf(err, "CreateKeyspace(%v) failed", keyspace)
 	}
@@ -412,7 +410,7 @@ func (si *ShardInfo) GetTabletControl(tabletType topodatapb.TabletType) *topodat
 	return nil
 }
 
-// UpdateSourceDeniedTables will add or remove the listed tables
+// UpdateDeniedTables will add or remove the listed tables
 // in the shard record's TabletControl structures. Note we don't
 // support a lot of the corner cases:
 //   - only support one table list per shard. If we encounter a different
@@ -421,7 +419,7 @@ func (si *ShardInfo) GetTabletControl(tabletType topodatapb.TabletType) *topodat
 //     because it's not used in the same context (vertical vs horizontal sharding)
 //
 // This function should be called while holding the keyspace lock.
-func (si *ShardInfo) UpdateSourceDeniedTables(ctx context.Context, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
+func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
 	if err := CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
 		return err
 	}
@@ -633,7 +631,7 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 	}
 
 	for _, a := range resultAsMap {
-		result = append(result, proto.Clone(a).(*topodatapb.TabletAlias))
+		result = append(result, a.CloneVT())
 	}
 	sort.Sort(topoproto.TabletAliasList(result))
 	return result, err

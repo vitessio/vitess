@@ -174,6 +174,12 @@ func ExecAllowError(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Res
 	return conn.ExecuteFetch(query, 1000, true)
 }
 
+// ExecWithRowCount is similar to ExecAllowError with max row count provided.
+func ExecWithRowCount(t testing.TB, conn *mysql.Conn, query string, rowCount int) (*sqltypes.Result, error) {
+	t.Helper()
+	return conn.ExecuteFetch(query, rowCount, true)
+}
+
 // SkipIfBinaryIsBelowVersion skips the given test if the binary's major version is below majorVersion.
 func SkipIfBinaryIsBelowVersion(t *testing.T, majorVersion int, binary string) {
 	version, err := cluster.GetMajorVersion(binary)
@@ -220,15 +226,15 @@ func AssertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 }
 
 // WaitForAuthoritative waits for a table to become authoritative
-func WaitForAuthoritative(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl string) error {
-	timeout := time.After(10 * time.Second)
+func WaitForAuthoritative(t *testing.T, ks, tbl string, readVSchema func() (*interface{}, error)) error {
+	timeout := time.After(60 * time.Second)
 	for {
 		select {
 		case <-timeout:
 			return fmt.Errorf("schema tracking didn't mark table t2 as authoritative until timeout")
 		default:
 			time.Sleep(1 * time.Second)
-			res, err := vtgateProcess.ReadVSchema()
+			res, err := readVSchema()
 			require.NoError(t, err, res)
 			t2Map := getTableT2Map(res, ks, tbl)
 			authoritative, fieldPresent := t2Map["column_list_authoritative"]
@@ -246,7 +252,7 @@ func WaitForAuthoritative(t *testing.T, vtgateProcess cluster.VtgateProcess, ks,
 
 // WaitForColumn waits for a table's column to be present
 func WaitForColumn(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(60 * time.Second)
 	for {
 		select {
 		case <-timeout:

@@ -48,12 +48,16 @@ const NumJSONRows = 100
 
 func insertJSONValues(t *testing.T) {
 	// insert null value combinations
-	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id) values(1)")
-	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j1) values(2, \"{}\")")
-	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j2) values(3, \"{}\")")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j3) values(1, \"{}\")")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j1, j3) values(2, \"{}\", \"{}\")")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j2, j3) values(3, \"{}\", \"{}\")")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j1, j2, j3) values(4, NULL, 'null', '\"null\"')")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j3) values(5, JSON_QUOTE('null'))")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j3) values(6, '{}')")
 
-	id := 4
-	q := "insert into json_tbl(id, j1, j2) values(%d, '%s', '%s')"
+	id := 8 // 6 inserted above and one after copy phase is done
+
+	q := "insert into json_tbl(id, j1, j2, j3) values(%d, '%s', '%s', '{}')"
 	numJsonValues := len(jsonValues)
 	for id <= NumJSONRows {
 		id++
@@ -67,14 +71,25 @@ func insertJSONValues(t *testing.T) {
 // insertMoreCustomers creates additional customers.
 // Note: this will only work when the customer sequence is in place.
 func insertMoreCustomers(t *testing.T, numCustomers int) {
-	sql := "insert into customer (name) values "
-	i := 0
-	for i < numCustomers {
-		i++
-		sql += fmt.Sprintf("('customer%d')", i)
+	// Let's first be sure that the sequence is working.
+	// We reserve all of the sequence values we need for
+	// the number of customer records we are going to
+	// create. The value we get back is the max value
+	// that we reserved.
+	maxID := waitForSequenceValue(t, vtgateConn, "product", "customer_seq", numCustomers)
+	// So we need to calculate the first value we reserved
+	// from the max.
+	cid := maxID - int64(numCustomers)
+
+	// Now let's insert the records using the sequence
+	// values we reserved.
+	sql := "insert into customer (cid, name) values "
+	for i := 1; i <= numCustomers; i++ {
+		sql += fmt.Sprintf("(%d, 'customer%d')", cid, i)
 		if i != numCustomers {
 			sql += ","
 		}
+		cid++
 	}
 	execVtgateQuery(t, vtgateConn, "customer", sql)
 }

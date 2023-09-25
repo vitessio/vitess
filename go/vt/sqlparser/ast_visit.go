@@ -54,6 +54,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAlterVschema(in, f)
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *Argument:
 		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
@@ -222,8 +224,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfInsert(in, f)
 	case *InsertExpr:
 		return VisitRefOfInsertExpr(in, f)
-	case *IntervalExpr:
-		return VisitRefOfIntervalExpr(in, f)
+	case *IntervalDateExpr:
+		return VisitRefOfIntervalDateExpr(in, f)
 	case *IntervalFuncExpr:
 		return VisitRefOfIntervalFuncExpr(in, f)
 	case *IntroducerExpr:
@@ -284,6 +286,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfJtOnResponse(in, f)
 	case *KeyState:
 		return VisitRefOfKeyState(in, f)
+	case *Kill:
+		return VisitRefOfKill(in, f)
 	case *LagLeadExpr:
 		return VisitRefOfLagLeadExpr(in, f)
 	case *Limit:
@@ -490,8 +494,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfTableSpec(in, f)
 	case *TablespaceOperation:
 		return VisitRefOfTablespaceOperation(in, f)
-	case *TimestampFuncExpr:
-		return VisitRefOfTimestampFuncExpr(in, f)
+	case *TimestampDiffExpr:
+		return VisitRefOfTimestampDiffExpr(in, f)
 	case *TrimFuncExpr:
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *TruncateTable:
@@ -793,6 +797,18 @@ func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Right, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfAnyValue(in *AnyValue, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -1976,7 +1992,7 @@ func VisitRefOfInsert(in *Insert, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitTableName(in.Table, f); err != nil {
+	if err := VisitRefOfAliasedTableExpr(in.Table, f); err != nil {
 		return err
 	}
 	if err := VisitPartitions(in.Partitions, f); err != nil {
@@ -2014,14 +2030,17 @@ func VisitRefOfInsertExpr(in *InsertExpr, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfIntervalExpr(in *IntervalExpr, f Visit) error {
+func VisitRefOfIntervalDateExpr(in *IntervalDateExpr, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExpr(in.Expr, f); err != nil {
+	if err := VisitExpr(in.Date, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Interval, f); err != nil {
 		return err
 	}
 	return nil
@@ -2473,6 +2492,15 @@ func VisitRefOfJtOnResponse(in *JtOnResponse, f Visit) error {
 	return nil
 }
 func VisitRefOfKeyState(in *KeyState, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfKill(in *Kill, f Visit) error {
 	if in == nil {
 		return nil
 	}
@@ -3903,7 +3931,7 @@ func VisitRefOfTablespaceOperation(in *TablespaceOperation, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfTimestampFuncExpr(in *TimestampFuncExpr, f Visit) error {
+func VisitRefOfTimestampDiffExpr(in *TimestampDiffExpr, f Visit) error {
 	if in == nil {
 		return nil
 	}
@@ -4373,6 +4401,8 @@ func VisitAggrFunc(in AggrFunc, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *Avg:
 		return VisitRefOfAvg(in, f)
 	case *BitAnd:
@@ -4471,6 +4501,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *Avg:
@@ -4521,6 +4553,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:
 		return VisitRefOfInsertExpr(in, f)
+	case *IntervalDateExpr:
+		return VisitRefOfIntervalDateExpr(in, f)
 	case *IntervalFuncExpr:
 		return VisitRefOfIntervalFuncExpr(in, f)
 	case *JSONArrayExpr:
@@ -4613,8 +4647,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfSubstrExpr(in, f)
 	case *Sum:
 		return VisitRefOfSum(in, f)
-	case *TimestampFuncExpr:
-		return VisitRefOfTimestampFuncExpr(in, f)
+	case *TimestampDiffExpr:
+		return VisitRefOfTimestampDiffExpr(in, f)
 	case *TrimFuncExpr:
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *UpdateXMLExpr:
@@ -4721,6 +4755,8 @@ func VisitExpr(in Expr, f Visit) error {
 	switch in := in.(type) {
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
+	case *AnyValue:
+		return VisitRefOfAnyValue(in, f)
 	case *Argument:
 		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
@@ -4803,8 +4839,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:
 		return VisitRefOfInsertExpr(in, f)
-	case *IntervalExpr:
-		return VisitRefOfIntervalExpr(in, f)
+	case *IntervalDateExpr:
+		return VisitRefOfIntervalDateExpr(in, f)
 	case *IntervalFuncExpr:
 		return VisitRefOfIntervalFuncExpr(in, f)
 	case *IntroducerExpr:
@@ -4925,8 +4961,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfSubstrExpr(in, f)
 	case *Sum:
 		return VisitRefOfSum(in, f)
-	case *TimestampFuncExpr:
-		return VisitRefOfTimestampFuncExpr(in, f)
+	case *TimestampDiffExpr:
+		return VisitRefOfTimestampDiffExpr(in, f)
 	case *TrimFuncExpr:
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *UnaryExpr:
@@ -5079,6 +5115,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfFlush(in, f)
 	case *Insert:
 		return VisitRefOfInsert(in, f)
+	case *Kill:
+		return VisitRefOfKill(in, f)
 	case *Load:
 		return VisitRefOfLoad(in, f)
 	case *LockTables:

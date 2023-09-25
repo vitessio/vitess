@@ -51,6 +51,8 @@ Available Commands:
   GetVSchema                  Prints a JSON representation of a keyspace's topo record.
   GetWorkflows                Gets all vreplication workflows (Reshard, MoveTables, etc) in the given keyspace.
   LegacyVtctlCommand          Invoke a legacy vtctlclient command. Flag parsing is best effort.
+  MoveTables                  Perform commands related to moving tables from a source keyspace to a target keyspace.
+  OnlineDDL                   Operates on online DDL (schema migrations).
   PingTablet                  Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
   PlannedReparentShard        Reparents the shard to a new primary, or away from an old primary. Both the old and new primaries must be up and running.
   RebuildKeyspaceGraph        Rebuilds the serving data for the keyspace(s). This command may trigger an update to all connected clients.
@@ -64,6 +66,7 @@ Available Commands:
   RemoveKeyspaceCell          Removes the specified cell from the Cells list for all shards in the specified keyspace (by calling RemoveShardCell on every shard). It also removes the SrvKeyspace for that keyspace in that cell.
   RemoveShardCell             Remove the specified cell from the specified shard's Cells list.
   ReparentTablet              Reparent a tablet to the current primary in the shard.
+  Reshard                     Perform commands related to resharding a keyspace.
   RestoreFromBackup           Stops mysqld on the specified tablet and restores the data from either the latest backup or closest before `backup-timestamp`.
   RunHealthCheck              Runs a healthcheck on the remote tablet.
   SetKeyspaceDurabilityPolicy Sets the durability-policy used by the specified keyspace.
@@ -81,15 +84,16 @@ Available Commands:
   UpdateCellInfo              Updates the content of a CellInfo with the provided parameters, creating the CellInfo if it does not exist.
   UpdateCellsAlias            Updates the content of a CellsAlias with the provided parameters, creating the CellsAlias if it does not exist.
   UpdateThrottlerConfig       Update the tablet throttler configuration for all tablets in the given keyspace (across all cells)
+  VDiff                       Perform commands related to diffing tables involved in a VReplication workflow between the source and target.
   Validate                    Validates that all nodes reachable from the global replication graph, as well as all tablets in discoverable cells, are consistent.
   ValidateKeyspace            Validates that all nodes reachable from the specified keyspace are consistent.
   ValidateSchemaKeyspace      Validates that the schema on the primary tablet for shard 0 matches the schema on all other tablets in the keyspace.
   ValidateShard               Validates that all nodes reachable from the specified shard are consistent.
   ValidateVersionKeyspace     Validates that the version on the primary tablet of shard 0 matches all of the other tablets in the keyspace.
   ValidateVersionShard        Validates that the version on the primary matches all of the replicas.
+  Workflow                    Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace.
   completion                  Generate the autocompletion script for the specified shell
   help                        Help about any command
-  workflow                    Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace
 
 Flags:
       --action_timeout duration                timeout for the total command (default 1h0m0s)

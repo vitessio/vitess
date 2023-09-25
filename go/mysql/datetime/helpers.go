@@ -198,7 +198,7 @@ func getnuml(s string, l int) (int, string, bool) {
 }
 
 func getnumn(s string) (int, string, bool) {
-	if !isDigit(s, 0) {
+	if len(s) == 0 || !('0' <= s[0] && s[0] <= '9') {
 		return 0, s, false
 	}
 
@@ -229,6 +229,14 @@ var daysBefore = [...]int32{
 	31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30 + 31,
 }
 
+var daysInMonth = [...]int{
+	31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+}
+
+var daysInMonthLeap = [...]int{
+	31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+}
+
 func daysIn(m time.Month, year int) int {
 	if m == time.February && isLeap(year) {
 		return 29
@@ -238,6 +246,13 @@ func daysIn(m time.Month, year int) int {
 
 func isLeap(year int) bool {
 	return year%4 == 0 && (year%100 != 0 || year%400 == 0)
+}
+
+func daysInYear(year int) int {
+	if isLeap(year) {
+		return 366
+	}
+	return 365
 }
 
 func parseNanoseconds[bytes []byte | string](value bytes, nbytes int) (ns int, l int, ok bool) {
@@ -268,3 +283,9 @@ func parseNanoseconds[bytes []byte | string](value bytes, nbytes int) (ns int, l
 
 	return
 }
+
+const (
+	secondsPerMinute = 60
+	secondsPerHour   = 60 * secondsPerMinute
+	secondsPerDay    = 24 * secondsPerHour
+)

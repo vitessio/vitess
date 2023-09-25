@@ -55,6 +55,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAlterVschema(in)
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *Argument:
 		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
@@ -223,8 +225,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfInsert(in)
 	case *InsertExpr:
 		return CloneRefOfInsertExpr(in)
-	case *IntervalExpr:
-		return CloneRefOfIntervalExpr(in)
+	case *IntervalDateExpr:
+		return CloneRefOfIntervalDateExpr(in)
 	case *IntervalFuncExpr:
 		return CloneRefOfIntervalFuncExpr(in)
 	case *IntroducerExpr:
@@ -285,6 +287,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfJtOnResponse(in)
 	case *KeyState:
 		return CloneRefOfKeyState(in)
+	case *Kill:
+		return CloneRefOfKill(in)
 	case *LagLeadExpr:
 		return CloneRefOfLagLeadExpr(in)
 	case *Limit:
@@ -491,8 +495,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfTableSpec(in)
 	case *TablespaceOperation:
 		return CloneRefOfTablespaceOperation(in)
-	case *TimestampFuncExpr:
-		return CloneRefOfTimestampFuncExpr(in)
+	case *TimestampDiffExpr:
+		return CloneRefOfTimestampDiffExpr(in)
 	case *TrimFuncExpr:
 		return CloneRefOfTrimFuncExpr(in)
 	case *TruncateTable:
@@ -726,6 +730,16 @@ func CloneRefOfAndExpr(n *AndExpr) *AndExpr {
 	out := *n
 	out.Left = CloneExpr(n.Left)
 	out.Right = CloneExpr(n.Right)
+	return &out
+}
+
+// CloneRefOfAnyValue creates a deep clone of the input.
+func CloneRefOfAnyValue(n *AnyValue) *AnyValue {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -1613,7 +1627,7 @@ func CloneRefOfInsert(n *Insert) *Insert {
 	}
 	out := *n
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.Table = CloneTableName(n.Table)
+	out.Table = CloneRefOfAliasedTableExpr(n.Table)
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.Columns = CloneColumns(n.Columns)
 	out.Rows = CloneInsertRows(n.Rows)
@@ -1634,13 +1648,14 @@ func CloneRefOfInsertExpr(n *InsertExpr) *InsertExpr {
 	return &out
 }
 
-// CloneRefOfIntervalExpr creates a deep clone of the input.
-func CloneRefOfIntervalExpr(n *IntervalExpr) *IntervalExpr {
+// CloneRefOfIntervalDateExpr creates a deep clone of the input.
+func CloneRefOfIntervalDateExpr(n *IntervalDateExpr) *IntervalDateExpr {
 	if n == nil {
 		return nil
 	}
 	out := *n
-	out.Expr = CloneExpr(n.Expr)
+	out.Date = CloneExpr(n.Date)
+	out.Interval = CloneExpr(n.Interval)
 	return &out
 }
 
@@ -1967,6 +1982,15 @@ func CloneRefOfJtOnResponse(n *JtOnResponse) *JtOnResponse {
 
 // CloneRefOfKeyState creates a deep clone of the input.
 func CloneRefOfKeyState(n *KeyState) *KeyState {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfKill creates a deep clone of the input.
+func CloneRefOfKill(n *Kill) *Kill {
 	if n == nil {
 		return nil
 	}
@@ -3059,8 +3083,8 @@ func CloneRefOfTablespaceOperation(n *TablespaceOperation) *TablespaceOperation 
 	return &out
 }
 
-// CloneRefOfTimestampFuncExpr creates a deep clone of the input.
-func CloneRefOfTimestampFuncExpr(n *TimestampFuncExpr) *TimestampFuncExpr {
+// CloneRefOfTimestampDiffExpr creates a deep clone of the input.
+func CloneRefOfTimestampDiffExpr(n *TimestampDiffExpr) *TimestampDiffExpr {
 	if n == nil {
 		return nil
 	}
@@ -3406,6 +3430,8 @@ func CloneAggrFunc(in AggrFunc) AggrFunc {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *Avg:
 		return CloneRefOfAvg(in)
 	case *BitAnd:
@@ -3508,6 +3534,8 @@ func CloneCallable(in Callable) Callable {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
 	case *Avg:
@@ -3558,6 +3586,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
 		return CloneRefOfInsertExpr(in)
+	case *IntervalDateExpr:
+		return CloneRefOfIntervalDateExpr(in)
 	case *IntervalFuncExpr:
 		return CloneRefOfIntervalFuncExpr(in)
 	case *JSONArrayExpr:
@@ -3650,8 +3680,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfSubstrExpr(in)
 	case *Sum:
 		return CloneRefOfSum(in)
-	case *TimestampFuncExpr:
-		return CloneRefOfTimestampFuncExpr(in)
+	case *TimestampDiffExpr:
+		return CloneRefOfTimestampDiffExpr(in)
 	case *TrimFuncExpr:
 		return CloneRefOfTrimFuncExpr(in)
 	case *UpdateXMLExpr:
@@ -3770,6 +3800,8 @@ func CloneExpr(in Expr) Expr {
 	switch in := in.(type) {
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
+	case *AnyValue:
+		return CloneRefOfAnyValue(in)
 	case *Argument:
 		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
@@ -3852,8 +3884,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
 		return CloneRefOfInsertExpr(in)
-	case *IntervalExpr:
-		return CloneRefOfIntervalExpr(in)
+	case *IntervalDateExpr:
+		return CloneRefOfIntervalDateExpr(in)
 	case *IntervalFuncExpr:
 		return CloneRefOfIntervalFuncExpr(in)
 	case *IntroducerExpr:
@@ -3974,8 +4006,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfSubstrExpr(in)
 	case *Sum:
 		return CloneRefOfSum(in)
-	case *TimestampFuncExpr:
-		return CloneRefOfTimestampFuncExpr(in)
+	case *TimestampDiffExpr:
+		return CloneRefOfTimestampDiffExpr(in)
 	case *TrimFuncExpr:
 		return CloneRefOfTrimFuncExpr(in)
 	case *UnaryExpr:
@@ -4140,6 +4172,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfFlush(in)
 	case *Insert:
 		return CloneRefOfInsert(in)
+	case *Kill:
+		return CloneRefOfKill(in)
 	case *Load:
 		return CloneRefOfLoad(in)
 	case *LockTables:

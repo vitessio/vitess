@@ -41,12 +41,14 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
+	"vitess.io/vitess/go/test/endtoend/throttler"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -429,9 +431,6 @@ func TestMain(m *testing.M) {
 		// thereby examining lastPK on vcopier side. We will be iterating tables using non-PK order throughout
 		// this test suite, and so the low setting ensures we hit the more interesting code paths.
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--enable-lag-throttler",
-			"--throttle_threshold", "1s",
-			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
@@ -484,6 +483,8 @@ func TestSchemaChange(t *testing.T) {
 
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
+
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, time.Second)
 
 	for _, testcase := range testCases {
 		require.NotEmpty(t, testcase.name)
@@ -706,9 +707,9 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 				// Table renamed to _before, due to -vreplication-test-suite flag
 				err = nil
 			}
-			if sqlErr, ok := err.(*mysql.SQLError); ok {
+			if sqlErr, ok := err.(*sqlerror.SQLError); ok {
 				switch sqlErr.Number() {
-				case mysql.ERLockDeadlock:
+				case sqlerror.ERLockDeadlock:
 					// That's fine. We create a lot of contention; some transactions will deadlock and
 					// rollback. It happens, and we can ignore those and keep on going.
 					err = nil

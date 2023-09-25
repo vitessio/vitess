@@ -21,7 +21,7 @@ import (
 	"context"
 	"io"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -167,7 +167,7 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	if err != nil && ms.ScatterErrorsAsWarnings && len(errs) < len(handles) {
 		// we got errors, but not all shards failed, so we can hide the error and just warn instead
 		partialSuccessScatterQueries.Add(1)
-		sErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+		sErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 		vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
 		return nil
 	}
