@@ -854,7 +854,7 @@ func commandStop(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func registerVDiffCommands(root *cobra.Command) {
+func registerCommands(root *cobra.Command) {
 	common.AddCommonFlags(base)
 	root.AddCommand(base)
 
@@ -884,5 +884,5 @@ func registerVDiffCommands(root *cobra.Command) {
 }
 
 func init() {
-	common.RegisterCommandHandler("VDiff", registerVDiffCommands)
+	common.RegisterCommandHandler("VDiff", registerCommands)
 }

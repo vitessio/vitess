@@ -995,6 +995,29 @@ message LaunchSchemaMigrationResponse {
   map<string, uint64> rows_affected_by_shard = 1;
 }
 
+message LookupVindexCreateRequest {
+  string workflow = 1;
+  string target_keyspace = 2;
+  repeated string cells = 3;
+  repeated topodata.TabletType tablet_types = 4;
+  bool continue_after_copy = 5;
+  tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 6;
+  vschema.Keyspace vindex = 7;
+}
+
+message LookupVindexCreateResponse {
+}
+
+message LookupVindexExternalizeRequest {
+  string workflow = 1;
+  string target_keyspace = 2;
+}
+
+message LookupVindexExternalizeResponse {
+  // Was the workflow also deleted.
+  bool deleted = 1;
+}
+
 message MoveTablesCreateRequest {
   // The necessary info gets passed on to each primary tablet involved
   // in the workflow via the CreateVReplicationWorkflow tabletmanager RPC.

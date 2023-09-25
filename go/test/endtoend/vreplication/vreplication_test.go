@@ -385,7 +385,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		insert := "insert into customer (cid, name, typ, sport, meta) values (100, NULL, 'soho', 'football','{}'), (101, NULL, 'enterprise','baseball','{}')"
 		_, err = vtgateConn.ExecuteFetch(insert, -1, false)
 		require.NoError(t, err, "error executing %q: %v", insert, err)
-		err = vc.VtctlClient.ExecuteCommand("CreateLookupVindex", "--", "--tablet_types=PRIMARY", "customer", createLookupVindexVSchema)
+		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--workflow=customer_name_keyspace_id_vdx", "--target-keyspace=product", "--tablet-types=PRIMARY", "create", createLookupVindexVSchema)
 		require.NoError(t, err, "error executing CreateLookupVindex: %v", err)
 		waitForWorkflowState(t, vc, "product.customer_name_keyspace_id_vdx", binlogdatapb.VReplicationWorkflowState_Stopped.String())
 		waitForRowCount(t, vtgateConn, "product", "customer_name_keyspace_id", int(rows))
