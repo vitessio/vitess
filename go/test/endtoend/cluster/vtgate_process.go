@@ -77,9 +77,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--log_dir", vtgate.LogDir,
 		"--log_queries_to_file", vtgate.FileToLogQueries,
 		"--port", fmt.Sprintf("%d", vtgate.Port),
-		"--bind_address", "127.0.0.1",
 		"--grpc_port", fmt.Sprintf("%d", vtgate.GrpcPort),
-		"--grpc_bind_address", "127.0.0.1",
 		"--mysql_server_port", fmt.Sprintf("%d", vtgate.MySQLServerPort),
 		"--mysql_server_socket_path", vtgate.MySQLServerSocketPath,
 		"--cell", vtgate.Cell,
@@ -87,6 +85,12 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--tablet_types_to_wait", vtgate.TabletTypesToWait,
 		"--service_map", vtgate.ServiceMap,
 		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
+	}
+	if v, err := GetMajorVersion("vtgate"); err != nil {
+		return err
+	} else if v >= 18 {
+		args = append(args, "--bind_address", "127.0.0.1")
+		args = append(args, "--grpc_bind_address", "127.0.0.1")
 	}
 	// If no explicit mysql_server_version has been specified then we autodetect
 	// the MySQL version that will be used for the test and base the vtgate's

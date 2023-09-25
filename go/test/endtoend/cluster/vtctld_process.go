@@ -64,10 +64,16 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--file_backup_storage_root", vtctld.FileBackupStorageRoot,
 		"--log_dir", vtctld.LogDir,
 		"--port", fmt.Sprintf("%d", vtctld.Port),
-		"--bind_address", "127.0.0.1",
 		"--grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
-		"--grpc_bind_address", "127.0.0.1",
 	)
+
+	if v, err := GetMajorVersion("vtctld"); err != nil {
+		return err
+	} else if v >= 18 {
+		vtctld.proc.Args = append(vtctld.proc.Args, "--bind_address", "127.0.0.1")
+		vtctld.proc.Args = append(vtctld.proc.Args, "--grpc_bind_address", "127.0.0.1")
+	}
+
 	if *isCoverage {
 		vtctld.proc.Args = append(vtctld.proc.Args, "--test.coverprofile="+getCoveragePath("vtctld.out"))
 	}

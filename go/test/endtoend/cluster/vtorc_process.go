@@ -112,7 +112,6 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--topo_global_root", orc.TopoGlobalRoot,
 		"--config", orc.ConfigPath,
 		"--port", fmt.Sprintf("%d", orc.Port),
-		"--bind_address", "127.0.0.1",
 		// This parameter is overriden from the config file, added here to just verify that we indeed use the config file paramter over the flag
 		"--recovery-period-block-duration", "10h",
 		"--instance-poll-time", "1s",
@@ -120,6 +119,13 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--topo-information-refresh-duration", "3s",
 		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "vtorc"),
 	)
+
+	if v, err := GetMajorVersion("vtorc"); err != nil {
+		return err
+	} else if v >= 18 {
+		orc.proc.Args = append(orc.proc.Args, "--bind_address", "127.0.0.1")
+	}
+
 	if *isCoverage {
 		orc.proc.Args = append(orc.proc.Args, "--test.coverprofile="+getCoveragePath("orc.out"))
 	}
