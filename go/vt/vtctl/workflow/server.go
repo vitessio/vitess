@@ -1102,8 +1102,10 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	if vindex.Owner != "" {
 		// If there is an owner, we have to delete the streams.
 		if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
-			Keyspace: req.TargetKeyspace,
-			Workflow: req.Workflow,
+			Keyspace:         req.TargetKeyspace,
+			Workflow:         req.Workflow,
+			KeepData:         true, // Not relevant
+			KeepRoutingRules: true, // Not relevant
 		}); derr != nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to delete workflow %s: %v", req.Workflow, derr)
 		}

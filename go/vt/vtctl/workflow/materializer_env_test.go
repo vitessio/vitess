@@ -229,6 +229,14 @@ func (tmc *testMaterializerTMClient) ReadVReplicationWorkflow(ctx context.Contex
 	}, nil
 }
 
+func (tmc *testMaterializerTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {
+	return &tabletmanagerdatapb.DeleteVReplicationWorkflowResponse{
+		Result: &querypb.QueryResult{
+			RowsAffected: 1,
+		},
+	}, nil
+}
+
 func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	tmc.schemaRequested(tablet.Alias.Uid)
 	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
@@ -287,6 +295,10 @@ func (tmc *testMaterializerTMClient) VReplicationExec(ctx context.Context, table
 func (tmc *testMaterializerTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	// Reuse VReplicationExec
 	return tmc.VReplicationExec(ctx, tablet, string(req.Query))
+}
+
+func (tmc *testMaterializerTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
+	return nil, nil
 }
 
 // Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
