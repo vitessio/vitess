@@ -52,7 +52,7 @@ import (
 
 const (
 	defaultTick          = 1 * time.Second
-	defaultTimeout       = 30 * time.Second
+	defaultTimeout       = 60 * time.Second
 	workflowStateTimeout = 90 * time.Second
 )
 
@@ -224,6 +224,35 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 		case <-timer.C:
 			require.FailNow(t, fmt.Sprintf("table %q did not reach the expected number of rows (%d) on tablet %q before the timeout of %s; last seen result: %v",
 				table, want, vttablet.Name, defaultTimeout, qr.Rows))
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
+}
+
+// waitForSequenceValue queries the provided sequence name in the
+// provided database using the provided vtgate connection until
+// we get a next value from it. This allows us to move forward
+// with queries that rely on the sequence working as expected.
+// The read next value is also returned so that the caller can
+// use it if they want.
+// Note: you specify the number of values that you want to reserve
+// and you get back the max value reserved.
+func waitForSequenceValue(t *testing.T, conn *mysql.Conn, database, sequence string, numVals int) int64 {
+	query := fmt.Sprintf("select next %d values from %s.%s", numVals, database, sequence)
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	for {
+		qr, err := conn.ExecuteFetch(query, 1, false)
+		if err == nil && qr != nil && len(qr.Rows) == 1 { // We got a value back
+			val, err := qr.Rows[0][0].ToInt64()
+			require.NoError(t, err, "invalid sequence value: %v", qr.Rows[0][0])
+			return val
+		}
+		select {
+		case <-timer.C:
+			require.FailNow(t, fmt.Sprintf("sequence %q did not provide a next value before the timeout of %s; last seen result: %+v, error: %v",
+				sequence, defaultTimeout, qr, err))
 		default:
 			time.Sleep(defaultTick)
 		}

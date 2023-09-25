@@ -317,6 +317,11 @@ service Vtctld {
   rpc ValidateVersionShard(vtctldata.ValidateVersionShardRequest) returns (vtctldata.ValidateVersionShardResponse) {};
   // ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
   rpc ValidateVSchema(vtctldata.ValidateVSchemaRequest) returns (vtctldata.ValidateVSchemaResponse) {};
+  rpc VDiffCreate(vtctldata.VDiffCreateRequest) returns (vtctldata.VDiffCreateResponse) {};
+  rpc VDiffDelete(vtctldata.VDiffDeleteRequest) returns (vtctldata.VDiffDeleteResponse) {};
+  rpc VDiffResume(vtctldata.VDiffResumeRequest) returns (vtctldata.VDiffResumeResponse) {};
+  rpc VDiffShow(vtctldata.VDiffShowRequest) returns (vtctldata.VDiffShowResponse) {};
+  rpc VDiffStop(vtctldata.VDiffStopRequest) returns (vtctldata.VDiffStopResponse) {};
   // WorkflowDelete deletes a vreplication workflow.
   rpc WorkflowDelete(vtctldata.WorkflowDeleteRequest) returns (vtctldata.WorkflowDeleteResponse) {};
   rpc WorkflowStatus(vtctldata.WorkflowStatusRequest) returns (vtctldata.WorkflowStatusResponse) {};

@@ -120,7 +120,7 @@ func TestMigrate(t *testing.T) {
 		execVtgateQuery(t, extVtgateConn, "rating", "insert into rating(gid, pid, rating) values(3, 1, 3);")
 		waitForRowCount(t, vtgateConn, "product:0", "rating", 3)
 		waitForRowCount(t, vtgateConn, "product:0", "review", 4)
-		vdiff1(t, ksWorkflow, "extcell1")
+		vdiffSideBySide(t, ksWorkflow, "extcell1")
 
 		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "complete", ksWorkflow); err != nil {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
