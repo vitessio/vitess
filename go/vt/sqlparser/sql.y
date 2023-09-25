@@ -4222,6 +4222,10 @@ table_option:
   {
     $$ = string($1) + " " + string($3)
   }
+| SECONDARY_ENGINE equal_opt NULL
+  {
+    $$ = string($1) + " " + string($3)
+  }
 | SECONDARY_ENGINE equal_opt STRING
   {
     $$ = string($1) + " " + string($3)
@@ -4667,6 +4671,10 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr}
   }
+ | SECONDARY_ENGINE equal_opt NULL
+   {
+     $$ = &DDL{Action: AlterStr}
+   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
     $$ = &DDL{Action: AlterStr}
