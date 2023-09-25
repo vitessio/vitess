@@ -3214,10 +3214,16 @@ var (
 				") secondary_engine rapid",
 		},
 		{
-			input: "create table t (i int) secondary_engine='rapid'",
+			input: "create table t (i int) secondary_engine=NULL",
 			output: "create table t (\n" +
 				"\ti int\n" +
-				") secondary_engine rapid",
+				") secondary_engine NULL",
+		},
+		{
+			input: "create table t (i int) secondary_engine NULL",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") secondary_engine NULL",
 		},
 		{
 			input:  "alter table t secondary_engine=rapid",
@@ -3225,6 +3231,14 @@ var (
 		},
 		{
 			input:  "alter table t secondary_engine rapid",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t secondary_engine=NULL",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t secondary_engine NULL",
 			output: "alter table t",
 		},
 		{
