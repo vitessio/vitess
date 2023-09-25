@@ -727,7 +727,21 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			FixedValue: sqltypes.NewInt64(num),
 		}, nil
 	case *sqlparser.ConvertUsingExpr:
-		colnum, err := findColumn(plan.Table, aliased.As)
+		var colName sqlparser.IdentifierCI
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				if !node.Qualifier.IsEmpty() {
+					return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
+				}
+				colName = node.Name
+			}
+			return true, nil
+		}, aliased.Expr)
+		if err != nil {
+			return ColExpr{}, fmt.Errorf("failed to find column name for convert using expression: %v", sqlparser.String(aliased.Expr))
+		}
+		colnum, err := findColumn(plan.Table, colName)
 		if err != nil {
 			return ColExpr{}, err
 		}

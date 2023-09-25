@@ -425,9 +425,23 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		references: make(map[string]bool),
 	}
 	if expr, ok := aliased.Expr.(*sqlparser.ConvertUsingExpr); ok {
+		var colName sqlparser.IdentifierCI
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				if !node.Qualifier.IsEmpty() {
+					return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
+				}
+				colName = node.Name
+			}
+			return true, nil
+		}, aliased.Expr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find column name for convert using expression: %v", sqlparser.String(aliased.Expr))
+		}
 		selExpr := &sqlparser.ConvertUsingExpr{
 			Type: "utf8mb4",
-			Expr: &sqlparser.ColName{Name: as},
+			Expr: &sqlparser.ColName{Name: colName},
 		}
 		cexpr.expr = expr
 		cexpr.operation = opExpr
