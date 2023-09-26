@@ -1,4 +1,7 @@
-Usage of vtexplain:
+Usage:
+  vtexplain [flags]
+
+Flags:
       --alsologtostderr                                             log to standard error as well as files
       --batch-interval duration                                     Interval between logical time slots. (default 10ms)
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
@@ -10,7 +13,7 @@ Usage of vtexplain:
       --dbname string                                               Optional database target to override normal routing
       --default_tablet_type topodatapb.TabletType                   The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
       --execution-mode string                                       The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc (default "multi")
-  -h, --help                                                        display usage and exit
+  -h, --help                                                        help for vtexplain
       --keep_logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
       --ks-shard-map string                                         JSON map of keyspace name -> shard name -> ShardReference object. The inner map is the same as the output of FindAllShardsInKeyspace
