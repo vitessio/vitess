@@ -1289,7 +1289,7 @@ func (node *IsExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ExistsExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "exists%v", node.Subquery)
+	buf.astPrintf(node, "exists %v", node.Subquery)
 }
 
 // Format formats the node.

@@ -1690,7 +1690,7 @@ func (node *IsExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *ExistsExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("exists")
+	buf.WriteString("exists ")
 	buf.printExpr(node, node.Subquery, true)
 }
 

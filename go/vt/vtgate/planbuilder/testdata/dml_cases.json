@@ -2961,7 +2961,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists(select 1 from user_privacy_consents where user_id = 1)",
+        "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1)",
         "TableName": "user_privacy_consents"
       },
       "TablesUsed": [

@@ -492,26 +492,21 @@ func TestReplaceExpr(t *testing.T) {
 	}}
 	to := NewArgument("a")
 	for _, tcase := range tcases {
-		tree, err := Parse(tcase.in)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var from *Subquery
-		_ = Walk(func(node SQLNode) (kontinue bool, err error) {
-			if sq, ok := node.(*Subquery); ok {
-				from = sq
-				return false, nil
-			}
-			return true, nil
-		}, tree)
-		if from == nil {
-			t.Fatalf("from is nil for %s", tcase.in)
-		}
-		expr := ReplaceExpr(tree.(*Select).Where.Expr, from, to)
-		got := String(expr)
-		if tcase.out != got {
-			t.Errorf("ReplaceExpr(%s): %s, want %s", tcase.in, got, tcase.out)
-		}
+		t.Run(tcase.in, func(t *testing.T) {
+			tree, err := Parse(tcase.in)
+			require.NoError(t, err)
+			var from *Subquery
+			_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+				if sq, ok := node.(*Subquery); ok {
+					from = sq
+					return false, nil
+				}
+				return true, nil
+			}, tree)
+			require.NotNilf(t, from, "from is nil for %s", tcase.in)
+			expr := ReplaceExpr(tree.(*Select).Where.Expr, from, to)
+			assert.Equal(t, tcase.out, String(expr))
+		})
 	}
 }
 
