@@ -32,8 +32,8 @@ var (
 
 	Root = &cobra.Command{
 		Use:   "zk",
-		Short: "zk is a tool for wrangling the zookeeper.",
-		Long: `zk is a tool for wrangling the zookeeper.
+		Short: "zk is a tool for wrangling zookeeper.",
+		Long: `zk is a tool for wrangling zookeeper.
 
 It tries to mimic unix file system commands wherever possible, but
 there are some slight differences in flag handling.
