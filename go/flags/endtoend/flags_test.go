@@ -44,6 +44,9 @@ var (
 	//go:embed vtaclcheck.txt
 	vtaclcheckTxt string
 
+	//go:embed vtcombo.txt
+	vtcomboTxt string
+
 	//go:embed vtexplain.txt
 	vtexplainTxt string
 
@@ -87,19 +90,20 @@ var (
 		"mysqlctl":     mysqlctlTxt,
 		"mysqlctld":    mysqlctldTxt,
 		"vtaclcheck":   vtaclcheckTxt,
-		"vtexplain":    vtexplainTxt,
-		"vtgate":       vtgateTxt,
-		"vttablet":     vttabletTxt,
-		"vttlstest":    vttlstestTxt,
+		"vtbackup":     vtbackupTxt,
+		"vtcombo":      vtcomboTxt,
 		"vtctld":       vtctldTxt,
 		"vtctlclient":  vtctlclientTxt,
 		"vtctldclient": vtctldclientTxt,
+		"vtexplain":    vtexplainTxt,
+		"vtgate":       vtgateTxt,
 		"vtorc":        vtorcTxt,
+		"vttablet":     vttabletTxt,
 		"vttestserver": vttestserverTxt,
-		"zkctld":       zkctldTxt,
-		"vtbackup":     vtbackupTxt,
+		"vttlstest":    vttlstestTxt,
 		"zk":           zkTxt,
 		"zkctl":        zkctlTxt,
+		"zkctld":       zkctldTxt,
 	}
 )
 
