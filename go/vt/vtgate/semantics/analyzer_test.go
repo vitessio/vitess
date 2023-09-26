@@ -828,6 +828,12 @@ func TestInvalidQueries(t *testing.T) {
 	}, {
 		sql:             "select t1.does_not_exist from t1, t2",
 		notUnshardedErr: "column 't1.does_not_exist' not found",
+	}, {
+		sql:  "select 1 from t1 where id = (select 1, 2)",
+		serr: "Operand should contain 1 column(s)",
+	}, {
+		sql:  "select 1 from t1 where (id, id) in (select 1, 2, 3)",
+		serr: "Operand should contain 2 column(s)",
 	}}
 
 	for _, tc := range tcases {
