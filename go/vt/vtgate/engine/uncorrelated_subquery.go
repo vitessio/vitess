@@ -20,11 +20,10 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vterrors"
-	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 var _ Primitive = (*UncorrelatedSubquery)(nil)
@@ -134,9 +133,6 @@ func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCurso
 		case 0:
 			combinedVars[ps.SubqueryResult] = sqltypes.NullBindVariable
 		case 1:
-			if len(result.Rows[0]) != 1 {
-				return nil, errSqColumn
-			}
 			combinedVars[ps.SubqueryResult] = sqltypes.ValueBindVariable(result.Rows[0][0])
 		default:
 			return nil, errSqRow
@@ -151,9 +147,6 @@ func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCurso
 				Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(0))},
 			}
 		default:
-			if len(result.Rows[0]) != 1 {
-				return nil, errSqColumn
-			}
 			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(1)
 			values := &querypb.BindVariable{
 				Type:   querypb.Type_TUPLE,

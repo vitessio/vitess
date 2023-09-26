@@ -93,27 +93,6 @@ func TestPulloutSubqueryValueNone(t *testing.T) {
 	ufp.ExpectLog(t, []string{`Execute sq:  false`})
 }
 
-func TestPulloutSubqueryValueBadColumns(t *testing.T) {
-	sqResult := sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"col1|col2",
-			"int64|int64",
-		),
-		"1|1",
-	)
-	sfp := &fakePrimitive{
-		results: []*sqltypes.Result{sqResult},
-	}
-	ps := &UncorrelatedSubquery{
-		Opcode:         PulloutValue,
-		SubqueryResult: "sq",
-		Subquery:       sfp,
-	}
-
-	_, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
-	require.EqualError(t, err, "subquery returned more than one column")
-}
-
 func TestPulloutSubqueryValueBadRows(t *testing.T) {
 	sqResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -198,27 +177,6 @@ func TestPulloutSubqueryInNone(t *testing.T) {
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
 	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"0" sq: type:TUPLE values:{type:INT64 value:"0"} false`})
-}
-
-func TestPulloutSubqueryInBadColumns(t *testing.T) {
-	sqResult := sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"col1|col2",
-			"int64|int64",
-		),
-		"1|1",
-	)
-	sfp := &fakePrimitive{
-		results: []*sqltypes.Result{sqResult},
-	}
-	ps := &UncorrelatedSubquery{
-		Opcode:         PulloutIn,
-		SubqueryResult: "sq",
-		Subquery:       sfp,
-	}
-
-	_, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
-	require.EqualError(t, err, "subquery returned more than one column")
 }
 
 func TestPulloutSubqueryExists(t *testing.T) {

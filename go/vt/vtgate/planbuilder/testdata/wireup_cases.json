@@ -602,10 +602,10 @@
   },
   {
     "comment": "Wire-up in subquery",
-    "query": "select 1 from user where id in (select u.id, e.id from user u join user_extra e where e.id = u.col limit 10)",
+    "query": "select 1 from user where id in (select u.id+e.id from user u join user_extra e where e.id = u.col limit 10)",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select 1 from user where id in (select u.id, e.id from user u join user_extra e where e.id = u.col limit 10)",
+      "Original": "select 1 from user where id in (select u.id+e.id from user u join user_extra e where e.id = u.col limit 10)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
@@ -622,9 +622,10 @@
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "L:0,R:0",
+                "JoinColumnIndexes": "R:0",
                 "JoinVars": {
-                  "u_col": 1
+                  "u_col": 1,
+                  "u_id": 0
                 },
                 "TableName": "`user`_user_extra",
                 "Inputs": [
@@ -646,8 +647,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select e.id from user_extra as e where 1 != 1",
-                    "Query": "select e.id from user_extra as e where e.id = :u_col",
+                    "FieldQuery": "select :u_id + e.id as `u.id + e.id` from user_extra as e where 1 != 1",
+                    "Query": "select :u_id + e.id as `u.id + e.id` from user_extra as e where e.id = :u_col",
                     "Table": "user_extra"
                   }
                 ]
