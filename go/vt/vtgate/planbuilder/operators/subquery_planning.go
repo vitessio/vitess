@@ -588,23 +588,101 @@ func (s *subqueryRouteMerger) mergeShardedRouting(ctx *plancontext.PlanningConte
 	return s.merge(ctx, old1, old2, routing)
 }
 
-func (s *subqueryRouteMerger) merge(_ *plancontext.PlanningContext, old1, old2 *Route, r Routing) (*Route, error) {
-	mergedWith := append(old1.MergedWith, old1, old2)
-	mergedWith = append(mergedWith, old2.MergedWith...)
-	src := s.outer.Source
-	if !s.subq.IsProjection {
-		src = &Filter{
-			Source:     s.outer.Source,
-			Predicates: []sqlparser.Expr{s.original},
+func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing) (*Route, error) {
+	_, isSharded := r.(*ShardedRouting)
+	var src ops.Operator
+	var err error
+	if isSharded {
+		src = s.outer.Source
+		if !s.subq.IsProjection {
+			src = &Filter{
+				Source:     s.outer.Source,
+				Predicates: []sqlparser.Expr{s.original},
+			}
+		}
+	} else {
+		src, err = s.rewriteASTExpression(ctx, inner)
+		if err != nil {
+			return nil, err
 		}
 	}
 	return &Route{
 		Source:        src,
-		MergedWith:    mergedWith,
+		MergedWith:    mergedWith(inner, outer),
 		Routing:       r,
 		Ordering:      s.outer.Ordering,
 		ResultColumns: s.outer.ResultColumns,
 	}, nil
+}
+
+// rewriteASTExpression rewrites the subquery expression that is used in the merged output
+// Any changes that have been done to the operator tree since it was extracted from the
+// query need make it to the expression
+// TODO: systay 2023-09-26
+// we should be able to use this method for all plan types,
+// but using this method for sharded queries introduces bugs
+// We really need to figure out why this is not working as expected
+func (s *subqueryRouteMerger) rewriteASTExpression(ctx *plancontext.PlanningContext, inner *Route) (ops.Operator, error) {
+	src := s.outer.Source
+	stmt, _, err := ToSQL(ctx, inner.Source)
+	if err != nil {
+		return nil, err
+	}
+	subqStmt, ok := stmt.(sqlparser.SelectStatement)
+	if !ok {
+		return nil, vterrors.VT13001("subqueries should only be select statement")
+	}
+	subqID := TableID(s.subq.Subquery)
+	subqStmt = sqlparser.CopyOnRewrite(subqStmt, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		arg, ok := cursor.Node().(*sqlparser.Argument)
+		if !ok {
+			return
+		}
+		var exprFound sqlparser.Expr
+		for expr, argName := range ctx.ReservedArguments {
+			if arg.Name == argName {
+				exprFound = expr
+			}
+		}
+		if exprFound == nil {
+			return
+		}
+		deps := ctx.SemTable.RecursiveDeps(exprFound)
+		if deps.IsEmpty() {
+			err = vterrors.VT13001("found colname that we dont have deps for")
+			cursor.StopTreeWalk()
+			return
+		}
+		if !deps.IsSolvedBy(subqID) {
+			cursor.Replace(exprFound)
+		}
+	}, nil).(sqlparser.SelectStatement)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.subq.IsProjection {
+		ctx.SemTable.CopySemanticInfo(s.subq.originalSubquery.Select, subqStmt)
+		s.subq.originalSubquery.Select = subqStmt
+	} else {
+		sQuery := sqlparser.CopyOnRewrite(s.original, dontEnterSubqueries, func(cursor *sqlparser.CopyOnWriteCursor) {
+			if subq, ok := cursor.Node().(*sqlparser.Subquery); ok {
+				subq.Select = subqStmt
+				cursor.Replace(subq)
+			}
+		}, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
+		src = &Filter{
+			Source:     s.outer.Source,
+			Predicates: []sqlparser.Expr{sQuery},
+		}
+	}
+	return src, nil
+}
+
+func mergedWith(inner *Route, outer *Route) []*Route {
+	mergedWith := append(inner.MergedWith, inner, outer)
+	mergedWith = append(mergedWith, outer.MergedWith...)
+	return mergedWith
 }
 
 var _ merger = (*subqueryRouteMerger)(nil)

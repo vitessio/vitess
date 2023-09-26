@@ -2681,7 +2681,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 1 from dual where 1 != 1",
-        "Query": "select 1 from dual where exists(select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = 'proc' and `TABLES`.TABLE_SCHEMA = 'mysql')",
+        "Query": "select 1 from dual where exists(select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME /* VARCHAR */ and `TABLES`.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */)",
         "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
         "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
         "Table": "dual"

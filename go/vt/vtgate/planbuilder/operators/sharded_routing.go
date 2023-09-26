@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
 	"slices"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -558,10 +559,18 @@ func (tr *ShardedRouting) VindexExpressions() []sqlparser.Expr {
 
 func (tr *ShardedRouting) extraInfo() string {
 	if tr.Selected == nil {
-		return ""
+		return fmt.Sprintf(
+			"Seen:[%s]",
+			sqlparser.String(sqlparser.AndExpressions(tr.SeenPredicates...)),
+		)
 	}
 
-	return tr.Selected.FoundVindex.String() + " " + sqlparser.String(sqlparser.Exprs(tr.Selected.ValueExprs))
+	return fmt.Sprintf(
+		"Vindex[%s] Values[%s] Seen:[%s]",
+		tr.Selected.FoundVindex.String(),
+		sqlparser.String(sqlparser.Exprs(tr.Selected.ValueExprs)),
+		sqlparser.String(sqlparser.AndExpressions(tr.SeenPredicates...)),
+	)
 }
 
 func tryMergeJoinShardedRouting(
