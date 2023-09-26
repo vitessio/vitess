@@ -240,25 +240,9 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 		return ae, nil
 	})
 
-	// if we have a star in the select expression
 	if err != nil {
 		// if we have unexpanded expressions, we take this shortcut and hope we don't need any offsets from this plan
-		cols := sqlparser.SelectExprs{}
-
-		for _, expr := range qp.SelectExprs {
-			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-				_, isSubQ := node.(*sqlparser.Subquery)
-				if !isSubQ {
-					return true, nil
-				}
-				return false, vterrors.VT09015()
-			}, expr.Col)
-			if err != nil {
-				return nil, err
-			}
-			cols = append(cols, expr.Col)
-		}
-		return newStarProjection(src, cols), nil
+		return newStarProjection(src, qp)
 	}
 
 	proj := newAliasedProjection(nil)
@@ -288,11 +272,27 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 	return proj, nil
 }
 
-func newStarProjection(src ops.Operator, cols sqlparser.SelectExprs) *Projection {
+func newStarProjection(src ops.Operator, qp *QueryProjection) (*Projection, error) {
+	cols := sqlparser.SelectExprs{}
+
+	for _, expr := range qp.SelectExprs {
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			_, isSubQ := node.(*sqlparser.Subquery)
+			if !isSubQ {
+				return true, nil
+			}
+			return false, vterrors.VT09015()
+		}, expr.Col)
+		if err != nil {
+			return nil, err
+		}
+		cols = append(cols, expr.Col)
+	}
+
 	return &Projection{
 		Source:  src,
 		Columns: StarProjections(cols),
-	}
+	}, nil
 }
 
 type subqueryExtraction struct {
