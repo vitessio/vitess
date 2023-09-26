@@ -188,6 +188,7 @@ func cloneASTAndSemState[T sqlparser.SQLNode](ctx *plancontext.PlanningContext, 
 	}, ctx.SemTable.CopySemanticInfo).(T)
 }
 
+// findTablesContained returns the TableSet of all the contained
 func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNode) (result semantics.TableSet) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		t, ok := node.(*sqlparser.AliasedTableExpr)
@@ -201,23 +202,25 @@ func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNod
 	return
 }
 
-func inspectWherePredicates(
+// inspectSelect goes through all the predicates contained in the SELECT query
+// and extracts subqueries into operators, and rewrites the original query to use
+// arguments instead of subqueries.
+func (sqc *SubQueryContainer) inspectSelect(
 	ctx *plancontext.PlanningContext,
-	sqc *SubQueryContainer,
 	sel *sqlparser.Select,
 ) (sqlparser.Exprs, []JoinColumn, error) {
 	// first we need to go through all the places where one can find predicates
 	// and search for subqueries
-	newWhere, wherePreds, whereJoinCols, err := sqc.inspectInnerPredicates(ctx, sel.Where)
+	newWhere, wherePreds, whereJoinCols, err := sqc.inspectWhere(ctx, sel.Where)
 	if err != nil {
 		return nil, nil, err
 	}
-	newHaving, havingPreds, havingJoinCols, err := sqc.inspectInnerPredicates(ctx, sel.Having)
+	newHaving, havingPreds, havingJoinCols, err := sqc.inspectWhere(ctx, sel.Having)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	newFrom, onPreds, onJoinCols, err := sqc.inspectOnConditions(ctx, sel.From)
+	newFrom, onPreds, onJoinCols, err := sqc.inspectOnExpr(ctx, sel.From)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -228,22 +231,25 @@ func inspectWherePredicates(
 	sel.Having = newHaving
 	sel.From = newFrom
 
-	return append(append(wherePreds, havingPreds...), onPreds...), append(append(whereJoinCols, havingJoinCols...), onJoinCols...), nil
+	return append(append(wherePreds, havingPreds...), onPreds...),
+		append(append(whereJoinCols, havingJoinCols...), onJoinCols...),
+		nil
 }
 
-func inspectWherePredicatesStatement(ctx *plancontext.PlanningContext,
-	sqc *SubQueryContainer,
+// inspectStatement goes through all the predicates contained in the AST
+// and extracts subqueries into operators
+func (sqc *SubQueryContainer) inspectStatement(ctx *plancontext.PlanningContext,
 	stmt sqlparser.SelectStatement,
 ) (sqlparser.Exprs, []JoinColumn, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		return inspectWherePredicates(ctx, sqc, stmt)
+		return sqc.inspectSelect(ctx, stmt)
 	case *sqlparser.Union:
-		exprs1, cols1, err := inspectWherePredicatesStatement(ctx, sqc, stmt.Left)
+		exprs1, cols1, err := sqc.inspectStatement(ctx, stmt.Left)
 		if err != nil {
 			return nil, nil, err
 		}
-		exprs2, cols2, err := inspectWherePredicatesStatement(ctx, sqc, stmt.Right)
+		exprs2, cols2, err := sqc.inspectStatement(ctx, stmt.Right)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -269,12 +275,12 @@ func createSubquery(
 	totalID := subqID.Merge(outerID)
 	sqc := &SubQueryContainer{totalID: totalID, subqID: subqID, outerID: outerID}
 
-	predicates, joinCols, err := inspectWherePredicatesStatement(ctx, sqc, subq.Select)
+	predicates, joinCols, err := sqc.inspectStatement(ctx, subq.Select)
 	if err != nil {
 		return nil, err
 	}
 
-	stmt := rewriteRemainingColumns(ctx, subq.Select, subqID, parent)
+	stmt := rewriteRemainingColumns(ctx, subq.Select, subqID)
 
 	// TODO: this should not be needed. We are using CopyOnRewrite above, but somehow this is not getting copied
 	ctx.SemTable.CopySemanticInfo(subq.Select, stmt)
@@ -302,7 +308,6 @@ func rewriteRemainingColumns(
 	ctx *plancontext.PlanningContext,
 	stmt sqlparser.SelectStatement,
 	subqID semantics.TableSet,
-	parent sqlparser.Expr,
 ) sqlparser.SelectStatement {
 	return sqlparser.CopyOnRewrite(stmt, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		colname, isColname := cursor.Node().(*sqlparser.ColName)
@@ -315,11 +320,10 @@ func rewriteRemainingColumns(
 		}
 		rsv := ctx.GetReservedArgumentFor(colname)
 		cursor.Replace(sqlparser.NewArgument(rsv))
-		parent = sqlparser.AndExpressions(parent, colname)
 	}, nil).(sqlparser.SelectStatement)
 }
 
-func (sqc *SubQueryContainer) inspectInnerPredicates(
+func (sqc *SubQueryContainer) inspectWhere(
 	ctx *plancontext.PlanningContext,
 	in *sqlparser.Where,
 ) (*sqlparser.Where, sqlparser.Exprs, []JoinColumn, error) {
@@ -354,7 +358,7 @@ func (sqc *SubQueryContainer) inspectInnerPredicates(
 	return in, jpc.predicates, jpc.joinColumns, nil
 }
 
-func (sqc *SubQueryContainer) inspectOnConditions(
+func (sqc *SubQueryContainer) inspectOnExpr(
 	ctx *plancontext.PlanningContext,
 	from []sqlparser.TableExpr,
 ) (newFrom []sqlparser.TableExpr, onPreds sqlparser.Exprs, onJoinCols []JoinColumn, err error) {
@@ -442,6 +446,9 @@ func createComparisonSubQuery(
 	return subquery, err
 }
 
+// joinPredicateCollector is used to inspect the predicates inside the subquery, looking for any
+// comparisons between the inner and the outer side.
+// They can be used for merging the two parts of the query together
 type joinPredicateCollector struct {
 	predicates          sqlparser.Exprs
 	remainingPredicates sqlparser.Exprs

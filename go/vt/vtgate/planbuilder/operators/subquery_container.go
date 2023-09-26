@@ -27,6 +27,9 @@ type (
 	// SubQueryContainer stores the information about a query and it's subqueries.
 	// The inner subqueries can be executed in any order, so we store them like this so we can see more opportunities
 	// for merging
+	// TODO: I think this struct is used both for the operator,
+	// but also as a builder pattern, used during the initial AST to operator transformation.
+	// We should separate the two concerns
 	SubQueryContainer struct {
 		Outer ops.Operator
 		Inner []*SubQuery

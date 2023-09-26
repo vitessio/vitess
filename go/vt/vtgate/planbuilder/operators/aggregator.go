@@ -150,9 +150,9 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 		}
 	}
 
-	// If weight string function is received from above operator. Then check if we have a group on the expression used.
-	// If it is found, then continue to push it down but with addToGroupBy true so that is the added to group by sql down in the AddColumn.
-	// This also set the weight string column offset so that we would not need to add it later in aggregator operator planOffset.
+	// Upon receiving a weight string function from an upstream operator, check for an existing grouping on the argument expression.
+	// If a grouping is found, continue to push the function down, marking it with 'addToGroupBy' to ensure it's correctly treated as a grouping column.
+	// This process also sets the weight string column offset, eliminating the need for a later addition in the aggregator operator's planOffset.
 	if wsExpr, isWS := expr.Expr.(*sqlparser.WeightStringFuncExpr); isWS {
 		idx := slices.IndexFunc(a.Grouping, func(by GroupBy) bool {
 			return ctx.SemTable.EqualsExprWithDeps(wsExpr.Expr, by.SimplifiedExpr)

@@ -78,6 +78,8 @@ type (
 		GroupBy  bool // if this is true, we need to push this down to our inputs with addToGroupBy set to true
 	}
 
+	// BindVarExpr is an expression needed from one side of a join/subquery, and the argument name for it.
+	// TODO: Do we really need to store the name here? it could be found in the semantic state instead
 	BindVarExpr struct {
 		Name string
 		Expr sqlparser.Expr

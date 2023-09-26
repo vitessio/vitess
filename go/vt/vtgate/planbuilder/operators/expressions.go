@@ -30,8 +30,8 @@ func BreakExpressionInLHSandRHS(
 	lhs semantics.TableSet,
 ) (col JoinColumn, err error) {
 	rewrittenExpr := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-		nodeExpr := shouldExtract(cursor.Node())
-		if nodeExpr == nil {
+		nodeExpr, ok := cursor.Node().(sqlparser.Expr)
+		if !ok || !fetchByOffset(nodeExpr) {
 			return
 		}
 		deps := ctx.SemTable.RecursiveDeps(nodeExpr)
@@ -57,24 +57,4 @@ func BreakExpressionInLHSandRHS(
 	ctx.JoinPredicates[expr] = append(ctx.JoinPredicates[expr], rewrittenExpr)
 	col.RHSExpr = rewrittenExpr
 	return
-}
-
-func getReservedBVName(node sqlparser.SQLNode) string {
-	switch node := node.(type) {
-	case *sqlparser.ColName:
-		node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
-		return node.CompliantName()
-	case sqlparser.AggrFunc:
-		return sqlparser.CompliantString(node)
-	}
-	return ""
-}
-
-func shouldExtract(node sqlparser.SQLNode) sqlparser.Expr {
-	switch node.(type) {
-	case *sqlparser.ColName, sqlparser.AggrFunc:
-		return node.(sqlparser.Expr)
-	default:
-		return nil
-	}
 }
