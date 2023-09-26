@@ -425,6 +425,11 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		references: make(map[string]bool),
 	}
 	if expr, ok := aliased.Expr.(*sqlparser.ConvertUsingExpr); ok {
+		// Here we find the actual column name in the convert, in case
+		// this is a column rename and the AS is the new column.
+		// For example, in convert(c1 using utf8mb4) as c2, we want to find
+		// c1, because c1 exists in the current table whereas c2 is the renamed column
+		// in the desired table.
 		var colName sqlparser.IdentifierCI
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
@@ -437,7 +442,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			return true, nil
 		}, aliased.Expr)
 		if err != nil {
-			return nil, fmt.Errorf("failed to find column name for convert using expression: %v", sqlparser.String(aliased.Expr))
+			return nil, fmt.Errorf("failed to find column name for convert using expression: %v, %v", sqlparser.String(aliased.Expr), err)
 		}
 		selExpr := &sqlparser.ConvertUsingExpr{
 			Type: "utf8mb4",
