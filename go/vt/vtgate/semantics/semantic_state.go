@@ -488,6 +488,10 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 // The expression in the select list is not equal to the one in the ORDER BY,
 // but they point to the same column and would be considered equal by this method
 func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
+	// If there is no SemTable, then we cannot compare the expressions.
+	if st == nil {
+		return false
+	}
 	return st.ASTEquals().Expr(a, b)
 }
 
