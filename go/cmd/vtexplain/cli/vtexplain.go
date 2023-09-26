@@ -51,8 +51,37 @@ var (
 	outputMode      = "text"
 
 	Main = &cobra.Command{
-		Use:     "vtexplain",
-		Short:   "",
+		Use:   "vtexplain",
+		Short: "vtexplain is a command line tool which provides information on how Vitess plans to execute a particular query.",
+		Long: `vtexplain is a command line tool which provides information on how Vitess plans to execute a particular query.
+		
+It can be used to validate queries for compatibility with Vitess.
+
+For a user guide that describes how to use the vtexplain tool to explain how Vitess executes a particular SQL statement, see Analyzing a SQL statement.
+
+## Limitations
+
+### The VSchema must use a keyspace name.
+
+VTExplain requires a keyspace name for each keyspace in an input VSchema:
+` +
+			"```\n" +
+			`"keyspace_name": {
+    "_comment": "Keyspace definition goes here."
+}
+` + "```" + `
+
+If no keyspace name is present, VTExplain will return the following error:
+` +
+			"```\n" +
+			`ERROR: initVtgateExecutor: json: cannot unmarshal bool into Go value of type map[string]json.RawMessage
+` + "```\n",
+		Example: "Explain how Vitess will execute the query `SELECT * FROM users` using the VSchema contained in `vschemas.json` and the database schema `schema.sql`:\n\n" +
+			"```\nvtexplain --vschema-file vschema.json --schema-file schema.sql --sql \"SELECT * FROM users\"\n```\n\n" +
+
+			"Explain how the example will execute on 128 shards using Row-based replication:\n\n" +
+
+			"```\nvtexplain -- -shards 128 --vschema-file vschema.json --schema-file schema.sql --replication-mode \"ROW\" --output-mode text --sql \"INSERT INTO users (user_id, name) VALUES(1, 'john')\"\n```\n",
 		Args:    cobra.NoArgs,
 		PreRunE: servenv.CobraPreRunE,
 		RunE:    run,
