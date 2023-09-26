@@ -328,7 +328,7 @@
             "Cols": [
               0
             ],
-            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in (('bar'))",
+            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (u_tbl3.col3) not in (('bar'))",
             "Table": "u_tbl3"
           },
           {
@@ -439,7 +439,7 @@
             "Cols": [
               0
             ],
-            "Query": "update tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (t4col4) not in (('foo'))",
+            "Query": "update tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (tbl4.t4col4) not in (('foo'))",
             "Table": "tbl4"
           },
           {
@@ -693,7 +693,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in (('foo'))",
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (u_tbl3.col3) not in (('foo'))",
                 "Table": "u_tbl3"
               },
               {
@@ -727,7 +727,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in (('foo')) for update",
+                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (u_tbl9.col9) not in (('foo')) for update",
                 "Table": "u_tbl9"
               },
               {
@@ -755,7 +755,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in (('foo'))",
+                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (u_tbl9.col9) not in (('foo'))",
                 "Table": "u_tbl9"
               }
             ]
@@ -832,7 +832,7 @@
             "Cols": [
               0
             ],
-            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((2))",
+            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (u_tbl3.col3) not in ((2))",
             "Table": "u_tbl3"
           },
           {
@@ -909,7 +909,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((2))",
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (u_tbl3.col3) not in ((2))",
                 "Table": "u_tbl3"
               },
               {
@@ -943,7 +943,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((2)) for update",
+                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (u_tbl9.col9) not in ((2)) for update",
                 "Table": "u_tbl9"
               },
               {
@@ -971,7 +971,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((2))",
+                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (u_tbl9.col9) not in ((2))",
                 "Table": "u_tbl9"
               }
             ]
@@ -1220,7 +1220,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (u_tbl4.col4) not in (('foo')) and u_tbl4.col4 = u_tbl9.col9 limit 1 lock in share mode",
+                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (u_tbl9.col9) not in (('foo')) and u_tbl4.col4 = u_tbl9.col9 limit 1 lock in share mode",
                 "Table": "u_tbl4, u_tbl9"
               },
               {
@@ -1309,7 +1309,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (:v1 is null or (u_tbl4.col4) not in ((:v1))) and u_tbl4.col4 = u_tbl9.col9 limit 1 lock in share mode",
+                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (:v1 is null or (u_tbl9.col9) not in ((:v1))) and u_tbl4.col4 = u_tbl9.col9 limit 1 lock in share mode",
                 "Table": "u_tbl4, u_tbl9"
               },
               {
@@ -1424,7 +1424,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select cola, colb from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2)) for update",
+                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (u_multicol_tbl2.cola, u_multicol_tbl2.colb) not in ((1, 2)) for update",
                 "Table": "u_multicol_tbl2"
               },
               {
@@ -1453,7 +1453,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2))",
+                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (u_multicol_tbl2.cola, u_multicol_tbl2.colb) not in ((1, 2))",
                 "Table": "u_multicol_tbl2"
               }
             ]
@@ -1518,7 +1518,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select cola, colb from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2)))) for update",
+                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (u_multicol_tbl2.cola, u_multicol_tbl2.colb) not in ((:v1, :v2)))) for update",
                 "Table": "u_multicol_tbl2"
               },
               {
@@ -1547,7 +1547,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2))))",
+                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (u_multicol_tbl2.cola, u_multicol_tbl2.colb) not in ((:v1, :v2))))",
                 "Table": "u_multicol_tbl2"
               }
             ]
