@@ -136,7 +136,7 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 		case *QueryGraph:
 			return optimizeQueryGraph(ctx, in)
 		case *LockAndComment:
-			return pushDownLockAndComment(in)
+			return pushLockAndComment(in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -145,7 +145,7 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 	return rewrite.FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
 }
 
-func pushDownLockAndComment(l *LockAndComment) (ops.Operator, *rewrite.ApplyResult, error) {
+func pushLockAndComment(l *LockAndComment) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := l.Source.(type) {
 	case *Horizon, *QueryGraph:
 		// we want to wait until the horizons have been pushed under a route or expanded
@@ -193,14 +193,14 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Ope
 	needsOrdering := len(qp.OrderExprs) > 0
 	hasHaving := isSel && sel.Having != nil
 
-	canPushDown := isRoute &&
+	canPush := isRoute &&
 		!hasHaving &&
 		!needsOrdering &&
 		!qp.NeedsAggregation() &&
 		!in.selectStatement().IsDistinct() &&
 		in.selectStatement().GetLimit() == nil
 
-	if canPushDown {
+	if canPush {
 		return rewrite.Swap(in, rb, "push horizon into route")
 	}
 
@@ -215,17 +215,17 @@ func tryPushProjection(
 	case *Route:
 		return rewrite.Swap(p, src, "push projection under route")
 	case *ApplyJoin:
-		if p.FromAggr || !p.canPushDown(ctx) {
+		if p.FromAggr || !p.canPush(ctx) {
 			return p, rewrite.SameTree, nil
 		}
-		return pushDownProjectionInApplyJoin(ctx, p, src)
+		return pushProjectionInApplyJoin(ctx, p, src)
 	case *Vindex:
-		if !p.canPushDown(ctx) {
+		if !p.canPush(ctx) {
 			return p, rewrite.SameTree, nil
 		}
-		return pushDownProjectionInVindex(ctx, p, src)
+		return pushProjectionInVindex(ctx, p, src)
 	case *SubQueryContainer:
-		if !p.canPushDown(ctx) {
+		if !p.canPush(ctx) {
 			return p, rewrite.SameTree, nil
 		}
 		return pushProjectionToOuterContainer(ctx, p, src)
@@ -269,7 +269,7 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *
 	return sq, rewrite.NewTree("push projection into outer side of subquery", p), nil
 }
 
-func pushDownProjectionInVindex(
+func pushProjectionInVindex(
 	ctx *plancontext.PlanningContext,
 	p *Projection,
 	src *Vindex,
@@ -291,11 +291,11 @@ func (p *projector) add(pe *ProjExpr) {
 	p.columns = append(p.columns, pe)
 }
 
-// pushDownProjectionInApplyJoin pushes down a projection operation into an ApplyJoin operation.
+// pushProjectionInApplyJoin pushes down a projection operation into an ApplyJoin operation.
 // It processes each input column and creates new JoinPredicates for the ApplyJoin operation based on
 // the input column's expression. It also creates new Projection operators for the left and right
 // children of the ApplyJoin operation, if needed.
-func pushDownProjectionInApplyJoin(
+func pushProjectionInApplyJoin(
 	ctx *plancontext.PlanningContext,
 	p *Projection,
 	src *ApplyJoin,
@@ -680,21 +680,21 @@ func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, 
 
 func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter, projection *Projection) (ops.Operator, *rewrite.ApplyResult, error) {
 	for _, p := range filter.Predicates {
-		cantPushDown := false
+		cantPush := false
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			if !fetchByOffset(node) {
 				return true, nil
 			}
 
 			if projection.needsEvaluation(ctx, node.(sqlparser.Expr)) {
-				cantPushDown = true
+				cantPush = true
 				return false, io.EOF
 			}
 
 			return true, nil
 		}, p)
 
-		if cantPushDown {
+		if cantPush {
 			return filter, rewrite.SameTree, nil
 		}
 	}

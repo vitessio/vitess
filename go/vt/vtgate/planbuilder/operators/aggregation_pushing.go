@@ -37,18 +37,18 @@ func tryPushAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator)
 	switch src := aggregator.Source.(type) {
 	case *Route:
 		// if we have a single sharded route, we can push it down
-		output, applyResult, err = pushDownAggregationThroughRoute(ctx, aggregator, src)
+		output, applyResult, err = pushAggregationThroughRoute(ctx, aggregator, src)
 	case *ApplyJoin:
 		if ctx.DelegateAggregation {
-			output, applyResult, err = pushDownAggregationThroughJoin(ctx, aggregator, src)
+			output, applyResult, err = pushAggregationThroughJoin(ctx, aggregator, src)
 		}
 	case *Filter:
 		if ctx.DelegateAggregation {
-			output, applyResult, err = pushDownAggregationThroughFilter(ctx, aggregator, src)
+			output, applyResult, err = pushAggregationThroughFilter(ctx, aggregator, src)
 		}
 	case *SubQueryContainer:
 		if ctx.DelegateAggregation {
-			output, applyResult, err = pushDownAggregationThroughSubquery(ctx, aggregator, src)
+			output, applyResult, err = pushAggregationThroughSubquery(ctx, aggregator, src)
 		}
 	default:
 		return aggregator, rewrite.SameTree, nil
@@ -67,12 +67,12 @@ func tryPushAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator)
 	return
 }
 
-// pushDownAggregationThroughSubquery pushes an aggregation under a subquery.
+// pushAggregationThroughSubquery pushes an aggregation under a subquery.
 // Any columns that are needed to evaluate the subquery needs to be added as
 // grouping columns to the aggregation being pushed down, and then after the
 // subquery evaluation we are free to reassemble the total aggregation values.
 // This is very similar to how we push aggregation through an apply-join.
-func pushDownAggregationThroughSubquery(
+func pushAggregationThroughSubquery(
 	ctx *plancontext.PlanningContext,
 	rootAggr *Aggregator,
 	src *SubQueryContainer,
@@ -128,7 +128,7 @@ func aggregateTheAggregate(a *Aggregator, i int) {
 	}
 }
 
-func pushDownAggregationThroughRoute(
+func pushAggregationThroughRoute(
 	ctx *plancontext.PlanningContext,
 	aggregator *Aggregator,
 	route *Route,
@@ -146,7 +146,7 @@ func pushDownAggregationThroughRoute(
 	aggrBelowRoute := aggregator.SplitAggregatorBelowRoute(route.Inputs())
 	aggrBelowRoute.Aggregations = nil
 
-	err := pushDownAggregations(ctx, aggregator, aggrBelowRoute)
+	err := pushAggregations(ctx, aggregator, aggrBelowRoute)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -163,9 +163,9 @@ func pushDownAggregationThroughRoute(
 	return aggregator, rewrite.NewTree("push aggregation under route - keep original", aggregator), nil
 }
 
-// pushDownAggregations splits aggregations between the original aggregator and the one we are pushing down
-func pushDownAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, aggrBelowRoute *Aggregator) error {
-	canPushDownDistinctAggr, distinctExpr, err := checkIfWeCanPushDown(ctx, aggregator)
+// pushAggregations splits aggregations between the original aggregator and the one we are pushing down
+func pushAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, aggrBelowRoute *Aggregator) error {
+	canPushDistinctAggr, distinctExpr, err := checkIfWeCanPush(ctx, aggregator)
 	if err != nil {
 		return err
 	}
@@ -173,7 +173,7 @@ func pushDownAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregat
 	distinctAggrGroupByAdded := false
 
 	for i, aggr := range aggregator.Aggregations {
-		if !aggr.Distinct || canPushDownDistinctAggr {
+		if !aggr.Distinct || canPushDistinctAggr {
 			aggrBelowRoute.Aggregations = append(aggrBelowRoute.Aggregations, aggr)
 			aggregateTheAggregate(aggregator, i)
 			continue
@@ -195,15 +195,15 @@ func pushDownAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregat
 		}
 	}
 
-	if !canPushDownDistinctAggr {
+	if !canPushDistinctAggr {
 		aggregator.DistinctExpr = distinctExpr
 	}
 
 	return nil
 }
 
-func checkIfWeCanPushDown(ctx *plancontext.PlanningContext, aggregator *Aggregator) (bool, sqlparser.Expr, error) {
-	canPushDown := true
+func checkIfWeCanPush(ctx *plancontext.PlanningContext, aggregator *Aggregator) (bool, sqlparser.Expr, error) {
+	canPush := true
 	var distinctExpr sqlparser.Expr
 	var differentExpr *sqlparser.AliasedExpr
 
@@ -214,7 +214,7 @@ func checkIfWeCanPushDown(ctx *plancontext.PlanningContext, aggregator *Aggregat
 
 		innerExpr := aggr.Func.GetArg()
 		if !exprHasUniqueVindex(ctx, innerExpr) {
-			canPushDown = false
+			canPush = false
 		}
 		if distinctExpr == nil {
 			distinctExpr = innerExpr
@@ -224,14 +224,14 @@ func checkIfWeCanPushDown(ctx *plancontext.PlanningContext, aggregator *Aggregat
 		}
 	}
 
-	if !canPushDown && differentExpr != nil {
+	if !canPush && differentExpr != nil {
 		return false, nil, vterrors.VT12001(fmt.Sprintf("only one DISTINCT aggregation is allowed in a SELECT: %s", sqlparser.String(differentExpr)))
 	}
 
-	return canPushDown, distinctExpr, nil
+	return canPush, distinctExpr, nil
 }
 
-func pushDownAggregationThroughFilter(
+func pushAggregationThroughFilter(
 	ctx *plancontext.PlanningContext,
 	aggregator *Aggregator,
 	filter *Filter,
@@ -362,7 +362,7 @@ Transformed:
 		/         \
 	   R1          R2
 */
-func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
+func pushAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
 	lhs := &joinPusher{
 		orig: rootAggr,
 		pushed: &Aggregator{
@@ -503,14 +503,14 @@ func splitAggrColumnsToLeftAndRight(
 		outerJoin: join.LeftJoin,
 	}
 
-	canPushDownDistinctAggr, distinctExpr, err := checkIfWeCanPushDown(ctx, aggregator)
+	canPushDistinctAggr, distinctExpr, err := checkIfWeCanPush(ctx, aggregator)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Distinct aggregation cannot be pushed down in the join.
 	// We keep node of the distinct aggregation expression to be used later for ordering.
-	if !canPushDownDistinctAggr {
+	if !canPushDistinctAggr {
 		aggregator.DistinctExpr = distinctExpr
 		return nil, nil, errAbortAggrPushing
 	}

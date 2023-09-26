@@ -148,7 +148,7 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 	return expr, rewritten
 }
 
-// tryPushDownSubQueryInJoin attempts to push down a SubQuery into an ApplyJoin
+// tryPushSubQueryInJoin attempts to push down a SubQuery into an ApplyJoin
 /*
 For this query:
 
@@ -184,7 +184,11 @@ coming from the LHS. The join predicate is not affected, but we are adding
 any new columns needed by the inner subquery to the JoinVars that the join
 will handle.
 */
-func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner *SubQuery, outer *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushSubQueryInJoin(
+	ctx *plancontext.PlanningContext,
+	inner *SubQuery,
+	outer *ApplyJoin,
+) (ops.Operator, *rewrite.ApplyResult, error) {
 	lhs := TableID(outer.LHS)
 	rhs := TableID(outer.RHS)
 	joinID := TableID(outer)
@@ -438,7 +442,11 @@ func pushOrMergeSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQuery
 	return in, result, nil
 }
 
-func tryPushDownSubQueryInRoute(ctx *plancontext.PlanningContext, subQuery *SubQuery, outer *Route) (newOuter ops.Operator, result *rewrite.ApplyResult, err error) {
+func tryMergeSubQuery(
+	ctx *plancontext.PlanningContext,
+	subQuery *SubQuery,
+	outer *Route,
+) (newOuter ops.Operator, result *rewrite.ApplyResult, err error) {
 	switch inner := subQuery.Subquery.(type) {
 	case *Route:
 		return tryMergeSubqueryWithOuter(ctx, subQuery, outer, inner)
@@ -473,7 +481,7 @@ func tryMergeSubqueriesRecursively(
 	op.Source = outer.Source
 	var finalResult *rewrite.ApplyResult
 	for _, subq := range inner.Inner {
-		newOuter, res, err := tryPushDownSubQueryInRoute(ctx, subq, op)
+		newOuter, res, err := tryMergeSubQuery(ctx, subq, op)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -516,9 +524,9 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 func pushOrMerge(ctx *plancontext.PlanningContext, outer ops.Operator, inner *SubQuery) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch o := outer.(type) {
 	case *Route:
-		return tryPushDownSubQueryInRoute(ctx, inner, o)
+		return tryMergeSubQuery(ctx, inner, o)
 	case *ApplyJoin:
-		join, applyResult, err := tryPushDownSubQueryInJoin(ctx, inner, o)
+		join, applyResult, err := tryPushSubQueryInJoin(ctx, inner, o)
 		if err != nil {
 			return nil, nil, err
 		}

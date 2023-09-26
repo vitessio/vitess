@@ -187,10 +187,10 @@ func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjectio
 	return p, nil
 }
 
-// canPushDown returns false if the projection has subquery expressions in it and the subqueries have not yet
+// canPush returns false if the projection has subquery expressions in it and the subqueries have not yet
 // been settled. Once they have settled, we know where to push the projection, but if we push too early
 // the projection can end up in the wrong branch of joins
-func (p *Projection) canPushDown(ctx *plancontext.PlanningContext) bool {
+func (p *Projection) canPush(ctx *plancontext.PlanningContext) bool {
 	if ctx.SubqueriesSettled {
 		return true
 	}
@@ -288,7 +288,7 @@ func (p *Projection) addColumn(
 	reuse bool,
 	addToGroupBy bool,
 	ae *sqlparser.AliasedExpr,
-	pushDown bool,
+	push bool,
 ) (int, error) {
 	expr := ae.Expr
 	if p.isDerived() {
@@ -327,7 +327,7 @@ func (p *Projection) addColumn(
 	}
 
 	pe := newProjExprWithInner(ae, expr)
-	if !pushDown {
+	if !push {
 		return p.addProjExpr(pe)
 	}
 

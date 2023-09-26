@@ -321,7 +321,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 	return nil
 }
 
-func (aggr Aggr) getPushDownColumn() sqlparser.Expr {
+func (aggr Aggr) getPushColumn() sqlparser.Expr {
 	switch aggr.OpCode {
 	case opcode.AggregateAnyValue:
 		return aggr.Original.Expr
@@ -368,7 +368,7 @@ func (a *Aggregator) addIfAggregationColumn(ctx *plancontext.PlanningContext, co
 			continue
 		}
 
-		wrap := aeWrap(aggr.getPushDownColumn())
+		wrap := aeWrap(aggr.getPushColumn())
 		offset, err := a.Source.AddColumn(ctx, false, false, wrap)
 		if err != nil {
 			return 0, err

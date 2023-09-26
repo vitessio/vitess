@@ -57,7 +57,7 @@ type (
 		hasCheckedAlignment bool
 
 		// TODO Remove once all horizon planning is done on the operators
-		CanPushDownSorting bool
+		CanPushSorting bool
 	}
 
 	// GroupBy contains the expression to used in group by and also if grouping is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
@@ -359,7 +359,7 @@ func (es *expressionSet) add(ctx *plancontext.PlanningContext, e sqlparser.Expr)
 }
 
 func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy sqlparser.OrderBy) error {
-	canPushDownSorting := true
+	canPushSorting := true
 	es := &expressionSet{}
 	for _, order := range orderBy {
 		simpleExpr := qp.GetSimplifiedExpr(order.Expr)
@@ -374,9 +374,9 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 			Inner:          sqlparser.CloneRefOfOrder(order),
 			SimplifiedExpr: simpleExpr,
 		})
-		canPushDownSorting = canPushDownSorting && !containsAggr(simpleExpr)
+		canPushSorting = canPushSorting && !containsAggr(simpleExpr)
 	}
-	qp.CanPushDownSorting = canPushDownSorting
+	qp.CanPushSorting = canPushSorting
 	return nil
 }
 
