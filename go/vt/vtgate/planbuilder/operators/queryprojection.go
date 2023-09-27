@@ -310,15 +310,21 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 	return nil
 }
 
-func containsAggr(e sqlparser.SQLNode) (containsAggr bool) {
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		if _, isAggr := node.(sqlparser.AggrFunc); isAggr {
-			containsAggr = true
+func containsAggr(e sqlparser.SQLNode) (hasAggr bool) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node.(type) {
+		case *sqlparser.Offset:
+			// offsets here indicate that a possible aggregation has already been handled by an input
+			// so we don't need to worry about aggregation in the original
+			return false, nil
+		case sqlparser.AggrFunc:
+			hasAggr = true
 			return false, io.EOF
+		case *sqlparser.Subquery:
+			return false, nil
 		}
 
-		_, isSubquery := node.(*sqlparser.Subquery)
-		return !isSubquery, nil
+		return true, nil
 	}, e)
 	return
 }

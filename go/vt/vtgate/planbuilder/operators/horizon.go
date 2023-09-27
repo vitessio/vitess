@@ -62,6 +62,7 @@ func (h *Horizon) Clone(inputs []ops.Operator) ops.Operator {
 	klone.ColumnAliases = sqlparser.CloneColumns(h.ColumnAliases)
 	klone.Columns = slices.Clone(h.Columns)
 	klone.ColumnsOffset = slices.Clone(h.ColumnsOffset)
+	klone.QP = h.QP
 	return &klone
 }
 

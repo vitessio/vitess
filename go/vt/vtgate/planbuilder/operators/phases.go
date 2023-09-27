@@ -31,7 +31,9 @@ type (
 		Name string
 		// action is the action to be taken before calling plan optimization operation.
 		action func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error)
-		apply  func(semantics.QuerySignature) bool
+		// shouldRun checks if we should apply this phase or not.
+		// The phase is only applied if the function returns true
+		shouldRun func(semantics.QuerySignature) bool
 	}
 )
 
@@ -45,38 +47,38 @@ func getPhases(ctx *plancontext.PlanningContext) []Phase {
 		},
 		{
 			// Convert UNION with `distinct` to UNION ALL with DISTINCT op on top.
-			Name:   "pull distinct from UNION",
-			action: pullDistinctFromUNION,
-			apply:  func(s semantics.QuerySignature) bool { return s.Union },
+			Name:      "pull distinct from UNION",
+			action:    pullDistinctFromUNION,
+			shouldRun: func(s semantics.QuerySignature) bool { return s.Union },
 		},
 		{
 			// Split aggregation that has not been pushed under the routes into between work on mysql and vtgate.
-			Name:   "split aggregation between vtgate and mysql",
-			action: enableDelegateAggregatiion,
-			apply:  func(s semantics.QuerySignature) bool { return s.Aggregation },
+			Name:      "split aggregation between vtgate and mysql",
+			action:    enableDelegateAggregatiion,
+			shouldRun: func(s semantics.QuerySignature) bool { return s.Aggregation },
 		},
 		{
 			// Add ORDER BY for aggregations above the route.
-			Name:   "optimize aggregations with ORDER BY",
-			action: addOrderBysForAggregations,
-			apply:  func(s semantics.QuerySignature) bool { return s.Aggregation },
+			Name:      "optimize aggregations with ORDER BY",
+			action:    addOrderBysForAggregations,
+			shouldRun: func(s semantics.QuerySignature) bool { return s.Aggregation },
 		},
 		{
 			// Remove unnecessary Distinct operators above routes.
-			Name:   "optimize Distinct operations",
-			action: removePerformanceDistinctAboveRoute,
-			apply:  func(s semantics.QuerySignature) bool { return s.Distinct },
+			Name:      "optimize Distinct operations",
+			action:    removePerformanceDistinctAboveRoute,
+			shouldRun: func(s semantics.QuerySignature) bool { return s.Distinct },
 		},
 		{
 			// Finalize subqueries after they've been pushed as far as possible.
-			Name:   "settle subqueries",
-			action: settleSubqueries,
-			apply:  func(s semantics.QuerySignature) bool { return s.SubQueries },
+			Name:      "settle subqueries",
+			action:    settleSubqueries,
+			shouldRun: func(s semantics.QuerySignature) bool { return s.SubQueries },
 		},
 	}
 
 	return slice.Filter(phases, func(phase Phase) bool {
-		return phase.apply == nil || phase.apply(ctx.SemTable.QuerySignature)
+		return phase.shouldRun == nil || phase.shouldRun(ctx.SemTable.QuerySignature)
 	})
 }
 

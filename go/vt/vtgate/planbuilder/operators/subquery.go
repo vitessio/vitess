@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -271,6 +271,7 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Ope
 		Predicates: predicates,
 	}, nil
 }
+
 func dontEnterSubqueries(node, _ sqlparser.SQLNode) bool {
 	if _, ok := node.(*sqlparser.Subquery); ok {
 		return false

@@ -169,6 +169,24 @@ func TestSubQueries(t *testing.T) {
 	utils.AssertMatches(t, mcmp.VtConn, `select (select id from t2 order by id limit 1) from t2 order by id limit 2`, `[[INT64(1)] [INT64(1)]]`)
 }
 
+func TestSubQueriesOnOuterJoinOnCondition(t *testing.T) {
+	t.Skip("not supported")
+	mcmp, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, mcmp.VtConn, `insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
+	utils.Exec(t, mcmp.VtConn, `insert into t3(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
+
+	utils.AssertMatches(t, mcmp.VtConn, `select u_a.a from u_a left join t2 on t2.id IN (select id from t2)`, `[]`)
+	// inserting some data in u_a
+	utils.Exec(t, mcmp.VtConn, `insert into u_a(id, a) values (1, 1)`)
+	qr := utils.Exec(t, mcmp.VtConn, `select u_a.a from u_a left join t2 on t2.id IN (select id from t2)`)
+	assert.EqualValues(t, 8, len(qr.Rows))
+	for index, row := range qr.Rows {
+		assert.EqualValues(t, `[INT64(1)]`, fmt.Sprintf("%v", row), "does not match for row: %d", index+1)
+	}
+}
+
 func TestPlannerWarning(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()

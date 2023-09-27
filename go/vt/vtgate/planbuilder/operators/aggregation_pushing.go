@@ -71,7 +71,7 @@ func tryPushAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator)
 // Any columns that are needed to evaluate the subquery needs to be added as
 // grouping columns to the aggregation being pushed down, and then after the
 // subquery evaluation we are free to reassemble the total aggregation values.
-// This is very similar to how we push aggregation through an apply-join.
+// This is very similar to how we push aggregation through an shouldRun-join.
 func pushAggregationThroughSubquery(
 	ctx *plancontext.PlanningContext,
 	rootAggr *Aggregator,
@@ -723,9 +723,6 @@ func (ab *aggBuilder) buildProjectionForAggr(lhsAE *sqlparser.AliasedExpr, rhsAE
 	}
 
 	_, err := ab.proj.addUnexploredExpr(projAE, projExpr)
-	if err != nil {
-		return nil
-	}
 	return err
 }
 

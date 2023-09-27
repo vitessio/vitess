@@ -78,19 +78,3 @@ func Filter[T any](in []T, f func(T) bool) []T {
 	}
 	return result
 }
-
-// FilterWithError returns a new slice containing only the elements for which the predicate returns true, or an error
-func FilterWithError[T any](in []T, f func(T) (bool, error)) (result []T, err error) {
-	if in == nil {
-		return nil, nil
-	}
-	result = make([]T, 0, len(in))
-	for _, col := range in {
-		if ok, err := f(col); err != nil {
-			return nil, err
-		} else if ok {
-			result = append(result, col)
-		}
-	}
-	return
-}

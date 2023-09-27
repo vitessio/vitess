@@ -62,11 +62,13 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 }
 
 func rewriteNotExpr(cursor *sqlparser.Cursor, node *sqlparser.NotExpr) {
-	switch expr := node.Expr.(type) {
-	case *sqlparser.ComparisonExpr:
-		expr.Operator = sqlparser.Inverse(expr.Operator)
-		cursor.Replace(expr)
+	cmp, ok := node.Expr.(*sqlparser.ComparisonExpr)
+	if !ok {
+		return
 	}
+
+	cmp.Operator = sqlparser.Inverse(cmp.Operator)
+	cursor.Replace(cmp)
 }
 
 func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
