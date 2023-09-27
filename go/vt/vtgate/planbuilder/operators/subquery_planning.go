@@ -306,7 +306,7 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 		original: newExpr,
 		subq:     inner,
 	}
-	newOp, err := mergeJoinInputs(ctx, innerRoute, outerRoute, inner.GetMergePredicates(), sqm)
+	newOp, err := mergeSubqueryInputs(ctx, innerRoute, outerRoute, inner.GetMergePredicates(), sqm)
 	if err != nil || newOp == nil {
 		return nil, nil, err
 	}
@@ -469,7 +469,7 @@ func tryMergeSubqueriesRecursively(
 		original: subQuery.Original,
 		subq:     subQuery,
 	}
-	op, err := mergeJoinInputs(ctx, inner.Outer, outer, exprs, merger)
+	op, err := mergeSubqueryInputs(ctx, inner.Outer, outer, exprs, merger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -507,7 +507,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	if !subQuery.TopLevel {
 		return subQuery, nil, nil
 	}
-	op, err := mergeJoinInputs(ctx, inner, outer, exprs, merger)
+	op, err := mergeSubqueryInputs(ctx, inner, outer, exprs, merger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -685,6 +685,51 @@ func (s *subqueryRouteMerger) rewriteASTExpression(ctx *plancontext.PlanningCont
 		}
 	}
 	return src, nil
+}
+
+// mergeSubqueryInputs checks whether two operators can be merged into a single one.
+// If they can be merged, a new operator with the merged routing is returned
+// If they cannot be merged, nil is returned.
+// These rules are similar but different from join merging
+func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out ops.Operator, joinPredicates []sqlparser.Expr, m merger) (*Route, error) {
+	inRoute, outRoute := operatorsToRoutes(in, out)
+	if inRoute == nil || outRoute == nil {
+		return nil, nil
+	}
+
+	inRoute, outRoute, inRouting, outRouting, sameKeyspace := getRoutesOrAlternates(inRoute, outRoute)
+	inner, outer := getRoutingType(inRouting), getRoutingType(outRouting)
+
+	switch {
+	// We have to let the outer control how many rows are returned,
+	// which means that we have to be careful with merging when the outer side
+	case inner == dual ||
+		(inner == anyShard && sameKeyspace):
+		return m.merge(ctx, inRoute, outRoute, outRouting)
+
+	case inner == none && sameKeyspace:
+		return m.merge(ctx, inRoute, outRoute, inRouting)
+
+	// we can merge dual-outer subqueries only if the
+	// inner is guaranteed to hit a single shard
+	case inRoute.IsSingleShard() &&
+		(outer == dual || (outer == anyShard && sameKeyspace)):
+		return m.merge(ctx, inRoute, outRoute, inRouting)
+
+	case outer == none && sameKeyspace:
+		return m.merge(ctx, inRoute, outRoute, outRouting)
+
+	// infoSchema routing is complex, so we handle it in a separate method
+	case inner == infoSchema && outer == infoSchema:
+		return tryMergeInfoSchemaRoutings(ctx, inRouting, outRouting, m, inRoute, outRoute)
+
+	// sharded routing is complex, so we handle it in a separate method
+	case inner == sharded && outer == sharded:
+		return tryMergeJoinShardedRouting(ctx, inRoute, outRoute, m, joinPredicates)
+
+	default:
+		return nil, nil
+	}
 }
 
 func mergedWith(inner *Route, outer *Route) []*Route {
