@@ -14,19 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
+
+// This plugin imports consultopo to register the consul implementation of TopoServer.
 
 import (
-	"github.com/spf13/cobra"
-
-	"vitess.io/vitess/go/cmd/vttlstest/cli"
-	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/logutil"
+	_ "vitess.io/vitess/go/vt/topo/consultopo"
 )
-
-func main() {
-	defer exit.Recover()
-	defer logutil.Flush()
-
-	cobra.CheckErr(cli.Root.Execute())
-}
