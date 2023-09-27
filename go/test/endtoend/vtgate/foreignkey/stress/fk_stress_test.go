@@ -945,10 +945,8 @@ func runMultipleConnections(ctx context.Context, t *testing.T, tableName string)
 			runSingleConnection(ctx, t, tableName)
 		}()
 	}
-	<-ctx.Done()
-	log.Infof("Running multiple connections: done")
 	wg.Wait()
-	log.Infof("All connections cancelled")
+	log.Infof("Running multiple connections: done")
 }
 
 func wrapWithNoFKChecks(sql string) string {
