@@ -122,7 +122,7 @@ VTGate flag:
 Flags in `vtcombo`:
 - `--vtctld_addr`
 
-Flags in `vtctldclient`:
+Flags in `vtctldclient ApplySchema`:
 - `--skip-preflight`
 
 Flags in `vtgate`:
