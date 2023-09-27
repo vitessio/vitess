@@ -224,13 +224,8 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-<<<<<<< HEAD
-		err1 = td.forEachSource(func(source *migrationSource) error {
-			tablet, err := pickTablet(ctx, sourceTopoServer, cell, ct.sourceKeyspace, source.shard, tabletTypes)
-=======
 		sourceErr = td.forEachSource(func(source *migrationSource) error {
-			sourceTablet, err := pickTablet(ctx, sourceTopoServer, sourceCells, td.wd.ct.vde.thisTablet.Alias.Cell, td.wd.ct.sourceKeyspace, source.shard, td.wd.opts.PickerOptions.TabletTypes)
->>>>>>> 2f679aaab1 (VDiff: properly split cell values in record when using TabletPicker (#14099))
+			sourceTablet, err := pickTablet(ctx, sourceTopoServer, sourceCells, td.wd.ct.sourceKeyspace, source.shard, td.wd.opts.PickerOptions.TabletTypes)
 			if err != nil {
 				return err
 			}
@@ -242,15 +237,9 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-<<<<<<< HEAD
-		tablet, err2 := pickTablet(ctx, ct.ts, td.wd.opts.PickerOptions.TargetCell, ct.vde.thisTablet.Keyspace,
-			ct.vde.thisTablet.Shard, td.wd.opts.PickerOptions.TabletTypes)
-		if err2 != nil {
-=======
-		targetTablet, targetErr = pickTablet(ctx, td.wd.ct.ts, targetCells, td.wd.ct.vde.thisTablet.Alias.Cell, td.wd.ct.vde.thisTablet.Keyspace,
-			td.wd.ct.vde.thisTablet.Shard, td.wd.opts.PickerOptions.TabletTypes)
+		targetTablet, targetErr = pickTablet(ctx, td.wd.ct.ts, targetCells, td.wd.ct.vde.thisTablet.Keyspace, td.wd.ct.vde.thisTablet.Shard,
+			td.wd.opts.PickerOptions.TabletTypes)
 		if targetErr != nil {
->>>>>>> 2f679aaab1 (VDiff: properly split cell values in record when using TabletPicker (#14099))
 			return
 		}
 		td.wd.ct.targetShardStreamer = &shardStreamer{
@@ -266,13 +255,8 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 	return targetErr
 }
 
-<<<<<<< HEAD
-func pickTablet(ctx context.Context, ts *topo.Server, cell, keyspace, shard, tabletTypes string) (*topodata.Tablet, error) {
-	tp, err := discovery.NewTabletPicker(ts, []string{cell}, keyspace, shard, tabletTypes)
-=======
-func pickTablet(ctx context.Context, ts *topo.Server, cells []string, localCell, keyspace, shard, tabletTypes string) (*topodata.Tablet, error) {
-	tp, err := discovery.NewTabletPicker(ctx, ts, cells, localCell, keyspace, shard, tabletTypes, discovery.TabletPickerOptions{})
->>>>>>> 2f679aaab1 (VDiff: properly split cell values in record when using TabletPicker (#14099))
+func pickTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace, shard, tabletTypes string) (*topodata.Tablet, error) {
+	tp, err := discovery.NewTabletPicker(ts, cells, keyspace, shard, tabletTypes)
 	if err != nil {
 		return nil, err
 	}
