@@ -33,6 +33,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -375,8 +376,39 @@ func tabletTestName(t *testing.T, tablet *cluster.Vttablet) string {
 	return ""
 }
 
+func getTabletPosition(t *testing.T, tablet *cluster.Vttablet) replication.Position {
+	rs := queryTablet(t, tablet, "select @@gtid_executed as gtid_executed", "")
+	row := rs.Named().Row()
+	require.NotNil(t, row)
+	gtidExecuted := row.AsString("gtid_executed", "")
+	require.NotEmpty(t, gtidExecuted)
+	pos, err := replication.DecodePositionDefaultFlavor(gtidExecuted, replication.Mysql56FlavorID)
+	assert.NoError(t, err)
+	return pos
+}
+
 func waitForReplicaCatchup(t *testing.T) {
-	cluster.WaitForReplicationPos(t, primary, replica, true, time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	primaryPos := getTabletPosition(t, primary)
+	for {
+		replicaPos := getTabletPosition(t, replica)
+		if replicaPos.GTIDSet.Contains(primaryPos.GTIDSet) {
+			// success
+			return
+		}
+		if !cluster.ValidateReplicationIsHealthy(t, replica) {
+			assert.FailNow(t, "replication is broken; not waiting for catchup")
+			return
+		}
+		select {
+		case <-ctx.Done():
+			assert.FailNow(t, "timeout waiting for replica to catch up")
+			return
+		case <-time.After(time.Second):
+			//
+		}
+	}
 }
 
 func validateMetrics(t *testing.T, tcase *testCase) {
