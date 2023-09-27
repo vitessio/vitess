@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ func getRandomString(size int) string {
 	var str strings.Builder
 
 	for i := 0; i < size; i++ {
-		str.WriteByte(byte((rand.Int() % 26) + 97))
+		str.WriteByte(byte(rand.Intn(27) + 97))
 	}
 	return str.String()
 }
