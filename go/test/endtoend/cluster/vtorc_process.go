@@ -123,7 +123,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	if v, err := GetMajorVersion("vtorc"); err != nil {
 		return err
 	} else if v >= 18 {
-		orc.proc.Args = append(orc.proc.Args, "--bind_address", "127.0.0.1")
+		orc.proc.Args = append(orc.proc.Args, "--bind-address", "127.0.0.1")
 	}
 
 	if *isCoverage {
