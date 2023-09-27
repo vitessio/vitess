@@ -274,7 +274,6 @@ func TestAutocommitInsertLookup(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.StringBindVariable("myname"),
-			"__seq0":  sqltypes.Int64BindVariable(1),
 		},
 	}})
 	testCommitCount(t, "sbc1", sbc1, 1)
@@ -292,7 +291,6 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 			Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_0, 2)",
 			BindVariables: map[string]*querypb.BindVariable{
 				"_user_id_0": sqltypes.Int64BindVariable(1),
-				"_user_id_1": sqltypes.Int64BindVariable(3),
 			},
 		}})
 		testCommitCount(t, "sbc1", sbc1, 0)
@@ -300,7 +298,6 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 		assertQueries(t, sbc2, []*querypb.BoundQuery{{
 			Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_1, 4)",
 			BindVariables: map[string]*querypb.BindVariable{
-				"_user_id_0": sqltypes.Int64BindVariable(1),
 				"_user_id_1": sqltypes.Int64BindVariable(3),
 			},
 		}})
@@ -321,7 +318,6 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 		assertQueries(t, sbc2, []*querypb.BoundQuery{{
 			Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_1, 4)",
 			BindVariables: map[string]*querypb.BindVariable{
-				"_user_id_0": sqltypes.Int64BindVariable(1),
 				"_user_id_1": sqltypes.Int64BindVariable(3),
 			},
 		}})
@@ -339,7 +335,6 @@ func TestAutocommitInsertMultishard(t *testing.T) {
 		Sql: "insert into user_extra(user_id, v) values (:_user_id_0, 2)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(1),
-			"_user_id_1": sqltypes.Int64BindVariable(3),
 		},
 	}})
 	testCommitCount(t, "sbc1", sbc1, 1)
@@ -347,7 +342,6 @@ func TestAutocommitInsertMultishard(t *testing.T) {
 	assertQueries(t, sbc2, []*querypb.BoundQuery{{
 		Sql: "insert into user_extra(user_id, v) values (:_user_id_1, 4)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"_user_id_0": sqltypes.Int64BindVariable(1),
 			"_user_id_1": sqltypes.Int64BindVariable(3),
 		},
 	}})
