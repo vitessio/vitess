@@ -453,8 +453,8 @@ func TestInitialSetup(t *testing.T) {
 
 	if val, present := os.LookupEnv("GITHUB_ACTIONS"); present && val != "" {
 		// This is the place to fine tune the stress parameters if GitHub actions are too slow
-		maxConcurrency = maxConcurrency * 1
-		singleConnectionSleepInterval = singleConnectionSleepInterval * 1
+		maxConcurrency = maxConcurrency / 2
+		singleConnectionSleepInterval = singleConnectionSleepInterval * 2
 	}
 	t.Logf("==== test setup: maxConcurrency=%v, singleConnectionSleepInterval=%v", maxConcurrency, singleConnectionSleepInterval)
 }
@@ -573,6 +573,10 @@ func TestStressFK(t *testing.T) {
 	}
 
 	if runOnlineDDL {
+		// Foreign keys introduce some overhead. We reduce concurrency so that GitHub CI can accommodate.
+		maxConcurrency = maxConcurrency * 4 / 5
+		singleConnectionSleepInterval = singleConnectionSleepInterval * 2
+
 		// Running Online DDL on all test tables. We don't use all of the combinations
 		// presented above; we will run with workload, and suffice with same ON DELETE - ON UPDATE actions.
 		for _, action := range referenceActions {
