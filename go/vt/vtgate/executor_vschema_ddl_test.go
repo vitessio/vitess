@@ -17,8 +17,9 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"reflect"
-	"sort"
+	"slices"
 	"testing"
 	"time"
 
@@ -78,13 +79,19 @@ func waitForVschemaTables(t *testing.T, ks string, tables []string, executor *Ex
 	// Wait up to 100ms until the vindex manager gets notified of the update
 	for i := 0; i < 10; i++ {
 		vschema := executor.vm.GetCurrentSrvVschema()
-		gotTables := []string{}
+		var gotTables []string
 		for t := range vschema.Keyspaces[ks].Tables {
 			gotTables = append(gotTables, t)
 		}
-		sort.Strings(tables)
-		sort.Strings(gotTables)
-		if reflect.DeepEqual(tables, gotTables) {
+
+		foundAll := true
+		for _, expTbl := range tables {
+			if !slices.Contains(gotTables, expTbl) {
+				foundAll = false
+				break
+			}
+		}
+		if foundAll {
 			return vschema
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -399,29 +406,31 @@ func TestExecutorDropSequenceDDL(t *testing.T) {
 		t.Fatalf("test_seq should not exist in original vschema")
 	}
 
-	var vschemaTables []string
-	for t := range vschema.Keyspaces[ks].Tables {
-		vschemaTables = append(vschemaTables, t)
-	}
-
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 
 	// add test sequence
 	stmt := "alter vschema add sequence test_seq"
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
-	_ = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_seq"}...), executor)
+	_ = waitForVschemaTables(t, ks, []string{"test_seq"}, executor)
 	vschema = executor.vm.GetCurrentSrvVschema()
 	table := vschema.Keyspaces[ks].Tables["test_seq"]
 	wantType := "sequence"
-	if table.Type != wantType {
-		t.Errorf("want table type sequence got %v", table)
-	}
+	require.Equal(t, wantType, table.Type)
+
+	// note the last vschema updated time.
+	ts := executor.VSchema().GetCreated()
 
 	// drop existing test sequence
 	stmt = "alter vschema drop sequence test_seq"
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
+
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if !waitForNewerVSchema(ctxWithTimeout, executor, ts) {
+		t.Fatalf("vschema did not drop the sequene 'test_seq'")
+	}
 
 	// Should fail dropping a non-existing test sequence
 	session = NewSafeSession(&vtgatepb.Session{TargetString: ks})
@@ -449,21 +458,33 @@ func TestExecutorDropAutoIncDDL(t *testing.T) {
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
 
+	_ = waitForVschemaTables(t, ks, []string{"test_table"}, executor)
+	ts := executor.VSchema().GetCreated()
+
 	stmt = "alter vschema on test_table add auto_increment id using `db-name`.`test_seq`"
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if !waitForNewerVSchema(ctxWithTimeout, executor, ts) {
+		t.Fatalf("vschema did not update with auto_increment for 'test_table'")
+	}
+	ts = executor.VSchema().GetCreated()
 
 	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "`db-name`.test_seq"}
 	gotAutoInc := executor.vm.GetCurrentSrvVschema().Keyspaces[ks].Tables["test_table"].AutoIncrement
 
-	if !reflect.DeepEqual(wantAutoInc, gotAutoInc) {
-		t.Errorf("want autoinc %v, got autoinc %v", wantAutoInc, gotAutoInc)
-	}
+	utils.MustMatch(t, wantAutoInc, gotAutoInc)
 
 	stmt = "alter vschema on test_table drop auto_increment"
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
 
+	ctxWithTimeout, cancel2 := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel2()
+	if !waitForNewerVSchema(ctxWithTimeout, executor, ts) {
+		t.Fatalf("vschema did not drop the auto_increment for 'test_table'")
+	}
 	if executor.vm.GetCurrentSrvVschema().Keyspaces[ks].Tables["test_table"].AutoIncrement != nil {
 		t.Errorf("auto increment should be nil after drop")
 	}

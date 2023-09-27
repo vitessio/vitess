@@ -169,7 +169,7 @@ func ExecCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string)
 
 // ExecAllowError executes the given query without failing the test if it produces
 // an error. The error is returned to the client, along with the result set.
-func ExecAllowError(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
+func ExecAllowError(t testing.TB, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)
 }

@@ -542,8 +542,8 @@ func autoIncGenerate(gen *operators.Generate) *engine.Generate {
 	}
 }
 
-func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mid []string, suffix string) {
-	valueTuples, isValues := ins.Rows.(sqlparser.Values)
+func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mids sqlparser.Values, suffix string) {
+	mids, isValues := ins.Rows.(sqlparser.Values)
 	prefixFormat := "insert %v%sinto %v%v "
 	if isValues {
 		// the mid values are filled differently
@@ -560,20 +560,6 @@ func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mid []str
 	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
 	suffixBuf.Myprintf("%v", ins.OnDup)
 	suffix = suffixBuf.String()
-
-	if !isValues {
-		// this is a insert query using select to insert the rows.
-		return
-	}
-
-	midBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	mid = make([]string, len(valueTuples))
-	for rowNum, val := range valueTuples {
-		midBuf.Myprintf("%v", val)
-		mid[rowNum] = midBuf.String()
-		midBuf.Reset()
-	}
-
 	return
 }
 
