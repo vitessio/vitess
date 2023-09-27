@@ -65,7 +65,7 @@ func Init(ctx context.Context) (*Env, error) {
 	te := &Env{
 		KeyspaceName: "vttest",
 		ShardName:    "0",
-		Cells:        []string{"cell1", "cell2", "cell3"},
+		Cells:        []string{"cell1"},
 	}
 
 	te.TopoServ = memorytopo.NewServer(ctx, te.Cells...)

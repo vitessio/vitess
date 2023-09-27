@@ -70,14 +70,14 @@ func TestPerformVDiffAction(t *testing.T) {
 			// available cells, so this additional cell should then show up in the
 			// created vdiff record.
 			preFunc: func() error {
-				return tstenv.TopoServ.CreateCellInfo(ctx, "cell1_test", &topodatapb.CellInfo{})
+				return tstenv.TopoServ.CreateCellInfo(ctx, "zone100_test", &topodatapb.CellInfo{})
 			},
 			expectQueries: []string{
 				fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
-				fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'pending', '{\"picker_options\":{\"source_cell\":\"cell1,cell1_test,cell2,cell3\",\"target_cell\":\"cell1,cell1_test,cell2,cell3\"}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
+				fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'pending', '{\"picker_options\":{\"source_cell\":\"cell1,zone100_test\",\"target_cell\":\"cell1,zone100_test\"}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
 			},
 			postFunc: func() error {
-				return tstenv.TopoServ.DeleteCellInfo(ctx, "cell1_test", true)
+				return tstenv.TopoServ.DeleteCellInfo(ctx, "zone100_test", true)
 			},
 		},
 		{
@@ -94,10 +94,10 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			// Add a second cell and create an cell alias that contains it.
 			preFunc: func() error {
-				if err := tstenv.TopoServ.CreateCellInfo(ctx, "cell1_test", &topodatapb.CellInfo{}); err != nil {
+				if err := tstenv.TopoServ.CreateCellInfo(ctx, "zone100_test", &topodatapb.CellInfo{}); err != nil {
 					return err
 				}
-				cells := append(tstenv.Cells, "cell1_test")
+				cells := append(tstenv.Cells, "zone100_test")
 				return tstenv.TopoServ.CreateCellsAlias(ctx, "all", &topodatapb.CellsAlias{
 					Cells: cells,
 				})
@@ -107,7 +107,7 @@ func TestPerformVDiffAction(t *testing.T) {
 				fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'pending', '{\"picker_options\":{\"source_cell\":\"all\",\"target_cell\":\"all\"}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
 			},
 			postFunc: func() error {
-				if err := tstenv.TopoServ.DeleteCellInfo(ctx, "cell1_test", true); err != nil {
+				if err := tstenv.TopoServ.DeleteCellInfo(ctx, "zone100_test", true); err != nil {
 					return err
 				}
 				return tstenv.TopoServ.DeleteCellsAlias(ctx, "all")
