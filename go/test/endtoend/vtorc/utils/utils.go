@@ -969,6 +969,39 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	assert.EqualValues(t, countExpected, successCount)
 }
 
+// WaitForDetectedProblems waits until the given analysis code, alias, keyspace and shard count matches the count expected.
+func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, code, alias, ks, shard string, expect int) {
+	t.Helper()
+	key := strings.Join([]string{code, alias, ks, shard}, ".")
+	timeout := 15 * time.Second
+	startTime := time.Now()
+
+	for time.Since(startTime) < timeout {
+		vars := vtorcInstance.GetVars()
+		problems := vars["DetectedProblems"].(map[string]interface{})
+		actual := problems[key]
+		if actual == expect {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+
+	vars := vtorcInstance.GetVars()
+	problems := vars["DetectedProblems"].(map[string]interface{})
+	actual, ok := problems[key]
+
+	assert.True(t, ok,
+		"The metric DetectedProblems[%s] should exist but does not (all problems: %+v)",
+		key, problems,
+	)
+
+	assert.EqualValues(t, expect, actual,
+		"The metric DetectedProblems[%s] should be %v but is %v (all problems: %+v)",
+		key, expect, actual,
+		problems,
+	)
+}
+
 // WaitForTabletType waits for the tablet to reach a certain type.
 func WaitForTabletType(t *testing.T, tablet *cluster.Vttablet, expectedTabletType string) {
 	t.Helper()
