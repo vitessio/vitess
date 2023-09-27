@@ -19,6 +19,7 @@ package vdiff
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -107,8 +108,8 @@ func TestVDiff(t *testing.T) {
 			MaxRows:        100,
 		},
 		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
-			SourceCell:  tstenv.Cells[0],
-			TargetCell:  tstenv.Cells[0],
+			SourceCell:  strings.Join(tstenv.Cells, ","),
+			TargetCell:  strings.Join(tstenv.Cells, ","),
 			TabletTypes: "primary",
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
