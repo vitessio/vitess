@@ -918,10 +918,6 @@ func runSingleConnection(ctx context.Context, t *testing.T, tableName string) {
 	require.Nil(t, err)
 
 	for {
-		if ctx.Err() != nil {
-			log.Infof("Terminating single connection")
-			return
-		}
 		switch rand.Int31n(3) {
 		case 0:
 			_ = generateInsert(t, tableName, conn)
@@ -930,7 +926,12 @@ func runSingleConnection(ctx context.Context, t *testing.T, tableName string) {
 		case 2:
 			_ = generateDelete(t, tableName, conn)
 		}
-		time.Sleep(singleConnectionSleepInterval)
+		select {
+		case <-ctx.Done():
+			log.Infof("Terminating single connection")
+			return
+		case <-time.After(singleConnectionSleepInterval):
+		}
 	}
 }
 
