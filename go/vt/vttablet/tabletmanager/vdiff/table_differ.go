@@ -210,9 +210,6 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 	sourceCells := strings.Split(td.wd.opts.PickerOptions.SourceCell, ",")
 	targetCells := strings.Split(td.wd.opts.PickerOptions.TargetCell, ",")
 
-	log.Errorf("DEBUG: sourceCells: %v", sourceCells)
-	log.Errorf("DEBUG: targetCells: %v", sourceCells)
-
 	// For Mount+Migrate, the source tablets will be in a different
 	// Vitess cluster with its own TopoServer.
 	sourceTopoServer := td.wd.ct.ts
