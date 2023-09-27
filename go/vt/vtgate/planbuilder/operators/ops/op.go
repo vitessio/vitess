@@ -64,3 +64,14 @@ type (
 		SimplifiedExpr sqlparser.Expr
 	}
 )
+
+// Map takes in a mapping function and applies it to both the expression in OrderBy.
+func (ob OrderBy) Map(mappingFunc func(sqlparser.Expr) sqlparser.Expr) OrderBy {
+	return OrderBy{
+		Inner: &sqlparser.Order{
+			Expr:      mappingFunc(ob.Inner.Expr),
+			Direction: ob.Inner.Direction,
+		},
+		SimplifiedExpr: mappingFunc(ob.SimplifiedExpr),
+	}
+}

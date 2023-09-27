@@ -5496,6 +5496,87 @@
     }
   },
   {
+    "comment": "Rewrite derived expression while pushing order by underneath aggregation",
+    "query": "select d.a from music join (select id, count(*) as a from user) as d on music.user_id = d.id group by 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select d.a from music join (select id, count(*) as a from user) as d on music.user_id = d.id group by 1",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "GroupBy": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "JoinVars": {
+              "d_id": 1
+            },
+            "TableName": "`user`_music",
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "GroupBy": "0, (1|2)",
+                "Inputs": [
+                  {
+                    "OperatorType": "SimpleProjection",
+                    "Columns": [
+                      1,
+                      0,
+                      2
+                    ],
+                    "Inputs": [
+                      {
+                        "OperatorType": "Aggregate",
+                        "Variant": "Scalar",
+                        "Aggregates": "any_value(0) AS id, sum_count_star(1) AS a, any_value(2)",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select id, count(*) as a, weight_string(id) from `user` where 1 != 1",
+                            "OrderBy": "1 ASC, (0|2) ASC",
+                            "Query": "select id, count(*) as a, weight_string(id) from `user` order by count(*) asc, id asc",
+                            "Table": "`user`"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from music where 1 != 1 group by .0",
+                "Query": "select 1 from music where music.user_id = :d_id group by .0",
+                "Table": "music",
+                "Values": [
+                  ":d_id"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "group_concat with group by without in select list",
     "query": "select group_concat(user.id) from user, music where user.id = music.foo group by user.bar",
     "plan": {

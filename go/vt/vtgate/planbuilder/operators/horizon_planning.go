@@ -589,6 +589,20 @@ ordering:
 }
 
 func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, aggregator *Aggregator) (ops.Operator, *rewrite.ApplyResult, error) {
+	// If Aggregator is a derived table, then we should rewrite the ordering before pushing.
+	if aggregator.isDerived() {
+		for idx, orderExpr := range order.Order {
+			ti, err := ctx.SemTable.TableInfoFor(*aggregator.TableID)
+			if err != nil {
+				return nil, nil, err
+			}
+			newOrderExpr := orderExpr.Map(func(expr sqlparser.Expr) sqlparser.Expr {
+				return semantics.RewriteDerivedTableExpression(expr, ti)
+			})
+			order.Order[idx] = newOrderExpr
+		}
+	}
+
 	// Step 1: Align the GROUP BY and ORDER BY.
 	//         Reorder the GROUP BY columns to match the ORDER BY columns.
 	//         Since the GB clause is a set, we can reorder these columns freely.
