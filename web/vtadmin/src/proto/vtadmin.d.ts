@@ -57843,6 +57843,169 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a ReshardCreateRequest. */
+    interface IReshardCreateRequest {
+
+        /** ReshardCreateRequest workflow */
+        workflow?: (string|null);
+
+        /** ReshardCreateRequest keyspace */
+        keyspace?: (string|null);
+
+        /** ReshardCreateRequest source_shards */
+        source_shards?: (string[]|null);
+
+        /** ReshardCreateRequest target_shards */
+        target_shards?: (string[]|null);
+
+        /** ReshardCreateRequest cells */
+        cells?: (string[]|null);
+
+        /** ReshardCreateRequest tablet_types */
+        tablet_types?: (topodata.TabletType[]|null);
+
+        /** ReshardCreateRequest tablet_selection_preference */
+        tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
+
+        /** ReshardCreateRequest skip_schema_copy */
+        skip_schema_copy?: (boolean|null);
+
+        /** ReshardCreateRequest on_ddl */
+        on_ddl?: (string|null);
+
+        /** ReshardCreateRequest stop_after_copy */
+        stop_after_copy?: (boolean|null);
+
+        /** ReshardCreateRequest defer_secondary_keys */
+        defer_secondary_keys?: (boolean|null);
+
+        /** ReshardCreateRequest auto_start */
+        auto_start?: (boolean|null);
+    }
+
+    /** Represents a ReshardCreateRequest. */
+    class ReshardCreateRequest implements IReshardCreateRequest {
+
+        /**
+         * Constructs a new ReshardCreateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IReshardCreateRequest);
+
+        /** ReshardCreateRequest workflow. */
+        public workflow: string;
+
+        /** ReshardCreateRequest keyspace. */
+        public keyspace: string;
+
+        /** ReshardCreateRequest source_shards. */
+        public source_shards: string[];
+
+        /** ReshardCreateRequest target_shards. */
+        public target_shards: string[];
+
+        /** ReshardCreateRequest cells. */
+        public cells: string[];
+
+        /** ReshardCreateRequest tablet_types. */
+        public tablet_types: topodata.TabletType[];
+
+        /** ReshardCreateRequest tablet_selection_preference. */
+        public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
+
+        /** ReshardCreateRequest skip_schema_copy. */
+        public skip_schema_copy: boolean;
+
+        /** ReshardCreateRequest on_ddl. */
+        public on_ddl: string;
+
+        /** ReshardCreateRequest stop_after_copy. */
+        public stop_after_copy: boolean;
+
+        /** ReshardCreateRequest defer_secondary_keys. */
+        public defer_secondary_keys: boolean;
+
+        /** ReshardCreateRequest auto_start. */
+        public auto_start: boolean;
+
+        /**
+         * Creates a new ReshardCreateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReshardCreateRequest instance
+         */
+        public static create(properties?: vtctldata.IReshardCreateRequest): vtctldata.ReshardCreateRequest;
+
+        /**
+         * Encodes the specified ReshardCreateRequest message. Does not implicitly {@link vtctldata.ReshardCreateRequest.verify|verify} messages.
+         * @param message ReshardCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IReshardCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReshardCreateRequest message, length delimited. Does not implicitly {@link vtctldata.ReshardCreateRequest.verify|verify} messages.
+         * @param message ReshardCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IReshardCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReshardCreateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReshardCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ReshardCreateRequest;
+
+        /**
+         * Decodes a ReshardCreateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReshardCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ReshardCreateRequest;
+
+        /**
+         * Verifies a ReshardCreateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReshardCreateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReshardCreateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ReshardCreateRequest;
+
+        /**
+         * Creates a plain object from a ReshardCreateRequest message. Also converts values to other types if specified.
+         * @param message ReshardCreateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ReshardCreateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReshardCreateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReshardCreateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a RestoreFromBackupRequest. */
     interface IRestoreFromBackupRequest {
 
@@ -63605,6 +63768,1108 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for ValidateVSchemaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VDiffCreateRequest. */
+    interface IVDiffCreateRequest {
+
+        /** VDiffCreateRequest workflow */
+        workflow?: (string|null);
+
+        /** VDiffCreateRequest target_keyspace */
+        target_keyspace?: (string|null);
+
+        /** VDiffCreateRequest uuid */
+        uuid?: (string|null);
+
+        /** VDiffCreateRequest source_cells */
+        source_cells?: (string[]|null);
+
+        /** VDiffCreateRequest target_cells */
+        target_cells?: (string[]|null);
+
+        /** VDiffCreateRequest tablet_types */
+        tablet_types?: (topodata.TabletType[]|null);
+
+        /** VDiffCreateRequest tablet_selection_preference */
+        tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
+
+        /** VDiffCreateRequest tables */
+        tables?: (string[]|null);
+
+        /** VDiffCreateRequest limit */
+        limit?: (number|Long|null);
+
+        /** VDiffCreateRequest filtered_replication_wait_time */
+        filtered_replication_wait_time?: (vttime.IDuration|null);
+
+        /** VDiffCreateRequest debug_query */
+        debug_query?: (boolean|null);
+
+        /** VDiffCreateRequest only_p_ks */
+        only_p_ks?: (boolean|null);
+
+        /** VDiffCreateRequest update_table_stats */
+        update_table_stats?: (boolean|null);
+
+        /** VDiffCreateRequest max_extra_rows_to_compare */
+        max_extra_rows_to_compare?: (number|Long|null);
+
+        /** VDiffCreateRequest wait */
+        wait?: (boolean|null);
+
+        /** VDiffCreateRequest wait_update_interval */
+        wait_update_interval?: (vttime.IDuration|null);
+
+        /** VDiffCreateRequest auto_retry */
+        auto_retry?: (boolean|null);
+
+        /** VDiffCreateRequest verbose */
+        verbose?: (boolean|null);
+    }
+
+    /** Represents a VDiffCreateRequest. */
+    class VDiffCreateRequest implements IVDiffCreateRequest {
+
+        /**
+         * Constructs a new VDiffCreateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVDiffCreateRequest);
+
+        /** VDiffCreateRequest workflow. */
+        public workflow: string;
+
+        /** VDiffCreateRequest target_keyspace. */
+        public target_keyspace: string;
+
+        /** VDiffCreateRequest uuid. */
+        public uuid: string;
+
+        /** VDiffCreateRequest source_cells. */
+        public source_cells: string[];
+
+        /** VDiffCreateRequest target_cells. */
+        public target_cells: string[];
+
+        /** VDiffCreateRequest tablet_types. */
+        public tablet_types: topodata.TabletType[];
+
+        /** VDiffCreateRequest tablet_selection_preference. */
+        public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
+
+        /** VDiffCreateRequest tables. */
+        public tables: string[];
+
+        /** VDiffCreateRequest limit. */
+        public limit: (number|Long);
+
+        /** VDiffCreateRequest filtered_replication_wait_time. */
+        public filtered_replication_wait_time?: (vttime.IDuration|null);
+
+        /** VDiffCreateRequest debug_query. */
+        public debug_query: boolean;
+
+        /** VDiffCreateRequest only_p_ks. */
+        public only_p_ks: boolean;
+
+        /** VDiffCreateRequest update_table_stats. */
+        public update_table_stats: boolean;
+
+        /** VDiffCreateRequest max_extra_rows_to_compare. */
+        public max_extra_rows_to_compare: (number|Long);
+
+        /** VDiffCreateRequest wait. */
+        public wait: boolean;
+
+        /** VDiffCreateRequest wait_update_interval. */
+        public wait_update_interval?: (vttime.IDuration|null);
+
+        /** VDiffCreateRequest auto_retry. */
+        public auto_retry: boolean;
+
+        /** VDiffCreateRequest verbose. */
+        public verbose: boolean;
+
+        /**
+         * Creates a new VDiffCreateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffCreateRequest instance
+         */
+        public static create(properties?: vtctldata.IVDiffCreateRequest): vtctldata.VDiffCreateRequest;
+
+        /**
+         * Encodes the specified VDiffCreateRequest message. Does not implicitly {@link vtctldata.VDiffCreateRequest.verify|verify} messages.
+         * @param message VDiffCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVDiffCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffCreateRequest message, length delimited. Does not implicitly {@link vtctldata.VDiffCreateRequest.verify|verify} messages.
+         * @param message VDiffCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVDiffCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffCreateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VDiffCreateRequest;
+
+        /**
+         * Decodes a VDiffCreateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VDiffCreateRequest;
+
+        /**
+         * Verifies a VDiffCreateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffCreateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffCreateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VDiffCreateRequest;
+
+        /**
+         * Creates a plain object from a VDiffCreateRequest message. Also converts values to other types if specified.
+         * @param message VDiffCreateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VDiffCreateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffCreateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffCreateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VDiffCreateResponse. */
+    interface IVDiffCreateResponse {
+
+        /** VDiffCreateResponse UUID */
+        UUID?: (string|null);
+    }
+
+    /** Represents a VDiffCreateResponse. */
+    class VDiffCreateResponse implements IVDiffCreateResponse {
+
+        /**
+         * Constructs a new VDiffCreateResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVDiffCreateResponse);
+
+        /** VDiffCreateResponse UUID. */
+        public UUID: string;
+
+        /**
+         * Creates a new VDiffCreateResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffCreateResponse instance
+         */
+        public static create(properties?: vtctldata.IVDiffCreateResponse): vtctldata.VDiffCreateResponse;
+
+        /**
+         * Encodes the specified VDiffCreateResponse message. Does not implicitly {@link vtctldata.VDiffCreateResponse.verify|verify} messages.
+         * @param message VDiffCreateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVDiffCreateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffCreateResponse message, length delimited. Does not implicitly {@link vtctldata.VDiffCreateResponse.verify|verify} messages.
+         * @param message VDiffCreateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVDiffCreateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffCreateResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffCreateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VDiffCreateResponse;
+
+        /**
+         * Decodes a VDiffCreateResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffCreateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VDiffCreateResponse;
+
+        /**
+         * Verifies a VDiffCreateResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffCreateResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffCreateResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VDiffCreateResponse;
+
+        /**
+         * Creates a plain object from a VDiffCreateResponse message. Also converts values to other types if specified.
+         * @param message VDiffCreateResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VDiffCreateResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffCreateResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffCreateResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VDiffDeleteRequest. */
+    interface IVDiffDeleteRequest {
+
+        /** VDiffDeleteRequest workflow */
+        workflow?: (string|null);
+
+        /** VDiffDeleteRequest target_keyspace */
+        target_keyspace?: (string|null);
+
+        /** VDiffDeleteRequest arg */
+        arg?: (string|null);
+    }
+
+    /** Represents a VDiffDeleteRequest. */
+    class VDiffDeleteRequest implements IVDiffDeleteRequest {
+
+        /**
+         * Constructs a new VDiffDeleteRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVDiffDeleteRequest);
+
+        /** VDiffDeleteRequest workflow. */
+        public workflow: string;
+
+        /** VDiffDeleteRequest target_keyspace. */
+        public target_keyspace: string;
+
+        /** VDiffDeleteRequest arg. */
+        public arg: string;
+
+        /**
+         * Creates a new VDiffDeleteRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffDeleteRequest instance
+         */
+        public static create(properties?: vtctldata.IVDiffDeleteRequest): vtctldata.VDiffDeleteRequest;
+
+        /**
+         * Encodes the specified VDiffDeleteRequest message. Does not implicitly {@link vtctldata.VDiffDeleteRequest.verify|verify} messages.
+         * @param message VDiffDeleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVDiffDeleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffDeleteRequest message, length delimited. Does not implicitly {@link vtctldata.VDiffDeleteRequest.verify|verify} messages.
+         * @param message VDiffDeleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVDiffDeleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffDeleteRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffDeleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VDiffDeleteRequest;
+
+        /**
+         * Decodes a VDiffDeleteRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffDeleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VDiffDeleteRequest;
+
+        /**
+         * Verifies a VDiffDeleteRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffDeleteRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffDeleteRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VDiffDeleteRequest;
+
+        /**
+         * Creates a plain object from a VDiffDeleteRequest message. Also converts values to other types if specified.
+         * @param message VDiffDeleteRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VDiffDeleteRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffDeleteRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffDeleteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VDiffDeleteResponse. */
+    interface IVDiffDeleteResponse {
+    }
+
+    /** Represents a VDiffDeleteResponse. */
+    class VDiffDeleteResponse implements IVDiffDeleteResponse {
+
+        /**
+         * Constructs a new VDiffDeleteResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVDiffDeleteResponse);
+
+        /**
+         * Creates a new VDiffDeleteResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffDeleteResponse instance
+         */
+        public static create(properties?: vtctldata.IVDiffDeleteResponse): vtctldata.VDiffDeleteResponse;
+
+        /**
+         * Encodes the specified VDiffDeleteResponse message. Does not implicitly {@link vtctldata.VDiffDeleteResponse.verify|verify} messages.
+         * @param message VDiffDeleteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVDiffDeleteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffDeleteResponse message, length delimited. Does not implicitly {@link vtctldata.VDiffDeleteResponse.verify|verify} messages.
+         * @param message VDiffDeleteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVDiffDeleteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffDeleteResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffDeleteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VDiffDeleteResponse;
+
+        /**
+         * Decodes a VDiffDeleteResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffDeleteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VDiffDeleteResponse;
+
+        /**
+         * Verifies a VDiffDeleteResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffDeleteResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffDeleteResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VDiffDeleteResponse;
+
+        /**
+         * Creates a plain object from a VDiffDeleteResponse message. Also converts values to other types if specified.
+         * @param message VDiffDeleteResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VDiffDeleteResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffDeleteResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffDeleteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VDiffResumeRequest. */
+    interface IVDiffResumeRequest {
+
+        /** VDiffResumeRequest workflow */
+        workflow?: (string|null);
+
+        /** VDiffResumeRequest target_keyspace */
+        target_keyspace?: (string|null);
+
+        /** VDiffResumeRequest uuid */
+        uuid?: (string|null);
+    }
+
+    /** Represents a VDiffResumeRequest. */
+    class VDiffResumeRequest implements IVDiffResumeRequest {
+
+        /**
+         * Constructs a new VDiffResumeRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVDiffResumeRequest);
+
+        /** VDiffResumeRequest workflow. */
+        public workflow: string;
+
+        /** VDiffResumeRequest target_keyspace. */
+        public target_keyspace: string;
+
+        /** VDiffResumeRequest uuid. */
+        public uuid: string;
+
+        /**
+         * Creates a new VDiffResumeRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffResumeRequest instance
+         */
+        public static create(properties?: vtctldata.IVDiffResumeRequest): vtctldata.VDiffResumeRequest;
+
+        /**
+         * Encodes the specified VDiffResumeRequest message. Does not implicitly {@link vtctldata.VDiffResumeRequest.verify|verify} messages.
+         * @param message VDiffResumeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVDiffResumeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffResumeRequest message, length delimited. Does not implicitly {@link vtctldata.VDiffResumeRequest.verify|verify} messages.
+         * @param message VDiffResumeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVDiffResumeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffResumeRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffResumeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VDiffResumeRequest;
+
+        /**
+         * Decodes a VDiffResumeRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffResumeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VDiffResumeRequest;
+
+        /**
+         * Verifies a VDiffResumeRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffResumeRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffResumeRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VDiffResumeRequest;
+
+        /**
+         * Creates a plain object from a VDiffResumeRequest message. Also converts values to other types if specified.
+         * @param message VDiffResumeRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VDiffResumeRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffResumeRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffResumeRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VDiffResumeResponse. */
+    interface IVDiffResumeResponse {
+    }
+
+    /** Represents a VDiffResumeResponse. */
+    class VDiffResumeResponse implements IVDiffResumeResponse {
+
+        /**
+         * Constructs a new VDiffResumeResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVDiffResumeResponse);
+
+        /**
+         * Creates a new VDiffResumeResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffResumeResponse instance
+         */
+        public static create(properties?: vtctldata.IVDiffResumeResponse): vtctldata.VDiffResumeResponse;
+
+        /**
+         * Encodes the specified VDiffResumeResponse message. Does not implicitly {@link vtctldata.VDiffResumeResponse.verify|verify} messages.
+         * @param message VDiffResumeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVDiffResumeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffResumeResponse message, length delimited. Does not implicitly {@link vtctldata.VDiffResumeResponse.verify|verify} messages.
+         * @param message VDiffResumeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVDiffResumeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffResumeResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffResumeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VDiffResumeResponse;
+
+        /**
+         * Decodes a VDiffResumeResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffResumeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VDiffResumeResponse;
+
+        /**
+         * Verifies a VDiffResumeResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffResumeResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffResumeResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VDiffResumeResponse;
+
+        /**
+         * Creates a plain object from a VDiffResumeResponse message. Also converts values to other types if specified.
+         * @param message VDiffResumeResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VDiffResumeResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffResumeResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffResumeResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VDiffShowRequest. */
+    interface IVDiffShowRequest {
+
+        /** VDiffShowRequest workflow */
+        workflow?: (string|null);
+
+        /** VDiffShowRequest target_keyspace */
+        target_keyspace?: (string|null);
+
+        /** VDiffShowRequest arg */
+        arg?: (string|null);
+    }
+
+    /** Represents a VDiffShowRequest. */
+    class VDiffShowRequest implements IVDiffShowRequest {
+
+        /**
+         * Constructs a new VDiffShowRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVDiffShowRequest);
+
+        /** VDiffShowRequest workflow. */
+        public workflow: string;
+
+        /** VDiffShowRequest target_keyspace. */
+        public target_keyspace: string;
+
+        /** VDiffShowRequest arg. */
+        public arg: string;
+
+        /**
+         * Creates a new VDiffShowRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffShowRequest instance
+         */
+        public static create(properties?: vtctldata.IVDiffShowRequest): vtctldata.VDiffShowRequest;
+
+        /**
+         * Encodes the specified VDiffShowRequest message. Does not implicitly {@link vtctldata.VDiffShowRequest.verify|verify} messages.
+         * @param message VDiffShowRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVDiffShowRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffShowRequest message, length delimited. Does not implicitly {@link vtctldata.VDiffShowRequest.verify|verify} messages.
+         * @param message VDiffShowRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVDiffShowRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffShowRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffShowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VDiffShowRequest;
+
+        /**
+         * Decodes a VDiffShowRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffShowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VDiffShowRequest;
+
+        /**
+         * Verifies a VDiffShowRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffShowRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffShowRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VDiffShowRequest;
+
+        /**
+         * Creates a plain object from a VDiffShowRequest message. Also converts values to other types if specified.
+         * @param message VDiffShowRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VDiffShowRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffShowRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffShowRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VDiffShowResponse. */
+    interface IVDiffShowResponse {
+
+        /** VDiffShowResponse tablet_responses */
+        tablet_responses?: ({ [k: string]: tabletmanagerdata.IVDiffResponse }|null);
+    }
+
+    /** Represents a VDiffShowResponse. */
+    class VDiffShowResponse implements IVDiffShowResponse {
+
+        /**
+         * Constructs a new VDiffShowResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVDiffShowResponse);
+
+        /** VDiffShowResponse tablet_responses. */
+        public tablet_responses: { [k: string]: tabletmanagerdata.IVDiffResponse };
+
+        /**
+         * Creates a new VDiffShowResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffShowResponse instance
+         */
+        public static create(properties?: vtctldata.IVDiffShowResponse): vtctldata.VDiffShowResponse;
+
+        /**
+         * Encodes the specified VDiffShowResponse message. Does not implicitly {@link vtctldata.VDiffShowResponse.verify|verify} messages.
+         * @param message VDiffShowResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVDiffShowResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffShowResponse message, length delimited. Does not implicitly {@link vtctldata.VDiffShowResponse.verify|verify} messages.
+         * @param message VDiffShowResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVDiffShowResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffShowResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffShowResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VDiffShowResponse;
+
+        /**
+         * Decodes a VDiffShowResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffShowResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VDiffShowResponse;
+
+        /**
+         * Verifies a VDiffShowResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffShowResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffShowResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VDiffShowResponse;
+
+        /**
+         * Creates a plain object from a VDiffShowResponse message. Also converts values to other types if specified.
+         * @param message VDiffShowResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VDiffShowResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffShowResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffShowResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VDiffStopRequest. */
+    interface IVDiffStopRequest {
+
+        /** VDiffStopRequest workflow */
+        workflow?: (string|null);
+
+        /** VDiffStopRequest target_keyspace */
+        target_keyspace?: (string|null);
+
+        /** VDiffStopRequest uuid */
+        uuid?: (string|null);
+    }
+
+    /** Represents a VDiffStopRequest. */
+    class VDiffStopRequest implements IVDiffStopRequest {
+
+        /**
+         * Constructs a new VDiffStopRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVDiffStopRequest);
+
+        /** VDiffStopRequest workflow. */
+        public workflow: string;
+
+        /** VDiffStopRequest target_keyspace. */
+        public target_keyspace: string;
+
+        /** VDiffStopRequest uuid. */
+        public uuid: string;
+
+        /**
+         * Creates a new VDiffStopRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffStopRequest instance
+         */
+        public static create(properties?: vtctldata.IVDiffStopRequest): vtctldata.VDiffStopRequest;
+
+        /**
+         * Encodes the specified VDiffStopRequest message. Does not implicitly {@link vtctldata.VDiffStopRequest.verify|verify} messages.
+         * @param message VDiffStopRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVDiffStopRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffStopRequest message, length delimited. Does not implicitly {@link vtctldata.VDiffStopRequest.verify|verify} messages.
+         * @param message VDiffStopRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVDiffStopRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffStopRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffStopRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VDiffStopRequest;
+
+        /**
+         * Decodes a VDiffStopRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffStopRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VDiffStopRequest;
+
+        /**
+         * Verifies a VDiffStopRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffStopRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffStopRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VDiffStopRequest;
+
+        /**
+         * Creates a plain object from a VDiffStopRequest message. Also converts values to other types if specified.
+         * @param message VDiffStopRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VDiffStopRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffStopRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffStopRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VDiffStopResponse. */
+    interface IVDiffStopResponse {
+    }
+
+    /** Represents a VDiffStopResponse. */
+    class VDiffStopResponse implements IVDiffStopResponse {
+
+        /**
+         * Constructs a new VDiffStopResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVDiffStopResponse);
+
+        /**
+         * Creates a new VDiffStopResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffStopResponse instance
+         */
+        public static create(properties?: vtctldata.IVDiffStopResponse): vtctldata.VDiffStopResponse;
+
+        /**
+         * Encodes the specified VDiffStopResponse message. Does not implicitly {@link vtctldata.VDiffStopResponse.verify|verify} messages.
+         * @param message VDiffStopResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVDiffStopResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffStopResponse message, length delimited. Does not implicitly {@link vtctldata.VDiffStopResponse.verify|verify} messages.
+         * @param message VDiffStopResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVDiffStopResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffStopResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffStopResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VDiffStopResponse;
+
+        /**
+         * Decodes a VDiffStopResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffStopResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VDiffStopResponse;
+
+        /**
+         * Verifies a VDiffStopResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffStopResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffStopResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VDiffStopResponse;
+
+        /**
+         * Creates a plain object from a VDiffStopResponse message. Also converts values to other types if specified.
+         * @param message VDiffStopResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VDiffStopResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffStopResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffStopResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

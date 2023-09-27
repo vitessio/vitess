@@ -35,8 +35,9 @@ import (
 )
 
 var (
-	zkCfg = "6@<hostname>:3801:3802:3803"
-	myID  uint
+	zkCfg   = "6@<hostname>:3801:3802:3803"
+	myID    uint
+	zkExtra []string
 )
 
 func init() {
@@ -48,7 +49,8 @@ func registerFlags(fs *pflag.FlagSet) {
 		"zkid@server1:leaderPort1:electionPort1:clientPort1,...)")
 	fs.UintVar(&myID, "zk.myid", myID,
 		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
-
+	fs.StringArrayVar(&zkExtra, "zk.extra", zkExtra,
+		"extra config line(s) to append verbatim to config (flag can be specified more than once)")
 	acl.RegisterFlags(fs)
 }
 
@@ -59,6 +61,7 @@ func main() {
 	servenv.ParseFlags("zkctld")
 	servenv.Init()
 	zkConfig := zkctl.MakeZkConfigFromString(zkCfg, uint32(myID))
+	zkConfig.Extra = zkExtra
 	zkd := zkctl.NewZkd(zkConfig)
 
 	if zkd.Inited() {

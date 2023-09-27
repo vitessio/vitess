@@ -69,8 +69,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 
 		//Backup Arguments are not optional
 		"--backup_storage_implementation", "file",
-		"--file_backup_storage_root",
-		path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
+		"--file_backup_storage_root", path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
 	)
 
 	if vtbackup.initialBackup {
@@ -84,6 +83,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 	vtbackup.proc.Stdout = os.Stdout
 
 	vtbackup.proc.Env = append(vtbackup.proc.Env, os.Environ()...)
+	vtbackup.proc.Env = append(vtbackup.proc.Env, DefaultVttestEnv)
 	log.Infof("Running vtbackup with args: %v", strings.Join(vtbackup.proc.Args, " "))
 
 	err = vtbackup.proc.Run()

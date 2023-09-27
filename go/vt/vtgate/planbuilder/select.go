@@ -234,12 +234,6 @@ func newBuildSelectPlan(
 
 	optimizePlan(plan)
 
-	if sel, isSel := selStmt.(*sqlparser.Select); isSel {
-		if err = setMiscFunc(plan, sel); err != nil {
-			return nil, nil, err
-		}
-	}
-
 	if err = plan.Wireup(ctx); err != nil {
 		return nil, nil, err
 	}
@@ -394,38 +388,6 @@ func shouldRetryAfterPredicateRewriting(plan logicalPlan) bool {
 	return opcode == engine.DBA &&
 		len(sysTableTableName) == 0 &&
 		len(sysTableTableSchema) == 0
-}
-
-func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
-	_, err := visit(in, func(plan logicalPlan) (bool, logicalPlan, error) {
-		switch node := plan.(type) {
-		case *route:
-			err := copyCommentsAndLocks(node.Select, sel, node.eroute.Opcode)
-			if err != nil {
-				return false, nil, err
-			}
-			return true, node, nil
-		}
-		return true, plan, nil
-	})
-
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func copyCommentsAndLocks(statement sqlparser.SelectStatement, sel *sqlparser.Select, opcode engine.Opcode) error {
-	query := sqlparser.GetFirstSelect(statement)
-	query.Comments = sel.Comments
-	query.Lock = sel.Lock
-	if sel.Into != nil {
-		if opcode != engine.Unsharded {
-			return vterrors.VT12001("INTO on sharded keyspace")
-		}
-		query.Into = sel.Into
-	}
-	return nil
 }
 
 func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engine.Primitive, error) {

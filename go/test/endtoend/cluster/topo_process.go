@@ -42,6 +42,7 @@ type TopoProcess struct {
 	Binary             string
 	DataDirectory      string
 	LogDirectory       string
+	ErrorLog           string
 	ListenClientURL    string
 	AdvertiseClientURL string
 	Port               int
@@ -94,8 +95,10 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 	}
 
 	topo.proc.Stderr = errFile
+	topo.ErrorLog = errFile.Name()
 
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
+	topo.proc.Env = append(topo.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Starting etcd with command: %v", strings.Join(topo.proc.Args, " "))
 
@@ -125,6 +128,12 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 		}
 		select {
 		case err := <-topo.exit:
+			errBytes, ferr := os.ReadFile(topo.ErrorLog)
+			if ferr == nil {
+				log.Errorf("%s error log contents:\n%s", topo.Binary, string(errBytes))
+			} else {
+				log.Errorf("Failed to read the %s error log file %q: %v", topo.Binary, topo.ErrorLog, ferr)
+			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", topo.Binary, err)
 		default:
 			time.Sleep(300 * time.Millisecond)

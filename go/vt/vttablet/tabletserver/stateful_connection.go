@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -277,9 +276,6 @@ func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 	sc.Stats().UserTransactionCount.Add([]string{username, reason.Name()}, 1)
 	sc.Stats().UserTransactionTimesNs.Add([]string{username, reason.Name()}, int64(duration))
 	sc.txProps.Stats.Add(reason.Name(), duration)
-	if sc.txProps.LogToFile {
-		log.Infof("Logged transaction: %s", sc.String(sc.env.Config().SanitizeLogMessages))
-	}
 	tabletenv.TxLogger.Send(sc)
 }
 

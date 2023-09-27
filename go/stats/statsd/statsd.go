@@ -219,10 +219,22 @@ func (sb StatsBackend) addExpVar(kv expvar.KeyValue) {
 	}
 }
 
-// PushAll flush out the pending metrics
+// PushAll flushes out the pending metrics
 func (sb StatsBackend) PushAll() error {
 	expvar.Do(func(kv expvar.KeyValue) {
 		sb.addExpVar(kv)
+	})
+	if err := sb.statsdClient.Flush(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// PushOne pushes the single provided metric.
+func (sb StatsBackend) PushOne(name string, v stats.Variable) error {
+	sb.addExpVar(expvar.KeyValue{
+		Key:   name,
+		Value: v,
 	})
 	if err := sb.statsdClient.Flush(); err != nil {
 		return err

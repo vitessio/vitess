@@ -132,6 +132,9 @@ func (a *analyzer) checkSelect(cursor *sqlparser.Cursor, node *sqlparser.Select)
 	if a.scoper.currentScope().parent != nil {
 		return &CantUseOptionHereError{Msg: errMsg}
 	}
+	if node.Into != nil {
+		return ShardedError{Inner: &UnsupportedConstruct{errString: "INTO on sharded keyspace"}}
+	}
 	return nil
 }
 

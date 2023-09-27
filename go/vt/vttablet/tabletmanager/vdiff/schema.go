@@ -19,7 +19,7 @@ package vdiff
 const (
 	sqlAnalyzeTable = "analyze table `%s`.`%s`"
 	sqlNewVDiff     = "insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values(%a, %a, %a, %a, %a, %a, %a)"
-	sqlResumeVDiff  = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.options = %a, vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending',
+	sqlResumeVDiff  = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending',
 					vdt.state = 'pending' where vd.vdiff_uuid = %a and vd.id = vdt.vdiff_id and vd.state in ('completed', 'stopped')
 					and vdt.state in ('completed', 'stopped')`
 	sqlRetryVDiff = `update _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id) set vd.state = 'pending',

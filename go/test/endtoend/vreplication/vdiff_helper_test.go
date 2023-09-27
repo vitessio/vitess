@@ -17,7 +17,6 @@ limitations under the License.
 package vreplication
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -29,7 +28,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
-	"vitess.io/vitess/go/vt/wrangler"
 )
 
 const (
@@ -40,50 +38,52 @@ var (
 	runVDiffsSideBySide = true
 )
 
-func vdiff(t *testing.T, keyspace, workflow, cells string, v1, v2 bool, wantV2Result *expectedVDiff2Result) {
-	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
-	if v1 {
-		doVDiff1(t, ksWorkflow, cells)
+func vdiff(t *testing.T, keyspace, workflow, cells string, vtctlclient, vtctldclient bool, wantV2Result *expectedVDiff2Result) {
+	if vtctlclient {
+		doVtctlclientVDiff(t, keyspace, workflow, cells, wantV2Result)
 	}
-	if v2 {
-		doVdiff2(t, keyspace, workflow, cells, wantV2Result)
+	if vtctldclient {
+		doVtctldclientVDiff(t, keyspace, workflow, cells, wantV2Result)
 	}
 }
 
-func vdiff1(t *testing.T, ksWorkflow, cells string) {
-	if !runVDiffsSideBySide {
-		doVDiff1(t, ksWorkflow, cells)
-		return
-	}
+// vdiffSideBySide will run the VDiff command using both vtctlclient
+// and vtctldclient.
+func vdiffSideBySide(t *testing.T, ksWorkflow, cells string) {
 	arr := strings.Split(ksWorkflow, ".")
 	keyspace := arr[0]
 	workflowName := arr[1]
+	if !runVDiffsSideBySide {
+		doVtctlclientVDiff(t, keyspace, workflowName, cells, nil)
+		return
+	}
 	vdiff(t, keyspace, workflowName, cells, true, true, nil)
 }
 
-func doVDiff1(t *testing.T, ksWorkflow, cells string) {
-	t.Run(fmt.Sprintf("vdiff1 %s", ksWorkflow), func(t *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", "--tablet_types=primary", "--source_cell="+cells, "--format", "json", ksWorkflow)
-		log.Infof("vdiff1 err: %+v, output: %+v", err, output)
-		require.NoError(t, err)
-		require.NotNil(t, output)
-		diffReports := make(map[string]*wrangler.DiffReport)
-		t.Logf("vdiff1 output: %s", output)
-		err = json.Unmarshal([]byte(output), &diffReports)
-		require.NoError(t, err)
-		if len(diffReports) < 1 {
-			t.Fatal("VDiff did not return a valid json response " + output + "\n")
+func doVtctlclientVDiff(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result) {
+	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
+	t.Run(fmt.Sprintf("vtctlclient vdiff %s", ksWorkflow), func(t *testing.T) {
+		// update-table-stats is needed in order to test progress reports.
+		uuid, _ := performVDiff2Action(t, true, ksWorkflow, cells, "create", "", false, "--auto-retry", "--update-table-stats")
+		info := waitForVDiff2ToComplete(t, true, ksWorkflow, cells, uuid, time.Time{})
+		require.Equal(t, workflow, info.Workflow)
+		require.Equal(t, keyspace, info.Keyspace)
+		if want != nil {
+			require.Equal(t, want.state, info.State)
+			require.Equal(t, strings.Join(want.shards, ","), info.Shards)
+			require.Equal(t, want.hasMismatch, info.HasMismatch)
+		} else {
+			require.Equal(t, "completed", info.State, "vdiff results: %+v", info)
+			require.False(t, info.HasMismatch, "vdiff results: %+v", info)
 		}
-		require.True(t, len(diffReports) > 0)
-		for key, diffReport := range diffReports {
-			if diffReport.ProcessedRows != diffReport.MatchingRows {
-				require.Failf(t, "vdiff1 failed", "Table %d : %#v\n", key, diffReport)
-			}
+		if strings.Contains(t.Name(), "AcrossDBVersions") {
+			log.Errorf("VDiff resume cannot be guaranteed between major MySQL versions due to implied collation differences, skipping resume test...")
+			return
 		}
 	})
 }
 
-func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, completedAtMin time.Time) *vdiffInfo {
+func waitForVDiff2ToComplete(t *testing.T, useVtctlclient bool, ksWorkflow, cells, uuid string, completedAtMin time.Time) *vdiffInfo {
 	var info *vdiffInfo
 	first := true
 	previousProgress := vdiff2.ProgressReport{}
@@ -91,7 +91,7 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 	go func() {
 		for {
 			time.Sleep(1 * time.Second)
-			_, jsonStr := performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
+			_, jsonStr := performVDiff2Action(t, useVtctlclient, ksWorkflow, cells, "show", uuid, false)
 			info = getVDiffInfo(jsonStr)
 			if info.State == "completed" {
 				if !completedAtMin.IsZero() {
@@ -147,12 +147,12 @@ type expectedVDiff2Result struct {
 	hasMismatch bool
 }
 
-func doVdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result) {
+func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
-	t.Run(fmt.Sprintf("vdiff2 %s", ksWorkflow), func(t *testing.T) {
+	t.Run(fmt.Sprintf("vtctldclient vdiff %s", ksWorkflow), func(t *testing.T) {
 		// update-table-stats is needed in order to test progress reports.
-		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, "--auto-retry", "--update-table-stats")
-		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, time.Time{})
+		uuid, _ := performVDiff2Action(t, false, ksWorkflow, cells, "create", "", false, "--auto-retry", "--update-table-stats")
+		info := waitForVDiff2ToComplete(t, false, ksWorkflow, cells, uuid, time.Time{})
 
 		require.Equal(t, workflow, info.Workflow)
 		require.Equal(t, keyspace, info.Keyspace)
@@ -171,23 +171,50 @@ func doVdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDif
 	})
 }
 
-func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg string, expectError bool, extraFlags ...string) (uuid string, output string) {
+func performVDiff2Action(t *testing.T, useVtctlclient bool, ksWorkflow, cells, action, actionArg string, expectError bool, extraFlags ...string) (uuid string, output string) {
 	var err error
-	args := []string{"VDiff", "--", "--tablet_types=primary", "--source_cell=" + cells, "--format=json"}
-	if len(extraFlags) > 0 {
-		args = append(args, extraFlags...)
-	}
-	args = append(args, ksWorkflow, action, actionArg)
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput(args...)
-	log.Infof("vdiff2 output: %+v (err: %+v)", output, err)
-	if !expectError {
-		require.Nil(t, err)
-		uuid = gjson.Get(output, "UUID").String()
-		if action != "delete" && !(action == "show" && actionArg == "all") { // a UUID is not required
+	targetKeyspace, workflowName, ok := strings.Cut(ksWorkflow, ".")
+	require.True(t, ok, "invalid keyspace.workflow value: %s", ksWorkflow)
+
+	if useVtctlclient {
+		args := []string{"VDiff", "--", "--tablet_types=primary", "--source_cell=" + cells, "--format=json"}
+		if len(extraFlags) > 0 {
+			args = append(args, extraFlags...)
+		}
+		args = append(args, ksWorkflow, action, actionArg)
+		output, err = vc.VtctlClient.ExecuteCommandWithOutput(args...)
+		log.Infof("vdiff output: %+v (err: %+v)", output, err)
+		if !expectError {
+			require.Nil(t, err)
+			uuid = gjson.Get(output, "UUID").String()
+			if action != "delete" && !(action == "show" && actionArg == "all") { // A UUID is not required
+				require.NoError(t, err)
+				require.NotEmpty(t, uuid)
+			}
+		}
+	} else {
+		args := []string{"VDiff", "--target-keyspace", targetKeyspace, "--workflow", workflowName, "--format=json", action}
+		if strings.ToLower(action) == string(vdiff2.CreateAction) {
+			args = append(args, "--tablet-types=primary", "--source-cells="+cells)
+		}
+		if len(extraFlags) > 0 {
+			args = append(args, extraFlags...)
+		}
+		if actionArg != "" {
+			args = append(args, actionArg)
+		}
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...)
+		log.Infof("vdiff output: %+v (err: %+v)", output, err)
+		if !expectError {
 			require.NoError(t, err)
-			require.NotEmpty(t, uuid)
+			ouuid := gjson.Get(output, "UUID").String()
+			if action == "create" || (action == "show" && actionArg != "all") { // A UUID is returned
+				require.NotEmpty(t, ouuid)
+				uuid = ouuid
+			}
 		}
 	}
+
 	return uuid, output
 }
 

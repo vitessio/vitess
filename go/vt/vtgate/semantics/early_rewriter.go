@@ -123,7 +123,7 @@ func handleOrderBy(r *earlyRewriter, cursor *sqlparser.Cursor, node sqlparser.Or
 func rewriteOrExpr(cursor *sqlparser.Cursor, node *sqlparser.OrExpr) {
 	newNode := rewriteOrFalse(*node)
 	if newNode != nil {
-		cursor.Replace(newNode)
+		cursor.ReplaceAndRevisit(newNode)
 	}
 }
 

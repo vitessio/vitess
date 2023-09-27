@@ -42,6 +42,9 @@ type (
 
 		Ordering []RouteOrdering
 
+		Comments *sqlparser.ParsedComments
+		Lock     sqlparser.Lock
+
 		ResultColumns int
 	}
 

@@ -712,6 +712,9 @@ func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow st
 			if err := sw.dropSourceDeniedTables(ctx); err != nil {
 				return nil, err
 			}
+			if err := sw.dropTargetDeniedTables(ctx); err != nil {
+				return nil, err
+			}
 		case binlogdatapb.MigrationType_SHARDS:
 			log.Infof("Removing target shards")
 			if err := sw.dropTargetShards(ctx); err != nil {
@@ -833,6 +836,9 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowNam
 				return nil, err
 			}
 			if err := sw.dropSourceDeniedTables(ctx); err != nil {
+				return nil, err
+			}
+			if err := sw.dropTargetDeniedTables(ctx); err != nil {
 				return nil, err
 			}
 
@@ -1193,7 +1199,7 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access accessType) error {
 	err := ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, access == allowWrites /* remove */, ts.Tables())
+			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, access == allowWrites /* remove */, ts.Tables())
 		}); err != nil {
 			return err
 		}
@@ -1498,7 +1504,7 @@ func (ts *trafficSwitcher) allowTargetWrites(ctx context.Context) error {
 func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
 	return ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
+			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
 		}); err != nil {
 			return err
 		}
@@ -1641,13 +1647,27 @@ func (ts *trafficSwitcher) TargetShards() []*topo.ShardInfo {
 func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
+			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
 		}); err != nil {
 			return err
 		}
 		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
 		defer cancel()
 		_, _, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
+		return err
+	})
+}
+
+func (ts *trafficSwitcher) dropTargetDeniedTables(ctx context.Context) error {
+	return ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
+		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
+			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
+		}); err != nil {
+			return err
+		}
+		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+		defer cancel()
+		_, _, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
 		return err
 	})
 }

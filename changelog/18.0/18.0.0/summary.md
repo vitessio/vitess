@@ -9,6 +9,7 @@
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
     - [VTOrc flag `--change-tablets-with-errant-gtid-to-drained`](#new-flag-errant-gtid-convert)
     - [ERS sub flag `--wait-for-all-tablets`](#new-ers-subflag)
+    - [VTGate flag `--grpc-send-session-in-streaming`](#new-vtgate-streaming-sesion)
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v18.16.0](#update-node)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
@@ -16,8 +17,14 @@
     - [Deleted `V3` planner](#deleted-v3)
     - [Deleted `k8stopo`](#deleted-k8stopo)
     - [Deleted `vtgr`](#deleted-vtgr)
+    - [Deleted `query_analyzer`](#deleted-query_analyzer)
+    - [Deprecated VTBackup stat `DurationByPhase`](#deprecated-vtbackup-stat-duration-by-phase)
+    - [Deprecated VDiff v1](#deprecated-vdiff-v1)
   - **[New stats](#new-stats)**
     - [VTGate Vindex unknown parameters](#vtgate-vindex-unknown-parameters)
+    - [VTBackup stat `Phase`](#vtbackup-stat-phase)
+    - [VTBackup stat `PhaseStatus`](#vtbackup-stat-phase-status)
+    - [Backup and restore metrics for AWS S3](#backup-restore-metrics-aws-s3)
   - **[VTTablet](#vttablet)**
     - [VTTablet: New ResetSequences RPC](#vttablet-new-rpc-reset-sequences)
   - **[Docker](#docker)**
@@ -62,6 +69,14 @@ for a response from all the tablets. Originally `EmergencyReparentShard` was mea
 We have realized now that there are cases when the replication is broken but all the tablets are reachable. In these cases, it is advisable to 
 call `EmergencyReparentShard` with `--wait-for-all-tablets` so that it doesn't ignore one of the tablets.
 
+#### <a id="new-vtgate-streaming-sesion"/>VTGate GRPC stream execute session flag `--grpc-send-session-in-streaming`
+
+This flag enables transaction support on `StreamExecute` api.
+One enabled, VTGate `StreamExecute` grpc api will send session as the last packet in the response.
+The client should enable it only when they have made the required changes to expect such a packet.
+
+It is disabled by default.
+
 ### <a id="vtadmin"/>VTAdmin
 
 #### <a id="updated-node"/>vtadmin-web updated to node v18.16.0 (LTS)
@@ -83,9 +98,19 @@ Throttler related `vttablet` flags:
 - `--throttle_check_as_check_self` is deprecated and will be removed in `v19.0`
 - `--throttler-config-via-topo` is deprecated after assumed `true` in `v17.0`. It will be removed in a future version.
 
+Cache related `vttablet` flags:
+
+- `--queryserver-config-query-cache-lfu` is deprecated and will be removed in `v19.0`. The query cache always uses a LFU implementation now.
+- `--queryserver-config-query-cache-size` is deprecated and will be removed in `v19.0`. This option only applied to LRU caches, which are now unsupported.
+
 Buffering related `vtgate` flags:
 
 - `--buffer_implementation` is deprecated and will be removed in `v19.0`
+
+Cache related `vtgate` flags:
+
+- `--gate_query_cache_lfu` is deprecated and will be removed in `v19.0`. The query cache always uses a LFU implementation now.
+- `--gate_query_cache_size` is deprecated and will be removed in `v19.0`. This option only applied to LRU caches, which are now unsupported.
 
 VTGate flag:
 
@@ -104,11 +129,58 @@ the `k8stopo` has been removed.
 
 The `vtgr` has been deprecated in Vitess 17, also see https://github.com/vitessio/vitess/issues/13300. With Vitess 18 `vtgr` has been removed.
 
+#### <a id="deleted-query_analyzer"/>Deleted `query_analyzer`
+
+The undocumented `query_analyzer` binary has been removed in Vitess 18, see https://github.com/vitessio/vitess/issues/14054.
+
+#### <a id="deprecated-vdiff-v1"/>Deprecated VDiff v1
+
+[VDiff v2 was added in Vitess 15.0](https://vitess.io/blog/2022-11-22-vdiff-v2/) and marked as GA in 16.0. The [legacy v1 client command](https://vitess.io/docs/18.0/reference/vreplication/vdiffv1/) is now deprecated in Vitess 18.0 and will be **removed** in 19.0. Please switch all of your usage to the [new VDiff client](https://vitess.io/docs/18.0/reference/vreplication/vdiff/) command ASAP.
+
+#### <a id="deprecated-vtbackup-stat-duration-by-phase"/>Deprecated VTbackup stat `DurationByPhase`
+
+VTBackup stat `DurationByPhase` is deprecated. Use the binary-valued `Phase` stat instead.
+
 ### <a id="new-stats"/>New stats
 
 #### <a id="vtgate-vindex-unknown-parameters"/>VTGate Vindex unknown parameters
 
 The VTGate stat `VindexUnknownParameters` gauges unknown Vindex parameters found in the latest VSchema pulled from the topology.
+
+#### <a id="vtbackup-stat-phase"/>VTBackup `Phase` stat
+
+In v17, the `vtbackup` stat `DurationByPhase` stat was added measuring the time spent by `vtbackup` in each phase. This stat turned out to be awkward to use in production, and has been replaced in v18 by a binary-valued `Phase` stat.
+
+`Phase` reports a 1 (active) or a 0 (inactive) for each of the following phases:
+
+ * `CatchupReplication`
+ * `InitialBackup`
+ * `RestoreLastBackup`
+ * `TakeNewBackup`
+
+To calculate how long `vtbackup` has spent in a given phase, sum the 1-valued data points over time and multiply by the data collection or reporting interval. For example, in Prometheus:
+
+```
+sum_over_time(vtbackup_phase{phase="TakeNewBackup"}) * <interval>
+```
+#### <a id="vtbackup-stat-phase-status"/>VTBackup `PhaseStatus` stat
+
+`PhaseStatus` reports a 1 (active) or a 0 (inactive) for each of the following phases and statuses:
+
+ * `CatchupReplication` phase has statuses `Stalled` and `Stopped`.
+    * `Stalled` is set to `1` when replication stops advancing.
+    * `Stopped` is set to `1` when replication stops before `vtbackup` catches up with the primary.
+
+#### <a id="backup-restore-metrics-aws-s3"/>Backup and restore metrics for AWS S3
+
+Requests to AWS S3 are instrumented in backup and restore metrics. For example:
+
+```
+vtbackup_backup_count{component="BackupStorage",implementation="S3",operation="AWS:Request:Send"} 823
+vtbackup_backup_duration_nanoseconds{component="BackupStorage",implementation="S3",operation="AWS:Request:Send"} 1.33632421437e+11
+vtbackup_restore_count{component="BackupStorage",implementation="S3",operation="AWS:Request:Send"} 165
+vtbackup_restore_count{component="BackupStorage",implementation="S3",operation="AWS:Request:Send"} 165
+```
 
 ### <a id="vttablet"/>VTTablet
 
