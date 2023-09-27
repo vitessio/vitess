@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -121,7 +122,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		}
 	}()
 
-	if err := td.selectTablets(ctx, td.wd.opts.PickerOptions.SourceCell, td.wd.opts.PickerOptions.TabletTypes); err != nil {
+	if err := td.selectTablets(ctx); err != nil {
 		return err
 	}
 	if err := td.syncSourceStreams(ctx); err != nil {
@@ -199,16 +200,22 @@ func (td *tableDiffer) forEachSource(cb func(source *migrationSource) error) err
 	return allErrors.AggrError(vterrors.Aggregate)
 }
 
-func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes string) error {
-	var wg sync.WaitGroup
-	ct := td.wd.ct
-	var err1, err2 error
+func (td *tableDiffer) selectTablets(ctx context.Context) error {
+	var (
+		wg                   sync.WaitGroup
+		sourceErr, targetErr error
+		targetTablet         *topodata.Tablet
+	)
+
+	// The cells from the vdiff record are a comma separated list.
+	sourceCells := strings.Split(td.wd.opts.PickerOptions.SourceCell, ",")
+	targetCells := strings.Split(td.wd.opts.PickerOptions.TargetCell, ",")
 
 	// For Mount+Migrate, the source tablets will be in a different
 	// Vitess cluster with its own TopoServer.
-	sourceTopoServer := ct.ts
-	if ct.externalCluster != "" {
-		extTS, err := ct.ts.OpenExternalVitessClusterServer(ctx, ct.externalCluster)
+	sourceTopoServer := td.wd.ct.ts
+	if td.wd.ct.externalCluster != "" {
+		extTS, err := td.wd.ct.ts.OpenExternalVitessClusterServer(ctx, td.wd.ct.externalCluster)
 		if err != nil {
 			return err
 		}
@@ -217,12 +224,17 @@ func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes stri
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+<<<<<<< HEAD
 		err1 = td.forEachSource(func(source *migrationSource) error {
 			tablet, err := pickTablet(ctx, sourceTopoServer, cell, ct.sourceKeyspace, source.shard, tabletTypes)
+=======
+		sourceErr = td.forEachSource(func(source *migrationSource) error {
+			sourceTablet, err := pickTablet(ctx, sourceTopoServer, sourceCells, td.wd.ct.vde.thisTablet.Alias.Cell, td.wd.ct.sourceKeyspace, source.shard, td.wd.opts.PickerOptions.TabletTypes)
+>>>>>>> 2f679aaab1 (VDiff: properly split cell values in record when using TabletPicker (#14099))
 			if err != nil {
 				return err
 			}
-			source.tablet = tablet
+			source.tablet = sourceTablet
 			return nil
 		})
 	}()
@@ -230,26 +242,37 @@ func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes stri
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+<<<<<<< HEAD
 		tablet, err2 := pickTablet(ctx, ct.ts, td.wd.opts.PickerOptions.TargetCell, ct.vde.thisTablet.Keyspace,
 			ct.vde.thisTablet.Shard, td.wd.opts.PickerOptions.TabletTypes)
 		if err2 != nil {
+=======
+		targetTablet, targetErr = pickTablet(ctx, td.wd.ct.ts, targetCells, td.wd.ct.vde.thisTablet.Alias.Cell, td.wd.ct.vde.thisTablet.Keyspace,
+			td.wd.ct.vde.thisTablet.Shard, td.wd.opts.PickerOptions.TabletTypes)
+		if targetErr != nil {
+>>>>>>> 2f679aaab1 (VDiff: properly split cell values in record when using TabletPicker (#14099))
 			return
 		}
-		ct.targetShardStreamer = &shardStreamer{
-			tablet: tablet,
-			shard:  tablet.Shard,
+		td.wd.ct.targetShardStreamer = &shardStreamer{
+			tablet: targetTablet,
+			shard:  targetTablet.Shard,
 		}
 	}()
 
 	wg.Wait()
-	if err1 != nil {
-		return err1
+	if sourceErr != nil {
+		return sourceErr
 	}
-	return err2
+	return targetErr
 }
 
+<<<<<<< HEAD
 func pickTablet(ctx context.Context, ts *topo.Server, cell, keyspace, shard, tabletTypes string) (*topodata.Tablet, error) {
 	tp, err := discovery.NewTabletPicker(ts, []string{cell}, keyspace, shard, tabletTypes)
+=======
+func pickTablet(ctx context.Context, ts *topo.Server, cells []string, localCell, keyspace, shard, tabletTypes string) (*topodata.Tablet, error) {
+	tp, err := discovery.NewTabletPicker(ctx, ts, cells, localCell, keyspace, shard, tabletTypes, discovery.TabletPickerOptions{})
+>>>>>>> 2f679aaab1 (VDiff: properly split cell values in record when using TabletPicker (#14099))
 	if err != nil {
 		return nil, err
 	}
