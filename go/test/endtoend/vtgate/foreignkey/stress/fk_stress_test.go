@@ -472,6 +472,7 @@ type testCase struct {
 // - Either one of ON UPDATE actions
 // - Potentially running an Online DDL on an indicated table (this will not work in Vanilla MySQL, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/)
 func ExecuteFKTest(t *testing.T, tcase *testCase) {
+	t.Logf("==== test setup: maxConcurrency=%v, singleConnectionSleepInterval=%v", maxConcurrency, singleConnectionSleepInterval)
 	workloadName := "static data"
 	if tcase.workload {
 		workloadName = "workload"
