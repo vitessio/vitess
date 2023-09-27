@@ -177,7 +177,11 @@ func performVDiff2Action(t *testing.T, useVtctlclient bool, ksWorkflow, cells, a
 	require.True(t, ok, "invalid keyspace.workflow value: %s", ksWorkflow)
 
 	if useVtctlclient {
-		args := []string{"VDiff", "--", "--tablet_types=primary", "--source_cell=" + cells, "--format=json"}
+		// This will always result in us using a PRIMARY tablet, which is all
+		// we start in many e2e tests, but it avoids the tablet picker logic
+		// where when you ONLY specify the PRIMARY type it then picks the
+		// shard's primary and ignores any cell settings.
+		args := []string{"VDiff", "--", "--tablet_types=in_order:primary,replica", "--source_cell=" + cells, "--format=json"}
 		if len(extraFlags) > 0 {
 			args = append(args, extraFlags...)
 		}
@@ -195,7 +199,11 @@ func performVDiff2Action(t *testing.T, useVtctlclient bool, ksWorkflow, cells, a
 	} else {
 		args := []string{"VDiff", "--target-keyspace", targetKeyspace, "--workflow", workflowName, "--format=json", action}
 		if strings.ToLower(action) == string(vdiff2.CreateAction) {
-			args = append(args, "--tablet-types=primary", "--source-cells="+cells)
+			// This will always result in us using a PRIMARY tablet, which is all
+			// we start in many e2e tests, but it avoids the tablet picker logic
+			// where when you ONLY specify the PRIMARY type it then picks the
+			// shard's primary and ignores any cell settings.
+			args = append(args, "--tablet-types=primary,replica", "--tablet-types-in-preference-order", "--source-cells="+cells)
 		}
 		if len(extraFlags) > 0 {
 			args = append(args, extraFlags...)
