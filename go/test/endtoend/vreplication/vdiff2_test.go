@@ -104,7 +104,7 @@ var testCases = []*testCase{
 }
 
 func TestVDiff2(t *testing.T) {
-	allCellNames = "zone1,zone2,zone3,zone4,zone5"
+	allCellNames = "zone5,zone1,zone2,zone3,zone4"
 	sourceKs := "product"
 	sourceShards := []string{"0"}
 	targetKs := "customer"
@@ -123,7 +123,7 @@ func TestVDiff2(t *testing.T) {
 
 	// The primary tablet is only added in the first cell.
 	// We ONLY add primary tablets in this test.
-	_, err := vc.AddKeyspace(t, []*Cell{zone1, zone2, zone3}, sourceKs, strings.Join(sourceShards, ","), initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
+	_, err := vc.AddKeyspace(t, []*Cell{zone2, zone1, zone3}, sourceKs, strings.Join(sourceShards, ","), initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
 	require.NoError(t, err)
 
 	vtgate = defaultCell.Vtgates[0]
@@ -146,7 +146,7 @@ func TestVDiff2(t *testing.T) {
 
 	// The primary tablet is only added in the first cell.
 	// We ONLY add primary tablets in this test.
-	tks, err := vc.AddKeyspace(t, []*Cell{zone2, zone1, zone3}, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
+	tks, err := vc.AddKeyspace(t, []*Cell{zone3, zone1, zone2}, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
 	require.NoError(t, err)
 	for _, shard := range targetShards {
 		require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, shard))
