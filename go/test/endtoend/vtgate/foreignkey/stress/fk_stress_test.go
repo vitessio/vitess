@@ -25,7 +25,6 @@ import (
 	"path"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -449,8 +448,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 		testName = fmt.Sprintf("%s/ddl=%s", testName, tcase.onlineDDLTable)
 	}
 	t.Run(testName, func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := context.Background()
 
 		t.Run("create schema", func(t *testing.T) {
 			createInitialSchema(t, tcase)
@@ -460,6 +458,9 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 		})
 		if tcase.workload {
 			t.Run("workload", func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(ctx, workloadDuration)
+				defer cancel()
+
 				var wg sync.WaitGroup
 				for _, workloadTable := range []string{parentTableName, childTableName, child2TableName, grandchildTableName} {
 					wg.Add(1)
@@ -468,7 +469,6 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 						runMultipleConnections(ctx, t, tbl)
 					}(workloadTable)
 				}
-				timer := time.NewTimer(workloadDuration)
 
 				if tcase.onlineDDLTable != "" {
 					t.Run("migrating", func(t *testing.T) {
@@ -494,9 +494,6 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 						})
 					})
 				}
-
-				<-timer.C
-				cancel() // will cause runMultipleConnections() to terminate
 				wg.Wait()
 			})
 		}
@@ -877,7 +874,7 @@ func generateDelete(t *testing.T, tableName string, conn *mysql.Conn) error {
 	return err
 }
 
-func runSingleConnection(ctx context.Context, t *testing.T, tableName string, done *int64) {
+func runSingleConnection(ctx context.Context, t *testing.T, tableName string) {
 	log.Infof("Running single connection on %s", tableName)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -889,7 +886,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, tableName string, do
 	require.Nil(t, err)
 
 	for {
-		if atomic.LoadInt64(done) == 1 {
+		if ctx.Err() != nil {
 			log.Infof("Terminating single connection")
 			return
 		}
@@ -907,17 +904,15 @@ func runSingleConnection(ctx context.Context, t *testing.T, tableName string, do
 
 func runMultipleConnections(ctx context.Context, t *testing.T, tableName string) {
 	log.Infof("Running multiple connections")
-	var done int64
 	var wg sync.WaitGroup
 	for i := 0; i < maxConcurrency; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			runSingleConnection(ctx, t, tableName, &done)
+			runSingleConnection(ctx, t, tableName)
 		}()
 	}
 	<-ctx.Done()
-	atomic.StoreInt64(&done, 1)
 	log.Infof("Running multiple connections: done")
 	wg.Wait()
 	log.Infof("All connections cancelled")
