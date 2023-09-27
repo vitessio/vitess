@@ -257,7 +257,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 		t.Run("PITR-2", func(t *testing.T) {
 			testRestores(t)
 		})
-		// Test that we can create a new tablet with --restore_from_backup --restore_to_pos and that it bootstraps
+		// Test that we can create a new tablet with --restore_from_backup --restore-to-pos and that it bootstraps
 		// via PITR and ends up in DRAINED type.
 		t.Run("init tablet PITR", func(t *testing.T) {
 			require.NotEmpty(t, sampleTestedBackupPos)
@@ -265,7 +265,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 			var tablet *cluster.Vttablet
 
 			t.Run(fmt.Sprintf("init from backup pos %s", sampleTestedBackupPos), func(t *testing.T) {
-				tablet, err = SetupReplica3Tablet([]string{"--restore_to_pos", sampleTestedBackupPos})
+				tablet, err = SetupReplica3Tablet([]string{"--restore-to-pos", sampleTestedBackupPos})
 				assert.NoError(t, err)
 			})
 			t.Run("wait for drained", func(t *testing.T) {
@@ -484,7 +484,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 		t.Run("PITR-2", func(t *testing.T) {
 			testRestores(t)
 		})
-		// Test that we can create a new tablet with --restore_from_backup --restore_to_timestamp and that it bootstraps
+		// Test that we can create a new tablet with --restore_from_backup --restore-to-timestamp and that it bootstraps
 		// via PITR and ends up in DRAINED type.
 		t.Run("init tablet PITR", func(t *testing.T) {
 			require.GreaterOrEqual(t, sampleTestedBackupIndex, 0)
@@ -494,7 +494,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 			var tablet *cluster.Vttablet
 
 			t.Run(fmt.Sprintf("init from backup num %d", sampleTestedBackupIndex), func(t *testing.T) {
-				tablet, err = SetupReplica3Tablet([]string{"--restore_to_timestamp", restoreToTimestampArg})
+				tablet, err = SetupReplica3Tablet([]string{"--restore-to-timestamp", restoreToTimestampArg})
 				assert.NoError(t, err)
 			})
 			t.Run("wait for drained", func(t *testing.T) {

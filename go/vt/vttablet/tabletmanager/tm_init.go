@@ -770,7 +770,7 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("you cannot enable --restore_from_backup without a my.cnf file")
 	}
 	if restoreToTimestampStr != "" && restoreToPos != "" {
-		return false, fmt.Errorf("--restore_to_timestamp and --restore_to_pos are mutually exclusive")
+		return false, fmt.Errorf("--restore-to-timestamp and --restore-to-pos are mutually exclusive")
 	}
 
 	// Restore in the background
@@ -795,7 +795,7 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 				var err error
 				restoreToTimestamp, err = mysqlctl.ParseRFC3339(restoreToTimestampStr)
 				if err != nil {
-					log.Exitf(fmt.Sprintf("RestoreFromBackup failed: unable to parse the --restore_to_timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err))
+					log.Exitf(fmt.Sprintf("RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err))
 				}
 			}
 			// restoreFromBackup will just be a regular action
