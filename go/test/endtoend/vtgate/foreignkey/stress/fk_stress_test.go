@@ -555,7 +555,9 @@ func TestStressFK(t *testing.T) {
 	})
 
 	runOnlineDDL := false
-
+	if val, present := os.LookupEnv("FK_STRESS_ONLINE_DDL"); present && val != "" {
+		runOnlineDDL = true
+	}
 	// Without workload ; with workload
 	for _, workload := range []bool{false, true} {
 		// For any type of ON DELETE action
