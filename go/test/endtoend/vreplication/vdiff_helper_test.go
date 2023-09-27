@@ -175,6 +175,7 @@ func doVdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDif
 
 func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg string, expectError bool, extraFlags ...string) (uuid string, output string) {
 	var err error
+<<<<<<< HEAD
 	args := []string{"VDiff", "--", "--tablet_types=primary", "--source_cell=" + cells, "--format=json"}
 	if len(extraFlags) > 0 {
 		args = append(args, extraFlags...)
@@ -186,6 +187,49 @@ func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg stri
 		require.Nil(t, err)
 		uuid = gjson.Get(output, "UUID").String()
 		if action != "delete" && !(action == "show" && actionArg == "all") { // a UUID is not required
+=======
+	targetKeyspace, workflowName, ok := strings.Cut(ksWorkflow, ".")
+	require.True(t, ok, "invalid keyspace.workflow value: %s", ksWorkflow)
+
+	if useVtctlclient {
+		// This will always result in us using a PRIMARY tablet, which is all
+		// we start in many e2e tests, but it avoids the tablet picker logic
+		// where when you ONLY specify the PRIMARY type it then picks the
+		// shard's primary and ignores any cell settings.
+		args := []string{"VDiff", "--", "--tablet_types=in_order:primary,replica", "--source_cell=" + cells, "--format=json"}
+		if len(extraFlags) > 0 {
+			args = append(args, extraFlags...)
+		}
+		args = append(args, ksWorkflow, action, actionArg)
+		output, err = vc.VtctlClient.ExecuteCommandWithOutput(args...)
+		log.Infof("vdiff output: %+v (err: %+v)", output, err)
+		if !expectError {
+			require.Nil(t, err)
+			uuid = gjson.Get(output, "UUID").String()
+			if action != "delete" && !(action == "show" && actionArg == "all") { // A UUID is not required
+				require.NoError(t, err)
+				require.NotEmpty(t, uuid)
+			}
+		}
+	} else {
+		args := []string{"VDiff", "--target-keyspace", targetKeyspace, "--workflow", workflowName, "--format=json", action}
+		if strings.ToLower(action) == string(vdiff2.CreateAction) {
+			// This will always result in us using a PRIMARY tablet, which is all
+			// we start in many e2e tests, but it avoids the tablet picker logic
+			// where when you ONLY specify the PRIMARY type it then picks the
+			// shard's primary and ignores any cell settings.
+			args = append(args, "--tablet-types=primary,replica", "--tablet-types-in-preference-order", "--source-cells="+cells)
+		}
+		if len(extraFlags) > 0 {
+			args = append(args, extraFlags...)
+		}
+		if actionArg != "" {
+			args = append(args, actionArg)
+		}
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...)
+		log.Infof("vdiff output: %+v (err: %+v)", output, err)
+		if !expectError {
+>>>>>>> 2f679aaab1 (VDiff: properly split cell values in record when using TabletPicker (#14099))
 			require.NoError(t, err)
 			require.NotEmpty(t, uuid)
 		}
