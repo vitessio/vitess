@@ -133,9 +133,9 @@ Flags in `vttablet`:
 - `--use_super_read_only`
 - `--disable-replication-manager`
 - `--init_populate_metadata`
-- `--queryserver-config-pool-prefill-parallelis`
-- `--queryserver-config-stream-pool-prefill-parallelis`
-- `--queryserver-config-transaction-pool-prefill-parallelis`
+- `--queryserver-config-pool-prefill-parallelism`
+- `--queryserver-config-stream-pool-prefill-parallelism`
+- `--queryserver-config-transaction-pool-prefill-parallelism`
 - `--queryserver-config-schema-change-signal-interval`
 
 Flags in `vtctld`:
