@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,21 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// zkctld is a daemon that starts or initializes ZooKeeper with Vitess-specific
-// configuration. It will stay running as long as the underlying ZooKeeper
-// server, and will pass along SIGTERM.
-package main
+package command
 
-import (
-	"vitess.io/vitess/go/cmd/zkctld/cli"
-	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/log"
-)
+import "github.com/spf13/cobra"
 
-func main() {
-	defer exit.Recover()
-	if err := cli.Main.Execute(); err != nil {
-		log.Error(err)
-		exit.Return(1)
-	}
+var Init = &cobra.Command{
+	Use:   "init",
+	Short: "Generates a new config and then starts zookeeper.",
+	Args:  cobra.ExactArgs(0),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return zkd.Init()
+	},
+}
+
+func init() {
+	Root.AddCommand(Init)
 }
