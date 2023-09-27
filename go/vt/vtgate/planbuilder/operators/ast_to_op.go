@@ -66,8 +66,6 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 		}
 	}
 
-	op = newHorizon(op, sel)
-
 	if sel.Comments != nil || sel.Lock != sqlparser.NoLock {
 		op = &LockAndComment{
 			Source:   op,
@@ -75,6 +73,8 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 			Lock:     sel.Lock,
 		}
 	}
+
+	op = newHorizon(op, sel)
 
 	return op, nil
 }
