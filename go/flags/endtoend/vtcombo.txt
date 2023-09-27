@@ -303,6 +303,8 @@ Flags:
       --restore_concurrency int                                          (init restore parameter) how many concurrent files to restore at once (default 4)
       --restore_from_backup                                              (init restore parameter) will check BackupStorage for a recent backup at startup and start there
       --restore_from_backup_ts string                                    (init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'
+      --restore_to_pos string                                            (init incremental restore parameter) if set, run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups
+      --restore_to_timestamp string                                      (init incremental restore parameter) if set, run a point in time recovery that restores up to the given timestamp, if possible. Given timestamp in RFC3339 format. Example: '2006-01-02T15:04:05Z07:00'
       --retain_online_ddl_tables duration                                How long should vttablet keep an old migrated table before purging it (default 24h0m0s)
       --sanitize_log_messages                                            Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.
       --schema-change-reload-timeout duration                            query server schema change reload timeout, this is how long to wait for the signaled schema reload operation to complete before giving up (default 30s)
