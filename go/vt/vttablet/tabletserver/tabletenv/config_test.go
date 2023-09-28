@@ -88,7 +88,6 @@ oltpReadPool:
   idleTimeoutSeconds: 20s
   maxLifetimeSeconds: 50s
   maxWaiters: 40
-  prefillParallelism: 30
   size: 16
   timeoutSeconds: 10s
 replicationTracker: {}
@@ -111,7 +110,6 @@ txPool: {}
 oltpReadPool:
   size: 16
   idleTimeoutSeconds: 20
-  prefillParallelism: 30
   maxWaiters: 40
   maxLifetimeSeconds: 50
 `)
