@@ -70,7 +70,7 @@ func commandCancel(cmd *cobra.Command, args []string) error {
 		sort.Slice(resp.Details, func(i, j int) bool {
 			return resp.Details[i].Tablet.String() < resp.Details[j].Tablet.String()
 		})
-		output, err = cli.MarshalJSONCompact(resp)
+		output, err = cli.MarshalJSONPretty(resp)
 		if err != nil {
 			return err
 		}

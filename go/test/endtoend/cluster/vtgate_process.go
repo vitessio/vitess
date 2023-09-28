@@ -43,6 +43,7 @@ type VtgateProcess struct {
 	Binary                string
 	CommonArg             VtctlProcess
 	LogDir                string
+	ErrorLog              string
 	FileToLogQueries      string
 	Port                  int
 	GrpcPort              int
@@ -150,6 +151,12 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		}
 		select {
 		case err := <-vtgate.exit:
+			errBytes, ferr := os.ReadFile(vtgate.ErrorLog)
+			if ferr == nil {
+				log.Errorf("vtgate error log contents:\n%s", string(errBytes))
+			} else {
+				log.Errorf("Failed to read the vtgate error log file %q: %v", vtgate.ErrorLog, ferr)
+			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtgate.Name, err)
 		default:
 			time.Sleep(300 * time.Millisecond)

@@ -856,8 +856,8 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/foreignkey"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vtgate_gen4",
-			"RetryMax": 2,
+			"Shard": "vtgate_foreignkey_stress",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_foreignkey_stress": {
@@ -1060,7 +1060,7 @@
 		},
 		"vreplication_basic": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
@@ -1069,7 +1069,7 @@
 		},
 		"vreplication_copy_parallel": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyParallel"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyParallel", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
@@ -1204,7 +1204,7 @@
 		},
                 "vreplication_mariadb_to_mysql": {
                         "File": "unused.go",
-                        "Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesMariaDBToMySQL", "-timeout", "10m"],
+                        "Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesMariaDBToMySQL", "-timeout", "20m"],
                         "Command": [],
                         "Manual": false,
                         "Shard": "vreplication_across_db_versions",
@@ -1213,7 +1213,7 @@
                 },
 		"vreplication_migrate": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMigrate"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMigrate", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_migrate_vdiff2_convert_tz",
@@ -1222,7 +1222,7 @@
 		},
 		"vdiff2": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVDiff2"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVDiff2", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_migrate_vdiff2_convert_tz",

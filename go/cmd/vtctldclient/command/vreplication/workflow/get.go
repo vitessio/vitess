@@ -55,7 +55,7 @@ func commandGetWorkflows(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := cli.MarshalJSON(resp)
+	data, err := cli.MarshalJSONPretty(resp)
 	if err != nil {
 		return err
 	}

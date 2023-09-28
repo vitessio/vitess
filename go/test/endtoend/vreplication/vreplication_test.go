@@ -806,7 +806,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 				execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("update `%s` set name='xyz'", tbl))
 			}
 		}
-		vdiff1(t, ksWorkflow, "")
+		vdiffSideBySide(t, ksWorkflow, "")
 		switchReadsDryRun(t, workflowType, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
 		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		assertQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query)
@@ -832,7 +832,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 		catchup(t, productTab, workflow, "MoveTables")
 
-		vdiff1(t, "product.p2c_reverse", "")
+		vdiffSideBySide(t, "product.p2c_reverse", "")
 		if withOpenTx {
 			execVtgateQuery(t, vtgateConn, "", deleteOpenTxQuery)
 		}
@@ -1061,7 +1061,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 				continue
 			}
 		}
-		vdiff1(t, ksWorkflow, "")
+		vdiffSideBySide(t, ksWorkflow, "")
 		if dryRunResultSwitchReads != nil {
 			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", allCellNames, "rdonly,replica", "--dry-run")
 		}
@@ -1097,7 +1097,7 @@ func shardOrders(t *testing.T) {
 		workflowType := "MoveTables"
 		catchup(t, customerTab1, workflow, workflowType)
 		catchup(t, customerTab2, workflow, workflowType)
-		vdiff1(t, ksWorkflow, "")
+		vdiffSideBySide(t, ksWorkflow, "")
 		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		switchWrites(t, workflowType, ksWorkflow, false)
 		moveTablesAction(t, "Complete", cell, workflow, sourceKs, targetKs, tables)
@@ -1109,7 +1109,7 @@ func shardOrders(t *testing.T) {
 
 func checkThatVDiffFails(t *testing.T, keyspace, workflow string) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
-	t.Run("check that vdiff1 won't run", func(t2 *testing.T) {
+	t.Run("check that vdiffSideBySide won't run", func(t2 *testing.T) {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", ksWorkflow)
 		require.Error(t, err)
 		require.Contains(t, output, "invalid VDiff run")
@@ -1145,7 +1145,7 @@ func shardMerchant(t *testing.T) {
 		catchup(t, merchantTab1, workflow, workflowType)
 		catchup(t, merchantTab2, workflow, workflowType)
 
-		vdiff1(t, fmt.Sprintf("%s.%s", merchantKeyspace, workflow), "")
+		vdiffSideBySide(t, fmt.Sprintf("%s.%s", merchantKeyspace, workflow), "")
 		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		switchWrites(t, workflowType, ksWorkflow, false)
 		printRoutingRules(t, vc, "After merchant movetables")
@@ -1313,7 +1313,7 @@ func checkVtgateHealth(t *testing.T, cell *Cell) {
 	for _, vtgate := range cell.Vtgates {
 		vtgateHealthURL := strings.Replace(vtgate.VerifyURL, "vars", "health", -1)
 		if !checkHealth(t, vtgateHealthURL) {
-			assert.Failf(t, "Vtgate not healthy: ", vtgateHealthURL)
+			assert.Fail(t, "Vtgate not healthy: ", vtgateHealthURL)
 		}
 	}
 }
@@ -1321,7 +1321,7 @@ func checkVtgateHealth(t *testing.T, cell *Cell) {
 func checkTabletHealth(t *testing.T, tablet *Tablet) {
 	vttabletHealthURL := strings.Replace(tablet.Vttablet.VerifyURL, "debug/vars", "healthz", -1)
 	if !checkHealth(t, vttabletHealthURL) {
-		assert.Failf(t, "Vttablet not healthy: ", vttabletHealthURL)
+		assert.Fail(t, "Vttablet not healthy: ", vttabletHealthURL)
 	}
 }
 
