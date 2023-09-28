@@ -40,6 +40,7 @@ const (
 	// sqlUpdateVDiffState has a penultimate placeholder for any additional columns you want to update, e.g. `, foo = 1`
 	sqlUpdateVDiffState   = "update _vt.vdiff set state = %s, last_error = %s %s where id = %d"
 	sqlUpdateVDiffStopped = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.state = 'stopped', vdt.state = 'stopped', vd.last_error = ''
+<<<<<<< HEAD
 							where vd.id = vdt.vdiff_id and vd.id = %d and vd.state != 'completed'`
 	sqlGetVReplicationEntry = "select * from _vt.vreplication %s"
 	sqlGetVDiffsToRun       = "select * from _vt.vdiff where state in ('started','pending')" // what VDiffs have not been stopped or completed
@@ -47,6 +48,17 @@ const (
 	sqlGetVDiffID           = "select id as id from _vt.vdiff where vdiff_uuid = %s"
 	sqlGetAllVDiffs         = "select * from _vt.vdiff order by id desc"
 	sqlGetAllTableRows      = "select table_name as table_name, table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %s and table_name in (%s)"
+=======
+							where vd.id = vdt.vdiff_id and vd.id = %a and vd.state != 'completed'`
+	sqlGetVReplicationEntry          = "select * from _vt.vreplication %s"
+	sqlGetVDiffsToRun                = "select * from _vt.vdiff where state in ('started','pending')" // what VDiffs have not been stopped or completed
+	sqlGetVDiffsToRetry              = "select * from _vt.vdiff where state = 'error' and json_unquote(json_extract(options, '$.core_options.auto_retry')) = 'true'"
+	sqlGetVDiffID                    = "select id as id from _vt.vdiff where vdiff_uuid = %a"
+	sqlGetVDiffIDsByKeyspaceWorkflow = "select id as id from _vt.vdiff where keyspace = %a and workflow = %a"
+	sqlGetAllVDiffs                  = "select * from _vt.vdiff order by id desc"
+	sqlGetTableRows                  = "select table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %a and table_name = %a"
+	sqlGetAllTableRows               = "select table_name as table_name, table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %s and table_name in (%s)"
+>>>>>>> 04834c4fec (VDiff: Cleanup the controller for a VDiff before deleting it (#14107))
 
 	sqlNewVDiffTable = "insert into _vt.vdiff_table(vdiff_id, table_name, state, table_rows) values(%d, %s, 'pending', %d)"
 	sqlGetVDiffTable = `select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report

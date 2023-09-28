@@ -97,6 +97,8 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 	select {
 	case <-ctx.Done():
 		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+	case <-wd.ct.done:
+		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
 	default:
 	}
 
@@ -141,6 +143,8 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+	case <-wd.ct.done:
+		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
 	default:
 	}
 
@@ -160,6 +164,8 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		case <-wd.ct.done:
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
 		default:
 		}
 		query := fmt.Sprintf(sqlGetVDiffTable, wd.ct.id, encodeString(td.table.Name))

@@ -23,19 +23,29 @@ import (
 	"strings"
 	"time"
 
+<<<<<<< HEAD
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql"
+=======
+	"google.golang.org/protobuf/encoding/prototext"
+
+	"vitess.io/vitess/go/mysql/replication"
+>>>>>>> 04834c4fec (VDiff: Cleanup the controller for a VDiff before deleting it (#14107))
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 /*
@@ -177,6 +187,8 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 	select {
 	case <-ctx.Done():
 		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+	case <-ct.done:
+		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
 	default:
 	}
 	ct.workflowFilter = fmt.Sprintf("where workflow = %s and db_name = %s", encodeString(ct.workflow), encodeString(ct.vde.dbName))
@@ -190,6 +202,8 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		select {
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		case <-ct.done:
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
 		default:
 		}
 		source := newMigrationSource()
@@ -306,9 +320,9 @@ func (ct *controller) saveErrorState(ctx context.Context, saveErr error) error {
 			log.Warningf("Failed to persist vdiff error state: %v. Will retry in %s", err, retryDelay.String())
 			select {
 			case <-ctx.Done():
-				return fmt.Errorf("engine is shutting down")
+				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "engine is shutting down")
 			case <-ct.done:
-				return fmt.Errorf("vdiff was stopped")
+				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
 			case <-time.After(retryDelay):
 				if retryDelay < maxRetryDelay {
 					retryDelay = time.Duration(float64(retryDelay) * 1.5)
