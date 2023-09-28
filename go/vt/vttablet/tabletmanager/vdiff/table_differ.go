@@ -407,6 +407,8 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			case participant.result <- result:
 			case <-ctx.Done():
 				return vterrors.Wrap(ctx.Err(), "VStreamRows")
+			case <-td.wd.ct.done:
+				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
 			}
 			return nil
 		})
@@ -494,6 +496,8 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		select {
 		case <-ctx.Done():
 			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		case <-td.wd.ct.done:
+			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
 		default:
 		}
 
