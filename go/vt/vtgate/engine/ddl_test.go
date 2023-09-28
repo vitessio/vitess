@@ -59,10 +59,9 @@ func TestDDLTempTable(t *testing.T) {
 	ddl := &DDL{
 		CreateTempTable: true,
 		DDL: &sqlparser.CreateTable{
+			Temp:  true,
 			Table: sqlparser.NewTableName("a"),
 		},
-		DirectDDLEnabled: true,
-		OnlineDDL:        &OnlineDDL{},
 		NormalDDL: &Send{
 			Keyspace: &vindexes.Keyspace{
 				Name:    "ks",
@@ -78,6 +77,8 @@ func TestDDLTempTable(t *testing.T) {
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
+		"temp table getting created",
+		"Needs Reserved Conn",
 		"ResolveDestinations ks [] Destinations:DestinationAllShards()",
 		"ExecuteMultiShard false false",
 	})

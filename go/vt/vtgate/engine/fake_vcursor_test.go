@@ -393,6 +393,10 @@ type loggingVCursor struct {
 	shardSession []*srvtopo.ResolvedShard
 }
 
+func (f *loggingVCursor) HasCreatedTempTable() {
+	f.log = append(f.log, "temp table getting created")
+}
+
 func (f *loggingVCursor) Commit(_ context.Context) error {
 	f.log = append(f.log, "commit")
 	return nil
