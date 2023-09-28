@@ -229,7 +229,14 @@ func run(_ *cobra.Command, args []string) error {
 		<-ctx.Done()
 	}()
 
+	// Some plugins use OnRun to initialize. Use a channel to signal to
+	// ourselves that these plugins have been initialized.
+	runCh := make(chan struct{})
+	servenv.OnRun(func() {
+		close(runCh)
+	})
 	go servenv.RunDefault()
+	<-runCh
 
 	if detachedMode {
 		// this method will call os.Exit and kill this process
