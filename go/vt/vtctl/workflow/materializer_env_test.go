@@ -306,3 +306,13 @@ func (tmc *testMaterializerTMClient) ApplySchema(ctx context.Context, tablet *to
 
 	return nil, nil
 }
+
+func (tmc *testMaterializerTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+	return &tabletmanagerdatapb.VDiffResponse{
+		Id:        1,
+		VdiffUuid: req.VdiffUuid,
+		Output: &querypb.QueryResult{
+			RowsAffected: 1,
+		},
+	}, nil
+}
