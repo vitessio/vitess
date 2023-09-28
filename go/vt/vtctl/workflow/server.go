@@ -1990,7 +1990,7 @@ func (s *Server) deleteWorkflowVDiffData(ctx context.Context, tablet *topodatapb
 		Keyspace:  tablet.Keyspace,
 		Workflow:  workflow,
 		Action:    string(vdiff.DeleteAction),
-		ActionArg: "all",
+		ActionArg: vdiff.AllActionArg,
 	}); err != nil {
 		log.Errorf("Error deleting vdiff data for %s.%s workflow: %v", tablet.Keyspace, workflow, err)
 	}

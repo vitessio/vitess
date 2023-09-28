@@ -718,7 +718,7 @@ func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodat
 		Keyspace:  tablet.Keyspace,
 		Workflow:  workflow,
 		Action:    string(vdiff2.DeleteAction),
-		ActionArg: "all",
+		ActionArg: vdiff2.AllActionArg,
 	}); err != nil {
 		log.Errorf("Error deleting vdiff data for %s.%s workflow: %v", tablet.Keyspace, workflow, err)
 	}
