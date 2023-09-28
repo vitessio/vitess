@@ -434,18 +434,14 @@ func TestPlanBuilder(t *testing.T) {
 			ColExprs: []ColExpr{{
 				ColNum: 1,
 				Field: &querypb.Field{
-					Name:    "val",
-					Type:    sqltypes.VarBinary,
-					Charset: collations.CollationBinaryID,
-					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
+					Name: "val",
+					Type: sqltypes.VarBinary,
 				},
 			}, {
 				ColNum: 0,
 				Field: &querypb.Field{
-					Name:    "id",
-					Type:    sqltypes.Int64,
-					Charset: collations.CollationBinaryID,
-					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
+					Name: "id",
+					Type: sqltypes.Int64,
 				},
 			}},
 			convertUsingUTF8Columns: map[string]bool{"val": true},
