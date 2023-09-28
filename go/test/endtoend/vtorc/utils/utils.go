@@ -959,7 +959,7 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
 		successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
-		successCount := int(math.Round(reflect.ValueOf(successfulRecoveriesMap[recoveryName]).Float()))
+		successCount := getIntFromValue(successfulRecoveriesMap[recoveryName])
 		if successCount == countExpected {
 			return
 		}
@@ -967,7 +967,7 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	}
 	vars := vtorcInstance.GetVars()
 	successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
-	successCount := int(math.Round(reflect.ValueOf(successfulRecoveriesMap[recoveryName]).Float()))
+	successCount := getIntFromValue(successfulRecoveriesMap[recoveryName])
 	assert.EqualValues(t, countExpected, successCount)
 }
 
@@ -980,7 +980,7 @@ func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
 		prsCountsMap := vars["planned_reparent_counts"].(map[string]interface{})
-		successCount := int(math.Round(reflect.ValueOf(prsCountsMap[mapKey]).Float()))
+		successCount := getIntFromValue(prsCountsMap[mapKey])
 		if successCount == countExpected {
 			return
 		}
@@ -988,7 +988,7 @@ func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	}
 	vars := vtorcInstance.GetVars()
 	prsCountsMap := vars["planned_reparent_counts"].(map[string]interface{})
-	successCount := int(math.Round(reflect.ValueOf(prsCountsMap[mapKey]).Float()))
+	successCount := getIntFromValue(prsCountsMap[mapKey])
 	assert.EqualValues(t, countExpected, successCount)
 }
 
@@ -1001,7 +1001,7 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
 		ersCountsMap := vars["emergency_reparent_counts"].(map[string]interface{})
-		successCount := int(math.Round(reflect.ValueOf(ersCountsMap[mapKey]).Float()))
+		successCount := getIntFromValue(ersCountsMap[mapKey])
 		if successCount == countExpected {
 			return
 		}
@@ -1009,8 +1009,22 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	}
 	vars := vtorcInstance.GetVars()
 	ersCountsMap := vars["emergency_reparent_counts"].(map[string]interface{})
-	successCount := int(math.Round(reflect.ValueOf(ersCountsMap[mapKey]).Float()))
+	successCount := getIntFromValue(ersCountsMap[mapKey])
 	assert.EqualValues(t, countExpected, successCount)
+}
+
+// getIntFromValue is a helper function to get an integer from the given value.
+// If it is convertible to a float, then we round the number to the nearest integer.
+// If the value is not numeric at all, we return 0.
+func getIntFromValue(val any) int {
+	value := reflect.ValueOf(val)
+	if value.CanFloat() {
+		return int(math.Round(value.Float()))
+	}
+	if value.CanInt() {
+		return int(value.Int())
+	}
+	return 0
 }
 
 // WaitForTabletType waits for the tablet to reach a certain type.
