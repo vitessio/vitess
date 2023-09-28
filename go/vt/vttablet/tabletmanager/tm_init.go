@@ -769,6 +769,9 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	if tm.Cnf == nil && restoreFromBackup {
 		return false, fmt.Errorf("you cannot enable --restore_from_backup without a my.cnf file")
 	}
+	if restoreToTimestampStr != "" && restoreToPos != "" {
+		return false, fmt.Errorf("--restore-to-timestamp and --restore-to-pos are mutually exclusive")
+	}
 
 	// Restore in the background
 	if restoreFromBackup {
@@ -778,7 +781,6 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 
 			// Zero date will cause us to use the latest, which is the default
 			backupTime := time.Time{}
-
 			// Or if a backup timestamp was specified then we use the last backup taken at or before that time
 			if restoreFromBackupTsStr != "" {
 				var err error
@@ -788,9 +790,17 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 				}
 			}
 
+			restoreToTimestamp := time.Time{}
+			if restoreToTimestampStr != "" {
+				var err error
+				restoreToTimestamp, err = mysqlctl.ParseRFC3339(restoreToTimestampStr)
+				if err != nil {
+					log.Exitf(fmt.Sprintf("RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err))
+				}
+			}
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime); err != nil {
+			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 		}()
