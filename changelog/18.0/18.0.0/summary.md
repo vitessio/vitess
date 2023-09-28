@@ -127,6 +127,9 @@ Flags in `vtcombo`:
 Flags in `vtctldclient ApplySchema`:
 - `--skip-preflight`
 
+Flags in `vtctl ApplySchema`:
+- `--skip_preflight`
+
 Flags in `vtgate`:
 - `--vtctld_addr`
 
