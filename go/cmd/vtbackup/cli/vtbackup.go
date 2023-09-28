@@ -230,6 +230,11 @@ func run(_ *cobra.Command, args []string) error {
 	}()
 
 	go servenv.RunDefault()
+	// Some stats plugins use OnRun to initialize. Wait for them to finish
+	// initializing before continuing, so we don't lose any stats.
+	if err := stats.AwaitBackend(ctx); err != nil {
+		return fmt.Errorf("failed to await stats backend: %w", err)
+	}
 
 	if detachedMode {
 		// this method will call os.Exit and kill this process
