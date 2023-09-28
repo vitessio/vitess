@@ -21,7 +21,6 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -80,7 +79,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 }
 
 func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (ops.Operator, error) {
-	sqc := &SubQueryContainer{}
+	sqc := &SubQueryBuilder{}
 	outerID := TableID(op)
 	exprs := sqlparser.SplitAndExpression(nil, expr)
 	for _, expr := range exprs {
@@ -99,82 +98,6 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 		addColumnEquality(ctx, expr)
 	}
 	return sqc.getRootOperator(op), nil
-}
-
-func (sqc *SubQueryContainer) handleSubquery(
-	ctx *plancontext.PlanningContext,
-	expr sqlparser.Expr,
-	outerID semantics.TableSet,
-) (*SubQuery, error) {
-	subq, parentExpr := getSubQuery(expr)
-	if subq == nil {
-		return nil, nil
-	}
-	argName := ctx.GetReservedArgumentFor(subq)
-	sqInner, err := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, argName)
-	if err != nil {
-		return nil, err
-	}
-	sqc.Inner = append(sqc.Inner, sqInner)
-
-	return sqInner, nil
-}
-
-func (sqc *SubQueryContainer) getRootOperator(op ops.Operator) ops.Operator {
-	if len(sqc.Inner) == 0 {
-		return op
-	}
-
-	sqc.Outer = op
-	return sqc
-}
-
-func getSubQuery(expr sqlparser.Expr) (subqueryExprExists *sqlparser.Subquery, parentExpr sqlparser.Expr) {
-	flipped := false
-	_ = sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
-		if subq, ok := cursor.Node().(*sqlparser.Subquery); ok {
-			subqueryExprExists = subq
-			parentExpr = subq
-			if expr, ok := cursor.Parent().(sqlparser.Expr); ok {
-				parentExpr = expr
-			}
-			flipped = true
-			return false
-		}
-		return true
-	}, func(cursor *sqlparser.Cursor) bool {
-		if !flipped {
-			return true
-		}
-		if not, isNot := cursor.Parent().(*sqlparser.NotExpr); isNot {
-			parentExpr = not
-		}
-		return false
-	})
-	return
-}
-
-func createSubqueryOp(
-	ctx *plancontext.PlanningContext,
-	parent, original sqlparser.Expr,
-	subq *sqlparser.Subquery,
-	outerID semantics.TableSet,
-	name string,
-) (*SubQuery, error) {
-	switch parent := parent.(type) {
-	case *sqlparser.NotExpr:
-		switch parent.Expr.(type) {
-		case *sqlparser.ExistsExpr:
-			return createSubquery(ctx, original, subq, outerID, parent, name, opcode.PulloutNotExists, false)
-		case *sqlparser.ComparisonExpr:
-			panic("should have been rewritten")
-		}
-	case *sqlparser.ExistsExpr:
-		return createSubquery(ctx, original, subq, outerID, parent, name, opcode.PulloutExists, false)
-	case *sqlparser.ComparisonExpr:
-		return createComparisonSubQuery(ctx, parent, original, subq, outerID, name)
-	}
-	return createSubquery(ctx, original, subq, outerID, parent, name, opcode.PulloutValue, false)
 }
 
 // cloneASTAndSemState clones the AST and the semantic state of the input node.
@@ -202,108 +125,6 @@ func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNod
 	return
 }
 
-// inspectSelect goes through all the predicates contained in the SELECT query
-// and extracts subqueries into operators, and rewrites the original query to use
-// arguments instead of subqueries.
-func (sqc *SubQueryContainer) inspectSelect(
-	ctx *plancontext.PlanningContext,
-	sel *sqlparser.Select,
-) (sqlparser.Exprs, []JoinColumn, error) {
-	// first we need to go through all the places where one can find predicates
-	// and search for subqueries
-	newWhere, wherePreds, whereJoinCols, err := sqc.inspectWhere(ctx, sel.Where)
-	if err != nil {
-		return nil, nil, err
-	}
-	newHaving, havingPreds, havingJoinCols, err := sqc.inspectWhere(ctx, sel.Having)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	newFrom, onPreds, onJoinCols, err := sqc.inspectOnExpr(ctx, sel.From)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// then we use the updated AST structs to build the operator
-	// these AST elements have any subqueries replace by arguments
-	sel.Where = newWhere
-	sel.Having = newHaving
-	sel.From = newFrom
-
-	return append(append(wherePreds, havingPreds...), onPreds...),
-		append(append(whereJoinCols, havingJoinCols...), onJoinCols...),
-		nil
-}
-
-// inspectStatement goes through all the predicates contained in the AST
-// and extracts subqueries into operators
-func (sqc *SubQueryContainer) inspectStatement(ctx *plancontext.PlanningContext,
-	stmt sqlparser.SelectStatement,
-) (sqlparser.Exprs, []JoinColumn, error) {
-	switch stmt := stmt.(type) {
-	case *sqlparser.Select:
-		return sqc.inspectSelect(ctx, stmt)
-	case *sqlparser.Union:
-		exprs1, cols1, err := sqc.inspectStatement(ctx, stmt.Left)
-		if err != nil {
-			return nil, nil, err
-		}
-		exprs2, cols2, err := sqc.inspectStatement(ctx, stmt.Right)
-		if err != nil {
-			return nil, nil, err
-		}
-		return append(exprs1, exprs2...), append(cols1, cols2...), nil
-	}
-	panic("unknown type")
-}
-
-func createSubquery(
-	ctx *plancontext.PlanningContext,
-	original sqlparser.Expr,
-	subq *sqlparser.Subquery,
-	outerID semantics.TableSet,
-	parent sqlparser.Expr,
-	argName string,
-	filterType opcode.PulloutOpcode,
-	isProjection bool,
-) (*SubQuery, error) {
-	topLevel := ctx.SemTable.EqualsExpr(original, parent)
-	original = cloneASTAndSemState(ctx, original)
-	originalSq := cloneASTAndSemState(ctx, subq)
-	subqID := findTablesContained(ctx, subq.Select)
-	totalID := subqID.Merge(outerID)
-	sqc := &SubQueryContainer{totalID: totalID, subqID: subqID, outerID: outerID}
-
-	predicates, joinCols, err := sqc.inspectStatement(ctx, subq.Select)
-	if err != nil {
-		return nil, err
-	}
-
-	stmt := rewriteRemainingColumns(ctx, subq.Select, subqID)
-
-	// TODO: this should not be needed. We are using CopyOnRewrite above, but somehow this is not getting copied
-	ctx.SemTable.CopySemanticInfo(subq.Select, stmt)
-
-	opInner, err := translateQueryToOp(ctx, stmt)
-	if err != nil {
-		return nil, err
-	}
-
-	opInner = sqc.getRootOperator(opInner)
-	return &SubQuery{
-		FilterType:       filterType,
-		Subquery:         opInner,
-		Predicates:       predicates,
-		Original:         original,
-		ArgName:          argName,
-		originalSubquery: originalSq,
-		IsProjection:     isProjection,
-		TopLevel:         topLevel,
-		JoinColumns:      joinCols,
-	}, nil
-}
-
 func rewriteRemainingColumns(
 	ctx *plancontext.PlanningContext,
 	stmt sqlparser.SelectStatement,
@@ -321,129 +142,6 @@ func rewriteRemainingColumns(
 		rsv := ctx.GetReservedArgumentFor(colname)
 		cursor.Replace(sqlparser.NewArgument(rsv))
 	}, nil).(sqlparser.SelectStatement)
-}
-
-func (sqc *SubQueryContainer) inspectWhere(
-	ctx *plancontext.PlanningContext,
-	in *sqlparser.Where,
-) (*sqlparser.Where, sqlparser.Exprs, []JoinColumn, error) {
-	if in == nil {
-		return nil, nil, nil, nil
-	}
-	jpc := &joinPredicateCollector{
-		totalID: sqc.totalID,
-		subqID:  sqc.subqID,
-		outerID: sqc.outerID,
-	}
-	for _, predicate := range sqlparser.SplitAndExpression(nil, in.Expr) {
-		sqlparser.RemoveKeyspaceFromColName(predicate)
-		subq, err := sqc.handleSubquery(ctx, predicate, sqc.totalID)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		if subq != nil {
-			continue
-		}
-		if err = jpc.inspectPredicate(ctx, predicate); err != nil {
-			return nil, nil, nil, err
-		}
-	}
-
-	if len(jpc.remainingPredicates) == 0 {
-		in = nil
-	} else {
-		in.Expr = sqlparser.AndExpressions(jpc.remainingPredicates...)
-	}
-
-	return in, jpc.predicates, jpc.joinColumns, nil
-}
-
-func (sqc *SubQueryContainer) inspectOnExpr(
-	ctx *plancontext.PlanningContext,
-	from []sqlparser.TableExpr,
-) (newFrom []sqlparser.TableExpr, onPreds sqlparser.Exprs, onJoinCols []JoinColumn, err error) {
-	for _, tbl := range from {
-		tbl := sqlparser.CopyOnRewrite(tbl, dontEnterSubqueries, func(cursor *sqlparser.CopyOnWriteCursor) {
-			cond, ok := cursor.Node().(*sqlparser.JoinCondition)
-			if !ok || cond.On == nil {
-				return
-			}
-
-			jpc := &joinPredicateCollector{
-				totalID: sqc.totalID,
-				subqID:  sqc.subqID,
-				outerID: sqc.outerID,
-			}
-
-			for _, pred := range sqlparser.SplitAndExpression(nil, cond.On) {
-				subq, innerErr := sqc.handleSubquery(ctx, pred, sqc.totalID)
-				if err != nil {
-					err = innerErr
-					cursor.StopTreeWalk()
-					return
-				}
-				if subq != nil {
-					continue
-				}
-				if err = jpc.inspectPredicate(ctx, pred); err != nil {
-					err = innerErr
-					cursor.StopTreeWalk()
-					return
-				}
-			}
-			if len(jpc.remainingPredicates) == 0 {
-				cond.On = nil
-			} else {
-				cond.On = sqlparser.AndExpressions(jpc.remainingPredicates...)
-			}
-			onPreds = append(onPreds, jpc.predicates...)
-			onJoinCols = append(onJoinCols, jpc.joinColumns...)
-		}, ctx.SemTable.CopySemanticInfo)
-		if err != nil {
-			return
-		}
-		newFrom = append(newFrom, tbl.(sqlparser.TableExpr))
-	}
-	return
-}
-
-func createComparisonSubQuery(
-	ctx *plancontext.PlanningContext,
-	parent *sqlparser.ComparisonExpr,
-	original sqlparser.Expr,
-	subFromOutside *sqlparser.Subquery,
-	outerID semantics.TableSet,
-	name string,
-) (*SubQuery, error) {
-	subq, outside := semantics.GetSubqueryAndOtherSide(parent)
-	if outside == nil || subq != subFromOutside {
-		panic("uh oh")
-	}
-
-	filterType := opcode.PulloutValue
-	switch parent.Operator {
-	case sqlparser.InOp:
-		filterType = opcode.PulloutIn
-	case sqlparser.NotInOp:
-		filterType = opcode.PulloutNotIn
-	}
-
-	subquery, err := createSubquery(ctx, original, subq, outerID, parent, name, filterType, false)
-	if err != nil {
-		return nil, err
-	}
-
-	// if we are comparing with a column from the inner subquery,
-	// we add this extra predicate to check if the two sides are mergable or not
-	if ae, ok := subq.Select.GetColumns()[0].(*sqlparser.AliasedExpr); ok {
-		subquery.OuterPredicate = &sqlparser.ComparisonExpr{
-			Operator: sqlparser.EqualOp,
-			Left:     outside,
-			Right:    ae.Expr,
-		}
-	}
-
-	return subquery, err
 }
 
 // joinPredicateCollector is used to inspect the predicates inside the subquery, looking for any

@@ -23,11 +23,9 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -246,7 +244,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 	}
 
 	proj := newAliasedProjection(nil)
-	sqc := &SubQueryContainer{}
+	sqc := &SubQueryBuilder{}
 	outerID := TableID(src)
 	for _, ae := range aes {
 		org := sqlparser.CloneRefOfAliasedExpr(ae)
@@ -293,70 +291,4 @@ func newStarProjection(src ops.Operator, qp *QueryProjection) (*Projection, erro
 		Source:  src,
 		Columns: StarProjections(cols),
 	}, nil
-}
-
-type subqueryExtraction struct {
-	new         sqlparser.Expr
-	subq        []*sqlparser.Subquery
-	pullOutCode []opcode.PulloutOpcode
-	cols        []string
-}
-
-func (sqc *SubQueryContainer) pullOutValueSubqueries(
-	ctx *plancontext.PlanningContext,
-	expr sqlparser.Expr,
-	outerID semantics.TableSet,
-	isDML bool,
-) (sqlparser.Expr, []*SubQuery, error) {
-	original := sqlparser.CloneExpr(expr)
-	sqe := extractSubQueries(ctx, expr, isDML)
-	if sqe == nil {
-		return nil, nil, nil
-	}
-	var newSubqs []*SubQuery
-
-	for idx, subq := range sqe.subq {
-		sqInner, err := createSubquery(ctx, original, subq, outerID, original, sqe.cols[idx], sqe.pullOutCode[idx], true)
-		if err != nil {
-			return nil, nil, err
-		}
-		newSubqs = append(newSubqs, sqInner)
-	}
-
-	sqc.Inner = append(sqc.Inner, newSubqs...)
-
-	return sqe.new, newSubqs, nil
-}
-
-func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, isDML bool) *subqueryExtraction {
-	sqe := &subqueryExtraction{}
-	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery) {
-		sqName := ctx.GetReservedArgumentFor(sq)
-		sqe.cols = append(sqe.cols, sqName)
-		if isDML {
-			cursor.Replace(sqlparser.NewArgument(sqName))
-		} else {
-			cursor.Replace(sqlparser.NewColName(sqName))
-		}
-		sqe.subq = append(sqe.subq, sq)
-	}
-	expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case *sqlparser.Subquery:
-			if _, isExists := cursor.Parent().(*sqlparser.ExistsExpr); isExists {
-				return true
-			}
-			replaceWithArg(cursor, node)
-			sqe.pullOutCode = append(sqe.pullOutCode, opcode.PulloutValue)
-		case *sqlparser.ExistsExpr:
-			replaceWithArg(cursor, node.Subquery)
-			sqe.pullOutCode = append(sqe.pullOutCode, opcode.PulloutExists)
-		}
-		return true
-	}).(sqlparser.Expr)
-	if len(sqe.subq) == 0 {
-		return nil
-	}
-	sqe.new = expr
-	return sqe
 }

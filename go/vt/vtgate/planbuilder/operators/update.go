@@ -138,7 +138,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		tr.VindexPreds = vp
 	}
 
-	sqc := &SubQueryContainer{}
+	sqc := &SubQueryBuilder{}
 	assignments := make([]SetExpr, len(updStmt.Exprs))
 	for idx, updExpr := range updStmt.Exprs {
 		expr, subqs, err := sqc.pullOutValueSubqueries(ctx, updExpr.Expr, qt.ID, true)

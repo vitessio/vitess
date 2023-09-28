@@ -154,7 +154,7 @@ func createDeleteOperator(
 
 	del.OwnedVindexQuery = ovq
 
-	sqc := &SubQueryContainer{}
+	sqc := &SubQueryBuilder{}
 	for _, predicate := range qt.Predicates {
 		if subq, err := sqc.handleSubquery(ctx, predicate, qt.ID); err != nil {
 			return nil, err
