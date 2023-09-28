@@ -24,15 +24,6 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: actions/checkout@v3
 
-<<<<<<< HEAD
-      - name: Run FOSSA scan and upload build data
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: fossa-contrib/fossa-action@v1
-        with:
-          fossa-api-key: 76d7483ea206d530d9452e44bffe7ba8
-
-=======
->>>>>>> fd9b7d623d (Remove FOSSA Test from CI until we can do it in a secure way (#14119))
       - name: Check for changes in Go files
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: frouioui/paths-filter@main
