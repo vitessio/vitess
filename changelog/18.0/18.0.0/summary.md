@@ -196,12 +196,8 @@ vtbackup_restore_count{component="BackupStorage",implementation="S3",operation="
 #### <a id="vtctld-and-vtorc-reparenting-stats"/>VTCtld and VTOrc reparenting stats
 
 New VTCtld and VTorc stats were added to measure frequency of reparents by keyspace/shard:
-- `emergency_reparent_shards` - Number of times Emergency Reparent Shard has been run
-- `emergency_reparent_shards_failed` - Number of times Emergency Reparent Shard has failed
-- `emergency_reparent_shards_succeeded` - Number of times Emergency Reparent Shard has succeeded
-- `planned_reparent_shards` - Number of times Planned Reparent Shard has been run
-- `planned_reparent_shards_failed` - Number of times Planned Reparent Shard has failed
-- `planned_reparent_shards_succeeded` - Number of times Planned Reparent Shard has succeeded
+- `emergency_reparent_counts` - Number of times Emergency Reparent Shard has been run. It is further subdivided by the keyspace, shard and the result of the operation.
+- `planned_reparent_counts` - Number of times Planned Reparent Shard has been run. It is further subdivided by the keyspace, shard and the result of the operation.
 
 Also, the `reparent_shard_operation_timings` stat was added to provide per-operation timings of reparent operations.
 

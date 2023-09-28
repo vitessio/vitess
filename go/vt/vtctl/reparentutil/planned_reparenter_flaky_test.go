@@ -3958,8 +3958,6 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 
 func TestPlannedReparenterStats(t *testing.T) {
 	prsCounter.ResetAll()
-	prsSuccessCounter.ResetAll()
-	prsFailureCounter.ResetAll()
 	reparentShardOpTimings.Reset()
 
 	tmc := &testutil.TabletManagerClient{
@@ -4045,9 +4043,7 @@ func TestPlannedReparenterStats(t *testing.T) {
 	require.NoError(t, err)
 
 	// check the counter values
-	require.EqualValues(t, map[string]int64{"testkeyspace.-": 1}, prsCounter.Counts())
-	require.EqualValues(t, map[string]int64{"testkeyspace.-": 1}, prsSuccessCounter.Counts())
-	require.EqualValues(t, map[string]int64{}, prsFailureCounter.Counts())
+	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1}, prsCounter.Counts())
 	require.EqualValues(t, map[string]int64{"All": 1, "PlannedReparentShard": 1}, reparentShardOpTimings.Counts())
 
 	// set plannedReparentOps to request a non existent tablet
@@ -4061,8 +4057,6 @@ func TestPlannedReparenterStats(t *testing.T) {
 	require.Error(t, err)
 
 	// check the counter values
-	require.EqualValues(t, map[string]int64{"testkeyspace.-": 2}, prsCounter.Counts())
-	require.EqualValues(t, map[string]int64{"testkeyspace.-": 1}, prsSuccessCounter.Counts())
-	require.EqualValues(t, map[string]int64{"testkeyspace.-": 1}, prsFailureCounter.Counts())
+	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1, "testkeyspace.-.failure": 1}, prsCounter.Counts())
 	require.EqualValues(t, map[string]int64{"All": 2, "PlannedReparentShard": 2}, reparentShardOpTimings.Counts())
 }

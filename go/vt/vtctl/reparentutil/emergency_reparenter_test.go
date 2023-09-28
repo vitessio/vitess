@@ -2735,8 +2735,6 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 
 func TestEmergencyReparenterStats(t *testing.T) {
 	ersCounter.ResetAll()
-	ersSuccessCounter.ResetAll()
-	ersFailureCounter.ResetAll()
 	legacyERSCounter.Reset()
 	legacyERSSuccessCounter.Reset()
 	legacyERSFailureCounter.Reset()
@@ -2869,9 +2867,7 @@ func TestEmergencyReparenterStats(t *testing.T) {
 	require.NoError(t, err)
 
 	// check the counter values
-	require.EqualValues(t, map[string]int64{"testkeyspace.-": 1}, ersCounter.Counts())
-	require.EqualValues(t, map[string]int64{"testkeyspace.-": 1}, ersSuccessCounter.Counts())
-	require.EqualValues(t, map[string]int64{}, ersFailureCounter.Counts())
+	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1}, ersCounter.Counts())
 	require.EqualValues(t, map[string]int64{"All": 1, "EmergencyReparentShard": 1}, reparentShardOpTimings.Counts())
 
 	// check the legacy counter values
@@ -2890,9 +2886,7 @@ func TestEmergencyReparenterStats(t *testing.T) {
 	require.Error(t, err)
 
 	// check the counter values
-	require.EqualValues(t, map[string]int64{"testkeyspace.-": 2}, ersCounter.Counts())
-	require.EqualValues(t, map[string]int64{"testkeyspace.-": 1}, ersSuccessCounter.Counts())
-	require.EqualValues(t, map[string]int64{"testkeyspace.-": 1}, ersFailureCounter.Counts())
+	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1, "testkeyspace.-.failure": 1}, ersCounter.Counts())
 	require.EqualValues(t, map[string]int64{"All": 2, "EmergencyReparentShard": 2}, reparentShardOpTimings.Counts())
 
 	// check the legacy counter values

@@ -74,14 +74,8 @@ var (
 	legacyERSSuccessCounter = stats.NewGauge("ers_success_counter", "Number of times Emergency Reparent Shard has succeeded")
 	legacyERSFailureCounter = stats.NewGauge("ers_failure_counter", "Number of times Emergency Reparent Shard has failed")
 
-	ersCounter = stats.NewCountersWithMultiLabels("emergency_reparent_shards", "Number of times Emergency Reparent Shard has been run",
-		[]string{"Keyspace", "Shard"},
-	)
-	ersFailureCounter = stats.NewCountersWithMultiLabels("emergency_reparent_shards_failed", "Number of times Emergency Reparent Shard has failed",
-		[]string{"Keyspace", "Shard"},
-	)
-	ersSuccessCounter = stats.NewCountersWithMultiLabels("emergency_reparent_shards_succeeded", "Number of times Emergency Reparent Shard has succeeded",
-		[]string{"Keyspace", "Shard"},
+	ersCounter = stats.NewCountersWithMultiLabels("emergency_reparent_counts", "Number of times Emergency Reparent Shard has been run",
+		[]string{"Keyspace", "Shard", "Result"},
 	)
 )
 
@@ -111,7 +105,6 @@ func NewEmergencyReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, l
 func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace string, shard string, opts EmergencyReparentOptions) (*events.Reparent, error) {
 	var err error
 	statsLabels := []string{keyspace, shard}
-	ersCounter.Add(statsLabels, 1)
 
 	opts.lockAction = erp.getLockAction(opts.NewPrimaryAlias)
 	// First step is to lock the shard for the given operation, if not already locked
@@ -119,7 +112,7 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace stri
 		var unlock func(*error)
 		ctx, unlock, err = erp.ts.LockShard(ctx, keyspace, shard, opts.lockAction)
 		if err != nil {
-			ersFailureCounter.Add(statsLabels, 1)
+			ersCounter.Add(append(statsLabels, failureResult), 1)
 			return nil, err
 		}
 		defer unlock(&err)
@@ -133,11 +126,11 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace stri
 		switch err {
 		case nil:
 			legacyERSSuccessCounter.Add(1)
-			ersSuccessCounter.Add(statsLabels, 1)
+			ersCounter.Add(append(statsLabels, successResult), 1)
 			event.DispatchUpdate(ev, "finished EmergencyReparentShard")
 		default:
 			legacyERSFailureCounter.Add(1)
-			ersFailureCounter.Add(statsLabels, 1)
+			ersCounter.Add(append(statsLabels, failureResult), 1)
 			event.DispatchUpdate(ev, "failed EmergencyReparentShard: "+err.Error())
 		}
 	}()
