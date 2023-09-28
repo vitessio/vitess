@@ -163,8 +163,10 @@ func (sq *SubQuery) ShortDescription() string {
 		typ = "FILTER"
 	}
 	var pred string
-	if len(sq.Predicates) > 0 {
-		pred = " WHERE " + sqlparser.String(sq.Predicates)
+
+	if len(sq.Predicates) > 0 || sq.OuterPredicate != nil {
+		preds := append(sq.Predicates, sq.OuterPredicate)
+		pred = " MERGE ON " + sqlparser.String(sqlparser.AndExpressions(preds...))
 	}
 	return fmt.Sprintf("%s %v%s", typ, sq.FilterType.String(), pred)
 }

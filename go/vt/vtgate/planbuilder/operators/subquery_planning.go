@@ -504,9 +504,6 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		original: subQuery.Original,
 		subq:     subQuery,
 	}
-	if !subQuery.TopLevel {
-		return subQuery, nil, nil
-	}
 	op, err := mergeSubqueryInputs(ctx, inner, outer, exprs, merger)
 	if err != nil {
 		return nil, nil, err
@@ -547,47 +544,51 @@ type subqueryRouteMerger struct {
 
 func (s *subqueryRouteMerger) mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, old1, old2 *Route) (*Route, error) {
 	tr := &ShardedRouting{
-		VindexPreds:    append(r1.VindexPreds, r2.VindexPreds...),
-		keyspace:       r1.keyspace,
-		RouteOpCode:    r1.RouteOpCode,
-		SeenPredicates: append(r1.SeenPredicates, r2.SeenPredicates...),
+		VindexPreds: append(r1.VindexPreds, r2.VindexPreds...),
+		keyspace:    r1.keyspace,
+		RouteOpCode: r1.RouteOpCode,
 	}
 
-	tr.SeenPredicates = slice.Filter(tr.SeenPredicates, func(expr sqlparser.Expr) bool {
-		// There are two cases we can have - we can have predicates in the outer
-		// that are no longer valid, and predicates in the inner that are no longer valid
-		// For the case WHERE exists(select 1 from user where user.id = ue.user_id)
-		// Outer: ::has_values
-		// Inner: user.id = :ue_user_id
-		//
-		// And for the case WHERE id IN (select id FROM user WHERE id = 5)
-		// Outer: id IN ::__sq1
-		// Inner: id = 5
-		//
-		// We only keep SeenPredicates that are not bind variables in the join columns.
-		// We have to remove the outer predicate since we merge both routes, and no one
-		// is producing the bind variable anymore.
-		if exprFromSubQ := ctx.SemTable.RecursiveDeps(expr).IsOverlapping(TableID(s.subq.Subquery)); !exprFromSubQ {
-			return true
-		}
-		var argFound bool
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			arg, ok := node.(*sqlparser.Argument)
-			if !ok {
-				return true, nil
+	if !s.subq.TopLevel {
+		// if the subquery is not at the root level, we can't use it for routing, only for merging
+		tr.SeenPredicates = r2.SeenPredicates
+	} else {
+		tr.SeenPredicates = slice.Filter(append(r1.SeenPredicates, r2.SeenPredicates...), func(expr sqlparser.Expr) bool {
+			// There are two cases we can have - we can have predicates in the outer
+			// that are no longer valid, and predicates in the inner that are no longer valid
+			// For the case WHERE exists(select 1 from user where user.id = ue.user_id)
+			// Outer: ::has_values
+			// Inner: user.id = :ue_user_id
+			//
+			// And for the case WHERE id IN (select id FROM user WHERE id = 5)
+			// Outer: id IN ::__sq1
+			// Inner: id = 5
+			//
+			// We only keep SeenPredicates that are not bind variables in the join columns.
+			// We have to remove the outer predicate since we merge both routes, and no one
+			// is producing the bind variable anymore.
+			if exprFromSubQ := ctx.SemTable.RecursiveDeps(expr).IsOverlapping(TableID(s.subq.Subquery)); !exprFromSubQ {
+				return true
 			}
-			f := func(bve BindVarExpr) bool { return bve.Name == arg.Name }
-			for _, jc := range s.subq.JoinColumns {
-				if slices.ContainsFunc(jc.LHSExprs, f) {
-					argFound = true
-					return false, io.EOF
+			var argFound bool
+			_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				arg, ok := node.(*sqlparser.Argument)
+				if !ok {
+					return true, nil
 				}
-			}
-			return true, nil
-		}, expr)
+				f := func(bve BindVarExpr) bool { return bve.Name == arg.Name }
+				for _, jc := range s.subq.JoinColumns {
+					if slices.ContainsFunc(jc.LHSExprs, f) {
+						argFound = true
+						return false, io.EOF
+					}
+				}
+				return true, nil
+			}, expr)
 
-		return !argFound
-	})
+			return !argFound
+		})
+	}
 
 	routing, err := tr.resetRoutingLogic(ctx)
 	if err != nil {
@@ -597,6 +598,17 @@ func (s *subqueryRouteMerger) mergeShardedRouting(ctx *plancontext.PlanningConte
 }
 
 func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing) (*Route, error) {
+	if !s.subq.TopLevel {
+		// if the subquery we are merging isn't a top level predicate, we can't use it for routing
+		return &Route{
+			Source:        outer.Source,
+			MergedWith:    mergedWith(inner, outer),
+			Routing:       outer.Routing,
+			Ordering:      outer.Ordering,
+			ResultColumns: outer.ResultColumns,
+		}, nil
+
+	}
 	_, isSharded := r.(*ShardedRouting)
 	var src ops.Operator
 	var err error
@@ -691,7 +703,7 @@ func (s *subqueryRouteMerger) rewriteASTExpression(ctx *plancontext.PlanningCont
 // If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
 // These rules are similar but different from join merging
-func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out ops.Operator, joinPredicates []sqlparser.Expr, m merger) (*Route, error) {
+func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out ops.Operator, joinPredicates []sqlparser.Expr, m *subqueryRouteMerger) (*Route, error) {
 	inRoute, outRoute := operatorsToRoutes(in, out)
 	if inRoute == nil || outRoute == nil {
 		return nil, nil
