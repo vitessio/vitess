@@ -415,6 +415,55 @@ func TestBuildPlayerPlan(t *testing.T) {
 			},
 		},
 	}, {
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select c1, convert(c using utf8mb4) as c2 from t1",
+			}},
+		},
+		plan: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select c1, convert(c using utf8mb4) as c2 from t1",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					TargetName:   "t1",
+					SendRule:     "t1",
+					PKReferences: []string{"c1"},
+					InsertFront:  "insert into t1(c1,c2)",
+					InsertValues: "(:a_c1,convert(:a_c using utf8mb4))",
+					Insert:       "insert into t1(c1,c2) values (:a_c1,convert(:a_c using utf8mb4))",
+					Update:       "update t1 set c2=convert(:a_c using utf8mb4) where c1=:b_c1",
+					Delete:       "delete from t1 where c1=:b_c1",
+				},
+			},
+		},
+		planpk: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select c1, convert(c using utf8mb4) as c2, pk1, pk2 from t1",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					TargetName:   "t1",
+					SendRule:     "t1",
+					PKReferences: []string{"c1", "pk1", "pk2"},
+					InsertFront:  "insert into t1(c1,c2)",
+					InsertValues: "(:a_c1,convert(:a_c using utf8mb4))",
+					Insert:       "insert into t1(c1,c2) select :a_c1, convert(:a_c using utf8mb4) from dual where (:a_pk1,:a_pk2) <= (1,'aaa')",
+					Update:       "update t1 set c2=convert(:a_c using utf8mb4) where c1=:b_c1 and (:b_pk1,:b_pk2) <= (1,'aaa')",
+					Delete:       "delete from t1 where c1=:b_c1 and (:b_pk1,:b_pk2) <= (1,'aaa')",
+				},
+			},
+		},
+	}, {
 		// Keywords as names.
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
