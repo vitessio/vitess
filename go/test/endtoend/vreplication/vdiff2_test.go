@@ -190,11 +190,11 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	vdiff(t, tc.targetKs, tc.workflow, allCellNames, true, true, nil)
 
 	if tc.autoRetryError {
-		testAutoRetryError(t, tc, cells[0].Name)
+		testAutoRetryError(t, tc, allCellNames)
 	}
 
 	if tc.resume {
-		testResume(t, tc, cells[0].Name)
+		testResume(t, tc, allCellNames)
 	}
 
 	// These are done here so that we have a valid workflow to test the commands against
