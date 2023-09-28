@@ -260,7 +260,7 @@ ifndef NOBANNER
 endif
 
 $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
-	protoc \
+	$(VTROOT)/bin/protoc \
 		--go_out=. --plugin protoc-gen-go="${VTROOTBIN}/protoc-gen-go" \
 		--go-grpc_out=. --plugin protoc-gen-go-grpc="${VTROOTBIN}/protoc-gen-go-grpc" \
 		--go-vtproto_out=. --plugin protoc-gen-go-vtproto="${VTROOTBIN}/protoc-gen-go-vtproto" \
