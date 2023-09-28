@@ -3955,3 +3955,108 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 		})
 	}
 }
+
+func TestPlannedReparenterStats(t *testing.T) {
+	prsCounter.ResetAll()
+	reparentShardOpTimings.Reset()
+
+	tmc := &testutil.TabletManagerClient{
+		PrimaryPositionResults: map[string]struct {
+			Position string
+			Error    error
+		}{
+			"zone1-0000000100": {
+				Position: "position1",
+				Error:    nil,
+			},
+		},
+		PopulateReparentJournalResults: map[string]error{
+			"zone1-0000000100": nil,
+		},
+		SetReplicationSourceResults: map[string]error{
+			"zone1-0000000101": nil,
+		},
+		SetReadWriteResults: map[string]error{
+			"zone1-0000000100": nil,
+		},
+		// This is only needed to verify reachability, so empty results are fine.
+		PrimaryStatusResults: map[string]struct {
+			Status *replicationdatapb.PrimaryStatus
+			Error  error
+		}{
+			"zone1-0000000101": {
+				Status: &replicationdatapb.PrimaryStatus{},
+			},
+			"zone1-0000000100": {
+				Status: &replicationdatapb.PrimaryStatus{},
+			},
+		},
+	}
+	shards := []*vtctldatapb.Shard{
+		{
+			Keyspace: "testkeyspace",
+			Name:     "-",
+		},
+	}
+	tablets := []*topodatapb.Tablet{
+		{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			Type:     topodatapb.TabletType_PRIMARY,
+			Keyspace: "testkeyspace",
+			Shard:    "-",
+		},
+		{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			Type:     topodatapb.TabletType_REPLICA,
+			Keyspace: "testkeyspace",
+			Shard:    "-",
+		},
+	}
+	plannedReparentOps := PlannedReparentOptions{
+		NewPrimaryAlias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+	}
+	keyspace := "testkeyspace"
+	shard := "-"
+	ts := memorytopo.NewServer(context.Background(), "zone1")
+
+	ctx := context.Background()
+	logger := logutil.NewMemoryLogger()
+
+	testutil.AddShards(ctx, t, ts, shards...)
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary: true,
+		SkipShardCreation:   false,
+	}, tablets...)
+
+	prp := NewPlannedReparenter(ts, tmc, logger)
+	// run a successful prs
+	_, err := prp.ReparentShard(ctx, keyspace, shard, plannedReparentOps)
+	require.NoError(t, err)
+
+	// check the counter values
+	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1}, prsCounter.Counts())
+	require.EqualValues(t, map[string]int64{"All": 1, "PlannedReparentShard": 1}, reparentShardOpTimings.Counts())
+
+	// set plannedReparentOps to request a non existent tablet
+	plannedReparentOps.NewPrimaryAlias = &topodatapb.TabletAlias{
+		Cell: "bogus",
+		Uid:  100,
+	}
+
+	// run a failing prs
+	_, err = prp.ReparentShard(ctx, keyspace, shard, plannedReparentOps)
+	require.Error(t, err)
+
+	// check the counter values
+	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1, "testkeyspace.-.failure": 1}, prsCounter.Counts())
+	require.EqualValues(t, map[string]int64{"All": 2, "PlannedReparentShard": 2}, reparentShardOpTimings.Counts())
+}
