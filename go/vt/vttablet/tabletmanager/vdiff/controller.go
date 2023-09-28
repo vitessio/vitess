@@ -23,23 +23,13 @@ import (
 	"strings"
 	"time"
 
-<<<<<<< HEAD
-	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql"
-=======
-	"google.golang.org/protobuf/encoding/prototext"
-
-	"vitess.io/vitess/go/mysql/replication"
->>>>>>> 04834c4fec (VDiff: Cleanup the controller for a VDiff before deleting it (#14107))
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
