@@ -584,7 +584,6 @@ func (m *ApplySchemaRequest) CloneVT() *ApplySchemaRequest {
 		DdlStrategy:         m.DdlStrategy,
 		MigrationContext:    m.MigrationContext,
 		WaitReplicasTimeout: m.WaitReplicasTimeout.CloneVT(),
-		SkipPreflight:       m.SkipPreflight,
 		CallerId:            m.CallerId.CloneVT(),
 		BatchSize:           m.BatchSize,
 	}
@@ -6756,16 +6755,6 @@ func (m *ApplySchemaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x4a
-	}
-	if m.SkipPreflight {
-		i--
-		if m.SkipPreflight {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x40
 	}
 	if m.WaitReplicasTimeout != nil {
 		size, err := m.WaitReplicasTimeout.MarshalToSizedBufferVT(dAtA[:i])
@@ -18625,9 +18614,6 @@ func (m *ApplySchemaRequest) SizeVT() (n int) {
 		l = m.WaitReplicasTimeout.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.SkipPreflight {
-		n += 2
-	}
 	if m.CallerId != nil {
 		l = m.CallerId.SizeVT()
 		n += 1 + l + sov(uint64(l))
@@ -27874,26 +27860,6 @@ func (m *ApplySchemaRequest) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 8:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SkipPreflight", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.SkipPreflight = bool(v != 0)
 		case 9:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field CallerId", wireType)

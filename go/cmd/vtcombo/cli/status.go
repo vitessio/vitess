@@ -21,8 +21,6 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate"
-
-	_ "vitess.io/vitess/go/vt/status"
 )
 
 func addStatusParts(vtg *vtgate.VTGate) {

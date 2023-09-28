@@ -333,8 +333,8 @@ message ApplySchemaRequest {
   // WaitReplicasTimeout is the duration of time to wait for replicas to catch
   // up in reparenting.
   vttime.Duration wait_replicas_timeout = 7;
-  // Skip pre-apply schema checks, and directly forward schema change query to shards
-  bool skip_preflight = 8;
+
+  reserved 8;
   // caller_id identifies the caller. This is the effective caller ID,
   // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 9;

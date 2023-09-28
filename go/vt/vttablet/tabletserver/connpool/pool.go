@@ -55,21 +55,20 @@ const (
 // Other than the connection type, ConnPool maintains an additional
 // pool of dba connections that are used to kill connections.
 type Pool struct {
-	env                tabletenv.Env
-	name               string
-	mu                 sync.Mutex
-	connections        pools.IResourcePool
-	capacity           int
-	prefillParallelism int
-	timeout            time.Duration
-	idleTimeout        time.Duration
-	maxLifetime        time.Duration
-	waiterCap          int64
-	waiterCount        atomic.Int64
-	waiterQueueFull    atomic.Int64
-	dbaPool            *dbconnpool.ConnectionPool
-	appDebugParams     dbconfigs.Connector
-	getConnTime        *servenv.TimingsWrapper
+	env             tabletenv.Env
+	name            string
+	mu              sync.Mutex
+	connections     pools.IResourcePool
+	capacity        int
+	timeout         time.Duration
+	idleTimeout     time.Duration
+	maxLifetime     time.Duration
+	waiterCap       int64
+	waiterCount     atomic.Int64
+	waiterQueueFull atomic.Int64
+	dbaPool         *dbconnpool.ConnectionPool
+	appDebugParams  dbconfigs.Connector
+	getConnTime     *servenv.TimingsWrapper
 }
 
 // NewPool creates a new Pool. The name is used
@@ -78,15 +77,14 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	idleTimeout := cfg.IdleTimeoutSeconds.Get()
 	maxLifetime := cfg.MaxLifetimeSeconds.Get()
 	cp := &Pool{
-		env:                env,
-		name:               name,
-		capacity:           cfg.Size,
-		prefillParallelism: cfg.PrefillParallelism,
-		timeout:            cfg.TimeoutSeconds.Get(),
-		idleTimeout:        idleTimeout,
-		maxLifetime:        maxLifetime,
-		waiterCap:          int64(cfg.MaxWaiters),
-		dbaPool:            dbconnpool.NewConnectionPool("", 1, idleTimeout, maxLifetime, 0),
+		env:         env,
+		name:        name,
+		capacity:    cfg.Size,
+		timeout:     cfg.TimeoutSeconds.Get(),
+		idleTimeout: idleTimeout,
+		maxLifetime: maxLifetime,
+		waiterCap:   int64(cfg.MaxWaiters),
+		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout, maxLifetime, 0),
 	}
 	if name == "" {
 		return cp
@@ -123,11 +121,6 @@ func (cp *Pool) pool() (p pools.IResourcePool) {
 func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
-
-	if cp.prefillParallelism != 0 {
-		log.Infof("Opening pool: '%s'", cp.name)
-		defer log.Infof("Done opening pool: '%s'", cp.name)
-	}
 
 	f := func(ctx context.Context) (pools.Resource, error) {
 		return NewDBConn(ctx, cp, appParams)
