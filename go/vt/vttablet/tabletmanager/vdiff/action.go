@@ -352,10 +352,10 @@ func (vde *Engine) handleStopAction(ctx context.Context, dbClient binlogplayer.D
 }
 
 func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
-	var err error
-	query := ""
 	vde.mu.Lock()
 	defer vde.mu.Unlock()
+	var err error
+	var query string
 
 	switch req.ActionArg {
 	case AllActionArg:
