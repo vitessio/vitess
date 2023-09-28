@@ -31,7 +31,6 @@ import (
 
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
@@ -571,7 +570,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	}
 
 	if req.DryRun {
-		afterTablet := proto.Clone(tablet.Tablet).(*topodatapb.Tablet)
+		afterTablet := tablet.Tablet.CloneVT()
 		afterTablet.Type = req.DbType
 
 		return &vtctldatapb.ChangeTabletTypeResponse{
@@ -619,7 +618,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 
 	// We should clone the tablet and change its type to the expected type before checking the durability rules
 	// Since we want to check the durability rules for the desired state and not before we make that change
-	expectedTablet := proto.Clone(tablet.Tablet).(*topodatapb.Tablet)
+	expectedTablet := tablet.Tablet.CloneVT()
 	expectedTablet.Type = req.DbType
 	err = s.tmc.ChangeType(ctx, tablet.Tablet, req.DbType, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, expectedTablet))
 	if err != nil {
@@ -2313,7 +2312,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	if !ok {
 		return fmt.Errorf("primary-elect tablet %v is not in the shard", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
-	ev.NewPrimary = proto.Clone(primaryElectTabletInfo.Tablet).(*topodatapb.Tablet)
+	ev.NewPrimary = primaryElectTabletInfo.Tablet.CloneVT()
 
 	// Check the primary is the only primary is the shard, or -force was used.
 	_, primaryTabletMap := topotools.SortedTabletMap(tabletMap)
@@ -3003,6 +3002,24 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	}, nil
 }
 
+// ReshardCreate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCreateRequest) (resp *vtctldatapb.WorkflowStatusResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReshardCreate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("cells", req.Cells)
+	span.Annotate("source_shards", req.SourceShards)
+	span.Annotate("target_shards", req.TargetShards)
+	span.Annotate("tablet_types", req.TabletTypes)
+	span.Annotate("on_ddl", req.OnDdl)
+
+	resp, err = s.ws.ReshardCreate(ctx, req)
+	return resp, err
+}
 func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupRequest, stream vtctlservicepb.Vtctld_RestoreFromBackupServer) (err error) {
 	span, ctx := trace.NewSpan(stream.Context(), "VtctldServer.RestoreFromBackup")
 	defer span.Finish()
@@ -3269,7 +3286,7 @@ func (s *VtctldServer) SetShardTabletControl(ctx context.Context, req *vtctldata
 	defer unlock(&err)
 
 	si, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
-		return si.UpdateSourceDeniedTables(ctx, req.TabletType, req.Cells, req.Remove, req.DeniedTables)
+		return si.UpdateDeniedTables(ctx, req.TabletType, req.Cells, req.Remove, req.DeniedTables)
 	})
 
 	switch {
@@ -3802,7 +3819,7 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 	log.Infof("TabletExternallyReparented: executing tablet type change %v -> PRIMARY on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
 	ev := &events.Reparent{
 		ShardInfo:  *shard,
-		NewPrimary: proto.Clone(tablet.Tablet).(*topodatapb.Tablet),
+		NewPrimary: tablet.Tablet.CloneVT(),
 		OldPrimary: &topodatapb.Tablet{
 			Alias: shard.PrimaryAlias,
 			Type:  topodatapb.TabletType_PRIMARY,
@@ -3854,9 +3871,7 @@ func (s *VtctldServer) UpdateCellInfo(ctx context.Context, req *vtctldatapb.Upda
 
 	var updatedCi *topodatapb.CellInfo
 	err = s.ts.UpdateCellInfoFields(ctx, req.Name, func(ci *topodatapb.CellInfo) error {
-		defer func() {
-			updatedCi = proto.Clone(ci).(*topodatapb.CellInfo)
-		}()
+		defer func() { updatedCi = ci.CloneVT() }()
 
 		changed := false
 
@@ -3902,9 +3917,7 @@ func (s *VtctldServer) UpdateCellsAlias(ctx context.Context, req *vtctldatapb.Up
 
 	var updatedCa *topodatapb.CellsAlias
 	err = s.ts.UpdateCellsAlias(ctx, req.Name, func(ca *topodatapb.CellsAlias) error {
-		defer func() {
-			updatedCa = proto.Clone(ca).(*topodatapb.CellsAlias)
-		}()
+		defer func() { updatedCa = ca.CloneVT() }()
 
 		ca.Cells = req.CellsAlias.Cells
 		return nil
@@ -4672,6 +4685,86 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 		}(shard)
 	}
 	wg.Wait()
+	return resp, err
+}
+
+// VDiffCreate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRequest) (resp *vtctldatapb.VDiffCreateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffCreate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("uuid", req.Uuid)
+	span.Annotate("source_cells", req.SourceCells)
+	span.Annotate("target_cells", req.TargetCells)
+	span.Annotate("tablet_types", req.TabletTypes)
+	span.Annotate("tables", req.Tables)
+	span.Annotate("auto_retry", req.AutoRetry)
+
+	resp, err = s.ws.VDiffCreate(ctx, req)
+	return resp, err
+}
+
+// VDiffDelete is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VDiffDelete(ctx context.Context, req *vtctldatapb.VDiffDeleteRequest) (resp *vtctldatapb.VDiffDeleteResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffDelete")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("argument", req.Arg)
+
+	resp, err = s.ws.VDiffDelete(ctx, req)
+	return resp, err
+}
+
+// VDiffResume is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VDiffResume(ctx context.Context, req *vtctldatapb.VDiffResumeRequest) (resp *vtctldatapb.VDiffResumeResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffResume")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("uuid", req.Uuid)
+
+	resp, err = s.ws.VDiffResume(ctx, req)
+	return resp, err
+}
+
+// VDiffShow is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowRequest) (resp *vtctldatapb.VDiffShowResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffShow")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("argument", req.Arg)
+
+	resp, err = s.ws.VDiffShow(ctx, req)
+	return resp, err
+}
+
+// VDiffStop is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopRequest) (resp *vtctldatapb.VDiffStopResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffStop")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("uuid", req.Uuid)
+
+	resp, err = s.ws.VDiffStop(ctx, req)
 	return resp, err
 }
 

@@ -86,7 +86,7 @@ message MaterializeSettings {
   // MaterializationIntent is used to identify the reason behind the materialization workflow: eg. MoveTables, CreateLookupVindex
   MaterializationIntent materialization_intent = 9;
   // SourceTimeZone is the time zone in which datetimes on the source were stored, provided as an option in MoveTable
-  string source_time_zone =10;
+  string source_time_zone = 10;
   // TargetTimeZone is not currently specifiable by the user, defaults to UTC for the forward workflows
   // and to the SourceTimeZone in reverse workflows
   string target_time_zone = 11;
@@ -96,6 +96,7 @@ message MaterializeSettings {
   // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table copy finishes.
   bool defer_secondary_keys = 14;
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 15;
+  bool atomic_copy = 16;
 }
 
 /* Data types for VtctldServer */
@@ -1023,6 +1024,8 @@ message MoveTablesCreateRequest {
   bool auto_start = 17;
   // NoRoutingRules is set to true if routing rules should not be created on the target when the workflow is created.
   bool no_routing_rules = 18;
+  // Run a single copy phase for the entire database.
+  bool atomic_copy = 19;
 }
 
 message MoveTablesCreateResponse {
@@ -1224,6 +1227,27 @@ message ReparentTabletResponse {
   string shard = 2;
   // Primary is the alias of the tablet that the tablet was reparented under.
   topodata.TabletAlias primary = 3;
+}
+
+message ReshardCreateRequest {
+  string workflow = 1;
+  string keyspace = 2;
+  repeated string source_shards = 3;
+  repeated string target_shards = 4;
+  repeated string cells = 5;
+  repeated topodata.TabletType tablet_types = 6;
+  tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 7;
+  // SkipSchemaCopy specifies if the schema should be copied from the source shard, set false if
+  // schema is already created on the target shard before Reshard is invoked.
+  bool skip_schema_copy = 8;
+  // OnDdl specifies the action to be taken when a DDL is encountered.
+  string on_ddl = 9;
+  // StopAfterCopy specifies if vreplication should be stopped after copying.
+  bool stop_after_copy = 10;
+  // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table copy finishes.
+  bool defer_secondary_keys = 11;
+  // Start the workflow after creating it.
+  bool auto_start = 12;
 }
 
 message RestoreFromBackupRequest {
@@ -1551,6 +1575,73 @@ message ValidateVSchemaRequest {
 message ValidateVSchemaResponse {
   repeated string results = 1;
   map<string, ValidateShardResponse> results_by_shard = 2;
+}
+
+message VDiffCreateRequest {
+  string workflow = 1;
+  string target_keyspace = 2;
+  string uuid = 3;
+  repeated string source_cells = 4;
+  repeated string target_cells = 5;
+  repeated topodata.TabletType tablet_types = 6;
+  tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 7;
+  repeated string tables = 8;
+  int64 limit = 9;
+  vttime.Duration filtered_replication_wait_time = 10;
+  bool debug_query = 11;
+  bool only_p_ks = 12;
+  bool update_table_stats = 13;
+  int64 max_extra_rows_to_compare = 14;
+  bool wait = 15;
+  vttime.Duration wait_update_interval = 16;
+  bool auto_retry = 17;
+  bool verbose = 18;
+}
+
+message VDiffCreateResponse {
+  // Intentionally upper case to maintain compatibility with
+  // vtctlclient and other VDiff client command output.
+  string UUID = 1;
+}
+
+message VDiffDeleteRequest {
+  string workflow = 1;
+  string target_keyspace = 2;
+  // This will be 'all' or a UUID.
+  string arg = 3;
+}
+
+message VDiffDeleteResponse {
+}
+
+message VDiffResumeRequest {
+  string workflow = 1;
+  string target_keyspace = 2;
+  string uuid = 3;
+}
+
+message VDiffResumeResponse {
+}
+
+message VDiffShowRequest {
+  string workflow = 1;
+  string target_keyspace = 2;
+  // This will be 'all', 'last', or a UUID.
+  string arg = 3;
+}
+
+message VDiffShowResponse {
+  // The key is keyspace/shard.
+  map<string, tabletmanagerdata.VDiffResponse> tablet_responses = 1;
+}
+
+message VDiffStopRequest {
+  string workflow = 1;
+  string target_keyspace = 2;
+  string uuid = 3;
+}
+
+message VDiffStopResponse {
 }
 
 message WorkflowDeleteRequest {

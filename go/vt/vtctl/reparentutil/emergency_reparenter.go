@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/event"
@@ -321,8 +319,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if err != nil {
 		return err
 	}
-
-	ev.NewPrimary = proto.Clone(newPrimary).(*topodatapb.Tablet)
+	ev.NewPrimary = newPrimary.CloneVT()
 	return err
 }
 

@@ -36,6 +36,7 @@ var (
 	env    *testenv.Env
 
 	ignoreKeyspaceShardInFieldAndRowEvents bool
+	testRowEventFlags                      bool
 )
 
 func TestMain(m *testing.M) {

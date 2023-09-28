@@ -1,4 +1,26 @@
-Usage of vtctld:
+vtctld provides web and gRPC interfaces to manage a single Vitess cluster.
+It is usually the first Vitess component to be started after a valid global topology service has been created.
+
+For the last several releases, vtctld has been transitioning to a newer gRPC service for well-typed cluster management requests.
+This is **required** to use programs such as vtadmin and vtctldclient, and The old API and service are deprecated and will be removed in a future release.
+To enable this newer service, include "grpc-vtctld" in the --service_map argument.
+This is demonstrated in the example usage below.
+
+Usage:
+  vtctld [flags]
+
+Examples:
+vtctld \
+	--topo_implementation etcd2 \
+	--topo_global_server_address localhost:2379 \
+	--topo_global_root /vitess/ \
+	--service_map 'grpc-vtctl,grpc-vtctld' \
+	--backup_storage_implementation file \
+	--file_backup_storage_root $VTDATAROOT/backups \
+	--port 15000 \
+	--grpc_port 15999
+
+Flags:
       --action_timeout duration                                          time to wait for an action before resorting to force (default 1m0s)
       --alsologtostderr                                                  log to standard error as well as files
       --azblob_backup_account_key_file string                            Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
@@ -58,7 +80,7 @@ Usage of vtctld:
       --grpc_server_initial_window_size int                              gRPC server initial window size
       --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
       --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
-  -h, --help                                                             display usage and exit
+  -h, --help                                                             help for vtctld
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
@@ -79,8 +101,6 @@ Usage of vtctld:
       --proxy_tablets                                                    Setting this true will make vtctld proxy the tablet status instead of redirecting to them
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
       --remote_operation_timeout duration                                time to wait for a remote operation (default 15s)
-      --s2a_enable_appengine_dialer                                      If true, opportunistically use AppEngine-specific dialer to call S2A.
-      --s2a_timeout duration                                             Timeout enforced on the connection to the S2A service for handshake. (default 3s)
       --s3_backup_aws_endpoint string                                    endpoint of the S3 backend (region must be provided).
       --s3_backup_aws_region string                                      AWS region to use. (default "us-east-1")
       --s3_backup_aws_retries int                                        AWS request retries. (default -1)

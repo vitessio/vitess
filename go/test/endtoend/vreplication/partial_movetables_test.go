@@ -21,12 +21,60 @@ import (
 	"strings"
 	"testing"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/wrangler"
 )
+
+// testCancel() starts and cancels a partial MoveTables for one of the shards which will be actually moved later on.
+// Before canceling, we first switch traffic to the target keyspace and then reverse it back to the source keyspace.
+// This tests that artifacts are being properly cleaned up when a MoveTables ia canceled.
+func testCancel(t *testing.T) {
+	targetKeyspace := "customer2"
+	sourceKeyspace := "customer"
+	workflowName := "partial80DashForCancel"
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
+	// We use a different table in this MoveTables than the subsequent one, so that setting up of the artifacts
+	// while creating MoveTables do not paper over any issues with cleaning up artifacts when MoveTables is canceled.
+	// Ref: https://github.com/vitessio/vitess/issues/13998
+	table := "customer2"
+	shard := "80-"
+	// start the partial movetables for 80-
+	mt := newMoveTables(vc, &moveTables{
+		workflowName:   workflowName,
+		targetKeyspace: targetKeyspace,
+		sourceKeyspace: sourceKeyspace,
+		tables:         table,
+		sourceShards:   shard,
+	}, moveTablesFlavorRandom)
+	mt.Create()
+
+	checkDenyList := func(keyspace string, expected bool) {
+		validateTableInDenyList(t, vc, fmt.Sprintf("%s:%s", keyspace, shard), table, expected)
+	}
+
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+
+	checkDenyList(targetKeyspace, false)
+	checkDenyList(sourceKeyspace, false)
+
+	mt.SwitchReadsAndWrites()
+	checkDenyList(targetKeyspace, false)
+	checkDenyList(sourceKeyspace, true)
+
+	mt.ReverseReadsAndWrites()
+	checkDenyList(targetKeyspace, true)
+	checkDenyList(sourceKeyspace, false)
+
+	mt.Cancel()
+	checkDenyList(targetKeyspace, false)
+	checkDenyList(sourceKeyspace, false)
+
+}
 
 // TestPartialMoveTablesBasic tests partial move tables by moving each
 // customer shard -- -80,80- -- once a a time to customer2.
@@ -58,7 +106,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 
 	// Move customer table from unsharded product keyspace to
 	// sharded customer keyspace.
-	createMoveTablesWorkflow(t, "customer,loadtest")
+	createMoveTablesWorkflow(t, "customer,loadtest,customer2")
 	tstWorkflowSwitchReadsAndWrites(t)
 	tstWorkflowComplete(t)
 
@@ -81,6 +129,9 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	// move tables for one of the two shards: 80-.
 	defaultRdonly = 0
 	setupCustomer2Keyspace(t)
+
+	testCancel(t)
+
 	currentWorkflowType = wrangler.MoveTablesWorkflow
 	wfName := "partial80Dash"
 	sourceKs := "customer"
@@ -90,7 +141,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 
 	// start the partial movetables for 80-
 	err := tstWorkflowExec(t, defaultCellName, wfName, sourceKs, targetKs,
-		"customer,loadtest", workflowActionCreate, "", shard, "")
+		"customer,loadtest", workflowActionCreate, "", shard, "", false)
 	require.NoError(t, err)
 	var lg *loadGenerator
 	if runWithLoad { // start load after routing rules are set, otherwise we end up with ambiguous tables
@@ -103,7 +154,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 
 	targetTab1 = vc.getPrimaryTablet(t, targetKs, shard)
 	catchup(t, targetTab1, wfName, "Partial MoveTables Customer to Customer2")
-	vdiff1(t, ksWf, "")
+	vdiffSideBySide(t, ksWf, "")
 
 	waitForRowCount(t, vtgateConn, "customer", "customer", 3)      // customer: all shards
 	waitForRowCount(t, vtgateConn, "customer2", "customer", 3)     // customer2: all shards
@@ -163,7 +214,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	require.Contains(t, err.Error(), "target: customer.-80.primary", "Query was routed to the target before any SwitchTraffic")
 
 	// Switch all traffic for the shard
-	require.NoError(t, tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionSwitchTraffic, "", "", ""))
+	require.NoError(t, tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionSwitchTraffic, "", "", "", false))
 	expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
 		targetKs, wfName, shard, shard)
 	require.Equal(t, expectedSwitchOutput, lastOutput)
@@ -221,7 +272,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 
 	// We cannot Complete a partial move tables at the moment because
 	// it will find that all traffic has (obviously) not been switched.
-	err = tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionComplete, "", "", "")
+	err = tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionComplete, "", "", "", false)
 	require.Error(t, err)
 
 	// Confirm global routing rules: -80 should still be be routed to customer
@@ -234,14 +285,14 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	ksWf = fmt.Sprintf("%s.%s", targetKs, wfName)
 	// Start the partial movetables for -80, 80- has already been switched
 	err = tstWorkflowExec(t, defaultCellName, wfName, sourceKs, targetKs,
-		"customer,loadtest", workflowActionCreate, "", shard, "")
+		"customer,loadtest", workflowActionCreate, "", shard, "", false)
 	require.NoError(t, err)
 	targetTab2 := vc.getPrimaryTablet(t, targetKs, shard)
 	catchup(t, targetTab2, wfName, "Partial MoveTables Customer to Customer2: -80")
-	vdiff1(t, ksWf, "")
+	vdiffSideBySide(t, ksWf, "")
 
 	// Switch all traffic for the shard
-	require.NoError(t, tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionSwitchTraffic, "", "", ""))
+	require.NoError(t, tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionSwitchTraffic, "", "", "", false))
 	expectedSwitchOutput = fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n",
 		targetKs, wfName)
 	require.Equal(t, expectedSwitchOutput, lastOutput)
@@ -262,7 +313,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 		// We switched traffic, so it's the reverse workflow we want to cancel.
 		reverseWf := wf + "_reverse"
 		reverseKs := sourceKs // customer
-		err = tstWorkflowExec(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "")
+		err = tstWorkflowExec(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "", false)
 		require.NoError(t, err)
 
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", fmt.Sprintf("%s.%s", reverseKs, reverseWf), "show")

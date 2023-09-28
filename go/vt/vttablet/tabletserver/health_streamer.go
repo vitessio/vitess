@@ -37,18 +37,15 @@ import (
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/history"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -130,7 +127,7 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine 
 }
 
 func (hs *healthStreamer) InitDBConfig(target *querypb.Target, cp dbconfigs.Connector) {
-	hs.state.Target = proto.Clone(target).(*querypb.Target)
+	hs.state.Target = target.CloneVT()
 	hs.dbConfig = cp
 }
 
@@ -202,7 +199,7 @@ func (hs *healthStreamer) register() (chan *querypb.StreamHealthResponse, contex
 	hs.clients[ch] = struct{}{}
 
 	// Send the current state immediately.
-	ch <- proto.Clone(hs.state).(*querypb.StreamHealthResponse)
+	ch <- hs.state.CloneVT()
 	return ch, hs.ctx
 }
 
@@ -233,9 +230,7 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, ptsTimes
 
 	hs.state.RealtimeStats.FilteredReplicationLagSeconds, hs.state.RealtimeStats.BinlogPlayersCount = blpFunc()
 	hs.state.RealtimeStats.Qps = hs.stats.QPSRates.TotalRate()
-
-	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
-
+	shr := hs.state.CloneVT()
 	hs.broadCastToClients(shr)
 	hs.history.Add(&historyRecord{
 		Time:       time.Now(),
@@ -302,7 +297,7 @@ func (hs *healthStreamer) AppendDetails(details []*kv) []*kv {
 
 func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
 	hs.unhealthyThreshold.Store(v.Nanoseconds())
-	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
+	shr := hs.state.CloneVT()
 	for ch := range hs.clients {
 		select {
 		case ch <- shr:
@@ -391,7 +386,7 @@ func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered
 
 	hs.state.RealtimeStats.TableSchemaChanged = tables
 	hs.state.RealtimeStats.ViewSchemaChanged = views
-	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
+	shr := hs.state.CloneVT()
 	hs.broadCastToClients(shr)
 	hs.state.RealtimeStats.TableSchemaChanged = nil
 	hs.state.RealtimeStats.ViewSchemaChanged = nil

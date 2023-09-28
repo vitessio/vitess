@@ -57,7 +57,7 @@ func gen4DeleteStmtPlanner(
 	}
 
 	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
-		if fkManagementNotRequired(vschema, tables) {
+		if fkManagementNotRequired(ctx, vschema, tables) {
 			plan := deleteUnshardedShortcut(deleteStmt, ks, tables)
 			plan = pushCommentDirectivesOnPlan(plan, deleteStmt)
 			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
@@ -94,7 +94,7 @@ func gen4DeleteStmtPlanner(
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
 }
 
-func fkManagementNotRequired(vschema plancontext.VSchema, vTables []*vindexes.Table) bool {
+func fkManagementNotRequired(ctx *plancontext.PlanningContext, vschema plancontext.VSchema, vTables []*vindexes.Table) bool {
 	// Find the foreign key mode and check for any managed child foreign keys.
 	for _, vTable := range vTables {
 		ksMode, err := vschema.ForeignKeyMode(vTable.Keyspace.Name)
@@ -104,7 +104,7 @@ func fkManagementNotRequired(vschema plancontext.VSchema, vTables []*vindexes.Ta
 		if ksMode != vschemapb.Keyspace_FK_MANAGED {
 			continue
 		}
-		childFks := vTable.ChildFKsNeedsHandling(vindexes.DeleteAction)
+		childFks := vTable.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.DeleteAction)
 		if len(childFks) > 0 {
 			return false
 		}

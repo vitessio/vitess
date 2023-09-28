@@ -78,6 +78,9 @@ type (
 	}
 )
 
+// exprInterfacePath is the path of the sqlparser.Expr interface.
+const exprInterfacePath = "vitess.io/vitess/go/vt/sqlparser.Expr"
+
 func (gen *astHelperGen) iface() *types.Interface {
 	return gen._iface
 }
@@ -200,22 +203,15 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 		scopes[pkg.PkgPath] = pkg.Types.Scope()
 	}
 
-	pos := strings.LastIndexByte(options.RootInterface, '.')
-	if pos < 0 {
-		return nil, fmt.Errorf("unexpected input type: %s", options.RootInterface)
+	tt, err := findTypeObject(options.RootInterface, scopes)
+	if err != nil {
+		return nil, err
 	}
 
-	pkgname := options.RootInterface[:pos]
-	typename := options.RootInterface[pos+1:]
-
-	scope := scopes[pkgname]
-	if scope == nil {
-		return nil, fmt.Errorf("no scope found for type '%s'", options.RootInterface)
-	}
-
-	tt := scope.Lookup(typename)
-	if tt == nil {
-		return nil, fmt.Errorf("no type called '%s' found in '%s'", typename, pkgname)
+	exprType, _ := findTypeObject(exprInterfacePath, scopes)
+	var exprInterface *types.Interface
+	if exprType != nil {
+		exprInterface = exprType.Type().(*types.Named).Underlying().(*types.Interface)
 	}
 
 	nt := tt.Type().(*types.Named)
@@ -224,7 +220,7 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 		newEqualsGen(pName, &options.Equals),
 		newCloneGen(pName, &options.Clone),
 		newVisitGen(pName),
-		newRewriterGen(pName, types.TypeString(nt, noQualifier)),
+		newRewriterGen(pName, types.TypeString(nt, noQualifier), exprInterface),
 		newCOWGen(pName, nt),
 	)
 
@@ -234,6 +230,28 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 	}
 
 	return it, nil
+}
+
+// findTypeObject finds the types.Object for the given interface from the given scopes.
+func findTypeObject(interfaceToFind string, scopes map[string]*types.Scope) (types.Object, error) {
+	pos := strings.LastIndexByte(interfaceToFind, '.')
+	if pos < 0 {
+		return nil, fmt.Errorf("unexpected input type: %s", interfaceToFind)
+	}
+
+	pkgname := interfaceToFind[:pos]
+	typename := interfaceToFind[pos+1:]
+
+	scope := scopes[pkgname]
+	if scope == nil {
+		return nil, fmt.Errorf("no scope found for type '%s'", interfaceToFind)
+	}
+
+	tt := scope.Lookup(typename)
+	if tt == nil {
+		return nil, fmt.Errorf("no type called '%s' found in '%s'", typename, pkgname)
+	}
+	return tt, nil
 }
 
 var _ generatorSPI = (*astHelperGen)(nil)

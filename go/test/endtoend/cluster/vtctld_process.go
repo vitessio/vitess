@@ -39,6 +39,7 @@ type VtctldProcess struct {
 	BackupStorageImplementation string
 	FileBackupStorageRoot       string
 	LogDir                      string
+	ErrorLog                    string
 	Port                        int
 	GrpcPort                    int
 	VerifyURL                   string
@@ -72,8 +73,10 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 
 	errFile, _ := os.Create(path.Join(vtctld.LogDir, "vtctld-stderr.txt"))
 	vtctld.proc.Stderr = errFile
+	vtctld.ErrorLog = errFile.Name()
 
 	vtctld.proc.Env = append(vtctld.proc.Env, os.Environ()...)
+	vtctld.proc.Env = append(vtctld.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Starting vtctld with command: %v", strings.Join(vtctld.proc.Args, " "))
 
@@ -95,6 +98,12 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		}
 		select {
 		case err := <-vtctld.exit:
+			errBytes, ferr := os.ReadFile(vtctld.ErrorLog)
+			if ferr == nil {
+				log.Errorf("vtctld error log contents:\n%s", string(errBytes))
+			} else {
+				log.Errorf("Failed to read the vtctld error log file %q: %v", vtctld.ErrorLog, ferr)
+			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtctld.Name, err)
 		default:
 			time.Sleep(300 * time.Millisecond)

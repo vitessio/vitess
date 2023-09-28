@@ -243,8 +243,12 @@ func (node *AlterVschema) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "alter vschema on %v drop vindex %v", node.Table, node.VindexSpec.Name)
 	case AddSequenceDDLAction:
 		buf.astPrintf(node, "alter vschema add sequence %v", node.Table)
+	case DropSequenceDDLAction:
+		buf.astPrintf(node, "alter vschema drop sequence %v", node.Table)
 	case AddAutoIncDDLAction:
 		buf.astPrintf(node, "alter vschema on %v add auto_increment %v", node.Table, node.AutoIncSpec)
+	case DropAutoIncDDLAction:
+		buf.astPrintf(node, "alter vschema on %v drop auto_increment %v", node.Table, node.AutoIncSpec)
 	default:
 		buf.astPrintf(node, "%s table %v", node.Action.ToString(), node.Table)
 	}

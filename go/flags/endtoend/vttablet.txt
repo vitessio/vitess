@@ -1,4 +1,47 @@
-Usage of vttablet:
+The VTTablet server _controls_ a running MySQL server. VTTablet supports two primary types of deployments:
+
+* Managed MySQL (most common)
+* External MySQL
+
+In addition to these deployment types, a partially managed VTTablet is also possible by setting `--disable_active_reparents`.
+
+### Managed MySQL
+
+In this mode, Vitess actively manages MySQL.
+
+### External MySQL.
+
+In this mode, an external MySQL can be used such as AWS RDS, AWS Aurora, Google CloudSQL; or just an existing (vanilla) MySQL installation.
+
+See "Unmanaged Tablet" for the full guide.
+
+Even if a MySQL is external, you can still make vttablet perform some management functions. They are as follows:
+
+* `--disable_active_reparents`: If this flag is set, then any reparent or replica commands will not be allowed. These are InitShardPrimary, PlannedReparentShard, EmergencyReparentShard, and ReparentTablet. In this mode, you should use the TabletExternallyReparented command to inform vitess of the current primary.
+* `--replication_connect_retry`: This value is give to mysql when it connects a replica to the primary as the retry duration parameter.
+* `--enable_replication_reporter`: If this flag is set, then vttablet will transmit replica lag related information to the vtgates, which will allow it to balance load better. Additionally, enabling this will also cause vttablet to restart replication if it was stopped. However, it will do this only if `--disable_active_reparents` was not turned on.
+* `--heartbeat_enable` and `--heartbeat_interval duration`: cause vttablet to write heartbeats to the sidecar database. This information is also used by the replication reporter to assess replica lag.
+
+Usage:
+  vttablet [flags]
+
+Examples:
+
+vttablet \
+	--topo_implementation etcd2 \
+	--topo_global_server_address localhost:2379 \
+	--topo_global_root /vitess/ \
+	--tablet-path $alias \
+	--init_keyspace $keyspace \
+	--init_shard $shard \
+	--init_tablet_type $tablet_type \
+	--port $port \
+	--grpc_port $grpc_port \
+	--service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream'
+
+`$alias` needs to be of the form: `<cell>-id`, and the cell should match one of the local cells that was created in the topology. The id can be left padded with zeroes: `cell-100` and `cell-000000100` are synonymous.
+
+Flags:
       --alsologtostderr                                                  log to standard error as well as files
       --app_idle_timeout duration                                        Idle timeout for app connections (default 1m0s)
       --app_pool_size int                                                Size of the connection pool for app connections (default 40)
@@ -152,7 +195,7 @@ Usage of vttablet:
       --heartbeat_enable                                                 If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the sidecar database's heartbeat table. The result is used to inform the serving state of the vttablet via healthchecks.
       --heartbeat_interval duration                                      How frequently to read and write replication heartbeat. (default 1s)
       --heartbeat_on_demand_duration duration                            If non-zero, heartbeats are only written upon consumer request, and only run for up to given duration following the request. Frequent requests can keep the heartbeat running consistently; when requests are infrequent heartbeat may completely stop between requests
-  -h, --help                                                             display usage and exit
+  -h, --help                                                             help for vttablet
       --hot_row_protection_concurrent_transactions int                   Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect. (default 5)
       --hot_row_protection_max_global_queue_size int                     Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded. (default 1000)
       --hot_row_protection_max_queue_size int                            Maximum number of BeginExecute RPCs which will be queued for the same row (range). (default 20)
@@ -225,9 +268,7 @@ Usage of vttablet:
       --queryserver-config-passthrough-dmls                              query server pass through all dml statements without rewriting
       --queryserver-config-pool-conn-max-lifetime duration               query server connection max lifetime (in seconds), vttablet manages various mysql connection pools. This config means if a connection has lived at least this long, it connection will be removed from pool upon the next time it is returned to the pool. (default 0s)
       --queryserver-config-pool-size int                                 query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction) (default 16)
-      --queryserver-config-query-cache-lfu                               query server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries (default true)
       --queryserver-config-query-cache-memory int                        query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 33554432)
-      --queryserver-config-query-cache-size int                          query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 5000)
       --queryserver-config-query-pool-timeout duration                   query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead. (default 0s)
       --queryserver-config-query-pool-waiter-cap int                     query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection (default 5000)
       --queryserver-config-query-timeout duration                        query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed. (default 30s)
@@ -257,8 +298,6 @@ Usage of vttablet:
       --restore_from_backup                                              (init restore parameter) will check BackupStorage for a recent backup at startup and start there
       --restore_from_backup_ts string                                    (init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'
       --retain_online_ddl_tables duration                                How long should vttablet keep an old migrated table before purging it (default 24h0m0s)
-      --s2a_enable_appengine_dialer                                      If true, opportunistically use AppEngine-specific dialer to call S2A.
-      --s2a_timeout duration                                             Timeout enforced on the connection to the S2A service for handshake. (default 3s)
       --s3_backup_aws_endpoint string                                    endpoint of the S3 backend (region must be provided).
       --s3_backup_aws_region string                                      AWS region to use. (default "us-east-1")
       --s3_backup_aws_retries int                                        AWS request retries. (default -1)

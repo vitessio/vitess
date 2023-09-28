@@ -67,6 +67,11 @@ func (vw *VSchemaWrapper) GetPrepareData(stmtName string) *vtgatepb.PrepareData 
 			PrepareStatement: "select 1 from user",
 			ParamsCount:      0,
 		}
+	case "prep_delete":
+		return &vtgatepb.PrepareData{
+			PrepareStatement: "delete from tbl5 where id = :v1",
+			ParamsCount:      1,
+		}
 	}
 	return nil
 }

@@ -20,13 +20,10 @@ import (
 	"context"
 	"sync"
 
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
-
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -58,7 +55,7 @@ type SchemaInfo interface {
 func (vm *VSchemaManager) GetCurrentSrvVschema() *vschemapb.SrvVSchema {
 	vm.mu.Lock()
 	defer vm.mu.Unlock()
-	return proto.Clone(vm.currentSrvVschema).(*vschemapb.SrvVSchema)
+	return vm.currentSrvVschema.CloneVT()
 }
 
 // UpdateVSchema propagates the updated vschema to the topo. The entry for

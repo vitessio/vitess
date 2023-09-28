@@ -23,8 +23,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/constants/sidecar"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -81,7 +79,7 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 	w := &heartbeatWriter{
 		env:              env,
 		enabled:          true,
-		tabletAlias:      proto.Clone(alias).(*topodatapb.TabletAlias),
+		tabletAlias:      alias.CloneVT(),
 		now:              time.Now,
 		interval:         heartbeatInterval,
 		onDemandDuration: config.ReplicationTracker.HeartbeatOnDemandSeconds.Get(),

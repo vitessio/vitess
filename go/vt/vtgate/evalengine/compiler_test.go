@@ -587,3 +587,65 @@ func TestBindVarLiteral(t *testing.T) {
 		})
 	}
 }
+
+func TestCompilerNonConstant(t *testing.T) {
+	var testCases = []struct {
+		expression string
+	}{
+		{
+			expression: "RANDOM_BYTES(4)",
+		},
+		{
+			expression: "UUID()",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := sqlparser.ParseExpr(tc.expression)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			cfg := &evalengine.Config{
+				Collation:    collations.CollationUtf8mb4ID,
+				Optimization: evalengine.OptimizationLevelCompile,
+			}
+
+			converted, err := evalengine.Translate(expr, cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			env := evalengine.EmptyExpressionEnv()
+			var prev string
+			for i := 0; i < 1000; i++ {
+				expected, err := env.Evaluate(evalengine.Deoptimize(converted))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if expected.String() == prev {
+					t.Fatalf("constant evaluation from eval engine: got %s multiple times", expected.String())
+				}
+				prev = expected.String()
+			}
+
+			if cfg.CompilerErr != nil {
+				t.Fatalf("bad compilation: %v", cfg.CompilerErr)
+			}
+
+			// re-run the same evaluation multiple times to ensure results are always consistent
+			for i := 0; i < 1000; i++ {
+				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if res.String() == prev {
+					t.Fatalf("constant evaluation from eval engine: got %s multiple times", res.String())
+				}
+				prev = res.String()
+			}
+		})
+	}
+}

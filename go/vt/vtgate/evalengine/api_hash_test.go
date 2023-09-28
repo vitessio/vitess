@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -79,7 +78,7 @@ func TestHashCodesRandom(t *testing.T) {
 	endTime := time.Now().Add(1 * time.Second)
 	for time.Now().Before(endTime) {
 		tested++
-		v1, v2 := randomValues()
+		v1, v2 := sqltypes.TestRandomValues()
 		cmp, err := NullsafeCompare(v1, v2, collation)
 		require.NoErrorf(t, err, "%s compared with %s", v1.String(), v2.String())
 		typ, err := coerceTo(v1.Type(), v2.Type())
@@ -168,7 +167,7 @@ func TestHashCodesRandom128(t *testing.T) {
 	endTime := time.Now().Add(1 * time.Second)
 	for time.Now().Before(endTime) {
 		tested++
-		v1, v2 := randomValues()
+		v1, v2 := sqltypes.TestRandomValues()
 		cmp, err := NullsafeCompare(v1, v2, collation)
 		require.NoErrorf(t, err, "%s compared with %s", v1.String(), v2.String())
 		typ, err := coerceTo(v1.Type(), v2.Type())
@@ -188,89 +187,6 @@ func TestHashCodesRandom128(t *testing.T) {
 		}
 	}
 	t.Logf("tested %d values, with %d equalities found\n", tested, equal)
-}
-
-func randomValues() (sqltypes.Value, sqltypes.Value) {
-	if rand.Int()%2 == 0 {
-		// create a single value, and turn it into two different types
-		v := rand.Int()
-		return randomNumericType(v), randomNumericType(v)
-	}
-
-	// just produce two arbitrary random values and compare
-	return randomValue(), randomValue()
-}
-
-func randomNumericType(i int) sqltypes.Value {
-	r := rand.Intn(len(numericTypes))
-	return numericTypes[r](i)
-
-}
-
-var numericTypes = []func(int) sqltypes.Value{
-	func(i int) sqltypes.Value { return sqltypes.NULL },
-	func(i int) sqltypes.Value { return sqltypes.NewInt8(int8(i)) },
-	func(i int) sqltypes.Value { return sqltypes.NewInt32(int32(i)) },
-	func(i int) sqltypes.Value { return sqltypes.NewInt64(int64(i)) },
-	func(i int) sqltypes.Value { return sqltypes.NewUint64(uint64(i)) },
-	func(i int) sqltypes.Value { return sqltypes.NewUint32(uint32(i)) },
-	func(i int) sqltypes.Value { return sqltypes.NewFloat64(float64(i)) },
-	func(i int) sqltypes.Value { return sqltypes.NewDecimal(fmt.Sprintf("%d", i)) },
-	func(i int) sqltypes.Value { return sqltypes.NewVarChar(fmt.Sprintf("%d", i)) },
-	func(i int) sqltypes.Value { return sqltypes.NewVarChar(fmt.Sprintf("  %f aa", float64(i))) },
-}
-
-var randomGenerators = []func() sqltypes.Value{
-	randomNull,
-	randomInt8,
-	randomInt32,
-	randomInt64,
-	randomUint64,
-	randomUint32,
-	randomVarChar,
-	randomComplexVarChar,
-	randomDecimal,
-	randomDate,
-	randomDatetime,
-	randomTimestamp,
-	randomTime,
-}
-
-func randomValue() sqltypes.Value {
-	r := rand.Intn(len(randomGenerators))
-	return randomGenerators[r]()
-}
-
-func randTime() time.Time {
-	min := time.Date(1970, 1, 0, 0, 0, 0, 0, time.UTC).Unix()
-	max := time.Date(2070, 1, 0, 0, 0, 0, 0, time.UTC).Unix()
-	delta := max - min
-
-	sec := rand.Int63n(delta) + min
-	return time.Unix(sec, 0)
-}
-
-func randomNull() sqltypes.Value   { return sqltypes.NULL }
-func randomInt8() sqltypes.Value   { return sqltypes.NewInt8(int8(rand.Intn(255))) }
-func randomInt32() sqltypes.Value  { return sqltypes.NewInt32(rand.Int31()) }
-func randomInt64() sqltypes.Value  { return sqltypes.NewInt64(rand.Int63()) }
-func randomUint32() sqltypes.Value { return sqltypes.NewUint32(rand.Uint32()) }
-func randomUint64() sqltypes.Value { return sqltypes.NewUint64(rand.Uint64()) }
-func randomDecimal() sqltypes.Value {
-	dec := fmt.Sprintf("%d.%d", rand.Intn(9999999999), rand.Intn(9999999999))
-	if rand.Int()&0x1 == 1 {
-		dec = "-" + dec
-	}
-	return sqltypes.NewDecimal(dec)
-}
-func randomVarChar() sqltypes.Value   { return sqltypes.NewVarChar(fmt.Sprintf("%d", rand.Int63())) }
-func randomDate() sqltypes.Value      { return sqltypes.NewDate(randTime().Format(time.DateOnly)) }
-func randomDatetime() sqltypes.Value  { return sqltypes.NewDatetime(randTime().Format(time.DateTime)) }
-func randomTimestamp() sqltypes.Value { return sqltypes.NewTimestamp(randTime().Format(time.DateTime)) }
-func randomTime() sqltypes.Value      { return sqltypes.NewTime(randTime().Format(time.TimeOnly)) }
-
-func randomComplexVarChar() sqltypes.Value {
-	return sqltypes.NewVarChar(fmt.Sprintf(" \t %f apa", float64(rand.Intn(1000))*1.10))
 }
 
 // coerceTo takes two input types, and decides how they should be coerced before compared

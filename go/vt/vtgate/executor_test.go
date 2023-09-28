@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/safehtml/template"
@@ -35,7 +36,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -377,7 +377,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, "select id from main1", nil)
 	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{TargetString: "@primary", InTransaction: true, FoundRows: 1, RowCount: -1}
-	testSession := proto.Clone(session.Session).(*vtgatepb.Session)
+	testSession := session.Session.CloneVT()
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=0")
 
@@ -418,7 +418,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, "update main1 set id=1", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@primary", FoundRows: 0, RowCount: 1}
-	testSession = proto.Clone(session.Session).(*vtgatepb.Session)
+	testSession = session.Session.CloneVT()
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=1")
 	if got, want := sbclookup.CommitCount.Load(), startCount; got != want {
@@ -1665,13 +1665,9 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	}
 }
 
-func assertCacheSize(t *testing.T, c cache.Cache, expected int) {
+func assertCacheSize(t *testing.T, c *PlanCache, expected int) {
 	t.Helper()
-	var size int
-	c.ForEach(func(_ any) bool {
-		size++
-		return true
-	})
+	size := c.Len()
 	if size != expected {
 		t.Errorf("getPlan() expected cache to have size %d, but got: %d", expected, size)
 	}
@@ -1682,8 +1678,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *vcursorImpl, sql string)
 
 	var plan *engine.Plan
 	if vc == nil {
-		e.plans.ForEach(func(x any) bool {
-			p := x.(*engine.Plan)
+		e.ForEachPlan(func(p *engine.Plan) bool {
 			if p.Original == sql {
 				plan = p
 			}
@@ -1691,9 +1686,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *vcursorImpl, sql string)
 		})
 	} else {
 		h := e.hashPlan(context.Background(), vc, sql)
-		if p, ok := e.plans.Get(h); ok {
-			plan = p.(*engine.Plan)
-		}
+		plan, _ = e.plans.Get(h, e.epoch.Load())
 	}
 	require.Truef(t, plan != nil, "plan not found for query: %s", sql)
 	return plan
@@ -1712,7 +1705,7 @@ func getPlanCached(t *testing.T, ctx context.Context, e *Executor, vcursor *vcur
 	require.NoError(t, err)
 
 	// Wait for cache to settle
-	e.plans.Wait()
+	time.Sleep(100 * time.Millisecond)
 	return plan, logStats
 }
 
@@ -1897,7 +1890,7 @@ func TestPassthroughDDL(t *testing.T) {
 		TargetString: "TestExecutor",
 	}
 
-	alterDDL := "/* leading */ alter table passthrough_ddl add columne col bigint default 123 /* trailing */"
+	alterDDL := "/* leading */ alter table passthrough_ddl add column col bigint default 123 /* trailing */"
 	_, err := executorExec(ctx, executor, session, alterDDL, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
@@ -2147,7 +2140,7 @@ func TestServingKeyspaces(t *testing.T) {
 	hc.BroadcastAll()
 
 	// Clear plan cache, to force re-planning of the query.
-	executor.plans.Clear()
+	executor.ClearPlans()
 	require.ElementsMatch(t, []string{"TestUnsharded"}, gw.GetServingKeyspaces())
 	result, err = executor.Execute(ctx, nil, "TestServingKeyspaces", NewSafeSession(&vtgatepb.Session{}), "select keyspace_name from dual", nil)
 	require.NoError(t, err)

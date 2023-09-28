@@ -408,3 +408,38 @@ func TestAllSQLsAreCreateQueries(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyAllowZeroInDate(t *testing.T) {
+	tcases := []struct {
+		sql    string
+		expect string
+	}{
+		{
+			"create table t1(id int primary key); ",
+			"create /*vt+ allowZeroInDate=true */ table t1 (\n\tid int primary key\n)",
+		},
+		{
+			"create table t1(id int primary key)",
+			"create /*vt+ allowZeroInDate=true */ table t1 (\n\tid int primary key\n)",
+		},
+		{
+			"create table t1(id int primary key);select 1 from dual",
+			"create /*vt+ allowZeroInDate=true */ table t1 (\n\tid int primary key\n);select 1 from dual",
+		},
+		{
+			"create table t1(id int primary key); alter table t2 add column id2 int",
+			"create /*vt+ allowZeroInDate=true */ table t1 (\n\tid int primary key\n);alter /*vt+ allowZeroInDate=true */ table t2 add column id2 int",
+		},
+		{
+			"  ; ; ;;; create table t1(id int primary key); ;; alter table t2 add column id2 int ;;",
+			"create /*vt+ allowZeroInDate=true */ table t1 (\n\tid int primary key\n);alter /*vt+ allowZeroInDate=true */ table t2 add column id2 int",
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			result, err := applyAllowZeroInDate(tcase.sql)
+			assert.NoError(t, err)
+			assert.Equal(t, tcase.expect, result)
+		})
+	}
+}

@@ -27,10 +27,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/test/utils"
@@ -2704,8 +2702,7 @@ func TestGetSchema(t *testing.T) {
 				}
 
 				// Clone so our mutation below doesn't trip the race detector.
-				schema = proto.Clone(schema).(*vtadminpb.Schema)
-
+				schema = schema.CloneVT()
 				if schema.TableDefinitions != nil {
 					// For simplicity, we're going to assert only on the state
 					// of the aggregated sizes (in schema.TableSizes), since the

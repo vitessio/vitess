@@ -66,7 +66,8 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateMigrationStatusFailedOrCancelled = `UPDATE _vt.schema_migrations
-			SET migration_status=IF(cancelled_timestamp IS NULL, 'failed', 'cancelled')
+			SET migration_status=IF(cancelled_timestamp IS NULL, 'failed', 'cancelled'),
+			completed_timestamp=NOW(6)
 		WHERE
 			migration_uuid=%a
 	`
@@ -345,7 +346,7 @@ const (
 			log_path
 		FROM _vt.schema_migrations
 		WHERE
-			migration_status IN ('complete', 'failed')
+			migration_status IN ('complete', 'cancelled', 'failed')
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp <= IF(retain_artifacts_seconds=0,
 				NOW() - INTERVAL %a SECOND,
@@ -356,7 +357,7 @@ const (
 		SET
 			completed_timestamp=NOW(6)
 		WHERE
-			migration_status='failed'
+			migration_status IN ('cancelled', 'failed')
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp IS NULL
 	`

@@ -521,8 +521,7 @@ func TestStateManagerValidations(t *testing.T) {
 	defer cancel()
 	sm := newTestStateManager(t)
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	sm.target = proto.Clone(target).(*querypb.Target)
-
+	sm.target = target.CloneVT()
 	err := sm.StartRequest(ctx, target, false)
 	assert.Contains(t, err.Error(), "operation not allowed")
 

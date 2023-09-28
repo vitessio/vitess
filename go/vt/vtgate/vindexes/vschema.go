@@ -1226,11 +1226,12 @@ func LoadFormalKeyspace(filename string) (*vschemapb.Keyspace, error) {
 	return formal, nil
 }
 
-// ChooseVindexForType chooses the most appropriate vindex for the give type.
+// ChooseVindexForType chooses the most appropriate vindex type for
+// the given SQL data type.
 func ChooseVindexForType(typ querypb.Type) (string, error) {
 	switch {
 	case sqltypes.IsIntegral(typ):
-		return "hash", nil
+		return "xxhash", nil
 	case sqltypes.IsText(typ):
 		return "unicode_loose_md5", nil
 	case sqltypes.IsBinary(typ):

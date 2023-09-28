@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 )
 
@@ -33,9 +31,7 @@ type MaxReplicationLagModuleConfig struct {
 }
 
 func (cfg MaxReplicationLagModuleConfig) Clone() MaxReplicationLagModuleConfig {
-	return MaxReplicationLagModuleConfig{
-		proto.Clone(cfg.Configuration).(*throttlerdatapb.Configuration),
-	}
+	return MaxReplicationLagModuleConfig{cfg.Configuration.CloneVT()}
 }
 
 // Most of the values are based on the assumption that vttablet is started
