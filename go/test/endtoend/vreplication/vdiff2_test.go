@@ -104,8 +104,7 @@ var testCases = []*testCase{
 }
 
 func TestVDiff2(t *testing.T) {
-	allCellNames = "zone1"
-	defaultCellName := "zone1"
+	allCellNames = "zone5,zone1,zone2,zone3,zone4"
 	sourceKs := "product"
 	sourceShards := []string{"0"}
 	targetKs := "customer"
@@ -113,14 +112,19 @@ func TestVDiff2(t *testing.T) {
 	// This forces us to use multiple vstream packets even with small test tables
 	extraVTTabletArgs = []string{"--vstream_packet_size=1"}
 
-	vc = NewVitessCluster(t, "TestVDiff2", []string{allCellNames}, mainClusterConfig)
+	vc = NewVitessCluster(t, "TestVDiff2", strings.Split(allCellNames, ","), mainClusterConfig)
 	require.NotNil(t, vc)
-	defaultCell = vc.Cells[defaultCellName]
-	cells := []*Cell{defaultCell}
+	zone1 := vc.Cells["zone1"]
+	zone2 := vc.Cells["zone2"]
+	zone3 := vc.Cells["zone3"]
+	defaultCell = zone1
 
 	defer vc.TearDown(t)
 
-	vc.AddKeyspace(t, cells, sourceKs, strings.Join(sourceShards, ","), initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
+	// The primary tablet is only added in the first cell.
+	// We ONLY add primary tablets in this test.
+	_, err := vc.AddKeyspace(t, []*Cell{zone2, zone1, zone3}, sourceKs, strings.Join(sourceShards, ","), initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
+	require.NoError(t, err)
 
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
@@ -140,7 +144,9 @@ func TestVDiff2(t *testing.T) {
 
 	generateMoreCustomers(t, sourceKs, 100)
 
-	_, err := vc.AddKeyspace(t, cells, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
+	// The primary tablet is only added in the first cell.
+	// We ONLY add primary tablets in this test.
+	tks, err := vc.AddKeyspace(t, []*Cell{zone3, zone1, zone2}, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
 	require.NoError(t, err)
 	for _, shard := range targetShards {
 		require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, shard))
@@ -148,15 +154,15 @@ func TestVDiff2(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			testWorkflow(t, vc, tc, cells)
+			// Primary tablets for any new shards are added in the first cell.
+			testWorkflow(t, vc, tc, tks, []*Cell{zone3, zone2, zone1})
 		})
 	}
 }
 
-func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) {
+func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, cells []*Cell) {
 	arrTargetShards := strings.Split(tc.targetShards, ",")
 	if tc.typ == "Reshard" {
-		tks := vc.Cells[cells[0].Name].Keyspaces[tc.targetKs]
 		require.NoError(t, vc.AddShards(t, cells, tks, tc.targetShards, 0, 0, tc.tabletBaseID, targetKsOpts))
 		for _, shard := range arrTargetShards {
 			require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, tc.targetKs, shard))
@@ -169,6 +175,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 	if tc.typ == "Reshard" {
 		args = append(args, "--source_shards", tc.sourceShards, "--target_shards", tc.targetShards)
 	}
+	args = append(args, "--cells", allCellNames)
 	args = append(args, "--tables", tc.tables)
 	args = append(args, "Create")
 	args = append(args, ksWorkflow)
@@ -180,14 +187,14 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 		catchup(t, tab, tc.workflow, tc.typ)
 	}
 
-	vdiff(t, tc.targetKs, tc.workflow, cells[0].Name, true, true, nil)
+	vdiff(t, tc.targetKs, tc.workflow, allCellNames, true, true, nil)
 
 	if tc.autoRetryError {
-		testAutoRetryError(t, tc, cells[0].Name)
+		testAutoRetryError(t, tc, allCellNames)
 	}
 
 	if tc.resume {
-		testResume(t, tc, cells[0].Name)
+		testResume(t, tc, allCellNames)
 	}
 
 	// These are done here so that we have a valid workflow to test the commands against
