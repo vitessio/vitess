@@ -1037,7 +1037,7 @@ func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, 
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
 		problems := vars["DetectedProblems"].(map[string]interface{})
-		actual := problems[key]
+		actual := getIntFromValue(problems[key])
 		if actual == expect {
 			return
 		}
@@ -1047,6 +1047,7 @@ func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, 
 	vars := vtorcInstance.GetVars()
 	problems := vars["DetectedProblems"].(map[string]interface{})
 	actual, ok := problems[key]
+	actual = getIntFromValue(actual)
 
 	assert.True(t, ok,
 		"The metric DetectedProblems[%s] should exist but does not (all problems: %+v)",
