@@ -42,6 +42,10 @@ func TestPerformVDiffAction(t *testing.T) {
 	keyspace := "ks"
 	workflow := "wf"
 	uuid := uuid.New().String()
+	type queryAndResult struct {
+		query  string
+		result *sqltypes.Result // Optional if you need a non-empty result
+	}
 	tests := []struct {
 		name          string
 		vde           *Engine
@@ -49,7 +53,7 @@ func TestPerformVDiffAction(t *testing.T) {
 		preFunc       func() error
 		postFunc      func() error
 		want          *tabletmanagerdatapb.VDiffResponse
-		expectQueries []string
+		expectQueries []queryAndResult
 		wantErr       error
 	}{
 		{
@@ -72,9 +76,13 @@ func TestPerformVDiffAction(t *testing.T) {
 			preFunc: func() error {
 				return tstenv.TopoServ.CreateCellInfo(ctx, "zone100_test", &topodatapb.CellInfo{})
 			},
-			expectQueries: []string{
-				fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
-				fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'pending', '{\"picker_options\":{\"source_cell\":\"cell1,zone100_test\",\"target_cell\":\"cell1,zone100_test\"}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
+			expectQueries: []queryAndResult{
+				{
+					query: fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
+				},
+				{
+					query: fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'pending', '{\"picker_options\":{\"source_cell\":\"cell1,zone100_test\",\"target_cell\":\"cell1,zone100_test\"}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
+				},
 			},
 			postFunc: func() error {
 				return tstenv.TopoServ.DeleteCellInfo(ctx, "zone100_test", true)
@@ -102,9 +110,13 @@ func TestPerformVDiffAction(t *testing.T) {
 					Cells: cells,
 				})
 			},
-			expectQueries: []string{
-				fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
-				fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'pending', '{\"picker_options\":{\"source_cell\":\"all\",\"target_cell\":\"all\"}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
+			expectQueries: []queryAndResult{
+				{
+					query: fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
+				},
+				{
+					query: fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'pending', '{\"picker_options\":{\"source_cell\":\"all\",\"target_cell\":\"all\"}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
+				},
 			},
 			postFunc: func() error {
 				if err := tstenv.TopoServ.DeleteCellInfo(ctx, "zone100_test", true); err != nil {
@@ -119,9 +131,21 @@ func TestPerformVDiffAction(t *testing.T) {
 				Action:    string(DeleteAction),
 				ActionArg: uuid,
 			},
-			expectQueries: []string{
-				fmt.Sprintf(`delete from vd, vdt using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+			expectQueries: []queryAndResult{
+				{
+					query: fmt.Sprintf("select id as id from _vt.vdiff where vdiff_uuid = %s", encodeString(uuid)),
+					result: sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields(
+							"id",
+							"int64",
+						),
+						"1",
+					),
+				},
+				{
+					query: fmt.Sprintf(`delete from vd, vdt using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 							where vd.vdiff_uuid = %s`, encodeString(uuid)),
+				},
 			},
 		},
 		{
@@ -132,10 +156,12 @@ func TestPerformVDiffAction(t *testing.T) {
 				Keyspace:  keyspace,
 				Workflow:  workflow,
 			},
-			expectQueries: []string{
-				fmt.Sprintf(`delete from vd, vdt, vdl using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+			expectQueries: []queryAndResult{
+				{
+					query: fmt.Sprintf(`delete from vd, vdt, vdl using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 										left join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
 										where vd.keyspace = %s and vd.workflow = %s`, encodeString(keyspace), encodeString(workflow)),
+				},
 			},
 		},
 	}
@@ -148,10 +174,14 @@ func TestPerformVDiffAction(t *testing.T) {
 			if tt.vde == nil {
 				tt.vde = vdiffenv.vde
 			}
-			for _, query := range tt.expectQueries {
-				vdiffenv.dbClient.ExpectRequest(query, &sqltypes.Result{}, nil)
+			for _, queryResult := range tt.expectQueries {
+				if queryResult.result == nil {
+					queryResult.result = &sqltypes.Result{}
+				}
+				vdiffenv.dbClient.ExpectRequest(queryResult.query, queryResult.result, nil)
 			}
 			got, err := tt.vde.PerformVDiffAction(ctx, tt.req)
+			vdiffenv.dbClient.Wait()
 			if tt.wantErr != nil && !vterrors.Equals(err, tt.wantErr) {
 				t.Errorf("Engine.PerformVDiffAction() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -163,6 +193,9 @@ func TestPerformVDiffAction(t *testing.T) {
 				err := tt.postFunc()
 				require.NoError(t, err, "post function failed: %v", err)
 			}
+			// No VDiffs should be running anymore.
+			require.Equal(t, 0, len(vdiffenv.vde.controllers), "expected no controllers to be running, but found %d",
+				len(vdiffenv.vde.controllers))
 		})
 	}
 }
