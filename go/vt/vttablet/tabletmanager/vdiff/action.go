@@ -361,7 +361,23 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 	case AllActionArg:
 		// We need to stop any running controllers before we delete
 		// the vdiff records.
-		vde.resetControllers()
+		query, err = sqlparser.ParseAndBind(sqlGetVDiffIDsByKeyspaceWorkflow,
+			sqltypes.StringBindVariable(req.Keyspace),
+			sqltypes.StringBindVariable(req.Workflow),
+		)
+		if err != nil {
+			return err
+		}
+		res, err := dbClient.ExecuteFetch(query, -1)
+		if err != nil {
+			return err
+		}
+		rows := res.Named().Rows
+		for _, row := range rows {
+			if controller := vde.controllers[int64(row.AsInt64("id", -1))]; controller != nil {
+				controller.Stop()
+			}
+		}
 		query, err = sqlparser.ParseAndBind(sqlDeleteVDiffs,
 			sqltypes.StringBindVariable(req.Keyspace),
 			sqltypes.StringBindVariable(req.Workflow),
@@ -391,7 +407,7 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no vdiff found for UUID %s on tablet %v",
 				uuid, vde.thisTablet.Alias)
 		}
-		controller, ok := vde.controllers[int64(row.AsInt64("id", 0))]
+		controller, ok := vde.controllers[int64(row.AsInt64("id", -1))]
 		if ok {
 			controller.Stop()
 		}
@@ -402,9 +418,8 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 			return err
 		}
 	}
-	if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
-		return err
-	}
+	// Execute the query that deletes one or all vdiff records.
+	_, err = dbClient.ExecuteFetch(query, 1)
 
-	return nil
+	return err
 }

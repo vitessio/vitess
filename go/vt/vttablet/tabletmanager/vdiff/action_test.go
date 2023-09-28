@@ -158,6 +158,17 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
+					query: fmt.Sprintf("select id as id from _vt.vdiff where keyspace = %s and workflow = %s", encodeString(keyspace), encodeString(workflow)),
+					result: sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields(
+							"id",
+							"int64",
+						),
+						"1",
+						"2",
+					),
+				},
+				{
 					query: fmt.Sprintf(`delete from vd, vdt, vdl using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 										left join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
 										where vd.keyspace = %s and vd.workflow = %s`, encodeString(keyspace), encodeString(workflow)),
