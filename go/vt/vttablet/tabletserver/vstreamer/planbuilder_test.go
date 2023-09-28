@@ -428,6 +428,29 @@ func TestPlanBuilder(t *testing.T) {
 			}},
 		},
 	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select convert(val using utf8mb4) as val2, id as id from t1"},
+		outPlan: &Plan{
+			ColExprs: []ColExpr{{
+				ColNum: 1,
+				Field: &querypb.Field{
+					Name:    "val",
+					Type:    sqltypes.VarBinary,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
+				},
+			}, {
+				ColNum: 0,
+				Field: &querypb.Field{
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
+				},
+			}},
+			convertUsingUTF8Columns: map[string]bool{"val": true},
+		},
+	}, {
 		inTable: regional,
 		inRule:  &binlogdatapb.Rule{Match: "regional", Filter: "select id, keyspace_id() from regional"},
 		outPlan: &Plan{
