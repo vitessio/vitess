@@ -117,7 +117,6 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--instance-poll-time", "1s",
 		// Faster topo information refresh speeds up the tests. This doesn't add any significant load either
 		"--topo-information-refresh-duration", "3s",
-		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "vtorc"),
 	)
 	if *isCoverage {
 		orc.proc.Args = append(orc.proc.Args, "--test.coverprofile="+getCoveragePath("orc.out"))
@@ -197,7 +196,7 @@ func (orc *VTOrcProcess) GetVars() map[string]any {
 
 // MakeAPICall makes an API call on the given endpoint of VTOrc
 func (orc *VTOrcProcess) MakeAPICall(endpoint string) (status int, response string, err error) {
-	url := fmt.Sprintf("http://localhost:%d/%s", orc.Port, endpoint)
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", orc.Port, endpoint)
 	resp, err := http.Get(url)
 	if err != nil {
 		if resp != nil {
