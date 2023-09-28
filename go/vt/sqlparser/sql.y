@@ -404,7 +404,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> NVAR PASSWORD_LOCK
 
 %type <statement> command
-%type <selStmt> create_query_expression select_statement with_select select_or_set_op base_select base_select_no_cte select_statement_with_no_trailing_into
+%type <selStmt> create_query_expression create_query_select_expression select_statement with_select select_or_set_op base_select base_select_no_cte select_statement_with_no_trailing_into
 %type <selStmt> set_op intersect_stmt union_except_lhs union_except_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
@@ -1087,11 +1087,20 @@ create_statement:
     $$ = $1
   }
   // TODO: Allow for table specs to be parsed here
-| create_table_prefix as_opt create_query_expression
+| create_table_prefix AS create_query_expression
   {
     $1.OptSelect = &OptSelect{Select: $3}
     $$ = $1
   }
+  // Currently, only unparenthesized SELECT expressions
+  // are permitted for `CREATE AS` if `AS` is ommitted.
+  // This is done to avoid ambiguity when parsing
+  // > CREATE TABLE AS (...
+| create_table_prefix create_query_select_expression
+   {
+     $1.OptSelect = &OptSelect{Select: $2}
+     $$ = $1
+   }
 | create_table_prefix LIKE table_name
   {
     $1.OptLike = &OptLike{LikeTable: $3}
@@ -1759,8 +1768,21 @@ with_admin_opt:
   }
 
 // TODO: Implement IGNORE, REPLACE, VALUES, and TABLE
-create_query_expression:
+create_query_select_expression:
   base_select_no_cte order_by_opt limit_opt lock_opt
+  {
+    if $1.GetInto() != nil {
+      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
+      return 1
+    }
+    $1.SetOrderBy($2)
+    $1.SetLimit($3)
+    $1.SetLock($4)
+    $$ = $1
+  }
+
+create_query_expression:
+  select_or_set_op order_by_opt limit_opt lock_opt
   {
     if $1.GetInto() != nil {
       yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
