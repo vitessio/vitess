@@ -49,6 +49,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
@@ -82,6 +83,120 @@ func GenerateMarkdownTree(cmd *cobra.Command, dir string) error {
 	indexDocPath := filepath.Join(dir, "_index.md")
 	if err := os.Rename(rootDocPath, indexDocPath); err != nil {
 		return fmt.Errorf("failed to index doc (generated at %s) into proper position (%s): %w", rootDocPath, indexDocPath, err)
+	}
+
+	if err := anonymizeHomedir(indexDocPath); err != nil {
+		return fmt.Errorf("failed to anonymize homedir in help text for command %s: %w", indexDocPath, err)
+	}
+
+	if err := restructure(dir, dir, cmd.Name(), cmd.Commands()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/*
+_index.md (aka vtctldclient.md)
+vtctldclient_AddCellInfo.md
+vtctldclient_movetables.md
+vtctldclient_movetables_show.md
+
+becomes
+
+_index.md
+vtctldclient_AddCellInfo.md
+vtctldclient_movetables/
+	_index.md
+	vtctldclient_movetables_show.md
+*/
+
+func restructure(rootDir string, dir string, name string, commands []*cobra.Command) error {
+	for _, cmd := range commands {
+		fullCmdFilename := strings.Join([]string{name, cmd.Name()}, "_")
+
+		children := cmd.Commands()
+
+		switch {
+		case len(children) > 0:
+			// Command (top-level or not) with children.
+			// 1. Set up a directory for its children.
+			// 2. Move its doc into that dir as "_index.md"
+			// 3. Restructure its children.
+			cmdDir := filepath.Join(dir, fullCmdFilename)
+			if err := os.MkdirAll(cmdDir, 0755); err != nil {
+				return fmt.Errorf("failed to create subdir for %s: %w", fullCmdFilename, err)
+			}
+
+			indexFile := filepath.Join(cmdDir, "_index.md")
+			if err := os.Rename(filepath.Join(rootDir, fullCmdFilename+".md"), indexFile); err != nil {
+				return fmt.Errorf("failed to move index doc for command %s with children: %w", fullCmdFilename, err)
+			}
+
+			if err := anonymizeHomedir(indexFile); err != nil {
+				return fmt.Errorf("failed to anonymize homedir in help text for command %s: %w", indexFile, err)
+			}
+
+			if err := restructure(rootDir, cmdDir, fullCmdFilename, children); err != nil {
+				return fmt.Errorf("failed to restructure child commands for %s: %w", fullCmdFilename, err)
+			}
+		case rootDir != dir:
+			// Sub-command without children.
+			// 1. Move its doc into the directory for its parent, name unchanged.
+			if cmd.Name() == "help" {
+				// all commands with children have their own "help" subcommand,
+				// which we do not generate docs for
+				continue
+			}
+
+			oldName := filepath.Join(rootDir, fullCmdFilename+".md")
+			newName := filepath.Join(dir, fullCmdFilename+".md")
+
+			if err := os.Rename(oldName, newName); err != nil {
+				return fmt.Errorf("failed to move child command %s to its parent's dir: %w", fullCmdFilename, err)
+			}
+
+			sed := newParentLinkSedCommand(name, newName)
+			if out, err := sed.CombinedOutput(); err != nil {
+				return fmt.Errorf("failed to rewrite links to parent command in child %s: %w (extra: %s)", newName, err, out)
+			}
+
+			if err := anonymizeHomedir(newName); err != nil {
+				return fmt.Errorf("failed to anonymize homedir in help text for command %s: %w", newName, err)
+			}
+		default:
+			// Top-level command without children. Nothing to restructure.
+			continue
+		}
+	}
+
+	return nil
+}
+
+func newParentLinkSedCommand(parent string, file string) *exec.Cmd {
+	return exec.Command("sed", "-i", "", "-e", fmt.Sprintf("s:(./%s/):(../):i", parent), file)
+}
+
+var (
+	wd   string
+	once sync.Once
+)
+
+func anonymizeHomedir(file string) (err error) {
+	once.Do(func() {
+		// Only do this once per run.
+		wd, err = os.Getwd()
+	})
+	if err != nil {
+		return err
+	}
+
+	// We're replacing the stuff inside the square brackets in the example sed
+	// below:
+	// 	's:Paths to search for config files in. (default \[.*\])$:Paths to search for config files in. (default \[$WORKDIR\]):'
+	sed := exec.Command("sed", "-i", "", "-e", fmt.Sprintf("s:%s:$WORKDIR:i", wd), file)
+	if out, err := sed.CombinedOutput(); err != nil {
+		return fmt.Errorf("%w: %s", err, out)
 	}
 
 	return nil
