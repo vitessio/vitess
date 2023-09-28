@@ -141,7 +141,6 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 		Keyspace:            ks,
 		DdlStrategy:         applySchemaOptions.DDLStrategy,
 		Sql:                 parts,
-		SkipPreflight:       true,
 		UuidList:            applySchemaOptions.UUIDList,
 		MigrationContext:    applySchemaOptions.MigrationContext,
 		WaitReplicasTimeout: protoutil.DurationToProto(applySchemaOptions.WaitReplicasTimeout),
