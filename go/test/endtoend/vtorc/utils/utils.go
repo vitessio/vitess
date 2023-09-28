@@ -20,9 +20,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -957,7 +959,7 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
 		successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
-		successCount := successfulRecoveriesMap[recoveryName]
+		successCount := int(math.Round(reflect.ValueOf(successfulRecoveriesMap[recoveryName]).Float()))
 		if successCount == countExpected {
 			return
 		}
@@ -965,7 +967,49 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	}
 	vars := vtorcInstance.GetVars()
 	successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
-	successCount := successfulRecoveriesMap[recoveryName]
+	successCount := int(math.Round(reflect.ValueOf(successfulRecoveriesMap[recoveryName]).Float()))
+	assert.EqualValues(t, countExpected, successCount)
+}
+
+// WaitForSuccessfulPRSCount waits until the given keyspace-shard's count of successful prs runs matches the count expected.
+func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyspace, shard string, countExpected int) {
+	t.Helper()
+	timeout := 15 * time.Second
+	startTime := time.Now()
+	mapKey := fmt.Sprintf("%v.%v.success", keyspace, shard)
+	for time.Since(startTime) < timeout {
+		vars := vtorcInstance.GetVars()
+		prsCountsMap := vars["planned_reparent_counts"].(map[string]interface{})
+		successCount := int(math.Round(reflect.ValueOf(prsCountsMap[mapKey]).Float()))
+		if successCount == countExpected {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	vars := vtorcInstance.GetVars()
+	prsCountsMap := vars["planned_reparent_counts"].(map[string]interface{})
+	successCount := int(math.Round(reflect.ValueOf(prsCountsMap[mapKey]).Float()))
+	assert.EqualValues(t, countExpected, successCount)
+}
+
+// WaitForSuccessfulERSCount waits until the given keyspace-shard's count of successful ers runs matches the count expected.
+func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyspace, shard string, countExpected int) {
+	t.Helper()
+	timeout := 15 * time.Second
+	startTime := time.Now()
+	mapKey := fmt.Sprintf("%v.%v.success", keyspace, shard)
+	for time.Since(startTime) < timeout {
+		vars := vtorcInstance.GetVars()
+		ersCountsMap := vars["emergency_reparent_counts"].(map[string]interface{})
+		successCount := int(math.Round(reflect.ValueOf(ersCountsMap[mapKey]).Float()))
+		if successCount == countExpected {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	vars := vtorcInstance.GetVars()
+	ersCountsMap := vars["emergency_reparent_counts"].(map[string]interface{})
+	successCount := int(math.Round(reflect.ValueOf(ersCountsMap[mapKey]).Float()))
 	assert.EqualValues(t, countExpected, successCount)
 }
 
