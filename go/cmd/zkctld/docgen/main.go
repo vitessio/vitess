@@ -20,7 +20,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/internal/docgen"
-	"vitess.io/vitess/go/cmd/vttablet/cli"
+	"vitess.io/vitess/go/cmd/zkctld/cli"
 )
 
 func main() {
