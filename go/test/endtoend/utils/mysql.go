@@ -208,13 +208,17 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtConn *mysql.Conn
 	for _, row := range vtQr.Rows {
 		errStr += fmt.Sprintf("%s\n", row)
 	}
+	errStr += fmt.Sprintf("Vitess RowsAffected: %v\n", vtQr.RowsAffected)
 	errStr += "MySQL Results:\n"
 	for _, row := range mysqlQr.Rows {
 		errStr += fmt.Sprintf("%s\n", row)
 	}
+	errStr += fmt.Sprintf("MySQL RowsAffected: %v\n", mysqlQr.RowsAffected)
 	if vtConn != nil {
-		qr := Exec(t, vtConn, fmt.Sprintf("vexplain plan %s", query))
-		errStr += fmt.Sprintf("query plan: \n%s\n", qr.Rows[0][0].ToString())
+		qr, _ := ExecAllowError(t, vtConn, fmt.Sprintf("vexplain plan %s", query))
+		if qr != nil && len(qr.Rows) > 0 {
+			errStr += fmt.Sprintf("query plan: \n%s\n", qr.Rows[0][0].ToString())
+		}
 	}
 	t.Error(errStr)
 	return errors.New(errStr)
