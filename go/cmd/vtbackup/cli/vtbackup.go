@@ -229,14 +229,12 @@ func run(_ *cobra.Command, args []string) error {
 		<-ctx.Done()
 	}()
 
-	// Some plugins use OnRun to initialize. Use a channel to signal to
-	// ourselves that these plugins have been initialized.
-	runCh := make(chan struct{})
-	servenv.OnRun(func() {
-		close(runCh)
-	})
 	go servenv.RunDefault()
-	<-runCh
+	// Some stats plugins use OnRun to initialize. Wait for them to finish
+	// initializing before continuing, so we don't lose any stats.
+	if err := stats.AwaitBackend(ctx); err != nil {
+		return fmt.Errorf("failed to await stats backend: %w", err)
+	}
 
 	if detachedMode {
 		// this method will call os.Exit and kill this process
