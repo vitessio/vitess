@@ -34,6 +34,7 @@
     - [Debian: Buster removed](#debian-buster)
   - **[Durability Policies](#durability-policies)**
     - [New Durability Policies](#new-durability-policies)
+  - **[Experimental Foreign Key Support](#foreign-keys)**
 
 ## <a id="major-changes"/>Major Changes
 
@@ -117,6 +118,7 @@ Cache related `vtgate` flags:
 VTGate flag:
 
 - `--schema_change_signal_user` is deprecated and will be removed in `v19.0`
+- `--foreign_key_mode` is deprecated and will be removed in `v19.0`. For more detail read the [foreign keys](#foreign-keys) section.
 
 #### <a id="deprecated-stats"/>Deprecated Stats
 
@@ -238,3 +240,20 @@ removing Vitess support.
 #### <a id="new-durability-policies"/>New Durability Policies
 
 2 new inbuilt durability policies have been added to Vitess in this release namely `semi_sync_with_rdonly_ack` and `cross_cell_with_rdonly_ack`. These policies are exactly like `semi_sync` and `cross_cell` respectively, and differ just in the part where the rdonly tablets can also send semi-sync ACKs. 
+
+### <a id="foreign-keys"/>Experimental Foreign Key Support
+
+A new field `foreignKeyMode` has been added to the Vschema. This field can be provided for each keyspace. The Vtgate flag `--foreign_key_mode` has been deprecated in favour of this field.
+
+There are 3 foreign key modes now supported in Vitess - 
+1. `FK_UNMANAGED` -
+   In this mode, Vitess is unaware of the existance of foreign keys. This is the default mode for Vitess as well. It is upto the users to configure the foreign keys in MySQL such that rows that are related by foreign keys end up living in the same shard.
+2. `FK_MANAGED` [EXPERIMENTAL] - 
+   In this mode, Vitess is aware of foreign keys and it keeps track of all the foreign key constraints using the schema tracker. In this mode, Vitess takes care of splitting up DMLs that would cause updates on a child table in a foreign key constraint. All the queries on MySQL are executed such that InnoDB doesn't end up running any updates which don't make their way into the binary log. This allows VReplication to work properly, thus relaxing one of the limitations of the previous approach. 
+   For more details on what operations Vitess takes please refer to the [design document for foreign keys](https://github.com/vitessio/vitess/issues/12967).
+3. `FK_DISALLOW` -
+   In this mode Vitess explicitly disallows any DDL statements that try to create a foreign key constraint. This mode is equivalent to running Vtgates with the flag `--foreign_key_mode=disallow`.
+
+#### Upgrade process
+
+After upgrading from v17 to v18, the users should specify the correct foreign key mode for all their keyspaces in the Vschema using the new property. Once this change has taken effect, the deprecated flag `--foreign_key_mode` can be dropped from all the Vtgates.
