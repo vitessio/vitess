@@ -44,8 +44,6 @@ var (
 	prsCounter = stats.NewCountersWithMultiLabels("planned_reparent_counts", "Number of times Planned Reparent Shard has been run",
 		[]string{"Keyspace", "Shard", "Result"},
 	)
-	failureResult = "failure"
-	successResult = "success"
 )
 
 // PlannedReparenter performs PlannedReparentShard operations.

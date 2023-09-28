@@ -42,7 +42,11 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var reparentShardOpTimings = stats.NewTimings("reparent_shard_operation_timings", "Timings of reparent shard operations", "Operation")
+var (
+	reparentShardOpTimings = stats.NewTimings("reparent_shard_operation_timings", "Timings of reparent shard operations", "Operation")
+	failureResult          = "failure"
+	successResult          = "success"
+)
 
 // ChooseNewPrimary finds a tablet that should become a primary after reparent.
 // The criteria for the new primary-elect are (preferably) to be in the same
