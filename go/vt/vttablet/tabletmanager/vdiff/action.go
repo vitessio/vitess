@@ -375,6 +375,7 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 		for _, row := range res.Named().Rows {
 			if controller := vde.controllers[row.AsInt64("id", -1)]; controller != nil {
 				controller.Stop()
+				delete(vde.controllers, controller.id)
 			}
 		}
 		query, err = sqlparser.ParseAndBind(sqlDeleteVDiffs,
@@ -409,6 +410,7 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 		controller, ok := vde.controllers[row.AsInt64("id", -1)]
 		if ok {
 			controller.Stop()
+			delete(vde.controllers, controller.id)
 		}
 		query, err = sqlparser.ParseAndBind(sqlDeleteVDiffByUUID,
 			sqltypes.StringBindVariable(uuid.String()),

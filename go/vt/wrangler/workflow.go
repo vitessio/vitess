@@ -12,12 +12,14 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
+	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // VReplicationWorkflowType specifies whether workflow is MoveTables or Reshard
@@ -709,20 +711,16 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 
 // region Workflow related utility functions
 
-// deleteWorkflowVDiffData cleans up any potential VDiff related data associated with the workflow on the given tablet
+// deleteWorkflowVDiffData cleans up any potential VDiff related data associated
+// with the workflow on the given tablet.
 func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodatapb.Tablet, workflow string) {
-	sqlDeleteVDiffs := `delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
-						inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
-						where vd.keyspace = %s and vd.workflow = %s`
-	query := fmt.Sprintf(sqlDeleteVDiffs, encodeString(tablet.Keyspace), encodeString(workflow))
-	rows := -1
-	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-		Query:   []byte(query),
-		MaxRows: uint64(rows),
+	if _, err := wr.tmc.VDiff(ctx, tablet, &tabletmanagerdatapb.VDiffRequest{
+		Keyspace:  tablet.Keyspace,
+		Workflow:  workflow,
+		Action:    string(vdiff2.DeleteAction),
+		ActionArg: "all",
 	}); err != nil {
-		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Num != sqlerror.ERNoSuchTable { // the tables may not exist if no vdiffs have been run
-			wr.Logger().Errorf("Error deleting vdiff data for %s.%s workflow: %v", tablet.Keyspace, workflow, err)
-		}
+		log.Errorf("Error deleting vdiff data for %s.%s workflow: %v", tablet.Keyspace, workflow, err)
 	}
 }
 
