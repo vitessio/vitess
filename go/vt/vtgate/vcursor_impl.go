@@ -978,6 +978,10 @@ func (vc *vcursorImpl) InTransaction() bool {
 	return vc.safeSession.InTransaction()
 }
 
+func (vc *vcursorImpl) Commit(ctx context.Context) error {
+	return vc.executor.Commit(ctx, vc.safeSession)
+}
+
 // GetDBDDLPluginName implements the VCursor interface
 func (vc *vcursorImpl) GetDBDDLPluginName() string {
 	return dbDDLPlugin
