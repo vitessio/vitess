@@ -830,6 +830,11 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 		IsPartialMigration: ts.isPartialMigration,
 	}
 
+	if ts.workflowType == binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
+		// Nothing left to do.
+		return ts, state, nil
+	}
+
 	var (
 		reverse        bool
 		sourceKeyspace string
@@ -1006,7 +1011,8 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	span.Annotate("target_keyspace", req.TargetKeyspace)
 
 	var vindex *vschemapb.Vindex
-	vschema, err := s.ts.GetVSchema(ctx, req.TargetKeyspace)
+	var vindexMu sync.Mutex
+	targetVschema, err := s.ts.GetVSchema(ctx, req.TargetKeyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -1065,9 +1071,22 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid binlog source")
 			}
 			vindexName := bls.Filter.Rules[0].Match
-			vindex = vschema.Vindexes[vindexName]
+
+			// All streams on all shards will have the same vindex, so we only
+			// need to set it once.
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				vindexMu.Lock()
+				defer vindexMu.Unlock()
+				if vindex == nil {
+					vindex = targetVschema.Vindexes[vindexName]
+				}
+			}()
+			wg.Wait()
 			if vindex == nil {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in vschema", vindexName)
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in %s vschema: %+v", vindexName, req.TargetKeyspace, targetVschema)
 			}
 
 			targetKeyspace, tableName, err := sqlparser.ParseTable(vindex.Params["table"])
@@ -1114,7 +1133,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 
 	// Remove the write_only param and save the source vschema.
 	delete(vindex.Params, "write_only")
-	if err := s.ts.SaveVSchema(ctx, req.TargetKeyspace, vschema); err != nil {
+	if err := s.ts.SaveVSchema(ctx, req.TargetKeyspace, targetVschema); err != nil {
 		return nil, err
 	}
 
@@ -2239,6 +2258,11 @@ func (s *Server) DropTargets(ctx context.Context, targetKeyspace, workflow strin
 		return nil, err
 	}
 
+	// There is nothing to drop for a LookupVindex workflow.
+	if ts.workflowType == binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
+		return nil, nil
+	}
+
 	// Return an error if the workflow traffic is partially switched.
 	if state.WritesSwitched || len(state.ReplicaCellsSwitched) > 0 || len(state.RdonlyCellsSwitched) > 0 {
 		return nil, ErrWorkflowPartiallySwitched
@@ -3299,7 +3323,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 
 	// Validate input vindex.
 	if len(specs.Vindexes) != 1 {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "only one vindex must be specified in the spec: %v", specs.Vindexes)
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "only one vindex must be specified in the specs: %v", specs.Vindexes)
 	}
 	vindexName = maps.Keys(specs.Vindexes)[0]
 	vindex = maps.Values(specs.Vindexes)[0]
