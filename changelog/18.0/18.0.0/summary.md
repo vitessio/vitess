@@ -14,16 +14,19 @@
     - [Updated to node v18.16.0](#update-node)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
+    - [Deprecated Stats](#deprecated-stats)
     - [Deleted `V3` planner](#deleted-v3)
     - [Deleted `k8stopo`](#deleted-k8stopo)
     - [Deleted `vtgr`](#deleted-vtgr)
     - [Deleted `query_analyzer`](#deleted-query_analyzer)
     - [Deprecated VTBackup stat `DurationByPhase`](#deprecated-vtbackup-stat-duration-by-phase)
-  - **[New stats](#new-stats)**
+    - [Deprecated VDiff v1](#deprecated-vdiff-v1)
+  - **[New Stats](#new-stats)**
     - [VTGate Vindex unknown parameters](#vtgate-vindex-unknown-parameters)
     - [VTBackup stat `Phase`](#vtbackup-stat-phase)
     - [VTBackup stat `PhaseStatus`](#vtbackup-stat-phase-status)
     - [Backup and restore metrics for AWS S3](#backup-restore-metrics-aws-s3)
+    - [VTCtld and VTOrc reparenting stats](#vtctld-and-vtorc-reparenting-stats)
   - **[VTTablet](#vttablet)**
     - [VTTablet: New ResetSequences RPC](#vttablet-new-rpc-reset-sequences)
   - **[Docker](#docker)**
@@ -115,6 +118,15 @@ VTGate flag:
 
 - `--schema_change_signal_user` is deprecated and will be removed in `v19.0`
 
+#### <a id="deprecated-stats"/>Deprecated Stats
+
+The following Emergency Reparent Shard stats are deprecated in `v18.0` and will be removed in `v19.0`:
+- `ers_counter`
+- `ers_success_counter`
+- `ers_failure_counter`
+
+These metrics are replaced by [new reparenting stats introduced in `v18.0`](#vtctld-and-vtorc-reparenting-stats).
+
 #### <a id="deleted-v3"/>Deleted `v3` planner
 
 The `Gen4` planner has been the default planner since Vitess 14. The `v3` planner was deprecated in Vitess 15 and has now been removed in this release.
@@ -131,6 +143,10 @@ The `vtgr` has been deprecated in Vitess 17, also see https://github.com/vitessi
 #### <a id="deleted-query_analyzer"/>Deleted `query_analyzer`
 
 The undocumented `query_analyzer` binary has been removed in Vitess 18, see https://github.com/vitessio/vitess/issues/14054.
+
+#### <a id="deprecated-vdiff-v1"/>Deprecated VDiff v1
+
+[VDiff v2 was added in Vitess 15.0](https://vitess.io/blog/2022-11-22-vdiff-v2/) and marked as GA in 16.0. The [legacy v1 client command](https://vitess.io/docs/18.0/reference/vreplication/vdiffv1/) is now deprecated in Vitess 18.0 and will be **removed** in 19.0. Please switch all of your usage to the [new VDiff client](https://vitess.io/docs/18.0/reference/vreplication/vdiff/) command ASAP.
 
 #### <a id="deprecated-vtbackup-stat-duration-by-phase"/>Deprecated VTbackup stat `DurationByPhase`
 
@@ -176,6 +192,14 @@ vtbackup_backup_duration_nanoseconds{component="BackupStorage",implementation="S
 vtbackup_restore_count{component="BackupStorage",implementation="S3",operation="AWS:Request:Send"} 165
 vtbackup_restore_count{component="BackupStorage",implementation="S3",operation="AWS:Request:Send"} 165
 ```
+
+#### <a id="vtctld-and-vtorc-reparenting-stats"/>VTCtld and VTOrc reparenting stats
+
+New VTCtld and VTorc stats were added to measure frequency of reparents by keyspace/shard:
+- `emergency_reparent_counts` - Number of times Emergency Reparent Shard has been run. It is further subdivided by the keyspace, shard and the result of the operation.
+- `planned_reparent_counts` - Number of times Planned Reparent Shard has been run. It is further subdivided by the keyspace, shard and the result of the operation.
+
+Also, the `reparent_shard_operation_timings` stat was added to provide per-operation timings of reparent operations.
 
 ### <a id="vttablet"/>VTTablet
 

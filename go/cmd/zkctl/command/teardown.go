@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,10 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package command
 
-// Imports and register the gRPC vtgateservice server
+import "github.com/spf13/cobra"
 
-import (
-	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
-)
+var Teardown = &cobra.Command{
+	Use:   "teardown",
+	Short: "Shuts down the zookeeper server and removes its data dir.",
+	Args:  cobra.ExactArgs(0),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return zkd.Teardown()
+	},
+}
+
+func init() {
+	Root.AddCommand(Teardown)
+}

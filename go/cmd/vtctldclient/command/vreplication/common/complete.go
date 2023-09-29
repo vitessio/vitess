@@ -53,7 +53,7 @@ func commandComplete(cmd *cobra.Command, args []string) error {
 
 	var output []byte
 	if format == "json" {
-		output, err = cli.MarshalJSONCompact(resp)
+		output, err = cli.MarshalJSONPretty(resp)
 		if err != nil {
 			return err
 		}

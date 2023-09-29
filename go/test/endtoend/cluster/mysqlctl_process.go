@@ -207,7 +207,7 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 	// We first need to try and kill any associated mysqld_safe process or
 	// else it will immediately restart the mysqld process when we kill it.
 	mspidb, err := exec.Command("sh", "-c",
-		fmt.Sprintf("ps auxww | grep mysqld_safe | grep vt_%010d | awk '{print $2}'", mysqlctl.TabletUID)).Output()
+		fmt.Sprintf("ps auxww | grep -E 'mysqld_safe|mariadbd-safe' | grep vt_%010d | awk '{print $2}'", mysqlctl.TabletUID)).Output()
 	if err != nil {
 		return err
 	}

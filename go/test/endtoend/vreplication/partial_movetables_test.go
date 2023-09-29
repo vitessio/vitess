@@ -154,7 +154,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 
 	targetTab1 = vc.getPrimaryTablet(t, targetKs, shard)
 	catchup(t, targetTab1, wfName, "Partial MoveTables Customer to Customer2")
-	vdiff1(t, ksWf, "")
+	vdiffSideBySide(t, ksWf, "")
 
 	waitForRowCount(t, vtgateConn, "customer", "customer", 3)      // customer: all shards
 	waitForRowCount(t, vtgateConn, "customer2", "customer", 3)     // customer2: all shards
@@ -289,7 +289,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	require.NoError(t, err)
 	targetTab2 := vc.getPrimaryTablet(t, targetKs, shard)
 	catchup(t, targetTab2, wfName, "Partial MoveTables Customer to Customer2: -80")
-	vdiff1(t, ksWf, "")
+	vdiffSideBySide(t, ksWf, "")
 
 	// Switch all traffic for the shard
 	require.NoError(t, tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionSwitchTraffic, "", "", "", false))
