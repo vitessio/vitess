@@ -25,6 +25,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -155,7 +156,12 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 	var err error
 	options := req.Options
 
-	query := fmt.Sprintf(sqlGetVDiffID, encodeString(req.VdiffUuid))
+	query, err := sqlparser.ParseAndBind(sqlGetVDiffID,
+		sqltypes.StringBindVariable(req.VdiffUuid),
+	)
+	if err != nil {
+		return err
+	}
 	if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
@@ -308,9 +314,6 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 
 	switch req.ActionArg {
 	case AllActionArg:
-<<<<<<< HEAD
-		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(req.Keyspace), encodeString(req.Workflow))
-=======
 		// We need to stop any running controllers before we delete
 		// the vdiff records.
 		query, err := sqlparser.ParseAndBind(sqlGetVDiffIDsByKeyspaceWorkflow,
@@ -334,15 +337,11 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 		if err != nil {
 			return err
 		}
->>>>>>> 04834c4fec (VDiff: Cleanup the controller for a VDiff before deleting it (#14107))
 	default:
 		uuid, err := uuid.Parse(req.ActionArg)
 		if err != nil {
 			return fmt.Errorf("action argument %s not supported", req.ActionArg)
 		}
-<<<<<<< HEAD
-		query = fmt.Sprintf(sqlDeleteVDiffByUUID, encodeString(uuid.String()))
-=======
 		// We need to be sure that the controller is stopped, if
 		// it's still running, before we delete the vdiff record.
 		query, err := sqlparser.ParseAndBind(sqlGetVDiffID,
@@ -367,7 +366,6 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 		if err != nil {
 			return err
 		}
->>>>>>> 04834c4fec (VDiff: Cleanup the controller for a VDiff before deleting it (#14107))
 	}
 	// Execute the query which deletes the vdiff record(s).
 	if _, err := dbClient.ExecuteFetch(deleteQuery, 1); err != nil {
