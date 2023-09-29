@@ -19,9 +19,9 @@ package servenv
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"math"
 	"net"
+	"strconv"
 	"time"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -71,6 +71,9 @@ var (
 var (
 	// gRPCPort is the port to listen on for gRPC. If zero, don't listen.
 	gRPCPort int
+
+	// gRPCBindAddress is the address to bind to for gRPC. If empty, bind to all addresses.
+	gRPCBindAddress string
 
 	// gRPCMaxConnectionAge is the maximum age of a client connection, before GoAway is sent.
 	// This is useful for L4 loadbalancing to ensure rebalancing after scaling.
@@ -124,6 +127,7 @@ var (
 func RegisterGRPCServerFlags() {
 	OnParse(func(fs *pflag.FlagSet) {
 		fs.IntVar(&gRPCPort, "grpc_port", gRPCPort, "Port to listen on for gRPC calls. If zero, do not listen.")
+		fs.StringVar(&gRPCBindAddress, "grpc_bind_address", gRPCBindAddress, "Bind address for gRPC calls. If empty, listen on all addresses.")
 		fs.DurationVar(&gRPCMaxConnectionAge, "grpc_max_connection_age", gRPCMaxConnectionAge, "Maximum age of a client connection before GoAway is sent.")
 		fs.DurationVar(&gRPCMaxConnectionAgeGrace, "grpc_max_connection_age_grace", gRPCMaxConnectionAgeGrace, "Additional grace period after grpc_max_connection_age, after which connections are forcibly closed.")
 		fs.IntVar(&gRPCInitialConnWindowSize, "grpc_server_initial_conn_window_size", gRPCInitialConnWindowSize, "gRPC server initial connection window size")
@@ -284,7 +288,7 @@ func serveGRPC() {
 
 	// listen on the port
 	log.Infof("Listening for gRPC calls on port %v", gRPCPort)
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", gRPCPort))
+	listener, err := net.Listen("tcp", net.JoinHostPort(gRPCBindAddress, strconv.Itoa(gRPCPort)))
 	if err != nil {
 		log.Exitf("Cannot listen on port %v for gRPC: %v", gRPCPort, err)
 	}

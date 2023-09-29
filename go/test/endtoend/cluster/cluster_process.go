@@ -1127,7 +1127,7 @@ func (cluster *LocalProcessCluster) GetAndReservePort() int {
 	for {
 		cluster.nextPortForProcess = cluster.nextPortForProcess + 1
 		log.Infof("Attempting to reserve port: %v", cluster.nextPortForProcess)
-		ln, err := net.Listen("tcp", fmt.Sprintf(":%v", cluster.nextPortForProcess))
+		ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cluster.nextPortForProcess)))
 
 		if err != nil {
 			log.Errorf("Can't listen on port %v: %s, trying next port", cluster.nextPortForProcess, err)
