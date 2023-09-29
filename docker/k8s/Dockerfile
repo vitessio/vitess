@@ -43,6 +43,7 @@ COPY --from=base /vt/bin/vtgate /vt/bin/
 COPY --from=base /vt/bin/vttablet /vt/bin/
 COPY --from=base /vt/bin/vtbackup /vt/bin/
 COPY --from=base /vt/bin/vtadmin /vt/bin/
+COPY --from=base /vt/bin/vtorc /vt/bin/
 
 # copy web admin files
 COPY --from=base $VTROOT/web /vt/web/
