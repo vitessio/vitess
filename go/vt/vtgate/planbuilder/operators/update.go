@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -42,6 +43,11 @@ type (
 		OrderBy             sqlparser.OrderBy
 		Limit               *sqlparser.Limit
 
+		// these subqueries cannot be merged as they are part of the changed vindex values
+		// these values are needed to be sent over to lookup vindex for update.
+		// On merging this information will be lost, so subquery merge is blocked.
+		SubQueriesArgOnChangedVindex []string
+
 		noInputs
 		noColumns
 		noPredicates
@@ -52,6 +58,10 @@ type (
 		Expr *ProjExpr
 	}
 )
+
+func (se SetExpr) String() string {
+	return fmt.Sprintf("%s = %s", sqlparser.String(se.Name), sqlparser.String(se.Expr.EvalExpr))
+}
 
 // Introduces implements the PhysicalOperator interface
 func (u *Update) introducesTableID() semantics.TableSet {
@@ -128,16 +138,6 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 }
 
 func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, vindexTable *vindexes.Table, qt *QueryTable, routing Routing) (ops.Operator, error) {
-	vp, cvv, ovq, err := getUpdateVindexInformation(updStmt, vindexTable, qt.ID, qt.Predicates)
-	if err != nil {
-		return nil, err
-	}
-
-	tr, ok := routing.(*ShardedRouting)
-	if ok {
-		tr.VindexPreds = vp
-	}
-
 	sqc := &SubQueryBuilder{}
 	assignments := make([]SetExpr, len(updStmt.Exprs))
 	for idx, updExpr := range updStmt.Exprs {
@@ -156,6 +156,16 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 			Name: updExpr.Name,
 			Expr: proj,
 		}
+	}
+
+	vp, cvv, ovq, subQueriesArgOnChangedVindex, err := getUpdateVindexInformation(updStmt, vindexTable, qt.ID, assignments)
+	if err != nil {
+		return nil, err
+	}
+
+	tr, ok := routing.(*ShardedRouting)
+	if ok {
+		tr.VindexPreds = vp
 	}
 
 	for _, predicate := range qt.Predicates {
@@ -177,14 +187,15 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 
 	route := &Route{
 		Source: &Update{
-			QTable:              qt,
-			VTable:              vindexTable,
-			Assignments:         assignments,
-			ChangedVindexValues: cvv,
-			OwnedVindexQuery:    ovq,
-			Ignore:              updStmt.Ignore,
-			Limit:               updStmt.Limit,
-			OrderBy:             updStmt.OrderBy,
+			QTable:                       qt,
+			VTable:                       vindexTable,
+			Assignments:                  assignments,
+			ChangedVindexValues:          cvv,
+			OwnedVindexQuery:             ovq,
+			Ignore:                       updStmt.Ignore,
+			Limit:                        updStmt.Limit,
+			OrderBy:                      updStmt.OrderBy,
+			SubQueriesArgOnChangedVindex: subQueriesArgOnChangedVindex,
 		},
 		Routing:  routing,
 		Comments: updStmt.Comments,

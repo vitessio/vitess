@@ -256,14 +256,14 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"c1": evalengine.NewLiteralInt(1),
 					"c2": evalengine.NewLiteralInt(2),
 				},
 				Offset: 4,
 			},
 			"onecol": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"c3": evalengine.NewLiteralInt(3),
 				},
 				Offset: 5,
@@ -400,7 +400,7 @@ func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"lkp_rg": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"colc": evalengine.NewLiteralInt(5),
 				},
 				Offset: 3,
@@ -520,14 +520,14 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"c1": evalengine.NewLiteralInt(1),
 					"c2": evalengine.NewLiteralInt(2),
 				},
 				Offset: 4,
 			},
 			"onecol": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"c3": evalengine.NewLiteralInt(3),
 				},
 				Offset: 5,
@@ -715,14 +715,14 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"c1": evalengine.NewLiteralInt(1),
 					"c2": evalengine.NewLiteralInt(2),
 				},
 				Offset: 4,
 			},
 			"onecol": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"c3": evalengine.NewLiteralInt(3),
 				},
 				Offset: 5,
@@ -845,7 +845,7 @@ func TestUpdateInChangedVindexMultiCol(t *testing.T) {
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"lkp_rg": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"colc": evalengine.NewLiteralInt(5),
 				},
 				Offset: 3,

@@ -189,22 +189,22 @@ func getUpdateVindexInformation(
 	updStmt *sqlparser.Update,
 	vindexTable *vindexes.Table,
 	tableID semantics.TableSet,
-	predicates []sqlparser.Expr,
-) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, string, error) {
+	assignments []SetExpr,
+) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, string, []string, error) {
 	if !vindexTable.Keyspace.Sharded {
-		return nil, nil, "", nil
+		return nil, nil, "", nil, nil
 	}
 
-	primaryVindex, vindexAndPredicates, err := getVindexInformation(tableID, predicates, vindexTable)
+	primaryVindex, vindexAndPredicates, err := getVindexInformation(tableID, vindexTable)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", nil, err
 	}
 
-	changedVindexValues, ownedVindexQuery, err := buildChangedVindexesValues(updStmt, vindexTable, primaryVindex.Columns)
+	changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex, err := buildChangedVindexesValues(updStmt, vindexTable, primaryVindex.Columns, assignments)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", nil, err
 	}
-	return vindexAndPredicates, changedVindexValues, ownedVindexQuery, nil
+	return vindexAndPredicates, changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex, nil
 }
 
 /*

@@ -504,6 +504,9 @@ func tryMergeSubqueriesRecursively(
 }
 
 func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQuery, outer *Route, inner ops.Operator) (ops.Operator, *rewrite.ApplyResult, error) {
+	if updOp, ok := outer.Source.(*Update); ok && mergingIsBlocked(subQuery, updOp) {
+		return outer, rewrite.SameTree, nil
+	}
 	exprs := subQuery.GetMergePredicates()
 	merger := &subqueryRouteMerger{
 		outer:    outer,
@@ -522,6 +525,16 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	}
 	ctx.MergedSubqueries = append(ctx.MergedSubqueries, subQuery.originalSubquery)
 	return op, rewrite.NewTree("merged subquery with outer", subQuery), nil
+}
+
+// This checked if subquery is part of the changed vindex values. Subquery cannot be merged with the outer route.
+func mergingIsBlocked(subQuery *SubQuery, updOp *Update) bool {
+	for _, sqArg := range updOp.SubQueriesArgOnChangedVindex {
+		if sqArg == subQuery.ArgName {
+			return true
+		}
+	}
+	return false
 }
 
 func pushOrMerge(ctx *plancontext.PlanningContext, outer ops.Operator, inner *SubQuery) (ops.Operator, *rewrite.ApplyResult, error) {

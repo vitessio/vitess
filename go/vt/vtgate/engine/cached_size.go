@@ -1343,17 +1343,17 @@ func (cached *VindexValues) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(16)
 	}
-	// field PvMap map[string]vitess.io/vitess/go/vt/vtgate/evalengine.Expr
-	if cached.PvMap != nil {
+	// field EvalExprMap map[string]vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cached.EvalExprMap != nil {
 		size += int64(48)
-		hmap := reflect.ValueOf(cached.PvMap)
+		hmap := reflect.ValueOf(cached.EvalExprMap)
 		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
 		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
 		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
-		if len(cached.PvMap) > 0 || numBuckets > 1 {
+		if len(cached.EvalExprMap) > 0 || numBuckets > 1 {
 			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
 		}
-		for k, v := range cached.PvMap {
+		for k, v := range cached.EvalExprMap {
 			size += hack.RuntimeAllocSize(int64(len(k)))
 			if cc, ok := v.(cachedObject); ok {
 				size += cc.CachedSize(true)

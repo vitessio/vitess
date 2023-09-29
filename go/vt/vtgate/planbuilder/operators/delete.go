@@ -136,7 +136,7 @@ func createDeleteOperator(
 		return route, nil
 	}
 
-	primaryVindex, vindexAndPredicates, err := getVindexInformation(qt.ID, qt.Predicates, vindexTable)
+	primaryVindex, vindexAndPredicates, err := getVindexInformation(qt.ID, vindexTable)
 	if err != nil {
 		return nil, err
 	}
