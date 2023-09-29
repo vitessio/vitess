@@ -148,9 +148,9 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&messageStreamGracePeriod, "message_stream_grace_period", messageStreamGracePeriod, "the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent.")
 	fs.BoolVar(&enableViews, "enable-views", enableViews, "Enable views support in vtgate.")
 	fs.BoolVar(&allowKillStmt, "allow-kill-statement", allowKillStmt, "Allows the execution of kill statement")
-	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm (default 0)")
-	fs.IntVar(&warmingReadsPoolSize, "warming-reads-pool-size", 500, "Size of goroutine pool for warming reads (default 500)")
-	fs.DurationVar(&warmingReadsQueryTimeout, "warming-reads-query-timeout", 5*time.Second, "Timeout of warming read queries (default 5s)")
+	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm")
+	fs.IntVar(&warmingReadsPoolSize, "warming-reads-pool-size", 500, "Size of goroutine pool for warming reads")
+	fs.DurationVar(&warmingReadsQueryTimeout, "warming-reads-query-timeout", 5*time.Second, "Timeout of warming read queries")
 
 	_ = fs.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 	_ = fs.MarkDeprecated("schema_change_signal_user", "schema tracking uses an internal api and does not require a user to be specified")
