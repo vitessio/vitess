@@ -10,6 +10,7 @@
     - [VTOrc flag `--change-tablets-with-errant-gtid-to-drained`](#new-flag-errant-gtid-convert)
     - [ERS sub flag `--wait-for-all-tablets`](#new-ers-subflag)
     - [VTGate flag `--grpc-send-session-in-streaming`](#new-vtgate-streaming-sesion)
+  - **[Experimental Foreign Key Support](#foreign-keys)**
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v18.16.0](#update-node)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
@@ -80,6 +81,25 @@ The client should enable it only when they have made the required changes to exp
 
 It is disabled by default.
 
+### <a id="foreign-keys"/>Experimental Foreign Key Support
+
+A new field `foreignKeyMode` has been added to the Vschema. This field can be provided for each keyspace. The Vtgate flag `--foreign_key_mode` has been deprecated in favour of this field.
+
+There are 3 foreign key modes now supported in Vitess -
+1. `FK_UNMANAGED` -
+   This mode represents the default behaviour in Vitess, where it does not manage foreign keys column references. Users are responsible for configuring foreign keys in MySQL in such a way that related rows, as determined by foreign keys, reside within the same shard.
+2. `FK_MANAGED` [EXPERIMENTAL] -
+   In this experimental mode, Vitess is fully aware of foreign key relationships and actively tracks foreign key constraints using the schema tracker. Vitess takes charge of handling DML operations with foreign keys cascading updates, deletes and verifying restrict. It will also validate parent row existence.
+   This ensures that all the operations are logged in binary logs, unlike MySQL implementation of foreign keys.
+   This enables seamless integration of VReplication with foreign keys.
+   For more details on what operations Vitess takes please refer to the [design document for foreign keys](https://github.com/vitessio/vitess/issues/12967).
+3. `FK_DISALLOW` -
+   In this mode Vitess explicitly disallows any DDL statements that try to create a foreign key constraint. This mode is equivalent to running Vtgates with the flag `--foreign_key_mode=disallow`.
+
+#### Upgrade process
+
+After upgrading from v17 to v18, the users should specify the correct foreign key mode for all their keyspaces in the Vschema using the new property. Once this change has taken effect, the deprecated flag `--foreign_key_mode` can be dropped from all the Vtgates.
+
 ### <a id="vtadmin"/>VTAdmin
 
 #### <a id="updated-node"/>vtadmin-web updated to node v18.16.0 (LTS)
@@ -118,6 +138,7 @@ Cache related `vtgate` flags:
 VTGate flag:
 
 - `--schema_change_signal_user` is deprecated and will be removed in `v19.0`
+- `--foreign_key_mode` is deprecated and will be removed in `v19.0`. For more detail read the [foreign keys](#foreign-keys) section.
 
 #### <a id="deleted-flags"/>Deleted Command Line Flags
 
