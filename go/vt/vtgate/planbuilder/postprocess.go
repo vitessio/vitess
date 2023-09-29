@@ -42,15 +42,15 @@ func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
 		node.eMemorySort.UpperLimit = pv
 		// we don't want to go down to the rest of the tree
 		return false, node, nil
-	case *pulloutSubquery:
+	case *uncorrelatedSubquery:
 		// we control the visitation manually here -
 		// we don't want to visit the subQuery side of this plan
-		newUnderlying, err := visit(node.underlying, setUpperLimit)
+		newUnderlying, err := visit(node.outer, setUpperLimit)
 		if err != nil {
 			return false, nil, err
 		}
 
-		node.underlying = newUnderlying
+		node.outer = newUnderlying
 		return false, node, nil
 	case *route:
 		// The route pushes the limit regardless of the plan.

@@ -30,6 +30,7 @@ type analyzer struct {
 	binder   *binder
 	typer    *typer
 	rewriter *earlyRewriter
+	sig      QuerySignature
 
 	err          error
 	inProjection int
@@ -115,12 +116,12 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		NotUnshardedErr:   a.unshardedErr,
 		Warning:           a.warning,
 		Comments:          comments,
-		SubqueryMap:       a.binder.subqueryMap,
-		SubqueryRef:       a.binder.subqueryRef,
 		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
 		Collation:         coll,
 		ExpandedColumns:   a.rewriter.expandedColumns,
 		columns:           columns,
+		StatementIDs:      a.scoper.statementIDs,
+		QuerySignature:    a.sig,
 	}
 }
 
@@ -160,6 +161,8 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	}
 	// log any warn in rewriting.
 	a.warning = a.rewriter.warning
+
+	a.noteQuerySignature(cursor.Node())
 
 	a.enterProjection(cursor)
 	// this is the visitor going down the tree. Returning false here would just not visit the children
@@ -286,6 +289,27 @@ func (a *analyzer) shouldContinue() bool {
 
 func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	return a.tables.tableSetFor(t)
+}
+
+func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
+	switch node := node.(type) {
+	case *sqlparser.Union:
+		a.sig.Union = true
+		if node.Distinct {
+			a.sig.Distinct = true
+		}
+	case *sqlparser.Subquery:
+		a.sig.SubQueries = true
+	case *sqlparser.Select:
+		if node.Distinct {
+			a.sig.Distinct = true
+		}
+		if node.GroupBy != nil {
+			a.sig.Aggregation = true
+		}
+	case sqlparser.AggrFunc:
+		a.sig.Aggregation = true
+	}
 }
 
 // ProjError is used to mark an error as something that should only be returned

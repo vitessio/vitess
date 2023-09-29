@@ -49,7 +49,7 @@ type hashJoin struct {
 	Collation collations.ID
 }
 
-// WireupGen4 implements the logicalPlan interface
+// Wireup implements the logicalPlan interface
 func (hj *hashJoin) Wireup(ctx *plancontext.PlanningContext) error {
 	err := hj.Left.Wireup(ctx)
 	if err != nil {

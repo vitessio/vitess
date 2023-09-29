@@ -28,7 +28,7 @@ import (
 // mergeJoinInputs checks whether two operators can be merged into a single one.
 // If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
-func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, m merger) (ops.Operator, error) {
+func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, m merger) (*Route, error) {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
 	if lhsRoute == nil {
 		return nil, nil
@@ -37,25 +37,25 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, jo
 	switch {
 	// if either side is a dual query, we can always merge them together
 	case a == dual:
-		return m.merge(lhsRoute, rhsRoute, routingB)
+		return m.merge(ctx, lhsRoute, rhsRoute, routingB)
 	case b == dual:
-		return m.merge(lhsRoute, rhsRoute, routingA)
+		return m.merge(ctx, lhsRoute, rhsRoute, routingA)
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case a == anyShard && sameKeyspace:
-		return m.merge(lhsRoute, rhsRoute, routingB)
+		return m.merge(ctx, lhsRoute, rhsRoute, routingB)
 	case b == anyShard && sameKeyspace:
-		return m.merge(lhsRoute, rhsRoute, routingA)
+		return m.merge(ctx, lhsRoute, rhsRoute, routingA)
 
 	// None routing can always be merged, as long as we are aiming for the same keyspace
 	case a == none && sameKeyspace:
-		return m.merge(lhsRoute, rhsRoute, routingA)
+		return m.merge(ctx, lhsRoute, rhsRoute, routingA)
 	case b == none && sameKeyspace:
-		return m.merge(lhsRoute, rhsRoute, routingB)
+		return m.merge(ctx, lhsRoute, rhsRoute, routingB)
 
 	// infoSchema routing is complex, so we handle it in a separate method
 	case a == infoSchema && b == infoSchema:
-		return tryMergeInfoSchemaRoutings(routingA, routingB, m, lhsRoute, rhsRoute)
+		return tryMergeInfoSchemaRoutings(ctx, routingA, routingB, m, lhsRoute, rhsRoute)
 
 	// sharded routing is complex, so we handle it in a separate method
 	case a == sharded && b == sharded:
@@ -87,25 +87,13 @@ func prepareInputRoutes(lhs ops.Operator, rhs ops.Operator) (*Route, *Route, Rou
 
 type (
 	merger interface {
-		mergeShardedRouting(r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error)
-		merge(op1, op2 *Route, r Routing) (*Route, error)
+		mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error)
+		merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) (*Route, error)
 	}
 
 	joinMerger struct {
-		ctx        *plancontext.PlanningContext
 		predicates []sqlparser.Expr
 		innerJoin  bool
-	}
-
-	subQueryMerger struct {
-		ctx  *plancontext.PlanningContext
-		subq *SubQueryInner
-	}
-
-	// mergeDecorator runs the inner merge and also runs the additional function f.
-	mergeDecorator struct {
-		inner merger
-		f     func() error
 	}
 
 	routingType int
@@ -189,15 +177,18 @@ func getRoutingType(r Routing) routingType {
 	panic(fmt.Sprintf("switch should be exhaustive, got %T", r))
 }
 
-func newJoinMerge(ctx *plancontext.PlanningContext, predicates []sqlparser.Expr, innerJoin bool) merger {
+func newJoinMerge(predicates []sqlparser.Expr, innerJoin bool) merger {
 	return &joinMerger{
-		ctx:        ctx,
 		predicates: predicates,
 		innerJoin:  innerJoin,
 	}
 }
 
-func (jm *joinMerger) mergeShardedRouting(r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error) {
+func (jm *joinMerger) mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error) {
+	return jm.merge(ctx, op1, op2, mergeShardedRouting(r1, r2))
+}
+
+func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting {
 	tr := &ShardedRouting{
 		VindexPreds:    append(r1.VindexPreds, r2.VindexPreds...),
 		keyspace:       r1.keyspace,
@@ -209,124 +200,17 @@ func (jm *joinMerger) mergeShardedRouting(r1, r2 *ShardedRouting, op1, op2 *Rout
 	} else {
 		tr.PickBestAvailableVindex()
 	}
-
-	return &Route{
-		Source:     jm.getApplyJoin(op1, op2),
-		MergedWith: []*Route{op2},
-		Routing:    tr,
-	}, nil
+	return tr
 }
 
-func (jm *joinMerger) getApplyJoin(op1, op2 *Route) *ApplyJoin {
-	return NewApplyJoin(op1.Source, op2.Source, jm.ctx.SemTable.AndExpressions(jm.predicates...), !jm.innerJoin)
+func (jm *joinMerger) getApplyJoin(ctx *plancontext.PlanningContext, op1, op2 *Route) *ApplyJoin {
+	return NewApplyJoin(op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), !jm.innerJoin)
 }
 
-func (jm *joinMerger) merge(op1, op2 *Route, r Routing) (*Route, error) {
+func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) (*Route, error) {
 	return &Route{
-		Source:     jm.getApplyJoin(op1, op2),
+		Source:     jm.getApplyJoin(ctx, op1, op2),
 		MergedWith: []*Route{op2},
 		Routing:    r,
 	}, nil
-}
-
-func newSubQueryMerge(ctx *plancontext.PlanningContext, subq *SubQueryInner) merger {
-	return &subQueryMerger{ctx: ctx, subq: subq}
-}
-
-// markPredicateInOuterRouting merges a subquery with the outer routing.
-// If the subquery was a predicate on the outer side, we see if we can use
-// predicates from the subquery to help with routing
-func (s *subQueryMerger) markPredicateInOuterRouting(outer *ShardedRouting, inner Routing) (Routing, error) {
-	// When merging an inner query with its outer query, we can remove the
-	// inner query from the list of predicates that can influence routing of
-	// the outer query.
-	//
-	// Note that not all inner queries necessarily are part of the routing
-	// predicates list, so this might be a no-op.
-	subQueryWasPredicate := false
-	for i, predicate := range outer.SeenPredicates {
-		if s.ctx.SemTable.EqualsExprWithDeps(predicate, s.subq.ExtractedSubquery) {
-			outer.SeenPredicates = append(outer.SeenPredicates[:i], outer.SeenPredicates[i+1:]...)
-
-			subQueryWasPredicate = true
-
-			// The `ExtractedSubquery` of an inner query is unique (due to the uniqueness of bind variable names)
-			// so we can stop after the first match.
-			break
-		}
-	}
-
-	if !subQueryWasPredicate {
-		// if the subquery was not a predicate, we are done here
-		return outer, nil
-	}
-
-	switch inner := inner.(type) {
-	case *ShardedRouting:
-		// Copy Vindex predicates from the inner route to the upper route.
-		// If we can route based on some of these predicates, the routing can improve
-		outer.VindexPreds = append(outer.VindexPreds, inner.VindexPreds...)
-		outer.SeenPredicates = append(outer.SeenPredicates, inner.SeenPredicates...)
-		routing, err := outer.ResetRoutingLogic(s.ctx)
-		if err != nil {
-			return nil, err
-		}
-		return routing, nil
-	case *NoneRouting:
-		// if we have an ANDed subquery, and we know that it will not find anything,
-		// we can safely assume that the outer query will also not return anything
-		return &NoneRouting{keyspace: outer.keyspace}, nil
-	default:
-		return outer, nil
-	}
-}
-
-func (s *subQueryMerger) mergeShardedRouting(outer, inner *ShardedRouting, op1, op2 *Route) (*Route, error) {
-	s.subq.ExtractedSubquery.Merged = true
-
-	routing, err := s.markPredicateInOuterRouting(outer, inner)
-	if err != nil {
-		return nil, err
-	}
-	op1.Routing = routing
-	op1.MergedWith = append(op1.MergedWith, op2)
-	return op1, nil
-}
-
-func (s *subQueryMerger) merge(outer, inner *Route, routing Routing) (*Route, error) {
-	s.subq.ExtractedSubquery.Merged = true
-
-	if outerSR, ok := outer.Routing.(*ShardedRouting); ok {
-		var err error
-		routing, err = s.markPredicateInOuterRouting(outerSR, inner.Routing)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	outer.Routing = routing
-	outer.MergedWith = append(outer.MergedWith, inner)
-	return outer, nil
-}
-
-func (d *mergeDecorator) mergeShardedRouting(outer, inner *ShardedRouting, op1, op2 *Route) (*Route, error) {
-	merged, err := d.inner.mergeShardedRouting(outer, inner, op1, op2)
-	if err != nil {
-		return nil, err
-	}
-	if err := d.f(); err != nil {
-		return nil, err
-	}
-	return merged, nil
-}
-
-func (d *mergeDecorator) merge(outer, inner *Route, r Routing) (*Route, error) {
-	merged, err := d.inner.merge(outer, inner, r)
-	if err != nil {
-		return nil, err
-	}
-	if err := d.f(); err != nil {
-		return nil, err
-	}
-	return merged, nil
 }

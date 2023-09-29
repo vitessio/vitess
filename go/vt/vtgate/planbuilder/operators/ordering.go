@@ -62,8 +62,8 @@ func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser
 	return o, nil
 }
 
-func (o *Ordering) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
-	return o.Source.AddColumns(ctx, reuse, addToGroupBy, exprs)
+func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) (int, error) {
+	return o.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
 func (o *Ordering) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
@@ -84,11 +84,11 @@ func (o *Ordering) GetOrdering() ([]ops.OrderBy, error) {
 
 func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 	for _, order := range o.Order {
-		offsets, err := o.Source.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(order.SimplifiedExpr)})
+		offset, err := o.Source.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
 		if err != nil {
 			return err
 		}
-		o.Offset = append(o.Offset, offsets[0])
+		o.Offset = append(o.Offset, offset)
 
 		if !ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
 			o.WOffset = append(o.WOffset, -1)
@@ -96,11 +96,11 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 
 		wsExpr := &sqlparser.WeightStringFuncExpr{Expr: order.SimplifiedExpr}
-		offsets, err = o.Source.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(wsExpr)})
+		offset, err = o.Source.AddColumn(ctx, true, false, aeWrap(wsExpr))
 		if err != nil {
 			return err
 		}
-		o.WOffset = append(o.WOffset, offsets[0])
+		o.WOffset = append(o.WOffset, offset)
 	}
 
 	return nil
@@ -108,7 +108,7 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 
 func (o *Ordering) ShortDescription() string {
 	ordering := slice.Map(o.Order, func(o ops.OrderBy) string {
-		return sqlparser.String(o.Inner)
+		return sqlparser.String(o.SimplifiedExpr)
 	})
 	return strings.Join(ordering, ", ")
 }

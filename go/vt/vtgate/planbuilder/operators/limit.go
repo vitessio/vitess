@@ -56,8 +56,8 @@ func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return l, nil
 }
 
-func (l *Limit) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
-	return l.Source.AddColumns(ctx, reuse, addToGroupBy, exprs)
+func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) (int, error) {
+	return l.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
 func (l *Limit) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {

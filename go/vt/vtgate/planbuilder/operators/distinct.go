@@ -20,7 +20,6 @@ import (
 	"slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -52,41 +51,21 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 	if err != nil {
 		return err
 	}
-	var wsExprs []*sqlparser.AliasedExpr
-	var addToGroupBy []bool
-	wsNeeded := make([]bool, len(columns))
 	for idx, col := range columns {
-		addToGroupBy = append(addToGroupBy, false)
 		e := d.QP.GetSimplifiedExpr(col.Expr)
-		if ctx.SemTable.NeedsWeightString(e) {
-			wsExprs = append(wsExprs, aeWrap(weightStringFor(e)))
-			addToGroupBy = append(addToGroupBy, false)
-			wsNeeded[idx] = true
-		}
-	}
-	offsets, err := d.Source.AddColumns(ctx, true, addToGroupBy, append(columns, wsExprs...))
-	if err != nil {
-		return err
-	}
-	modifiedCols, err := d.GetColumns(ctx)
-	if err != nil {
-		return err
-	}
-	if len(modifiedCols) < len(columns) {
-		return vterrors.VT12001("unable to plan the distinct query as not able to align the columns")
-	}
-	n := len(columns)
-	wsOffset := 0
-	for i, col := range columns {
 		var wsCol *int
-		if wsNeeded[i] {
-			wsCol = &offsets[n+wsOffset]
-			wsOffset++
-		}
-		e := d.QP.GetSimplifiedExpr(col.Expr)
 		typ, coll, _ := ctx.SemTable.TypeForExpr(e)
+
+		if ctx.SemTable.NeedsWeightString(e) {
+			offset, err := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(e)))
+			if err != nil {
+				return err
+			}
+			wsCol = &offset
+		}
+
 		d.Columns = append(d.Columns, engine.CheckCol{
-			Col:       i,
+			Col:       idx,
 			WsCol:     wsCol,
 			Type:      typ,
 			Collation: coll,
@@ -123,8 +102,8 @@ func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser
 	return d, nil
 }
 
-func (d *Distinct) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
-	return d.Source.AddColumns(ctx, reuse, addToGroupBy, exprs)
+func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) (int, error) {
+	return d.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
 func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {

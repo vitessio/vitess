@@ -33,17 +33,23 @@ const (
 	PulloutIn
 	PulloutNotIn
 	PulloutExists
+	PulloutNotExists
 )
 
 var pulloutName = map[PulloutOpcode]string{
-	PulloutValue:  "PulloutValue",
-	PulloutIn:     "PulloutIn",
-	PulloutNotIn:  "PulloutNotIn",
-	PulloutExists: "PulloutExists",
+	PulloutValue:     "PulloutValue",
+	PulloutIn:        "PulloutIn",
+	PulloutNotIn:     "PulloutNotIn",
+	PulloutExists:    "PulloutExists",
+	PulloutNotExists: "PulloutNotExists",
 }
 
 func (code PulloutOpcode) String() string {
 	return pulloutName[code]
+}
+
+func (code PulloutOpcode) NeedsListArg() bool {
+	return code == PulloutIn || code == PulloutNotIn
 }
 
 // MarshalJSON serializes the PulloutOpcode as a JSON string.
