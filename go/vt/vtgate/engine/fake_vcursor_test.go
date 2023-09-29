@@ -93,7 +93,7 @@ func (t *noopVCursor) GetWarmingReadsPercent() int {
 	panic("implement me")
 }
 
-func (t *noopVCursor) GetWarmingReadsPool() chan bool {
+func (t *noopVCursor) GetWarmingReadsChannel() chan bool {
 	panic("implement me")
 }
 
@@ -497,7 +497,7 @@ func (f *loggingVCursor) GetWarmingReadsPercent() int {
 	return 0
 }
 
-func (f *loggingVCursor) GetWarmingReadsPool() chan bool {
+func (f *loggingVCursor) GetWarmingReadsChannel() chan bool {
 	return make(chan bool)
 }
 

@@ -115,7 +115,7 @@ type vcursorImpl struct {
 	pv       plancontext.PlannerVersion
 
 	warmingReadsPercent int
-	warmingReadsPool    chan bool
+	warmingReadsChannel chan bool
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
@@ -161,10 +161,10 @@ func newVCursorImpl(
 	}
 
 	warmingReadsPct := 0
-	var warmingReadsPool chan bool
+	var warmingReadsChan chan bool
 	if executor != nil {
 		warmingReadsPct = executor.warmingReadsPercent
-		warmingReadsPool = executor.warmingReadsPool
+		warmingReadsChan = executor.warmingReadsChannel
 	}
 	return &vcursorImpl{
 		safeSession:         safeSession,
@@ -182,7 +182,7 @@ func newVCursorImpl(
 		warnShardedOnly:     warnShardedOnly,
 		pv:                  pv,
 		warmingReadsPercent: warmingReadsPct,
-		warmingReadsPool:    warmingReadsPool,
+		warmingReadsChannel: warmingReadsChan,
 	}, nil
 }
 
@@ -1284,8 +1284,8 @@ func (vc *vcursorImpl) GetWarmingReadsPercent() int {
 	return vc.warmingReadsPercent
 }
 
-func (vc *vcursorImpl) GetWarmingReadsPool() chan bool {
-	return vc.warmingReadsPool
+func (vc *vcursorImpl) GetWarmingReadsChannel() chan bool {
+	return vc.warmingReadsChannel
 }
 
 func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCursor {

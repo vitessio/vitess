@@ -121,7 +121,7 @@ type Executor struct {
 	queryLogger *streamlog.StreamLogger[*logstats.LogStats]
 
 	warmingReadsPercent int
-	warmingReadsPool    chan bool
+	warmingReadsChannel chan bool
 }
 
 var executorOnce sync.Once
@@ -167,7 +167,7 @@ func NewExecutor(
 		pv:                  pv,
 		plans:               plans,
 		warmingReadsPercent: warmingReadsPercent,
-		warmingReadsPool:    make(chan bool, warmingReadsPoolSize),
+		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
 	}
 
 	vschemaacl.Init()

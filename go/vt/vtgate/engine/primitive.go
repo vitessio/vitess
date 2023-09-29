@@ -123,8 +123,8 @@ type (
 		// GetWarmingReadsPercent gets the percentage of queries to clone to replicas for bufferpool warming
 		GetWarmingReadsPercent() int
 
-		// GetWarmingReadsPool returns the pool for executing warming reads against replicas
-		GetWarmingReadsPool() chan bool
+		// GetWarmingReadsChannel returns the channel for executing warming reads against replicas
+		GetWarmingReadsChannel() chan bool
 
 		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas
 		CloneForReplicaWarming(ctx context.Context) VCursor
