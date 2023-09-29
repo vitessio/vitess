@@ -25,10 +25,10 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -74,8 +74,9 @@ func (vte *VTExplain) initVtgateExecutor(ctx context.Context, vSchemaStr, ksShar
 	streamSize := 10
 	var schemaTracker vtgate.SchemaInfo // no schema tracker for these tests
 	queryLogBufferSize := 10
-	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
-	vte.vtgateExecutor = vtgate.NewExecutor(ctx, vte.explainTopo, vtexplainCell, resolver, opts.Normalize, false, streamSize, plans, schemaTracker, false, opts.PlannerVersion, streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize))
+	plans := theine.NewStore[vtgate.PlanCacheKey, *engine.Plan](4*1024*1024, false)
+	vte.vtgateExecutor = vtgate.NewExecutor(ctx, vte.explainTopo, vtexplainCell, resolver, opts.Normalize, false, streamSize, plans, schemaTracker, false, opts.PlannerVersion)
+	vte.vtgateExecutor.SetQueryLogger(streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize))
 
 	return nil
 }
@@ -207,29 +208,27 @@ func (vte *VTExplain) vtgateExecute(sql string) ([]*engine.Plan, map[string]*Tab
 	// This will ensure that the commit/rollback order is predictable.
 	vte.sortShardSession()
 
-	// use the plan cache to get the set of plans used for this query, then
-	// clear afterwards for the next run
-	planCache := vte.vtgateExecutor.Plans()
-
 	_, err := vte.vtgateExecutor.Execute(context.Background(), nil, "VtexplainExecute", vtgate.NewSafeSession(vte.vtgateSession), sql, nil)
 	if err != nil {
 		for _, tc := range vte.explainTopo.TabletConns {
 			tc.tabletQueries = nil
 			tc.mysqlQueries = nil
 		}
-		planCache.Clear()
-
+		vte.vtgateExecutor.ClearPlans()
 		return nil, nil, vterrors.Wrapf(err, "vtexplain execute error in '%s'", sql)
 	}
 
 	var plans []*engine.Plan
-	planCache.ForEach(func(value any) bool {
-		plan := value.(*engine.Plan)
+
+	// use the plan cache to get the set of plans used for this query, then
+	// clear afterwards for the next run
+	vte.vtgateExecutor.ForEachPlan(func(plan *engine.Plan) bool {
 		plan.ExecTime = 0
 		plans = append(plans, plan)
 		return true
 	})
-	planCache.Clear()
+
+	vte.vtgateExecutor.ClearPlans()
 
 	tabletActions := make(map[string]*TabletActions)
 	for shard, tc := range vte.explainTopo.TabletConns {

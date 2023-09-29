@@ -87,7 +87,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 			return nil, err
 		}
 		// if we already did sorting, we don't need to do it again
-		needsOrdering = needsOrdering && !hp.qp.CanPushDownSorting
+		needsOrdering = needsOrdering && !hp.qp.CanPushSorting
 	case canShortcut:
 		err = planSingleRoutePlan(hp.sel, rb)
 		if err != nil {
@@ -171,12 +171,12 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(ctx *plancontext.PlanningCont
 		p.truncateColumnCount = hp.qp.GetColumnCount()
 	case *memorySort:
 		p.truncater.SetTruncateColumnCount(hp.qp.GetColumnCount())
-	case *pulloutSubquery:
-		newUnderlyingPlan, err := hp.truncateColumnsIfNeeded(ctx, p.underlying)
+	case *uncorrelatedSubquery:
+		newUnderlyingPlan, err := hp.truncateColumnsIfNeeded(ctx, p.outer)
 		if err != nil {
 			return nil, err
 		}
-		p.underlying = newUnderlyingPlan
+		p.outer = newUnderlyingPlan
 	default:
 		plan = &simpleProjection{
 			logicalPlanCommon: newBuilderCommon(plan),
@@ -265,7 +265,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 	}
 
 	var order []ops.OrderBy
-	if hp.qp.CanPushDownSorting {
+	if hp.qp.CanPushSorting {
 		hp.qp.OldAlignGroupByAndOrderBy(ctx)
 		// the grouping order might have changed, so we reload the grouping expressions
 		grouping = hp.qp.GetGrouping()
@@ -630,7 +630,7 @@ func (hp *horizonPlanning) planOrderBy(ctx *plancontext.PlanningContext, orderEx
 	case *vindexFunc:
 		// This is evaluated at VTGate only, so weight_string function cannot be used.
 		return hp.createMemorySortPlan(ctx, plan, orderExprs /* useWeightStr */, false)
-	case *limit, *semiJoin, *filter, *pulloutSubquery, *projection:
+	case *limit, *semiJoin, *filter, *uncorrelatedSubquery, *projection:
 		inputs := plan.Inputs()
 		if len(inputs) == 0 {
 			break
@@ -901,7 +901,7 @@ func (hp *horizonPlanning) planDistinct(ctx *plancontext.PlanningContext, plan l
 		}
 
 		return hp.addDistinct(ctx, plan)
-	case *join, *pulloutSubquery:
+	case *join, *uncorrelatedSubquery:
 		return hp.addDistinct(ctx, plan)
 	case *orderedAggregate:
 		return hp.planDistinctOA(ctx.SemTable, p)
@@ -1044,8 +1044,8 @@ func pushHaving(ctx *plancontext.PlanningContext, expr sqlparser.Expr, plan logi
 		sel := sqlparser.GetFirstSelect(node.Select)
 		sel.AddHaving(expr)
 		return plan, nil
-	case *pulloutSubquery:
-		return pushHaving(ctx, expr, node.underlying)
+	case *uncorrelatedSubquery:
+		return pushHaving(ctx, expr, node.outer)
 	case *simpleProjection:
 		return nil, vterrors.VT13001("filtering on results of cross-shard derived table")
 	case *orderedAggregate:
@@ -1162,8 +1162,8 @@ func planGroupByGen4(ctx *plancontext.PlanningContext, groupExpr operators.Group
 			sel.AddGroupBy(weightStringFor(groupExpr.SimplifiedExpr))
 		}
 		return nil
-	case *pulloutSubquery:
-		return planGroupByGen4(ctx, groupExpr, node.underlying, wsAdded)
+	case *uncorrelatedSubquery:
+		return planGroupByGen4(ctx, groupExpr, node.outer, wsAdded)
 	case *semiJoin:
 		return vterrors.VT13001("GROUP BY in a query having a correlated subquery")
 	default:

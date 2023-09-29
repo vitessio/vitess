@@ -36,8 +36,8 @@ var _ Primitive = (*Update)(nil)
 
 // VindexValues contains changed values for a vindex.
 type VindexValues struct {
-	PvMap  map[string]evalengine.Expr
-	Offset int // Offset from ownedVindexQuery to provide input decision for vindex update.
+	EvalExprMap map[string]evalengine.Expr
+	Offset      int // Offset from ownedVindexQuery to provide input decision for vindex update.
 }
 
 // Update represents the instructions to perform an update.
@@ -152,7 +152,7 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 				// Fetch the column values.
 				origColValue := row[fieldColNumMap[vCol.String()]]
 				fromIds = append(fromIds, origColValue)
-				if colValue, exists := updColValues.PvMap[vCol.String()]; exists {
+				if colValue, exists := updColValues.EvalExprMap[vCol.String()]; exists {
 					resolvedVal, err := env.Evaluate(colValue)
 					if err != nil {
 						return err

@@ -22,16 +22,21 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func TestFKVerifyUpdate(t *testing.T) {
 	verifyP := &Route{
-		Query: "select distinct cola, colb from parent where (cola, colb) in ::__vals",
+		Query: "select 1 from child c left join parent p on p.cola = 1 and p.colb = 'a' where p.cola is null and p.colb is null",
+		RoutingParameters: &RoutingParameters{
+			Opcode:   Unsharded,
+			Keyspace: &vindexes.Keyspace{Name: "ks"},
+		},
+	}
+	verifyC := &Route{
+		Query: "select 1 from grandchild g join child c on g.cola = c.cola and g.colb = c.colb where c.foo = 48",
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Unsharded,
 			Keyspace: &vindexes.Keyspace{Name: "ks"},
@@ -47,29 +52,19 @@ func TestFKVerifyUpdate(t *testing.T) {
 		},
 	}
 	fkc := &FkVerify{
-		Verify: []*FkParent{
-			{
-				Values: []sqlparser.Exprs{{sqlparser.NewIntLiteral("1"), sqlparser.NewStrLiteral("a")}},
-				Cols: []CheckCol{
-					{Col: 0, Type: sqltypes.Int64, Collation: collations.CollationBinaryID},
-					{Col: 1, Type: sqltypes.VarChar, Collation: collations.CollationUtf8mb4ID},
-				},
-				BvName: "__vals",
-				Exec:   verifyP,
-			},
-		},
-		Exec: childP,
+		Verify: []*Verify{{Exec: verifyP, Typ: ParentVerify}},
+		Exec:   childP,
 	}
 
 	t.Run("foreign key verification success", func(t *testing.T) {
-		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("cola|colb", "int64|varchar"), "1|a")
+		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"))
 		vc := newDMLTestVCursor("0")
 		vc.results = []*sqltypes.Result{fakeRes}
 		_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
 		require.NoError(t, err)
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			`ExecuteMultiShard ks.0: select distinct cola, colb from parent where (cola, colb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}}} false false`,
+			`ExecuteMultiShard ks.0: select 1 from child c left join parent p on p.cola = 1 and p.colb = 'a' where p.cola is null and p.colb is null {} false false`,
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 			`ExecuteMultiShard ks.0: update child set cola = 1, colb = 'a' where foo = 48 {} true true`,
 		})
@@ -79,22 +74,22 @@ func TestFKVerifyUpdate(t *testing.T) {
 		require.NoError(t, err)
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			`StreamExecuteMulti select distinct cola, colb from parent where (cola, colb) in ::__vals ks.0: {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}}} `,
+			`StreamExecuteMulti select 1 from child c left join parent p on p.cola = 1 and p.colb = 'a' where p.cola is null and p.colb is null ks.0: {} `,
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 			`ExecuteMultiShard ks.0: update child set cola = 1, colb = 'a' where foo = 48 {} true true`,
 		})
 	})
 
-	t.Run("foreign key verification failure", func(t *testing.T) {
+	t.Run("parent foreign key verification failure", func(t *testing.T) {
 		// No results from select, should cause the foreign key verification to fail.
-		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("cola|colb", "int64|varchar"))
+		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1", "1", "1")
 		vc := newDMLTestVCursor("0")
 		vc.results = []*sqltypes.Result{fakeRes}
 		_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
 		require.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			`ExecuteMultiShard ks.0: select distinct cola, colb from parent where (cola, colb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}}} false false`,
+			`ExecuteMultiShard ks.0: select 1 from child c left join parent p on p.cola = 1 and p.colb = 'a' where p.cola is null and p.colb is null {} false false`,
 		})
 
 		vc.Rewind()
@@ -102,86 +97,29 @@ func TestFKVerifyUpdate(t *testing.T) {
 		require.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			`StreamExecuteMulti select distinct cola, colb from parent where (cola, colb) in ::__vals ks.0: {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}}} `,
-		})
-	})
-}
-
-// TestFKVerifyInsert tests the functionality of FkVerify Primitive to verify the validation of the foreign key constraints when executing an insert.
-func TestFKVerifyInsert(t *testing.T) {
-	verifyP := &Route{
-		Query: "select distinct cola, colb from parent where (cola, colb) in ::__vals",
-		RoutingParameters: &RoutingParameters{
-			Opcode:   Unsharded,
-			Keyspace: &vindexes.Keyspace{Name: "ks"},
-		},
-	}
-	childP := &Insert{
-		Opcode:   InsertUnsharded,
-		Query:    "insert into child (cola, colb, x) values (1, 'a', 1), (2, 'b', 2), (1, 'a', 3),",
-		Keyspace: &vindexes.Keyspace{Name: "ks"},
-	}
-	fkc := &FkVerify{
-		Verify: []*FkParent{
-			{
-				Values: []sqlparser.Exprs{
-					{sqlparser.NewIntLiteral("1"), sqlparser.NewStrLiteral("a")},
-					{sqlparser.NewIntLiteral("2"), sqlparser.NewStrLiteral("b")},
-					{sqlparser.NewIntLiteral("1"), sqlparser.NewStrLiteral("a")},
-				},
-				Cols: []CheckCol{
-					{Col: 0, Type: sqltypes.Int64, Collation: collations.CollationBinaryID},
-					{Col: 1, Type: sqltypes.VarChar, Collation: collations.CollationUtf8mb4ID},
-				},
-				BvName: "__vals",
-				Exec:   verifyP,
-			},
-		},
-		Exec: childP,
-	}
-
-	t.Run("foreign key verification success", func(t *testing.T) {
-		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("cola|colb", "int64|varchar"), "1|a", "2|b")
-		vc := newDMLTestVCursor("0")
-		vc.results = []*sqltypes.Result{fakeRes}
-		_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
-		require.NoError(t, err)
-		vc.ExpectLog(t, []string{
-			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			`ExecuteMultiShard ks.0: select distinct cola, colb from parent where (cola, colb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}} values:{type:TUPLE values:{type:INT64 value:"2"} values:{type:VARCHAR value:"b"}}} false false`,
-			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			`ExecuteMultiShard ks.0: insert into child (cola, colb, x) values (1, 'a', 1), (2, 'b', 2), (1, 'a', 3), {} true true`,
-		})
-
-		vc.Rewind()
-		err = fkc.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
-		require.NoError(t, err)
-		vc.ExpectLog(t, []string{
-			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			`StreamExecuteMulti select distinct cola, colb from parent where (cola, colb) in ::__vals ks.0: {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}} values:{type:TUPLE values:{type:INT64 value:"2"} values:{type:VARCHAR value:"b"}}} `,
-			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			`ExecuteMultiShard ks.0: insert into child (cola, colb, x) values (1, 'a', 1), (2, 'b', 2), (1, 'a', 3), {} true true`,
+			`StreamExecuteMulti select 1 from child c left join parent p on p.cola = 1 and p.colb = 'a' where p.cola is null and p.colb is null ks.0: {} `,
 		})
 	})
 
-	t.Run("foreign key verification failure", func(t *testing.T) {
-		// Only 1 result from select, should cause the foreign key verification to fail.
-		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("cola|colb", "int64|varchar"), "2|b")
+	fkc.Verify[0] = &Verify{Exec: verifyC, Typ: ChildVerify}
+	t.Run("child foreign key verification failure", func(t *testing.T) {
+		// No results from select, should cause the foreign key verification to fail.
+		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1", "1", "1")
 		vc := newDMLTestVCursor("0")
 		vc.results = []*sqltypes.Result{fakeRes}
 		_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
-		require.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
+		require.ErrorContains(t, err, "Cannot delete or update a parent row: a foreign key constraint fails")
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			`ExecuteMultiShard ks.0: select distinct cola, colb from parent where (cola, colb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}} values:{type:TUPLE values:{type:INT64 value:"2"} values:{type:VARCHAR value:"b"}}} false false`,
+			`ExecuteMultiShard ks.0: select 1 from grandchild g join child c on g.cola = c.cola and g.colb = c.colb where c.foo = 48 {} false false`,
 		})
 
 		vc.Rewind()
 		err = fkc.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
-		require.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
+		require.ErrorContains(t, err, "Cannot delete or update a parent row: a foreign key constraint fails")
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			`StreamExecuteMulti select distinct cola, colb from parent where (cola, colb) in ::__vals ks.0: {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}} values:{type:TUPLE values:{type:INT64 value:"2"} values:{type:VARCHAR value:"b"}}} `,
+			`StreamExecuteMulti select 1 from grandchild g join child c on g.cola = c.cola and g.colb = c.colb where c.foo = 48 ks.0: {} `,
 		})
 	})
 }

@@ -61,7 +61,7 @@ func (ps *semiJoin) Primitive() engine.Primitive {
 	}
 }
 
-// WireupGen4 implements the logicalPlan interface
+// Wireup implements the logicalPlan interface
 func (ps *semiJoin) Wireup(ctx *plancontext.PlanningContext) error {
 	if err := ps.lhs.Wireup(ctx); err != nil {
 		return err

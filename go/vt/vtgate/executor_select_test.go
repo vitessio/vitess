@@ -37,7 +37,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
@@ -1561,8 +1560,10 @@ func TestStreamSelectIN(t *testing.T) {
 
 func createExecutor(ctx context.Context, serv *sandboxTopo, cell string, resolver *Resolver) *Executor {
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
-	return NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
+	plans := DefaultPlanCache()
+	ex := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4)
+	ex.SetQueryLogger(queryLogger)
+	return ex
 }
 
 func TestSelectScatter(t *testing.T) {
@@ -3186,8 +3187,9 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	}
 
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
-	executor := NewExecutor(ctx, serv, cell, resolver, true, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
+	plans := DefaultPlanCache()
+	executor := NewExecutor(ctx, serv, cell, resolver, true, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4)
+	executor.SetQueryLogger(queryLogger)
 	defer executor.Close()
 	// some sleep for all goroutines to start
 	time.Sleep(100 * time.Millisecond)
@@ -4094,12 +4096,12 @@ func TestSelectCFC(t *testing.T) {
 	for {
 		select {
 		case <-timeout:
-			t.Fatal("not able to cache a plan withing 10 seconds.")
+			t.Fatal("not able to cache a plan within 30 seconds.")
 		case <-time.After(5 * time.Millisecond):
 			// should be able to find cache entry before the timeout.
 			cacheItems := executor.debugCacheEntries()
 			for _, item := range cacheItems {
-				if strings.Contains(item.Key, "c2 from tbl_cfc where c1 like") {
+				if strings.Contains(item.Original, "c2 from tbl_cfc where c1 like") {
 					return
 				}
 			}
@@ -4153,4 +4155,39 @@ func TestSelectView(t *testing.T) {
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	os.Exit(m.Run())
+}
+
+func TestStreamJoinQuery(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	// Special setup: Don't use createExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
+	s := createSandbox(KsTestSharded)
+	s.VSchema = executorVSchema
+	u.VSchema = unshardedVSchema
+	serv := newSandboxForCells(ctx, []string{cell})
+	resolver := newTestResolver(ctx, hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	for _, shard := range shards {
+		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+	}
+	executor := createExecutor(ctx, serv, cell, resolver)
+	defer executor.Close()
+
+	sql := "select u.foo, u.apa, ue.bar, ue.apa from user u join user_extra ue on u.foo = ue.bar"
+	result, err := executorStream(ctx, executor, sql)
+	require.NoError(t, err)
+	wantResult := &sqltypes.Result{
+		Fields: append(sandboxconn.SingleRowResult.Fields, sandboxconn.SingleRowResult.Fields...),
+	}
+	wantRow := append(sandboxconn.StreamRowResult.Rows[0], sandboxconn.StreamRowResult.Rows[0]...)
+	for i := 0; i < 64; i++ {
+		wantResult.Rows = append(wantResult.Rows, wantRow)
+	}
+	require.Equal(t, len(wantResult.Rows), len(result.Rows))
+	for idx := 0; idx < 64; idx++ {
+		utils.MustMatch(t, wantResult.Rows[idx], result.Rows[idx], "mismatched on: ", strconv.Itoa(idx))
+	}
 }

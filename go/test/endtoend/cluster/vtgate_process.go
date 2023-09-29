@@ -43,6 +43,7 @@ type VtgateProcess struct {
 	Binary                string
 	CommonArg             VtctlProcess
 	LogDir                string
+	ErrorLog              string
 	FileToLogQueries      string
 	Port                  int
 	GrpcPort              int
@@ -84,6 +85,12 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--tablet_types_to_wait", vtgate.TabletTypesToWait,
 		"--service_map", vtgate.ServiceMap,
 		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
+	}
+	if v, err := GetMajorVersion("vtgate"); err != nil {
+		return err
+	} else if v >= 18 {
+		args = append(args, "--bind-address", "127.0.0.1")
+		args = append(args, "--grpc_bind_address", "127.0.0.1")
 	}
 	// If no explicit mysql_server_version has been specified then we autodetect
 	// the MySQL version that will be used for the test and base the vtgate's
@@ -127,6 +134,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	vtgate.proc.Stderr = errFile
 
 	vtgate.proc.Env = append(vtgate.proc.Env, os.Environ()...)
+	vtgate.proc.Env = append(vtgate.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Running vtgate with command: %v", strings.Join(vtgate.proc.Args, " "))
 
@@ -149,6 +157,12 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		}
 		select {
 		case err := <-vtgate.exit:
+			errBytes, ferr := os.ReadFile(vtgate.ErrorLog)
+			if ferr == nil {
+				log.Errorf("vtgate error log contents:\n%s", string(errBytes))
+			} else {
+				log.Errorf("Failed to read the vtgate error log file %q: %v", vtgate.ErrorLog, ferr)
+			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtgate.Name, err)
 		default:
 			time.Sleep(300 * time.Millisecond)

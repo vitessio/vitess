@@ -1,5 +1,19 @@
+VTOrc is the automated fault detection and repair tool in Vitess.
+
 Usage:
   vtorc [flags]
+
+Examples:
+vtorc \
+	--topo_implementation etcd2 \
+	--topo_global_server_address localhost:2379 \
+	--topo_global_root /vitess/global \
+	--log_dir $VTDATAROOT/tmp \
+	--port 15000 \
+	--recovery-period-block-duration "10m" \
+	--instance-poll-time "1s" \
+	--topo-information-refresh-duration "30s" \
+	--alsologtostderr
 
 Flags:
       --allow-emergency-reparent                                    Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary (default true)
@@ -8,7 +22,9 @@ Flags:
       --audit-purge-duration duration                               Duration for which audit logs are held before being purged. Should be in multiples of days (default 168h0m0s)
       --audit-to-backend                                            Whether to store the audit log in the VTOrc database
       --audit-to-syslog                                             Whether to store the audit log in the syslog
+      --bind-address string                                         Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --catch-sigpipe                                               catch and ignore SIGPIPE on stdout and stderr if specified
+      --change-tablets-with-errant-gtid-to-drained                  Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED
       --clusters_to_watch strings                                   Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: "ks1,ks2/-80"
       --config string                                               config file name
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
@@ -34,6 +50,7 @@ Flags:
       --keep_logs_by_mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                    keep running at least this long after SIGTERM before stopping (default 50ms)
       --lock-timeout duration                                       Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
+      --log_backtrace_at traceLocation                              when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                                              If non-empty, write log files in this directory
       --log_err_stacks                                              log stack traces for errors
       --log_rotate_max_size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
@@ -89,4 +106,5 @@ Flags:
       --topo_zk_tls_key string                                      the key to use to connect to the zk topo server, enables TLS
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
+      --vmodule moduleSpec                                          comma-separated list of pattern=N settings for file-filtered logging
       --wait-replicas-timeout duration                              Duration for which to wait for replica's to respond when issuing RPCs (default 30s)

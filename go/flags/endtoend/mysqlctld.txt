@@ -1,7 +1,28 @@
-Usage of mysqlctld:
+`mysqlctld` is a gRPC server that can be used instead of the `mysqlctl` client tool.
+If the target directories are empty when it is invoked, it automatically performs initialization operations to bootstrap the `mysqld` instance before starting it.
+The `mysqlctld` process can subsequently receive gRPC commands from a `vttablet` to perform housekeeping operations like shutting down and restarting the `mysqld` instance as needed.
+
+{{ "{{< warning >}}" }}
+`mysqld_safe` is not used so the `mysqld` process will not be automatically restarted in case of a failure.
+{{ "{{</ warning>}}" }}
+
+To enable communication with a `vttablet`, the server must be configured to receive gRPC messages on a unix domain socket.
+
+Usage:
+  mysqlctld [flags]
+
+Examples:
+mysqlctld \
+	--log_dir=${VTDATAROOT}/logs \
+	--tablet_uid=100 \
+	--mysql_port=17100 \
+	--socket_file=/path/to/socket_file
+
+Flags:
       --alsologtostderr                                                  log to standard error as well as files
       --app_idle_timeout duration                                        Idle timeout for app connections (default 1m0s)
       --app_pool_size int                                                Size of the connection pool for app connections (default 40)
+      --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
@@ -44,6 +65,7 @@ Usage of mysqlctld:
       --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc_auth_static_client_creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_auth_static_password_file string                            JSON File to read the users/passwords from.
+      --grpc_bind_address string                                         Bind address for gRPC calls. If empty, listen on all addresses.
       --grpc_ca string                                                   server CA to use for gRPC connections, requires TLS, and enforces client certificate check
       --grpc_cert string                                                 server certificate to use for gRPC connections, requires grpc_key, enables TLS
       --grpc_compression string                                          Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
@@ -62,7 +84,7 @@ Usage of mysqlctld:
       --grpc_server_initial_window_size int                              gRPC server initial window size
       --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
       --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
-  -h, --help                                                             display usage and exit
+  -h, --help                                                             help for mysqlctld
       --init_db_sql_file string                                          Path to .sql file to run after mysqld initialization
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)

@@ -49,6 +49,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
@@ -58,6 +59,10 @@ import (
 // written to `dir`. The root command is also renamed to _index.md to remain
 // compatible with the vitessio/website content structure expectations.
 func GenerateMarkdownTree(cmd *cobra.Command, dir string) error {
+	sha, err := getCommitID("HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to get commit id for HEAD: %w", err)
+	}
 	switch fi, err := os.Stat(dir); {
 	case errors.Is(err, fs.ErrNotExist):
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -70,7 +75,7 @@ func GenerateMarkdownTree(cmd *cobra.Command, dir string) error {
 	}
 
 	recursivelyDisableAutoGenTags(cmd)
-	if err := doc.GenMarkdownTreeCustom(cmd, dir, frontmatterFilePrepender, linkHandler); err != nil {
+	if err := doc.GenMarkdownTreeCustom(cmd, dir, frontmatterFilePrepender(sha), linkHandler); err != nil {
 		return err
 	}
 
@@ -78,6 +83,10 @@ func GenerateMarkdownTree(cmd *cobra.Command, dir string) error {
 	indexDocPath := filepath.Join(dir, "_index.md")
 	if err := os.Rename(rootDocPath, indexDocPath); err != nil {
 		return fmt.Errorf("failed to index doc (generated at %s) into proper position (%s): %w", rootDocPath, indexDocPath, err)
+	}
+
+	if err := anonymizeHomedir(indexDocPath); err != nil {
+		return fmt.Errorf("failed to anonymize homedir in help text for command %s: %w", indexDocPath, err)
 	}
 
 	if err := restructure(dir, dir, cmd.Name(), cmd.Commands()); err != nil {
@@ -119,8 +128,13 @@ func restructure(rootDir string, dir string, name string, commands []*cobra.Comm
 				return fmt.Errorf("failed to create subdir for %s: %w", fullCmdFilename, err)
 			}
 
-			if err := os.Rename(filepath.Join(rootDir, fullCmdFilename+".md"), filepath.Join(cmdDir, "_index.md")); err != nil {
+			indexFile := filepath.Join(cmdDir, "_index.md")
+			if err := os.Rename(filepath.Join(rootDir, fullCmdFilename+".md"), indexFile); err != nil {
 				return fmt.Errorf("failed to move index doc for command %s with children: %w", fullCmdFilename, err)
+			}
+
+			if err := anonymizeHomedir(indexFile); err != nil {
+				return fmt.Errorf("failed to anonymize homedir in help text for command %s: %w", indexFile, err)
 			}
 
 			if err := restructure(rootDir, cmdDir, fullCmdFilename, children); err != nil {
@@ -146,6 +160,10 @@ func restructure(rootDir string, dir string, name string, commands []*cobra.Comm
 			if out, err := sed.CombinedOutput(); err != nil {
 				return fmt.Errorf("failed to rewrite links to parent command in child %s: %w (extra: %s)", newName, err, out)
 			}
+
+			if err := anonymizeHomedir(newName); err != nil {
+				return fmt.Errorf("failed to anonymize homedir in help text for command %s: %w", newName, err)
+			}
 		default:
 			// Top-level command without children. Nothing to restructure.
 			continue
@@ -159,6 +177,31 @@ func newParentLinkSedCommand(parent string, file string) *exec.Cmd {
 	return exec.Command("sed", "-i", "", "-e", fmt.Sprintf("s:(./%s/):(../):i", parent), file)
 }
 
+var (
+	wd   string
+	once sync.Once
+)
+
+func anonymizeHomedir(file string) (err error) {
+	once.Do(func() {
+		// Only do this once per run.
+		wd, err = os.Getwd()
+	})
+	if err != nil {
+		return err
+	}
+
+	// We're replacing the stuff inside the square brackets in the example sed
+	// below:
+	// 	's:Paths to search for config files in. (default \[.*\])$:Paths to search for config files in. (default \[$WORKDIR\]):'
+	sed := exec.Command("sed", "-i", "", "-e", fmt.Sprintf("s:%s:$WORKDIR:i", wd), file)
+	if out, err := sed.CombinedOutput(); err != nil {
+		return fmt.Errorf("%w: %s", err, out)
+	}
+
+	return nil
+}
+
 func recursivelyDisableAutoGenTags(root *cobra.Command) {
 	commands := []*cobra.Command{root}
 	for cmd := commands[0]; len(commands) > 0; cmd, commands = commands[0], commands[1:] {
@@ -168,24 +211,37 @@ func recursivelyDisableAutoGenTags(root *cobra.Command) {
 	}
 }
 
+func getCommitID(ref string) (string, error) {
+	gitShow := exec.Command("git", "show", "--pretty=format:%H", "--no-patch", ref)
+	out, err := gitShow.Output()
+	if err != nil {
+		return "", err
+	}
+
+	return string(out), nil
+}
+
 const frontmatter = `---
 title: %s
 series: %s
+commit: %s
 ---
 `
 
-func frontmatterFilePrepender(filename string) string {
-	name := filepath.Base(filename)
-	base := strings.TrimSuffix(name, filepath.Ext(name))
+func frontmatterFilePrepender(sha string) func(filename string) string {
+	return func(filename string) string {
+		name := filepath.Base(filename)
+		base := strings.TrimSuffix(name, filepath.Ext(name))
 
-	root, cmdName, ok := strings.Cut(base, "_")
-	if !ok { // no `_`, so not a subcommand
-		cmdName = root
+		root, cmdName, ok := strings.Cut(base, "_")
+		if !ok { // no `_`, so not a subcommand
+			cmdName = root
+		}
+
+		cmdName = strings.ReplaceAll(cmdName, "_", " ")
+
+		return fmt.Sprintf(frontmatter, cmdName, root, sha)
 	}
-
-	cmdName = strings.ReplaceAll(cmdName, "_", " ")
-
-	return fmt.Sprintf(frontmatter, cmdName, root)
 }
 
 func linkHandler(filename string) string {

@@ -614,6 +614,15 @@ func (client *gRPCVtctldClient) ReparentTablet(ctx context.Context, in *vtctldat
 	return client.c.ReparentTablet(ctx, in, opts...)
 }
 
+// ReshardCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ReshardCreate(ctx context.Context, in *vtctldatapb.ReshardCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowStatusResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ReshardCreate(ctx, in, opts...)
+}
+
 // RestoreFromBackup is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldatapb.RestoreFromBackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_RestoreFromBackupClient, error) {
 	if client.c == nil {
@@ -792,6 +801,51 @@ func (client *gRPCVtctldClient) UpdateThrottlerConfig(ctx context.Context, in *v
 	}
 
 	return client.c.UpdateThrottlerConfig(ctx, in, opts...)
+}
+
+// VDiffCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VDiffCreate(ctx context.Context, in *vtctldatapb.VDiffCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.VDiffCreateResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VDiffCreate(ctx, in, opts...)
+}
+
+// VDiffDelete is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VDiffDelete(ctx context.Context, in *vtctldatapb.VDiffDeleteRequest, opts ...grpc.CallOption) (*vtctldatapb.VDiffDeleteResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VDiffDelete(ctx, in, opts...)
+}
+
+// VDiffResume is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VDiffResume(ctx context.Context, in *vtctldatapb.VDiffResumeRequest, opts ...grpc.CallOption) (*vtctldatapb.VDiffResumeResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VDiffResume(ctx, in, opts...)
+}
+
+// VDiffShow is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VDiffShow(ctx context.Context, in *vtctldatapb.VDiffShowRequest, opts ...grpc.CallOption) (*vtctldatapb.VDiffShowResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VDiffShow(ctx, in, opts...)
+}
+
+// VDiffStop is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VDiffStop(ctx context.Context, in *vtctldatapb.VDiffStopRequest, opts ...grpc.CallOption) (*vtctldatapb.VDiffStopResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VDiffStop(ctx, in, opts...)
 }
 
 // Validate is part of the vtctlservicepb.VtctldClient interface.

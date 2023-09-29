@@ -28,7 +28,10 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -45,7 +48,7 @@ var (
 	}
 	OnlineDDLCancel = &cobra.Command{
 		Use:                   "cancel <keyspace> <uuid|all>",
-		Short:                 "cancel one or all migrations, terminating any running ones as needed.",
+		Short:                 "Cancel one or all migrations, terminating any running ones as needed.",
 		Example:               "OnlineDDL cancel test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
@@ -61,7 +64,7 @@ var (
 	}
 	OnlineDDLComplete = &cobra.Command{
 		Use:                   "complete <keyspace> <uuid|all>",
-		Short:                 "complete one or all migrations executed with --postpone-completion",
+		Short:                 "Complete one or all migrations executed with --postpone-completion",
 		Example:               "OnlineDDL complete test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
@@ -69,7 +72,7 @@ var (
 	}
 	OnlineDDLLaunch = &cobra.Command{
 		Use:                   "launch <keyspace> <uuid|all>",
-		Short:                 "launch one or all migrations executed with --postpone-launch",
+		Short:                 "Launch one or all migrations executed with --postpone-launch",
 		Example:               "OnlineDDL launch test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
@@ -82,6 +85,22 @@ var (
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandOnlineDDLRetry,
+	}
+	OnlineDDLThrottle = &cobra.Command{
+		Use:                   "throttle <keyspace> <uuid|all>",
+		Short:                 "Throttles one or all migrations",
+		Example:               "OnlineDDL throttle all",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandOnlineDDLThrottle,
+	}
+	OnlineDDLUnthrottle = &cobra.Command{
+		Use:                   "unthrottle <keyspace> <uuid|all>",
+		Short:                 "Unthrottles one or all migrations",
+		Example:               "OnlineDDL unthrottle all",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandOnlineDDLUnthrottle,
 	}
 	OnlineDDLShow = &cobra.Command{
 		Use:   "show",
@@ -239,6 +258,64 @@ func commandOnlineDDLRetry(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// throttleCommandHelper is a helper function that implements the logic for both
+// commandOnlineDDLThrottle and commandOnlineDDLUnthrottle ; the only difference between the two
+// is the ThrottledApp *rule* sent in UpdateThrottlerConfigRequest.
+// input: `throttleType`: true stands for "throttle", `false` stands for "unthrottle"
+func throttleCommandHelper(cmd *cobra.Command, throttleType bool) error {
+	keyspace, uuid, err := analyzeOnlineDDLCommandWithUuidOrAllArgument(cmd)
+	if err != nil {
+		return err
+	}
+	cli.FinishedParsing(cmd)
+
+	var rule topodatapb.ThrottledAppRule
+	if throttleType {
+		rule.Ratio = throttle.DefaultThrottleRatio
+		rule.ExpiresAt = protoutil.TimeToProto(time.Now().Add(throttle.DefaultAppThrottleDuration))
+	} else {
+		rule.Ratio = 0
+		rule.ExpiresAt = protoutil.TimeToProto(time.Now())
+	}
+
+	if strings.ToLower(uuid) == AllMigrationsIndicator {
+		rule.Name = throttlerapp.OnlineDDLName.String()
+	} else {
+		rule.Name = uuid
+	}
+
+	updateThrottlerConfigOptions := vtctldatapb.UpdateThrottlerConfigRequest{
+		Keyspace:     keyspace,
+		ThrottledApp: &rule,
+	}
+	resp, err := client.UpdateThrottlerConfig(commandCtx, &updateThrottlerConfigOptions)
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
+// commandOnlineDDLThrottle throttles one or multiple migrations.
+// As opposed to *most* OnlineDDL functions, this functionality does not end up calling a gRPC on tablets.
+// Instead, it updates Keyspace and SrvKeyspace entries, on which the tablets listen.
+func commandOnlineDDLThrottle(cmd *cobra.Command, args []string) error {
+	return throttleCommandHelper(cmd, true)
+}
+
+// commandOnlineDDLUnthrottle unthrottles one or multiple migrations.
+// As opposed to *most* OnlineDDL functions, this functionality does not end up calling a gRPC on tablets.
+// Instead, it updates Keyspace and SrvKeyspace entries, on which the tablets listen.
+func commandOnlineDDLUnthrottle(cmd *cobra.Command, args []string) error {
+	return throttleCommandHelper(cmd, false)
+}
+
 var onlineDDLShowArgs = struct {
 	JSON     bool
 	OrderStr string
@@ -314,6 +391,8 @@ func init() {
 	OnlineDDL.AddCommand(OnlineDDLComplete)
 	OnlineDDL.AddCommand(OnlineDDLLaunch)
 	OnlineDDL.AddCommand(OnlineDDLRetry)
+	OnlineDDL.AddCommand(OnlineDDLThrottle)
+	OnlineDDL.AddCommand(OnlineDDLUnthrottle)
 
 	OnlineDDLShow.Flags().BoolVar(&onlineDDLShowArgs.JSON, "json", false, "Output JSON instead of human-readable table.")
 	OnlineDDLShow.Flags().StringVar(&onlineDDLShowArgs.OrderStr, "order", "asc", "Sort the results by `id` property of the Schema migration.")

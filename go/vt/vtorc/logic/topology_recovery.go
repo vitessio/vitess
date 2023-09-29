@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -48,6 +49,7 @@ const (
 	ElectNewPrimaryRecoveryName                      string = "ElectNewPrimary"
 	FixPrimaryRecoveryName                           string = "FixPrimary"
 	FixReplicaRecoveryName                           string = "FixReplica"
+	RecoverErrantGTIDDetectedName                    string = "RecoverErrantGTIDDetected"
 )
 
 var (
@@ -60,6 +62,17 @@ var (
 	}
 
 	countPendingRecoveries = stats.NewGauge("PendingRecoveries", "Count of the number of pending recoveries")
+
+	// detectedProblems is used to track the number of detected problems.
+	//
+	// When an issue is active it will be set to 1, when it is no longer active
+	// it will be reset back to 0.
+	detectedProblems = stats.NewGaugesWithMultiLabels("DetectedProblems", "Count of the different detected problems", []string{
+		"Analysis",
+		"TabletAlias",
+		"Keyspace",
+		"Shard",
+	})
 
 	// recoveriesCounter counts the number of recoveries that VTOrc has performed
 	recoveriesCounter = stats.NewCountersWithSingleLabel("RecoveriesCount", "Count of the different recoveries performed", "RecoveryType", actionableRecoveriesNames...)
@@ -86,6 +99,7 @@ const (
 	electNewPrimaryFunc
 	fixPrimaryFunc
 	fixReplicaFunc
+	recoverErrantGTIDDetectedFunc
 )
 
 // TopologyRecovery represents an entry in the topology_recovery table
@@ -405,6 +419,12 @@ func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, tabletAlias 
 			return recoverGenericProblemFunc
 		}
 		return recoverPrimaryTabletDeletedFunc
+	case inst.ErrantGTIDDetected:
+		if !config.ConvertTabletWithErrantGTIDs() {
+			log.Infof("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode)
+			return noRecoveryFunc
+		}
+		return recoverErrantGTIDDetectedFunc
 	case inst.PrimaryHasPrimary:
 		return recoverPrimaryHasPrimaryFunc
 	case inst.LockedSemiSyncPrimary:
@@ -461,6 +481,8 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return true
 	case fixReplicaFunc:
 		return true
+	case recoverErrantGTIDDetectedFunc:
+		return true
 	default:
 		return false
 	}
@@ -489,6 +511,8 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return fixPrimary
 	case fixReplicaFunc:
 		return fixReplica
+	case recoverErrantGTIDDetectedFunc:
+		return recoverErrantGTIDDetected
 	default:
 		return nil
 	}
@@ -516,6 +540,8 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return FixPrimaryRecoveryName
 	case fixReplicaFunc:
 		return FixReplicaRecoveryName
+	case recoverErrantGTIDDetectedFunc:
+		return RecoverErrantGTIDDetectedName
 	default:
 		return ""
 	}
@@ -740,17 +766,42 @@ func CheckAndRecover() {
 		log.Error(err)
 		return
 	}
+
+	// Regardless of if the problem is solved or not we want to monitor active
+	// issues, we use a map of labels and set a counter to `1` for each problem
+	// then we reset any counter that is not present in the current analysis.
+	active := make(map[string]struct{})
+	for _, e := range replicationAnalysis {
+		if e.Analysis != inst.NoProblem {
+			names := [...]string{
+				string(e.Analysis),
+				e.AnalyzedInstanceAlias,
+				e.AnalyzedKeyspace,
+				e.AnalyzedShard,
+			}
+
+			key := detectedProblems.GetLabelName(names[:]...)
+			active[key] = struct{}{}
+			detectedProblems.Set(names[:], 1)
+		}
+	}
+
+	// Reset any non-active problems.
+	for key := range detectedProblems.Counts() {
+		if _, ok := active[key]; !ok {
+			detectedProblems.ResetKey(key)
+		}
+	}
+
 	// intentionally iterating entries in random order
 	for _, j := range rand.Perm(len(replicationAnalysis)) {
 		analysisEntry := replicationAnalysis[j]
 
 		go func() {
-			err = executeCheckAndRecoverFunction(analysisEntry)
-			if err != nil {
+			if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {
 				log.Error(err)
 			}
 		}()
-
 	}
 }
 
@@ -880,5 +931,40 @@ func fixReplica(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (r
 	}
 
 	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, reparentutil.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet))
+	return true, topologyRecovery, err
+}
+
+// recoverErrantGTIDDetected changes the tablet type of a replica tablet that has errant GTIDs.
+func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false, true)
+	if topologyRecovery == nil {
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another recoverErrantGTIDDetected.", analysisEntry.AnalyzedInstanceAlias))
+		return false, nil, err
+	}
+	log.Infof("Analysis: %v, will fix tablet %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
+	// So that after the active period passes, we are able to run other recoveries.
+	defer func() {
+		_ = resolveRecovery(topologyRecovery, nil)
+	}()
+
+	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
+	if err != nil {
+		return false, topologyRecovery, err
+	}
+
+	primaryTablet, err := shardPrimary(analyzedTablet.Keyspace, analyzedTablet.Shard)
+	if err != nil {
+		log.Info("Could not compute primary for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
+		return false, topologyRecovery, err
+	}
+
+	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
+	if err != nil {
+		log.Info("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
+		return false, topologyRecovery, err
+	}
+
+	err = changeTabletType(ctx, analyzedTablet, topodatapb.TabletType_DRAINED, reparentutil.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet))
 	return true, topologyRecovery, err
 }

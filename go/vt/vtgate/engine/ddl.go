@@ -95,6 +95,11 @@ func (ddl *DDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 		return vcursor.ExecutePrimitive(ctx, ddl.NormalDDL, bindVars, wantfields)
 	}
 
+	// Commit any open transaction before executing the ddl query.
+	if err = vcursor.Session().Commit(ctx); err != nil {
+		return nil, err
+	}
+
 	ddlStrategySetting, err := schema.ParseDDLStrategy(vcursor.Session().GetDDLStrategy())
 	if err != nil {
 		return nil, err

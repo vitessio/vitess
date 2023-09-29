@@ -545,7 +545,7 @@ func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBacku
 }
 
 func (s *server) CheckThrottler(ctx context.Context, request *tabletmanagerdatapb.CheckThrottlerRequest) (response *tabletmanagerdatapb.CheckThrottlerResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "CheckThrottler", request, response, true /*verbose*/, &err)
+	defer s.tm.HandleRPCPanic(ctx, "CheckThrottler", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response, err = s.tm.CheckThrottler(ctx, request)
 	return response, err

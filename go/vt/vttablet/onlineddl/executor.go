@@ -75,6 +75,14 @@ var (
 	ErrMigrationNotFound = errors.New("migration not found")
 )
 
+var (
+	// fixCompletedTimestampDone fixes a nil `completed_tiemstamp` columns, see
+	// https://github.com/vitessio/vitess/issues/13927
+	// The fix is in release-18.0
+	// TODO: remove in release-19.0
+	fixCompletedTimestampDone bool
+)
+
 var emptyResult = &sqltypes.Result{}
 var acceptableDropTableIfExistsErrorCodes = []sqlerror.ErrorCode{sqlerror.ERCantFindFile, sqlerror.ERNoSuchTable}
 var copyAlgorithm = sqlparser.AlgorithmValue(sqlparser.CopyStr)
@@ -3740,6 +3748,17 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
+	// v18 fix. Remove in v19
+	if !fixCompletedTimestampDone {
+		if _, err := e.execQuery(ctx, sqlFixCompletedTimestamp); err != nil {
+			// This query fixes a bug where stale migrations were marked as 'cancelled' or 'failed' without updating 'completed_timestamp'
+			// Running this query retroactively sets completed_timestamp
+			// This fix is created in v18 and can be removed in v19
+			return err
+		}
+		fixCompletedTimestampDone = true
+	}
+
 	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
 		sqltypes.Int64BindVariable(int64((retainOnlineDDLTables).Seconds())),
 	)
@@ -4615,6 +4634,11 @@ func (e *Executor) SubmitMigration(
 
 	revertedUUID, _ := onlineDDL.GetRevertUUID() // Empty value if the migration is not actually a REVERT. Safe to ignore error.
 	retainArtifactsSeconds := int64((retainOnlineDDLTables).Seconds())
+	if retainArtifacts, _ := onlineDDL.StrategySetting().RetainArtifactsDuration(); retainArtifacts != 0 {
+		// Explicit retention indicated by `--retain-artifact` DDL strategy flag for this migration. Override!
+		retainArtifactsSeconds = int64((retainArtifacts).Seconds())
+	}
+
 	_, allowConcurrentMigration := e.allowConcurrentMigration(onlineDDL)
 	submitQuery, err := sqlparser.ParseAndBind(sqlInsertMigration,
 		sqltypes.StringBindVariable(onlineDDL.UUID),

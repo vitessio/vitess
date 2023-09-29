@@ -25,10 +25,10 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/mysql"
 )
@@ -46,38 +46,24 @@ func TestNormalizeAllFields(t *testing.T) {
 	assert.Equal(t, 1, len(qr.Rows), "wrong number of table rows, expected 1 but had %d. Results: %v", len(qr.Rows), qr.Rows)
 
 	// Now need to figure out the best way to check the normalized query in the planner cache...
-	results, err := getPlanCache(fmt.Sprintf("%s:%d", vtParams.Host, clusterInstance.VtgateProcess.Port))
-	require.Nil(t, err)
-	found := false
-	for _, record := range results {
-		key := record["Key"].(string)
-		if key == normalizedInsertQuery {
-			found = true
-			break
-		}
-	}
-	assert.Truef(t, found, "correctly normalized record not found in planner cache %v", results)
+	results := getPlanCache(t, fmt.Sprintf("%s:%d", vtParams.Host, clusterInstance.VtgateProcess.Port))
+	assert.Contains(t, results, normalizedInsertQuery)
 }
 
-func getPlanCache(vtgateHostPort string) ([]map[string]any, error) {
-	var results []map[string]any
+func getPlanCache(t *testing.T, vtgateHostPort string) map[string]any {
+	var results map[string]any
 	client := http.Client{
 		Timeout: 10 * time.Second,
 	}
 	resp, err := client.Get(fmt.Sprintf("http://%s/debug/query_plans", vtgateHostPort))
-	if err != nil {
-		return results, err
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
+
 	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return results, err
-	}
+	require.NoError(t, err)
 
 	err = json.Unmarshal(body, &results)
-	if err != nil {
-		return results, err
-	}
+	require.NoErrorf(t, err, "failed to unmarshal results. contents:\n%s\n\n", body)
 
-	return results, nil
+	return results
 }

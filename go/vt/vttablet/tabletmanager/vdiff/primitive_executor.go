@@ -67,7 +67,7 @@ func newPrimitiveExecutor(ctx context.Context, prim vtgateEngine.Primitive, name
 			select {
 			case pe.resultch <- qr:
 			case <-ctx.Done():
-				return vterrors.Wrap(ctx.Err(), "Outer Stream")
+				return vterrors.Wrap(ctx.Err(), "LHS Stream")
 			}
 			return nil
 		})

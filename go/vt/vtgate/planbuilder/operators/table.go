@@ -65,8 +65,8 @@ func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Exp
 	return newFilter(to, expr), nil
 }
 
-func (to *Table) AddColumns(*plancontext.PlanningContext, bool, []bool, []*sqlparser.AliasedExpr) ([]int, error) {
-	return nil, vterrors.VT13001("did not expect this method to be called")
+func (to *Table) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) (int, error) {
+	return 0, vterrors.VT13001("did not expect this method to be called")
 }
 
 func (to *Table) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
@@ -99,6 +99,7 @@ func (to *Table) GetOrdering() ([]ops.OrderBy, error) {
 func (to *Table) GetColNames() []*sqlparser.ColName {
 	return to.Columns
 }
+
 func (to *Table) AddCol(col *sqlparser.ColName) {
 	to.Columns = append(to.Columns, col)
 }
@@ -127,5 +128,15 @@ func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.
 }
 
 func (to *Table) ShortDescription() string {
-	return to.VTable.String()
+	tbl := to.VTable.String()
+	var alias, where string
+	if !to.QTable.Alias.As.IsEmpty() {
+		alias = " AS " + to.QTable.Alias.As.String()
+	}
+
+	if len(to.QTable.Predicates) > 0 {
+		where = " WHERE " + sqlparser.String(sqlparser.AndExpressions(to.QTable.Predicates...))
+	}
+
+	return tbl + alias + where
 }

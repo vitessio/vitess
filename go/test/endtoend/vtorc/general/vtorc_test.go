@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )
 
@@ -76,6 +77,7 @@ func TestSingleKeyspace(t *testing.T) {
 	utils.CheckPrimaryTablet(t, clusterInfo, shard0.Vttablets[0], true)
 	utils.CheckReplication(t, clusterInfo, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
 	utils.WaitForSuccessfulRecoveryCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], logic.ElectNewPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulPRSCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], keyspace.Name, shard0.Name, 1)
 }
 
 // Cases to test:
@@ -94,6 +96,7 @@ func TestKeyspaceShard(t *testing.T) {
 	utils.CheckPrimaryTablet(t, clusterInfo, shard0.Vttablets[0], true)
 	utils.CheckReplication(t, clusterInfo, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
 	utils.WaitForSuccessfulRecoveryCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], logic.ElectNewPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulPRSCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], keyspace.Name, shard0.Name, 1)
 }
 
 // Cases to test:
@@ -102,10 +105,11 @@ func TestKeyspaceShard(t *testing.T) {
 // 3. stop replication, let vtorc repair
 // 4. setup replication from non-primary, let vtorc repair
 // 5. make instance A replicates from B and B from A, wait for repair
+// 6. disable recoveries and make sure the detected problems are set correctly.
 func TestVTOrcRepairs(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 0, nil, cluster.VTOrcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 0, []string{"--change-tablets-with-errant-gtid-to-drained"}, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
@@ -116,6 +120,7 @@ func TestVTOrcRepairs(t *testing.T) {
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
 	var replica, otherReplica *cluster.Vttablet
 	for _, tablet := range shard0.Vttablets {
@@ -214,6 +219,48 @@ func TestVTOrcRepairs(t *testing.T) {
 		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverPrimaryHasPrimaryRecoveryName, 1)
 		// check that the writes still succeed
 		utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 10*time.Second)
+	})
+
+	t.Run("Errant GTID Detected", func(t *testing.T) {
+		// insert an errant GTID in the replica
+		_, err := utils.RunSQL(t, "insert into vt_insert_test(id, msg) values (10173, 'test 178342')", replica, "vt_ks")
+		require.NoError(t, err)
+		// When VTOrc detects errant GTIDs, it should change the tablet to a drained type.
+		utils.WaitForTabletType(t, replica, "drained")
+	})
+
+	t.Run("Sets DetectedProblems metric correctly", func(t *testing.T) {
+		// Since we're using a boolean metric here, disable recoveries for now.
+		status, _, err := utils.MakeAPICall(t, vtOrcProcess, "/api/disable-global-recoveries")
+		require.NoError(t, err)
+		require.Equal(t, 200, status)
+
+		// Make the current primary database read-only.
+		_, err = utils.RunSQL(t, "set global read_only=ON", curPrimary, "")
+		require.NoError(t, err)
+
+		// Wait for problems to be set.
+		utils.WaitForDetectedProblems(t, vtOrcProcess,
+			string(inst.PrimaryIsReadOnly),
+			curPrimary.Alias,
+			keyspace.Name,
+			shard0.Name,
+			1,
+		)
+
+		// Enable recoveries.
+		status, _, err = utils.MakeAPICall(t, vtOrcProcess, "/api/enable-global-recoveries")
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+
+		// wait for detected problem to be cleared.
+		utils.WaitForDetectedProblems(t, vtOrcProcess,
+			string(inst.PrimaryIsReadOnly),
+			curPrimary.Alias,
+			keyspace.Name,
+			shard0.Name,
+			0,
+		)
 	})
 }
 
@@ -335,6 +382,7 @@ func TestVTOrcWithPrs(t *testing.T) {
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
 	// find any replica tablet other than the current primary
 	var replica *cluster.Vttablet
@@ -362,7 +410,9 @@ func TestVTOrcWithPrs(t *testing.T) {
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
 	// Verify that VTOrc didn't run any other recovery
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, 0)
+	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 0)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixPrimaryRecoveryName, 0)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, 0)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverPrimaryHasPrimaryRecoveryName, 0)

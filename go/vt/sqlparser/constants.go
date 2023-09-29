@@ -65,7 +65,9 @@ const (
 	AddColVindexStr     = "on table add vindex"
 	DropColVindexStr    = "on table drop vindex"
 	AddSequenceStr      = "add sequence"
+	DropSequenceStr     = "drop sequence"
 	AddAutoIncStr       = "add auto_increment"
+	DropAutoIncStr      = "drop auto_increment"
 
 	// ALTER TABLE ALGORITHM string.
 	DefaultStr = "default"
@@ -489,7 +491,9 @@ const (
 	AddColVindexDDLAction
 	DropColVindexDDLAction
 	AddSequenceDDLAction
+	DropSequenceDDLAction
 	AddAutoIncDDLAction
+	DropAutoIncDDLAction
 	RevertDDLAction
 )
 
@@ -658,6 +662,38 @@ const (
 	RegexpOp
 	NotRegexpOp
 )
+
+func Inverse(in ComparisonExprOperator) ComparisonExprOperator {
+	switch in {
+	case EqualOp:
+		return NotEqualOp
+	case LessThanOp:
+		return GreaterEqualOp
+	case GreaterThanOp:
+		return LessEqualOp
+	case LessEqualOp:
+		return GreaterThanOp
+	case GreaterEqualOp:
+		return LessThanOp
+	case NotEqualOp:
+		return EqualOp
+	case NullSafeEqualOp:
+		return NotEqualOp
+	case InOp:
+		return NotInOp
+	case NotInOp:
+		return InOp
+	case LikeOp:
+		return NotLikeOp
+	case NotLikeOp:
+		return LikeOp
+	case RegexpOp:
+		return NotRegexpOp
+	case NotRegexpOp:
+		return RegexpOp
+	}
+	panic("unreachable")
+}
 
 // Constant for Enum Type - IsExprOperator
 const (

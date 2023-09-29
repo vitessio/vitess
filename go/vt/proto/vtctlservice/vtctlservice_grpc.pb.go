@@ -328,6 +328,8 @@ type VtctldClient interface {
 	// only works if the current replica position matches the last known reparent
 	// action.
 	ReparentTablet(ctx context.Context, in *vtctldata.ReparentTabletRequest, opts ...grpc.CallOption) (*vtctldata.ReparentTabletResponse, error)
+	// ReshardCreate creates a workflow to reshard a keyspace.
+	ReshardCreate(ctx context.Context, in *vtctldata.ReshardCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
 	// RestoreFromBackup stops mysqld for the given tablet and restores a backup.
 	RestoreFromBackup(ctx context.Context, in *vtctldata.RestoreFromBackupRequest, opts ...grpc.CallOption) (Vtctld_RestoreFromBackupClient, error)
 	// RetrySchemaMigration marks a given schema migration for retry.
@@ -420,6 +422,11 @@ type VtctldClient interface {
 	ValidateVersionShard(ctx context.Context, in *vtctldata.ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(ctx context.Context, in *vtctldata.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVSchemaResponse, error)
+	VDiffCreate(ctx context.Context, in *vtctldata.VDiffCreateRequest, opts ...grpc.CallOption) (*vtctldata.VDiffCreateResponse, error)
+	VDiffDelete(ctx context.Context, in *vtctldata.VDiffDeleteRequest, opts ...grpc.CallOption) (*vtctldata.VDiffDeleteResponse, error)
+	VDiffResume(ctx context.Context, in *vtctldata.VDiffResumeRequest, opts ...grpc.CallOption) (*vtctldata.VDiffResumeResponse, error)
+	VDiffShow(ctx context.Context, in *vtctldata.VDiffShowRequest, opts ...grpc.CallOption) (*vtctldata.VDiffShowResponse, error)
+	VDiffStop(ctx context.Context, in *vtctldata.VDiffStopRequest, opts ...grpc.CallOption) (*vtctldata.VDiffStopResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(ctx context.Context, in *vtctldata.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error)
 	WorkflowStatus(ctx context.Context, in *vtctldata.WorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
@@ -1077,6 +1084,15 @@ func (c *vtctldClient) ReparentTablet(ctx context.Context, in *vtctldata.Reparen
 	return out, nil
 }
 
+func (c *vtctldClient) ReshardCreate(ctx context.Context, in *vtctldata.ReshardCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
+	out := new(vtctldata.WorkflowStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ReshardCreate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldata.RestoreFromBackupRequest, opts ...grpc.CallOption) (Vtctld_RestoreFromBackupClient, error) {
 	stream, err := c.cc.NewStream(ctx, &Vtctld_ServiceDesc.Streams[2], "/vtctlservice.Vtctld/RestoreFromBackup", opts...)
 	if err != nil {
@@ -1334,6 +1350,51 @@ func (c *vtctldClient) ValidateVSchema(ctx context.Context, in *vtctldata.Valida
 	return out, nil
 }
 
+func (c *vtctldClient) VDiffCreate(ctx context.Context, in *vtctldata.VDiffCreateRequest, opts ...grpc.CallOption) (*vtctldata.VDiffCreateResponse, error) {
+	out := new(vtctldata.VDiffCreateResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VDiffCreate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VDiffDelete(ctx context.Context, in *vtctldata.VDiffDeleteRequest, opts ...grpc.CallOption) (*vtctldata.VDiffDeleteResponse, error) {
+	out := new(vtctldata.VDiffDeleteResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VDiffDelete", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VDiffResume(ctx context.Context, in *vtctldata.VDiffResumeRequest, opts ...grpc.CallOption) (*vtctldata.VDiffResumeResponse, error) {
+	out := new(vtctldata.VDiffResumeResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VDiffResume", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VDiffShow(ctx context.Context, in *vtctldata.VDiffShowRequest, opts ...grpc.CallOption) (*vtctldata.VDiffShowResponse, error) {
+	out := new(vtctldata.VDiffShowResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VDiffShow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VDiffStop(ctx context.Context, in *vtctldata.VDiffStopRequest, opts ...grpc.CallOption) (*vtctldata.VDiffStopResponse, error) {
+	out := new(vtctldata.VDiffStopResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VDiffStop", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) WorkflowDelete(ctx context.Context, in *vtctldata.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error) {
 	out := new(vtctldata.WorkflowDeleteResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowDelete", in, out, opts...)
@@ -1566,6 +1627,8 @@ type VtctldServer interface {
 	// only works if the current replica position matches the last known reparent
 	// action.
 	ReparentTablet(context.Context, *vtctldata.ReparentTabletRequest) (*vtctldata.ReparentTabletResponse, error)
+	// ReshardCreate creates a workflow to reshard a keyspace.
+	ReshardCreate(context.Context, *vtctldata.ReshardCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
 	// RestoreFromBackup stops mysqld for the given tablet and restores a backup.
 	RestoreFromBackup(*vtctldata.RestoreFromBackupRequest, Vtctld_RestoreFromBackupServer) error
 	// RetrySchemaMigration marks a given schema migration for retry.
@@ -1658,6 +1721,11 @@ type VtctldServer interface {
 	ValidateVersionShard(context.Context, *vtctldata.ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error)
+	VDiffCreate(context.Context, *vtctldata.VDiffCreateRequest) (*vtctldata.VDiffCreateResponse, error)
+	VDiffDelete(context.Context, *vtctldata.VDiffDeleteRequest) (*vtctldata.VDiffDeleteResponse, error)
+	VDiffResume(context.Context, *vtctldata.VDiffResumeRequest) (*vtctldata.VDiffResumeResponse, error)
+	VDiffShow(context.Context, *vtctldata.VDiffShowRequest) (*vtctldata.VDiffShowResponse, error)
+	VDiffStop(context.Context, *vtctldata.VDiffStopRequest) (*vtctldata.VDiffStopResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error)
 	WorkflowStatus(context.Context, *vtctldata.WorkflowStatusRequest) (*vtctldata.WorkflowStatusResponse, error)
@@ -1870,6 +1938,9 @@ func (UnimplementedVtctldServer) RemoveShardCell(context.Context, *vtctldata.Rem
 func (UnimplementedVtctldServer) ReparentTablet(context.Context, *vtctldata.ReparentTabletRequest) (*vtctldata.ReparentTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReparentTablet not implemented")
 }
+func (UnimplementedVtctldServer) ReshardCreate(context.Context, *vtctldata.ReshardCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReshardCreate not implemented")
+}
 func (UnimplementedVtctldServer) RestoreFromBackup(*vtctldata.RestoreFromBackupRequest, Vtctld_RestoreFromBackupServer) error {
 	return status.Errorf(codes.Unimplemented, "method RestoreFromBackup not implemented")
 }
@@ -1947,6 +2018,21 @@ func (UnimplementedVtctldServer) ValidateVersionShard(context.Context, *vtctldat
 }
 func (UnimplementedVtctldServer) ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVSchema not implemented")
+}
+func (UnimplementedVtctldServer) VDiffCreate(context.Context, *vtctldata.VDiffCreateRequest) (*vtctldata.VDiffCreateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VDiffCreate not implemented")
+}
+func (UnimplementedVtctldServer) VDiffDelete(context.Context, *vtctldata.VDiffDeleteRequest) (*vtctldata.VDiffDeleteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VDiffDelete not implemented")
+}
+func (UnimplementedVtctldServer) VDiffResume(context.Context, *vtctldata.VDiffResumeRequest) (*vtctldata.VDiffResumeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VDiffResume not implemented")
+}
+func (UnimplementedVtctldServer) VDiffShow(context.Context, *vtctldata.VDiffShowRequest) (*vtctldata.VDiffShowResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VDiffShow not implemented")
+}
+func (UnimplementedVtctldServer) VDiffStop(context.Context, *vtctldata.VDiffStopRequest) (*vtctldata.VDiffStopResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VDiffStop not implemented")
 }
 func (UnimplementedVtctldServer) WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WorkflowDelete not implemented")
@@ -3167,6 +3253,24 @@ func _Vtctld_ReparentTablet_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_ReshardCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ReshardCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ReshardCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ReshardCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ReshardCreate(ctx, req.(*vtctldata.ReshardCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_RestoreFromBackup_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(vtctldata.RestoreFromBackupRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -3638,6 +3742,96 @@ func _Vtctld_ValidateVSchema_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_VDiffCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VDiffCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VDiffCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VDiffCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VDiffCreate(ctx, req.(*vtctldata.VDiffCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VDiffDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VDiffDeleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VDiffDelete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VDiffDelete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VDiffDelete(ctx, req.(*vtctldata.VDiffDeleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VDiffResume_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VDiffResumeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VDiffResume(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VDiffResume",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VDiffResume(ctx, req.(*vtctldata.VDiffResumeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VDiffShow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VDiffShowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VDiffShow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VDiffShow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VDiffShow(ctx, req.(*vtctldata.VDiffShowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VDiffStop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VDiffStopRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VDiffStop(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VDiffStop",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VDiffStop(ctx, req.(*vtctldata.VDiffStopRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_WorkflowDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.WorkflowDeleteRequest)
 	if err := dec(in); err != nil {
@@ -3974,6 +4168,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_ReparentTablet_Handler,
 		},
 		{
+			MethodName: "ReshardCreate",
+			Handler:    _Vtctld_ReshardCreate_Handler,
+		},
+		{
 			MethodName: "RetrySchemaMigration",
 			Handler:    _Vtctld_RetrySchemaMigration_Handler,
 		},
@@ -4072,6 +4270,26 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateVSchema",
 			Handler:    _Vtctld_ValidateVSchema_Handler,
+		},
+		{
+			MethodName: "VDiffCreate",
+			Handler:    _Vtctld_VDiffCreate_Handler,
+		},
+		{
+			MethodName: "VDiffDelete",
+			Handler:    _Vtctld_VDiffDelete_Handler,
+		},
+		{
+			MethodName: "VDiffResume",
+			Handler:    _Vtctld_VDiffResume_Handler,
+		},
+		{
+			MethodName: "VDiffShow",
+			Handler:    _Vtctld_VDiffShow_Handler,
+		},
+		{
+			MethodName: "VDiffStop",
+			Handler:    _Vtctld_VDiffStop_Handler,
 		},
 		{
 			MethodName: "WorkflowDelete",

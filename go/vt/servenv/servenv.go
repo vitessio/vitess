@@ -29,6 +29,8 @@ limitations under the License.
 package servenv
 
 import (
+	"flag"
+	"fmt"
 	"net/url"
 	"os"
 	"os/signal"
@@ -38,6 +40,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/event"
@@ -57,7 +60,8 @@ import (
 
 var (
 	// port is part of the flags used when calling RegisterDefaultFlags.
-	port int
+	port        int
+	bindAddress string
 
 	// mutex used to protect the Init function
 	mu sync.Mutex
@@ -263,6 +267,7 @@ func FireRunHooks() {
 func RegisterDefaultFlags() {
 	OnParse(func(fs *pflag.FlagSet) {
 		fs.IntVar(&port, "port", port, "port for the server")
+		fs.StringVar(&bindAddress, "bind-address", bindAddress, "Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.")
 	})
 }
 
@@ -273,7 +278,7 @@ func Port() int {
 
 // RunDefault calls Run() with the parameters from the flags.
 func RunDefault() {
-	Run(port)
+	Run(bindAddress, port)
 }
 
 var (
@@ -360,6 +365,58 @@ func ParseFlagsForTests(cmd string) {
 	pflag.Parse()
 	viperutil.BindFlags(fs)
 	loadViper(cmd)
+}
+
+// MoveFlagsToCobraCommand moves the servenv-registered flags to the flagset of
+// the given cobra command, then copies over the glog flags that otherwise
+// require manual transferring.
+func MoveFlagsToCobraCommand(cmd *cobra.Command) {
+	moveFlags(cmd.Use, cmd.Flags())
+}
+
+// MovePersistentFlagsToCobraCommand functions exactly like MoveFlagsToCobraCommand,
+// but moves the servenv-registered flags to the persistent flagset of
+// the given cobra command, then copies over the glog flags that otherwise
+// require manual transferring.
+//
+// Useful for transferring flags to a parent command whose subcommands should
+// inherit the servenv-registered flags.
+func MovePersistentFlagsToCobraCommand(cmd *cobra.Command) {
+	moveFlags(cmd.Use, cmd.PersistentFlags())
+}
+
+func moveFlags(name string, fs *pflag.FlagSet) {
+	fs.AddFlagSet(GetFlagSetFor(name))
+
+	// glog flags, no better way to do this
+	_flag.PreventGlogVFlagFromClobberingVersionFlagShorthand(fs)
+	fs.AddGoFlag(flag.Lookup("logtostderr"))
+	fs.AddGoFlag(flag.Lookup("log_backtrace_at"))
+	fs.AddGoFlag(flag.Lookup("alsologtostderr"))
+	fs.AddGoFlag(flag.Lookup("stderrthreshold"))
+	fs.AddGoFlag(flag.Lookup("log_dir"))
+	fs.AddGoFlag(flag.Lookup("vmodule"))
+
+	pflag.CommandLine = fs
+}
+
+// CobraPreRunE returns the common function that commands will need to load
+// viper infrastructure. It matches the signature of cobra's (Pre|Post)RunE-type
+// functions.
+func CobraPreRunE(cmd *cobra.Command, args []string) error {
+	_flag.TrickGlog()
+
+	watchCancel, err := viperutil.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("%s: failed to read in config: %s", cmd.Name(), err)
+	}
+
+	OnTerm(watchCancel)
+	HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
+
+	logutil.PurgeLogs()
+
+	return nil
 }
 
 // GetFlagSetFor returns the flag set for a given command.
@@ -478,4 +535,11 @@ func RegisterFlagsForTopoBinaries(registerFlags func(fs *pflag.FlagSet)) {
 	for _, cmd := range topoBinaries {
 		OnParseFor(cmd, registerFlags)
 	}
+}
+
+// TestingEndtoend is true when this Vitess binary is being ran as part of an endtoend test suite
+var TestingEndtoend = false
+
+func init() {
+	TestingEndtoend = os.Getenv("VTTEST") == "endtoend"
 }

@@ -17,15 +17,9 @@ limitations under the License.
 package cli
 
 import (
-	"flag"
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/acl"
-	_flag "vitess.io/vitess/go/internal/flag"
-	"vitess.io/vitess/go/viperutil"
-	viperdebug "vitess.io/vitess/go/viperutil/debug"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -37,23 +31,22 @@ import (
 var (
 	configFile string
 	Main       = &cobra.Command{
-		Use:     "vtorc",
-		Short:   "", // TODO
+		Use:   "vtorc",
+		Short: "VTOrc is the automated fault detection and repair tool in Vitess.",
+		Example: `vtorc \
+	--topo_implementation etcd2 \
+	--topo_global_server_address localhost:2379 \
+	--topo_global_root /vitess/global \
+	--log_dir $VTDATAROOT/tmp \
+	--port 15000 \
+	--recovery-period-block-duration "10m" \
+	--instance-poll-time "1s" \
+	--topo-information-refresh-duration "30s" \
+	--alsologtostderr`,
 		Args:    cobra.NoArgs,
 		Version: servenv.AppVersion.String(),
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			_flag.TrickGlog()
-
-			watchCancel, err := viperutil.LoadConfig()
-			if err != nil {
-				return fmt.Errorf("%s: failed to read in config: %s", cmd.Name(), err)
-			}
-
-			servenv.OnTerm(watchCancel)
-			servenv.HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
-			return nil
-		},
-		Run: run,
+		PreRunE: servenv.CobraPreRunE,
+		Run:     run,
 	}
 )
 
@@ -101,17 +94,9 @@ func init() {
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterFlags()
 
-	Main.Flags().AddFlagSet(servenv.GetFlagSetFor("vtorc"))
-
-	// glog flags, no better way to do this
-	_flag.PreventGlogVFlagFromClobberingVersionFlagShorthand(Main.Flags())
-	Main.Flags().AddGoFlag(flag.Lookup("logtostderr"))
-	Main.Flags().AddGoFlag(flag.Lookup("alsologtostderr"))
-	Main.Flags().AddGoFlag(flag.Lookup("stderrthreshold"))
-	Main.Flags().AddGoFlag(flag.Lookup("log_dir"))
+	servenv.MoveFlagsToCobraCommand(Main)
 
 	logic.RegisterFlags(Main.Flags())
-	server.RegisterFlags(Main.Flags())
 	config.RegisterFlags(Main.Flags())
 	acl.RegisterFlags(Main.Flags())
 	Main.Flags().StringVar(&configFile, "config", "", "config file name")

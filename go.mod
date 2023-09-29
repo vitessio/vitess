@@ -9,7 +9,6 @@ require (
 	github.com/Azure/azure-storage-blob-go v0.15.0
 	github.com/DataDog/datadog-go v4.8.3+incompatible
 	github.com/HdrHistogram/hdrhistogram-go v0.9.0 // indirect
-	github.com/PuerkitoBio/goquery v1.5.1
 	github.com/aquarapid/vaultlib v0.5.1
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/aws/aws-sdk-go v1.44.258
@@ -76,7 +75,7 @@ require (
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/net v0.14.0
 	golang.org/x/oauth2 v0.7.0
-	golang.org/x/sys v0.11.0 // indirect
+	golang.org/x/sys v0.11.0
 	golang.org/x/term v0.11.0
 	golang.org/x/text v0.12.0
 	golang.org/x/time v0.3.0
@@ -97,6 +96,7 @@ require (
 require (
 	github.com/Shopify/toxiproxy/v2 v2.5.0
 	github.com/bndr/gotabulate v1.1.2
+	github.com/gammazero/deque v0.2.1
 	github.com/google/safehtml v0.1.0
 	github.com/hashicorp/go-version v1.6.0
 	github.com/kr/pretty v0.3.1
@@ -107,6 +107,7 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0
 	github.com/xlab/treeprint v1.2.0
 	go.uber.org/goleak v1.2.1
+	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63
 	golang.org/x/sync v0.3.0
 	modernc.org/sqlite v1.20.3
 )
@@ -124,7 +125,6 @@ require (
 	github.com/DataDog/go-tuf v0.3.0--fix-localmeta-fork // indirect
 	github.com/DataDog/sketches-go v1.4.1 // indirect
 	github.com/Microsoft/go-winio v0.6.0 // indirect
-	github.com/andybalholm/cascadia v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect

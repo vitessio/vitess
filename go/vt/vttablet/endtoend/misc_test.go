@@ -185,8 +185,7 @@ func TestIntegrityError(t *testing.T) {
 }
 
 func TestTrailingComment(t *testing.T) {
-	vstart := framework.DebugVars()
-	v1 := framework.FetchInt(vstart, "QueryCacheLength")
+	v1 := framework.Server.QueryPlanCacheLen()
 
 	bindVars := map[string]*querypb.BindVariable{"ival": sqltypes.Int64BindVariable(1)}
 	client := framework.NewClient()
@@ -201,7 +200,7 @@ func TestTrailingComment(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		v2 := framework.FetchInt(framework.DebugVars(), "QueryCacheLength")
+		v2 := framework.Server.QueryPlanCacheLen()
 		if v2 != v1+1 {
 			t.Errorf("QueryCacheLength(%s): %d, want %d", query, v2, v1+1)
 		}

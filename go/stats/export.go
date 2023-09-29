@@ -29,6 +29,7 @@ package stats
 
 import (
 	"bytes"
+	"context"
 	"expvar"
 	"fmt"
 	"strconv"
@@ -45,6 +46,7 @@ var (
 	emitStats         bool
 	statsEmitPeriod   = 60 * time.Second
 	statsBackend      string
+	statsBackendInit  = make(chan struct{})
 	combineDimensions string
 	dropVariables     string
 )
@@ -121,6 +123,22 @@ func Publish(name string, v expvar.Var) {
 	publish(name, v)
 }
 
+func pushAll() error {
+	backend, ok := pushBackends[statsBackend]
+	if !ok {
+		return fmt.Errorf("no PushBackend registered with name %s", statsBackend)
+	}
+	return backend.PushAll()
+}
+
+func pushOne(name string, v Variable) error {
+	backend, ok := pushBackends[statsBackend]
+	if !ok {
+		return fmt.Errorf("no PushBackend registered with name %s", statsBackend)
+	}
+	return backend.PushOne(name, v)
+}
+
 // StringMapFuncWithMultiLabels is a multidimensional string map publisher.
 //
 // Map keys are compound names made with joining multiple strings with '.',
@@ -183,13 +201,27 @@ func publish(name string, v expvar.Var) {
 // to be pushed to it. It's used to support push-based metrics backends, as expvar
 // by default only supports pull-based ones.
 type PushBackend interface {
-	// PushAll pushes all stats from expvar to the backend
+	// PushAll pushes all stats from expvar to the backend.
 	PushAll() error
+	// PushOne pushes a single stat from expvar to the backend.
+	PushOne(name string, v Variable) error
 }
 
 var pushBackends = make(map[string]PushBackend)
 var pushBackendsLock sync.Mutex
 var once sync.Once
+
+func AwaitBackend(ctx context.Context) error {
+	if statsBackend == "" {
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-statsBackendInit:
+		return nil
+	}
+}
 
 // RegisterPushBackend allows modules to register PushBackend implementations.
 // Should be called on init().
@@ -200,6 +232,9 @@ func RegisterPushBackend(name string, backend PushBackend) {
 		log.Fatalf("PushBackend %s already exists; can't register the same name multiple times", name)
 	}
 	pushBackends[name] = backend
+	if name == statsBackend {
+		close(statsBackendInit)
+	}
 	if emitStats {
 		// Start a single goroutine to emit stats periodically
 		once.Do(func() {
@@ -214,13 +249,7 @@ func emitToBackend(emitPeriod *time.Duration) {
 	ticker := time.NewTicker(*emitPeriod)
 	defer ticker.Stop()
 	for range ticker.C {
-		backend, ok := pushBackends[statsBackend]
-		if !ok {
-			log.Errorf("No PushBackend registered with name %s", statsBackend)
-			return
-		}
-		err := backend.PushAll()
-		if err != nil {
+		if err := pushAll(); err != nil {
 			// TODO(aaijazi): This might cause log spam...
 			log.Warningf("Pushing stats to backend %v failed: %v", statsBackend, err)
 		}

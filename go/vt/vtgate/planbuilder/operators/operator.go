@@ -105,17 +105,14 @@ func (noInputs) SetInputs(ops []ops.Operator) {
 }
 
 // AddColumn implements the Operator interface
-func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr, bool, bool) (ops.Operator, int, error) {
-	return nil, 0, vterrors.VT13001("noColumns operators have no column")
-}
-
-func (noColumns) AddColumns(*plancontext.PlanningContext, bool, []bool, []*sqlparser.AliasedExpr) ([]int, error) {
-	return nil, vterrors.VT13001("noColumns operators have no column")
+func (noColumns) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) (int, error) {
+	return 0, vterrors.VT13001("noColumns operators have no column")
 }
 
 func (noColumns) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
 	return nil, vterrors.VT13001("noColumns operators have no column")
 }
+
 func (noColumns) FindCol(*plancontext.PlanningContext, sqlparser.Expr, bool) (int, error) {
 	return 0, vterrors.VT13001("noColumns operators have no column")
 }
@@ -141,19 +138,19 @@ func tryTruncateColumnsAt(op ops.Operator, truncateAt int) bool {
 		return true
 	}
 
-	inputs := op.Inputs()
-	if len(inputs) != 1 {
-		return false
-	}
-
-	switch op.(type) {
+	switch op := op.(type) {
 	case *Limit:
-		// empty by design
+		return tryTruncateColumnsAt(op.Source, truncateAt)
+	case *SubQuery:
+		for _, offset := range op.Vars {
+			if offset >= truncateAt {
+				return false
+			}
+		}
+		return tryTruncateColumnsAt(op.Outer, truncateAt)
 	default:
 		return false
 	}
-
-	return tryTruncateColumnsAt(inputs[0], truncateAt)
 }
 
 func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op ops.Operator) (sqlparser.SelectExprs, error) {

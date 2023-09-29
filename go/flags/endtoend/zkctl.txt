@@ -1,4 +1,17 @@
-Usage of zkctl:
+Initializes and controls zookeeper with Vitess-specific configuration.
+
+Usage:
+  zkctl [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  help        Help about any command
+  init        Generates a new config and then starts zookeeper.
+  shutdown    Terminates a zookeeper server but keeps its data dir intact.
+  start       Runs an already initialized zookeeper server.
+  teardown    Shuts down the zookeeper server and removes its data dir.
+
+Flags:
       --alsologtostderr                                             log to standard error as well as files
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling   Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
@@ -6,7 +19,7 @@ Usage of zkctl:
       --config-path strings                                         Paths to search for config files in. (default [{{ .Workdir }}])
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
-  -h, --help                                                        display usage and exit
+  -h, --help                                                        help for zkctl
       --keep_logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
       --log_backtrace_at traceLocation                              when logging hits line file:N, emit a stack trace (default :0)
@@ -21,4 +34,7 @@ Usage of zkctl:
   -v, --version                                                     print binary version
       --vmodule moduleSpec                                          comma-separated list of pattern=N settings for file-filtered logging
       --zk.cfg string                                               zkid@server1:leaderPort1:electionPort1:clientPort1,...) (default "6@<hostname>:3801:3802:3803")
+      --zk.extra stringArray                                        extra config line(s) to append verbatim to config (flag can be specified more than once)
       --zk.myid uint                                                which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname
+
+Use "zkctl [command] --help" for more information about a command.

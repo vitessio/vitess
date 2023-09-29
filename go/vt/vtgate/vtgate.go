@@ -31,7 +31,6 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
@@ -65,9 +64,7 @@ var (
 	truncateErrorLen int
 
 	// plan cache related flag
-	queryPlanCacheSize   = cache.DefaultConfig.MaxEntries
-	queryPlanCacheMemory = cache.DefaultConfig.MaxMemoryUsage
-	queryPlanCacheLFU    bool
+	queryPlanCacheMemory int64 = 32 * 1024 * 1024 // 32mb
 
 	maxMemoryRows   = 300000
 	warnMemoryRows  = 30000
@@ -122,9 +119,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&terseErrors, "vtgate-config-terse-errors", terseErrors, "prevent bind vars from escaping in returned errors")
 	fs.IntVar(&truncateErrorLen, "truncate-error-len", truncateErrorLen, "truncate errors sent to client if they are longer than this value (0 means do not truncate)")
 	fs.IntVar(&streamBufferSize, "stream_buffer_size", streamBufferSize, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
-	fs.Int64Var(&queryPlanCacheSize, "gate_query_cache_size", queryPlanCacheSize, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a cache. This config controls the expected amount of unique entries in the cache.")
 	fs.Int64Var(&queryPlanCacheMemory, "gate_query_cache_memory", queryPlanCacheMemory, "gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
-	fs.BoolVar(&queryPlanCacheLFU, "gate_query_cache_lfu", cache.DefaultConfig.LFU, "gate server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
 	fs.IntVar(&maxMemoryRows, "max_memory_rows", maxMemoryRows, "Maximum number of rows that will be held in memory for intermediate results as well as the final result.")
 	fs.IntVar(&warnMemoryRows, "warn_memory_rows", warnMemoryRows, "Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented.")
 	fs.StringVar(&defaultDDLStrategy, "ddl_strategy", defaultDDLStrategy, "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
@@ -152,6 +147,12 @@ func registerFlags(fs *pflag.FlagSet) {
 
 	_ = fs.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 	_ = fs.MarkDeprecated("schema_change_signal_user", "schema tracking uses an internal api and does not require a user to be specified")
+
+	fs.Int64("gate_query_cache_size", 0, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a cache. This config controls the expected amount of unique entries in the cache.")
+	_ = fs.MarkDeprecated("gate_query_cache_size", "`--gate_query_cache_size` is deprecated and will be removed in `v19.0`. This option only applied to LRU caches, which are now unsupported.")
+
+	fs.Bool("gate_query_cache_lfu", false, "gate server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
+	_ = fs.MarkDeprecated("gate_query_cache_lfu", "`--gate_query_cache_lfu` is deprecated and will be removed in `v19.0`. The query cache always uses a LFU implementation now.")
 }
 func init() {
 	servenv.OnParseFor("vtgate", registerFlags)
@@ -304,17 +305,7 @@ func Init(
 		si = st
 	}
 
-	cacheCfg := &cache.Config{
-		MaxEntries:     queryPlanCacheSize,
-		MaxMemoryUsage: queryPlanCacheMemory,
-		LFU:            queryPlanCacheLFU,
-	}
-
-	plans := cache.NewDefaultCacheImpl(cacheCfg)
-	queryLogger, err := initQueryLogger(plans)
-	if err != nil {
-		log.Fatalf("error initializing query logger: %v", err)
-	}
+	plans := DefaultPlanCache()
 
 	executor := NewExecutor(
 		ctx,
@@ -328,8 +319,11 @@ func Init(
 		si,
 		noScatter,
 		pv,
-		queryLogger,
 	)
+
+	if err := executor.defaultQueryLogger(); err != nil {
+		log.Fatalf("error initializing query logger: %v", err)
+	}
 
 	// connect the schema tracker with the vschema manager
 	if enableSchemaChangeSignal {

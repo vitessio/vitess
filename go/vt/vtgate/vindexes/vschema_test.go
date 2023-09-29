@@ -805,37 +805,37 @@ func TestChooseVindexForType(t *testing.T) {
 		out: "",
 	}, {
 		in:  sqltypes.Int8,
-		out: "hash",
+		out: "xxhash",
 	}, {
 		in:  sqltypes.Uint8,
-		out: "hash",
+		out: "xxhash",
 	}, {
 		in:  sqltypes.Int16,
-		out: "hash",
+		out: "xxhash",
 	}, {
 		in:  sqltypes.Uint16,
-		out: "hash",
+		out: "xxhash",
 	}, {
 		in:  sqltypes.Int24,
-		out: "hash",
+		out: "xxhash",
 	}, {
 		in:  sqltypes.Uint24,
-		out: "hash",
+		out: "xxhash",
 	}, {
 		in:  sqltypes.Int32,
-		out: "hash",
+		out: "xxhash",
 	}, {
 		in:  sqltypes.Uint32,
-		out: "hash",
+		out: "xxhash",
 	}, {
 		in:  sqltypes.Int64,
-		out: "hash",
+		out: "xxhash",
 	}, {
 		in:  sqltypes.Uint64,
-		out: "hash",
+		out: "xxhash",
 	}, {
 		in:  sqltypes.Float32,
-		out: "hash",
+		out: "",
 	}, {
 		in:  sqltypes.Float64,
 		out: "",
@@ -853,7 +853,7 @@ func TestChooseVindexForType(t *testing.T) {
 		out: "",
 	}, {
 		in:  sqltypes.Year,
-		out: "hash",
+		out: "xxhash",
 	}, {
 		in:  sqltypes.Decimal,
 		out: "",
@@ -897,11 +897,16 @@ func TestChooseVindexForType(t *testing.T) {
 
 	for _, tcase := range testcases {
 		out, err := ChooseVindexForType(tcase.in)
-		if out == "" {
-			assert.Error(t, err, tcase.in)
+		// If no type is returned then we do not recommend the column be
+		// used for a vindex. If the test case provides an empty output
+		// value then we expect an error.
+		if tcase.out == "" {
+			assert.Error(t, err, "unexpectedly got a recommended vindex type of %s for input column type %v",
+				out, tcase.in)
 			continue
 		}
-		assert.Equal(t, out, tcase.out, tcase.in)
+		assert.Equal(t, out, tcase.out, "expected a recommended vindex type of %s for input column type %v but got %s",
+			tcase.out, tcase.in, out)
 	}
 }
 

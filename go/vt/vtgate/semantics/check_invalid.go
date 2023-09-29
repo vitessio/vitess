@@ -42,12 +42,47 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		return checkDerived(node)
 	case *sqlparser.AssignmentExpr:
 		return vterrors.VT12001("Assignment expression")
+	case *sqlparser.Subquery:
+		return a.checkSubqueryColumns(cursor.Parent(), node)
 	case *sqlparser.Insert:
 		if node.Action == sqlparser.ReplaceAct {
 			return ShardedError{Inner: &UnsupportedConstruct{errString: "REPLACE INTO with sharded keyspace"}}
 		}
 	}
 
+	return nil
+}
+
+// checkSubqueryColumns checks that subqueries used in comparisons have the correct number of columns
+func (a *analyzer) checkSubqueryColumns(parent sqlparser.SQLNode, subq *sqlparser.Subquery) error {
+	cmp, ok := parent.(*sqlparser.ComparisonExpr)
+	if !ok {
+		return nil
+	}
+	var otherSide sqlparser.Expr
+	if cmp.Left == subq {
+		otherSide = cmp.Right
+	} else {
+		otherSide = cmp.Left
+	}
+
+	cols := 1
+	if tuple, ok := otherSide.(sqlparser.ValTuple); ok {
+		cols = len(tuple)
+	}
+	columns := subq.Select.GetColumns()
+	for _, expr := range columns {
+		_, ok := expr.(*sqlparser.StarExpr)
+		if ok {
+			// we can't check these queries properly. if we are able to push it down to mysql,
+			// it will be checked there. if not, we'll fail because we are missing the column
+			// information when we get to offset planning
+			return nil
+		}
+	}
+	if len(columns) != cols {
+		return &SubqueryColumnCountError{Expected: cols}
+	}
 	return nil
 }
 
@@ -131,6 +166,9 @@ func (a *analyzer) checkSelect(cursor *sqlparser.Cursor, node *sqlparser.Select)
 	}
 	if a.scoper.currentScope().parent != nil {
 		return &CantUseOptionHereError{Msg: errMsg}
+	}
+	if node.Into != nil {
+		return ShardedError{Inner: &UnsupportedConstruct{errString: "INTO on sharded keyspace"}}
 	}
 	return nil
 }
