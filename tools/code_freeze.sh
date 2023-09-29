@@ -34,7 +34,7 @@ freeze=$1
 branch=$2
 code_freeze_workflow="./.github/workflows/code_freeze.yml"
 
-if [ "$freeze" != "freeze" && "$freeze" != "unfreeze" ]; then
+if [[ "$freeze" != "freeze" && "$freeze" != "unfreeze" ]]; then
     echo "the first argument must be either 'freeze' or 'unfreeze'"
     exit 1
 fi
