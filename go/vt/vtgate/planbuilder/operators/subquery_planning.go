@@ -379,7 +379,7 @@ func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Project
 		}
 
 		if se, ok := pe.Info.(SubQueryExpression); ok {
-			pe.EvalExpr = rewriteColNameToArgument(pe.EvalExpr, se, src.Inner...)
+			pe.EvalExpr = rewriteColNameToArgument(ctx, pe.EvalExpr, se, src.Inner...)
 		}
 	}
 	// all projections can be pushed to the outer
@@ -387,7 +387,7 @@ func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Project
 	return src, rewrite.NewTree("push projection into outer side of subquery container", p), nil
 }
 
-func rewriteColNameToArgument(in sqlparser.Expr, se SubQueryExpression, subqueries ...*SubQuery) sqlparser.Expr {
+func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Expr, se SubQueryExpression, subqueries ...*SubQuery) sqlparser.Expr {
 	rewriteIt := func(s string) sqlparser.SQLNode {
 		for _, sq1 := range se {
 			if sq1.ArgName != s && sq1.HasValuesName != s {
@@ -395,11 +395,19 @@ func rewriteColNameToArgument(in sqlparser.Expr, se SubQueryExpression, subqueri
 			}
 
 			for _, sq2 := range subqueries {
-				switch {
-				case s == sq2.ArgName && sq1.FilterType.NeedsListArg():
-					return sqlparser.NewListArg(s)
-				case s == sq2.ArgName || s == sq2.HasValuesName:
-					return sqlparser.NewArgument(s)
+				if s == sq2.ArgName {
+					switch {
+					case sq1.FilterType.NeedsListArg():
+						return sqlparser.NewListArg(s)
+					case sq1.FilterType == opcode.PulloutExists:
+						if sq1.HasValuesName == "" {
+							sq1.HasValuesName = ctx.ReservedVars.ReserveHasValuesSubQuery()
+							sq2.HasValuesName = sq1.HasValuesName
+						}
+						return sqlparser.NewArgument(sq1.HasValuesName)
+					default:
+						return sqlparser.NewArgument(s)
+					}
 				}
 			}
 		}

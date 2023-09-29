@@ -3005,6 +3005,7 @@
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutExists",
         "PulloutVars": [
+          "__sq_has_values2",
           "__sq1"
         ],
         "Inputs": [
@@ -3028,8 +3029,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select :__sq1 as `exists (select 1 from ``user``)` from dual where 1 != 1",
-            "Query": "select :__sq1 as `exists (select 1 from ``user``)` from dual",
+            "FieldQuery": "select :__sq_has_values2 as `exists (select 1 from ``user``)` from dual where 1 != 1",
+            "Query": "select :__sq_has_values2 as `exists (select 1 from ``user``)` from dual",
             "Table": "dual"
           }
         ]

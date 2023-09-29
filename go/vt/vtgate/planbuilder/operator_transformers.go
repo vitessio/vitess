@@ -47,7 +47,7 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator) (
 	case *operators.Vindex:
 		return transformVindexPlan(ctx, op)
 	case *operators.SubQuery:
-		return transformSubQueryFilter(ctx, op)
+		return transformSubQuery(ctx, op)
 	case *operators.Filter:
 		return transformFilter(ctx, op)
 	case *operators.Horizon:
@@ -109,7 +109,7 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 	return newFkCascade(parentLP, selLP, children), nil
 }
 
-func transformSubQueryFilter(ctx *plancontext.PlanningContext, op *operators.SubQuery) (logicalPlan, error) {
+func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery) (logicalPlan, error) {
 	outer, err := transformToLogicalPlan(ctx, op.Outer)
 	if err != nil {
 		return nil, err
