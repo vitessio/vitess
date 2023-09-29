@@ -29,9 +29,9 @@ const (
 	sqlGetVDiffByID                   = "select * from _vt.vdiff where id = %d"
 	sqlDeleteVDiffs                   = `delete from vd, vdt, vdl using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 										left join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
-										where vd.keyspace = %s and vd.workflow = %s`
+										where vd.keyspace = %a and vd.workflow = %a`
 	sqlDeleteVDiffByUUID = `delete from vd, vdt using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
-							where vd.vdiff_uuid = %s`
+							where vd.vdiff_uuid = %a`
 	sqlVDiffSummary = `select vd.state as vdiff_state, vd.last_error as last_error, vdt.table_name as table_name,
 						vd.vdiff_uuid as 'uuid', vdt.state as table_state, vdt.table_rows as table_rows,
 						vd.started_at as started_at, vdt.rows_compared as rows_compared, vd.completed_at as completed_at,
@@ -42,13 +42,14 @@ const (
 	sqlUpdateVDiffState   = "update _vt.vdiff set state = %s, last_error = %s %s where id = %d"
 	sqlUpdateVDiffStopped = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.state = 'stopped', vdt.state = 'stopped', vd.last_error = ''
 							where vd.id = vdt.vdiff_id and vd.id = %d and vd.state != 'completed'`
-	sqlGetVReplicationEntry = "select * from _vt.vreplication %s"
-	sqlGetVDiffsToRun       = "select * from _vt.vdiff where state in ('started','pending')" // what VDiffs have not been stopped or completed
-	sqlGetVDiffsToRetry     = "select * from _vt.vdiff where state = 'error' and json_unquote(json_extract(options, '$.core_options.auto_retry')) = 'true'"
-	sqlGetVDiffID           = "select id as id from _vt.vdiff where vdiff_uuid = %s"
-	sqlGetAllVDiffs         = "select * from _vt.vdiff order by id desc"
-	sqlGetTableRows         = "select table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %a and table_name = %a"
-	sqlGetAllTableRows      = "select table_name as table_name, table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %s and table_name in (%s)"
+	sqlGetVReplicationEntry          = "select * from _vt.vreplication %s"
+	sqlGetVDiffsToRun                = "select * from _vt.vdiff where state in ('started','pending')" // what VDiffs have not been stopped or completed
+	sqlGetVDiffsToRetry              = "select * from _vt.vdiff where state = 'error' and json_unquote(json_extract(options, '$.core_options.auto_retry')) = 'true'"
+	sqlGetVDiffID                    = "select id as id from _vt.vdiff where vdiff_uuid = %a"
+	sqlGetVDiffIDsByKeyspaceWorkflow = "select id as id from _vt.vdiff where keyspace = %a and workflow = %a"
+	sqlGetAllVDiffs                  = "select * from _vt.vdiff order by id desc"
+	sqlGetTableRows                  = "select table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %a and table_name = %a"
+	sqlGetAllTableRows               = "select table_name as table_name, table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %s and table_name in (%s)"
 
 	sqlNewVDiffTable = "insert into _vt.vdiff_table(vdiff_id, table_name, state, table_rows) values(%d, %s, 'pending', %d)"
 	sqlGetVDiffTable = `select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report
