@@ -4152,13 +4152,13 @@ func TestSelectView(t *testing.T) {
 }
 
 func TestWarmingReads(t *testing.T) {
-	ctx := context.Background()
+	ctx := utils.LeakCheckContext(t)
 	executor, primary, replica := createExecutorEnvWithPrimaryReplicaConn(t, ctx, 100)
 
 	executor.normalize = true
 	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
 
-	_, err := executor.Execute(ctx, nil, "TestSelect", session, "select age, city from user", map[string]*querypb.BindVariable{})
+	_, err := executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user", map[string]*querypb.BindVariable{})
 	time.Sleep(10 * time.Millisecond)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
@@ -4173,7 +4173,7 @@ func TestWarmingReads(t *testing.T) {
 	utils.MustMatch(t, wantQueriesReplica, replica.Queries)
 	replica.Queries = nil
 
-	_, err = executor.Execute(ctx, nil, "TestSelect", session, "select age, city from user /* already has a comment */ ", map[string]*querypb.BindVariable{})
+	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user /* already has a comment */ ", map[string]*querypb.BindVariable{})
 	time.Sleep(10 * time.Millisecond)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
@@ -4193,19 +4193,19 @@ func TestWarmingReads(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, replica.Queries)
 
-	_, err = executor.Execute(ctx, nil, "TestSelect", session, "update user set age=5 where city='Boston'", map[string]*querypb.BindVariable{})
+	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "update user set age=5 where city='Boston'", map[string]*querypb.BindVariable{})
 	time.Sleep(10 * time.Millisecond)
 	require.NoError(t, err)
 	require.Nil(t, replica.Queries)
 
-	_, err = executor.Execute(ctx, nil, "TestSelect", session, "delete from user where city='Boston'", map[string]*querypb.BindVariable{})
+	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "delete from user where city='Boston'", map[string]*querypb.BindVariable{})
 	time.Sleep(10 * time.Millisecond)
 	require.NoError(t, err)
 	require.Nil(t, replica.Queries)
 	primary.Queries = nil
 
 	executor, primary, replica = createExecutorEnvWithPrimaryReplicaConn(t, ctx, 0)
-	_, err = executor.Execute(ctx, nil, "TestSelect", session, "select age, city from user", map[string]*querypb.BindVariable{})
+	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user", map[string]*querypb.BindVariable{})
 	time.Sleep(10 * time.Millisecond)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
