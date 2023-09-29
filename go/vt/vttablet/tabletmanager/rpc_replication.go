@@ -22,8 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/pflag"
-
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
@@ -32,27 +30,12 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
-
-var disableReplicationManager bool
-
-func registerReplicationFlags(fs *pflag.FlagSet) {
-	fs.Bool("use_super_read_only", true, "Set super_read_only flag when performing planned failover.")
-	fs.MarkDeprecated("use_super_read_only", "From v17 onwards MySQL server will always try to start with super_read_only=ON")
-	fs.BoolVar(&disableReplicationManager, "disable-replication-manager", disableReplicationManager, "Disable replication manager to prevent replication repairs.")
-	fs.MarkDeprecated("disable-replication-manager", "Replication manager is deleted")
-}
-
-func init() {
-	servenv.OnParseFor("vtcombo", registerReplicationFlags)
-	servenv.OnParseFor("vttablet", registerReplicationFlags)
-}
 
 // ReplicationStatus returns the replication status
 func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error) {
@@ -935,7 +918,7 @@ func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletT
 		return nil
 	}
 
-	//shouldAck := semiSync == SemiSyncActionSet
+	// shouldAck := semiSync == SemiSyncActionSet
 	shouldAck := isPrimaryEligible(tabletType)
 	acking, err := tm.MysqlDaemon.SemiSyncReplicationStatus()
 	if err != nil {

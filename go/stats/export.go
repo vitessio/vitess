@@ -29,6 +29,7 @@ package stats
 
 import (
 	"bytes"
+	"context"
 	"expvar"
 	"fmt"
 	"strconv"
@@ -45,6 +46,7 @@ var (
 	emitStats         bool
 	statsEmitPeriod   = 60 * time.Second
 	statsBackend      string
+	statsBackendInit  = make(chan struct{})
 	combineDimensions string
 	dropVariables     string
 )
@@ -209,6 +211,18 @@ var pushBackends = make(map[string]PushBackend)
 var pushBackendsLock sync.Mutex
 var once sync.Once
 
+func AwaitBackend(ctx context.Context) error {
+	if statsBackend == "" {
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-statsBackendInit:
+		return nil
+	}
+}
+
 // RegisterPushBackend allows modules to register PushBackend implementations.
 // Should be called on init().
 func RegisterPushBackend(name string, backend PushBackend) {
@@ -218,6 +232,9 @@ func RegisterPushBackend(name string, backend PushBackend) {
 		log.Fatalf("PushBackend %s already exists; can't register the same name multiple times", name)
 	}
 	pushBackends[name] = backend
+	if name == statsBackend {
+		close(statsBackendInit)
+	}
 	if emitStats {
 		// Start a single goroutine to emit stats periodically
 		once.Do(func() {

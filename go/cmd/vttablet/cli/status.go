@@ -18,7 +18,6 @@ package cli
 
 import (
 	"vitess.io/vitess/go/vt/servenv"
-	_ "vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"

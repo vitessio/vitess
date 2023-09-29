@@ -33,12 +33,6 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: actions/checkout@v3
 
-      - name: Run FOSSA scan and upload build data
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: fossa-contrib/fossa-action@v2
-        with:
-          fossa-api-key: 76d7483ea206d530d9452e44bffe7ba8
-
       - name: Check for changes in Go files
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: frouioui/paths-filter@main

@@ -1,4 +1,9 @@
-Usage of vttestserver:
+vttestserver allows users to spawn a self-contained Vitess server for local testing/CI.
+
+Usage:
+  vttestserver [flags]
+
+Flags:
       --alsologtostderr                                                  log to standard error as well as files
       --app_idle_timeout duration                                        Idle timeout for app connections (default 1m0s)
       --app_pool_size int                                                Size of the connection pool for app connections (default 40)
@@ -64,7 +69,7 @@ Usage of vttestserver:
       --grpc_server_initial_window_size int                              gRPC server initial window size
       --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
       --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
-  -h, --help                                                             display usage and exit
+  -h, --help                                                             help for vttestserver
       --initialize_with_random_data                                      If this flag is each table-shard will be initialized with random data. See also the 'rng_seed' and 'min_shard_size' and 'max_shard_size' flags.
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
