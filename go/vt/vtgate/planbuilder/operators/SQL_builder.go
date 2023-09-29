@@ -92,12 +92,11 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 		return
 	}
 
-	_, isSubQuery := expr.(*sqlparser.ExtractedSubquery)
 	var addPred func(sqlparser.Expr)
 
 	switch stmt := qb.stmt.(type) {
 	case *sqlparser.Select:
-		if sqlparser.ContainsAggregation(expr) && !isSubQuery {
+		if containsAggr(expr) {
 			addPred = stmt.AddHaving
 		} else {
 			addPred = stmt.AddWhere
@@ -120,22 +119,20 @@ func (qb *queryBuilder) addGroupBy(original sqlparser.Expr) {
 	sel.GroupBy = append(sel.GroupBy, original)
 }
 
-func (qb *queryBuilder) addProjection(projection *sqlparser.AliasedExpr) error {
+func (qb *queryBuilder) addProjection(projection sqlparser.SelectExpr) error {
 	switch stmt := qb.stmt.(type) {
 	case *sqlparser.Select:
 		stmt.SelectExprs = append(stmt.SelectExprs, projection)
 		return nil
 	case *sqlparser.Union:
-		switch expr := projection.Expr.(type) {
-		case *sqlparser.ColName:
-			return checkUnionColumnByName(expr, stmt)
-		default:
-			// if there is more than just column names, we'll just push the UNION
-			// inside a derived table and then recurse into this method again
-			qb.pushUnionInsideDerived()
-			return qb.addProjection(projection)
+		if ae, ok := projection.(*sqlparser.AliasedExpr); ok {
+			if col, ok := ae.Expr.(*sqlparser.ColName); ok {
+				return checkUnionColumnByName(col, stmt)
+			}
 		}
 
+		qb.pushUnionInsideDerived()
+		return qb.addProjection(projection)
 	}
 	return vterrors.VT13001(fmt.Sprintf("unknown select statement type: %T", qb.stmt))
 }
@@ -389,7 +386,7 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		}
 		qb.asSelectStatement().MakeDistinct()
 	case *Update:
-		buildDML(op, qb)
+		buildUpdate(op, qb)
 	case *Delete:
 		buildDML(op, qb)
 	case *Insert:
@@ -398,6 +395,35 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		return vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op))
 	}
 	return nil
+}
+
+func buildUpdate(op *Update, qb *queryBuilder) {
+	tblName := sqlparser.NewTableName(op.QTable.Table.Name.String())
+	aTblExpr := &sqlparser.AliasedTableExpr{
+		Expr: tblName,
+		As:   op.QTable.Alias.As,
+	}
+	updExprs := make(sqlparser.UpdateExprs, 0, len(op.Assignments))
+	for _, se := range op.Assignments {
+		updExprs = append(updExprs, &sqlparser.UpdateExpr{
+			Name: se.Name,
+			Expr: se.Expr.EvalExpr,
+		})
+	}
+
+	qb.stmt = &sqlparser.Update{
+		Ignore:     op.Ignore,
+		TableExprs: sqlparser.TableExprs{aTblExpr},
+		Exprs:      updExprs,
+		OrderBy:    op.OrderBy,
+		Limit:      op.Limit,
+	}
+
+	for _, pred := range op.QTable.Predicates {
+		qb.addPredicate(pred)
+	}
+
+	qb.dmlOperator = op
 }
 
 type OpWithAST interface {
@@ -488,8 +514,11 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 	_, isSel := qb.stmt.(*sqlparser.Select)
 	if isSel {
 		qb.clearProjections()
-
-		for _, column := range op.Columns {
+		cols, err := op.GetSelectExprs(qb.ctx)
+		if err != nil {
+			return err
+		}
+		for _, column := range cols {
 			err := qb.addProjection(column)
 			if err != nil {
 				return err
@@ -508,7 +537,11 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 	}
 
 	if !isSel {
-		for _, column := range op.Columns {
+		cols, err := op.GetSelectExprs(qb.ctx)
+		if err != nil {
+			return err
+		}
+		for _, column := range cols {
 			err := qb.addProjection(column)
 			if err != nil {
 				return err

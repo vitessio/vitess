@@ -79,15 +79,15 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Op
 
 	notFound := func(e sqlparser.Expr) error {
 		_, addToGroupBy := e.(*sqlparser.ColName)
-		offsets, err := in.AddColumns(ctx, true, []bool{addToGroupBy}, []*sqlparser.AliasedExpr{aeWrap(e)})
+		offset, err := in.AddColumn(ctx, true, addToGroupBy, aeWrap(e))
 		if err != nil {
 			return err
 		}
-		exprOffset = sqlparser.NewOffset(offsets[0], e)
+		exprOffset = sqlparser.NewOffset(offset, e)
 		return nil
 	}
 
-	visitor := getVisitor(ctx, in.FindCol, found, notFound)
+	visitor := getOffsetRewritingVisitor(ctx, in.FindCol, found, notFound)
 
 	// The cursor replace is not available while walking `down`, so `up` is used to do the replacement.
 	up := func(cursor *sqlparser.CopyOnWriteCursor) {
@@ -97,7 +97,7 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Op
 		}
 	}
 
-	rewritten := sqlparser.CopyOnRewrite(expr, visitor, up, ctx.SemTable.CopyDependenciesOnSQLNodes)
+	rewritten := sqlparser.CopyOnRewrite(expr, visitor, up, ctx.SemTable.CopySemanticInfo)
 
 	return rewritten.(sqlparser.Expr), nil
 }
@@ -120,14 +120,17 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root ops.Operator) (ops
 		found := func(expr sqlparser.Expr, i int) {}
 		notFound := func(e sqlparser.Expr) error {
 			_, addToGroupBy := e.(*sqlparser.ColName)
-			proj.addColumnWithoutPushing(aeWrap(e), addToGroupBy)
+			_, err := proj.addColumnWithoutPushing(ctx, aeWrap(e), addToGroupBy)
+			if err != nil {
+				return err
+			}
 			addedColumns = true
 			return nil
 		}
-		visitor := getVisitor(ctx, proj.FindCol, found, notFound)
+		visitor := getOffsetRewritingVisitor(ctx, proj.FindCol, found, notFound)
 
 		for _, expr := range filter.Predicates {
-			_ = sqlparser.CopyOnRewrite(expr, visitor, nil, ctx.SemTable.CopyDependenciesOnSQLNodes)
+			_ = sqlparser.CopyOnRewrite(expr, visitor, nil, ctx.SemTable.CopySemanticInfo)
 		}
 		if addedColumns {
 			return in, rewrite.NewTree("added columns because filter needs it", in), nil
@@ -141,7 +144,7 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root ops.Operator) (ops
 
 // addColumnsToInput adds columns needed by an operator to its input.
 // This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
-func pullDistinctFromUNION(root ops.Operator) (ops.Operator, error) {
+func pullDistinctFromUNION(_ *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		union, ok := in.(*Union)
 		if !ok || !union.distinct {
@@ -160,10 +163,13 @@ func pullDistinctFromUNION(root ops.Operator) (ops.Operator, error) {
 	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
 }
 
-func getVisitor(
+func getOffsetRewritingVisitor(
 	ctx *plancontext.PlanningContext,
+	// this is the function that will be called to try to find the offset for an expression
 	findCol func(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error),
+	// this function will be called when an expression has been found on the input
 	found func(sqlparser.Expr, int),
+	// if we have an expression that mush be fetched, this method will be called
 	notFound func(sqlparser.Expr) error,
 ) func(node, parent sqlparser.SQLNode) bool {
 	var err error

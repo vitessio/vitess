@@ -32,7 +32,7 @@ type sqlCalcFoundRows struct {
 	LimitQuery, CountQuery logicalPlan
 }
 
-// WireupGen4 implements the logicalPlan interface
+// Wireup implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Wireup(ctx *plancontext.PlanningContext) error {
 	err := s.LimitQuery.Wireup(ctx)
 	if err != nil {

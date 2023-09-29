@@ -25,22 +25,23 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-var _ logicalPlan = (*pulloutSubquery)(nil)
+var _ logicalPlan = (*uncorrelatedSubquery)(nil)
 
-// pulloutSubquery is the logicalPlan for engine.PulloutSubquery.
+// uncorrelatedSubquery is the logicalPlan for engine.UncorrelatedSubquery.
 // This gets built if a subquery is not correlated and can
 // therefore can be pulled out and executed upfront.
-type pulloutSubquery struct {
-	subquery   logicalPlan
-	underlying logicalPlan
-	eSubquery  *engine.PulloutSubquery
+type uncorrelatedSubquery struct {
+	subquery  logicalPlan
+	outer     logicalPlan
+	eSubquery *engine.UncorrelatedSubquery
 }
 
-// newPulloutSubquery builds a new pulloutSubquery.
-func newPulloutSubquery(opcode popcode.PulloutOpcode, sqName, hasValues string, subquery logicalPlan) *pulloutSubquery {
-	return &pulloutSubquery{
+// newUncorrelatedSubquery builds a new uncorrelatedSubquery.
+func newUncorrelatedSubquery(opcode popcode.PulloutOpcode, sqName, hasValues string, subquery, outer logicalPlan) *uncorrelatedSubquery {
+	return &uncorrelatedSubquery{
 		subquery: subquery,
-		eSubquery: &engine.PulloutSubquery{
+		outer:    outer,
+		eSubquery: &engine.UncorrelatedSubquery{
 			Opcode:         opcode,
 			SubqueryResult: sqName,
 			HasValues:      hasValues,
@@ -49,41 +50,41 @@ func newPulloutSubquery(opcode popcode.PulloutOpcode, sqName, hasValues string, 
 }
 
 // Primitive implements the logicalPlan interface
-func (ps *pulloutSubquery) Primitive() engine.Primitive {
+func (ps *uncorrelatedSubquery) Primitive() engine.Primitive {
 	ps.eSubquery.Subquery = ps.subquery.Primitive()
-	ps.eSubquery.Underlying = ps.underlying.Primitive()
+	ps.eSubquery.Outer = ps.outer.Primitive()
 	return ps.eSubquery
 }
 
-// WireupGen4 implements the logicalPlan interface
-func (ps *pulloutSubquery) Wireup(ctx *plancontext.PlanningContext) error {
-	if err := ps.underlying.Wireup(ctx); err != nil {
+// Wireup implements the logicalPlan interface
+func (ps *uncorrelatedSubquery) Wireup(ctx *plancontext.PlanningContext) error {
+	if err := ps.outer.Wireup(ctx); err != nil {
 		return err
 	}
 	return ps.subquery.Wireup(ctx)
 }
 
 // Rewrite implements the logicalPlan interface
-func (ps *pulloutSubquery) Rewrite(inputs ...logicalPlan) error {
+func (ps *uncorrelatedSubquery) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
-		return vterrors.VT13001("pulloutSubquery: wrong number of inputs")
+		return vterrors.VT13001("uncorrelatedSubquery: wrong number of inputs")
 	}
-	ps.underlying = inputs[0]
+	ps.outer = inputs[0]
 	ps.subquery = inputs[1]
 	return nil
 }
 
 // ContainsTables implements the logicalPlan interface
-func (ps *pulloutSubquery) ContainsTables() semantics.TableSet {
-	return ps.underlying.ContainsTables().Merge(ps.subquery.ContainsTables())
+func (ps *uncorrelatedSubquery) ContainsTables() semantics.TableSet {
+	return ps.outer.ContainsTables().Merge(ps.subquery.ContainsTables())
 }
 
 // Inputs implements the logicalPlan interface
-func (ps *pulloutSubquery) Inputs() []logicalPlan {
-	return []logicalPlan{ps.underlying, ps.subquery}
+func (ps *uncorrelatedSubquery) Inputs() []logicalPlan {
+	return []logicalPlan{ps.outer, ps.subquery}
 }
 
 // OutputColumns implements the logicalPlan interface
-func (ps *pulloutSubquery) OutputColumns() []sqlparser.SelectExpr {
-	return ps.underlying.OutputColumns()
+func (ps *uncorrelatedSubquery) OutputColumns() []sqlparser.SelectExpr {
+	return ps.outer.OutputColumns()
 }

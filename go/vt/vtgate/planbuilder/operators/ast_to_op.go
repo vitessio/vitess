@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-const foriegnKeyContraintValues = "fkc_vals"
+const foreignKeyConstraintValues = "fkc_vals"
 
 // translateQueryToOp creates an operator tree that represents the input SELECT or UNION query
 func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op ops.Operator, err error) {
@@ -53,35 +53,129 @@ func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Stat
 }
 
 func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (ops.Operator, error) {
-	subq, err := createSubqueryFromStatement(ctx, sel)
-	if err != nil {
-		return nil, err
-	}
 	op, err := crossJoin(ctx, sel.From)
 	if err != nil {
 		return nil, err
 	}
+
 	if sel.Where != nil {
-		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
-		for _, expr := range exprs {
-			sqlparser.RemoveKeyspaceFromColName(expr)
-			op, err = op.AddPredicate(ctx, expr)
-			if err != nil {
-				return nil, err
-			}
-			addColumnEquality(ctx, expr)
+		op, err = addWherePredicates(ctx, sel.Where.Expr, op)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	if subq != nil {
-		subq.Outer = op
-		op = subq
+	if sel.Comments != nil || sel.Lock != sqlparser.NoLock {
+		op = &LockAndComment{
+			Source:   op,
+			Comments: sel.Comments,
+			Lock:     sel.Lock,
+		}
 	}
 
-	return &Horizon{
-		Source: op,
-		Query:  sel,
-	}, nil
+	op = newHorizon(op, sel)
+
+	return op, nil
+}
+
+func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (ops.Operator, error) {
+	sqc := &SubQueryBuilder{}
+	outerID := TableID(op)
+	exprs := sqlparser.SplitAndExpression(nil, expr)
+	for _, expr := range exprs {
+		sqlparser.RemoveKeyspaceFromColName(expr)
+		subq, err := sqc.handleSubquery(ctx, expr, outerID)
+		if err != nil {
+			return nil, err
+		}
+		if subq != nil {
+			continue
+		}
+		op, err = op.AddPredicate(ctx, expr)
+		if err != nil {
+			return nil, err
+		}
+		addColumnEquality(ctx, expr)
+	}
+	return sqc.getRootOperator(op), nil
+}
+
+// cloneASTAndSemState clones the AST and the semantic state of the input node.
+func cloneASTAndSemState[T sqlparser.SQLNode](ctx *plancontext.PlanningContext, original T) T {
+	return sqlparser.CopyOnRewrite(original, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		e, ok := cursor.Node().(sqlparser.Expr)
+		if !ok {
+			return
+		}
+		cursor.Replace(e) // We do this only to trigger the cloning of the AST
+	}, ctx.SemTable.CopySemanticInfo).(T)
+}
+
+// findTablesContained returns the TableSet of all the contained
+func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNode) (result semantics.TableSet) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		t, ok := node.(*sqlparser.AliasedTableExpr)
+		if !ok {
+			return true, nil
+		}
+		ts := ctx.SemTable.TableSetFor(t)
+		result = result.Merge(ts)
+		return true, nil
+	}, node)
+	return
+}
+
+func rewriteRemainingColumns(
+	ctx *plancontext.PlanningContext,
+	stmt sqlparser.SelectStatement,
+	subqID semantics.TableSet,
+) sqlparser.SelectStatement {
+	return sqlparser.CopyOnRewrite(stmt, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		colname, isColname := cursor.Node().(*sqlparser.ColName)
+		if !isColname {
+			return
+		}
+		deps := ctx.SemTable.RecursiveDeps(colname)
+		if deps.IsSolvedBy(subqID) {
+			return
+		}
+		rsv := ctx.GetReservedArgumentFor(colname)
+		cursor.Replace(sqlparser.NewArgument(rsv))
+	}, nil).(sqlparser.SelectStatement)
+}
+
+// joinPredicateCollector is used to inspect the predicates inside the subquery, looking for any
+// comparisons between the inner and the outer side.
+// They can be used for merging the two parts of the query together
+type joinPredicateCollector struct {
+	predicates          sqlparser.Exprs
+	remainingPredicates sqlparser.Exprs
+	joinColumns         []JoinColumn
+
+	totalID,
+	subqID,
+	outerID semantics.TableSet
+}
+
+func (jpc *joinPredicateCollector) inspectPredicate(
+	ctx *plancontext.PlanningContext,
+	predicate sqlparser.Expr,
+) error {
+	pred := predicate
+	deps := ctx.SemTable.RecursiveDeps(predicate)
+	// if the subquery is not enough, but together we have all we need,
+	// then we can use this predicate to connect the subquery to the outer query
+	if !deps.IsSolvedBy(jpc.subqID) && deps.IsSolvedBy(jpc.totalID) {
+		jpc.predicates = append(jpc.predicates, predicate)
+		jc, err := BreakExpressionInLHSandRHS(ctx, predicate, jpc.outerID)
+		if err != nil {
+			return err
+		}
+		jpc.joinColumns = append(jpc.joinColumns, jc)
+		pred = jc.RHSExpr
+	}
+	jpc.remainingPredicates = append(jpc.remainingPredicates, pred)
+	return nil
 }
 
 func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (ops.Operator, error) {
@@ -104,7 +198,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 
 	unionCols := ctx.SemTable.SelectExprs(node)
 	union := newUnion([]ops.Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, unionCols, node.Distinct)
-	return &Horizon{Source: union, Query: node}, nil
+	return newHorizon(union, node), nil
 }
 
 // createOpFromStmt creates an operator from the given statement. It takes in two additional arguments—
@@ -183,30 +277,26 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 		qg.Tables = append(qg.Tables, qt)
 		return qg, nil
 	case *sqlparser.DerivedTable:
+		if onlyTable && tbl.Select.GetLimit() == nil {
+			tbl.Select.SetOrderBy(nil)
+		}
+
 		inner, err := translateQueryToOp(ctx, tbl.Select)
 		if err != nil {
 			return nil, err
 		}
 		if horizon, ok := inner.(*Horizon); ok {
-			inner = horizon.Source
+			horizon.TableId = &tableID
+			horizon.Alias = tableExpr.As.String()
+			horizon.ColumnAliases = tableExpr.Columns
+			qp, err := CreateQPFromSelectStatement(ctx, tbl.Select)
+			if err != nil {
+				return nil, err
+			}
+			horizon.QP = qp
 		}
 
-		if onlyTable && tbl.Select.GetLimit() == nil {
-			tbl.Select.SetOrderBy(nil)
-		}
-		qp, err := CreateQPFromSelectStatement(ctx, tbl.Select)
-		if err != nil {
-			return nil, err
-		}
-
-		return &Horizon{
-			TableId:       &tableID,
-			Alias:         tableExpr.As.String(),
-			Source:        inner,
-			Query:         tbl.Select,
-			ColumnAliases: tableExpr.Columns,
-			QP:            qp,
-		}, nil
+		return inner, nil
 	default:
 		return nil, vterrors.VT13001(fmt.Sprintf("unable to use: %T", tbl))
 	}
@@ -280,7 +370,14 @@ func addColumnEquality(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 // createSelectionOp creates the selection operator to select the parent columns for the foreign key constraints.
 // The Select statement looks something like this - `SELECT <parent_columns_in_fk for all the foreign key constraints> FROM <parent_table> WHERE <where_clause_of_update>`
 // TODO (@Harshit, @GuptaManan100): Compress the columns in the SELECT statement, if there are multiple foreign key constraints using the same columns.
-func createSelectionOp(ctx *plancontext.PlanningContext, selectExprs []sqlparser.SelectExpr, tableExprs sqlparser.TableExprs, where *sqlparser.Where, limit *sqlparser.Limit, lock sqlparser.Lock) (ops.Operator, error) {
+func createSelectionOp(
+	ctx *plancontext.PlanningContext,
+	selectExprs []sqlparser.SelectExpr,
+	tableExprs sqlparser.TableExprs,
+	where *sqlparser.Where,
+	limit *sqlparser.Limit,
+	lock sqlparser.Lock,
+) (ops.Operator, error) {
 	selectionStmt := &sqlparser.Select{
 		SelectExprs: selectExprs,
 		From:        tableExprs,

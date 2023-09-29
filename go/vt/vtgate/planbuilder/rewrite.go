@@ -18,8 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
+
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -39,21 +38,18 @@ func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.Reserved
 	return nil
 }
 
+func (r *rewriter) rewriteUp(cursor *sqlparser.Cursor) bool {
+	_, ok := cursor.Node().(*sqlparser.Subquery)
+	if ok {
+		r.inSubquery--
+	}
+	return true
+}
+
 func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
 		rewriteHavingClause(node)
-	case *sqlparser.ComparisonExpr:
-		err := rewriteInSubquery(cursor, r, node)
-		if err != nil {
-			r.err = err
-		}
-	case *sqlparser.ExistsExpr:
-		err := r.rewriteExistsSubquery(cursor, node)
-		if err != nil {
-			r.err = err
-		}
-		return false
 	case *sqlparser.AliasedTableExpr:
 		// rewrite names of the routed tables for the subquery
 		// We only need to do this for non-derived tables and if they are in a subquery
@@ -88,78 +84,10 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 		// replace the table name with the original table
 		tableName.Name = vindexTable.Name
 		node.Expr = tableName
-	case *sqlparser.ExtractedSubquery:
-		return false
 	case *sqlparser.Subquery:
-		err := rewriteSubquery(cursor, r, node)
-		if err != nil {
-			r.err = err
-		}
+		r.inSubquery++
 	}
 	return true
-}
-
-func (r *rewriter) rewriteUp(cursor *sqlparser.Cursor) bool {
-	switch cursor.Node().(type) {
-	case *sqlparser.Subquery:
-		r.inSubquery--
-	}
-	return r.err == nil
-}
-
-func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.ComparisonExpr) error {
-	subq, exp := semantics.GetSubqueryAndOtherSide(node)
-	if subq == nil || exp == nil {
-		return nil
-	}
-
-	semTableSQ, err := r.getSubQueryRef(subq)
-	if err != nil {
-		return err
-	}
-
-	r.inSubquery++
-	argName, hasValuesArg := r.reservedVars.ReserveSubQueryWithHasValues()
-	semTableSQ.SetArgName(argName)
-	semTableSQ.SetHasValuesArg(hasValuesArg)
-	cursor.Replace(semTableSQ)
-	return nil
-}
-
-func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subquery) error {
-	semTableSQ, err := r.getSubQueryRef(node)
-	if err != nil {
-		return err
-	}
-	if semTableSQ.GetArgName() != "" || popcode.PulloutOpcode(semTableSQ.OpCode) != popcode.PulloutValue {
-		return nil
-	}
-	r.inSubquery++
-	argName := r.reservedVars.ReserveSubQuery()
-	semTableSQ.SetArgName(argName)
-	cursor.Replace(semTableSQ)
-	return nil
-}
-
-func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlparser.ExistsExpr) error {
-	semTableSQ, err := r.getSubQueryRef(node.Subquery)
-	if err != nil {
-		return err
-	}
-
-	r.inSubquery++
-	hasValuesArg := r.reservedVars.ReserveHasValuesSubQuery()
-	semTableSQ.SetHasValuesArg(hasValuesArg)
-	cursor.Replace(semTableSQ)
-	return nil
-}
-
-func (r *rewriter) getSubQueryRef(sq *sqlparser.Subquery) (*sqlparser.ExtractedSubquery, error) {
-	semTableSQ, found := r.semTable.SubqueryRef[sq]
-	if !found {
-		return nil, vterrors.VT13001("got subquery that was not in the subq map")
-	}
-	return semTableSQ, nil
 }
 
 func rewriteHavingClause(node *sqlparser.Select) {

@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 // binder is responsible for finding all the column references in
@@ -28,14 +27,12 @@ import (
 // While doing this, it will also find the types for columns and
 // store these in the typer:s expression map
 type binder struct {
-	recursive   ExprDependencies
-	direct      ExprDependencies
-	scoper      *scoper
-	tc          *tableCollector
-	org         originable
-	typer       *typer
-	subqueryMap map[sqlparser.Statement][]*sqlparser.ExtractedSubquery
-	subqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
+	recursive ExprDependencies
+	direct    ExprDependencies
+	scoper    *scoper
+	tc        *tableCollector
+	org       originable
+	typer     *typer
 
 	// every table will have an entry in the outer map. it will point to a map with all the columns
 	// that this map is joined with using USING.
@@ -51,8 +48,6 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 		org:           org,
 		tc:            tc,
 		typer:         typer,
-		subqueryMap:   map[sqlparser.Statement][]*sqlparser.ExtractedSubquery{},
-		subqueryRef:   map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery{},
 		usingJoinInfo: map[TableSet]map[string]TableSet{},
 	}
 }
@@ -61,18 +56,6 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Subquery:
 		currScope := b.scoper.currentScope()
-		// do not extract subquery in insert statement.
-		if _, isInsert := currScope.stmt.(*sqlparser.Insert); isInsert {
-			return nil
-		}
-		sq, err := b.createExtractedSubquery(cursor, currScope, node)
-		if err != nil {
-			return err
-		}
-
-		b.subqueryMap[currScope.stmt] = append(b.subqueryMap[currScope.stmt], sq)
-		b.subqueryRef[node] = sq
-
 		b.setSubQueryDependencies(node, currScope)
 	case *sqlparser.JoinCondition:
 		currScope := b.scoper.currentScope()
@@ -211,39 +194,6 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *sc
 
 	b.recursive[subq] = subqRecursiveDeps.KeepOnly(tablesToKeep)
 	b.direct[subq] = subqDirectDeps.KeepOnly(tablesToKeep)
-}
-
-func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *scope, subq *sqlparser.Subquery) (*sqlparser.ExtractedSubquery, error) {
-	if currScope.stmt == nil {
-		return nil, &BuggyError{Msg: "unable to bind subquery to select statement"}
-	}
-
-	sq := &sqlparser.ExtractedSubquery{
-		Subquery: subq,
-		Original: subq,
-		OpCode:   int(opcode.PulloutValue),
-	}
-
-	switch par := cursor.Parent().(type) {
-	case *sqlparser.ComparisonExpr:
-		switch par.Operator {
-		case sqlparser.InOp:
-			sq.OpCode = int(opcode.PulloutIn)
-		case sqlparser.NotInOp:
-			sq.OpCode = int(opcode.PulloutNotIn)
-		}
-		subq, exp := GetSubqueryAndOtherSide(par)
-		sq.Original = &sqlparser.ComparisonExpr{
-			Left:     exp,
-			Operator: par.Operator,
-			Right:    subq,
-		}
-		sq.OtherSide = exp
-	case *sqlparser.ExistsExpr:
-		sq.OpCode = int(opcode.PulloutExists)
-		sq.Original = par
-	}
-	return sq, nil
 }
 
 func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti bool) (dependency, error) {

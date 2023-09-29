@@ -58,7 +58,7 @@ func (vf *vindexFunc) Primitive() engine.Primitive {
 	return vf.eVindexFunc
 }
 
-// WireupGen4 implements the logicalPlan interface
+// Wireup implements the logicalPlan interface
 func (vf *vindexFunc) Wireup(*plancontext.PlanningContext) error {
 	return nil
 }

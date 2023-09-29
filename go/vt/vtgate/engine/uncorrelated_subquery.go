@@ -20,31 +20,30 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vterrors"
-	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
-var _ Primitive = (*PulloutSubquery)(nil)
+var _ Primitive = (*UncorrelatedSubquery)(nil)
 
-// PulloutSubquery executes a "pulled out" subquery and stores
-// the results in a bind variable.
-type PulloutSubquery struct {
+// UncorrelatedSubquery executes a subquery once and uses
+// the result as a bind variable for the underlying primitive.
+type UncorrelatedSubquery struct {
 	Opcode PulloutOpcode
 
 	// SubqueryResult and HasValues are used to send in the bindvar used in the query to the underlying primitive
 	SubqueryResult string
 	HasValues      string
 
-	Subquery   Primitive
-	Underlying Primitive
+	Subquery Primitive
+	Outer    Primitive
 }
 
 // Inputs returns the input primitives for this join
-func (ps *PulloutSubquery) Inputs() ([]Primitive, []map[string]any) {
-	return []Primitive{ps.Subquery, ps.Underlying}, []map[string]any{{
+func (ps *UncorrelatedSubquery) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{ps.Subquery, ps.Outer}, []map[string]any{{
 		inputName: "SubQuery",
 	}, {
 		inputName: "Outer",
@@ -52,40 +51,40 @@ func (ps *PulloutSubquery) Inputs() ([]Primitive, []map[string]any) {
 }
 
 // RouteType returns a description of the query routing type used by the primitive
-func (ps *PulloutSubquery) RouteType() string {
+func (ps *UncorrelatedSubquery) RouteType() string {
 	return ps.Opcode.String()
 }
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (ps *PulloutSubquery) GetKeyspaceName() string {
-	return ps.Underlying.GetKeyspaceName()
+func (ps *UncorrelatedSubquery) GetKeyspaceName() string {
+	return ps.Outer.GetKeyspaceName()
 }
 
 // GetTableName specifies the table that this primitive routes to.
-func (ps *PulloutSubquery) GetTableName() string {
-	return ps.Underlying.GetTableName()
+func (ps *UncorrelatedSubquery) GetTableName() string {
+	return ps.Outer.GetTableName()
 }
 
 // TryExecute satisfies the Primitive interface.
-func (ps *PulloutSubquery) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ps *UncorrelatedSubquery) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	combinedVars, err := ps.execSubquery(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	return vcursor.ExecutePrimitive(ctx, ps.Underlying, combinedVars, wantfields)
+	return vcursor.ExecutePrimitive(ctx, ps.Outer, combinedVars, wantfields)
 }
 
 // TryStreamExecute performs a streaming exec.
-func (ps *PulloutSubquery) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ps *UncorrelatedSubquery) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	combinedVars, err := ps.execSubquery(ctx, vcursor, bindVars)
 	if err != nil {
 		return err
 	}
-	return vcursor.StreamExecutePrimitive(ctx, ps.Underlying, combinedVars, wantfields, callback)
+	return vcursor.StreamExecutePrimitive(ctx, ps.Outer, combinedVars, wantfields, callback)
 }
 
 // GetFields fetches the field info.
-func (ps *PulloutSubquery) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ps *UncorrelatedSubquery) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	combinedVars := make(map[string]*querypb.BindVariable, len(bindVars)+1)
 	for k, v := range bindVars {
 		combinedVars[k] = v
@@ -102,12 +101,12 @@ func (ps *PulloutSubquery) GetFields(ctx context.Context, vcursor VCursor, bindV
 	case PulloutExists:
 		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
 	}
-	return ps.Underlying.GetFields(ctx, vcursor, combinedVars)
+	return ps.Outer.GetFields(ctx, vcursor, combinedVars)
 }
 
 // NeedsTransaction implements the Primitive interface
-func (ps *PulloutSubquery) NeedsTransaction() bool {
-	return ps.Subquery.NeedsTransaction() || ps.Underlying.NeedsTransaction()
+func (ps *UncorrelatedSubquery) NeedsTransaction() bool {
+	return ps.Subquery.NeedsTransaction() || ps.Outer.NeedsTransaction()
 }
 
 var (
@@ -115,7 +114,7 @@ var (
 	errSqColumn = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "subquery returned more than one column")
 )
 
-func (ps *PulloutSubquery) execSubquery(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
+func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
 	subqueryBindVars := make(map[string]*querypb.BindVariable, len(bindVars))
 	for k, v := range bindVars {
 		subqueryBindVars[k] = v
@@ -134,9 +133,6 @@ func (ps *PulloutSubquery) execSubquery(ctx context.Context, vcursor VCursor, bi
 		case 0:
 			combinedVars[ps.SubqueryResult] = sqltypes.NullBindVariable
 		case 1:
-			if len(result.Rows[0]) != 1 {
-				return nil, errSqColumn
-			}
 			combinedVars[ps.SubqueryResult] = sqltypes.ValueBindVariable(result.Rows[0][0])
 		default:
 			return nil, errSqRow
@@ -151,9 +147,6 @@ func (ps *PulloutSubquery) execSubquery(ctx context.Context, vcursor VCursor, bi
 				Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(0))},
 			}
 		default:
-			if len(result.Rows[0]) != 1 {
-				return nil, errSqColumn
-			}
 			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(1)
 			values := &querypb.BindVariable{
 				Type:   querypb.Type_TUPLE,
@@ -175,7 +168,7 @@ func (ps *PulloutSubquery) execSubquery(ctx context.Context, vcursor VCursor, bi
 	return combinedVars, nil
 }
 
-func (ps *PulloutSubquery) description() PrimitiveDescription {
+func (ps *UncorrelatedSubquery) description() PrimitiveDescription {
 	other := map[string]any{}
 	var pulloutVars []string
 	if ps.HasValues != "" {
@@ -188,7 +181,7 @@ func (ps *PulloutSubquery) description() PrimitiveDescription {
 		other["PulloutVars"] = pulloutVars
 	}
 	return PrimitiveDescription{
-		OperatorType: "Subquery",
+		OperatorType: "UncorrelatedSubquery",
 		Variant:      ps.Opcode.String(),
 		Other:        other,
 	}

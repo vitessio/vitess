@@ -39,7 +39,7 @@ type projection struct {
 
 var _ logicalPlan = (*projection)(nil)
 
-// WireupGen4 implements the logicalPlan interface
+// Wireup implements the logicalPlan interface
 func (p *projection) Wireup(ctx *plancontext.PlanningContext) error {
 	if p.primitive != nil {
 		// if primitive is not nil, it means that the horizon planning in the operator phase already

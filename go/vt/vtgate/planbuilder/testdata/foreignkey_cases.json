@@ -500,14 +500,14 @@
         "Inputs": [
           {
             "InputName": "VerifyParent-1",
-            "OperatorType": "Projection",
-            "Expressions": [
-              "INT64(1) as 1"
-            ],
+            "OperatorType": "Limit",
+            "Count": "INT64(1)",
             "Inputs": [
               {
-                "OperatorType": "Limit",
-                "Count": "INT64(1)",
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "INT64(1) as 1"
+                ],
                 "Inputs": [
                   {
                     "OperatorType": "Filter",
@@ -1025,14 +1025,14 @@
         "Inputs": [
           {
             "InputName": "VerifyParent-1",
-            "OperatorType": "Projection",
-            "Expressions": [
-              "INT64(1) as 1"
-            ],
+            "OperatorType": "Limit",
+            "Count": "INT64(1)",
             "Inputs": [
               {
-                "OperatorType": "Limit",
-                "Count": "INT64(1)",
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "INT64(1) as 1"
+                ],
                 "Inputs": [
                   {
                     "OperatorType": "Filter",

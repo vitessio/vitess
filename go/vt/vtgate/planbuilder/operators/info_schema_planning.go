@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -79,7 +78,7 @@ func (isr *InfoSchemaRouting) Clone() Routing {
 }
 
 func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
-	isTableSchema, bvName, out := extractInfoSchemaRoutingPredicate(expr, ctx.ReservedVars)
+	isTableSchema, bvName, out := extractInfoSchemaRoutingPredicate(ctx, expr)
 	if out == nil {
 		return isr, nil
 	}
@@ -117,7 +116,7 @@ func (isr *InfoSchemaRouting) Keyspace() *vindexes.Keyspace {
 	return nil
 }
 
-func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, sqlparser.Expr) {
+func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlparser.Expr) (bool, string, sqlparser.Expr) {
 	cmp, ok := in.(*sqlparser.ComparisonExpr)
 	if !ok || cmp.Operator != sqlparser.EqualOp {
 		return false, "", nil
@@ -145,7 +144,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 	if isSchemaName {
 		name = sqltypes.BvSchemaName
 	} else {
-		name = reservedVars.ReserveColName(col)
+		name = ctx.GetReservedArgumentFor(col)
 	}
 	cmp.Right = sqlparser.NewTypedArgument(name, sqltypes.VarChar)
 	return isSchemaName, name, rhs
@@ -170,7 +169,7 @@ func isTableOrSchemaRoutable(cmp *sqlparser.ComparisonExpr) (
 	return false, nil
 }
 
-func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, rhsRoute *Route) (ops.Operator, error) {
+func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, routingB Routing, m merger, lhsRoute, rhsRoute *Route) (*Route, error) {
 	// we have already checked type earlier, so this should always be safe
 	isrA := routingA.(*InfoSchemaRouting)
 	isrB := routingB.(*InfoSchemaRouting)
@@ -180,9 +179,9 @@ func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, 
 	switch {
 	// if either side has no predicates to help us route, we can merge them
 	case emptyA:
-		return m.merge(lhsRoute, rhsRoute, isrB)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrB)
 	case emptyB:
-		return m.merge(lhsRoute, rhsRoute, isrA)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
 
 	// if we have no schema predicates on either side, we can merge if the table info is the same
 	case len(isrA.SysTableTableSchema) == 0 && len(isrB.SysTableTableSchema) == 0:
@@ -193,14 +192,14 @@ func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, 
 			}
 			isrA.SysTableTableName[k] = expr
 		}
-		return m.merge(lhsRoute, rhsRoute, isrA)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
 
 	// if both sides have the same schema predicate, we can safely merge them
 	case sqlparser.Equals.Exprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
 		for k, expr := range isrB.SysTableTableName {
 			isrA.SysTableTableName[k] = expr
 		}
-		return m.merge(lhsRoute, rhsRoute, isrA)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
 
 	// give up
 	default:

@@ -726,28 +726,6 @@ func (cached *Projection) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *PulloutSubquery) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(80)
-	}
-	// field SubqueryResult string
-	size += hack.RuntimeAllocSize(int64(len(cached.SubqueryResult)))
-	// field HasValues string
-	size += hack.RuntimeAllocSize(int64(len(cached.HasValues)))
-	// field Subquery vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Subquery.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field Underlying vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Underlying.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	return size
-}
 func (cached *RenameFields) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1159,6 +1137,28 @@ func (cached *ThrottleApp) CachedSize(alloc bool) int64 {
 	size += cached.ThrottledAppRule.CachedSize(true)
 	return size
 }
+func (cached *UncorrelatedSubquery) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field SubqueryResult string
+	size += hack.RuntimeAllocSize(int64(len(cached.SubqueryResult)))
+	// field HasValues string
+	size += hack.RuntimeAllocSize(int64(len(cached.HasValues)))
+	// field Subquery vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Subquery.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Outer vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Outer.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 
 //go:nocheckptr
 func (cached *Update) CachedSize(alloc bool) int64 {
@@ -1343,17 +1343,17 @@ func (cached *VindexValues) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(16)
 	}
-	// field PvMap map[string]vitess.io/vitess/go/vt/vtgate/evalengine.Expr
-	if cached.PvMap != nil {
+	// field EvalExprMap map[string]vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cached.EvalExprMap != nil {
 		size += int64(48)
-		hmap := reflect.ValueOf(cached.PvMap)
+		hmap := reflect.ValueOf(cached.EvalExprMap)
 		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
 		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
 		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
-		if len(cached.PvMap) > 0 || numBuckets > 1 {
+		if len(cached.EvalExprMap) > 0 || numBuckets > 1 {
 			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
 		}
-		for k, v := range cached.PvMap {
+		for k, v := range cached.EvalExprMap {
 			size += hack.RuntimeAllocSize(int64(len(k)))
 			if cc, ok := v.(cachedObject); ok {
 				size += cc.CachedSize(true)

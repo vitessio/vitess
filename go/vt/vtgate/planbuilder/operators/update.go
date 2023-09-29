@@ -17,6 +17,11 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+	"maps"
+	"slices"
+	"strings"
+
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -27,17 +32,35 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type Update struct {
-	QTable              *QueryTable
-	VTable              *vindexes.Table
-	Assignments         map[string]sqlparser.Expr
-	ChangedVindexValues map[string]*engine.VindexValues
-	OwnedVindexQuery    string
-	AST                 *sqlparser.Update
+type (
+	Update struct {
+		QTable              *QueryTable
+		VTable              *vindexes.Table
+		Assignments         []SetExpr
+		ChangedVindexValues map[string]*engine.VindexValues
+		OwnedVindexQuery    string
+		Ignore              sqlparser.Ignore
+		OrderBy             sqlparser.OrderBy
+		Limit               *sqlparser.Limit
 
-	noInputs
-	noColumns
-	noPredicates
+		// these subqueries cannot be merged as they are part of the changed vindex values
+		// these values are needed to be sent over to lookup vindex for update.
+		// On merging this information will be lost, so subquery merge is blocked.
+		SubQueriesArgOnChangedVindex []string
+
+		noInputs
+		noColumns
+		noPredicates
+	}
+
+	SetExpr struct {
+		Name *sqlparser.ColName
+		Expr *ProjExpr
+	}
+)
+
+func (se SetExpr) String() string {
+	return fmt.Sprintf("%s = %s", sqlparser.String(se.Name), sqlparser.String(se.Expr.EvalExpr))
 }
 
 // Introduces implements the PhysicalOperator interface
@@ -47,14 +70,10 @@ func (u *Update) introducesTableID() semantics.TableSet {
 
 // Clone implements the Operator interface
 func (u *Update) Clone([]ops.Operator) ops.Operator {
-	return &Update{
-		QTable:              u.QTable,
-		VTable:              u.VTable,
-		Assignments:         u.Assignments,
-		ChangedVindexValues: u.ChangedVindexValues,
-		OwnedVindexQuery:    u.OwnedVindexQuery,
-		AST:                 u.AST,
-	}
+	upd := *u
+	upd.Assignments = slices.Clone(u.Assignments)
+	upd.ChangedVindexValues = maps.Clone(u.ChangedVindexValues)
+	return &upd
 }
 
 func (u *Update) GetOrdering() ([]ops.OrderBy, error) {
@@ -69,11 +88,14 @@ func (u *Update) TablesUsed() []string {
 }
 
 func (u *Update) ShortDescription() string {
-	return u.VTable.String()
-}
-
-func (u *Update) Statement() sqlparser.Statement {
-	return u.AST
+	s := []string{u.VTable.String()}
+	if u.Limit != nil {
+		s = append(s, sqlparser.String(u.Limit))
+	}
+	if len(u.OrderBy) > 0 {
+		s = append(s, sqlparser.String(u.OrderBy))
+	}
+	return strings.Join(s, " ")
 }
 
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (ops.Operator, error) {
@@ -116,12 +138,27 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 }
 
 func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, vindexTable *vindexes.Table, qt *QueryTable, routing Routing) (ops.Operator, error) {
-	assignments := make(map[string]sqlparser.Expr)
-	for _, set := range updStmt.Exprs {
-		assignments[set.Name.Name.String()] = set.Expr
+	sqc := &SubQueryBuilder{}
+	assignments := make([]SetExpr, len(updStmt.Exprs))
+	for idx, updExpr := range updStmt.Exprs {
+		expr, subqs, err := sqc.pullOutValueSubqueries(ctx, updExpr.Expr, qt.ID, true)
+		if err != nil {
+			return nil, err
+		}
+		if len(subqs) == 0 {
+			expr = updExpr.Expr
+		}
+		proj := newProjExpr(aeWrap(expr))
+		if len(subqs) != 0 {
+			proj.Info = SubQueryExpression(subqs)
+		}
+		assignments[idx] = SetExpr{
+			Name: updExpr.Name,
+			Expr: proj,
+		}
 	}
 
-	vp, cvv, ovq, err := getUpdateVindexInformation(updStmt, vindexTable, qt.ID, qt.Predicates)
+	vp, cvv, ovq, subQueriesArgOnChangedVindex, err := getUpdateVindexInformation(updStmt, vindexTable, qt.ID, assignments)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +169,11 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	}
 
 	for _, predicate := range qt.Predicates {
+		if subq, err := sqc.handleSubquery(ctx, predicate, qt.ID); err != nil {
+			return nil, err
+		} else if subq != nil {
+			continue
+		}
 		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
 		if err != nil {
 			return nil, err
@@ -143,27 +185,23 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		return nil, vterrors.VT12001("multi shard UPDATE with LIMIT")
 	}
 
-	r := &Route{
+	route := &Route{
 		Source: &Update{
-			QTable:              qt,
-			VTable:              vindexTable,
-			Assignments:         assignments,
-			ChangedVindexValues: cvv,
-			OwnedVindexQuery:    ovq,
-			AST:                 updStmt,
+			QTable:                       qt,
+			VTable:                       vindexTable,
+			Assignments:                  assignments,
+			ChangedVindexValues:          cvv,
+			OwnedVindexQuery:             ovq,
+			Ignore:                       updStmt.Ignore,
+			Limit:                        updStmt.Limit,
+			OrderBy:                      updStmt.OrderBy,
+			SubQueriesArgOnChangedVindex: subQueriesArgOnChangedVindex,
 		},
-		Routing: routing,
+		Routing:  routing,
+		Comments: updStmt.Comments,
 	}
 
-	subq, err := createSubqueryFromStatement(ctx, updStmt)
-	if err != nil {
-		return nil, err
-	}
-	if subq == nil {
-		return r, nil
-	}
-	subq.Outer = r
-	return subq, nil
+	return sqc.getRootOperator(route), nil
 }
 
 // getFKRequirementsForUpdate analyzes update expressions to determine which foreign key constraints needs management at the VTGate.
@@ -327,7 +365,7 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 	}
 
 	// Reserve a bind variable name
-	bvName := ctx.ReservedVars.ReserveVariable(foriegnKeyContraintValues)
+	bvName := ctx.ReservedVars.ReserveVariable(foreignKeyConstraintValues)
 	// Create a comparison expression for WHERE clause
 	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, valTuple, sqlparser.NewListArg(bvName), nil)
 	var childWhereExpr sqlparser.Expr = compExpr
@@ -390,7 +428,6 @@ func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.Chi
 	// we need to verify the validity of the remaining foreign keys on VTGate,
 	// while specifically ignoring the parent foreign key in question.
 	return createOpFromStmt(ctx, childUpdStmt, true, fk.String(updatedTable))
-
 }
 
 // buildChildUpdOpForSetNull builds the child update statement operator for the SET NULL type foreign key constraint.
