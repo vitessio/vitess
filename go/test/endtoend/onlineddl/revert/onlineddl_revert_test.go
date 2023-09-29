@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 
@@ -154,8 +155,10 @@ func TestMain(m *testing.M) {
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
-			"--queryserver-config-schema-change-signal-interval", "0.1",
 			"--watch_replication_stream",
+		}
+		if !utils.BinaryIsAtVersion(17, "vttablet") {
+			clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal-interval", "0.1")
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
