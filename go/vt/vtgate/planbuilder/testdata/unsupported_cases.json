@@ -1,8 +1,13 @@
 [
   {
-    "comment": "union operations in subqueries (expressions)",
+    "comment": "unexpanded expressions invalid also inside subqueries",
     "query": "select * from user where id in (select * from user union select * from user_extra)",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+    "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "union operations in subqueries (expressions)",
+    "query": "select col from user u where id in (select bar from user where user.x = u.z union select * from user_extra)",
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "TODO: Implement support for select with a target destination",
@@ -27,7 +32,7 @@
   {
     "comment": "scatter order by with * expression",
     "query": "select * from user order by id",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "natural join",
@@ -57,7 +62,7 @@
   {
     "comment": "* expresson not allowed for cross-shard joins",
     "query": "select * from user join user_extra",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "Group by column number, used with non-aliased expression (duplicated code)",
@@ -342,12 +347,12 @@
   {
     "comment": "outer and inner subquery route reference the same \"uu.id\" name\n# but they refer to different things. The first reference is to the outermost query,\n# and the second reference is to the innermost 'from' subquery.\n# This query will never work as the inner derived table is only selecting one of the column",
     "query": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))",
-    "plan": "VT12001: unsupported: cross-shard correlated subquery"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
     "comment": "outer and inner subquery route reference the same \"uu.id\" name\n# but they refer to different things. The first reference is to the outermost query,\n# and the second reference is to the innermost 'from' subquery.\n# changed to project all the columns from the derived tables.",
     "query": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select col, id, user_id from user_extra where user_id = 5) uu where uu.user_id = uu.id))",
-    "plan": "VT12001: unsupported: cross-shard correlated subquery"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
     "comment": "rewrite of 'order by 2' that becomes 'order by id', leading to ambiguous binding.",
@@ -442,37 +447,37 @@
   {
     "comment": "correlated subquery with different keyspace tables involved",
     "query": "select id from user where id in (select col from unsharded where col = user.id)",
-    "plan": "VT12001: unsupported: cross-shard correlated subquery"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
     "comment": "ORDER BY on select t.*",
     "query": "select t.*, t.col from user t order by t.col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "ORDER BY on select *",
     "query": "select *, col from user order by col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "ORDER BY on select multi t.*",
     "query": "select t.*, t.name, t.*, t.col from user t order by t.col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "ORDER BY on select multi *",
     "query": "select *, name, *, col from user order by col",
-    "plan": "VT12001: unsupported: '*' expression in cross-shard query"
+    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
     "query": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
-    "plan": "VT12001: unsupported: cross-shard correlated subquery"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
     "comment": "correlated subquery part of an OR clause",
     "query": "select 1 from user u where u.col = 6 or exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
-    "plan": "VT12001: unsupported: EXISTS sub-queries are only supported with AND clause"
+    "plan": "VT12001: unsupported: unmergable subquery can not be inside complex expression"
   },
   {
     "comment": "cant switch sides for outer joins",
@@ -498,5 +503,20 @@
     "comment": "Cannot have more than one aggr(distinct...",
     "query": "select count(distinct a), count(distinct b) from user",
     "plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: count(distinct b)"
+  },
+  {
+    "comment": "subqueries not supported in the join condition of outer joins",
+    "query": "select unsharded_a.col from unsharded_a left join unsharded_b on unsharded_a.col IN (select col from user)",
+    "plan": "VT12001: unsupported: subquery in outer join predicate"
+  },
+  {
+    "comment": "subquery in ON clause, with left join primitives",
+    "query": "select unsharded.col from unsharded left join user on user.col in (select col from user)",
+    "plan": "VT12001: unsupported: subquery in outer join predicate"
+  },
+  {
+    "comment": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
+    "query": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   }
 ]

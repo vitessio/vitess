@@ -21,11 +21,10 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 type earlyRewriter struct {
@@ -48,6 +47,8 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		handleOrderBy(r, cursor, node)
 	case *sqlparser.OrExpr:
 		rewriteOrExpr(cursor, node)
+	case *sqlparser.NotExpr:
+		rewriteNotExpr(cursor, node)
 	case sqlparser.GroupBy:
 		r.clause = "group statement"
 	case *sqlparser.Literal:
@@ -58,6 +59,16 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		return handleComparisonExpr(cursor, node)
 	}
 	return nil
+}
+
+func rewriteNotExpr(cursor *sqlparser.Cursor, node *sqlparser.NotExpr) {
+	cmp, ok := node.Expr.(*sqlparser.ComparisonExpr)
+	if !ok {
+		return
+	}
+
+	cmp.Operator = sqlparser.Inverse(cmp.Operator)
+	cursor.Replace(cmp)
 }
 
 func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {

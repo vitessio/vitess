@@ -2168,18 +2168,13 @@ func (s *Server) checkIfPreviousJournalExists(ctx context.Context, mz *materiali
 // deleteWorkflowVDiffData cleans up any potential VDiff related data associated
 // with the workflow on the given tablet.
 func (s *Server) deleteWorkflowVDiffData(ctx context.Context, tablet *topodatapb.Tablet, workflow string) {
-	sqlDeleteVDiffs := `delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
-						inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
-						where vd.keyspace = %s and vd.workflow = %s`
-	query := fmt.Sprintf(sqlDeleteVDiffs, encodeString(tablet.Keyspace), encodeString(workflow))
-	rows := -1
-	if _, err := s.tmc.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
-		Query:   []byte(query),
-		MaxRows: uint64(rows),
+	if _, err := s.tmc.VDiff(ctx, tablet, &tabletmanagerdatapb.VDiffRequest{
+		Keyspace:  tablet.Keyspace,
+		Workflow:  workflow,
+		Action:    string(vdiff.DeleteAction),
+		ActionArg: vdiff.AllActionArg,
 	}); err != nil {
-		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Num != sqlerror.ERNoSuchTable { // the tables may not exist if no vdiffs have been run
-			log.Errorf("Error deleting vdiff data for %s.%s workflow: %v", tablet.Keyspace, workflow, err)
-		}
+		log.Errorf("Error deleting vdiff data for %s.%s workflow: %v", tablet.Keyspace, workflow, err)
 	}
 }
 

@@ -172,9 +172,6 @@ func TestRewrites(in *testing.T) {
 		in:       "select (select 42) from dual",
 		expected: "select 42 as `(select 42 from dual)` from dual",
 	}, {
-		in:       "select exists(select 1) from user",
-		expected: "select exists(select 1 limit 1) from user",
-	}, {
 		in:       "select * from user where col = (select 42)",
 		expected: "select * from user where col = 42",
 	}, {
@@ -273,22 +270,22 @@ func TestRewrites(in *testing.T) {
 		expected: "select * from tbl where id regexp '%foobar'",
 	}, {
 		in:       "SELECT * FROM tbl WHERE exists(select col1, col2 from other_table where foo > bar)",
-		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar limit 1)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar)",
 	}, {
 		in:       "SELECT * FROM tbl WHERE exists(select col1, col2 from other_table where foo > bar limit 100 offset 34)",
-		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar limit 1 offset 34)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar limit 100 offset 34)",
 	}, {
 		in:       "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2)",
-		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar limit 1)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar)",
 	}, {
 		in:       "SELECT * FROM tbl WHERE exists(select col1, col2 from other_table where foo > bar group by col1, col2)",
-		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar limit 1)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar)",
 	}, {
 		in:       "SELECT * FROM tbl WHERE exists(select count(*) from other_table where foo > bar)",
 		expected: "SELECT * FROM tbl WHERE true",
 	}, {
 		in:       "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3)",
-		expected: "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3 limit 1)",
+		expected: "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3)",
 	}, {
 		in:       "SELECT id, name, salary FROM user_details",
 		expected: "SELECT id, name, salary FROM (select user.id, user.name, user_extra.salary from user join user_extra where user.id = user_extra.user_id) as user_details",
@@ -521,8 +518,8 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 		in:       "SELECT 1 from (select 2 from test) t",
 		expected: "SELECT 1 from (select 2 from sys.test) t",
 	}, {
-		in:       "SELECT 1 from test where exists (select 2 from test)",
-		expected: "SELECT 1 from sys.test where exists (select 1 from sys.test limit 1)",
+		in:       "SELECT 1 from test where exists(select 2 from test)",
+		expected: "SELECT 1 from sys.test where exists(select 1 from sys.test)",
 	}, {
 		in:       "SELECT 1 from dual",
 		expected: "SELECT 1 from dual",

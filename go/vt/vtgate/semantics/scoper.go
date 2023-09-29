@@ -20,9 +20,8 @@ import (
 	"reflect"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -37,6 +36,7 @@ type (
 
 		// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
 		specialExprScopes map[*sqlparser.Literal]*scope
+		statementIDs      map[sqlparser.Statement]TableSet
 	}
 
 	scope struct {
@@ -54,6 +54,7 @@ func newScoper() *scoper {
 		rScope:            map[*sqlparser.Select]*scope{},
 		wScope:            map[*sqlparser.Select]*scope{},
 		specialExprScopes: map[*sqlparser.Literal]*scope{},
+		statementIDs:      map[sqlparser.Statement]TableSet{},
 	}
 }
 
@@ -181,6 +182,12 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 			s.popScope()
 		}
 	case *sqlparser.Select, sqlparser.GroupBy, *sqlparser.Update, *sqlparser.Delete, *sqlparser.Insert:
+		id := EmptyTableSet()
+		for _, tableInfo := range s.currentScope().tables {
+			set := tableInfo.getTableSet(s.org)
+			id = id.Merge(set)
+		}
+		s.statementIDs[s.currentScope().stmt] = id
 		s.popScope()
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {

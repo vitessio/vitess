@@ -56,7 +56,6 @@ func TestDerivedTableWithOrderByLimit(t *testing.T) {
 }
 
 func TestDerivedAggregationOnRHS(t *testing.T) {
-	t.Skip("skipped for now, issue: https://github.com/vitessio/vitess/issues/11703")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -85,7 +84,8 @@ func TestDerivedTableWithHaving(t *testing.T) {
 	mcmp.Exec("insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
 
 	mcmp.Exec("set sql_mode = ''")
-	mcmp.AssertMatchesAnyNoCompare("select  /*vt+ PLANNER=Gen4 */ * from (select id from user having count(*) >= 1) s", "[[INT64(1)]]", "[[INT64(4)]]")
+	// For the given query, we can get any id back, because we aren't grouping by it.
+	mcmp.AssertMatchesAnyNoCompare("select  /*vt+ PLANNER=Gen4 */ * from (select id from user having count(*) >= 1) s", "[[INT64(1)]]", "[[INT64(2)]]", "[[INT64(3)]]", "[[INT64(4)]]", "[[INT64(5)]]")
 }
 
 func TestDerivedTableColumns(t *testing.T) {

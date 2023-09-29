@@ -2484,21 +2484,6 @@ type (
 		Fsp  int // fractional seconds precision, integer from 0 to 6 or an Argument
 	}
 
-	// ExtractedSubquery is a subquery that has been extracted from the original AST
-	// This is a struct that the parser will never produce - it's written and read by the gen4 planner
-	// CAUTION: you should only change argName and hasValuesArg through the setter methods
-	ExtractedSubquery struct {
-		Original  Expr // original expression that was replaced by this ExtractedSubquery
-		OpCode    int  // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
-		Subquery  *Subquery
-		OtherSide Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
-		Merged    bool // tells whether we need to rewrite this subquery to Original or not
-
-		hasValuesArg string
-		argName      string
-		alternative  Expr // this is what will be used to Format this struct
-	}
-
 	// JSONPrettyExpr represents the function and argument for JSON_PRETTY()
 	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-pretty
 	JSONPrettyExpr struct {
@@ -3176,7 +3161,6 @@ func (*CharExpr) iExpr()                           {}
 func (*ConvertUsingExpr) iExpr()                   {}
 func (*MatchExpr) iExpr()                          {}
 func (*Default) iExpr()                            {}
-func (*ExtractedSubquery) iExpr()                  {}
 func (*TrimFuncExpr) iExpr()                       {}
 func (*JSONSchemaValidFuncExpr) iExpr()            {}
 func (*JSONSchemaValidationReportFuncExpr) iExpr() {}

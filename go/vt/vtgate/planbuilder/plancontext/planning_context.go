@@ -48,13 +48,24 @@ type PlanningContext struct {
 	// This is required for queries we are running with /*+ SET_VAR(foreign_key_checks=OFF) */
 	VerifyAllFKs bool
 
+	// SubqueriesSettled ..
+	SubqueriesSettled bool
+
 	// ParentFKToIgnore stores a specific parent foreign key that we would need to ignore while planning
 	// a certain query. This field is used in UPDATE CASCADE planning, wherein while planning the child update
 	// query, we need to ignore the parent foreign key constraint that caused the cascade in question.
 	ParentFKToIgnore string
+
+	// Projected subqueries that have been merged
+	MergedSubqueries []*sqlparser.Subquery
 }
 
-func CreatePlanningContext(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema VSchema, version querypb.ExecuteOptions_PlannerVersion) (*PlanningContext, error) {
+func CreatePlanningContext(stmt sqlparser.Statement,
+	reservedVars *sqlparser.ReservedVars,
+
+	vschema VSchema,
+	version querypb.ExecuteOptions_PlannerVersion,
+) (*PlanningContext, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
@@ -79,17 +90,24 @@ func CreatePlanningContext(stmt sqlparser.Statement, reservedVars *sqlparser.Res
 	}, nil
 }
 
-func (ctx *PlanningContext) IsSubQueryToReplace(e sqlparser.Expr) bool {
-	ext, ok := e.(*sqlparser.Subquery)
-	if !ok {
-		return false
-	}
-	for _, extractedSubq := range ctx.SemTable.GetSubqueryNeedingRewrite() {
-		if extractedSubq.Merged && ctx.SemTable.EqualsExpr(extractedSubq.Subquery, ext) {
-			return true
+func (ctx *PlanningContext) GetReservedArgumentFor(expr sqlparser.Expr) string {
+	for key, name := range ctx.ReservedArguments {
+		if ctx.SemTable.EqualsExpr(key, expr) {
+			return name
 		}
 	}
-	return false
+	var bvName string
+	switch expr := expr.(type) {
+	case *sqlparser.ColName:
+		bvName = ctx.ReservedVars.ReserveColName(expr)
+	case *sqlparser.Subquery:
+		bvName = ctx.ReservedVars.ReserveSubQuery()
+	default:
+		bvName = ctx.ReservedVars.ReserveVariable(sqlparser.CompliantString(expr))
+	}
+	ctx.ReservedArguments[expr] = bvName
+
+	return bvName
 }
 
 func (ctx *PlanningContext) GetArgumentFor(expr sqlparser.Expr, f func() string) string {

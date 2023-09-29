@@ -727,7 +727,26 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			FixedValue: sqltypes.NewInt64(num),
 		}, nil
 	case *sqlparser.ConvertUsingExpr:
-		colnum, err := findColumn(plan.Table, aliased.As)
+		// Here we find the actual column name in the convert, in case
+		// this is a column rename and the AS is the new column.
+		// For example, in convert(c1 using utf8mb4) as c2, we want to find
+		// c1, because c1 exists in the current table whereas c2 is the renamed column
+		// in the desired table.
+		var colName sqlparser.IdentifierCI
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				if !node.Qualifier.IsEmpty() {
+					return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
+				}
+				colName = node.Name
+			}
+			return true, nil
+		}, aliased.Expr)
+		if err != nil {
+			return ColExpr{}, fmt.Errorf("failed to find column name for convert using expression: %v, %v", sqlparser.String(aliased.Expr), err)
+		}
+		colnum, err := findColumn(plan.Table, colName)
 		if err != nil {
 			return ColExpr{}, err
 		}

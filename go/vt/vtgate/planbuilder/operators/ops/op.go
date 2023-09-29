@@ -44,7 +44,7 @@ type (
 		// TODO: we should remove this and replace it with rewriters
 		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
 
-		AddColumns(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error)
+		AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) (int, error)
 
 		FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error)
 
@@ -64,3 +64,14 @@ type (
 		SimplifiedExpr sqlparser.Expr
 	}
 )
+
+// Map takes in a mapping function and applies it to both the expression in OrderBy.
+func (ob OrderBy) Map(mappingFunc func(sqlparser.Expr) sqlparser.Expr) OrderBy {
+	return OrderBy{
+		Inner: &sqlparser.Order{
+			Expr:      mappingFunc(ob.Inner.Expr),
+			Direction: ob.Inner.Direction,
+		},
+		SimplifiedExpr: mappingFunc(ob.SimplifiedExpr),
+	}
+}

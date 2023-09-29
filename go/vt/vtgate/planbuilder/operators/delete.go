@@ -136,7 +136,7 @@ func createDeleteOperator(
 		return route, nil
 	}
 
-	primaryVindex, vindexAndPredicates, err := getVindexInformation(qt.ID, qt.Predicates, vindexTable)
+	primaryVindex, vindexAndPredicates, err := getVindexInformation(qt.ID, vindexTable)
 	if err != nil {
 		return nil, err
 	}
@@ -154,9 +154,14 @@ func createDeleteOperator(
 
 	del.OwnedVindexQuery = ovq
 
+	sqc := &SubQueryBuilder{}
 	for _, predicate := range qt.Predicates {
-		var err error
-		route.Routing, err = UpdateRoutingLogic(ctx, predicate, route.Routing)
+		if subq, err := sqc.handleSubquery(ctx, predicate, qt.ID); err != nil {
+			return nil, err
+		} else if subq != nil {
+			continue
+		}
+		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
 		if err != nil {
 			return nil, err
 		}
@@ -167,15 +172,7 @@ func createDeleteOperator(
 		return nil, vterrors.VT12001("multi shard DELETE with LIMIT")
 	}
 
-	subq, err := createSubqueryFromStatement(ctx, deleteStmt)
-	if err != nil {
-		return nil, err
-	}
-	if subq == nil {
-		return route, nil
-	}
-	subq.Outer = route
-	return subq, nil
+	return sqc.getRootOperator(route), nil
 }
 
 func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo) (ops.Operator, error) {
@@ -211,7 +208,7 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.O
 }
 
 func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, cols []int) (*FkChild, error) {
-	bvName := ctx.ReservedVars.ReserveVariable(foriegnKeyContraintValues)
+	bvName := ctx.ReservedVars.ReserveVariable(foreignKeyConstraintValues)
 
 	var childStmt sqlparser.Statement
 	switch fk.OnDelete {

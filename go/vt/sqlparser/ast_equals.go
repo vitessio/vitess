@@ -452,12 +452,6 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfExtractValueExpr(a, b)
-	case *ExtractedSubquery:
-		b, ok := inB.(*ExtractedSubquery)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfExtractedSubquery(a, b)
 	case *FirstOrLastValueExpr:
 		b, ok := inB.(*FirstOrLastValueExpr)
 		if !ok {
@@ -2523,24 +2517,6 @@ func (cmp *Comparator) RefOfExtractValueExpr(a, b *ExtractValueExpr) bool {
 	}
 	return cmp.Expr(a.Fragment, b.Fragment) &&
 		cmp.Expr(a.XPathExpr, b.XPathExpr)
-}
-
-// RefOfExtractedSubquery does deep equals between the two objects.
-func (cmp *Comparator) RefOfExtractedSubquery(a, b *ExtractedSubquery) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.OpCode == b.OpCode &&
-		a.Merged == b.Merged &&
-		a.hasValuesArg == b.hasValuesArg &&
-		a.argName == b.argName &&
-		cmp.Expr(a.Original, b.Original) &&
-		cmp.RefOfSubquery(a.Subquery, b.Subquery) &&
-		cmp.Expr(a.OtherSide, b.OtherSide) &&
-		cmp.Expr(a.alternative, b.alternative)
 }
 
 // RefOfFirstOrLastValueExpr does deep equals between the two objects.
@@ -6050,12 +6026,6 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfExtractValueExpr(a, b)
-	case *ExtractedSubquery:
-		b, ok := inB.(*ExtractedSubquery)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfExtractedSubquery(a, b)
 	case *FirstOrLastValueExpr:
 		b, ok := inB.(*FirstOrLastValueExpr)
 		if !ok {

@@ -29,19 +29,16 @@ import (
 
 // getVindexInformation returns the vindex and VindexPlusPredicates for the DML,
 // If it cannot find a unique vindex match, it returns an error.
-func getVindexInformation(
-	id semantics.TableSet,
-	predicates []sqlparser.Expr,
-	table *vindexes.Table,
-) (*vindexes.ColumnVindex, []*VindexPlusPredicates, error) {
+func getVindexInformation(id semantics.TableSet, table *vindexes.Table) (
+	*vindexes.ColumnVindex,
+	[]*VindexPlusPredicates,
+	error) {
+
 	// Check that we have a primary vindex which is valid
 	if len(table.ColumnVindexes) == 0 || !table.ColumnVindexes[0].IsUnique() {
 		return nil, nil, vterrors.VT09001(table.Name)
 	}
 	primaryVindex := table.ColumnVindexes[0]
-	if len(predicates) == 0 {
-		return primaryVindex, nil, nil
-	}
 
 	var vindexesAndPredicates []*VindexPlusPredicates
 	for _, colVindex := range table.Ordered {
@@ -59,7 +56,7 @@ func getVindexInformation(
 	return primaryVindex, vindexesAndPredicates, nil
 }
 
-func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI) (map[string]*engine.VindexValues, string, error) {
+func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI, assignments []SetExpr) (vv map[string]*engine.VindexValues, ownedVindexQuery string, subQueriesArgOnChangedVindex []string, err error) {
 	changedVindexes := make(map[string]*engine.VindexValues)
 	buf, offset := initialQuery(ksidCols, table)
 	for i, vindex := range table.ColumnVindexes {
@@ -68,24 +65,34 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 		for _, vcol := range vindex.Columns {
 			// Searching in order of columns in colvindex.
 			found := false
-			for _, assignment := range update.Exprs {
+			for _, assignment := range assignments {
 				if !vcol.Equal(assignment.Name.Name) {
 					continue
 				}
 				if found {
-					return nil, "", vterrors.VT03015(assignment.Name.Name)
+					return nil, "", nil, vterrors.VT03015(assignment.Name.Name)
 				}
 				found = true
-				pv, err := extractValueFromUpdate(assignment)
+				pv, err := evalengine.Translate(assignment.Expr.EvalExpr, nil)
 				if err != nil {
-					return nil, "", err
+					return nil, "", nil, invalidUpdateExpr(assignment.Name.Name.String(), assignment.Expr.EvalExpr)
 				}
+
+				if assignment.Expr.Info != nil {
+					sqe, ok := assignment.Expr.Info.(SubQueryExpression)
+					if ok {
+						for _, sq := range sqe {
+							subQueriesArgOnChangedVindex = append(subQueriesArgOnChangedVindex, sq.ArgName)
+						}
+					}
+				}
+
 				vindexValueMap[vcol.String()] = pv
 				if first {
-					buf.Myprintf(", %v", assignment)
+					buf.Myprintf(", %s", assignment.String())
 					first = false
 				} else {
-					buf.Myprintf(" and %v", assignment)
+					buf.Myprintf(" and %s", assignment.String())
 				}
 			}
 		}
@@ -95,31 +102,31 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 		}
 
 		if update.Limit != nil && len(update.OrderBy) == 0 {
-			return nil, "", vterrors.VT12001(fmt.Sprintf("you need to provide the ORDER BY clause when using LIMIT; invalid update on vindex: %v", vindex.Name))
+			return nil, "", nil, vterrors.VT12001(fmt.Sprintf("you need to provide the ORDER BY clause when using LIMIT; invalid update on vindex: %v", vindex.Name))
 		}
 		if i == 0 {
-			return nil, "", vterrors.VT12001(fmt.Sprintf("you cannot UPDATE primary vindex columns; invalid update on vindex: %v", vindex.Name))
+			return nil, "", nil, vterrors.VT12001(fmt.Sprintf("you cannot UPDATE primary vindex columns; invalid update on vindex: %v", vindex.Name))
 		}
 		if _, ok := vindex.Vindex.(vindexes.Lookup); !ok {
-			return nil, "", vterrors.VT12001(fmt.Sprintf("you can only UPDATE lookup vindexes; invalid update on vindex: %v", vindex.Name))
+			return nil, "", nil, vterrors.VT12001(fmt.Sprintf("you can only UPDATE lookup vindexes; invalid update on vindex: %v", vindex.Name))
 		}
 		changedVindexes[vindex.Name] = &engine.VindexValues{
-			PvMap:  vindexValueMap,
-			Offset: offset,
+			EvalExprMap: vindexValueMap,
+			Offset:      offset,
 		}
 		offset++
 	}
 	if len(changedVindexes) == 0 {
-		return nil, "", nil
+		return nil, "", nil, nil
 	}
 	// generate rest of the owned vindex query.
 	aTblExpr, ok := update.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, "", vterrors.VT12001("UPDATE on complex table expression")
+		return nil, "", nil, vterrors.VT12001("UPDATE on complex table expression")
 	}
 	tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: table.Name}, As: aTblExpr.As}
 	buf.Myprintf(" from %v%v%v%v for update", tblExpr, update.Where, update.OrderBy, update.Limit)
-	return changedVindexes, buf.String(), nil
+	return changedVindexes, buf.String(), subQueriesArgOnChangedVindex, nil
 }
 
 func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (*sqlparser.TrackedBuffer, int) {
@@ -142,27 +149,6 @@ func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (*sq
 	return buf, offset
 }
 
-// extractValueFromUpdate given an UpdateExpr, builds an evalengine.Expr
-func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (evalengine.Expr, error) {
-	expr := upd.Expr
-	if sq, ok := expr.(*sqlparser.ExtractedSubquery); ok {
-		// if we are planning an update that needs one or more values from the outside, we can trust that they have
-		// been correctly extracted from this query before we reach this far
-		// if Merged is true, it means that this subquery was happily merged with the outer.
-		// But in that case we should not be here, so we fail
-		if sq.Merged {
-			return nil, invalidUpdateExpr(upd, expr)
-		}
-		expr = sqlparser.NewArgument(sq.GetArgName())
-	}
-
-	pv, err := evalengine.Translate(expr, nil)
-	if err != nil || sqlparser.IsSimpleTuple(expr) {
-		return nil, invalidUpdateExpr(upd, expr)
-	}
-	return pv, nil
-}
-
-func invalidUpdateExpr(upd *sqlparser.UpdateExpr, expr sqlparser.Expr) error {
-	return vterrors.VT12001(fmt.Sprintf("only values are supported; invalid update on column: `%s` with expr: [%s]", upd.Name.Name.String(), sqlparser.String(expr)))
+func invalidUpdateExpr(upd string, expr sqlparser.Expr) error {
+	return vterrors.VT12001(fmt.Sprintf("only values are supported; invalid update on column: `%s` with expr: [%s]", upd, sqlparser.String(expr)))
 }

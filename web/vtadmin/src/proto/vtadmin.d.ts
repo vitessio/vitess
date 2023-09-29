@@ -44742,9 +44742,6 @@ export namespace vtctldata {
         /** ApplySchemaRequest wait_replicas_timeout */
         wait_replicas_timeout?: (vttime.IDuration|null);
 
-        /** ApplySchemaRequest skip_preflight */
-        skip_preflight?: (boolean|null);
-
         /** ApplySchemaRequest caller_id */
         caller_id?: (vtrpc.ICallerID|null);
 
@@ -44778,9 +44775,6 @@ export namespace vtctldata {
 
         /** ApplySchemaRequest wait_replicas_timeout. */
         public wait_replicas_timeout?: (vttime.IDuration|null);
-
-        /** ApplySchemaRequest skip_preflight. */
-        public skip_preflight: boolean;
 
         /** ApplySchemaRequest caller_id. */
         public caller_id?: (vtrpc.ICallerID|null);

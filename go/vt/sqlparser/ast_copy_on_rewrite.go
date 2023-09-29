@@ -164,8 +164,6 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfExtractFuncExpr(n, parent)
 	case *ExtractValueExpr:
 		return c.copyOnRewriteRefOfExtractValueExpr(n, parent)
-	case *ExtractedSubquery:
-		return c.copyOnRewriteRefOfExtractedSubquery(n, parent)
 	case *FirstOrLastValueExpr:
 		return c.copyOnRewriteRefOfFirstOrLastValueExpr(n, parent)
 	case *Flush:
@@ -2155,34 +2153,6 @@ func (c *cow) copyOnRewriteRefOfExtractValueExpr(n *ExtractValueExpr, parent SQL
 			res := *n
 			res.Fragment, _ = _Fragment.(Expr)
 			res.XPathExpr, _ = _XPathExpr.(Expr)
-			out = &res
-			if c.cloned != nil {
-				c.cloned(n, out)
-			}
-			changed = true
-		}
-	}
-	if c.post != nil {
-		out, changed = c.postVisit(out, parent, changed)
-	}
-	return
-}
-func (c *cow) copyOnRewriteRefOfExtractedSubquery(n *ExtractedSubquery, parent SQLNode) (out SQLNode, changed bool) {
-	if n == nil || c.cursor.stop {
-		return n, false
-	}
-	out = n
-	if c.pre == nil || c.pre(n, parent) {
-		_Original, changedOriginal := c.copyOnRewriteExpr(n.Original, n)
-		_Subquery, changedSubquery := c.copyOnRewriteRefOfSubquery(n.Subquery, n)
-		_OtherSide, changedOtherSide := c.copyOnRewriteExpr(n.OtherSide, n)
-		_alternative, changedalternative := c.copyOnRewriteExpr(n.alternative, n)
-		if changedOriginal || changedSubquery || changedOtherSide || changedalternative {
-			res := *n
-			res.Original, _ = _Original.(Expr)
-			res.Subquery, _ = _Subquery.(*Subquery)
-			res.OtherSide, _ = _OtherSide.(Expr)
-			res.alternative, _ = _alternative.(Expr)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -7049,8 +7019,6 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfExtractFuncExpr(n, parent)
 	case *ExtractValueExpr:
 		return c.copyOnRewriteRefOfExtractValueExpr(n, parent)
-	case *ExtractedSubquery:
-		return c.copyOnRewriteRefOfExtractedSubquery(n, parent)
 	case *FirstOrLastValueExpr:
 		return c.copyOnRewriteRefOfFirstOrLastValueExpr(n, parent)
 	case *FuncExpr:
