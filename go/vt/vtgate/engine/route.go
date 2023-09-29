@@ -606,14 +606,14 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 	}
 
 	replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
-	pool := vcursor.GetWarmingReadsChannel()
+	warmingReadsChannel := vcursor.GetWarmingReadsChannel()
 
 	select {
-	// if there's no more room in the pool, drop the warming read
-	case pool <- true:
+	// if there's no more room in the channel, drop the warming read
+	case warmingReadsChannel <- true:
 		go func(replicaVCursor VCursor) {
 			defer func() {
-				<-pool
+				<-warmingReadsChannel
 			}()
 			rss, _, err := route.findRoute(ctx, replicaVCursor, bindVars)
 			if err != nil {
