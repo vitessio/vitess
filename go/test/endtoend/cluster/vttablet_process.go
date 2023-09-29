@@ -112,6 +112,13 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--vreplication_tablet_type", vttablet.VreplicationTabletType,
 		"--db_charset", vttablet.Charset,
 	)
+	if v, err := GetMajorVersion("vttablet"); err != nil {
+		return err
+	} else if v >= 18 {
+		vttablet.proc.Args = append(vttablet.proc.Args, "--bind-address", "127.0.0.1")
+		vttablet.proc.Args = append(vttablet.proc.Args, "--grpc_bind_address", "127.0.0.1")
+	}
+
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--test.coverprofile="+getCoveragePath("vttablet.out"))
 	}

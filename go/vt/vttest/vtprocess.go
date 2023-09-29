@@ -127,6 +127,7 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	vtp.proc = exec.Command(
 		vtp.Binary,
 		"--port", fmt.Sprintf("%d", vtp.Port),
+		"--bind-address", "127.0.0.1",
 		"--log_dir", vtp.LogDirectory,
 		"--alsologtostderr",
 	)

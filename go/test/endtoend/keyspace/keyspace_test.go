@@ -248,7 +248,7 @@ func TestDeleteKeyspace(t *testing.T) {
 	// Start over and this time use recursive DeleteKeyspace to do everything.
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--", "--port=1234", "--keyspace=test_delete_keyspace", "--shard=0", "zone1-0000000100", "primary")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--", "--port=1234", "--bind-address=127.0.0.1", "--keyspace=test_delete_keyspace", "--shard=0", "zone1-0000000100", "primary")
 
 	// Create the serving/replication entries and check that they exist,
 	//  so we can later check they're deleted.
@@ -279,10 +279,10 @@ func TestDeleteKeyspace(t *testing.T) {
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace_removekscell")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace_removekscell/0")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace_removekscell/1")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--port=1234", "-keyspace=test_delete_keyspace_removekscell", "--shard=0", "zone1-0000000100", "primary")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--port=1234", "-keyspace=test_delete_keyspace_removekscell", "--shard=1", "zone1-0000000101", "primary")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--port=1234", "-keyspace=test_delete_keyspace_removekscell", "--shard=0", "zone2-0000000100", "replica")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--port=1234", "-keyspace=test_delete_keyspace_removekscell", "--shard=1", "zone2-0000000101", "replica")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=0", "zone1-0000000100", "primary")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=1", "zone1-0000000101", "primary")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=0", "zone2-0000000100", "replica")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=1", "zone2-0000000101", "replica")
 
 	// Create the serving/replication entries and check that they exist,  so we can later check they're deleted.
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace_removekscell")
