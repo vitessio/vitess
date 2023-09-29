@@ -90,7 +90,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		return err
 	} else if v >= 18 {
 		args = append(args, "--bind-address", "127.0.0.1")
-		args = append(args, "--grpc_bind-address", "127.0.0.1")
+		args = append(args, "--grpc_bind_address", "127.0.0.1")
 	}
 	// If no explicit mysql_server_version has been specified then we autodetect
 	// the MySQL version that will be used for the test and base the vtgate's

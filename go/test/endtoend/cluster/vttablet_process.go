@@ -116,7 +116,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		return err
 	} else if v >= 18 {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--bind-address", "127.0.0.1")
-		vttablet.proc.Args = append(vttablet.proc.Args, "--grpc_bind-address", "127.0.0.1")
+		vttablet.proc.Args = append(vttablet.proc.Args, "--grpc_bind_address", "127.0.0.1")
 	}
 
 	if *isCoverage {

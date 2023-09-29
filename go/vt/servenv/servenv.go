@@ -267,7 +267,7 @@ func FireRunHooks() {
 func RegisterDefaultFlags() {
 	OnParse(func(fs *pflag.FlagSet) {
 		fs.IntVar(&port, "port", port, "port for the server")
-		fs.StringVar(&bindAddress, "bind-address", bindAddress, "Bind address for the server.")
+		fs.StringVar(&bindAddress, "bind-address", bindAddress, "Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.")
 	})
 }
 

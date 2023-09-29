@@ -71,7 +71,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		return err
 	} else if v >= 18 {
 		vtctld.proc.Args = append(vtctld.proc.Args, "--bind-address", "127.0.0.1")
-		vtctld.proc.Args = append(vtctld.proc.Args, "--grpc_bind-address", "127.0.0.1")
+		vtctld.proc.Args = append(vtctld.proc.Args, "--grpc_bind_address", "127.0.0.1")
 	}
 
 	if *isCoverage {
