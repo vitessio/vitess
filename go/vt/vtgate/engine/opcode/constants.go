@@ -48,6 +48,10 @@ func (code PulloutOpcode) String() string {
 	return pulloutName[code]
 }
 
+func (code PulloutOpcode) NeedsListArg() bool {
+	return code == PulloutIn || code == PulloutNotIn
+}
+
 // MarshalJSON serializes the PulloutOpcode as a JSON string.
 // It's used for testing and diagnostics.
 func (code PulloutOpcode) MarshalJSON() ([]byte, error) {

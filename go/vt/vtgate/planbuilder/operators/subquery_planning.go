@@ -388,16 +388,22 @@ func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Project
 }
 
 func rewriteColNameToArgument(in sqlparser.Expr, se SubQueryExpression, subqueries ...*SubQuery) sqlparser.Expr {
-	cols := make(map[string]any)
-	for _, sq1 := range se {
-		for _, sq2 := range subqueries {
-			if sq1.ArgName == sq2.ArgName {
-				cols[sq1.ArgName] = nil
+	rewriteIt := func(s string) sqlparser.SQLNode {
+		for _, sq1 := range se {
+			if sq1.ArgName != s && sq1.HasValuesName != s {
+				continue
+			}
+
+			for _, sq2 := range subqueries {
+				switch {
+				case s == sq2.ArgName && sq1.FilterType.NeedsListArg():
+					return sqlparser.NewListArg(s)
+				case s == sq2.ArgName || s == sq2.HasValuesName:
+					return sqlparser.NewArgument(s)
+				}
 			}
 		}
-	}
-	if len(cols) <= 0 {
-		return in
+		return nil
 	}
 
 	// replace the ColNames with Argument inside the subquery
@@ -406,10 +412,10 @@ func rewriteColNameToArgument(in sqlparser.Expr, se SubQueryExpression, subqueri
 		if !ok || !col.Qualifier.IsEmpty() {
 			return true
 		}
-		if _, ok := cols[col.Name.String()]; !ok {
+		arg := rewriteIt(col.Name.String())
+		if arg == nil {
 			return true
 		}
-		arg := sqlparser.NewArgument(col.Name.String())
 		cursor.Replace(arg)
 		return true
 	})

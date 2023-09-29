@@ -242,7 +242,7 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Ope
 		}
 
 		var arg sqlparser.Expr
-		if sq.FilterType == opcode.PulloutIn || sq.FilterType == opcode.PulloutNotIn {
+		if sq.FilterType.NeedsListArg() {
 			arg = sqlparser.NewListArg(sq.ArgName)
 		} else {
 			arg = sqlparser.NewArgument(sq.ArgName)

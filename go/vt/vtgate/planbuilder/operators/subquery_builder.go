@@ -368,28 +368,50 @@ type subqueryExtraction struct {
 	cols        []string
 }
 
+func getOpCodeFromParent(parent sqlparser.SQLNode) *opcode.PulloutOpcode {
+	code := opcode.PulloutValue
+	switch parent := parent.(type) {
+	case *sqlparser.ExistsExpr:
+		return nil
+	case *sqlparser.ComparisonExpr:
+		switch parent.Operator {
+		case sqlparser.InOp:
+			code = opcode.PulloutIn
+		case sqlparser.NotInOp:
+			code = opcode.PulloutNotIn
+		}
+	}
+	return &code
+}
+
 func extractSubQueries(ctx *plancontext.PlanningContext, expr sqlparser.Expr, isDML bool) *subqueryExtraction {
 	sqe := &subqueryExtraction{}
-	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery) {
+	replaceWithArg := func(cursor *sqlparser.Cursor, sq *sqlparser.Subquery, t opcode.PulloutOpcode) {
 		sqName := ctx.GetReservedArgumentFor(sq)
 		sqe.cols = append(sqe.cols, sqName)
 		if isDML {
-			cursor.Replace(sqlparser.NewArgument(sqName))
+			if t.NeedsListArg() {
+				cursor.Replace(sqlparser.NewListArg(sqName))
+			} else {
+				cursor.Replace(sqlparser.NewArgument(sqName))
+			}
 		} else {
 			cursor.Replace(sqlparser.NewColName(sqName))
 		}
 		sqe.subq = append(sqe.subq, sq)
 	}
+
 	expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.Subquery:
-			if _, isExists := cursor.Parent().(*sqlparser.ExistsExpr); isExists {
+			t := getOpCodeFromParent(cursor.Parent())
+			if t == nil {
 				return true
 			}
-			replaceWithArg(cursor, node)
-			sqe.pullOutCode = append(sqe.pullOutCode, opcode.PulloutValue)
+			replaceWithArg(cursor, node, *t)
+			sqe.pullOutCode = append(sqe.pullOutCode, *t)
 		case *sqlparser.ExistsExpr:
-			replaceWithArg(cursor, node.Subquery)
+			replaceWithArg(cursor, node.Subquery, opcode.PulloutExists)
 			sqe.pullOutCode = append(sqe.pullOutCode, opcode.PulloutExists)
 		}
 		return true
