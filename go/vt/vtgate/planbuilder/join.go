@@ -94,3 +94,15 @@ func (j *join) ContainsTables() semantics.TableSet {
 func (j *join) OutputColumns() []sqlparser.SelectExpr {
 	return getOutputColumnsFromJoin(j.Cols, j.Left.OutputColumns(), j.Right.OutputColumns())
 }
+
+func getOutputColumnsFromJoin(ints []int, lhs []sqlparser.SelectExpr, rhs []sqlparser.SelectExpr) (cols []sqlparser.SelectExpr) {
+	for _, col := range ints {
+		if col < 0 {
+			col *= -1
+			cols = append(cols, lhs[col-1])
+		} else {
+			cols = append(cols, rhs[col-1])
+		}
+	}
+	return
+}

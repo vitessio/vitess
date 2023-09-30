@@ -51,7 +51,7 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator) (
 	case *operators.Filter:
 		return transformFilter(ctx, op)
 	case *operators.Horizon:
-		return transformHorizon(ctx, op)
+		panic("should have been solved in the operator")
 	case *operators.Projection:
 		return transformProjection(ctx, op)
 	case *operators.Limit:
@@ -340,16 +340,8 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (lo
 	predicate := op.PredicateWithOffsets
 	ast := ctx.SemTable.AndExpressions(op.Predicates...)
 
-	// this might already have been done on the operators
 	if predicate == nil {
-		predicate, err = evalengine.Translate(ast, &evalengine.Config{
-			ResolveType:   ctx.SemTable.TypeForExpr,
-			ResolveColumn: resolveFromPlan(ctx, plan, true),
-			Collation:     ctx.SemTable.Collation,
-		})
-		if err != nil {
-			return nil, err
-		}
+		panic("this should have already been done")
 	}
 
 	return &filter{
@@ -360,47 +352,6 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (lo
 			Truncate:     op.Truncate,
 		},
 	}, nil
-}
-
-func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon) (logicalPlan, error) {
-	if op.IsDerived() {
-		return transformDerivedPlan(ctx, op)
-	}
-	source, err := transformToLogicalPlan(ctx, op.Source)
-	if err != nil {
-		return nil, err
-	}
-	switch node := op.Query.(type) {
-	case *sqlparser.Select:
-		hp := horizonPlanning{
-			sel: node,
-		}
-
-		plan, err := hp.planHorizon(ctx, source, true)
-		if err != nil {
-			return nil, err
-		}
-		return planLimit(node.Limit, plan)
-	case *sqlparser.Union:
-		var err error
-		rb, isRoute := source.(*route)
-		if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
-			return nil, ctx.SemTable.NotSingleRouteErr
-		}
-		var plan logicalPlan
-		if isRoute && rb.isSingleShard() {
-			err = planSingleRoutePlan(node, rb)
-			plan = rb
-		} else {
-			plan, err = planOrderByOnUnion(ctx, source, node)
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		return planLimit(node.Limit, plan)
-	}
-	return nil, vterrors.VT13001("only SELECT and UNION implement the SelectStatement interface")
 }
 
 func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.ApplyJoin) (logicalPlan, error) {
@@ -744,52 +695,6 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (
 		noNeedToTypeCheck: nil,
 	}, nil
 
-}
-
-func transformDerivedPlan(ctx *plancontext.PlanningContext, op *operators.Horizon) (logicalPlan, error) {
-	// transforming the inner part of the derived table into a logical plan
-	// so that we can do horizon planning on the inner. If the logical plan
-	// we've produced is a Route, we set its Select.From field to be an aliased
-	// expression containing our derived table's inner select and the derived
-	// table's alias.
-
-	plan, err := transformToLogicalPlan(ctx, op.Source)
-	if err != nil {
-		return nil, err
-	}
-
-	plan, err = planHorizon(ctx, plan, op.Query, false)
-	if err != nil {
-		return nil, err
-	}
-
-	rb, isRoute := plan.(*route)
-	if !isRoute {
-		return &simpleProjection{
-			logicalPlanCommon: newBuilderCommon(plan),
-			eSimpleProj: &engine.SimpleProjection{
-				Cols: op.ColumnsOffset,
-			},
-		}, nil
-	}
-	innerSelect := rb.Select
-	derivedTable := &sqlparser.DerivedTable{Select: innerSelect}
-	tblExpr := &sqlparser.AliasedTableExpr{
-		Expr:    derivedTable,
-		As:      sqlparser.NewIdentifierCS(op.Alias),
-		Columns: op.ColumnAliases,
-	}
-	selectExprs := sqlparser.SelectExprs{}
-	for _, colName := range op.Columns {
-		selectExprs = append(selectExprs, &sqlparser.AliasedExpr{
-			Expr: colName,
-		})
-	}
-	rb.Select = &sqlparser.Select{
-		From:        []sqlparser.TableExpr{tblExpr},
-		SelectExprs: selectExprs,
-	}
-	return plan, nil
 }
 
 func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logicalPlan, error) {

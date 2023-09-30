@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -26,40 +24,6 @@ import (
 
 // This file has functions to analyze postprocessing
 // clauses like ORDER BY, etc.
-
-// make sure we have the right signature for this function
-var _ planVisitor = setUpperLimit
-
-// setUpperLimit is an optimization hint that tells that primitive
-// that it does not need to return more than the specified number of rows.
-// A primitive that cannot perform this can ignore the request.
-func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
-	switch node := plan.(type) {
-	case *join, *hashJoin:
-		return false, node, nil
-	case *memorySort:
-		pv := evalengine.NewBindVar("__upper_limit", sqltypes.Int64, collations.CollationBinaryID)
-		node.eMemorySort.UpperLimit = pv
-		// we don't want to go down to the rest of the tree
-		return false, node, nil
-	case *uncorrelatedSubquery:
-		// we control the visitation manually here -
-		// we don't want to visit the subQuery side of this plan
-		newUnderlying, err := visit(node.outer, setUpperLimit)
-		if err != nil {
-			return false, nil, err
-		}
-
-		node.outer = newUnderlying
-		return false, node, nil
-	case *route:
-		// The route pushes the limit regardless of the plan.
-		// If it's a scatter query, the rows returned will be
-		// more than the upper limit, but enough for the limit
-		node.Select.SetLimit(&sqlparser.Limit{Rowcount: sqlparser.NewArgument("__upper_limit")})
-	}
-	return true, plan, nil
-}
 
 func createLimit(input logicalPlan, limit *sqlparser.Limit) (logicalPlan, error) {
 	plan := newLimit(input)
