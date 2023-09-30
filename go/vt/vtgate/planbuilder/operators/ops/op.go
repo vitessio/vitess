@@ -23,11 +23,11 @@ import (
 
 type (
 	// Operator forms the tree of operators, representing the declarative query provided.
-	// While planning, the operator tree starts with logical operators, and later moves to physical operators.
-	// The difference between the two is that when we get to a physical operator, we have made decisions on in
-	// which order to do the joins, and how to split them up across shards and keyspaces.
-	// In some situation we go straight to the physical operator - when there are no options to consider,
-	// we can go straight to the end result.
+	// The operator tree is no actually runnable, it's an intermediate representation used
+	// while query planning
+	// The mental model are operators that pull data from each other, the root being the
+	// full query output, and the leaves are most often `Route`s, representing communication
+	// with one or more shards. We want to push down as much work as possible under these Routes
 	Operator interface {
 		// Clone will return a copy of this operator, protected so changed to the original will not impact the clone
 		Clone(inputs []Operator) Operator

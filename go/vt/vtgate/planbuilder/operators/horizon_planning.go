@@ -35,8 +35,8 @@ type (
 	}
 )
 
-func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (output ops.Operator, err error) {
-	output, err = planHorizons(ctx, root)
+func planQuery(ctx *plancontext.PlanningContext, root ops.Operator) (output ops.Operator, err error) {
+	output, err = runPhases(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -59,11 +59,11 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 	return addTruncationOrProjectionToReturnOutput(ctx, root, output)
 }
 
-// planHorizons is the process of figuring out how to perform the operations in the Horizon
+// runPhases is the process of figuring out how to perform the operations in the Horizon
 // If we can push it under a route - done.
 // If we can't, we will instead expand the Horizon into
 // smaller operators and try to push these down as far as possible
-func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.Operator, err error) {
+func runPhases(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.Operator, err error) {
 	op = root
 	for _, phase := range getPhases(ctx) {
 		ctx.CurrentPhase = int(phase)
@@ -94,26 +94,66 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		switch in := in.(type) {
 		case *Horizon:
+			if in.TableId != nil {
+				newOp, result, err := pushDerived(ctx, in)
+				if err != nil {
+					return nil, nil, err
+				}
+				if result != rewrite.SameTree {
+					return newOp, result, nil
+				}
+			}
+			if !reachedPhase(ctx, initialPlanning) {
+				return in, rewrite.SameTree, nil
+			}
 			return pushOrExpandHorizon(ctx, in)
+		case *Join:
+			return optimizeJoin(ctx, in)
 		case *Projection:
+			if !reachedPhase(ctx, initialPlanning) {
+				return in, rewrite.SameTree, nil
+			}
 			return tryPushProjection(ctx, in)
 		case *Limit:
+			if !reachedPhase(ctx, initialPlanning) {
+				return in, rewrite.SameTree, nil
+			}
 			return tryPushLimit(in)
 		case *Ordering:
+			if !reachedPhase(ctx, initialPlanning) {
+				return in, rewrite.SameTree, nil
+			}
 			return tryPushOrdering(ctx, in)
 		case *Aggregator:
+			if !reachedPhase(ctx, initialPlanning) {
+				return in, rewrite.SameTree, nil
+			}
 			return tryPushAggregator(ctx, in)
 		case *Filter:
 			return tryPushFilter(ctx, in)
 		case *Distinct:
+			if !reachedPhase(ctx, initialPlanning) {
+				return in, rewrite.SameTree, nil
+			}
 			return tryPushDistinct(in)
 		case *Union:
+			if !reachedPhase(ctx, initialPlanning) {
+				return in, rewrite.SameTree, nil
+			}
 			return tryPushUnion(ctx, in)
 		case *SubQueryContainer:
+			if !reachedPhase(ctx, initialPlanning) {
+				return in, rewrite.SameTree, nil
+			}
+
 			return pushOrMergeSubQueryContainer(ctx, in)
 		case *QueryGraph:
 			return optimizeQueryGraph(ctx, in)
 		case *LockAndComment:
+			if !reachedPhase(ctx, initialPlanning) {
+				return in, rewrite.SameTree, nil
+			}
+
 			return pushLockAndComment(in)
 		default:
 			return in, rewrite.SameTree, nil
