@@ -76,7 +76,7 @@ func runPhases(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.Oper
 			return nil, err
 		}
 
-		op, err = optimizeHorizonPlanning(ctx, op)
+		op, err = runRewriters(ctx, op)
 		if err != nil {
 			return nil, err
 		}
@@ -90,70 +90,32 @@ func runPhases(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.Oper
 	return addGroupByOnRHSOfJoin(op)
 }
 
-func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+func runRewriters(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		switch in := in.(type) {
 		case *Horizon:
-			if in.TableId != nil {
-				newOp, result, err := pushDerived(ctx, in)
-				if err != nil {
-					return nil, nil, err
-				}
-				if result != rewrite.SameTree {
-					return newOp, result, nil
-				}
-			}
-			if !reachedPhase(ctx, initialPlanning) {
-				return in, rewrite.SameTree, nil
-			}
 			return pushOrExpandHorizon(ctx, in)
 		case *Join:
 			return optimizeJoin(ctx, in)
 		case *Projection:
-			if !reachedPhase(ctx, initialPlanning) {
-				return in, rewrite.SameTree, nil
-			}
 			return tryPushProjection(ctx, in)
 		case *Limit:
-			if !reachedPhase(ctx, initialPlanning) {
-				return in, rewrite.SameTree, nil
-			}
 			return tryPushLimit(in)
 		case *Ordering:
-			if !reachedPhase(ctx, initialPlanning) {
-				return in, rewrite.SameTree, nil
-			}
 			return tryPushOrdering(ctx, in)
 		case *Aggregator:
-			if !reachedPhase(ctx, initialPlanning) {
-				return in, rewrite.SameTree, nil
-			}
 			return tryPushAggregator(ctx, in)
 		case *Filter:
 			return tryPushFilter(ctx, in)
 		case *Distinct:
-			if !reachedPhase(ctx, initialPlanning) {
-				return in, rewrite.SameTree, nil
-			}
 			return tryPushDistinct(in)
 		case *Union:
-			if !reachedPhase(ctx, initialPlanning) {
-				return in, rewrite.SameTree, nil
-			}
 			return tryPushUnion(ctx, in)
 		case *SubQueryContainer:
-			if !reachedPhase(ctx, initialPlanning) {
-				return in, rewrite.SameTree, nil
-			}
-
 			return pushOrMergeSubQueryContainer(ctx, in)
 		case *QueryGraph:
 			return optimizeQueryGraph(ctx, in)
 		case *LockAndComment:
-			if !reachedPhase(ctx, initialPlanning) {
-				return in, rewrite.SameTree, nil
-			}
-
 			return pushLockAndComment(in)
 		default:
 			return in, rewrite.SameTree, nil
@@ -188,6 +150,20 @@ func pushLockAndComment(l *LockAndComment) (ops.Operator, *rewrite.ApplyResult, 
 }
 
 func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
+	if in.IsDerived() {
+		newOp, result, err := pushDerived(ctx, in)
+		if err != nil {
+			return nil, nil, err
+		}
+		if result != rewrite.SameTree {
+			return newOp, result, nil
+		}
+	}
+
+	if !reachedPhase(ctx, initialPlanning) {
+		return in, rewrite.SameTree, nil
+	}
+
 	if ctx.SemTable.QuerySignature.SubQueries {
 		return expandHorizon(ctx, in)
 	}
