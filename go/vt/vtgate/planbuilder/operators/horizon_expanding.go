@@ -63,8 +63,11 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 
 	if horizon.TableId != nil {
 		proj := newAliasedProjection(op)
-		proj.TableID = horizon.TableId
-		proj.Alias = horizon.Alias
+		proj.DT = &DerivedTable{
+			TableID: *horizon.TableId,
+			Alias:   horizon.Alias,
+			Columns: horizon.ColumnAliases,
+		}
 		op = proj
 	}
 
@@ -135,13 +138,21 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 		return nil, err
 	}
 
+	var dt *DerivedTable
+	if horizon.TableId != nil {
+		dt = &DerivedTable{
+			TableID: *horizon.TableId,
+			Alias:   horizon.Alias,
+			Columns: horizon.ColumnAliases,
+		}
+	}
+
 	if !qp.NeedsAggregation() {
 		projX, err := createProjectionWithoutAggr(ctx, qp, horizon.src())
 		if err != nil {
 			return nil, err
 		}
-		projX.TableID = horizon.TableId
-		projX.Alias = horizon.Alias
+		projX.DT = dt
 		out = projX
 
 		return out, nil
@@ -158,8 +169,7 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 		QP:           qp,
 		Grouping:     qp.GetGrouping(),
 		Aggregations: aggregations,
-		TableID:      horizon.TableId,
-		Alias:        horizon.Alias,
+		DT:           dt,
 	}
 
 	if complexAggr {
@@ -204,8 +214,7 @@ outer:
 
 func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) (ops.Operator, error) {
 	p := newAliasedProjection(a)
-	p.Alias = a.Alias
-	p.TableID = a.TableID
+	p.DT = a.DT
 	for _, expr := range qp.SelectExprs {
 		ae, err := expr.GetAliasedExpr()
 		if err != nil {
