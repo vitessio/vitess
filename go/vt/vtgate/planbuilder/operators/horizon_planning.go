@@ -66,15 +66,16 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.Operator, err error) {
 	op = root
 	for _, phase := range getPhases(ctx) {
+		ctx.CurrentPhase = int(phase)
 		if rewrite.DebugOperatorTree {
-			fmt.Printf("PHASE: %s\n", phase.Name)
+			fmt.Printf("PHASE: %s\n", phase.String())
 		}
-		if phase.action != nil {
-			op, err = phase.action(ctx, op)
-			if err != nil {
-				return nil, err
-			}
+
+		op, err = phase.act(ctx, op)
+		if err != nil {
+			return nil, err
 		}
+
 		op, err = optimizeHorizonPlanning(ctx, op)
 		if err != nil {
 			return nil, err
@@ -217,7 +218,7 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *
 		return p, rewrite.SameTree, nil
 	}
 
-	if !ctx.SubqueriesSettled || err != nil {
+	if !reachedPhase(ctx, subquerySettling) || err != nil {
 		return p, rewrite.SameTree, nil
 	}
 

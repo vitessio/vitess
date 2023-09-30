@@ -219,7 +219,7 @@ func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjectio
 // been settled. Once they have settled, we know where to push the projection, but if we push too early
 // the projection can end up in the wrong branch of joins
 func (p *Projection) canPush(ctx *plancontext.PlanningContext) bool {
-	if ctx.SubqueriesSettled {
+	if reachedPhase(ctx, subquerySettling) {
 		return true
 	}
 	ap, ok := p.Columns.(AliasedProjections)

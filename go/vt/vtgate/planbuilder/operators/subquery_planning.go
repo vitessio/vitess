@@ -101,7 +101,6 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Op
 		}
 		return op, rewrite.SameTree, nil
 	}
-	ctx.SubqueriesSettled = true
 	return rewrite.BottomUp(op, TableID, visit, nil)
 }
 
