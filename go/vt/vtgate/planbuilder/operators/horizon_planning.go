@@ -666,6 +666,21 @@ func canPushLeft(ctx *plancontext.PlanningContext, aj *ApplyJoin, order []ops.Or
 	return true
 }
 
+func isOuterTable(op ops.Operator, ts semantics.TableSet) bool {
+	aj, ok := op.(*ApplyJoin)
+	if ok && aj.LeftJoin && TableID(aj.RHS).IsOverlapping(ts) {
+		return true
+	}
+
+	for _, op := range op.Inputs() {
+		if isOuterTable(op, ts) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := in.Source.(type) {
 	case *Projection:
@@ -673,9 +688,13 @@ func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, 
 	case *Route:
 		for _, pred := range in.Predicates {
 			var err error
-			src.Routing, err = src.Routing.updateRoutingLogic(ctx, pred)
-			if err != nil {
-				return nil, nil, err
+			deps := ctx.SemTable.RecursiveDeps(pred)
+			if !isOuterTable(src, deps) {
+				// we can only update based on predicates on inner tables
+				src.Routing, err = src.Routing.updateRoutingLogic(ctx, pred)
+				if err != nil {
+					return nil, nil, err
+				}
 			}
 		}
 		return rewrite.Swap(in, src, "push filter into Route")
