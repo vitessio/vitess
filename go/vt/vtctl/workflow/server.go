@@ -3441,7 +3441,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		if len(colVindex.Columns) != 0 {
 			colName = colVindex.Columns[0]
 		}
-		if colName == sourceVindexColumns[0] && !proto.Equal(sourceVSchemaTable, targetVSchema.Tables[sourceTableName]) {
+		if colName == sourceVindexColumns[0] {
 			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting ColumnVindex on column %s in table %s already exists in the source vschema",
 				colName, sourceTableName)
 		}
