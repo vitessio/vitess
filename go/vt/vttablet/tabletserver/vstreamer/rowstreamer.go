@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
@@ -271,7 +272,8 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 	// of the PK columns which are used in the ORDER BY clause below.
 	var indexHint string
 	if st.PKIndexName != "" {
-		indexHint = fmt.Sprintf(" force index (`%s`)", st.PKIndexName)
+		indexHint = fmt.Sprintf(" force index (%s)",
+			sqlescape.EscapeID(sqlescape.UnescapeID(st.PKIndexName)))
 	}
 	buf.Myprintf(" from %v%s", sqlparser.NewIdentifierCS(rs.plan.Table.Name), indexHint)
 	if len(rs.lastpk) != 0 {
