@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
@@ -118,7 +119,7 @@ func (rs *rowStreamer) Cancel() {
 }
 
 func (rs *rowStreamer) Stream() error {
-	// Ensure sh is Open. If vttablet came up in a non_serving role,
+	// Ensure se is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
 	if err := rs.se.Open(); err != nil {
 		return err
@@ -154,11 +155,11 @@ func (rs *rowStreamer) buildPlan() error {
 		// with vitess migrations, based on vreplication.
 		// Vitess migrations use an elaborate cut-over flow where tables are swapped away while traffic is
 		// being blocked. The RENAME flow is such that at some point the table is renamed away, leaving a
-		// "puncture"; this is an event the is captured by vstreamer. The completion of the flow fixes the
+		// "puncture"; this is an event that is captured by vstreamer. The completion of the flow fixes the
 		// puncture, and places a new table under the original table's name, but the way it is done does not
 		// cause vstreamer to refresh schema state.
-		// there is therefore a reproducable valid sequence of events where vstreamer thinks a table does not exist,
-		// where it in fact does exist.
+		// There is therefore a reproducable valid sequence of events where vstreamer thinks a table does not
+		// exist, where it in fact does exist.
 		// For this reason we give vstreamer a "second chance" to review the up-to-date state of the schema.
 		// In the future, we will reduce this operation to reading a single table rather than the entire schema.
 		rs.se.ReloadAt(context.Background(), replication.Position{})
@@ -198,7 +199,7 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
-	rs.sendQuery, err = rs.buildSelect()
+	rs.sendQuery, err = rs.buildSelect(st)
 	if err != nil {
 		return err
 	}
@@ -226,13 +227,13 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 	}
 	var pkColumns = make([]int, 0)
 	if len(st.PKColumns) == 0 {
-		// Use a PK equivalent if one exists
+		// Use a PK equivalent if one exists.
 		pkColumns, err := rs.vse.mapPKEquivalentCols(rs.ctx, st)
 		if err == nil && len(pkColumns) != 0 {
 			return pkColumns, nil
 		}
 
-		// Fall back to using every column in the table if there's no PK or PKE
+		// Fall back to using every column in the table if there's no PK or PKE.
 		pkColumns = make([]int, len(st.Fields))
 		for i := range st.Fields {
 			pkColumns[i] = i
@@ -245,10 +246,11 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 		}
 		pkColumns = append(pkColumns, int(pk))
 	}
+	st.PKIndexName = "PRIMARY"
 	return pkColumns, nil
 }
 
-func (rs *rowStreamer) buildSelect() (string, error) {
+func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error) {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	// We could have used select *, but being explicit is more predictable.
 	buf.Myprintf("select ")
@@ -263,18 +265,28 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 		}
 		prefix = ", "
 	}
-	buf.Myprintf(" from %v", sqlparser.NewIdentifierCS(rs.plan.Table.Name))
+	// If we know the index name that we should be using then tell MySQL
+	// to use it if possible. This helps to ensure that we are able to
+	// leverage the ordering from the index itself and avoid having to
+	// do a FILESORT of all the results. This index should contain all
+	// of the PK columns which are used in the ORDER BY clause below.
+	var indexHint string
+	if st.PKIndexName != "" {
+		indexHint = fmt.Sprintf(" force index (%s)",
+			sqlescape.EscapeID(sqlescape.UnescapeID(st.PKIndexName)))
+	}
+	buf.Myprintf(" from %v%s", sqlparser.NewIdentifierCS(rs.plan.Table.Name), indexHint)
 	if len(rs.lastpk) != 0 {
 		if len(rs.lastpk) != len(rs.pkColumns) {
 			return "", fmt.Errorf("primary key values don't match length: %v vs %v", rs.lastpk, rs.pkColumns)
 		}
 		buf.WriteString(" where ")
 		prefix := ""
-		// This loop handles the case for composite pks. For example,
+		// This loop handles the case for composite PKs. For example,
 		// if lastpk was (1,2), the where clause would be:
 		// (col1 = 1 and col2 > 2) or (col1 > 1).
 		// A tuple inequality like (col1,col2) > (1,2) ends up
-		// being a full table scan for mysql.
+		// being a full table scan for MySQL.
 		for lastcol := len(rs.pkColumns) - 1; lastcol >= 0; lastcol-- {
 			buf.Myprintf("%s(", prefix)
 			prefix = " or "
