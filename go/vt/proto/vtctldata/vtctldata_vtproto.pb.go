@@ -2542,11 +2542,11 @@ func (m *LookupVindexCreateRequest) CloneVT() *LookupVindexCreateRequest {
 		return (*LookupVindexCreateRequest)(nil)
 	}
 	r := &LookupVindexCreateRequest{
-		Workflow:                  m.Workflow,
-		TargetKeyspace:            m.TargetKeyspace,
-		ContinueAfterCopy:         m.ContinueAfterCopy,
-		TabletSelectionPreference: m.TabletSelectionPreference,
-		Vindex:                    m.Vindex.CloneVT(),
+		Workflow:                   m.Workflow,
+		TargetKeyspace:             m.TargetKeyspace,
+		ContinueAfterCopyWithOwner: m.ContinueAfterCopyWithOwner,
+		TabletSelectionPreference:  m.TabletSelectionPreference,
+		Vindex:                     m.Vindex.CloneVT(),
 	}
 	if rhs := m.Cells; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
@@ -11775,9 +11775,9 @@ func (m *LookupVindexCreateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, er
 		i--
 		dAtA[i] = 0x30
 	}
-	if m.ContinueAfterCopy {
+	if m.ContinueAfterCopyWithOwner {
 		i--
-		if m.ContinueAfterCopy {
+		if m.ContinueAfterCopyWithOwner {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -20708,7 +20708,7 @@ func (m *LookupVindexCreateRequest) SizeVT() (n int) {
 		}
 		n += 1 + sov(uint64(l)) + l
 	}
-	if m.ContinueAfterCopy {
+	if m.ContinueAfterCopyWithOwner {
 		n += 2
 	}
 	if m.TabletSelectionPreference != 0 {
@@ -39731,7 +39731,7 @@ func (m *LookupVindexCreateRequest) UnmarshalVT(dAtA []byte) error {
 			}
 		case 5:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ContinueAfterCopy", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ContinueAfterCopyWithOwner", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -39748,7 +39748,7 @@ func (m *LookupVindexCreateRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.ContinueAfterCopy = bool(v != 0)
+			m.ContinueAfterCopyWithOwner = bool(v != 0)
 		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TabletSelectionPreference", wireType)

@@ -1000,7 +1000,7 @@ message LookupVindexCreateRequest {
   string target_keyspace = 2;
   repeated string cells = 3;
   repeated topodata.TabletType tablet_types = 4;
-  bool continue_after_copy = 5;
+  bool continue_after_copy_with_owner = 5;
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 6;
   vschema.Keyspace vindex = 7;
 }

@@ -974,9 +974,9 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 	span.Annotate("target_keyspace", req.TargetKeyspace)
 	span.Annotate("cells", req.Cells)
 	span.Annotate("tablet_types", req.TabletTypes)
-	span.Annotate("continue_after_copy", req.ContinueAfterCopy)
+	span.Annotate("continue_after_copy", req.ContinueAfterCopyWithOwner)
 
-	ms, sourceVSchema, targetVSchema, err := s.prepareCreateLookup(ctx, req.Workflow, req.TargetKeyspace, req.Vindex, req.ContinueAfterCopy)
+	ms, sourceVSchema, targetVSchema, err := s.prepareCreateLookup(ctx, req.Workflow, req.TargetKeyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
 	if err != nil {
 		return nil, err
 	}

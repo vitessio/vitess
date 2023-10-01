@@ -54554,8 +54554,8 @@ export namespace vtctldata {
         /** LookupVindexCreateRequest tablet_types */
         tablet_types?: (topodata.TabletType[]|null);
 
-        /** LookupVindexCreateRequest continue_after_copy */
-        continue_after_copy?: (boolean|null);
+        /** LookupVindexCreateRequest continue_after_copy_with_owner */
+        continue_after_copy_with_owner?: (boolean|null);
 
         /** LookupVindexCreateRequest tablet_selection_preference */
         tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
@@ -54585,8 +54585,8 @@ export namespace vtctldata {
         /** LookupVindexCreateRequest tablet_types. */
         public tablet_types: topodata.TabletType[];
 
-        /** LookupVindexCreateRequest continue_after_copy. */
-        public continue_after_copy: boolean;
+        /** LookupVindexCreateRequest continue_after_copy_with_owner. */
+        public continue_after_copy_with_owner: boolean;
 
         /** LookupVindexCreateRequest tablet_selection_preference. */
         public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;

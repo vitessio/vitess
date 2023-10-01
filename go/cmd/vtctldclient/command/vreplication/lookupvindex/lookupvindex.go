@@ -59,7 +59,7 @@ var (
 		Cells                        []string
 		TabletTypes                  []topodatapb.TabletType
 		TabletTypesInPreferenceOrder bool
-		ContinueAfterCopy            bool
+		ContinueAfterCopyWithOwner   bool
 		Vindex                       *vschemapb.Keyspace
 	}{}
 
@@ -116,13 +116,13 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	_, err = common.GetClient().LookupVindexCreate(common.GetCommandCtx(), &vtctldatapb.LookupVindexCreateRequest{
-		Workflow:                  common.BaseOptions.Workflow,
-		TargetKeyspace:            common.BaseOptions.TargetKeyspace,
-		Vindex:                    createOptions.Vindex,
-		Cells:                     createOptions.Cells,
-		TabletTypes:               createOptions.TabletTypes,
-		TabletSelectionPreference: tsp,
-		ContinueAfterCopy:         createOptions.ContinueAfterCopy,
+		Workflow:                   common.BaseOptions.Workflow,
+		TargetKeyspace:             common.BaseOptions.TargetKeyspace,
+		Vindex:                     createOptions.Vindex,
+		Cells:                      createOptions.Cells,
+		TabletTypes:                createOptions.TabletTypes,
+		TabletSelectionPreference:  tsp,
+		ContinueAfterCopyWithOwner: createOptions.ContinueAfterCopyWithOwner,
 	})
 
 	if err != nil {
@@ -198,7 +198,7 @@ func registerCommands(root *cobra.Command) {
 
 	create.Flags().StringSliceVar(&createOptions.Cells, "cells", nil, "Cells to look in for source tablets to replicate from.")
 	create.Flags().Var((*topoprotopb.TabletTypeListFlag)(&createOptions.TabletTypes), "tablet-types", "Source tablet types to replicate from.")
-	create.Flags().BoolVar(&createOptions.ContinueAfterCopy, "continue-after-copy-with-owner", false, "Vindex will continue materialization after copy when an owner is provided")
+	create.Flags().BoolVar(&createOptions.ContinueAfterCopyWithOwner, "continue-after-copy-with-owner", false, "Vindex will continue materialization after copy when an owner is provided")
 	create.Flags().BoolVar(&createOptions.TabletTypesInPreferenceOrder, "tablet-types-in-preference-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
 	base.AddCommand(create)
 
