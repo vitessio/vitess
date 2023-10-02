@@ -3076,40 +3076,32 @@
       "QueryType": "SELECT",
       "Original": "select i+1 from (select user.id from user join user_extra) t(i)",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          1
-        ],
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.id, `user`.id + 1 from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.id + 1 from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select i + 1 from (select `user`.id from `user` where 1 != 1) as t(i) where 1 != 1",
+            "Query": "select i + 1 from (select `user`.id from `user`) as t(i)",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
           }
         ]
       },

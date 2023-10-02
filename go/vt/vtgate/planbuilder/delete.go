@@ -59,7 +59,6 @@ func gen4DeleteStmtPlanner(
 	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
 		if fkManagementNotRequired(ctx, vschema, tables) {
 			plan := deleteUnshardedShortcut(deleteStmt, ks, tables)
-			plan = pushCommentDirectivesOnPlan(plan, deleteStmt)
 			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
 		}
 	}

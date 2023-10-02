@@ -21,7 +21,6 @@ import (
 	"io"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -30,36 +29,14 @@ import (
 
 type (
 	projector struct {
-		columns []*ProjExpr
+		columns               []*ProjExpr
+		columnAliases         sqlparser.Columns
+		explicitColumnAliases bool
 	}
 )
 
-func errHorizonNotPlanned() error {
-	if rewrite.DebugOperatorTree {
-		fmt.Println("ERROR! Falling back on the old horizon planner")
-	}
-	return _errHorizonNotPlanned
-}
-
-var _errHorizonNotPlanned = vterrors.VT12001("query cannot be fully operator planned")
-
-func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (output ops.Operator, err error) {
-	backup := Clone(root)
-	defer func() {
-		// If we encounter the _errHorizonNotPlanned error, we'll revert to using the old horizon planning strategy.
-		if err == _errHorizonNotPlanned {
-			// The only offset planning we did before was on joins.
-			// Therefore, we traverse the tree to find all joins and calculate the joinColumns offsets.
-			// Our fallback strategy is to clone the original operator tree, compute the join offsets,
-			// and allow the legacy horizonPlanner to handle this query using logical plans.
-			err = planOffsetsOnJoins(ctx, backup)
-			if err == nil {
-				output = backup
-			}
-		}
-	}()
-
-	output, err = planHorizons(ctx, root)
+func planQuery(ctx *plancontext.PlanningContext, root ops.Operator) (output ops.Operator, err error) {
+	output, err = runPhases(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -82,23 +59,24 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 	return addTruncationOrProjectionToReturnOutput(ctx, root, output)
 }
 
-// planHorizons is the process of figuring out how to perform the operations in the Horizon
+// runPhases is the process of figuring out how to perform the operations in the Horizon
 // If we can push it under a route - done.
 // If we can't, we will instead expand the Horizon into
 // smaller operators and try to push these down as far as possible
-func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.Operator, err error) {
+func runPhases(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.Operator, err error) {
 	op = root
 	for _, phase := range getPhases(ctx) {
+		ctx.CurrentPhase = int(phase)
 		if rewrite.DebugOperatorTree {
-			fmt.Printf("PHASE: %s\n", phase.Name)
+			fmt.Printf("PHASE: %s\n", phase.String())
 		}
-		if phase.action != nil {
-			op, err = phase.action(ctx, op)
-			if err != nil {
-				return nil, err
-			}
+
+		op, err = phase.act(ctx, op)
+		if err != nil {
+			return nil, err
 		}
-		op, err = optimizeHorizonPlanning(ctx, op)
+
+		op, err = runRewriters(ctx, op)
 		if err != nil {
 			return nil, err
 		}
@@ -112,11 +90,13 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.O
 	return addGroupByOnRHSOfJoin(op)
 }
 
-func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+func runRewriters(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		switch in := in.(type) {
 		case *Horizon:
 			return pushOrExpandHorizon(ctx, in)
+		case *Join:
+			return optimizeJoin(ctx, in)
 		case *Projection:
 			return tryPushProjection(ctx, in)
 		case *Limit:
@@ -150,7 +130,7 @@ func pushLockAndComment(l *LockAndComment) (ops.Operator, *rewrite.ApplyResult, 
 	case *Horizon, *QueryGraph:
 		// we want to wait until the horizons have been pushed under a route or expanded
 		// that way we know that we've replaced the QueryGraphs with Routes
-		return nil, rewrite.SameTree, nil
+		return src, rewrite.SameTree, nil
 	case *Route:
 		src.Comments = l.Comments
 		src.Lock = l.Lock
@@ -170,8 +150,18 @@ func pushLockAndComment(l *LockAndComment) (ops.Operator, *rewrite.ApplyResult, 
 }
 
 func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
-	if len(in.ColumnAliases) > 0 {
-		return nil, nil, errHorizonNotPlanned()
+	if in.IsDerived() {
+		newOp, result, err := pushDerived(ctx, in)
+		if err != nil {
+			return nil, nil, err
+		}
+		if result != rewrite.SameTree {
+			return newOp, result, nil
+		}
+	}
+
+	if !reachedPhase(ctx, initialPlanning) {
+		return in, rewrite.SameTree, nil
 	}
 
 	if ctx.SemTable.QuerySignature.SubQueries {
@@ -244,7 +234,7 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *
 		return p, rewrite.SameTree, nil
 	}
 
-	if !ctx.SubqueriesSettled || err != nil {
+	if !reachedPhase(ctx, subquerySettling) || err != nil {
 		return p, rewrite.SameTree, nil
 	}
 
@@ -287,8 +277,11 @@ func pushProjectionInVindex(
 	return src, rewrite.NewTree("push projection into vindex", p), nil
 }
 
-func (p *projector) add(pe *ProjExpr) {
+func (p *projector) add(pe *ProjExpr, col *sqlparser.IdentifierCI) {
 	p.columns = append(p.columns, pe)
+	if col != nil {
+		p.columnAliases = append(p.columnAliases, *col)
+	}
 }
 
 // pushProjectionInApplyJoin pushes down a projection operation into an ApplyJoin operation.
@@ -306,16 +299,24 @@ func pushProjectionInApplyJoin(
 		return p, rewrite.SameTree, nil
 	}
 	lhs, rhs := &projector{}, &projector{}
+	if p.DT != nil && len(p.DT.Columns) > 0 {
+		lhs.explicitColumnAliases = true
+		rhs.explicitColumnAliases = true
+	}
 
 	src.JoinColumns = nil
-	for _, pe := range ap {
-		err := splitProjectionAcrossJoin(ctx, src, lhs, rhs, pe)
+	for idx, pe := range ap {
+		var col *sqlparser.IdentifierCI
+		if p.DT != nil && idx < len(p.DT.Columns) {
+			col = &p.DT.Columns[idx]
+		}
+		err := splitProjectionAcrossJoin(ctx, src, lhs, rhs, pe, col)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
-	if p.TableID != nil {
+	if p.isDerived() {
 		err := exposeColumnsThroughDerivedTable(ctx, p, src, lhs)
 		if err != nil {
 			return nil, nil, err
@@ -323,12 +324,12 @@ func pushProjectionInApplyJoin(
 	}
 
 	// Create and update the Projection operators for the left and right children, if needed.
-	src.LHS, err = createProjectionWithTheseColumns(ctx, src.LHS, lhs, p.TableID, p.Alias)
+	src.LHS, err = createProjectionWithTheseColumns(ctx, src.LHS, lhs, p.DT)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	src.RHS, err = createProjectionWithTheseColumns(ctx, src.RHS, rhs, p.TableID, p.Alias)
+	src.RHS, err = createProjectionWithTheseColumns(ctx, src.RHS, rhs, p.DT)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -343,6 +344,7 @@ func splitProjectionAcrossJoin(
 	join *ApplyJoin,
 	lhs, rhs *projector,
 	pe *ProjExpr,
+	colAlias *sqlparser.IdentifierCI,
 ) error {
 
 	// Check if the current expression can reuse an existing column in the ApplyJoin.
@@ -350,7 +352,7 @@ func splitProjectionAcrossJoin(
 		return nil
 	}
 
-	col, err := splitUnexploredExpression(ctx, join, lhs, rhs, pe)
+	col, err := splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias)
 	if err != nil {
 		return err
 	}
@@ -365,6 +367,7 @@ func splitUnexploredExpression(
 	join *ApplyJoin,
 	lhs, rhs *projector,
 	pe *ProjExpr,
+	colAlias *sqlparser.IdentifierCI,
 ) (JoinColumn, error) {
 	// Get a JoinColumn for the current expression.
 	col, err := join.getJoinColumnFor(ctx, pe.Original, pe.ColExpr, false)
@@ -375,17 +378,23 @@ func splitUnexploredExpression(
 	// Update the left and right child columns and names based on the JoinColumn type.
 	switch {
 	case col.IsPureLeft():
-		lhs.add(pe)
+		lhs.add(pe, colAlias)
 	case col.IsPureRight():
-		rhs.add(pe)
+		rhs.add(pe, colAlias)
 	case col.IsMixedLeftAndRight():
 		for _, lhsExpr := range col.LHSExprs {
-			lhs.add(newProjExpr(aeWrap(lhsExpr.Expr)))
+			var lhsAlias *sqlparser.IdentifierCI
+			if colAlias != nil {
+				// we need to add an explicit column alias here. let's try just the ColName as is first
+				ci := sqlparser.NewIdentifierCI(sqlparser.String(lhsExpr.Expr))
+				lhsAlias = &ci
+			}
+			lhs.add(newProjExpr(aeWrap(lhsExpr.Expr)), lhsAlias)
 		}
 		innerPE := newProjExprWithInner(pe.Original, col.RHSExpr)
 		innerPE.ColExpr = col.RHSExpr
 		innerPE.Info = pe.Info
-		rhs.add(innerPE)
+		rhs.add(innerPE, colAlias)
 	}
 	return col, nil
 }
@@ -403,7 +412,7 @@ func splitUnexploredExpression(
 // LHS expressions to include the derived table. This allows the expressions to be accessed outside
 // the derived table.
 func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Projection, src *ApplyJoin, lhs *projector) error {
-	derivedTbl, err := ctx.SemTable.TableInfoFor(*p.TableID)
+	derivedTbl, err := ctx.SemTable.TableInfoFor(p.DT.TableID)
 	if err != nil {
 		return err
 	}
@@ -429,7 +438,13 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 
 			alias := sqlparser.UnescapedString(out)
 			predicate.LHSExprs[idx].Expr = sqlparser.NewColNameWithQualifier(alias, derivedTblName)
-			lhs.add(newProjExprWithInner(&sqlparser.AliasedExpr{Expr: out, As: sqlparser.NewIdentifierCI(alias)}, out))
+			identifierCI := sqlparser.NewIdentifierCI(alias)
+			projExpr := newProjExprWithInner(&sqlparser.AliasedExpr{Expr: out, As: identifierCI}, out)
+			var colAlias *sqlparser.IdentifierCI
+			if lhs.explicitColumnAliases {
+				colAlias = &identifierCI
+			}
+			lhs.add(projExpr, colAlias)
 		}
 	}
 	return nil
@@ -451,8 +466,7 @@ func createProjectionWithTheseColumns(
 	ctx *plancontext.PlanningContext,
 	src ops.Operator,
 	p *projector,
-	tableID *semantics.TableSet,
-	alias string,
+	dt *DerivedTable,
 ) (ops.Operator, error) {
 	if len(p.columns) == 0 {
 		return src, nil
@@ -462,8 +476,12 @@ func createProjectionWithTheseColumns(
 		return nil, err
 	}
 	proj.Columns = AliasedProjections(p.columns)
-	proj.TableID = tableID
-	proj.Alias = alias
+	if dt != nil {
+		kopy := *dt
+		kopy.Columns = p.columnAliases
+		proj.DT = &kopy
+	}
+
 	return proj, nil
 }
 
@@ -592,7 +610,7 @@ func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, ag
 	// If Aggregator is a derived table, then we should rewrite the ordering before pushing.
 	if aggregator.isDerived() {
 		for idx, orderExpr := range order.Order {
-			ti, err := ctx.SemTable.TableInfoFor(*aggregator.TableID)
+			ti, err := ctx.SemTable.TableInfoFor(aggregator.DT.TableID)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -664,6 +682,21 @@ func canPushLeft(ctx *plancontext.PlanningContext, aj *ApplyJoin, order []ops.Or
 	return true
 }
 
+func isOuterTable(op ops.Operator, ts semantics.TableSet) bool {
+	aj, ok := op.(*ApplyJoin)
+	if ok && aj.LeftJoin && TableID(aj.RHS).IsOverlapping(ts) {
+		return true
+	}
+
+	for _, op := range op.Inputs() {
+		if isOuterTable(op, ts) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := in.Source.(type) {
 	case *Projection:
@@ -671,9 +704,13 @@ func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, 
 	case *Route:
 		for _, pred := range in.Predicates {
 			var err error
-			src.Routing, err = src.Routing.updateRoutingLogic(ctx, pred)
-			if err != nil {
-				return nil, nil, err
+			deps := ctx.SemTable.RecursiveDeps(pred)
+			if !isOuterTable(src, deps) {
+				// we can only update based on predicates on inner tables
+				src.Routing, err = src.Routing.updateRoutingLogic(ctx, pred)
+				if err != nil {
+					return nil, nil, err
+				}
 			}
 		}
 		return rewrite.Swap(in, src, "push filter into Route")
