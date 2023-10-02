@@ -17,19 +17,21 @@ limitations under the License.
 // Package operators contains the operators used to plan queries.
 /*
 The operators go through a few phases while planning:
-1. Logical
-   In this first pass, we build an operator tree from the incoming parsed query.
-   It will contain logical joins - we still haven't decided on the join algorithm to use yet.
-   At the leaves, it will contain QueryGraphs - these are the tables in the FROM clause
-   that we can easily do join ordering on. The logical tree will represent the full query,
-   including projections, Grouping, ordering and so on.
-2. Physical
-   Once the logical plan has been fully built, we go bottom up and plan which routes that will be used.
-   During this phase, we will also decide which join algorithms should be used on the vtgate level
-3. Columns & Aggregation
-   Once we know which queries will be sent to the tablets, we go over the tree and decide which
-   columns each operator should output. At this point, we also do offset lookups,
-   so we know at runtime from which columns in the input table we need to read.
+1.	Initial plan
+	In this first pass, we build an operator tree from the incoming parsed query.
+	At the leaves, it will contain QueryGraphs - these are the tables in the FROM clause
+	that we can easily do join ordering on because they are all inner joins.
+	All the post-processing - aggregations, sorting, limit etc. are at this stage
+	contained in Horizon structs. We try to push these down under routes, and expand
+	the ones that can't be pushed down into individual operators such as Projection,
+	Agreggation, Limit, etc.
+2.	Planning
+	Once the initial plan has been fully built, we go through a number of phases.
+	recursively running rewriters on the tree in a fixed point fashion, until we've gone
+	over all phases and the tree has stop changing.
+3.	Offset planning
+	Now is the time to stop working with AST objects and transform remaining expressions being
+	used on top of vtgate to either offsets on inputs or evalengine expressions.
 */
 package operators
 
@@ -75,11 +77,7 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.
 		return nil, err
 	}
 
-	if op, err = transformToPhysical(ctx, op); err != nil {
-		return nil, err
-	}
-
-	if op, err = tryHorizonPlanning(ctx, op); err != nil {
+	if op, err = planQuery(ctx, op); err != nil {
 		return nil, err
 	}
 

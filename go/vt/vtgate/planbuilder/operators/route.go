@@ -648,8 +648,10 @@ func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Op
 		proj := &Projection{
 			Source:  op,
 			Columns: AliasedProjections(slice.Map(unionColumns, newProjExpr)),
-			TableID: &tableID,
-			Alias:   "dt",
+			DT: &DerivedTable{
+				TableID: tableID,
+				Alias:   "dt",
+			},
 		}
 		return addMultipleColumnsToInput(ctx, proj, reuse, addToGroupBy, exprs)
 	default:

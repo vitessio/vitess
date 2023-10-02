@@ -41,43 +41,6 @@ type (
 	opCacheMap map[tableSetPair]ops.Operator
 )
 
-// TransformToPhysical takes an operator tree and rewrites any parts that have not yet been planned as physical operators.
-// This is where a lot of the optimisations of the query plans are done.
-// Here we try to merge query parts into the same route primitives. At the end of this process,
-// all the operators in the tree are guaranteed to be PhysicalOperators
-func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, error) {
-	op, err := rewrite.BottomUpAll(in, TableID, func(operator ops.Operator, ts semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
-		switch op := operator.(type) {
-		case *QueryGraph:
-			return optimizeQueryGraph(ctx, op)
-		case *Join:
-			return optimizeJoin(ctx, op)
-		case *Horizon:
-			if op.TableId != nil {
-				return pushDerived(ctx, op)
-			}
-		case *Filter:
-			return pushFilter(op)
-		}
-		return operator, rewrite.SameTree, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return compact(ctx, op)
-}
-
-func pushFilter(op *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
-	// TODO: once all horizon planning has been moved to the operators, we can remove this method
-	if _, ok := op.Source.(*Route); ok {
-		return rewrite.Swap(op, op.Source, "push filter into Route")
-	}
-
-	return op, rewrite.SameTree, nil
-}
-
 func pushDerived(ctx *plancontext.PlanningContext, op *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
 	innerRoute, ok := op.Source.(*Route)
 	if !ok {
@@ -424,7 +387,7 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 		if err != nil {
 			return nil, nil, err
 		}
-		return newOp, rewrite.NewTree("merge routes, but switch sides", newOp), nil
+		return newOp, rewrite.NewTree("logical join to applyJoin, switching side because derived table", newOp), nil
 	}
 
 	join := NewApplyJoin(Clone(lhs), Clone(rhs), nil, !inner)

@@ -1276,7 +1276,98 @@
   {
     "comment": "TPC-H query 13",
     "query": "select c_count, count(*) as custdist from ( select c_custkey, count(o_orderkey) from customer left outer join orders on c_custkey = o_custkey and o_comment not like '%special%requests%' group by c_custkey ) as c_orders(c_custkey, c_count) group by c_count order by custdist desc, c_count desc",
-    "plan": "VT12001: unsupported: using aggregation on top of a *planbuilder.orderedAggregate plan"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select c_count, count(*) as custdist from ( select c_custkey, count(o_orderkey) from customer left outer join orders on c_custkey = o_custkey and o_comment not like '%special%requests%' group by c_custkey ) as c_orders(c_custkey, c_count) group by c_count order by custdist desc, c_count desc",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "1 DESC, 0 DESC",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "count_star(1) AS custdist",
+            "GroupBy": "0",
+            "Inputs": [
+              {
+                "OperatorType": "SimpleProjection",
+                "Columns": [
+                  1,
+                  3
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Ordered",
+                    "Aggregates": "sum_count(1) AS count(o_orderkey), any_value(3)",
+                    "GroupBy": "(0|2)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Projection",
+                        "Expressions": [
+                          "[COLUMN 2] as c_custkey",
+                          "[COLUMN 1] * [COLUMN 0] as count(o_orderkey)",
+                          "[COLUMN 3] as weight_string(c_custkey)",
+                          "[COLUMN 4] as 1"
+                        ],
+                        "Inputs": [
+                          {
+                            "OperatorType": "Sort",
+                            "Variant": "Memory",
+                            "OrderBy": "0 ASC, (2|3) ASC",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Join",
+                                "Variant": "LeftJoin",
+                                "JoinColumnIndexes": "R:0,L:0,L:1,L:2,L:3",
+                                "JoinVars": {
+                                  "c_custkey": 1
+                                },
+                                "TableName": "customer_orders",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "Scatter",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select count(*), c_custkey, weight_string(c_custkey), 1 from customer where 1 != 1 group by c_custkey, weight_string(c_custkey)",
+                                    "OrderBy": "(1|2) ASC",
+                                    "Query": "select count(*), c_custkey, weight_string(c_custkey), 1 from customer group by c_custkey, weight_string(c_custkey) order by c_custkey asc",
+                                    "Table": "customer"
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "Scatter",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select count(o_orderkey) from orders where 1 != 1 group by .0",
+                                    "Query": "select count(o_orderkey) from orders where o_comment not like '%special%requests%' and o_custkey = :c_custkey group by .0",
+                                    "Table": "orders"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.customer",
+        "main.orders"
+      ]
+    }
   },
   {
     "comment": "TPC-H query 14",
