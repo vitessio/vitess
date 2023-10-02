@@ -31,6 +31,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -63,7 +65,7 @@ var (
 	replicationWaitTimeout = time.Duration(15 * time.Second)
 )
 
-//region cluster setup/teardown
+// region cluster setup/teardown
 
 // SetupReparentCluster is used to setup the reparent cluster
 func SetupReparentCluster(t *testing.T, durability string) *cluster.LocalProcessCluster {
@@ -138,18 +140,22 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
 		// DemotePrimary rpc is stalled!
 		"--queryserver_enable_online_ddl=false",
+	)
+
+	if !utils.BinaryIsAtVersion(17, "vttablet") {
 		// disabling active reparents on the tablet since we don't want the replication manager
 		// to fix replication if it is stopped. Some tests deliberately do that. Also, we don't want
 		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
 		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
 		// setting up the replication correctly.
-		"--disable-replication-manager")
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--disable-replication-manager")
+	}
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	require.NoError(t, err, "Cannot launch cluster")
 
-	//Start MySql
+	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
@@ -252,7 +258,7 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 	return tablet
 }
 
-//endregion
+// endregion
 
 // region database queries
 func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
@@ -280,7 +286,7 @@ func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	return qr
 }
 
-//endregion
+// endregion
 
 // region ers, prs
 

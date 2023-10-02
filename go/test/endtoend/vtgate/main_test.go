@@ -73,7 +73,10 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1", "--queryserver-config-max-result-size", "100", "--queryserver-config-terse-errors"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-max-result-size", "100", "--queryserver-config-terse-errors"}
+		if !utils.BinaryIsAtVersion(17, "vttablet") {
+			clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal-interval", "0.1")
+		}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1

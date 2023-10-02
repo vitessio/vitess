@@ -29,6 +29,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
@@ -69,10 +71,12 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema_change_signal")
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 			"--queryserver-config-schema-change-signal",
-			"--queryserver-config-schema-change-signal-interval", "0.1",
 			"--queryserver-config-strict-table-acl",
 			"--queryserver-config-acl-exempt-acl", "userData1",
 			"--table-acl-config", "dummy.json")
+		if !utils.BinaryIsAtVersion(17, "vttablet") {
+			clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal-interval", "0.1")
+		}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
