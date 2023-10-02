@@ -428,7 +428,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <statement> alter_statement alter_table_statement alter_database_statement alter_event_statement
 %type <ddl> create_table_prefix rename_list alter_table_statement_part
 %type <ddls> alter_table_statement_list
-%type <statement> analyze_statement show_statement use_statement prepare_statement execute_statement deallocate_statement
+%type <statement> analyze_statement analyze_opt show_statement use_statement prepare_statement execute_statement deallocate_statement
 %type <statement> describe_statement explain_statement explainable_statement
 %type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
 %type <bytes> work_opt no_opt chain_opt release_opt index_name_opt
@@ -493,7 +493,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <limit> limit_opt
 %type <str> lock_opt
 %type <colIdent> ins_column
-%type <columns> ins_column_list ins_column_list_opt column_list column_list_opt
+%type <columns> ins_column_list ins_column_list_opt column_list paren_column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <variables> variable_list
 %type <strs> system_variable_list
@@ -4754,9 +4754,23 @@ truncate_statement:
   }
 
 analyze_statement:
-  ANALYZE TABLE table_name_list
+  ANALYZE TABLE analyze_opt
   {
-    $$ = &Analyze{Tables: $3}
+    $$ = $3
+  }
+
+analyze_opt:
+  table_name UPDATE HISTOGRAM ON paren_column_list USING value_expression
+  {
+    $$ = &Analyze{Tables: []TableName{$1}, Action: UpdateStr, Columns: $5, Using: $7}
+  }
+| table_name DROP HISTOGRAM ON paren_column_list
+  {
+    $$ = &Analyze{Tables: []TableName{$1}, Action: DropStr, Columns: $5}
+  }
+| table_name_list
+  {
+    $$ = &Analyze{Tables: $1}
   }
 
 all_non_reserved:
@@ -5788,6 +5802,16 @@ as_of_opt:
 | as_of_point_clause
   {
     $$ = $1.Time
+  }
+
+paren_column_list:
+  '(' column_list ')'
+  {
+    $$ = $2
+  }
+| column_list
+  {
+    $$ = $1
   }
 
 column_list_opt:

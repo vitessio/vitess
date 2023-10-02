@@ -412,9 +412,9 @@ func (*Update) iStatement()            {}
 func (*Delete) iStatement()            {}
 func (*Set) iStatement()               {}
 func (*DBDDL) iStatement()             {}
-func (*DDL) iStatement()        {}
-func (*AlterTable) iStatement() {}
-func (*Explain) iStatement()    {}
+func (*DDL) iStatement()               {}
+func (*AlterTable) iStatement()        {}
+func (*Explain) iStatement()           {}
 func (*Show) iStatement()              {}
 func (*Use) iStatement()               {}
 func (*Begin) iStatement()             {}
@@ -3001,7 +3001,7 @@ type JSONTableColOpts struct {
 func (opt JSONTableColOpts) Format(buf *TrackedBuffer) {
 	buf.Myprintf("\"%s\"", opt.Path)
 	if opt.ValOnEmpty != nil {
-        buf.Myprintf(" %v %s %s", opt.ValOnEmpty, keywordStrings[ON], keywordStrings[EMPTY])
+		buf.Myprintf(" %v %s %s", opt.ValOnEmpty, keywordStrings[ON], keywordStrings[EMPTY])
 	}
 	if opt.ValOnError != nil {
 		buf.Myprintf(" %v %s %s ", opt.ValOnError, keywordStrings[ON], keywordStrings[ERROR])
@@ -4082,12 +4082,12 @@ type AliasedTableExpr struct {
 }
 
 type AsOf struct {
-	Time Expr
-	Start Expr
-	End Expr
+	Time           Expr
+	Start          Expr
+	End            Expr
 	StartInclusive bool
-	EndInclusive bool
-	All bool
+	EndInclusive   bool
+	All            bool
 }
 
 func (node *AsOf) Format(buf *TrackedBuffer) {
@@ -6989,6 +6989,11 @@ func compliantName(in string) string {
 
 type Analyze struct {
 	Tables TableNames
+	// UPDATE or DELETE
+	Action  string
+	Columns Columns
+	// JSON data for stats
+	Using Expr
 }
 
 func (*Analyze) iStatement() {}
@@ -7001,7 +7006,14 @@ func (node *Analyze) walkSubtree(visit Visit) error {
 }
 
 func (node *Analyze) Format(buf *TrackedBuffer) {
-	buf.Myprintf("analyze table %v", node.Tables)
+	switch node.Action {
+	case UpdateStr:
+		buf.Myprintf("analyze table %v update histogram on %v using %v", node.Tables, node.Columns, node.Using)
+	case DropStr:
+		buf.Myprintf("analyze table %v drop histogram on %v", node.Tables, node.Columns)
+	default:
+		buf.Myprintf("analyze table %v", node.Tables)
+	}
 }
 
 type Prepare struct {
@@ -7058,8 +7070,8 @@ func (node *Deallocate) Format(buf *TrackedBuffer) {
 }
 
 type CreateSpatialRefSys struct {
-	SRID 	    *SQLVal
-	OrReplace	bool
+	SRID        *SQLVal
+	OrReplace   bool
 	IfNotExists bool
 	SrsAttr     *SrsAttribute
 }
@@ -7087,7 +7099,7 @@ type SrsAttribute struct {
 	Name         string
 	Definition   string
 	Organization string
-	OrgID	     *SQLVal
+	OrgID        *SQLVal
 	Description  string
 }
 
