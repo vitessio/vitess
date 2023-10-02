@@ -221,7 +221,7 @@ func commandExternalize(cmd *cobra.Command, args []string) error {
 	}
 
 	output := fmt.Sprintf("LookupVindex %s has been externalized", maps.Keys(baseOptions.Vindex.Vindexes)[0])
-	if resp.Deleted {
+	if resp.WorkflowDeleted {
 		output = output + fmt.Sprintf(" and the %s VReplication workflow has been deleted", baseOptions.Workflow)
 	}
 	fmt.Println(output)
@@ -257,7 +257,7 @@ func registerCommands(root *cobra.Command) {
 	root.AddCommand(base)
 
 	// This will create the lookup vindex in the specified keyspace
-	// and setup a VReplication workflow to backfill it.
+	// and setup a VReplication workflow to backfill its targe table.
 	create.Flags().StringSliceVar(&createOptions.Cells, "cells", nil, "Cells to look in for source tablets to replicate from.")
 	create.Flags().Var((*topoprotopb.TabletTypeListFlag)(&createOptions.TabletTypes), "tablet-types", "Source tablet types to replicate from.")
 	create.Flags().BoolVar(&createOptions.ContinueAfterCopyWithOwner, "continue-after-copy-with-owner", false, "Vindex will continue materialization after copy when an owner is provided")

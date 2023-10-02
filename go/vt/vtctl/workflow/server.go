@@ -1116,7 +1116,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 		}); derr != nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to delete workflow %s: %v", req.Workflow, derr)
 		}
-		resp.Deleted = true
+		resp.WorkflowDeleted = true
 	}
 
 	// Remove the write_only param and save the source vschema.

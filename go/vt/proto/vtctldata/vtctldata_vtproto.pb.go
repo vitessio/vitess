@@ -2610,7 +2610,7 @@ func (m *LookupVindexExternalizeResponse) CloneVT() *LookupVindexExternalizeResp
 		return (*LookupVindexExternalizeResponse)(nil)
 	}
 	r := &LookupVindexExternalizeResponse{
-		Deleted: m.Deleted,
+		WorkflowDeleted: m.WorkflowDeleted,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -11953,9 +11953,9 @@ func (m *LookupVindexExternalizeResponse) MarshalToSizedBufferVT(dAtA []byte) (i
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.Deleted {
+	if m.WorkflowDeleted {
 		i--
-		if m.Deleted {
+		if m.WorkflowDeleted {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -20771,7 +20771,7 @@ func (m *LookupVindexExternalizeResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Deleted {
+	if m.WorkflowDeleted {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -40074,7 +40074,7 @@ func (m *LookupVindexExternalizeResponse) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Deleted", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field WorkflowDeleted", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -40091,7 +40091,7 @@ func (m *LookupVindexExternalizeResponse) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.Deleted = bool(v != 0)
+			m.WorkflowDeleted = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

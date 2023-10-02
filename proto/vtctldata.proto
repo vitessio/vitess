@@ -1016,7 +1016,7 @@ message LookupVindexExternalizeRequest {
 
 message LookupVindexExternalizeResponse {
   // Was the workflow also deleted.
-  bool deleted = 1;
+  bool workflow_deleted = 1;
 }
 
 message MoveTablesCreateRequest {

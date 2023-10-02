@@ -54875,8 +54875,8 @@ export namespace vtctldata {
     /** Properties of a LookupVindexExternalizeResponse. */
     interface ILookupVindexExternalizeResponse {
 
-        /** LookupVindexExternalizeResponse deleted */
-        deleted?: (boolean|null);
+        /** LookupVindexExternalizeResponse workflow_deleted */
+        workflow_deleted?: (boolean|null);
     }
 
     /** Represents a LookupVindexExternalizeResponse. */
@@ -54888,8 +54888,8 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ILookupVindexExternalizeResponse);
 
-        /** LookupVindexExternalizeResponse deleted. */
-        public deleted: boolean;
+        /** LookupVindexExternalizeResponse workflow_deleted. */
+        public workflow_deleted: boolean;
 
         /**
          * Creates a new LookupVindexExternalizeResponse instance using the specified properties.
