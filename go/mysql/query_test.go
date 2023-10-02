@@ -223,6 +223,230 @@ func TestComStmtExecute(t *testing.T) {
 	}
 }
 
+func TestComStmtExecuteNewParams(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	paramTypes := []querypb.Type{
+		querypb.Type_DECIMAL,
+		querypb.Type_INT8,
+		querypb.Type_INT16,
+		querypb.Type_INT32,
+		querypb.Type_FLOAT32,
+		querypb.Type_FLOAT64,
+		querypb.Type_TIMESTAMP,
+		querypb.Type_INT64,
+		querypb.Type_INT24,
+		querypb.Type_DATE,
+		querypb.Type_TIME,
+		querypb.Type_DATETIME,
+		querypb.Type_YEAR,
+		querypb.Type_VARCHAR,
+		querypb.Type_BIT,
+		querypb.Type_TIMESTAMP,
+		querypb.Type_DATETIME,
+		querypb.Type_TIME,
+		querypb.Type_JSON,
+		querypb.Type_DECIMAL,
+		querypb.Type_ENUM,
+		querypb.Type_SET,
+		querypb.Type_TEXT,
+		querypb.Type_TEXT,
+		querypb.Type_TEXT,
+		querypb.Type_TEXT,
+		querypb.Type_VARCHAR,
+		querypb.Type_CHAR,
+		querypb.Type_GEOMETRY,
+
+		querypb.Type_DECIMAL,
+		querypb.Type_UINT8,
+		querypb.Type_UINT16,
+		querypb.Type_UINT32,
+		querypb.Type_FLOAT32,
+		querypb.Type_FLOAT64,
+		querypb.Type_TIMESTAMP,
+		querypb.Type_UINT64,
+		querypb.Type_UINT24,
+		querypb.Type_DATE,
+		querypb.Type_TIME,
+		querypb.Type_DATETIME,
+		querypb.Type_YEAR,
+		querypb.Type_VARCHAR,
+		querypb.Type_BIT,
+		querypb.Type_TIMESTAMP,
+		querypb.Type_DATETIME,
+		querypb.Type_TIME,
+		querypb.Type_JSON,
+		querypb.Type_DECIMAL,
+		querypb.Type_ENUM,
+		querypb.Type_SET,
+		querypb.Type_TEXT,
+		querypb.Type_TEXT,
+		querypb.Type_TEXT,
+		querypb.Type_TEXT,
+		querypb.Type_VARCHAR,
+		querypb.Type_CHAR,
+		querypb.Type_GEOMETRY,
+	}
+	paramsCount := uint16(58)
+	prepare := &PrepareData{
+		StatementID: 123,
+		ParamsCount: paramsCount, // TODO: figure out total number of param types
+		ParamsType:  make([]int32, paramsCount),
+		BindVars: make(map[string]*querypb.BindVariable),
+	}
+	cConn.PrepareData = make(map[uint32]*PrepareData)
+	cConn.PrepareData[prepare.StatementID] = prepare
+
+	data := []byte{
+		23,                     // status
+		123, 0, 0, 0,           // statement_id
+		1,                      // flags
+		1, 0, 0, 0,             // iteration_count
+		0, 0, 0, 0, 0, 0, 0, 0, // null_bitmap
+		1,                      // new_params_bind_flag
+
+		0, 0,   // parameter[0] DECIMAL, UNSIGNED
+		1, 0,   // parameter[1] INT8, UNSIGNED
+		2, 0,   // parameter[2] INT16, UNSIGNED
+		3, 0,   // parameter[3] INT32, UNSIGNED
+		4, 0,   // parameter[4] FLOAT32, UNSIGNED
+		5, 0,   // parameter[5] FLOAT64, UNSIGNED
+		7, 0,   // parameter[6] TIMESTAMP, UNSIGNED
+		8, 0,   // parameter[7] INT64, UNSIGNED
+		9, 0,   // parameter[8] INT24, UNSIGNED
+		10, 0,  // parameter[9] DATE, UNSIGNED
+		11, 0,  // parameter[10] TIME, UNSIGNED
+		12, 0,  // parameter[11] DATETIME, UNSIGNED
+		13, 0,  // parameter[12] YEAR, UNSIGNED
+		15, 0,  // parameter[13] VARCHAR, UNSIGNED
+		16, 0,  // parameter[14] BIT, UNSIGNED
+		17, 0,  // parameter[15] TIMESTAMP2, UNSIGNED
+		18, 0,  // parameter[16] DATETIME2, UNSIGNED
+		19, 0,  // parameter[17] TIME2, UNSIGNED
+		245, 0, // parameter[18] JSON, UNSIGNED
+		246, 0, // parameter[19] DECIMAL, UNSIGNED
+		247, 0, // parameter[20] ENUM, UNSIGNED
+		248, 0, // parameter[21] SET, UNSIGNED
+		249, 0, // parameter[22] TINY_BLOB, UNSIGNED
+		250, 0, // parameter[23] MEDIUM_BLOB, UNSIGNED
+		251, 0, // parameter[24] LONG_BLOB, UNSIGNED
+		252, 0, // parameter[25] BLOB, UNSIGNED
+		253, 0, // parameter[26] VAR_CHAR, UNSIGNED
+		254, 0, // parameter[27] CHAR, UNSIGNED
+		255, 0, // parameter[28] GEOMETRY, UNSIGNED
+
+		0, 128,   // parameter[29] DECIMAL, SIGNED
+		1, 128,   // parameter[30] INT8, SIGNED
+		2, 128,   // parameter[31] INT16, SIGNED
+		3, 128,   // parameter[32] INT32, SIGNED
+		4, 128,   // parameter[33] FLOAT32, SIGNED
+		5, 128,   // parameter[34] FLOAT64, SIGNED
+		7, 128,   // parameter[35] TIMESTAMP, SIGNED
+		8, 128,   // parameter[36] INT64, SIGNED
+		9, 128,   // parameter[37] INT24, SIGNED
+		10, 128,  // parameter[38] DATE, SIGNED
+		11, 128,  // parameter[39] TIME, SIGNED
+		12, 128,  // parameter[40] DATETIME, SIGNED
+		13, 128,  // parameter[41] YEAR, SIGNED
+		15, 128,  // parameter[42] VARCHAR, SIGNED
+		16, 128,  // parameter[43] BIT, SIGNED
+		17, 128,  // parameter[44] TIMESTAMP2, SIGNED
+		18, 128,  // parameter[45] DATETIME2, SIGNED
+		19, 128,  // parameter[46] TIME2, SIGNED
+		245, 128, // parameter[47] JSON, SIGNED
+		246, 128, // parameter[48] DECIMAL, SIGNED
+		247, 128, // parameter[49] ENUM, SIGNED
+		248, 128, // parameter[50] SET, SIGNED
+		249, 128, // parameter[51] TINY_BLOB, SIGNED
+		250, 128, // parameter[52] MEDIUM_BLOB, SIGNED
+		251, 128, // parameter[53] LONG_BLOB, SIGNED
+		252, 128, // parameter[54] BLOB, SIGNED
+		253, 128, // parameter[55] VAR_CHAR, SIGNED
+		254, 128, // parameter[56] CHAR, SIGNED
+		255, 128, // parameter[57] GEOMETRY, SIGNED
+
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[0]  DECIMAL
+		0x00,                                                                   // parameter[1]  INT8
+		0x00, 0x00,                                                             // parameter[2]  INT16
+		0x00, 0x00, 0x00, 0x00,                                                 // parameter[3]  INT32
+		0x00, 0x00, 0x00, 0x00,                                                 // parameter[4]  FLOAT32
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,                         // parameter[5]  FLOAT64
+		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[6]  TIMESTAMP
+		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e,                         // parameter[7]  INT64
+		0x0b, 0xda, 0x07, 0x0a,                                                 // parameter[8]  INT24
+		0x04, 0xda, 0x07, 0x0a, 0x11,                                           // parameter[9]  DATE
+		0x00,                                                                   // parameter[10] TIME
+		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[11] DATETIME
+		0x01, 0x00,                                                             // parameter[12] YEAR
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[13] VARCHAR
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[14] BIT
+		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[15] TIMESTAMP2
+		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[16] DATETIME2
+		0x00,                                                                   // parameter[17] TIME2
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[18] JSON
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[19] DECIMAL
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[20] ENUM
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[21] SET
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[22] TINY_BLOB
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[23] MEDIUM_BLOB
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[24] LONG_BLOB
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[25] BLOB
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[26] VAR_CHAR
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[27] CHAR
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[28] GEOMETRY
+
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[29] DECIMAL
+		0x00,                                                                   // parameter[30] INT8
+		0x00, 0x00,                                                             // parameter[31] INT16
+		0x00, 0x00, 0x00, 0x00,                                                 // parameter[32] INT32
+		0x00, 0x00, 0x00, 0x00,                                                 // parameter[33] FLOAT32
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,                         // parameter[34] FLOAT64
+		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[35] TIMESTAMP
+		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e,                         // parameter[36] INT64
+		0x0b, 0xda, 0x07, 0x0a,                                                 // parameter[37] INT24
+		0x04, 0xda, 0x07, 0x0a, 0x11,                                           // parameter[38] DATE
+		0x00,                                                                   // parameter[39] TIME
+		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[40] DATETIME
+		0x01, 0x00,                                                             // parameter[41] YEAR
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[42] VARCHAR
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[43] BIT
+		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[44] TIMESTAMP2
+		0x0b, 0xda, 0x07, 0x0a, 0x11, 0x13, 0x1b, 0x1e, 0x01, 0x00, 0x00, 0x00, // parameter[45] DATETIME2
+		0x00,                                                                   // parameter[46] TIME2
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[47] JSON
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[48] DECIMAL
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[49] ENUM
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[50] SET
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[51] TINY_BLOB
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[52] MEDIUM_BLOB
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[53] LONG_BLOB
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[54] BLOB
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[55] VAR_CHAR
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[56] CHAR
+		0x03, 0x66, 0x6f, 0x6f,                                                 // parameter[57] GEOMETRY
+	}
+
+	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
+	if err != nil {
+		t.Fatalf("parseComStmtExeute failed: %v", err)
+	}
+	if stmtID != 123 {
+		t.Fatalf("Parsed incorrect values")
+	}
+
+
+	for i, pt := range paramTypes {
+		if cConn.PrepareData[123].ParamsType[i] != int32(pt) {
+			t.Fatalf("Parsed incorrect type/flag for parameter")
+		}
+	}
+}
+
 func TestComStmtFetch(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {

@@ -650,7 +650,11 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 			}
 
 			// convert MySQL type to internal type.
-			valType, err := sqltypes.MySQLToType(int64(mysqlType), int64(flags))
+			// for com_stmt_execute, the flag will either be 0x00 or 0x80 indicating signed or unsigned
+			// as a result, we need to shift the flag to the right by 2 bits
+			// while this flag may conflict with the mysqlBinary constant, it doesn't matter;
+			// the format for BLOB and TEXT parameters is the same for both binary and non-binary
+			valType, err := sqltypes.MySQLToType(int64(mysqlType), int64(flags) >> 2)
 			if err != nil {
 				return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "MySQLToType(%v,%v) failed: %v", mysqlType, flags, err)
 			}

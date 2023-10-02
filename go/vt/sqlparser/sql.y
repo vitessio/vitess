@@ -207,7 +207,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> FOR_SYSTEM_TIME
 %token <bytes> FOR_VERSION
 
+%left <bytes> EXCEPT
 %left <bytes> UNION
+%left <bytes> INTERSECT
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL 
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
@@ -281,7 +283,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 
 // Permissions Tokens
 %token <bytes> USER IDENTIFIED ROLE REUSE GRANT GRANTS REVOKE NONE ATTRIBUTE RANDOM PASSWORD INITIAL AUTHENTICATION
-%token <bytes> SSL X509 CIPHER ISSUER SUBJECT ACCOUNT EXPIRE NEVER OPTION OPTIONAL EXCEPT ADMIN PRIVILEGES
+%token <bytes> SSL X509 CIPHER ISSUER SUBJECT ACCOUNT EXPIRE NEVER OPTION OPTIONAL ADMIN PRIVILEGES
 %token <bytes> MAX_QUERIES_PER_HOUR MAX_UPDATES_PER_HOUR MAX_CONNECTIONS_PER_HOUR MAX_USER_CONNECTIONS FLUSH
 %token <bytes> FAILED_LOGIN_ATTEMPTS PASSWORD_LOCK_TIME UNBOUNDED REQUIRE PROXY ROUTINE TABLESPACE CLIENT SLAVE
 %token <bytes> EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE LOGS ENGINE ERROR GENERAL HOSTS
@@ -309,13 +311,13 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM SERIAL
 %token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC DEC FIXED PRECISION
 %token <bytes> TIME TIMESTAMP DATETIME
-%token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR NVARCHAR NATIONAL VARYING
+%token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR NVARCHAR NATIONAL VARYING VARCHARACTER
 %token <bytes> TEXT TINYTEXT MEDIUMTEXT LONGTEXT LONG
 %token <bytes> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
 %token <bytes> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
 
 // Lock tokens
-%token <bytes> LOCAL LOW_PRIORITY
+%token <bytes> LOCAL LOW_PRIORITY SKIP LOCKED
 
 // Type Modifiers
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL SRID
@@ -349,8 +351,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> DUAL JSON_TABLE PATH
 
 // Table options
-%token <bytes> AVG_ROW_LENGTH CHECKSUM COMPRESSION DIRECTORY DELAY_KEY_WRITE ENGINE_ATTRIBUTE INSERT_METHOD MAX_ROWS
-%token <bytes> MIN_ROWS PACK_KEYS ROW_FORMAT SECONDARY_ENGINE_ATTRIBUTE STATS_AUTO_RECALC STATS_PERSISTENT
+%token <bytes> AVG_ROW_LENGTH CHECKSUM TABLE_CHECKSUM COMPRESSION DIRECTORY DELAY_KEY_WRITE ENGINE_ATTRIBUTE INSERT_METHOD MAX_ROWS
+%token <bytes> MIN_ROWS PACK_KEYS ROW_FORMAT SECONDARY_ENGINE SECONDARY_ENGINE_ATTRIBUTE STATS_AUTO_RECALC STATS_PERSISTENT
 %token <bytes> STATS_SAMPLE_PAGES STORAGE DISK MEMORY DYNAMIC COMPRESSED REDUNDANT
 %token <bytes> COMPACT LIST HASH PARTITIONS SUBPARTITION SUBPARTITIONS
 
@@ -384,13 +386,12 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> PURGE
 %token <bytes> READ_WRITE RLIKE
 %token <bytes> SENSITIVE SPECIFIC SQL_BIG_RESULT SQL_SMALL_RESULT
-%token <bytes> VARCHARACTER
 
 %token <bytes> UNUSED DESCRIPTION LATERAL MEMBER RECURSIVE
 %token <bytes> BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
-%token <bytes> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
+%token <bytes> INACTIVE INVISIBLE MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD ORDINALITY ORGANIZATION OTHERS PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
-%token <bytes> REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP
+%token <bytes> REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN SECONDARY SECONDARY_LOAD SECONDARY_UNLOAD
 %token <bytes> THREAD_PRIORITY TIES VCPU VISIBLE INFILE
 
 // MySQL unreserved keywords that are currently unused
@@ -403,7 +404,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> NVAR PASSWORD_LOCK
 
 %type <statement> command
-%type <selStmt>  create_query_expression select_statement base_select with_select base_select_no_cte union_lhs union_rhs select_statement_with_no_trailing_into
+%type <selStmt> create_query_expression create_query_select_expression select_statement with_select select_or_set_op base_select base_select_no_cte select_statement_with_no_trailing_into
+%type <selStmt> set_op intersect_stmt union_except_lhs union_except_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
@@ -433,7 +435,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
 %type <bytes> work_opt no_opt chain_opt release_opt index_name_opt
 %type <bytes2> comment_opt comment_list
-%type <str> union_op insert_or_replace
+%type <str> union_op intersect_op except_op insert_or_replace
 %type <str> distinct_opt straight_join_opt cache_opt match_option format_opt
 %type <separator> separator_opt
 %type <expr> like_escape_opt
@@ -603,6 +605,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <grantAssumption> grant_assumption
 %type <boolean> with_grant_opt with_admin_opt
 %type <bytes> any_identifier
+%type <str> any_identifier_list
 %type <statement> create_spatial_ref_sys
 %type <srsAttr> srs_attribute
 
@@ -611,6 +614,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <JSONTableColDef> json_table_column_definition
 %type <JSONTableColOpts> json_table_column_options
 %type <expr> val_on_empty val_on_error
+
+%type <bytes> coericble_to_integral
 
 %start any_command
 
@@ -711,23 +716,92 @@ stream_statement:
     $$ = &Stream{Comments: Comments($2), SelectExpr: $3, Table: $5}
   }
 
-// base_select is an unparenthesized SELECT with no order by clause or beyond.
-base_select:
+// select_or_set_op is an unparenthesized SELECT without an order by clause or UNION/INTERSECT/EXCEPT operation
+// TODO: select_or_set_op should also include openb select_statement_with_no_trailing_into closeb; so it should just use base_select
+select_or_set_op:
   base_select_no_cte
   {
     $$ = $1
   }
-| union_lhs union_op union_rhs
+| set_op
   {
-    $$ = &Union{Type: $2, Left: $1, Right: $3}
+    $$ = $1
   }
 
-with_select:
+// set_op is a UNION/INTERSECT/EXCEPT operation
+set_op:
+  intersect_stmt
+  {
+    $$ = $1
+  }
+| union_except_lhs union_op union_except_rhs
+  {
+    $$ = &SetOp{Type: $2, Left: $1, Right: $3}
+  }
+| union_except_lhs except_op union_except_rhs
+  {
+    $$ = &SetOp{Type: $2, Left: $1, Right: $3}
+  }
+
+// intersect_stmt is an INTERSECT operation
+// in order to enforce its higher precedence over UNION/EXCEPT, it is defined as a terminal rule
+// this way, base_select and other intersect_stmt are greedily paired up
+intersect_stmt:
+  base_select intersect_op base_select
+  {
+    $$ = &SetOp{Type: $2, Left: $1, Right: $3}
+  }
+| intersect_stmt intersect_op base_select
+  {
+    $$ = &SetOp{Type: $2, Left: $1, Right: $3}
+  }
+
+// TODO: add (VALUES ROW(...), ROW(...), ...) support
+// base_select is either a simple SELECT or a SELECT wrapped in parentheses
+base_select:
+  base_select_no_cte
+  {
+    if $1.GetInto() != nil {
+      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
+      return 1
+    }
+    $$ = $1
+  }
+| openb select_statement_with_no_trailing_into closeb
+  {
+    $$ = &ParenSelect{Select: $2}
+  }
+
+// union_except_lhs is either a simple select or a set_op
+// this allows further nesting of UNION/INTERSECT/EXCEPT
+union_except_lhs:
   base_select
   {
     $$ = $1
   }
-| WITH with_clause base_select
+| set_op
+  {
+    $$ = $1
+  }
+
+// union_except_rhs is either a simple SELECT or an intersect_stmt
+// this is a terminal rule, to prevent further nesting of set_op
+union_except_rhs:
+  base_select
+  {
+    $$ = $1
+  }
+| intersect_stmt
+  {
+    $$ = $1
+  }
+
+with_select:
+  select_or_set_op
+  {
+    $$ = $1
+  }
+| WITH with_clause select_or_set_op
   {
     $3.SetWith($2)
     $$ = $3
@@ -749,6 +823,10 @@ base_select_no_cte:
     if $5 == 1 {
       $$.(*Select).CalcFoundRows = true
     }
+  }
+| TABLE table_reference
+  {
+    $$ = &Select{SelectExprs: SelectExprs{&StarExpr{}}, From: TableExprs{$2}}
   }
 
 from_opt:
@@ -818,34 +896,6 @@ common_table_expression:
   table_alias ins_column_list_opt AS subquery_or_values
   {
     $$ = &CommonTableExpr{&AliasedTableExpr{Expr:$4, As: $1}, $2}
-  }
-
-union_lhs:
-  base_select
-  {
-    if $1.GetInto() != nil {
-      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
-      return 1
-    }
-    $$ = $1
-  }
-| openb select_statement_with_no_trailing_into closeb
-  {
-    $$ = &ParenSelect{Select: $2}
-  }
-
-union_rhs:
-  base_select_no_cte
-  {
-    if $1.GetInto() != nil {
-      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
-      return 1
-    }
-    $$ = $1
-  }
-| openb select_statement_with_no_trailing_into closeb
-  {
-    $$ = &ParenSelect{Select: $2}
   }
 
 insert_statement:
@@ -1037,11 +1087,20 @@ create_statement:
     $$ = $1
   }
   // TODO: Allow for table specs to be parsed here
-| create_table_prefix as_opt create_query_expression
+| create_table_prefix AS create_query_expression
   {
     $1.OptSelect = &OptSelect{Select: $3}
     $$ = $1
   }
+  // Currently, only unparenthesized SELECT expressions
+  // are permitted for `CREATE AS` if `AS` is ommitted.
+  // This is done to avoid ambiguity when parsing
+  // > CREATE TABLE AS (...
+| create_table_prefix create_query_select_expression
+   {
+     $1.OptSelect = &OptSelect{Select: $2}
+     $$ = $1
+   }
 | create_table_prefix LIKE table_name
   {
     $1.OptLike = &OptLike{LikeTable: $3}
@@ -1709,8 +1768,21 @@ with_admin_opt:
   }
 
 // TODO: Implement IGNORE, REPLACE, VALUES, and TABLE
-create_query_expression:
+create_query_select_expression:
   base_select_no_cte order_by_opt limit_opt lock_opt
+  {
+    if $1.GetInto() != nil {
+      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
+      return 1
+    }
+    $1.SetOrderBy($2)
+    $1.SetLimit($3)
+    $1.SetLock($4)
+    $$ = $1
+  }
+
+create_query_expression:
+  select_or_set_op order_by_opt limit_opt lock_opt
   {
     if $1.GetInto() != nil {
       yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
@@ -3108,9 +3180,21 @@ char_type:
   {
     $$ = ColumnType{Type: string($1), Length: $2}
   }
+| NCHAR VARCHAR char_length_opt
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
+  }
+| NCHAR VARYING char_length_opt
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
+  }
 | VARCHAR char_length_opt
   {
     $$ = ColumnType{Type: string($1), Length: $2}
+  }
+| CHAR VARYING char_length_opt
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
 | CHARACTER VARYING char_length_opt
   {
@@ -3123,6 +3207,10 @@ char_type:
 | NATIONAL VARCHAR char_length_opt
   {
     $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
+  }
+| NATIONAL CHAR VARYING char_length_opt
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2) + " " + string($3), Length: $4}
   }
 | NATIONAL CHARACTER VARYING char_length_opt
   {
@@ -3740,6 +3828,22 @@ index_option:
   {
     $$ = &IndexOption{Name: string($1), Value: NewStrVal($2)}
   }
+| ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &IndexOption{Name: string($1), Value: NewStrVal($3)}
+  }
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &IndexOption{Name: string($1), Value: NewStrVal($3)}
+  }
+| VISIBLE
+  {
+    $$ = &IndexOption{Name: string($1), Value: nil}
+  }
+| INVISIBLE
+  {
+    $$ = &IndexOption{Name: string($1), Value: nil}
+  }
 
 equal_opt:
   /* empty */
@@ -4044,9 +4148,13 @@ table_option:
   {
     $$ = string($1) + " "  + string($2) + " "  + string($3) + " " + $5
   }
-| CHECKSUM equal_opt INTEGRAL
+| CHECKSUM equal_opt coericble_to_integral
   {
     $$ = string($1) + " " + string($3)
+  }
+| TABLE_CHECKSUM equal_opt coericble_to_integral
+  {
+    $$ = "CHECKSUM" + " " + string($3)
   }
 | COLLATE equal_opt table_option_collate
   {
@@ -4076,7 +4184,7 @@ table_option:
   {
     $$ = string($1) + " "  + string($2) + " " + "'" + string($4) + "'"
   }
-| DELAY_KEY_WRITE equal_opt INTEGRAL
+| DELAY_KEY_WRITE equal_opt coericble_to_integral
   {
     $$ = string($1) + " " + string($3)
   }
@@ -4116,7 +4224,7 @@ table_option:
   {
     $$ = string($1) + " " + $3
   }
-| PACK_KEYS equal_opt INTEGRAL
+| PACK_KEYS equal_opt coericble_to_integral
   {
     $$ = string($1) + " " + string($3)
   }
@@ -4131,6 +4239,18 @@ table_option:
 | START TRANSACTION
   {
     $$ = string($1) + " "  + string($2)
+  }
+| SECONDARY_ENGINE equal_opt ID
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| SECONDARY_ENGINE equal_opt NULL
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| SECONDARY_ENGINE equal_opt STRING
+  {
+    $$ = string($1) + " " + string($3)
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
@@ -4148,7 +4268,7 @@ table_option:
   {
     $$ = string($1) + " " + string($3)
   }
-| STATS_PERSISTENT equal_opt INTEGRAL
+| STATS_PERSISTENT equal_opt coericble_to_integral
   {
     $$ = string($1) + " " + string($3)
   }
@@ -4172,9 +4292,9 @@ table_option:
   {
     $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
   }
-| UNION equal_opt table_opt_value
+| UNION equal_opt openb any_identifier_list closeb
   {
-    $$ = string($1) + " " + $3
+    $$ = string($1) + " " + "(" + $4 + ")"
   }
 
 table_option_collate:
@@ -4192,7 +4312,7 @@ table_opt_value:
   {
     $$ = "'" + string($1) + "'"
   }
-| INTEGRAL
+| coericble_to_integral
   {
     $$ = string($1)
   }
@@ -4208,6 +4328,20 @@ table_opt_value:
 | PASSWORD
   {
     $$ = string($1)
+  }
+
+coericble_to_integral:
+  INTEGRAL
+  {
+     $$ = $1
+  }
+| HEXNUM
+  {
+    $$ = $1
+  }
+| FLOAT
+  {
+     $$ = $1
   }
 
 row_fmt_opt:
@@ -4234,6 +4368,16 @@ row_fmt_opt:
 | COMPACT
   {
     $$ = string($1)
+  }
+
+any_identifier_list:
+  any_identifier
+  {
+    $$ = string($1)
+  }
+| any_identifier_list ',' any_identifier
+  {
+    $$ = $1 + "," + string($3)
   }
 
 any_identifier:
@@ -4540,6 +4684,46 @@ alter_table_statement_part:
 | default_keyword_opt COLLATE equal_opt charset
   {
     $$ = &DDL{Action: AlterStr, AlterCollationSpec: &AlterCollationSpec{CharacterSet: "", Collation: $4}}
+  }
+| SECONDARY_ENGINE equal_opt ID
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+ | SECONDARY_ENGINE equal_opt NULL
+   {
+     $$ = &DDL{Action: AlterStr}
+   }
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| CHECKSUM equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| TABLE_CHECKSUM equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| UNION equal_opt openb any_identifier_list closeb
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| INSERT_METHOD equal_opt NO
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| INSERT_METHOD equal_opt FIRST
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| INSERT_METHOD equal_opt LAST
+  {
+    $$ = &DDL{Action: AlterStr}
   }
 
 column_order_opt:
@@ -5280,6 +5464,34 @@ union_op:
 | UNION DISTINCT
   {
     $$ = UnionDistinctStr
+  }
+
+intersect_op:
+  INTERSECT
+  {
+    $$ = IntersectStr
+  }
+| INTERSECT ALL
+  {
+    $$ = IntersectAllStr
+  }
+| INTERSECT DISTINCT
+  {
+    $$ = IntersectDistinctStr
+  }
+
+except_op:
+  EXCEPT
+  {
+    $$ = ExceptStr
+  }
+| EXCEPT ALL
+  {
+    $$ = ExceptAllStr
+  }
+| EXCEPT DISTINCT
+  {
+    $$ = ExceptDistinctStr
   }
 
 sql_calc_found_rows_opt:
@@ -7441,6 +7653,10 @@ lock_opt:
   {
     $$ = ForUpdateStr
   }
+| FOR UPDATE SKIP LOCKED
+  {
+    $$ = ForUpdateSkipLockedStr
+  }
 | LOCK IN SHARE MODE
   {
     $$ = ShareModeStr
@@ -8788,6 +9004,7 @@ non_reserved_keyword:
 | SUBJECT
 | SUBPARTITION
 | SUBPARTITIONS
+| TABLE_CHECKSUM
 | TABLES
 | TABLESPACE
 | TABLE_NAME

@@ -121,3 +121,91 @@ func TestIsPrecedence(t *testing.T) {
 		}
 	}
 }
+
+func fmtSetOp(s SelectStatement) string {
+	switch s := s.(type) {
+	case *SetOp:
+		return fmt.Sprintf("(%s %s %s)", fmtSetOp(s.Left), s.Type, fmtSetOp(s.Right))
+	case *Select:
+		return String(s)
+	case *ParenSelect:
+		return String(s)
+	}
+	return ""
+}
+
+func TestSetOperatorPrecedence(t *testing.T) {
+	validSQL := []struct {
+		input  string
+		output string
+	}{
+		{
+			input:  "select 1 union select 2 union select 3 union select 4",
+			output: "(((select 1 union select 2) union select 3) union select 4)",
+		},
+		{
+			input:  "select 1 intersect select 2 intersect select 3 intersect select 4",
+			output: "(((select 1 intersect select 2) intersect select 3) intersect select 4)",
+		},
+		{
+			input:  "select 1 except select 2 except select 3 except select 4",
+			output: "(((select 1 except select 2) except select 3) except select 4)",
+		},
+
+		{
+			input:  "select 1 union select 2 intersect select 3 except select 4",
+			output: "((select 1 union (select 2 intersect select 3)) except select 4)",
+		},
+		{
+			input:  "select 1 union select 2 except select 3 intersect select 4",
+			output: "((select 1 union select 2) except (select 3 intersect select 4))",
+		},
+
+		{
+			input:  "select 1 intersect select 2 union select 3 except select 4",
+			output: "(((select 1 intersect select 2) union select 3) except select 4)",
+		},
+		{
+			input:  "select 1 intersect select 2 except select 3 union select 4",
+			output: "(((select 1 intersect select 2) except select 3) union select 4)",
+		},
+
+		{
+			input:  "select 1 except select 2 intersect select 3 union select 4",
+			output: "((select 1 except (select 2 intersect select 3)) union select 4)",
+		},
+		{
+			input:  "select 1 except select 2 union select 3 intersect select 4",
+			output: "((select 1 except select 2) union (select 3 intersect select 4))",
+		},
+
+		{
+			input:  "(table a) union (table b)",
+			output: "((select * from a) union (select * from b))",
+		},
+		{
+			input:  "(table a) intersect (table b)",
+			output: "((select * from a) intersect (select * from b))",
+		},
+		{
+			input:  "(table a) except (table b)",
+			output: "((select * from a) except (select * from b))",
+		},
+		{
+			input:  "select 1 intersect (select 2 union select 3)",
+			output: "(select 1 intersect (select 2 union select 3))",
+		},
+
+	}
+	for _, tcase := range validSQL {
+		tree, err := Parse(tcase.input)
+		if err != nil {
+			t.Error(err)
+			continue
+		}
+		expr := fmtSetOp(tree.(SelectStatement))
+		if expr != tcase.output {
+			t.Errorf("Parse: \n%s, want: \n%s", expr, tcase.output)
+		}
+	}
+}

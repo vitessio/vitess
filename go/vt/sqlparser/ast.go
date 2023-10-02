@@ -404,7 +404,7 @@ type Statement interface {
 
 type Statements []Statement
 
-func (*Union) iStatement()             {}
+func (*SetOp) iStatement()             {}
 func (*Select) iStatement()            {}
 func (*Stream) iStatement()            {}
 func (*Insert) iStatement()            {}
@@ -467,7 +467,7 @@ type SelectStatement interface {
 }
 
 func (*Select) iSelectStatement()          {}
-func (*Union) iSelectStatement()           {}
+func (*SetOp) iSelectStatement()           {}
 func (*ParenSelect) iSelectStatement()     {}
 func (*ValuesStatement) iSelectStatement() {}
 
@@ -499,8 +499,9 @@ const (
 
 // Select.Lock
 const (
-	ForUpdateStr = " for update"
-	ShareModeStr = " lock in share mode"
+	ForUpdateStr           = " for update"
+	ShareModeStr           = " lock in share mode"
+	ForUpdateSkipLockedStr = " for update skip locked"
 )
 
 // Select.Cache
@@ -700,8 +701,8 @@ func (s *ValuesStatement) walkSubtree(visit Visit) error {
 	return Walk(visit, s.Rows)
 }
 
-// Union represents a UNION statement.
-type Union struct {
+// SetOp represents a UNION, INTERSECT, and EXCEPT statement.
+type SetOp struct {
 	Type        string
 	Left, Right SelectStatement
 	OrderBy     OrderBy
@@ -711,36 +712,42 @@ type Union struct {
 	Into        *Into
 }
 
-// Union.Type
+// SetOp.Type
 const (
-	UnionStr         = "union"
-	UnionAllStr      = "union all"
-	UnionDistinctStr = "union distinct"
+	UnionStr             = "union"
+	UnionAllStr          = "union all"
+	UnionDistinctStr     = "union distinct"
+	IntersectStr         = "intersect"
+	IntersectAllStr      = "intersect all"
+	IntersectDistinctStr = "intersect distinct"
+	ExceptStr            = "except"
+	ExceptAllStr         = "except all"
+	ExceptDistinctStr    = "except distinct"
 )
 
 // AddOrder adds an order by element
-func (node *Union) AddOrder(order *Order) {
+func (node *SetOp) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
 }
 
-func (node *Union) SetOrderBy(orderBy OrderBy) {
+func (node *SetOp) SetOrderBy(orderBy OrderBy) {
 	node.OrderBy = orderBy
 }
 
-func (node *Union) SetWith(w *With) {
+func (node *SetOp) SetWith(w *With) {
 	node.With = w
 }
 
 // SetLimit sets the limit clause
-func (node *Union) SetLimit(limit *Limit) {
+func (node *SetOp) SetLimit(limit *Limit) {
 	node.Limit = limit
 }
 
-func (node *Union) SetLock(lock string) {
+func (node *SetOp) SetLock(lock string) {
 	node.Lock = lock
 }
 
-func (node *Union) SetInto(into *Into) error {
+func (node *SetOp) SetInto(into *Into) error {
 	if into == nil {
 		if r, ok := node.Right.(*Select); ok {
 			node.Into = r.Into
@@ -755,17 +762,17 @@ func (node *Union) SetInto(into *Into) error {
 	return nil
 }
 
-func (node *Union) GetInto() *Into {
+func (node *SetOp) GetInto() *Into {
 	return node.Into
 }
 
 // Format formats the node.
-func (node *Union) Format(buf *TrackedBuffer) {
+func (node *SetOp) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v%v %s %v%v%v%s%v", node.With, node.Left, node.Type, node.Right,
 		node.OrderBy, node.Limit, node.Lock, node.Into)
 }
 
-func (node *Union) walkSubtree(visit Visit) error {
+func (node *SetOp) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
@@ -1594,7 +1601,7 @@ type InsertRows interface {
 }
 
 func (*Select) iInsertRows()      {}
-func (*Union) iInsertRows()       {}
+func (*SetOp) iInsertRows()       {}
 func (Values) iInsertRows()       {}
 func (*ParenSelect) iInsertRows() {}
 
@@ -2933,15 +2940,15 @@ func (ts *JSONTableSpec) AddColumn(cd *JSONTableColDef) {
 
 // Format formats the node.
 func (ts *JSONTableSpec) Format(buf *TrackedBuffer) {
-	buf.Myprintf("\"%s\" %s(", ts.Path, keywordStrings[COLUMNS])
+	buf.Myprintf("'%s' %s(", ts.Path, keywordStrings[COLUMNS])
 	for i, col := range ts.Columns {
 		if i == 0 {
-			buf.Myprintf("\n\t%v", col)
+			buf.Myprintf("%v", col)
 		} else {
-			buf.Myprintf(",\n\t%v", col)
+			buf.Myprintf(", %v", col)
 		}
 	}
-	buf.Myprintf("\n)")
+	buf.Myprintf(")")
 }
 
 func (ts *JSONTableSpec) walkSubtree(visit Visit) error {
@@ -2972,7 +2979,15 @@ func (col *JSONTableColDef) Format(buf *TrackedBuffer) {
 		buf.Myprintf("%s %s %v", keywordStrings[NESTED], keywordStrings[PATH], col.Spec)
 		return
 	} else {
-		buf.Myprintf("%v %v %s %v", col.Name, &col.Type, keywordStrings[PATH], col.Opts)
+		exists := ""
+		if col.Opts.Exists {
+			exists = " " + keywordStrings[EXISTS]
+		}
+		if col.Type.Autoincrement {
+			buf.Myprintf("%v %s", col.Name, "FOR ORDINALITY")
+		} else {
+			buf.Myprintf("%v %v%s %s %v", col.Name, &col.Type, exists, keywordStrings[PATH], col.Opts)
+		}
 	}
 }
 
@@ -2999,21 +3014,18 @@ type JSONTableColOpts struct {
 
 // Format formats the node.
 func (opt JSONTableColOpts) Format(buf *TrackedBuffer) {
-	buf.Myprintf("\"%s\"", opt.Path)
+	buf.Myprintf("'%s'", opt.Path)
 	if opt.ValOnEmpty != nil {
-		buf.Myprintf(" %v %s %s", opt.ValOnEmpty, keywordStrings[ON], keywordStrings[EMPTY])
+		buf.Myprintf(" DEFAULT %v %s %s", opt.ValOnEmpty, keywordStrings[ON], keywordStrings[EMPTY])
 	}
 	if opt.ValOnError != nil {
-		buf.Myprintf(" %v %s %s ", opt.ValOnError, keywordStrings[ON], keywordStrings[ERROR])
+		buf.Myprintf(" DEFAULT %v %s %s ", opt.ValOnError, keywordStrings[ON], keywordStrings[ERROR])
 	}
 	if opt.ErrorOnEmpty {
 		buf.Myprintf(" %s %s %s", keywordStrings[ERROR], keywordStrings[ON], keywordStrings[EMPTY])
 	}
 	if opt.ErrorOnError {
 		buf.Myprintf(" %s %s %s", keywordStrings[ERROR], keywordStrings[ON], keywordStrings[ERROR])
-	}
-	if opt.Exists {
-		buf.Myprintf(" %s", keywordStrings[EXISTS])
 	}
 }
 
@@ -3082,7 +3094,7 @@ func (idx *IndexSpec) Format(buf *TrackedBuffer) {
 			buf.Myprintf(" %s", opt.Name)
 			if opt.Using != "" {
 				buf.Myprintf(" %s", opt.Using)
-			} else {
+			} else if opt.Value != nil {
 				buf.Myprintf(" %v", opt.Value)
 			}
 		}
@@ -3140,7 +3152,7 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" %s", opt.Name)
 		if opt.Using != "" {
 			buf.Myprintf(" %s", opt.Using)
-		} else {
+		} else if opt.Value != nil {
 			buf.Myprintf(" %v", opt.Value)
 		}
 	}
@@ -3520,7 +3532,7 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		}
 	}
 
-	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
+	if strings.EqualFold(node.Type, "collation") && node.ShowCollationFilterOpt != nil {
 		buf.Myprintf(" where %v", node.ShowCollationFilterOpt)
 	}
 	if node.HasTable() {
@@ -3630,7 +3642,7 @@ type Begin struct {
 
 // Format formats the node.
 func (node *Begin) Format(buf *TrackedBuffer) {
-	buf.WriteString("begin")
+	buf.WriteString("start transaction")
 
 	if node.TransactionCharacteristic != "" {
 		buf.Myprintf(" %s", node.TransactionCharacteristic)
@@ -3883,9 +3895,10 @@ func (node *AliasedExpr) Format(buf *TrackedBuffer) {
 		if !node.As.IsEmpty() {
 			// The AS is omitted here because it gets captured by the InputExpression. A bug, but not a major one since
 			// we use the alias expression for the column in the return schema.
-			buf.Myprintf("%s %v", node.InputExpression, node.As)
+			buf.Myprintf("%v %v", node.Expr, node.As)
 		} else {
-			buf.Myprintf("%s", node.InputExpression)
+			//buf.Myprintf("%s", node.InputExpression)
+			node.Expr.Format(buf)
 		}
 	} else if !node.As.IsEmpty() {
 		buf.Myprintf("%v as %v", node.Expr, node.As)

@@ -61,10 +61,13 @@ func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]*querypb.BindVaria
 
 // Append appends the generated query to the provided buffer.
 func (pq *ParsedQuery) Append(buf *strings.Builder, bindVariables map[string]*querypb.BindVariable, extras map[string]Encodable) error {
+	// TODO error if excess or not enough bind vars
+	used := make(map[string]bool)
 	current := 0
 	for _, loc := range pq.bindLocations {
 		buf.WriteString(pq.Query[current:loc.offset])
 		name := pq.Query[loc.offset : loc.offset+loc.length]
+		used[name] = true
 		if encodable, ok := extras[name[1:]]; ok {
 			encodable.EncodeSQL(buf)
 		} else {
@@ -75,6 +78,9 @@ func (pq *ParsedQuery) Append(buf *strings.Builder, bindVariables map[string]*qu
 			EncodeValue(buf, supplied)
 		}
 		current = loc.offset + loc.length
+	}
+	if len(used) < len(bindVariables) {
+		return fmt.Errorf("invalid arguments. expected: %d, found: %d", len(used), len(bindVariables))
 	}
 	buf.WriteString(pq.Query[current:])
 	return nil

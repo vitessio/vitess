@@ -201,13 +201,15 @@ var (
 			output: "select a, `'b'` from t",
 		}, {
 			input:                      `select "'ain't'", '"hello"' from t`,
-			output:                     `select 'ain't', "hello" from t`,
+			output:                     "select '\\'ain\\'t\\'', '\\\"hello\\\"' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      `select "1" + "2" from t`,
+			output:                     "select '1' + '2' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      `select '1' + "2" from t`,
+			output:                     "select '1' + '2' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select * from information_schema.columns",
@@ -226,11 +228,11 @@ var (
 			input: "select -1 from t where b = -2",
 		}, {
 			input:                      "select - -1 from t",
-			output:                     "select - -1 from t",
+			output:                     "select 1 from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select -   -1 from t",
-			output:                     "select -   -1 from t",
+			output:                     "select 1 from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select - -1 from t",
@@ -277,7 +279,7 @@ var (
 			input: "select /* \\0 */ '\\0' from a",
 		}, {
 			input:                      "select /* \\0 */ '\\0' from a",
-			output:                     "select /* \\0 */ \\0 from a",
+			output:                     "select /* \\0 */ '\\0' from a",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select 1 /* drop this comment */ from t",
@@ -304,7 +306,29 @@ var (
 		}, {
 			input:  "select /* union order by limit lock */ 1 from t union select 1 from t order by a limit 1 for update",
 			output: "select /* union order by limit lock */ 1 from t union select 1 from t order by a asc limit 1 for update",
-		}, {
+		},
+		{
+			input: "select 1 from t intersect select 1 from t",
+		},
+		{
+			input: "select 1 from t intersect all select 1 from t",
+		},
+		{
+			input: "select 1 from t intersect distinct select 1 from t",
+		},
+		{
+			input: "select 1 from t except select 1 from t",
+		},
+		{
+			input: "select 1 from t except all select 1 from t",
+		},
+		{
+			input: "select 1 from t except distinct select 1 from t",
+		},
+		{
+			input: "create table u as select 1 from t intersect all select 1 from t",
+		},
+		{
 			input:  "(select id, a from t order by id limit 1) union (select id, b as a from s order by id limit 1) order by a limit 1",
 			output: "(select id, a from t order by id asc limit 1) union (select id, b as a from s order by id asc limit 1) order by a asc limit 1",
 		}, {
@@ -365,6 +389,8 @@ var (
 			input: "select /* straight_join */ straight_join 1 from t",
 		}, {
 			input: "select /* for update */ 1 from t for update",
+		}, {
+			input: "select /* skip locked */ 1 from t for update skip locked",
 		}, {
 			input: "select /* lock in share mode */ 1 from t lock in share mode",
 		}, {
@@ -835,14 +861,14 @@ var (
 			input: "select /* keyword a.b */ `By`.`bY` from t",
 		}, {
 			input:                      "select /* string */ 'a' from t",
-			output:                     "select /* string */ a from t",
+			output:                     "select /* string */ 'a' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select /* double quoted string */ \"a\" from t",
 			output: "select /* double quoted string */ 'a' from t",
 		}, {
 			input:                      "select /* double quoted string */ \"a\" from t",
-			output:                     "select /* double quoted string */ a from t",
+			output:                     "select /* double quoted string */ 'a' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select /* quote quote in string */ 'a''a' from t",
@@ -855,36 +881,36 @@ var (
 			output: "select /* quote in double quoted string */ 'a\\'a' from t",
 		}, {
 			input:  "select /* quote in double quoted string */ \"a'a\" from t",
-			output: "select /* quote in double quoted string */ a'a from t",
+			output: "select /* quote in double quoted string */ 'a\\'a' from t",
 
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select /* backslash quote in string */ 'a\\'a' from t",
-			output:                     "select /* backslash quote in string */ a\\'a from t",
+			output:                     "select /* backslash quote in string */ 'a\\'a' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select /* literal backslash in string */ 'a\\\\na' from t",
-			output: "select /* literal backslash in string */ a\\\\na from t",
+			output: "select /* literal backslash in string */ 'a\\\\na' from t",
 
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select /* all escapes */ '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\' from t",
-			output:                     "select /* all escapes */ \\0\\'\\\"\\b\\n\\r\\t\\Z\\\\ from t",
+			output:                     "select /* all escapes */ '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select /* non-escape */ '\\x' from t",
 			output: "select /* non-escape */ 'x' from t",
 		}, {
 			input:                      "select /* non-escape */ '\\x' from t",
-			output:                     "select /* non-escape */ \\x from t",
+			output:                     "select /* non-escape */ 'x' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select /* unescaped backslash */ '\n' from t",
-			output:                     "select /* unescaped backslash */ \n from t",
+			output:                     "select /* unescaped backslash */ '\\n' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select /* escaped backslash */ '\\n' from t",
-			output:                     "select /* escaped backslash */ \\n from t",
+			output:                     "select /* escaped backslash */ '\\n' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select /* value argument */ :a from t",
@@ -897,6 +923,7 @@ var (
 			output: "select /* positional argument */ :v1 from t",
 		}, {
 			input:                      "select /* positional argument */ ? from t",
+			output:                     "select /* positional argument */ :v1 from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select /* positional argument */ ? from t limit ?",
@@ -917,6 +944,7 @@ var (
 			output: "select /* hex */ X'f0A1' from t",
 		}, {
 			input:                      "select /* hex */ x'f0A1' from t",
+			output:                     "select /* hex */ X'f0A1' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select /* hex caps */ X'F0a1' from t",
@@ -925,6 +953,7 @@ var (
 			output: "select /* bit literal */ B'0101' from t",
 		}, {
 			input:                      "select /* bit literal */ b'0101' from t",
+			output:                     "select /* bit literal */ B'0101' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select /* bit literal caps */ B'010011011010' from t",
@@ -954,6 +983,7 @@ var (
 			output: "select /* binary unary */ a - -b from t",
 		}, {
 			input:                      "select /* binary unary */ a- -b from t",
+			output:                     "select /* binary unary */ a - -b from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select /* - - */ - -b from t",
@@ -969,9 +999,11 @@ var (
 			input: "select /* interval keyword */ adddate('2008-01-02', interval 1 year) from t",
 		}, {
 			input:                      "select /* TIMESTAMPADD */ TIMESTAMPADD(MINUTE, 1, '2008-01-04') from t",
+			output:                     "select /* TIMESTAMPADD */ timestampadd(MINUTE, 1, '2008-01-04') from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
+			output:                     "select /* TIMESTAMPDIFF */ timestampdiff(MINUTE, '2008-01-02', '2008-01-04') from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select /* dual */ 1 from dual",
@@ -1029,7 +1061,7 @@ var (
 			output: "select * from (select 'tables') as `tables`",
 		}, {
 			input:                      "select * from (select 'tables') tables",
-			output:                     "select * from (select tables) as `tables`",
+			output:                     "select * from (select 'tables') as `tables`",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "insert /* simple */ into a values (1)",
@@ -1515,6 +1547,12 @@ var (
 			input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 			output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 		}, {
+			input:  "CREATE TABLE `dolt_test`.`a` (`id` INT, `b` DOUBLE, PRIMARY KEY (`id`), INDEX `c` (`b` ASC) INVISIBLE)",
+			output: "create table dolt_test.a (\n\tid INT,\n\tb DOUBLE,\n\tPRIMARY KEY (id),\n\tINDEX c (b) INVISIBLE\n)",
+		}, {
+			input:  "CREATE TABLE `dolt_test`.`a` (`id` INT, `b` DOUBLE, PRIMARY KEY (`id`), INDEX `c` (`b` ASC) VISIBLE)",
+			output: "create table dolt_test.a (\n\tid INT,\n\tb DOUBLE,\n\tPRIMARY KEY (id),\n\tINDEX c (b) VISIBLE\n)",
+		}, {
 			input:  "create temporary table a (b1 bool not null primary key, b2 boolean not null)",
 			output: "create temporary table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 		}, {
@@ -1529,6 +1567,12 @@ var (
 		}, {
 			input:  "create index a on b (foo(6) desc, foo asc)",
 			output: "alter table b add index a (foo(6) desc, foo)",
+		}, {
+			input:  "CREATE INDEX `c` on `dolt_test`.`a`(`b` ASC) INVISIBLE",
+			output: "alter table dolt_test.a add index c (b) INVISIBLE",
+		}, {
+			input:  "CREATE INDEX `c` on `dolt_test`.`a`(`b` ASC) VISIBLE",
+			output: "alter table dolt_test.a add index c (b) VISIBLE",
 		}, {
 			input:  "create unique index a on b (id)",
 			output: "alter table b add unique index a (id)",
@@ -2073,15 +2117,15 @@ var (
 			output: "select /* drop trailing semicolon */ 1",
 		}, {
 			input:                      "select /* cache directive */ sql_no_cache 'foo' from t",
-			output:                     "select /* cache directive */ sql_no_cache foo from t",
+			output:                     "select /* cache directive */ sql_no_cache 'foo' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select /* sql_calc_rows directive */ sql_calc_found_rows 'foo' from t",
-			output:                     "select /* sql_calc_rows directive */ sql_calc_found_rows foo from t",
+			output:                     "select /* sql_calc_rows directive */ sql_calc_found_rows 'foo' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows 'foo' from t",
-			output:                     "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows foo from t",
+			output:                     "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows 'foo' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select binary 'a' = 'A' from t",
@@ -2105,6 +2149,7 @@ var (
 			input: "select `name`, group_concat(score) from t group by `name`",
 		}, {
 			input:                      "select concAt(  \"a\",    \"b\", \"c\"  ) from t group by `name`",
+			output:                     "select concAt('a', 'b', 'c') from t group by `name`",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select `name`, group_concat(distinct id, score order by id desc separator ':') from t group by `name`",
@@ -2293,8 +2338,8 @@ var (
 					WHERE (SELECT min(pk) FROM one_pk WHERE pk > opk.pk) IS NOT NULL
 					ORDER BY max`,
 			useSelectExpressionLiteral: true,
-			output: "select pk, (SELECT max(pk) FROM one_pk WHERE pk < opk.pk) as `max`," +
-				" (SELECT min(pk) FROM one_pk WHERE pk > opk.pk) as `min` " +
+			output: "select pk, (select max(pk) from one_pk where pk < opk.pk) `max`," +
+				" (select min(pk) from one_pk where pk > opk.pk) `min` " +
 				"from one_pk as opk " +
 				"where (select min(pk) from one_pk where pk > opk.pk) " +
 				"is not null order by `max` asc",
@@ -2314,19 +2359,20 @@ var (
 		}, {
 			input: "stream /* comment */ * from t",
 		}, {
-			input: "begin",
+			input:  "begin",
+			output: "start transaction",
 		}, {
 			input:  "begin work",
-			output: "begin",
+			output: "start transaction",
 		}, {
 			input:  "start transaction",
-			output: "begin",
+			output: "start transaction",
 		}, {
 			input:  "start transaction read only",
-			output: "begin read only",
+			output: "start transaction read only",
 		}, {
 			input:  "start transaction read write",
-			output: "begin read write",
+			output: "start transaction read write",
 		}, {
 			input: "commit",
 		}, {
@@ -2538,11 +2584,11 @@ var (
 			output: "create definer = `me`@`%` procedure p1 (in v1 int) comment 'some_comment' not deterministic select now()",
 		}, {
 			input:                      "SELECT FORMAT(45124,2) FROM test",
-			output:                     "select FORMAT(45124,2) from test",
+			output:                     "select FORMAT(45124, 2) from test",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "SELECT FORMAT(45124,2,'de_DE') FROM test",
-			output:                     "select FORMAT(45124,2,'de_DE') from test",
+			output:                     "select FORMAT(45124, 2, 'de_DE') from test",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "CREATE USER UserName@localhost",
@@ -3169,6 +3215,146 @@ var (
 				"definition 'definition'\n" +
 				"organization 'organization' identified by 4321\n" +
 				"description 'description'",
+		},
+		{
+			input: "create table t (i int) secondary_engine=rapid",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") secondary_engine rapid",
+		},
+		{
+			input: "create table t (i int) secondary_engine='rapid'",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") secondary_engine rapid",
+		},
+		{
+			input: "create table t (i int) secondary_engine=NULL",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") secondary_engine NULL",
+		},
+		{
+			input: "create table t (i int) secondary_engine NULL",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") secondary_engine NULL",
+		},
+		{
+			input:  "alter table t secondary_engine=rapid",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t secondary_engine rapid",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t secondary_engine=NULL",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t secondary_engine NULL",
+			output: "alter table t",
+		},
+		{
+			input: "create table t (i int) secondary_engine_attribute='rapid'",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") secondary_engine_attribute 'rapid'",
+		},
+		{
+			input: "create table t (i int) secondary_engine_attribute='rapid'",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") secondary_engine_attribute 'rapid'",
+		},
+		{
+			input:  "alter table t secondary_engine_attribute='rapid'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t secondary_engine_attribute 'rapid'",
+			output: "alter table t",
+		},
+		{
+			input:  "table t",
+			output: "select * from t",
+		},
+		{
+			input: "create table t (i int) checksum=0",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") checksum 0",
+		},
+		{
+			input: "create table t (i int) checksum 100",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") checksum 100",
+		},
+		{
+			input:  "alter table t checksum 1",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t checksum = 1",
+			output: "alter table t",
+		},
+		{
+			input: "create table t (i int) table_checksum=0",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") CHECKSUM 0",
+		},
+		{
+			input: "create table t (i int) table_checksum 100",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") CHECKSUM 100",
+		},
+		{
+			input:  "alter table t table_checksum 1",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t table_checksum = 1",
+			output: "alter table t",
+		},
+		{
+			input: "create table t (i int) union (a, b, c)",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") union (a,b,c)",
+		},
+		{
+			input: "create table t (i int) union (`a`, `b`, `c`)",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") union (a,b,c)",
+		},
+		{
+			input:  "alter table t union=(a, b, c)",
+			output: "alter table t",
+		},
+		{
+			input: "create table t (i int) insert_method last",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") insert_method last",
+		},
+		{
+			input: "create table t (i int) insert_method=last",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") insert_method last",
+		},
+		{
+			input:  "alter table t insert_method last",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t insert_method=last",
+			output: "alter table t",
 		},
 	}
 
@@ -4364,7 +4550,7 @@ func TestCaseSensitivity(t *testing.T) {
 			output: "select A(B, C) from b",
 		}, {
 			input:                      "select A(ALL B, C) from b",
-			output:                     "select A(ALL B, C) from b",
+			output:                     "select A(B, C) from b",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select IF(B, C) from b",
@@ -4404,7 +4590,7 @@ func TestKeywords(t *testing.T) {
 			output: "select current_timestamp()",
 		}, {
 			input:                      "select current_TIMESTAMP",
-			output:                     "select current_TIMESTAMP",
+			output:                     "select current_TIMESTAMP()",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "update t set a = current_timestamp()",
@@ -4415,16 +4601,18 @@ func TestKeywords(t *testing.T) {
 			output: "select a, current_date() from t",
 		}, {
 			input:                      "select a, current_DATE from t",
-			output:                     "select a, current_DATE from t",
+			output:                     "select a, current_DATE() from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select a, current_user from t",
 			output: "select a, current_user() from t",
 		}, {
 			input:                      "select a, current_USER from t",
+			output:                     "select a, current_USER() from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select a, Current_USER(     ) from t",
+			output:                     "select a, Current_USER() from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "insert into t(a, b) values (current_date, current_date())",
@@ -4450,7 +4638,7 @@ func TestKeywords(t *testing.T) {
 			output: "select utc_time(), utc_date(), utc_time(6)",
 		}, {
 			input:                      "select utc_TIME, UTC_date, utc_time(6)",
-			output:                     "select utc_TIME, UTC_date, utc_time(6)",
+			output:                     "select utc_TIME(), UTC_date(), utc_time(6)",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select 1 from dual where localtime > utc_time",
@@ -5176,15 +5364,18 @@ func TestSubStr(t *testing.T) {
 		output: "select substr(a, 1, 6) from t",
 	}, {
 		input:                      "select substring(a from 1 for 6) from t",
+		output:                     "select substr(a, 1, 6) from t",
 		useSelectExpressionLiteral: true,
 	}, {
 		input:  "select substring(a from 1 for 6) from t",
 		output: "select substr(a, 1, 6) from t",
 	}, {
 		input:                      "select substring(a from 1 for 6) from t",
+		output:                     "select substr(a, 1, 6) from t",
 		useSelectExpressionLiteral: true,
 	}, {
 		input:                      "select substring(a from 1  for   6) from t",
+		output:                     "select substr(a, 1, 6) from t",
 		useSelectExpressionLiteral: true,
 	}, {
 		input:  `select substr("foo" from 1 for 2) from t`,
@@ -5197,6 +5388,7 @@ func TestSubStr(t *testing.T) {
 		output: `select substr(substr('foo', 1, 2), 1, 2) from t`,
 	}, {
 		input:                      `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
+		output:                     "select substr(substr('foo', 1, 2), 1, 2) from t",
 		useSelectExpressionLiteral: true,
 	}, {
 		input:  `select substr(substring("foo", 1, 2), 3, 4) from t`,
@@ -5260,12 +5452,17 @@ func TestCreateTable(t *testing.T) {
 			"	col_character2 character(2),\n" +
 			"	col_character3 character(3) character set ascii,\n" +
 			"	col_character4 character(4) character set ascii collate ascii_bin,\n" +
+			"	col_char_varying char varying(2),\n" +
+			"	col_char_varying2 char varying(10) character set utf8,\n" +
 			"	col_nchar nchar,\n" +
 			"	col_nchar2 nchar(2),\n" +
+			"	col_nchar_varchar nchar varchar(2),\n" +
+			"	col_nchar_varying nchar varying(2),\n" +
 			"	col_national_char national char,\n" +
 			"	col_national_char2 national char(2),\n" +
 			"	col_national_character national character,\n" +
 			"	col_national_character2 national character(2),\n" +
+			"	col_national_char_varying national char varying(2),\n" +
 			"	col_varchar varchar,\n" +
 			"	col_varchar2 varchar(2),\n" +
 			"	col_varchar3 varchar(3) character set ascii,\n" +
@@ -5440,6 +5637,36 @@ func TestCreateTable(t *testing.T) {
 			"  tablespace tablespace_name storage disk,\n" +
 			"  tablespace tablespace_name\n",
 
+		// passing hex nums to table options
+		"create table t (\n" +
+			"	id int auto_increment\n" +
+			") engine InnoDB,\n" +
+			"  auto_increment 0x1,\n" +
+			"  avg_row_length 0x2,\n" +
+			"  checksum 0x3,\n" +
+			"  delay_key_write 0x4,\n" +
+			"  key_block_size 0x5,\n" +
+			"  max_rows 0x6,\n" +
+			"  min_rows 0x7,\n" +
+			"  pack_keys 0x8,\n" +
+			"  stats_persistent 0x9,\n" +
+			"  stats_sample_pages 0x10\n",
+
+		// passing floats to table options
+		"create table t (\n" +
+			"	id int auto_increment\n" +
+			") engine InnoDB,\n" +
+			"  auto_increment 4.1,\n" +
+			"  avg_row_length 4.2,\n" +
+			"  checksum 4.3,\n" +
+			"  delay_key_write 4.4,\n" +
+			"  key_block_size 4.5,\n" +
+			"  max_rows 4.6,\n" +
+			"  min_rows 4.7,\n" +
+			"  pack_keys 4.8,\n" +
+			"  stats_persistent 4.9,\n" +
+			"  stats_sample_pages 4.01\n",
+
 		// boolean columns
 		"create table t (\n" +
 			"	bi bigint not null primary key,\n" +
@@ -5453,17 +5680,19 @@ func TestCreateTable(t *testing.T) {
 			")",
 	}
 	for _, sql := range validSQL {
-		sql = strings.TrimSpace(sql)
-		tree, err := Parse(sql)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", sql, err)
-			continue
-		}
-		got := String(tree.(*DDL))
+		t.Run(sql, func(t *testing.T) {
+			sql = strings.TrimSpace(sql)
+			tree, err := Parse(sql)
+			if err != nil {
+				t.Errorf("input: %s, err: %v", sql, err)
+				return
+			}
+			got := String(tree.(*DDL))
 
-		if sql != got {
-			t.Errorf("want:\n%s\ngot:\n%s", sql, got)
-		}
+			if sql != got {
+				t.Errorf("want:\n%s\ngot:\n%s", sql, got)
+			}
+		})
 	}
 
 	sql := "create table t garbage"
@@ -7487,7 +7716,7 @@ FROM
 			x varchar(100) path "$.a"
 		)
 	) as tt;`,
-			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n\tx varchar(100) path \"$.a\"\n)) as tt",
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(x varchar(100) path '$.a')) as tt",
 		},
 		{
 			input: `
@@ -7500,7 +7729,7 @@ FROM
 			y varchar(100) path "$.b"
 		)
 	) as tt;`,
-			output: "select * from json_table('[{\\\"a\\\":1, \\\"b\\\":2},{\\\"a\\\":3, \\\"b\\\":4}]', \"$[*]\" columns(\n\tx varchar(100) path \"$.a\",\n\ty varchar(100) path \"$.b\"\n)) as tt",
+			output: "select * from json_table('[{\\\"a\\\":1, \\\"b\\\":2},{\\\"a\\\":3, \\\"b\\\":4}]', '$[*]' columns(x varchar(100) path '$.a', y varchar(100) path '$.b')) as tt",
 		},
 		{
 			input: `
@@ -7514,9 +7743,9 @@ FROM
 		)
 	) as t;
 	`,
-			output: "select * from json_table(concat('[{},', '{}]'), \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\",\n" +
-				"\ty varchar(100) path \"$.b\"\n" +
+			output: "select * from json_table(concat('[{},', '{}]'), '$[*]' columns(" +
+				"x varchar(100) path '$.a', " +
+				"y varchar(100) path '$.b'" +
 				")) as t",
 		},
 		{
@@ -7531,9 +7760,9 @@ FROM
 		)
 	) as t;
 	`,
-			output: "select * from json_table(123, \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\",\n" +
-				"\ty varchar(100) path \"$.b\"\n" +
+			output: "select * from json_table(123, '$[*]' columns(" +
+				"x varchar(100) path '$.a', " +
+				"y varchar(100) path '$.b'" +
 				")) as t",
 		},
 		{
@@ -7553,10 +7782,10 @@ JOIN
 			x varchar(100) path "$.a"
 		)
 	) t2;`,
-			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\"\n" +
-				")) as t1 join json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\"\n" +
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(" +
+				"x varchar(100) path '$.a'" +
+				")) as t1 join json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(" +
+				"x varchar(100) path '$.a'" +
 				")) as t2",
 		},
 		{
@@ -7571,8 +7800,8 @@ FROM
 	) t
 JOIN
 	tt;`,
-			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\"\n" +
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(" +
+				"x varchar(100) path '$.a'" +
 				")) as t join tt",
 		},
 		{
@@ -7587,8 +7816,8 @@ JOIN
 			x varchar(100) path "$.a"
 		)
 	) tt;`,
-			output: "select * from t join json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\"\n" +
+			output: "select * from t join json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(" +
+				"x varchar(100) path '$.a'" +
 				")) as tt",
 		},
 		{
@@ -7610,16 +7839,16 @@ FROM
 			y varchar(100) path "$.b"
 		)
 	) t2;`,
-			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\"\n" +
-				")) as t1 union select * from json_table('[{\\\"b\\\":1},{\\\"b\\\":2}]', \"$[*]\" columns(\n" +
-				"\ty varchar(100) path \"$.b\"\n" +
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(" +
+				"x varchar(100) path '$.a'" +
+				")) as t1 union select * from json_table('[{\\\"b\\\":1},{\\\"b\\\":2}]', '$[*]' columns(" +
+				"y varchar(100) path '$.b'" +
 				")) as t2",
 		},
 		{
 			input: `SELECT * FROM t WHERE i in (SELECT x FROM JSON_TABLE('[{"a":1},{"a":2}]', "$[*]" COLUMNS(x VARCHAR(100) PATH "$.a")) AS tt);`,
-			output: "select * from t where i in (select x from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
-				"\tx VARCHAR(100) path \"$.a\"\n" +
+			output: "select * from t where i in (select x from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(" +
+				"x VARCHAR(100) path '$.a'" +
 				")) as tt)",
 		},
 		{
@@ -7638,130 +7867,130 @@ FROM
 			y varchar(100) path "$.b"
 		)
 	) t2;`,
-			output: "select x, y from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
-				"\tx varchar(100) path \"$.a\"\n" +
-				")) as t1, json_table('[{\\\"b\\\":3},{\\\"b\\\":4}]', \"$[*]\" columns(\n" +
-				"\ty varchar(100) path \"$.b\"\n" +
+			output: "select x, y from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', '$[*]' columns(" +
+				"x varchar(100) path '$.a'" +
+				")) as t1, json_table('[{\\\"b\\\":3},{\\\"b\\\":4}]', '$[*]' columns(" +
+				"y varchar(100) path '$.b'" +
 				")) as t2",
 		},
 
 		// FOR ORDINALITY TESTS
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( pk FOR ORDINALITY, c1 INT PATH '$.c1')) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tpk INTEGER unsigned auto_increment path \"\",\n" +
-				"\tc1 INT path \"$.c1\"\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"pk FOR ORDINALITY, " +
+				"c1 INT path '$.c1'" +
 				")) as jt",
 		},
 
 		// EXISTS TESTS
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT EXISTS PATH '$.c1')) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" exists\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT exists path '$.c1'" +
 				")) as jt",
 		},
 
 		// ON EMPTY TESTS
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' NULL ON EMPTY )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" null on empty\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT null on empty" +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT 1 ON EMPTY )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" 1 on empty\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT 1 on empty" +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '1' ON EMPTY )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" '1' on empty\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT '1' on empty" +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '{"abc": 123}' ON EMPTY )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" '{\\\"abc\\\": 123}' on empty\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT '{\\\"abc\\\": 123}' on empty" +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' ERROR ON EMPTY )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" error on empty\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' error on empty" +
 				")) as jt",
 		},
 
 		// ON ERROR TESTS
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' NULL ON ERROR )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" null on error \n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT null on error " +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT 1 ON ERROR )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" 1 on error \n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT 1 on error " +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '1' ON ERROR )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" '1' on error \n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT '1' on error " +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '{"abc": 123}' ON ERROR )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" '{\\\"abc\\\": 123}' on error \n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' DEFAULT '{\\\"abc\\\": 123}' on error " +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tc1 INT path \"$.c1\" error on error\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"c1 INT path '$.c1' error on error" +
 				")) as jt",
 		},
 
 		// NESTED PATH TESTS
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' columns(NESTED PATH '$' columns (b INT PATH '$'))) AS jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tnested path \"$\" columns(\n" +
-				"\tb INT path \"$\"\n" +
-				")\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"nested path '$' columns(" +
+				"b INT path '$'" +
+				")" +
 				")) as jt",
 		},
 		// TODO: MySQL doesn't parse this, but their docs say they do.
 		// https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#:~:text=NESTED%20PATH%20(or%20simply%20NESTED%3B%20PATH%20is%20optional)
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' columns(NESTED '$' columns (b INT PATH '$'))) AS jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n" +
-				"\tnested path \"$\" columns(\n" +
-				"\tb INT path \"$\"\n" +
-				")\n" +
+			output: "select * from json_table('{}', '$' columns(" +
+				"nested path '$' columns(" +
+				"b INT path '$'" +
+				")" +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' columns(NESTED PATH '$' columns (a INT PATH '$', b INT PATH '$'))) AS jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n\tnested path \"$\" columns(\n" +
-				"\ta INT path \"$\",\n" +
-				"\tb INT path \"$\"\n" +
-				")\n" +
+			output: "select * from json_table('{}', '$' columns(nested path '$' columns(" +
+				"a INT path '$', " +
+				"b INT path '$'" +
+				")" +
 				")) as jt",
 		},
 		{
 			input: `SELECT * FROM  JSON_TABLE('{}', 'root_path' COLUMNS( a INT PATH 'a_path', NESTED PATH 'b_path' COLUMNS (NESTED PATH '$' COLUMNS (b1 INT PATH 'b1_path')))) AS jt;`,
-			output: "select * from json_table('{}', \"root_path\" columns(\n" +
-				"\ta INT path \"a_path\",\n" +
-				"\tnested path \"b_path\" columns(\n" +
-				"\tnested path \"$\" columns(\n" +
-				"\tb1 INT path \"b1_path\"\n" +
-				")\n" +
-				")\n" +
+			output: "select * from json_table('{}', 'root_path' columns(" +
+				"a INT path 'a_path', " +
+				"nested path 'b_path' columns(" +
+				"nested path '$' columns(" +
+				"b1 INT path 'b1_path'" +
+				")" +
+				")" +
 				")) as jt",
 		},
 	}
