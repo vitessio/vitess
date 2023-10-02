@@ -297,7 +297,7 @@ removing Vitess support.
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/18.0/18.0.0/changelog.md).
 
-The release includes 360 merged Pull Requests.
+The release includes 361 merged Pull Requests.
 
 Thanks to all our contributors: @GuptaManan100, @Juneezee, @adsr, @ajm188, @app/dependabot, @app/github-actions, @app/vitess-bot, @arvind-murty, @austenLacy, @brendar, @davidpiegza, @dbussink, @deepthi, @derekperkins, @ejortegau, @frouioui, @harshit-gangal, @hkdsun, @jfg956, @jspawar, @mattlord, @maxenglander, @mdlayher, @notfelineit, @olyazavr, @pbibra, @peterlyoo, @rafer, @rohit-nayak-ps, @shlomi-noach, @systay, @timvaillancourt, @vmg, @yields
 

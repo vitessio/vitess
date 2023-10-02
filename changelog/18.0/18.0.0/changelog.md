@@ -155,7 +155,9 @@
  * Flakes: Remove CI endtoend test for VReplication Copy Phase Throttling [#13343](https://github.com/vitessio/vitess/pull/13343)
  * Flakes: Improve reliability of vreplication_copy_parallel test [#13857](https://github.com/vitessio/vitess/pull/13857) 
 #### VTAdmin
- * Improve time taken to run the examples by optimizing `vtadmin` build [#13262](https://github.com/vitessio/vitess/pull/13262)
+ * Improve time taken to run the examples by optimizing `vtadmin` build [#13262](https://github.com/vitessio/vitess/pull/13262) 
+#### VTorc
+ * [release-18.0] docker: add dedicated vtorc container (#14126) [#14148](https://github.com/vitessio/vitess/pull/14148)
 ### Dependabot 
 #### General
  * Bump word-wrap from 1.2.3 to 1.2.4 in /web/vtadmin [#13569](https://github.com/vitessio/vitess/pull/13569)
