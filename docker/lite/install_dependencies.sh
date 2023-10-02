@@ -3,12 +3,15 @@
 # This is a script that gets run as part of the Dockerfile build
 # to install dependencies for the vitess/lite family of images.
 #
-# Usage: install_dependencies.sh <flavor>
+# Usage: install_dependencies.sh <flavor> <version (optional)>
 
 set -euo pipefail
 
 FLAVOR="$1"
-VERSION="$2"
+if [ $# -eq 2 ]; then
+  VERSION="$2"
+fi
+
 export DEBIAN_FRONTEND=noninteractive
 
 KEYSERVERS=(
