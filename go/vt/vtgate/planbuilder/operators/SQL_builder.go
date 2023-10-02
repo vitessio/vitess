@@ -528,12 +528,12 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 
 	// if the projection is on derived table, we use the select we have
 	// created above and transform it into a derived table
-	if op.TableID != nil {
+	if op.DT != nil {
 		sel := qb.asSelectStatement()
 		qb.stmt = nil
-		qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
+		qb.addTableExpr(op.DT.Alias, op.DT.Alias, TableID(op), &sqlparser.DerivedTable{
 			Select: sel,
-		}, nil, nil)
+		}, nil, op.DT.Columns)
 	}
 
 	if !isSel {

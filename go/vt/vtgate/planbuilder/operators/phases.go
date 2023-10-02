@@ -26,60 +26,83 @@ import (
 )
 
 type (
-	// Phase defines the different planning phases to go through to produce an optimized plan for the input query.
-	Phase struct {
-		Name string
-		// action is the action to be taken before calling plan optimization operation.
-		action func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error)
-		// shouldRun checks if we should apply this phase or not.
-		// The phase is only applied if the function returns true
-		shouldRun func(semantics.QuerySignature) bool
-	}
+	Phase int
 )
+
+const (
+	physicalTransform Phase = iota
+	initialPlanning
+	pullDistinctFromUnion
+	delegateAggregation
+	addAggrOrdering
+	cleanOutPerfDistinct
+	subquerySettling
+	DONE
+)
+
+func (p Phase) String() string {
+	switch p {
+	case physicalTransform:
+		return "physicalTransform"
+	case initialPlanning:
+		return "initial horizon planning optimization"
+	case pullDistinctFromUnion:
+		return "pull distinct from UNION1"
+	case delegateAggregation:
+		return "split aggregation between vtgate and mysql"
+	case addAggrOrdering:
+		return "optimize aggregations with ORDER BY"
+	case cleanOutPerfDistinct:
+		return "optimize Distinct operations"
+	case subquerySettling:
+		return "settle subqueries"
+	}
+
+	return "unknown"
+}
+
+func (p Phase) shouldRun(s semantics.QuerySignature) bool {
+	switch p {
+	case pullDistinctFromUnion:
+		return s.Union
+	case delegateAggregation:
+		return s.Aggregation
+	case addAggrOrdering:
+		return s.Aggregation
+	case cleanOutPerfDistinct:
+		return s.Distinct
+	case subquerySettling:
+		return s.SubQueries
+	}
+	return true
+}
+
+func (p Phase) act(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+	switch p {
+	case pullDistinctFromUnion:
+		return pullDistinctFromUNION(ctx, op)
+	case delegateAggregation:
+		return enableDelegateAggregation(ctx, op)
+	case addAggrOrdering:
+		return addOrderBysForAggregations(ctx, op)
+	case cleanOutPerfDistinct:
+		return removePerformanceDistinctAboveRoute(ctx, op)
+	case subquerySettling:
+		return settleSubqueries(ctx, op)
+	}
+
+	return op, nil
+}
 
 // getPhases returns the ordered phases that the planner will undergo.
 // These phases ensure the appropriate collaboration between rewriters.
-func getPhases(ctx *plancontext.PlanningContext) []Phase {
-	phases := []Phase{
-		{
-			// Initial optimization phase.
-			Name: "initial horizon planning optimization",
-		},
-		{
-			// Convert UNION with `distinct` to UNION ALL with DISTINCT op on top.
-			Name:      "pull distinct from UNION",
-			action:    pullDistinctFromUNION,
-			shouldRun: func(s semantics.QuerySignature) bool { return s.Union },
-		},
-		{
-			// Split aggregation that has not been pushed under the routes into between work on mysql and vtgate.
-			Name:      "split aggregation between vtgate and mysql",
-			action:    enableDelegateAggregatiion,
-			shouldRun: func(s semantics.QuerySignature) bool { return s.Aggregation },
-		},
-		{
-			// Add ORDER BY for aggregations above the route.
-			Name:      "optimize aggregations with ORDER BY",
-			action:    addOrderBysForAggregations,
-			shouldRun: func(s semantics.QuerySignature) bool { return s.Aggregation },
-		},
-		{
-			// Remove unnecessary Distinct operators above routes.
-			Name:      "optimize Distinct operations",
-			action:    removePerformanceDistinctAboveRoute,
-			shouldRun: func(s semantics.QuerySignature) bool { return s.Distinct },
-		},
-		{
-			// Finalize subqueries after they've been pushed as far as possible.
-			Name:      "settle subqueries",
-			action:    settleSubqueries,
-			shouldRun: func(s semantics.QuerySignature) bool { return s.SubQueries },
-		},
+func getPhases(ctx *plancontext.PlanningContext) (phases []Phase) {
+	for p := Phase(0); p < DONE; p++ {
+		if p.shouldRun(ctx.SemTable.QuerySignature) {
+			phases = append(phases, p)
+		}
 	}
-
-	return slice.Filter(phases, func(phase Phase) bool {
-		return phase.shouldRun == nil || phase.shouldRun(ctx.SemTable.QuerySignature)
-	})
+	return
 }
 
 func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
@@ -93,8 +116,7 @@ func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op ops.
 	}, stopAtRoute)
 }
 
-func enableDelegateAggregatiion(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-	ctx.DelegateAggregation = true
+func enableDelegateAggregation(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
 	return addColumnsToInput(ctx, op)
 }
 

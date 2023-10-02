@@ -59,17 +59,6 @@ func fetchByOffset(e sqlparser.SQLNode) bool {
 	}
 }
 
-func planOffsetsOnJoins(ctx *plancontext.PlanningContext, op ops.Operator) error {
-	err := rewrite.Visit(op, func(current ops.Operator) error {
-		join, ok := current.(*ApplyJoin)
-		if !ok {
-			return nil
-		}
-		return join.planOffsets(ctx)
-	})
-	return err
-}
-
 // useOffsets rewrites an expression to use values from the input
 func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (sqlparser.Expr, error) {
 	var exprOffset *sqlparser.Offset

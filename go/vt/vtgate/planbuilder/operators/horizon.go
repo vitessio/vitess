@@ -37,14 +37,14 @@ type Horizon struct {
 	Source ops.Operator
 
 	// If this is a derived table, the two following fields will contain the tableID and name of it
-	TableId *semantics.TableSet
-	Alias   string
+	TableId       *semantics.TableSet
+	Alias         string
+	ColumnAliases sqlparser.Columns // derived tables can have their column aliases specified outside the subquery
 
 	// QP contains the QueryProjection for this op
 	QP *QueryProjection
 
-	Query         sqlparser.SelectStatement
-	ColumnAliases sqlparser.Columns
+	Query sqlparser.SelectStatement
 
 	// Columns needed to feed other plans
 	Columns       []*sqlparser.ColName
