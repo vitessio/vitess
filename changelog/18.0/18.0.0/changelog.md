@@ -253,7 +253,8 @@
  * icuregex: Update to ICU 73 [#13912](https://github.com/vitessio/vitess/pull/13912)
  * Change internal vindex type recommendation for integrals to xxhash [#13956](https://github.com/vitessio/vitess/pull/13956)
  * Foreign key cascade: retain "for update" lock on select query plans [#13985](https://github.com/vitessio/vitess/pull/13985)
- * Improve the rewriter to simplify more queries [#14059](https://github.com/vitessio/vitess/pull/14059) 
+ * Improve the rewriter to simplify more queries [#14059](https://github.com/vitessio/vitess/pull/14059)
+ * [release-18.0] gen4: Support explicit column aliases on derived tables (#14129) [#14156](https://github.com/vitessio/vitess/pull/14156) 
 #### Schema Tracker
  * vttablet: do not notify `vtgate` about internal tables [#13897](https://github.com/vitessio/vitess/pull/13897) 
 #### TabletManager
