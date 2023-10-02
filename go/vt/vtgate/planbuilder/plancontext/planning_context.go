@@ -31,25 +31,17 @@ type PlanningContext struct {
 	// e.g. [FROM tblA JOIN tblB ON a.colA = b.colB] will be rewritten to [FROM tblB WHERE :a_colA = b.colB],
 	// if we assume that tblB is on the RHS of the join. This last predicate in the WHERE clause is added to the
 	// map below
-	JoinPredicates     map[sqlparser.Expr][]sqlparser.Expr
-	SkipPredicates     map[sqlparser.Expr]any
-	PlannerVersion     querypb.ExecuteOptions_PlannerVersion
-	RewriteDerivedExpr bool
+	JoinPredicates map[sqlparser.Expr][]sqlparser.Expr
+	SkipPredicates map[sqlparser.Expr]any
+	PlannerVersion querypb.ExecuteOptions_PlannerVersion
 
 	// If we during planning have turned this expression into an argument name,
 	// we can continue using the same argument name
 	ReservedArguments map[sqlparser.Expr]string
 
-	// DelegateAggregation tells us when we are allowed to split an aggregation across vtgate and mysql
-	// We aggregate within a shard, and then at the vtgate level we aggregate the incoming shard aggregates
-	DelegateAggregation bool
-
 	// VerifyAllFKs tells whether we need verification for all the fk constraints on VTGate.
 	// This is required for queries we are running with /*+ SET_VAR(foreign_key_checks=OFF) */
 	VerifyAllFKs bool
-
-	// SubqueriesSettled ..
-	SubqueriesSettled bool
 
 	// ParentFKToIgnore stores a specific parent foreign key that we would need to ignore while planning
 	// a certain query. This field is used in UPDATE CASCADE planning, wherein while planning the child update
@@ -58,6 +50,10 @@ type PlanningContext struct {
 
 	// Projected subqueries that have been merged
 	MergedSubqueries []*sqlparser.Subquery
+
+	// CurrentPhase keeps track of how far we've gone in the planning process
+	// The type should be operators.Phase, but depending on that would lead to circular dependencies
+	CurrentPhase int
 }
 
 func CreatePlanningContext(stmt sqlparser.Statement,

@@ -44,6 +44,8 @@ func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVers
 	}
 }
 
+// pushCommentDirectivesOnPlan adds comments to queries
+// TODO: this should move to the operator side of planning
 func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) logicalPlan {
 	var directives *sqlparser.CommentDirectives
 	cmt, ok := stmt.(sqlparser.Commented)
