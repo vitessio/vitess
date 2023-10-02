@@ -996,8 +996,8 @@ message LaunchSchemaMigrationResponse {
 }
 
 message LookupVindexCreateRequest {
-  string workflow = 1;
-  string target_keyspace = 2;
+  string keyspace = 1;
+  string workflow = 2;
   repeated string cells = 3;
   repeated topodata.TabletType tablet_types = 4;
   bool continue_after_copy_with_owner = 5;
@@ -1009,8 +1009,9 @@ message LookupVindexCreateResponse {
 }
 
 message LookupVindexExternalizeRequest {
-  string workflow = 1;
-  string target_keyspace = 2;
+  string keyspace = 1;
+  string workflow = 2;
+  vschema.Keyspace vindex = 3;
 }
 
 message LookupVindexExternalizeResponse {

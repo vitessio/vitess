@@ -971,12 +971,12 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 	defer span.Finish()
 
 	span.Annotate("workflow", req.Workflow)
-	span.Annotate("target_keyspace", req.TargetKeyspace)
+	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("cells", req.Cells)
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("continue_after_copy", req.ContinueAfterCopyWithOwner)
 
-	ms, sourceVSchema, targetVSchema, err := s.prepareCreateLookup(ctx, req.Workflow, req.TargetKeyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
+	ms, sourceVSchema, targetVSchema, err := s.prepareCreateLookup(ctx, req.Workflow, req.Keyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
 	if err != nil {
 		return nil, err
 	}
@@ -989,7 +989,7 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 	if err := s.Materialize(ctx, ms); err != nil {
 		return nil, err
 	}
-	if err := s.ts.SaveVSchema(ctx, req.TargetKeyspace, sourceVSchema); err != nil {
+	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVSchema); err != nil {
 		return nil, err
 	}
 
@@ -1008,15 +1008,27 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	defer span.Finish()
 
 	span.Annotate("workflow", req.Workflow)
-	span.Annotate("target_keyspace", req.TargetKeyspace)
+	span.Annotate("keyspace", req.Keyspace)
 
-	var vindex *vschemapb.Vindex
-	var vindexMu sync.Mutex
-	targetVschema, err := s.ts.GetVSchema(ctx, req.TargetKeyspace)
+	if req.Vindex == nil || len(req.Vindex.Vindexes) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex specs must contain exactly one vindex definition")
+	}
+	vindexName := maps.Keys(req.Vindex.Vindexes)[0]
+	vindex := maps.Values(req.Vindex.Vindexes)[0]
+	targetKeyspace, tableName, err := sqlparser.ParseTable(vindex.Params["table"])
+	if err != nil || (targetKeyspace == "" || tableName == "") {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex table name (%s) must be in the form <keyspace>.<table>", vindex.Params["table"])
+	}
+	sourceVschema, err := s.ts.GetVSchema(ctx, req.Keyspace)
 	if err != nil {
 		return nil, err
 	}
-	targetShards, err := s.ts.GetServingShards(ctx, req.TargetKeyspace)
+	sourceVindex := sourceVschema.Vindexes[vindexName]
+	if sourceVindex == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in %s vschema", vindexName, req.Keyspace)
+	}
+
+	targetShards, err := s.ts.GetServingShards(ctx, targetKeyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -1070,33 +1082,6 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 			if bls.Filter == nil || len(bls.Filter.Rules) != 1 {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid binlog source")
 			}
-			vindexName := bls.Filter.Rules[0].Match
-
-			// All streams on all shards will have the same vindex, so we only
-			// need to set it once.
-			wg := sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				vindexMu.Lock()
-				defer vindexMu.Unlock()
-				if vindex == nil {
-					vindex = targetVschema.Vindexes[vindexName]
-				}
-			}()
-			wg.Wait()
-			if vindex == nil {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in %s vschema: %+v", vindexName, req.TargetKeyspace, targetVschema)
-			}
-
-			targetKeyspace, tableName, err := sqlparser.ParseTable(vindex.Params["table"])
-			if err != nil || (targetKeyspace == "" || tableName == "") {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex table name must be in the form <keyspace>.<table>. Got: %v", vindex.Params["table"])
-			}
-			if !strings.EqualFold(targetKeyspace, req.TargetKeyspace) { // Should never happen
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex keyspace definition in workflow (%s) did not match the target-keyspace (%s).",
-					targetKeyspace, req.TargetKeyspace)
-			}
 			if vindex.Owner == "" || !bls.StopAfterCopy {
 				// If there's no owner or we've requested that the workflow NOT be stopped
 				// after the copy phase completes, then all streams need to be running.
@@ -1121,7 +1106,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	if vindex.Owner != "" {
 		// If there is an owner, we have to delete the streams.
 		if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
-			Keyspace:         req.TargetKeyspace,
+			Keyspace:         targetKeyspace,
 			Workflow:         req.Workflow,
 			KeepData:         true, // Not relevant
 			KeepRoutingRules: true, // Not relevant
@@ -1132,11 +1117,10 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	}
 
 	// Remove the write_only param and save the source vschema.
-	delete(vindex.Params, "write_only")
-	if err := s.ts.SaveVSchema(ctx, req.TargetKeyspace, targetVschema); err != nil {
+	delete(sourceVindex.Params, "write_only")
+	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVschema); err != nil {
 		return nil, err
 	}
-
 	return resp, s.ts.RebuildSrvVSchema(ctx, nil)
 }
 
@@ -3330,12 +3314,10 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	if !strings.Contains(vindex.Type, "lookup") {
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex %s is not a lookup type", vindex.Type)
 	}
-
 	targetKeyspace, targetTableName, err = sqlparser.ParseTable(vindex.Params["table"])
 	if err != nil || targetKeyspace == "" {
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex table name must be in the form <keyspace>.<table>. Got: %v", vindex.Params["table"])
 	}
-
 	vindexFromCols = strings.Split(vindex.Params["from"], ",")
 	if strings.Contains(vindex.Type, "unique") {
 		if len(vindexFromCols) != 1 {

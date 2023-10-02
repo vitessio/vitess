@@ -665,11 +665,11 @@ func TestCreateLookupVindexFull(t *testing.T) {
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='lookup_vdx'", &sqltypes.Result{})
 
 	req := &vtctldatapb.LookupVindexCreateRequest{
-		Workflow:       ms.Workflow,
-		TargetKeyspace: ms.SourceKeyspace,
-		Cells:          []string{"cell"},
-		TabletTypes:    []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
-		Vindex:         specs,
+		Workflow:    ms.Workflow,
+		Keyspace:    ms.SourceKeyspace,
+		Cells:       []string{"cell"},
+		TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+		Vindex:      specs,
 	}
 
 	_, err := env.ws.LookupVindexCreate(ctx, req)
@@ -1844,7 +1844,9 @@ func TestStopAfterCopyFlag(t *testing.T) {
 
 func TestCreateLookupVindexFailures(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
+		// Keyspace where the vindex is created.
 		SourceKeyspace: "sourceks",
+		// Keyspace where the target table is created.
 		TargetKeyspace: "targetks",
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2112,9 +2114,9 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.description, func(t *testing.T) {
 			req := &vtctldatapb.LookupVindexCreateRequest{
-				Workflow:       "lookup_vdx",
-				TargetKeyspace: ms.TargetKeyspace,
-				Vindex:         tcase.input,
+				Workflow: "lookup_vdx",
+				Keyspace: ms.TargetKeyspace,
+				Vindex:   tcase.input,
 			}
 			_, err := env.ws.LookupVindexCreate(ctx, req)
 			if !strings.Contains(err.Error(), tcase.err) {
@@ -2124,9 +2126,11 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 	}
 }
 
-func TestExternalizeVindex(t *testing.T) {
+func TestExternalizeLookupVindex(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
+		// Keyspace where the vindex is created.
 		SourceKeyspace: "sourceks",
+		// Keyspace where the target table is created.
 		TargetKeyspace: "targetks",
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2206,39 +2210,39 @@ func TestExternalizeVindex(t *testing.T) {
 	}{
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Workflow:       "owned_lookup_vdx",
-				TargetKeyspace: ms.TargetKeyspace,
+				Workflow: "owned_lookup_vdx",
+				Keyspace: ms.TargetKeyspace,
 			},
 			vrResponse:   ownedStopped,
 			expectDelete: true,
 		},
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Workflow:       "unowned_lookup_vdx",
-				TargetKeyspace: ms.TargetKeyspace,
+				Workflow: "unowned_lookup_vdx",
+				Keyspace: ms.TargetKeyspace,
 			},
 			vrResponse: unownedStopped,
 			err:        "is not in Running state",
 		},
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Workflow:       "owned_lookup_vdx",
-				TargetKeyspace: ms.TargetKeyspace,
+				Workflow: "owned_lookup_vdx",
+				Keyspace: ms.TargetKeyspace,
 			},
 			vrResponse:   ownedRunning,
 			expectDelete: true,
 		},
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Workflow:       "unowned_lookup_vdx",
-				TargetKeyspace: ms.TargetKeyspace,
+				Workflow: "unowned_lookup_vdx",
+				Keyspace: ms.TargetKeyspace,
 			},
 			vrResponse: unownedRunning,
 		},
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Workflow:       "absent_lookup_vdx",
-				TargetKeyspace: ms.TargetKeyspace,
+				Workflow: "absent_lookup_vdx",
+				Keyspace: ms.TargetKeyspace,
 			},
 			err: "workflow absent_lookup_vdx not found",
 		},
@@ -2246,13 +2250,13 @@ func TestExternalizeVindex(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.request.Workflow, func(t *testing.T) {
 			// Resave the source schema for every iteration.
-			err := env.topoServ.SaveVSchema(ctx, tcase.request.TargetKeyspace, targetVschema)
+			err := env.topoServ.SaveVSchema(ctx, tcase.request.Keyspace, targetVschema)
 			require.NoError(t, err)
 			err = env.topoServ.RebuildSrvVSchema(ctx, []string{env.cell})
 			require.NoError(t, err)
 
 			validationQuery := fmt.Sprintf("select id, state, message, source from _vt.vreplication where workflow='%s' and db_name='vt_%s'",
-				tcase.request.Workflow, tcase.request.TargetKeyspace)
+				tcase.request.Workflow, tcase.request.Keyspace)
 			env.tmc.expectVRQuery(200, validationQuery, tcase.vrResponse)
 			env.tmc.expectVRQuery(210, validationQuery, tcase.vrResponse)
 

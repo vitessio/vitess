@@ -2542,8 +2542,8 @@ func (m *LookupVindexCreateRequest) CloneVT() *LookupVindexCreateRequest {
 		return (*LookupVindexCreateRequest)(nil)
 	}
 	r := &LookupVindexCreateRequest{
+		Keyspace:                   m.Keyspace,
 		Workflow:                   m.Workflow,
-		TargetKeyspace:             m.TargetKeyspace,
 		ContinueAfterCopyWithOwner: m.ContinueAfterCopyWithOwner,
 		TabletSelectionPreference:  m.TabletSelectionPreference,
 		Vindex:                     m.Vindex.CloneVT(),
@@ -2590,8 +2590,9 @@ func (m *LookupVindexExternalizeRequest) CloneVT() *LookupVindexExternalizeReque
 		return (*LookupVindexExternalizeRequest)(nil)
 	}
 	r := &LookupVindexExternalizeRequest{
-		Workflow:       m.Workflow,
-		TargetKeyspace: m.TargetKeyspace,
+		Keyspace: m.Keyspace,
+		Workflow: m.Workflow,
+		Vindex:   m.Vindex.CloneVT(),
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -11815,17 +11816,17 @@ func (m *LookupVindexCreateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, er
 			dAtA[i] = 0x1a
 		}
 	}
-	if len(m.TargetKeyspace) > 0 {
-		i -= len(m.TargetKeyspace)
-		copy(dAtA[i:], m.TargetKeyspace)
-		i = encodeVarint(dAtA, i, uint64(len(m.TargetKeyspace)))
-		i--
-		dAtA[i] = 0x12
-	}
 	if len(m.Workflow) > 0 {
 		i -= len(m.Workflow)
 		copy(dAtA[i:], m.Workflow)
 		i = encodeVarint(dAtA, i, uint64(len(m.Workflow)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarint(dAtA, i, uint64(len(m.Keyspace)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -11895,17 +11896,27 @@ func (m *LookupVindexExternalizeRequest) MarshalToSizedBufferVT(dAtA []byte) (in
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.TargetKeyspace) > 0 {
-		i -= len(m.TargetKeyspace)
-		copy(dAtA[i:], m.TargetKeyspace)
-		i = encodeVarint(dAtA, i, uint64(len(m.TargetKeyspace)))
+	if m.Vindex != nil {
+		size, err := m.Vindex.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0x12
+		dAtA[i] = 0x1a
 	}
 	if len(m.Workflow) > 0 {
 		i -= len(m.Workflow)
 		copy(dAtA[i:], m.Workflow)
 		i = encodeVarint(dAtA, i, uint64(len(m.Workflow)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarint(dAtA, i, uint64(len(m.Keyspace)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -20687,11 +20698,11 @@ func (m *LookupVindexCreateRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Workflow)
+	l = len(m.Keyspace)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	l = len(m.TargetKeyspace)
+	l = len(m.Workflow)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -20738,12 +20749,16 @@ func (m *LookupVindexExternalizeRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
 	l = len(m.Workflow)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	l = len(m.TargetKeyspace)
-	if l > 0 {
+	if m.Vindex != nil {
+		l = m.Vindex.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -39566,6 +39581,38 @@ func (m *LookupVindexCreateRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Workflow", wireType)
 			}
 			var stringLen uint64
@@ -39595,38 +39642,6 @@ func (m *LookupVindexCreateRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Workflow = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TargetKeyspace", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.TargetKeyspace = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
@@ -39908,6 +39923,38 @@ func (m *LookupVindexExternalizeRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Workflow", wireType)
 			}
 			var stringLen uint64
@@ -39938,11 +39985,11 @@ func (m *LookupVindexExternalizeRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Workflow = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 2:
+		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TargetKeyspace", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Vindex", wireType)
 			}
-			var stringLen uint64
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -39952,23 +39999,27 @@ func (m *LookupVindexExternalizeRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
+			if msglen < 0 {
 				return ErrInvalidLength
 			}
-			postIndex := iNdEx + intStringLen
+			postIndex := iNdEx + msglen
 			if postIndex < 0 {
 				return ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.TargetKeyspace = string(dAtA[iNdEx:postIndex])
+			if m.Vindex == nil {
+				m.Vindex = &vschema.Keyspace{}
+			}
+			if err := m.Vindex.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

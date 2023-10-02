@@ -54542,11 +54542,11 @@ export namespace vtctldata {
     /** Properties of a LookupVindexCreateRequest. */
     interface ILookupVindexCreateRequest {
 
+        /** LookupVindexCreateRequest keyspace */
+        keyspace?: (string|null);
+
         /** LookupVindexCreateRequest workflow */
         workflow?: (string|null);
-
-        /** LookupVindexCreateRequest target_keyspace */
-        target_keyspace?: (string|null);
 
         /** LookupVindexCreateRequest cells */
         cells?: (string[]|null);
@@ -54573,11 +54573,11 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ILookupVindexCreateRequest);
 
+        /** LookupVindexCreateRequest keyspace. */
+        public keyspace: string;
+
         /** LookupVindexCreateRequest workflow. */
         public workflow: string;
-
-        /** LookupVindexCreateRequest target_keyspace. */
-        public target_keyspace: string;
 
         /** LookupVindexCreateRequest cells. */
         public cells: string[];
@@ -54766,11 +54766,14 @@ export namespace vtctldata {
     /** Properties of a LookupVindexExternalizeRequest. */
     interface ILookupVindexExternalizeRequest {
 
+        /** LookupVindexExternalizeRequest keyspace */
+        keyspace?: (string|null);
+
         /** LookupVindexExternalizeRequest workflow */
         workflow?: (string|null);
 
-        /** LookupVindexExternalizeRequest target_keyspace */
-        target_keyspace?: (string|null);
+        /** LookupVindexExternalizeRequest vindex */
+        vindex?: (vschema.IKeyspace|null);
     }
 
     /** Represents a LookupVindexExternalizeRequest. */
@@ -54782,11 +54785,14 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ILookupVindexExternalizeRequest);
 
+        /** LookupVindexExternalizeRequest keyspace. */
+        public keyspace: string;
+
         /** LookupVindexExternalizeRequest workflow. */
         public workflow: string;
 
-        /** LookupVindexExternalizeRequest target_keyspace. */
-        public target_keyspace: string;
+        /** LookupVindexExternalizeRequest vindex. */
+        public vindex?: (vschema.IKeyspace|null);
 
         /**
          * Creates a new LookupVindexExternalizeRequest instance using the specified properties.

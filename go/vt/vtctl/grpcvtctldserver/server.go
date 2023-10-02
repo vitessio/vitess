@@ -2518,7 +2518,7 @@ func (s *VtctldServer) LookupVindexCreate(ctx context.Context, req *vtctldatapb.
 	defer panicHandler(&err)
 
 	span.Annotate("workflow", req.Workflow)
-	span.Annotate("target_keyspace", req.TargetKeyspace)
+	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("cells", req.Cells)
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("continue_after_copy", req.ContinueAfterCopyWithOwner)
@@ -2535,7 +2535,7 @@ func (s *VtctldServer) LookupVindexExternalize(ctx context.Context, req *vtctlda
 	defer panicHandler(&err)
 
 	span.Annotate("workflow", req.Workflow)
-	span.Annotate("target_keyspace", req.TargetKeyspace)
+	span.Annotate("keyspace", req.Keyspace)
 
 	resp, err = s.ws.LookupVindexExternalize(ctx, req)
 	return resp, err
