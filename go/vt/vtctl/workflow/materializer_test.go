@@ -2139,32 +2139,32 @@ func TestExternalizeLookupVindex(t *testing.T) {
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
-	targetVschema := &vschemapb.Keyspace{
-		Sharded: true,
+	sourceVschema := &vschemapb.Keyspace{
+		Sharded: false,
 		Vindexes: map[string]*vschemapb.Vindex{
 			"xxhash": {
 				Type: "xxhash",
 			},
-			"owned_lookup_vdx": {
+			"owned_lookup": {
 				Type: "lookup_unique",
 				Params: map[string]string{
-					"table":      "targetks.lkp",
+					"table":      "targetks.owned_lookup",
 					"from":       "c1",
 					"to":         "c2",
 					"write_only": "true",
 				},
-				Owner: "source.t1",
+				Owner: "t1",
 			},
-			"unowned_lookup_vdx": {
+			"unowned_lookup": {
 				Type: "lookup_unique",
 				Params: map[string]string{
-					"table":      "targetks.lkp",
+					"table":      "targetks.unowned_lookup",
 					"from":       "c1",
 					"to":         "c2",
 					"write_only": "true",
 				},
 			},
-			"unqualified_lookup_vdx": {
+			"unqualified_lookup": {
 				Type: "lookup_unique",
 				Params: map[string]string{
 					"table": "unqualified",
@@ -2174,12 +2174,12 @@ func TestExternalizeLookupVindex(t *testing.T) {
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
-			"source.t1": {
+			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Name:   "xxhash",
 					Column: "col1",
 				}, {
-					Name:   "owned",
+					Name:   "owned_lookup",
 					Column: "col2",
 				}},
 			},
@@ -2189,15 +2189,15 @@ func TestExternalizeLookupVindex(t *testing.T) {
 		"id|state|message|source",
 		"int64|varbinary|varbinary|blob",
 	)
-	ownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup_vdx" filter:"select * from t1 where in_keyrange(col1, '%s.hash', '-80')"}} stop_after_copy:true`,
+	ownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.hash', '-80')"}} stop_after_copy:true`,
 		ms.SourceKeyspace, ms.SourceKeyspace)
-	ownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup_vdx" filter:"select * from t1 where in_keyrange(col1, '%s.hash', '-80')"}}`,
+	ownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.hash', '-80')"}}`,
 		ms.SourceKeyspace, ms.SourceKeyspace)
 	ownedRunning := sqltypes.MakeTestResult(fields, "1|Running|msg|"+ownedSourceKeepRunningAfterCopy)
 	ownedStopped := sqltypes.MakeTestResult(fields, "1|Stopped|Stopped after copy|"+ownedSourceStopAfterCopy)
-	unownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup_vdx" filter:"select * from t1 where in_keyrange(col1, '%s.hash', '-80')"}} stop_after_copy:true`,
+	unownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.hash', '-80')"}} stop_after_copy:true`,
 		ms.SourceKeyspace, ms.SourceKeyspace)
-	unownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup_vdx" filter:"select * from t1 where in_keyrange(col1, '%s.hash', '-80')"}}`,
+	unownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.hash', '-80')"}}`,
 		ms.SourceKeyspace, ms.SourceKeyspace)
 	unownedRunning := sqltypes.MakeTestResult(fields, "2|Running|msg|"+unownedSourceKeepRunningAfterCopy)
 	unownedStopped := sqltypes.MakeTestResult(fields, "2|Stopped|Stopped after copy|"+unownedSourceStopAfterCopy)
@@ -2211,7 +2211,22 @@ func TestExternalizeLookupVindex(t *testing.T) {
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
 				Workflow: "owned_lookup_vdx",
-				Keyspace: ms.TargetKeyspace,
+				Keyspace: ms.SourceKeyspace,
+				Vindex: &vschemapb.Keyspace{
+					Sharded: false,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"owned_lookup": {
+							Type: "lookup_unique",
+							Params: map[string]string{
+								"table":      "targetks.owned_lookup",
+								"from":       "c1",
+								"to":         "c2",
+								"write_only": "true",
+							},
+							Owner: "t1",
+						},
+					},
+				},
 			},
 			vrResponse:   ownedStopped,
 			expectDelete: true,
@@ -2220,6 +2235,20 @@ func TestExternalizeLookupVindex(t *testing.T) {
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
 				Workflow: "unowned_lookup_vdx",
 				Keyspace: ms.TargetKeyspace,
+				Vindex: &vschemapb.Keyspace{
+					Sharded: false,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"unowned_lookup": {
+							Type: "lookup_unique",
+							Params: map[string]string{
+								"table":      "targetks.unowned_lookup",
+								"from":       "c1",
+								"to":         "c2",
+								"write_only": "true",
+							},
+						},
+					},
+				},
 			},
 			vrResponse: unownedStopped,
 			err:        "is not in Running state",
@@ -2227,7 +2256,22 @@ func TestExternalizeLookupVindex(t *testing.T) {
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
 				Workflow: "owned_lookup_vdx",
-				Keyspace: ms.TargetKeyspace,
+				Keyspace: ms.SourceKeyspace,
+				Vindex: &vschemapb.Keyspace{
+					Sharded: false,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"owned_lookup": {
+							Type: "lookup_unique",
+							Params: map[string]string{
+								"table":      "targetks.owned_lookup",
+								"from":       "c1",
+								"to":         "c2",
+								"write_only": "true",
+							},
+							Owner: "t1",
+						},
+					},
+				},
 			},
 			vrResponse:   ownedRunning,
 			expectDelete: true,
@@ -2235,28 +2279,56 @@ func TestExternalizeLookupVindex(t *testing.T) {
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
 				Workflow: "unowned_lookup_vdx",
-				Keyspace: ms.TargetKeyspace,
+				Keyspace: ms.SourceKeyspace,
+				Vindex: &vschemapb.Keyspace{
+					Sharded: false,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"unowned_lookup": {
+							Type: "lookup_unique",
+							Params: map[string]string{
+								"table":      "targetks.unowned_lookup",
+								"from":       "c1",
+								"to":         "c2",
+								"write_only": "true",
+							},
+						},
+					},
+				},
 			},
 			vrResponse: unownedRunning,
 		},
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
 				Workflow: "absent_lookup_vdx",
-				Keyspace: ms.TargetKeyspace,
+				Keyspace: ms.SourceKeyspace,
+				Vindex: &vschemapb.Keyspace{
+					Sharded: false,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"absent_lookup": {
+							Type: "lookup_unique",
+							Params: map[string]string{
+								"table":      "targetks.absent_lookup",
+								"from":       "c1",
+								"to":         "c2",
+								"write_only": "true",
+							},
+						},
+					},
+				},
 			},
-			err: "workflow absent_lookup_vdx not found",
+			err: "vindex absent_lookup not found in sourceks vschema",
 		},
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.request.Workflow, func(t *testing.T) {
 			// Resave the source schema for every iteration.
-			err := env.topoServ.SaveVSchema(ctx, tcase.request.Keyspace, targetVschema)
+			err := env.topoServ.SaveVSchema(ctx, tcase.request.Keyspace, sourceVschema)
 			require.NoError(t, err)
 			err = env.topoServ.RebuildSrvVSchema(ctx, []string{env.cell})
 			require.NoError(t, err)
 
 			validationQuery := fmt.Sprintf("select id, state, message, source from _vt.vreplication where workflow='%s' and db_name='vt_%s'",
-				tcase.request.Workflow, tcase.request.Keyspace)
+				tcase.request.Workflow, ms.TargetKeyspace)
 			env.tmc.expectVRQuery(200, validationQuery, tcase.vrResponse)
 			env.tmc.expectVRQuery(210, validationQuery, tcase.vrResponse)
 
@@ -2276,10 +2348,12 @@ func TestExternalizeLookupVindex(t *testing.T) {
 			}
 			require.Equal(t, expectedWorkflowDeleteCalls, env.tmc.workflowDeleteCalls)
 
-			outvschema, err := env.topoServ.GetVSchema(ctx, ms.TargetKeyspace)
+			aftervschema, err := env.topoServ.GetVSchema(ctx, ms.SourceKeyspace)
 			require.NoError(t, err)
-			vindexName := tcase.request.Workflow
-			require.NotContains(t, outvschema.Vindexes[vindexName].Params, "write_only", tcase.request)
+			vindexName := strings.Replace(tcase.request.Workflow, "_vdx", "", 1)
+			vindex := aftervschema.Vindexes[vindexName]
+			require.NotNil(t, vindex, "vindex %s not found in vschema", vindexName)
+			require.NotContains(t, vindex.Params, "write_only", tcase.request)
 		})
 	}
 }
