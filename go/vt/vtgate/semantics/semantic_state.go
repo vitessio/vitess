@@ -238,6 +238,16 @@ func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
 	if found {
 		return &typ.Type
 	}
+
+	// We add a lot of WeightString() expressions to queries at late stages of the planning,
+	// which means that they don't have any type information. We can safely assume that they
+	// are VarBinary, since that's the only type that WeightString() can return.
+	_, isWS := e.(*sqlparser.WeightStringFuncExpr)
+	if isWS {
+		typ := sqltypes.VarBinary
+		return &typ
+	}
+
 	return nil
 }
 
