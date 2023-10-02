@@ -65,7 +65,7 @@ func TestMain(m *testing.M) {
 			Charset:   "utf8mb4_general_ci",
 		}
 
-		env, err := vttest.NewLocalTestEnv("", 0)
+		env, err := vttest.NewLocalTestEnv(0)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
