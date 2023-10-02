@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -578,16 +579,33 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	}
 
 	// Validate input table
-	if len(specs.Tables) != 1 {
-		return nil, nil, nil, fmt.Errorf("exactly one table must be specified in the specs: %v", specs.Tables)
+	if len(specs.Tables) < 1 || len(specs.Tables) > 2 {
+		return nil, nil, nil, fmt.Errorf("one or two tables must be specified in the specs: %v", specs.Tables)
 	}
-	// Loop executes once.
+
+	// Loop executes once or twice
 	for k, ti := range specs.Tables {
 		if len(ti.ColumnVindexes) != 1 {
 			return nil, nil, nil, fmt.Errorf("exactly one ColumnVindex must be specified for the table: %v", specs.Tables)
 		}
-		sourceTableName = k
-		sourceTable = ti
+		if k != targetTableName {
+			sourceTableName = k
+			sourceTable = ti
+			continue
+		}
+
+		var vindexCols []string
+		if len(ti.ColumnVindexes[0].Columns) != 0 {
+			vindexCols = ti.ColumnVindexes[0].Columns
+		} else {
+			if ti.ColumnVindexes[0].Column == "" {
+				return nil, nil, nil, fmt.Errorf("at least one column must be specified in ColumnVindexes: %v", sourceTable.ColumnVindexes)
+			}
+			vindexCols = []string{ti.ColumnVindexes[0].Column}
+		}
+		if !slices.Equal(vindexCols, vindexFromCols) {
+			return nil, nil, nil, fmt.Errorf("columns in vindex don't match")
+		}
 	}
 
 	// Validate input table and vindex consistency
@@ -741,16 +759,22 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	materializeQuery = buf.String()
 
 	// Update targetVSchema
-	var targetTable *vschemapb.Table
+	targetTable := specs.Tables[targetTableName].CloneVT()
+
 	if targetVSchema.Sharded {
 		// Choose a primary vindex type for target table based on source specs
 		var targetVindexType string
 		var targetVindex *vschemapb.Vindex
 		for _, field := range tableSchema.TableDefinitions[0].Fields {
 			if sourceVindexColumns[0] == field.Name {
-				targetVindexType, err = vindexes.ChooseVindexForType(field.Type)
-				if err != nil {
-					return nil, nil, nil, err
+				if targetTable != nil && len(targetTable.ColumnVindexes) > 0 {
+					targetVindexType = targetTable.ColumnVindexes[0].Name
+				}
+				if targetVindexType == "" {
+					targetVindexType, err = vindexes.ChooseVindexForType(field.Type)
+					if err != nil {
+						return nil, nil, nil, err
+					}
 				}
 				targetVindex = &vschemapb.Vindex{
 					Type: targetVindexType,
