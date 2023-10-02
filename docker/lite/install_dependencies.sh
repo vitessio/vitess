@@ -8,6 +8,7 @@
 set -euo pipefail
 
 FLAVOR="$1"
+VERSION=""
 if [ $# -eq 2 ]; then
   VERSION="$2"
 fi
