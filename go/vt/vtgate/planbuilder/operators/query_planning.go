@@ -130,7 +130,7 @@ func pushLockAndComment(l *LockAndComment) (ops.Operator, *rewrite.ApplyResult, 
 	case *Horizon, *QueryGraph:
 		// we want to wait until the horizons have been pushed under a route or expanded
 		// that way we know that we've replaced the QueryGraphs with Routes
-		return nil, rewrite.SameTree, nil
+		return src, rewrite.SameTree, nil
 	case *Route:
 		src.Comments = l.Comments
 		src.Lock = l.Lock
