@@ -154,7 +154,6 @@ exec $VTROOT/bin/vttablet \
   --port $web_port \
   --grpc_port $grpc_port \
   --service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
-  --vtctld_addr "http://vtctld:$WEB_PORT/" \
   --init_keyspace $keyspace \
   --init_shard $shard \
   --backup_storage_implementation file \

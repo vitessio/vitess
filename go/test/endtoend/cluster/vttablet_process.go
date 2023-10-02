@@ -108,8 +108,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--backup_storage_implementation", vttablet.BackupStorageImplementation,
 		"--file_backup_storage_root", vttablet.FileBackupStorageRoot,
 		"--service_map", vttablet.ServiceMap,
-		"--vtctld_addr", vttablet.VtctldAddress,
-		"--vtctld_addr", vttablet.VtctldAddress,
 		"--vreplication_tablet_type", vttablet.VreplicationTabletType,
 		"--db_charset", vttablet.Charset,
 	)

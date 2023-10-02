@@ -91,9 +91,9 @@ func TestMain(m *testing.M) {
 
 		// restart the tablet so that the schema.Engine gets a chance to start with existing schema
 		tablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
-		tablet.VttabletProcess.ExtraArgs = []string{
-			"--queryserver-config-schema-change-signal",
-			fmt.Sprintf("--queryserver-config-schema-change-signal-interval=%d", signalInterval),
+		tablet.VttabletProcess.ExtraArgs = []string{"--queryserver-config-schema-change-signal"}
+		if !utils.BinaryIsAtVersion(17, "vttablet") {
+			tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, fmt.Sprintf("--queryserver-config-schema-change-signal-interval=%d", signalInterval))
 		}
 		if err := tablet.RestartOnlyTablet(); err != nil {
 			return 1

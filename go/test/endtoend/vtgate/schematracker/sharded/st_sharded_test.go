@@ -91,11 +91,13 @@ func TestMain(m *testing.M) {
 			"--schema_change_signal_user", "userData1"}
 		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal",
-			"--queryserver-config-schema-change-signal-interval", "0.1",
 			"--queryserver-config-strict-table-acl",
 			"--queryserver-config-acl-exempt-acl", "userData1",
 			"--table-acl-config", "dummy.json"}
 
+		if vttabletVer <= 16 {
+			clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal-interval", "0.1")
+		}
 		if vtgateVer >= 16 && vttabletVer >= 16 {
 			clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable-views")
 			clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-views")
