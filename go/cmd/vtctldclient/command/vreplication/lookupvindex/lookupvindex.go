@@ -54,10 +54,8 @@ var (
 
 	// base is the base command for all actions related to Lookup Vindexes.
 	base = &cobra.Command{
-		Use:   "LookupVindex --keyspace <keyspace> [command] [<vindex spec>]",
-		Short: "Perform commands related to creating, backfilling, and externalizing Lookup Vindexes using VReplication workflows.",
-		Long: `LookupVindex commands: create, show, externalize, and cancel.
-	See the --help output for each command for more details.`,
+		Use:                   "LookupVindex --keyspace <keyspace> [command] [<vindex spec>]",
+		Short:                 "Perform commands related to creating, backfilling, and externalizing Lookup Vindexes using VReplication workflows.",
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"lookupvindex"},
 		Args:                  cobra.NoArgs,
@@ -70,7 +68,7 @@ var (
 		ContinueAfterCopyWithOwner   bool
 	}{}
 
-	parseAndValidateFlags = func(cmd *cobra.Command, args []string) error {
+	parseAndValidateInput = func(cmd *cobra.Command, args []string) error {
 		// Validate provided JSON spec.
 		jsonSpec := []byte(args[0])
 		baseOptions.Vindex = &vschemapb.Keyspace{}
@@ -119,7 +117,7 @@ var (
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Cancel"},
 		Args:                  cobra.ExactArgs(1),
-		PreRunE:               parseAndValidateFlags,
+		PreRunE:               parseAndValidateInput,
 		RunE:                  commandCancel,
 	}
 
@@ -132,7 +130,7 @@ var (
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Create"},
 		Args:                  cobra.ExactArgs(1),
-		PreRunE:               parseAndValidateFlags,
+		PreRunE:               parseAndValidateInput,
 		RunE:                  commandCreate,
 	}
 
@@ -145,7 +143,7 @@ var (
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Externalize"},
 		Args:                  cobra.ExactArgs(1),
-		PreRunE:               parseAndValidateFlags,
+		PreRunE:               parseAndValidateInput,
 		RunE:                  commandExternalize,
 	}
 
@@ -158,7 +156,7 @@ var (
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Show"},
 		Args:                  cobra.ExactArgs(1),
-		PreRunE:               parseAndValidateFlags,
+		PreRunE:               parseAndValidateInput,
 		RunE:                  commandShow,
 	}
 )
