@@ -24,7 +24,5 @@ RUN /vt/dist/install_dependencies.sh mysql80
 RUN groupadd -r vitess && useradd -r -g vitess vitess
 RUN mkdir -p /vt/vtdataroot && chown -R vitess:vitess /vt
 
-ENV MYSQL_FLAVOR MySQL80
-
 VOLUME /vt/vtdataroot
 USER vitess
