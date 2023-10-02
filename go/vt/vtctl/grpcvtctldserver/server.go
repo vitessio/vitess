@@ -2521,7 +2521,7 @@ func (s *VtctldServer) LookupVindexCreate(ctx context.Context, req *vtctldatapb.
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("cells", req.Cells)
 	span.Annotate("tablet_types", req.TabletTypes)
-	span.Annotate("continue_after_copy", req.ContinueAfterCopyWithOwner)
+	span.Annotate("continue_after_copy_with_owner", req.ContinueAfterCopyWithOwner)
 
 	resp, err = s.ws.LookupVindexCreate(ctx, req)
 	return resp, err

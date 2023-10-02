@@ -911,7 +911,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 			},
 		},
 		sourceSchema: "",
-		err:          "unexpected number of tables returned from schema",
+		err:          "unexpected number of tables returned from sourceks schema",
 	}}
 	for _, tcase := range testcases {
 		if tcase.sourceSchema != "" {
@@ -1343,7 +1343,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 				},
 			},
 		},
-		err: "a conflicting vindex named xxhash already exists in the target vschema",
+		err: "a conflicting vindex named xxhash already exists in the targetks keyspace vschema",
 	}, {
 		description:     "sharded, int64, good table",
 		targetTable:     "t2",
@@ -1370,7 +1370,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 		targetTable:     "t2",
 		sourceFieldType: querypb.Type_VARCHAR,
 		targetVSchema:   withTable,
-		err:             "a conflicting table named t2 already exists in the target vschema",
+		err:             "a conflicting table named t2 already exists in the targetks vschema",
 	}, {
 		description:     "unsharded",
 		targetTable:     "lkp",
@@ -2093,7 +2093,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			err: "a conflicting vindex named other already exists in the source vschema",
+			err: "a conflicting vindex named other already exists in the targetks keyspace vschema",
 		},
 		{
 			description: "source table not in vschema",
@@ -2108,7 +2108,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			err: "source table other not found in vschema",
+			err: "table other not found in the targetks keyspace vschema",
 		},
 	}
 	for _, tcase := range testcases {

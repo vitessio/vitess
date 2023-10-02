@@ -26,11 +26,11 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/sqlparser"
 	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 )
 
@@ -41,14 +41,14 @@ var (
 	}
 
 	baseOptions = struct {
-		// Where the vindex will be created.
+		// This is where the vindex will be created.
 		Keyspace string
-		// This value will come from the name of the vindex target table
+		// This will come from the name of the vindex target table
 		// in the provided spec with a static suffix of `_vdx` added.
 		Workflow string
 		Vindex   *vschemapb.Keyspace
-		// Where the vindex target table and VReplicaiton workflow will be
-		// created.
+		// This is where the vindex target table and VReplicaiton
+		// workflow will be created.
 		TargetKeyspace string
 	}{}
 
@@ -270,7 +270,8 @@ func registerCommands(root *cobra.Command) {
 	// for the VReplication workflow used.
 	base.AddCommand(show)
 
-	// This will also delete the workflow if the vindex has an owner.
+	// This will also delete the VReplication workflow if the
+	// vindex has an owner.
 	base.AddCommand(externalize)
 
 	// The cancel command deletes the VReplication workflow used

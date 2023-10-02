@@ -966,6 +966,9 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 	return copyStates, nil
 }
 
+// LookupVindexCreate creates the lookup vindex in the specified
+// keyspace and creates a VReplication workflow to backfill that
+// vindex from the keyspace to the target table specified.
 func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.LookupVindexCreateRequest) (*vtctldatapb.LookupVindexCreateResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.LookupVindexCreate")
 	defer span.Finish()
@@ -974,7 +977,7 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("cells", req.Cells)
 	span.Annotate("tablet_types", req.TabletTypes)
-	span.Annotate("continue_after_copy", req.ContinueAfterCopyWithOwner)
+	span.Annotate("continue_after_copy_with_owner", req.ContinueAfterCopyWithOwner)
 
 	ms, sourceVSchema, targetVSchema, err := s.prepareCreateLookup(ctx, req.Workflow, req.Keyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
 	if err != nil {
@@ -992,7 +995,6 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVSchema); err != nil {
 		return nil, err
 	}
-
 	if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err
 	}
@@ -3407,12 +3409,12 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	}
 	if existing, ok := sourceVSchema.Vindexes[vindexName]; ok {
 		if !proto.Equal(existing, vindex) {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a conflicting vindex named %s already exists in the source vschema", vindexName)
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a conflicting vindex named %s already exists in the %s keyspace vschema", vindexName, keyspace)
 		}
 	}
 	sourceVSchemaTable = sourceVSchema.Tables[sourceTableName]
 	if sourceVSchemaTable == nil && !schema.IsInternalOperationTableName(sourceTableName) {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "source table %s not found in vschema", sourceTableName)
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in the %s keyspace vschema", sourceTableName, keyspace)
 	}
 	for _, colVindex := range sourceVSchemaTable.ColumnVindexes {
 		// For a conflict, the vindex name and column should match.
@@ -3424,8 +3426,8 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 			colName = colVindex.Columns[0]
 		}
 		if colName == sourceVindexColumns[0] {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting ColumnVindex on column %s in table %s already exists in the source vschema",
-				colName, sourceTableName)
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting ColumnVindex on column %s in table %s already exists in the %s keyspace vschema",
+				colName, sourceTableName, keyspace)
 		}
 	}
 
@@ -3444,7 +3446,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		return nil, nil, nil, err
 	}
 	if len(tableSchema.TableDefinitions) != 1 {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected number of tables returned from schema: %v", tableSchema.TableDefinitions)
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected number of tables returned from %s schema: %v", keyspace, tableSchema.TableDefinitions)
 	}
 
 	// Generate "create table" statement.
@@ -3536,7 +3538,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		}
 		if existing, ok := targetVSchema.Vindexes[targetVindexType]; ok {
 			if !proto.Equal(existing, targetVindex) {
-				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting vindex named %v already exists in the target vschema", targetVindexType)
+				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting vindex named %v already exists in the %s keyspace vschema", targetVindexType, targetKeyspace)
 			}
 		} else {
 			targetVSchema.Vindexes[targetVindexType] = targetVindex
@@ -3553,7 +3555,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	}
 	if existing, ok := targetVSchema.Tables[targetTableName]; ok {
 		if !proto.Equal(existing, targetTable) {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting table named %v already exists in the target vschema", targetTableName)
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting table named %v already exists in the %s vschema", targetTableName, targetKeyspace)
 		}
 	} else {
 		targetVSchema.Tables[targetTableName] = targetTable
