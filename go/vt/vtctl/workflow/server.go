@@ -1269,7 +1269,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		tmc:      s.tmc,
 		ms:       ms,
 	}
-	err = mz.createMigrationStreams(req)
+	err = mz.createMoveTablesStreams(req)
 	if err != nil {
 		return nil, err
 	}
