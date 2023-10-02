@@ -18,7 +18,7 @@ RUN mkdir -p /vt/dist
 
 # Install dependencies
 COPY docker/lite/install_dependencies.sh /vt/dist/install_dependencies.sh
-RUN /vt/dist/install_dependencies.sh mysql80 8.0.30
+RUN /vt/dist/install_dependencies.sh mysql80 8.0.34
 
 # Set up Vitess user and directory tree.
 RUN groupadd -r vitess && useradd -r -g vitess vitess
