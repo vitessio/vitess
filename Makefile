@@ -329,7 +329,7 @@ docker_mysql:
 	for i in $(DOCKER_MYSQL_VERSIONS); do echo "building vitess/mysql:$$i"; ${call build_docker_image,docker/mysql/Dockerfile.$$i,vitess/mysql:$$i} || exit 1; done
 
 docker_mysql_push:
-	for i in $(DOCKER_MYSQL_VERSIONS); do echo "pushing vitess/mysql:$$i"; docker push vitess/mysql:$$1 || exit 1; done
+	for i in $(DOCKER_MYSQL_VERSIONS); do echo "pushing vitess/mysql:$$i"; docker push vitess/mysql:$$i || exit 1; done
 
 docker_lite:
 	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
