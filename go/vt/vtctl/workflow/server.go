@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -3352,16 +3353,34 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	}
 
 	// Validate input table.
-	if len(specs.Tables) != 1 {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "exactly one table must be specified in the specs: %v", specs.Tables)
+	if len(specs.Tables) < 1 || len(specs.Tables) > 2 {
+		return nil, nil, nil, fmt.Errorf("one or two tables must be specified in the specs: %v", specs.Tables)
 	}
-	// Loop executes once.
-	for k, ti := range specs.Tables {
-		if len(ti.ColumnVindexes) != 1 {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "exactly one ColumnVindex must be specified for the table: %v", specs.Tables)
+	// Loop executes once or twice.
+	for tableName, table := range specs.Tables {
+		if len(table.ColumnVindexes) != 1 {
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "exactly one ColumnVindex must be specified for the table: %s", table)
 		}
-		sourceTableName = k
-		sourceTable = ti
+		if tableName != targetTableName { // This is the source table.
+			sourceTableName = tableName
+			sourceTable = table
+			continue
+		}
+		// This is a primary vindex definition for the target table
+		// which allows you to override the vindex type used.
+		var vindexCols []string
+		if len(table.ColumnVindexes[0].Columns) != 0 {
+			vindexCols = table.ColumnVindexes[0].Columns
+		} else {
+			if table.ColumnVindexes[0].Column == "" {
+				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "at least one column must be specified in ColumnVindexes: %v", table.ColumnVindexes)
+			}
+			vindexCols = []string{table.ColumnVindexes[0].Column}
+		}
+		if !slices.Equal(vindexCols, vindexFromCols) {
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "columns in the target table %s primary vindex (%s) don't match the 'from' columns in the specs (%s)",
+				tableName, strings.Join(vindexCols, ","), strings.Join(vindexFromCols, ","))
+		}
 	}
 
 	// Validate input table and vindex consistency.
@@ -3515,16 +3534,21 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	materializeQuery = buf.String()
 
 	// Update targetVSchema.
-	var targetTable *vschemapb.Table
+	targetTable := specs.Tables[targetTableName]
 	if targetVSchema.Sharded {
-		// Choose a primary vindex type for target table based on source specs.
+		// Choose a primary vindex type for the target table based on the source definition.
 		var targetVindexType string
 		var targetVindex *vschemapb.Vindex
 		for _, field := range tableSchema.TableDefinitions[0].Fields {
 			if sourceVindexColumns[0] == field.Name {
-				targetVindexType, err = vindexes.ChooseVindexForType(field.Type)
-				if err != nil {
-					return nil, nil, nil, err
+				if targetTable != nil && len(targetTable.ColumnVindexes) > 0 {
+					targetVindexType = targetTable.ColumnVindexes[0].Name
+				}
+				if targetVindexType == "" {
+					targetVindexType, err = vindexes.ChooseVindexForType(field.Type)
+					if err != nil {
+						return nil, nil, nil, err
+					}
 				}
 				targetVindex = &vschemapb.Vindex{
 					Type: targetVindexType,

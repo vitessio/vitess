@@ -1545,7 +1545,7 @@ func TestCreateCustomizedVindex(t *testing.T) {
 			"v": {
 				Type: "lookup_unique",
 				Params: map[string]string{
-					"table": "ks.lkp",
+					"table": "ks.lookup",
 					"from":  "c1",
 					"to":    "col2",
 				},
@@ -1559,8 +1559,15 @@ func TestCreateCustomizedVindex(t *testing.T) {
 					Column: "col2",
 				}},
 			},
+			"lookup": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "unicode_loose_md5",
+					Column: "c1",
+				}},
+			},
 		},
 	}
+
 	// Dummy sourceSchema
 	sourceSchema := "CREATE TABLE `t1` (\n" +
 		"  `col1` int(11) NOT NULL AUTO_INCREMENT,\n" +
@@ -1573,6 +1580,9 @@ func TestCreateCustomizedVindex(t *testing.T) {
 		Vindexes: map[string]*vschemapb.Vindex{
 			"xxhash": {
 				Type: "xxhash",
+			},
+			"unicode_loose_md5": { // Non default vindex type for the column.
+				Type: "unicode_loose_md5",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
@@ -1590,10 +1600,13 @@ func TestCreateCustomizedVindex(t *testing.T) {
 			"xxhash": {
 				Type: "xxhash",
 			},
+			"unicode_loose_md5": {
+				Type: "unicode_loose_md5",
+			},
 			"v": {
 				Type: "lookup_unique",
 				Params: map[string]string{
-					"table":      "ks.lkp",
+					"table":      "ks.lookup",
 					"from":       "c1",
 					"to":         "col2",
 					"write_only": "true",
@@ -1611,10 +1624,10 @@ func TestCreateCustomizedVindex(t *testing.T) {
 					Column: "col2",
 				}},
 			},
-			"lkp": {
+			"lookup": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "c1",
-					Name:   "xxhash",
+					Name:   "unicode_loose_md5",
 				}},
 			},
 		},
@@ -1869,7 +1882,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
-			"other": {
+			"xxhash": {
 				Type: "xxhash",
 			},
 			"v": {
@@ -1987,11 +2000,48 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			err: `vindexType "lookup_noexist" not found`,
 		},
 		{
-			description: "only one table",
+			description: "no tables",
 			input: &vschemapb.Keyspace{
 				Vindexes: unique,
 			},
-			err: "exactly one table must be specified in the specs",
+			err: "one or two tables must be specified in the specs",
+		},
+		{
+			description: "too many tables",
+			input: &vschemapb.Keyspace{
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"v": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "targetks.t",
+							"from":  "c1",
+							"to":    "c2",
+						},
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:   "v",
+							Column: "c1",
+						}},
+					},
+					"v": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:   "xxhash",
+							Column: "c2",
+						}},
+					},
+					"v2": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:   "xxhash",
+							Column: "c1",
+						}},
+					},
+				},
+			},
+			err: "one or two tables must be specified in the specs",
 		},
 		{
 			description: "only one colvindex",
@@ -2074,7 +2124,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			description: "vindex mismatches with what's in vschema",
 			input: &vschemapb.Keyspace{
 				Vindexes: map[string]*vschemapb.Vindex{
-					"other": {
+					"xxhash": {
 						Type: "lookup_unique",
 						Params: map[string]string{
 							"table": "targetks.t",
@@ -2087,13 +2137,13 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
-							Name:   "other",
+							Name:   "xxhash",
 							Column: "col",
 						}},
 					},
 				},
 			},
-			err: "a conflicting vindex named other already exists in the targetks keyspace vschema",
+			err: "a conflicting vindex named xxhash already exists in the targetks keyspace vschema",
 		},
 		{
 			description: "source table not in vschema",
@@ -2189,15 +2239,15 @@ func TestExternalizeLookupVindex(t *testing.T) {
 		"id|state|message|source",
 		"int64|varbinary|varbinary|blob",
 	)
-	ownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.hash', '-80')"}} stop_after_copy:true`,
+	ownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}} stop_after_copy:true`,
 		ms.SourceKeyspace, ms.SourceKeyspace)
-	ownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.hash', '-80')"}}`,
+	ownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}}`,
 		ms.SourceKeyspace, ms.SourceKeyspace)
 	ownedRunning := sqltypes.MakeTestResult(fields, "1|Running|msg|"+ownedSourceKeepRunningAfterCopy)
 	ownedStopped := sqltypes.MakeTestResult(fields, "1|Stopped|Stopped after copy|"+ownedSourceStopAfterCopy)
-	unownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.hash', '-80')"}} stop_after_copy:true`,
+	unownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}} stop_after_copy:true`,
 		ms.SourceKeyspace, ms.SourceKeyspace)
-	unownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.hash', '-80')"}}`,
+	unownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}}`,
 		ms.SourceKeyspace, ms.SourceKeyspace)
 	unownedRunning := sqltypes.MakeTestResult(fields, "2|Running|msg|"+unownedSourceKeepRunningAfterCopy)
 	unownedStopped := sqltypes.MakeTestResult(fields, "2|Stopped|Stopped after copy|"+unownedSourceStopAfterCopy)
