@@ -324,6 +324,10 @@ $(DOCKER_BASE_TARGETS): docker_base_%:
 
 docker_base_all: docker_base $(DOCKER_BASE_TARGETS)
 
+DOCKER_MYSQL_SUFFIX = 8.0.30 8.0.34
+docker_mysql:
+	${call build_docker_image,docker/mysql/Dockerfile,vitess/mysql}
+
 docker_lite:
 	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
 
