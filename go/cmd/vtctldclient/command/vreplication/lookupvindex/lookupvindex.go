@@ -257,7 +257,7 @@ func registerCommands(root *cobra.Command) {
 	root.AddCommand(base)
 
 	// This will create the lookup vindex in the specified keyspace
-	// and setup a VReplication workflow to backfill its targe table.
+	// and setup a VReplication workflow to backfill its target table.
 	create.Flags().StringSliceVar(&createOptions.Cells, "cells", nil, "Cells to look in for source tablets to replicate from.")
 	create.Flags().Var((*topoprotopb.TabletTypeListFlag)(&createOptions.TabletTypes), "tablet-types", "Source tablet types to replicate from.")
 	create.Flags().BoolVar(&createOptions.ContinueAfterCopyWithOwner, "continue-after-copy-with-owner", false, "Vindex will continue materialization after copy when an owner is provided")
