@@ -77,7 +77,9 @@ func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowS
 	}
 }
 
-func (mz *materializer) createMoveTablesStreams(req *vtctldatapb.MoveTablesCreateRequest) error {
+// createMigrationStreams creates the vreplication streams for Migrate,
+// MoveTables, and Reshard workflows.
+func (mz *materializer) createMigrationStreams(req *vtctldatapb.MoveTablesCreateRequest) error {
 	if err := validateNewWorkflow(mz.ctx, mz.ts, mz.tmc, mz.ms.TargetKeyspace, mz.ms.Workflow); err != nil {
 		return err
 	}
