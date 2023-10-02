@@ -39,11 +39,39 @@ type Projection struct {
 	// Columns contain the expressions as viewed from the outside of this operator
 	Columns ProjCols
 
-	// TableID will be non-nil for derived tables
-	TableID *semantics.TableSet
-	Alias   string
-
+	// DT will hold all the necessary information if this is a derived table projection
+	DT       *DerivedTable
 	FromAggr bool
+}
+
+type (
+	DerivedTable struct {
+		TableID semantics.TableSet
+		Alias   string
+		Columns sqlparser.Columns
+	}
+)
+
+func (dt *DerivedTable) String() string {
+	return fmt.Sprintf("DERIVED %s(%s)", dt.Alias, sqlparser.String(dt.Columns))
+}
+
+func (dt *DerivedTable) RewriteExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (sqlparser.Expr, error) {
+	if dt == nil {
+		return expr, nil
+	}
+	tableInfo, err := ctx.SemTable.TableInfoFor(dt.TableID)
+	if err != nil {
+		return nil, err
+	}
+	return semantics.RewriteDerivedTableExpression(expr, tableInfo), nil
+}
+
+func (dt *DerivedTable) introducesTableID() semantics.TableSet {
+	if dt == nil {
+		return semantics.EmptyTableSet()
+	}
+	return dt.TableID
 }
 
 type (
@@ -191,7 +219,7 @@ func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjectio
 // been settled. Once they have settled, we know where to push the projection, but if we push too early
 // the projection can end up in the wrong branch of joins
 func (p *Projection) canPush(ctx *plancontext.PlanningContext) bool {
-	if ctx.SubqueriesSettled {
+	if reachedPhase(ctx, subquerySettling) {
 		return true
 	}
 	ap, ok := p.Columns.(AliasedProjections)
@@ -216,7 +244,7 @@ func (p *Projection) GetAliasedProjections() (AliasedProjections, error) {
 }
 
 func (p *Projection) isDerived() bool {
-	return p.TableID != nil
+	return p.DT != nil
 }
 
 func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
@@ -290,14 +318,9 @@ func (p *Projection) addColumn(
 	ae *sqlparser.AliasedExpr,
 	push bool,
 ) (int, error) {
-	expr := ae.Expr
-	if p.isDerived() {
-		// For derived tables we rewrite the expression before searching for it and/or pushing it down
-		tableInfo, err := ctx.SemTable.TableInfoFor(*p.TableID)
-		if err != nil {
-			return 0, err
-		}
-		expr = semantics.RewriteDerivedTableExpression(expr, tableInfo)
+	expr, err := p.DT.RewriteExpression(ctx, ae.Expr)
+	if err != nil {
+		return 0, err
 	}
 
 	if reuse {
@@ -349,8 +372,7 @@ func (p *Projection) Clone(inputs []ops.Operator) ops.Operator {
 	return &Projection{
 		Source:   inputs[0],
 		Columns:  p.Columns, // TODO don't think we need to deep clone here
-		TableID:  p.TableID,
-		Alias:    p.Alias,
+		DT:       p.DT,
 		FromAggr: p.FromAggr,
 	}
 }
@@ -422,8 +444,8 @@ func (p *Projection) AllOffsets() (cols []int) {
 
 func (p *Projection) ShortDescription() string {
 	var result []string
-	if p.Alias != "" {
-		result = append(result, "derived["+p.Alias+"]")
+	if p.DT != nil {
+		result = append(result, p.DT.String())
 	}
 
 	switch columns := p.Columns.(type) {
@@ -588,15 +610,9 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 	}
 
-	p.TableID = nil
-	p.Alias = ""
-
 	return nil
 }
 
 func (p *Projection) introducesTableID() semantics.TableSet {
-	if p.TableID == nil {
-		return semantics.EmptyTableSet()
-	}
-	return *p.TableID
+	return p.DT.introducesTableID()
 }

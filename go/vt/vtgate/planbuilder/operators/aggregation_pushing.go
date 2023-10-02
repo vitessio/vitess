@@ -39,15 +39,15 @@ func tryPushAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator)
 		// if we have a single sharded route, we can push it down
 		output, applyResult, err = pushAggregationThroughRoute(ctx, aggregator, src)
 	case *ApplyJoin:
-		if ctx.DelegateAggregation {
+		if reachedPhase(ctx, delegateAggregation) {
 			output, applyResult, err = pushAggregationThroughJoin(ctx, aggregator, src)
 		}
 	case *Filter:
-		if ctx.DelegateAggregation {
+		if reachedPhase(ctx, delegateAggregation) {
 			output, applyResult, err = pushAggregationThroughFilter(ctx, aggregator, src)
 		}
 	case *SubQueryContainer:
-		if ctx.DelegateAggregation {
+		if reachedPhase(ctx, delegateAggregation) {
 			output, applyResult, err = pushAggregationThroughSubquery(ctx, aggregator, src)
 		}
 	default:
@@ -65,6 +65,11 @@ func tryPushAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator)
 	aggregator.Pushed = true
 
 	return
+}
+
+func reachedPhase(ctx *plancontext.PlanningContext, p Phase) bool {
+	b := ctx.CurrentPhase >= int(p)
+	return b
 }
 
 // pushAggregationThroughSubquery pushes an aggregation under a subquery.
@@ -138,7 +143,7 @@ func pushAggregationThroughRoute(
 		return rewrite.Swap(aggregator, route, "push down aggregation under route - remove original")
 	}
 
-	if !ctx.DelegateAggregation {
+	if !reachedPhase(ctx, delegateAggregation) {
 		return nil, nil, nil
 	}
 

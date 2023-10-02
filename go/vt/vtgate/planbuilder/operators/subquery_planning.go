@@ -101,7 +101,6 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Op
 		}
 		return op, rewrite.SameTree, nil
 	}
-	ctx.SubqueriesSettled = true
 	return rewrite.BottomUp(op, TableID, visit, nil)
 }
 
@@ -431,6 +430,10 @@ func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Exp
 }
 
 func pushOrMergeSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQueryContainer) (ops.Operator, *rewrite.ApplyResult, error) {
+	if !reachedPhase(ctx, initialPlanning) {
+		return in, rewrite.SameTree, nil
+	}
+
 	var remaining []*SubQuery
 	var result *rewrite.ApplyResult
 	for _, inner := range in.Inner {
