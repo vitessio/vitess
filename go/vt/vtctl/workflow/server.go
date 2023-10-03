@@ -1107,7 +1107,9 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	resp := &vtctldatapb.LookupVindexExternalizeResponse{}
 
 	if vindex.Owner != "" {
-		// If there is an owner, we have to delete the streams.
+		// If there is an owner, we have to delete the streams. Once we externalize it
+		// the VTGate will now be responsible for keeping the lookup table up to date
+		// with the owner table.
 		if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
 			Keyspace:         targetKeyspace,
 			Workflow:         req.Workflow,

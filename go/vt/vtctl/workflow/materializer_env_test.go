@@ -215,7 +215,7 @@ func (tmc *testMaterializerTMClient) ReadVReplicationWorkflow(ctx context.Contex
 		workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
 	}
 	return &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
-		Workflow:     "workflow",
+		Workflow:     request.Workflow,
 		WorkflowType: workflowType,
 		Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
 			{
