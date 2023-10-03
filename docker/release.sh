@@ -1,7 +1,7 @@
 #!/bin/bash
 set -ex
 
-vt_base_version='v18.0.0-rc1'
+vt_base_version='v18.0.0-SNAPSHOT'
 debian_versions='bullseye  bookworm'
 default_debian_version='bookworm'
 
