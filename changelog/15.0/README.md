@@ -1,5 +1,9 @@
 ## v15.0
 The dedicated team for this release can be found [here](team.md).
+* **[15.0.5](15.0.5)**
+	* [Changelog](15.0.5/changelog.md)
+	* [Release Notes](15.0.5/release_notes.md)
+
 * **[15.0.4](15.0.4)**
 	* [Changelog](15.0.4/changelog.md)
 	* [Release Notes](15.0.4/release_notes.md)
