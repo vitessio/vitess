@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"path"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/topo"
@@ -51,14 +54,25 @@ func TestZk2Topo(t *testing.T) {
 		// Note we exercise the observer feature here by passing in
 		// the same server twice, with a "|" separator.
 		ts, err := topo.OpenServer("zk2", serverAddr+"|"+serverAddr, globalRoot)
-		if err != nil {
-			t.Fatalf("OpenServer() failed: %v", err)
-		}
-		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
-			ServerAddress: serverAddr,
-			Root:          cellRoot,
-		}); err != nil {
-			t.Fatalf("CreateCellInfo() failed: %v", err)
+		require.NoError(t, err, "OpenServer() failed")
+		// We retry creating the cell info until we no longer get a connection error.
+		timeout := time.After(15 * time.Second)
+		for {
+			err = ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+				ServerAddress: serverAddr,
+				Root:          cellRoot,
+			})
+			if err == nil {
+				break
+			}
+			select {
+			case <-timeout:
+				t.Fatalf("Timedout creating cell info - %v", err)
+				return nil
+			default:
+				require.ErrorContainsf(t, err, "could not connect to a server", "Received an error that isn't a connection error")
+				time.Sleep(1 * time.Second)
+			}
 		}
 
 		return ts
