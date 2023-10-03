@@ -18,6 +18,7 @@ package lookupvindex
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -62,15 +63,29 @@ var (
 	}
 
 	createOptions = struct {
+		VindexSpecs                  string
+		VindexSpecsFile              string
 		Cells                        []string
 		TabletTypes                  []topodatapb.TabletType
 		TabletTypesInPreferenceOrder bool
 		ContinueAfterCopyWithOwner   bool
 	}{}
 
-	parseAndValidateInput = func(cmd *cobra.Command, args []string) error {
+	parseAndValidateCreate = func(cmd *cobra.Command, args []string) error {
 		// Validate provided JSON spec.
-		jsonSpec := []byte(args[0])
+		var jsonSpec []byte
+		if createOptions.VindexSpecs == "" && createOptions.VindexSpecsFile == "" {
+			return fmt.Errorf("must specify one of --specs or --specs-file")
+		}
+		if createOptions.VindexSpecsFile != "" {
+			fileContents, err := os.ReadFile(createOptions.VindexSpecsFile)
+			if err != nil {
+				return fmt.Errorf("could not read specs-file: %v", err)
+			}
+			jsonSpec = []byte(fileContents)
+		} else {
+			jsonSpec = []byte(createOptions.VindexSpecs)
+		}
 		baseOptions.Vindex = &vschemapb.Keyspace{}
 		if err := protojson.Unmarshal(jsonSpec, baseOptions.Vindex); err != nil {
 			return fmt.Errorf("invalid vindex specs: %v", err)
@@ -116,8 +131,7 @@ var (
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Cancel"},
-		Args:                  cobra.ExactArgs(1),
-		PreRunE:               parseAndValidateInput,
+		Args:                  cobra.NoArgs,
 		RunE:                  commandCancel,
 	}
 
@@ -129,8 +143,8 @@ var (
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Create"},
-		Args:                  cobra.ExactArgs(1),
-		PreRunE:               parseAndValidateInput,
+		Args:                  cobra.NoArgs,
+		PreRunE:               parseAndValidateCreate,
 		RunE:                  commandCreate,
 	}
 
@@ -142,8 +156,7 @@ var (
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Externalize"},
-		Args:                  cobra.ExactArgs(1),
-		PreRunE:               parseAndValidateInput,
+		Args:                  cobra.NoArgs,
 		RunE:                  commandExternalize,
 	}
 
@@ -156,7 +169,6 @@ var (
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Show"},
 		Args:                  cobra.ExactArgs(1),
-		PreRunE:               parseAndValidateInput,
 		RunE:                  commandShow,
 	}
 )
@@ -258,6 +270,9 @@ func registerCommands(root *cobra.Command) {
 
 	// This will create the lookup vindex in the specified keyspace
 	// and setup a VReplication workflow to backfill its target table.
+	create.Flags().StringVar(&createOptions.VindexSpecs, "specs", "", "The vschema definition which defines the lookup vindex and its lookup table.")
+	create.Flags().StringVar(&createOptions.VindexSpecsFile, "specs-file", "", "The file containing the vschema definition which defines the lookup vindex and its lookup table.")
+	create.MarkFlagsMutuallyExclusive("specs", "specs-file")
 	create.Flags().StringSliceVar(&createOptions.Cells, "cells", nil, "Cells to look in for source tablets to replicate from.")
 	create.Flags().Var((*topoprotopb.TabletTypeListFlag)(&createOptions.TabletTypes), "tablet-types", "Source tablet types to replicate from.")
 	create.Flags().BoolVar(&createOptions.ContinueAfterCopyWithOwner, "continue-after-copy-with-owner", true, "Vindex will continue materialization after copy when an owner is provided")
