@@ -96,15 +96,16 @@ There are 3 foreign key modes now supported in Vitess -
 
 #### Upgrade process
 
-After upgrading from v17 to v18, the users should specify the correct foreign key mode for all their keyspaces in the Vschema using the new property. Once this change has taken effect, the deprecated flag `--foreign_key_mode` can be dropped from all the Vtgates.
+After upgrading from v17 to v18, the users should specify the correct foreign key mode for all their keyspaces in the VSchema using the new property.
+Once this change has taken effect, the deprecated flag `--foreign_key_mode` can be dropped from all the VTGates.
 
 ### <a id="vtadmin"/>VTAdmin
 
 #### <a id="updated-node"/>vtadmin-web updated to node v18.16.0 (LTS)
 
-Building vtadmin-web now requires node >= v18.16.0 (LTS). Breaking changes from v16 to v18 are listed
+Building `vtadmin-web` now requires node >= v18.16.0 (LTS). Breaking changes from v16 to v18 are listed
 in https://nodejs.org/en/blog/release/v18.0.0, but none apply to VTAdmin. Full details on v18.16.0 are listed
-here https://nodejs.org/en/blog/release/v18.16.0.
+on https://nodejs.org/en/blog/release/v18.16.0.
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions
 
@@ -112,7 +113,6 @@ here https://nodejs.org/en/blog/release/v18.16.0.
 
 Throttler related `vttablet` flags:
 
-- `--enable-lag-throttler` is now removed after being deprecated in `v17.0`
 - `--throttle_threshold` is deprecated and will be removed in `v19.0`
 - `--throttle_metrics_query` is deprecated and will be removed in `v19.0`
 - `--throttle_metrics_threshold` is deprecated and will be removed in `v19.0`
@@ -133,7 +133,7 @@ Cache related `vtgate` flags:
 - `--gate_query_cache_lfu` is deprecated and will be removed in `v19.0`. The query cache always uses a LFU implementation now.
 - `--gate_query_cache_size` is deprecated and will be removed in `v19.0`. This option only applied to LRU caches, which are now unsupported.
 
-VTGate flag:
+VTGate flags:
 
 - `--schema_change_signal_user` is deprecated and will be removed in `v19.0`
 - `--foreign_key_mode` is deprecated and will be removed in `v19.0`. For more detail read the [foreign keys](#foreign-keys) section.
@@ -179,6 +179,7 @@ Flags in `vttablet`:
 - `--queryserver-config-stream-pool-prefill-parallelism`
 - `--queryserver-config-transaction-pool-prefill-parallelism`
 - `--queryserver-config-schema-change-signal-interval`
+- `--enable-lag-throttler`
 
 Flags in `vtctld`:
 - `--vtctld_show_topology_crud`
@@ -258,7 +259,7 @@ Also, the `reparent_shard_operation_timings` stat was added to provide per-opera
 
 #### <a id="vttablet-new-rpc-reset-sequences"/>New ResetSequences rpc
 
-A new vttablet RPC `ResetSequences` has been added, which is being used by `MoveTables` and `Migrate` for workflows
+A new VTTablet RPC `ResetSequences` has been added, which is being used by `MoveTables` and `Migrate` for workflows
 where a `sequence` table is being moved (https://github.com/vitessio/vitess/pull/13238). This has an impact on the
 Vitess upgrade process from an earlier version if you need to use such a workflow before the entire cluster is upgraded.
 

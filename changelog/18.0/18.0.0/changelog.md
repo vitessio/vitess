@@ -1,4 +1,4 @@
-# Changelog of Vitess v18.0.0
+# Changelog of Vitess v18.0.0-rc1
 
 ### Bug fixes 
 #### Backup and Restore
