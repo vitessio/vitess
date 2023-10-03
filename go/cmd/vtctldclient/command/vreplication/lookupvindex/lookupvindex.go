@@ -260,7 +260,7 @@ func registerCommands(root *cobra.Command) {
 	// and setup a VReplication workflow to backfill its target table.
 	create.Flags().StringSliceVar(&createOptions.Cells, "cells", nil, "Cells to look in for source tablets to replicate from.")
 	create.Flags().Var((*topoprotopb.TabletTypeListFlag)(&createOptions.TabletTypes), "tablet-types", "Source tablet types to replicate from.")
-	create.Flags().BoolVar(&createOptions.ContinueAfterCopyWithOwner, "continue-after-copy-with-owner", false, "Vindex will continue materialization after copy when an owner is provided")
+	create.Flags().BoolVar(&createOptions.ContinueAfterCopyWithOwner, "continue-after-copy-with-owner", true, "Vindex will continue materialization after copy when an owner is provided")
 	create.Flags().BoolVar(&createOptions.TabletTypesInPreferenceOrder, "tablet-types-in-preference-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
 	base.AddCommand(create)
 
