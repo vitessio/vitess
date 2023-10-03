@@ -170,8 +170,17 @@ service Vtctld {
   rpc InitShardPrimary(vtctldata.InitShardPrimaryRequest) returns (vtctldata.InitShardPrimaryResponse) {};
   // LaunchSchemaMigration launches one or all migrations executed with --postpone-launch.
   rpc LaunchSchemaMigration(vtctldata.LaunchSchemaMigrationRequest) returns (vtctldata.LaunchSchemaMigrationResponse) {};
+
   rpc LookupVindexCreate(vtctldata.LookupVindexCreateRequest) returns (vtctldata.LookupVindexCreateResponse) {};
   rpc LookupVindexExternalize(vtctldata.LookupVindexExternalizeRequest) returns (vtctldata.LookupVindexExternalizeResponse) {};
+
+  rpc MigrateCreate(vtctldata.MigrateCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};
+  
+  rpc MountRegister(vtctldata.MountRegisterRequest) returns (vtctldata.MountRegisterResponse) {};
+  rpc MountUnregister(vtctldata.MountUnregisterRequest) returns (vtctldata.MountUnregisterResponse) {};
+  rpc MountShow(vtctldata.MountShowRequest) returns (vtctldata.MountShowResponse) {};
+  rpc MountList(vtctldata.MountListRequest) returns (vtctldata.MountListResponse) {};
+
   // MoveTablesCreate creates a workflow which moves one or more tables from a
   // source keyspace to a target keyspace.
   rpc MoveTablesCreate(vtctldata.MoveTablesCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};

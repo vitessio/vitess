@@ -26,17 +26,19 @@ import (
 
 	"github.com/spf13/cobra"
 
-	// These imports ensure init()s within them get called and they register their commands/subcommands.
-	vreplcommon "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
-	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/lookupvindex"
-	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/movetables"
-	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/reshard"
-	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/vdiff"
-	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/workflow"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
+
+	// These imports ensure init()s within them get called and they register their commands/subcommands.
+	vreplcommon "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/migrate"
+	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/mount"
+	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/movetables"
+	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/reshard"
+	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/vdiff"
+	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/workflow"
 )
 
 var (
