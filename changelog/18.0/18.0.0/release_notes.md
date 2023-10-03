@@ -1,3 +1,4 @@
+# Release of Vitess v18.0.0-rc1
 ## Summary
 
 ### Table of Contents
@@ -292,3 +293,11 @@ removing Vitess support.
 #### <a id="new-durability-policies"/>New Durability Policies
 
 2 new inbuilt durability policies have been added to Vitess in this release namely `semi_sync_with_rdonly_ack` and `cross_cell_with_rdonly_ack`. These policies are exactly like `semi_sync` and `cross_cell` respectively, and differ just in the part where the rdonly tablets can also send semi-sync ACKs. 
+
+------------
+The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/18.0/18.0.0/changelog.md).
+
+The release includes 361 merged Pull Requests.
+
+Thanks to all our contributors: @GuptaManan100, @Juneezee, @adsr, @ajm188, @app/dependabot, @app/github-actions, @app/vitess-bot, @arvind-murty, @austenLacy, @brendar, @davidpiegza, @dbussink, @deepthi, @derekperkins, @ejortegau, @frouioui, @harshit-gangal, @hkdsun, @jfg956, @jspawar, @mattlord, @maxenglander, @mdlayher, @notfelineit, @olyazavr, @pbibra, @peterlyoo, @rafer, @rohit-nayak-ps, @shlomi-noach, @systay, @timvaillancourt, @vmg, @yields
+
