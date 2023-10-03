@@ -3,11 +3,16 @@
 # This is a script that gets run as part of the Dockerfile build
 # to install dependencies for the vitess/lite family of images.
 #
-# Usage: install_dependencies.sh <flavor>
+# Usage: install_dependencies.sh <flavor> <version (optional)>
 
 set -euo pipefail
 
 FLAVOR="$1"
+VERSION=""
+if [ $# -eq 2 ]; then
+  VERSION="$2"
+fi
+
 export DEBIAN_FRONTEND=noninteractive
 
 KEYSERVERS=(
@@ -67,42 +72,46 @@ apt-get install -y --no-install-recommends "${BASE_PACKAGES[@]}"
 # Packages specific to certain flavors.
 case "${FLAVOR}" in
 mysql57)
-    mysql57_version=5.7.31
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb /tmp/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-client_${mysql57_version}-1debian10_amd64.deb /tmp/mysql-community-client_${mysql57_version}-1debian10_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-client_${mysql57_version}-1debian10_amd64.deb /tmp/mysql-client_${mysql57_version}-1debian10_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-server_${mysql57_version}-1debian10_amd64.deb /tmp/mysql-community-server_${mysql57_version}-1debian10_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-server_${mysql57_version}-1debian10_amd64.deb /tmp/mysql-server_${mysql57_version}-1debian10_amd64.deb
+    if [ -z "$VERSION" ]; then
+        VERSION=5.7.31
+    fi
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/libmysqlclient20_${VERSION}-1debian10_amd64.deb /tmp/libmysqlclient20_${VERSION}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-client_${VERSION}-1debian10_amd64.deb /tmp/mysql-community-client_${VERSION}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-client_${VERSION}-1debian10_amd64.deb /tmp/mysql-client_${VERSION}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-server_${VERSION}-1debian10_amd64.deb /tmp/mysql-community-server_${VERSION}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-server_${VERSION}-1debian10_amd64.deb /tmp/mysql-server_${VERSION}-1debian10_amd64.deb
     PACKAGES=(
-        /tmp/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb
-        /tmp/mysql-community-client_${mysql57_version}-1debian10_amd64.deb
-        /tmp/mysql-client_${mysql57_version}-1debian10_amd64.deb
-        /tmp/mysql-community-server_${mysql57_version}-1debian10_amd64.deb
-        /tmp/mysql-server_${mysql57_version}-1debian10_amd64.deb
+        /tmp/libmysqlclient20_${VERSION}-1debian10_amd64.deb
+        /tmp/mysql-community-client_${VERSION}-1debian10_amd64.deb
+        /tmp/mysql-client_${VERSION}-1debian10_amd64.deb
+        /tmp/mysql-community-server_${VERSION}-1debian10_amd64.deb
+        /tmp/mysql-server_${VERSION}-1debian10_amd64.deb
         percona-xtrabackup-24
     )
     ;;
 mysql80)
-    mysql8_version=8.0.30
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-common_${mysql8_version}-1debian11_amd64.deb /tmp/mysql-common_${mysql8_version}-1debian11_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/libmysqlclient21_${mysql8_version}-1debian11_amd64.deb /tmp/libmysqlclient21_${mysql8_version}-1debian11_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-core_${mysql8_version}-1debian11_amd64.deb /tmp/mysql-community-client-core_${mysql8_version}-1debian11_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-plugins_${mysql8_version}-1debian11_amd64.deb /tmp/mysql-community-client-plugins_${mysql8_version}-1debian11_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client_${mysql8_version}-1debian11_amd64.deb /tmp/mysql-community-client_${mysql8_version}-1debian11_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-client_${mysql8_version}-1debian11_amd64.deb /tmp/mysql-client_${mysql8_version}-1debian11_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server-core_${mysql8_version}-1debian11_amd64.deb /tmp/mysql-community-server-core_${mysql8_version}-1debian11_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server_${mysql8_version}-1debian11_amd64.deb /tmp/mysql-community-server_${mysql8_version}-1debian11_amd64.deb
-    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-server_${mysql8_version}-1debian11_amd64.deb /tmp/mysql-server_${mysql8_version}-1debian11_amd64.deb
+    if [ -z "$VERSION" ]; then
+        VERSION=8.0.30
+    fi
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-common_${VERSION}-1debian11_amd64.deb /tmp/mysql-common_${VERSION}-1debian11_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/libmysqlclient21_${VERSION}-1debian11_amd64.deb /tmp/libmysqlclient21_${VERSION}-1debian11_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-core_${VERSION}-1debian11_amd64.deb /tmp/mysql-community-client-core_${VERSION}-1debian11_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-plugins_${VERSION}-1debian11_amd64.deb /tmp/mysql-community-client-plugins_${VERSION}-1debian11_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client_${VERSION}-1debian11_amd64.deb /tmp/mysql-community-client_${VERSION}-1debian11_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-client_${VERSION}-1debian11_amd64.deb /tmp/mysql-client_${VERSION}-1debian11_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server-core_${VERSION}-1debian11_amd64.deb /tmp/mysql-community-server-core_${VERSION}-1debian11_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server_${VERSION}-1debian11_amd64.deb /tmp/mysql-community-server_${VERSION}-1debian11_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-server_${VERSION}-1debian11_amd64.deb /tmp/mysql-server_${VERSION}-1debian11_amd64.deb
     PACKAGES=(
-        /tmp/mysql-common_${mysql8_version}-1debian11_amd64.deb
-        /tmp/libmysqlclient21_${mysql8_version}-1debian11_amd64.deb
-        /tmp/mysql-community-client-core_${mysql8_version}-1debian11_amd64.deb
-        /tmp/mysql-community-client-plugins_${mysql8_version}-1debian11_amd64.deb
-        /tmp/mysql-community-client_${mysql8_version}-1debian11_amd64.deb
-        /tmp/mysql-client_${mysql8_version}-1debian11_amd64.deb
-        /tmp/mysql-community-server-core_${mysql8_version}-1debian11_amd64.deb
-        /tmp/mysql-community-server_${mysql8_version}-1debian11_amd64.deb
-        /tmp/mysql-server_${mysql8_version}-1debian11_amd64.deb
+        /tmp/mysql-common_${VERSION}-1debian11_amd64.deb
+        /tmp/libmysqlclient21_${VERSION}-1debian11_amd64.deb
+        /tmp/mysql-community-client-core_${VERSION}-1debian11_amd64.deb
+        /tmp/mysql-community-client-plugins_${VERSION}-1debian11_amd64.deb
+        /tmp/mysql-community-client_${VERSION}-1debian11_amd64.deb
+        /tmp/mysql-client_${VERSION}-1debian11_amd64.deb
+        /tmp/mysql-community-server-core_${VERSION}-1debian11_amd64.deb
+        /tmp/mysql-community-server_${VERSION}-1debian11_amd64.deb
+        /tmp/mysql-server_${VERSION}-1debian11_amd64.deb
         percona-xtrabackup-80
     )
     ;;
