@@ -1,39 +1,40 @@
+# Release of Vitess v18.0.0-rc1
 ## Summary
 
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
-  - **[Breaking Changes](#breaking-changes)**
-    - [Local examples now use etcd v3 storage and API](#local-examples-etcd-v3)
-  - **[New command line flags and behavior](#new-flag)**
-    - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
-    - [VTOrc flag `--change-tablets-with-errant-gtid-to-drained`](#new-flag-errant-gtid-convert)
-    - [ERS sub flag `--wait-for-all-tablets`](#new-ers-subflag)
-    - [VTGate flag `--grpc-send-session-in-streaming`](#new-vtgate-streaming-sesion)
-  - **[Experimental Foreign Key Support](#foreign-keys)**
-  - **[VTAdmin](#vtadmin)**
-    - [Updated to node v18.16.0](#update-node)
-  - **[Deprecations and Deletions](#deprecations-and-deletions)**
-    - [Deprecated Flags](#deprecated-flags)
-    - [Deprecated Stats](#deprecated-stats)
-    - [Deleted Flags](#deleted-flags)
-    - [Deleted `V3` planner](#deleted-v3)
-    - [Deleted `k8stopo`](#deleted-k8stopo)
-    - [Deleted `vtgr`](#deleted-vtgr)
-    - [Deleted `query_analyzer`](#deleted-query_analyzer)
-  - **[New Stats](#new-stats)**
-    - [VTGate Vindex unknown parameters](#vtgate-vindex-unknown-parameters)
-    - [VTBackup stat `Phase`](#vtbackup-stat-phase)
-    - [VTBackup stat `PhaseStatus`](#vtbackup-stat-phase-status)
-    - [Backup and restore metrics for AWS S3](#backup-restore-metrics-aws-s3)
-    - [VTCtld and VTOrc reparenting stats](#vtctld-and-vtorc-reparenting-stats)
-  - **[VTTablet](#vttablet)**
-    - [VTTablet: New ResetSequences RPC](#vttablet-new-rpc-reset-sequences)
-  - **[Docker](#docker)**
-    - [Debian: Bookworm added and made default](#debian-bookworm)
-    - [Debian: Buster removed](#debian-buster)
-  - **[Durability Policies](#durability-policies)**
-    - [New Durability Policies](#new-durability-policies)
+    - **[Breaking Changes](#breaking-changes)**
+        - [Local examples now use etcd v3 storage and API](#local-examples-etcd-v3)
+    - **[New command line flags and behavior](#new-flag)**
+        - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
+        - [VTOrc flag `--change-tablets-with-errant-gtid-to-drained`](#new-flag-errant-gtid-convert)
+        - [ERS sub flag `--wait-for-all-tablets`](#new-ers-subflag)
+        - [VTGate flag `--grpc-send-session-in-streaming`](#new-vtgate-streaming-sesion)
+    - **[Experimental Foreign Key Support](#foreign-keys)**
+    - **[VTAdmin](#vtadmin)**
+        - [Updated to node v18.16.0](#update-node)
+    - **[Deprecations and Deletions](#deprecations-and-deletions)**
+        - [Deprecated Flags](#deprecated-flags)
+        - [Deprecated Stats](#deprecated-stats)
+        - [Deleted Flags](#deleted-flags)
+        - [Deleted `V3` planner](#deleted-v3)
+        - [Deleted `k8stopo`](#deleted-k8stopo)
+        - [Deleted `vtgr`](#deleted-vtgr)
+        - [Deleted `query_analyzer`](#deleted-query_analyzer)
+    - **[New Stats](#new-stats)**
+        - [VTGate Vindex unknown parameters](#vtgate-vindex-unknown-parameters)
+        - [VTBackup stat `Phase`](#vtbackup-stat-phase)
+        - [VTBackup stat `PhaseStatus`](#vtbackup-stat-phase-status)
+        - [Backup and restore metrics for AWS S3](#backup-restore-metrics-aws-s3)
+        - [VTCtld and VTOrc reparenting stats](#vtctld-and-vtorc-reparenting-stats)
+    - **[VTTablet](#vttablet)**
+        - [VTTablet: New ResetSequences RPC](#vttablet-new-rpc-reset-sequences)
+    - **[Docker](#docker)**
+        - [Debian: Bookworm added and made default](#debian-bookworm)
+        - [Debian: Buster removed](#debian-buster)
+    - **[Durability Policies](#durability-policies)**
+        - [New Durability Policies](#new-durability-policies)
 
 ## <a id="major-changes"/>Major Changes
 
@@ -233,8 +234,8 @@ sum_over_time(vtbackup_phase{phase="TakeNewBackup"}) * <interval>
 `PhaseStatus` reports a 1 (active) or a 0 (inactive) for each of the following phases and statuses:
 
 * `CatchupReplication` phase has statuses `Stalled` and `Stopped`.
-  * `Stalled` is set to `1` when replication stops advancing.
-  * `Stopped` is set to `1` when replication stops before `vtbackup` catches up with the primary.
+    * `Stalled` is set to `1` when replication stops advancing.
+    * `Stopped` is set to `1` when replication stops before `vtbackup` catches up with the primary.
 
 #### <a id="backup-restore-metrics-aws-s3"/>Backup and restore metrics for AWS S3
 
@@ -291,4 +292,11 @@ removing Vitess support.
 
 #### <a id="new-durability-policies"/>New Durability Policies
 
-2 new inbuilt durability policies have been added to Vitess in this release namely `semi_sync_with_rdonly_ack` and `cross_cell_with_rdonly_ack`. These policies are exactly like `semi_sync` and `cross_cell` respectively, and differ just in the part where the rdonly tablets can also send semi-sync ACKs. 
+2 new inbuilt durability policies have been added to Vitess in this release namely `semi_sync_with_rdonly_ack` and `cross_cell_with_rdonly_ack`. These policies are exactly like `semi_sync` and `cross_cell` respectively, and differ just in the part where the rdonly tablets can also send semi-sync ACKs.
+
+------------
+The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/18.0/18.0.0/changelog.md).
+
+The release includes 361 merged Pull Requests.
+
+Thanks to all our contributors: @GuptaManan100, @Juneezee, @adsr, @ajm188, @app/dependabot, @app/github-actions, @app/vitess-bot, @arvind-murty, @austenLacy, @brendar, @davidpiegza, @dbussink, @deepthi, @derekperkins, @ejortegau, @frouioui, @harshit-gangal, @hkdsun, @jfg956, @jspawar, @mattlord, @maxenglander, @mdlayher, @notfelineit, @olyazavr, @pbibra, @peterlyoo, @rafer, @rohit-nayak-ps, @shlomi-noach, @systay, @timvaillancourt, @vmg, @yields
