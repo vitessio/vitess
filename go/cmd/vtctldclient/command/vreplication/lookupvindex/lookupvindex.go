@@ -111,7 +111,7 @@ var (
 	// cancel makes a WorkflowDelete call to a vtctld.
 	cancel = &cobra.Command{
 		Use:                   "cancel",
-		Short:                 "Canel the VReplication workflow that backfills the lookup vindex.",
+		Short:                 "Cancel the VReplication workflow that backfills the Lookup Vindex.",
 		Example:               `vtctldclient --server localhost:15999 LookupVindex --keyspace customer cancel '{"sharded":true,"vindexes":{"corder_lookup":{"type":"consistent_lookup_unique","params":{"table":"customer.corder_lookup","from":"sku","to":"keyspace_id"},"owner":"corder"}},"tables":{"corder":{"column_vindexes":[{"column":"sku","name":"corder_lookup"}]}}}'`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
@@ -150,7 +150,7 @@ var (
 	// show makes a GetWorkflows call to a vtctld.
 	show = &cobra.Command{
 		Use:                   "show",
-		Short:                 "Show the status of the VReplication workflow that backfills the lookup vindex.",
+		Short:                 "Show the status of the VReplication workflow that backfills the Lookup Vindex.",
 		Example:               `vtctldclient --server localhost:15999 LookupVindex --keyspace customer show '{"sharded":true,"vindexes":{"corder_lookup":{"type":"consistent_lookup_unique","params":{"table":"customer.corder_lookup","from":"sku","to":"keyspace_id"},"owner":"corder"}},"tables":{"corder":{"column_vindexes":[{"column":"sku","name":"corder_lookup"}]}}}'`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
