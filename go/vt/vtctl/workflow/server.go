@@ -1010,28 +1010,21 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.LookupVindexExternalize")
 	defer span.Finish()
 
-	span.Annotate("workflow", req.Workflow)
 	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("name", req.Name)
+	span.Annotate("target_keyspace", req.TargetKeyspace)
 
-	if req.Vindex == nil || len(req.Vindex.Vindexes) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex specs must contain exactly one vindex definition")
-	}
-	vindexName := maps.Keys(req.Vindex.Vindexes)[0]
-	vindex := maps.Values(req.Vindex.Vindexes)[0]
-	targetKeyspace, tableName, err := sqlparser.ParseTable(vindex.Params["table"])
-	if err != nil || (targetKeyspace == "" || tableName == "") {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex table name (%s) must be in the form <keyspace>.<table>", vindex.Params["table"])
-	}
+	// Find the lookup vindex by
 	sourceVschema, err := s.ts.GetVSchema(ctx, req.Keyspace)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", req.Keyspace)
 	}
-	sourceVindex := sourceVschema.Vindexes[vindexName]
-	if sourceVindex == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in %s vschema", vindexName, req.Keyspace)
+	vindex := sourceVschema.Vindexes[req.Name]
+	if vindex == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in the %s keyspace", req.Name, req.Keyspace)
 	}
 
-	targetShards, err := s.ts.GetServingShards(ctx, targetKeyspace)
+	targetShards, err := s.ts.GetServingShards(ctx, req.TargetKeyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -1059,13 +1052,13 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 		if err != nil {
 			return err
 		}
-		p3qr, err := s.tmc.VReplicationExec(ctx, targetPrimary.Tablet, fmt.Sprintf("select id, state, message, source from _vt.vreplication where workflow=%s and db_name=%s", encodeString(req.Workflow), encodeString(targetPrimary.DbName())))
+		p3qr, err := s.tmc.VReplicationExec(ctx, targetPrimary.Tablet, fmt.Sprintf("select id, state, message, source from _vt.vreplication where workflow=%s and db_name=%s", encodeString(req.Name), encodeString(targetPrimary.DbName())))
 		if err != nil {
 			return err
 		}
 		qr := sqltypes.Proto3ToResult(p3qr)
 		if qr == nil || len(qr.Rows) == 0 {
-			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", req.Workflow, targetPrimary.Alias)
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", req.Name, targetPrimary.Alias)
 		}
 		for _, row := range qr.Rows {
 			id, err := row[0].ToCastInt64()
@@ -1111,18 +1104,18 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 		// the VTGate will now be responsible for keeping the lookup table up to date
 		// with the owner table.
 		if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
-			Keyspace:         targetKeyspace,
-			Workflow:         req.Workflow,
+			Keyspace:         req.TargetKeyspace,
+			Workflow:         req.Name,
 			KeepData:         true, // Not relevant
 			KeepRoutingRules: true, // Not relevant
 		}); derr != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to delete workflow %s: %v", req.Workflow, derr)
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to delete workflow %s: %v", req.Name, derr)
 		}
 		resp.WorkflowDeleted = true
 	}
 
 	// Remove the write_only param and save the source vschema.
-	delete(sourceVindex.Params, "write_only")
+	delete(vindex.Params, "write_only")
 	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVschema); err != nil {
 		return nil, err
 	}
@@ -3380,7 +3373,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 			vindexCols = []string{table.ColumnVindexes[0].Column}
 		}
 		if !slices.Equal(vindexCols, vindexFromCols) {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "columns in the target table %s primary vindex (%s) don't match the 'from' columns in the specs (%s)",
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "columns in the target table %s primary vindex (%s) don't match the 'from' columns specified (%s)",
 				tableName, strings.Join(vindexCols, ","), strings.Join(vindexFromCols, ","))
 		}
 	}

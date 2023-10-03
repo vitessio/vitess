@@ -54769,11 +54769,11 @@ export namespace vtctldata {
         /** LookupVindexExternalizeRequest keyspace */
         keyspace?: (string|null);
 
-        /** LookupVindexExternalizeRequest workflow */
-        workflow?: (string|null);
+        /** LookupVindexExternalizeRequest name */
+        name?: (string|null);
 
-        /** LookupVindexExternalizeRequest vindex */
-        vindex?: (vschema.IKeyspace|null);
+        /** LookupVindexExternalizeRequest target_keyspace */
+        target_keyspace?: (string|null);
     }
 
     /** Represents a LookupVindexExternalizeRequest. */
@@ -54788,11 +54788,11 @@ export namespace vtctldata {
         /** LookupVindexExternalizeRequest keyspace. */
         public keyspace: string;
 
-        /** LookupVindexExternalizeRequest workflow. */
-        public workflow: string;
+        /** LookupVindexExternalizeRequest name. */
+        public name: string;
 
-        /** LookupVindexExternalizeRequest vindex. */
-        public vindex?: (vschema.IKeyspace|null);
+        /** LookupVindexExternalizeRequest target_keyspace. */
+        public target_keyspace: string;
 
         /**
          * Creates a new LookupVindexExternalizeRequest instance using the specified properties.

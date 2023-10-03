@@ -1009,9 +1009,12 @@ message LookupVindexCreateResponse {
 }
 
 message LookupVindexExternalizeRequest {
+  // Where the lookup vindex lives.
   string keyspace = 1;
-  string workflow = 2;
-  vschema.Keyspace vindex = 3;
+  // This is the name of the lookup vindex and the vreplication workflow.
+  string name = 2;
+  // Where the vreplication workflow lives.
+  string target_keyspace = 3;
 }
 
 message LookupVindexExternalizeResponse {

@@ -211,7 +211,7 @@ func (tmc *testMaterializerTMClient) CreateVReplicationWorkflow(ctx context.Cont
 
 func (tmc *testMaterializerTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
-	if strings.HasSuffix(request.Workflow, "_vdx") {
+	if strings.Contains(request.Workflow, "lookup") {
 		workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
 	}
 	return &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{

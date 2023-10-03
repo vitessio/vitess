@@ -2534,8 +2534,9 @@ func (s *VtctldServer) LookupVindexExternalize(ctx context.Context, req *vtctlda
 
 	defer panicHandler(&err)
 
-	span.Annotate("workflow", req.Workflow)
+	span.Annotate("name", req.Name)
 	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("target_keyspace", req.TargetKeyspace)
 
 	resp, err = s.ws.LookupVindexExternalize(ctx, req)
 	return resp, err

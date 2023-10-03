@@ -18,16 +18,12 @@ package lookupvindex
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/exp/maps"
-	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
-	"vitess.io/vitess/go/vt/sqlparser"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -42,15 +38,12 @@ var (
 	}
 
 	baseOptions = struct {
-		// This is where the vindex will be created.
-		Keyspace string
-		// This will come from the name of the vindex target table
-		// in the provided spec with a static suffix of `_vdx` added.
-		Workflow string
-		Vindex   *vschemapb.Keyspace
 		// This is where the vindex target table and VReplicaiton
 		// workflow will be created.
-		TargetKeyspace string
+		TableKeyspace string
+		// This will also be the name of the VReplication workflow.
+		Name    string
+		Vschema *vschemapb.Keyspace
 	}{}
 
 	// base is the base command for all actions related to Lookup Vindexes.
@@ -63,53 +56,67 @@ var (
 	}
 
 	createOptions = struct {
-		VindexSpecs                  string
-		VindexSpecsFile              string
+		Keyspace                     string
+		Type                         string
+		TableOwner                   string
+		TableOwnerColumns            []string
+		TableName                    string
+		TableKeyspace                string
+		TableVindexType              string
 		Cells                        []string
 		TabletTypes                  []topodatapb.TabletType
 		TabletTypesInPreferenceOrder bool
 		ContinueAfterCopyWithOwner   bool
 	}{}
 
+	externalizeOptions = struct {
+		Keyspace string
+	}{}
+
 	parseAndValidateCreate = func(cmd *cobra.Command, args []string) error {
-		// Validate provided JSON spec.
-		var jsonSpec []byte
-		if createOptions.VindexSpecs == "" && createOptions.VindexSpecsFile == "" {
-			return fmt.Errorf("must specify one of --specs or --specs-file")
+		if createOptions.TableKeyspace == "" {
+			createOptions.TableKeyspace = createOptions.Keyspace
 		}
-		if createOptions.VindexSpecsFile != "" {
-			fileContents, err := os.ReadFile(createOptions.VindexSpecsFile)
-			if err != nil {
-				return fmt.Errorf("could not read specs-file: %v", err)
-			}
-			jsonSpec = []byte(fileContents)
-		} else {
-			jsonSpec = []byte(createOptions.VindexSpecs)
+		baseOptions.Vschema = &vschemapb.Keyspace{
+			Vindexes: map[string]*vschemapb.Vindex{
+				baseOptions.Name: {
+					Type: createOptions.Type,
+					Params: map[string]string{
+						"table": createOptions.TableKeyspace + "." + createOptions.TableName,
+						"from":  strings.Join(createOptions.TableOwnerColumns, ","),
+						"to":    "keyspace_id",
+					},
+					Owner: createOptions.TableOwner,
+				},
+			},
+			Tables: map[string]*vschemapb.Table{
+				createOptions.TableOwner: {
+					ColumnVindexes: []*vschemapb.ColumnVindex{
+						{
+							Name:    baseOptions.Name,
+							Columns: createOptions.TableOwnerColumns,
+						},
+					},
+				},
+				createOptions.TableName: {
+					ColumnVindexes: []*vschemapb.ColumnVindex{
+						{
+							// If the vindex name/type is empty then we'll fill this in
+							// later using the defult for the column types.
+							Name:    createOptions.TableVindexType,
+							Columns: createOptions.TableOwnerColumns,
+						},
+					},
+				},
+			},
 		}
-		baseOptions.Vindex = &vschemapb.Keyspace{}
-		if err := protojson.Unmarshal(jsonSpec, baseOptions.Vindex); err != nil {
-			return fmt.Errorf("invalid vindex specs: %v", err)
+		// If this is not specified then we'll later use the default for the
+		// table-owner-columns.
+		if createOptions.TableVindexType != "" {
+			baseOptions.Vschema.Tables[createOptions.TableName].ColumnVindexes[0].Name = createOptions.TableVindexType
 		}
-		if baseOptions.Vindex == nil || len(baseOptions.Vindex.Vindexes) != 1 {
-			return fmt.Errorf("vindex spec must contain exactly one vindex")
-		}
-		vindexName := maps.Keys(baseOptions.Vindex.Vindexes)[0]
-		vindex := maps.Values(baseOptions.Vindex.Vindexes)[0]
-		var tableName string
-		var err error
-		baseOptions.TargetKeyspace, tableName, err = sqlparser.ParseTable(vindex.Params["table"])
-		if err != nil || (baseOptions.TargetKeyspace == "" || tableName == "") {
-			return fmt.Errorf("invalid vindex table name: %s, it must be in the form <keyspace>.<table>", vindex.Params["table"])
-		}
-		// Workflow name is the name of the vindex target table with a
-		// static suffix of `_vdx` added.
-		baseOptions.Workflow = fmt.Sprintf("%s_vdx", vindexName)
-		if cmd.Flags() == nil { // No specific command flags to verify.
-			return nil
-		}
-		// Only the create command has these additional flags so we
-		// only validate them if they exist for the command and they
-		// were changed from their default.
+
+		// VReplication specific flags.
 		ttFlag := cmd.Flags().Lookup("tablet-types")
 		if ttFlag != nil && ttFlag.Changed {
 			createOptions.TabletTypes = tabletTypesDefault
@@ -139,7 +146,7 @@ var (
 	create = &cobra.Command{
 		Use:                   "create",
 		Short:                 "Create the Lookup Vindex in the specified keyspace and backfill it with a VReplication workflow using the provided Vindex specification.",
-		Example:               `vtctldclient --server localhost:15999 LookupVindex --keyspace customer create '{"sharded":true,"vindexes":{"corder_lookup":{"type":"consistent_lookup_unique","params":{"table":"customer.corder_lookup","from":"sku","to":"keyspace_id"},"owner":"corder"}},"tables":{"corder":{"column_vindexes":[{"column":"sku","name":"corder_lookup"}]}}}'`,
+		Example:               `vtctldclient --server localhost:15999 LookupVindex --keyspace customer --name corder_lookup_vdx --type consistent_lookup_unique --table-owner corder --table-owner-columns sku --table-keyspace customer --table-name corder_lookup_tbl --table-vindex-type=unicode_loose_xxhash`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Create"},
@@ -168,7 +175,7 @@ var (
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Show"},
-		Args:                  cobra.ExactArgs(1),
+		Args:                  cobra.NoArgs,
 		RunE:                  commandShow,
 	}
 )
@@ -177,17 +184,16 @@ func commandCancel(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.WorkflowDeleteRequest{
-		Keyspace: baseOptions.Keyspace,
-		Workflow: baseOptions.Workflow,
+		Keyspace: baseOptions.TableKeyspace,
+		Workflow: baseOptions.Name,
 	}
 	_, err := common.GetClient().WorkflowDelete(common.GetCommandCtx(), req)
 	if err != nil {
 		return err
 	}
 
-	vindexName := maps.Keys(baseOptions.Vindex.Vindexes)[0]
-	output := fmt.Sprintf("LookupVindex %s left in the %s keyspace and the %s VReplication wokflow has been deleted",
-		vindexName, baseOptions.Keyspace, baseOptions.Workflow)
+	output := fmt.Sprintf("LookupVindex %s left in place and the %s VReplication wokflow has been deleted",
+		baseOptions.Name, baseOptions.Name)
 	fmt.Println(output)
 
 	return nil
@@ -198,9 +204,9 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	_, err := common.GetClient().LookupVindexCreate(common.GetCommandCtx(), &vtctldatapb.LookupVindexCreateRequest{
-		Workflow:                   baseOptions.Workflow,
-		Keyspace:                   baseOptions.Keyspace,
-		Vindex:                     baseOptions.Vindex,
+		Workflow:                   baseOptions.Name,
+		Keyspace:                   baseOptions.TableKeyspace,
+		Vindex:                     baseOptions.Vschema,
 		Cells:                      createOptions.Cells,
 		TabletTypes:                createOptions.TabletTypes,
 		TabletSelectionPreference:  tsp,
@@ -211,30 +217,32 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	vindexName := maps.Keys(baseOptions.Vindex.Vindexes)[0]
 	output := fmt.Sprintf("LookupVindex %s created in the %s keyspace and the %s VReplication wokflow scheduled on the %s shards, use show to view progress",
-		vindexName, baseOptions.Keyspace, baseOptions.Workflow, baseOptions.TargetKeyspace)
+		baseOptions.Name, createOptions.Keyspace, baseOptions.Name, baseOptions.TableKeyspace)
 	fmt.Println(output)
 
 	return nil
 }
 
 func commandExternalize(cmd *cobra.Command, args []string) error {
+	if externalizeOptions.Keyspace == "" {
+		externalizeOptions.Keyspace = baseOptions.TableKeyspace
+	}
 	cli.FinishedParsing(cmd)
 
 	resp, err := common.GetClient().LookupVindexExternalize(common.GetCommandCtx(), &vtctldatapb.LookupVindexExternalizeRequest{
-		Workflow: baseOptions.Workflow,
-		Keyspace: baseOptions.Keyspace,
-		Vindex:   baseOptions.Vindex,
+		Keyspace:       externalizeOptions.Keyspace,
+		Name:           baseOptions.Name, // The name of the workflow and lookup vindex.
+		TargetKeyspace: baseOptions.TableKeyspace,
 	})
 
 	if err != nil {
 		return err
 	}
 
-	output := fmt.Sprintf("LookupVindex %s has been externalized", maps.Keys(baseOptions.Vindex.Vindexes)[0])
+	output := fmt.Sprintf("LookupVindex %s has been externalized", baseOptions.Name)
 	if resp.WorkflowDeleted {
-		output = output + fmt.Sprintf(" and the %s VReplication workflow has been deleted", baseOptions.Workflow)
+		output = output + fmt.Sprintf(" and the %s VReplication workflow has been deleted", baseOptions.Name)
 	}
 	fmt.Println(output)
 
@@ -245,8 +253,8 @@ func commandShow(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.GetWorkflowsRequest{
-		Keyspace: baseOptions.Keyspace,
-		Workflow: baseOptions.Workflow,
+		Keyspace: baseOptions.TableKeyspace,
+		Workflow: baseOptions.Name,
 	}
 	resp, err := common.GetClient().GetWorkflows(common.GetCommandCtx(), req)
 	if err != nil {
@@ -264,15 +272,27 @@ func commandShow(cmd *cobra.Command, args []string) error {
 }
 
 func registerCommands(root *cobra.Command) {
-	base.PersistentFlags().StringVar(&baseOptions.Keyspace, "keyspace", "", "The keyspace to create the Lookup Vindex in.")
-	base.MarkPersistentFlagRequired("keyspace")
+	base.PersistentFlags().StringVar(&baseOptions.Name, "name", "", "The name of the Lookup Vindex to create. This will also be the name of the VReplication workflow created to backfill the Lookup Vindex.")
+	base.MarkPersistentFlagRequired("name")
+	base.PersistentFlags().StringVar(&baseOptions.TableKeyspace, "table-keyspace", "", "The keyspace to create the lookup table in. This is also where the VReplication workflow created to backfill the Lookup Vindex will be created.")
+	base.MarkPersistentFlagRequired("table-keyspace")
 	root.AddCommand(base)
 
 	// This will create the lookup vindex in the specified keyspace
 	// and setup a VReplication workflow to backfill its target table.
-	create.Flags().StringVar(&createOptions.VindexSpecs, "specs", "", "The vschema definition which defines the lookup vindex and its lookup table.")
-	create.Flags().StringVar(&createOptions.VindexSpecsFile, "specs-file", "", "The file containing the vschema definition which defines the lookup vindex and its lookup table.")
-	create.MarkFlagsMutuallyExclusive("specs", "specs-file")
+	// vtctldclient --server localhost:15999 LookupVindex --keyspace customer --name corder_lookup_vdx --type consistent_lookup_unique --table-owner corder --table-owner-columns sku --table-keyspace customer --table-name corder_lookup_tbl --table-vindex-type=unicode_loose_xxhash`,
+	create.Flags().StringVar(&createOptions.Keyspace, "keyspace", "", "The keyspace to create the Lookup Vindex in. This is also where the table-owner must exist.")
+	create.MarkFlagRequired("keyspace")
+	create.Flags().StringVar(&createOptions.Type, "type", "", "The type of Lookup Vindex to create.")
+	create.MarkFlagRequired("type")
+	create.Flags().StringVar(&createOptions.TableOwner, "table-owner", "", "The table holding the data which we should use to backfill the Lookup Vindex. This must exist in the same keyspace as the Lookup Vindex.")
+	create.MarkFlagRequired("table-owner")
+	create.Flags().StringSliceVar(&createOptions.TableOwnerColumns, "table-owner-columns", nil, "The columns to read from the owner table. These will be used to generate the hash which gets stored as the keyspace_id value in the lookup table.")
+	create.MarkFlagRequired("table-owner-columns")
+	create.Flags().StringVar(&createOptions.TableName, "table-name", "", "The name of the lookup table. If not specified, then it will be created using the same name as the Lookup Vindex.")
+	create.Flags().StringVar(&createOptions.TableKeyspace, "table-keyspace", "", "The keyspace to create the lookup table in. If not specified, then it will be created in the same keyspace as the Lookup Vindex.")
+	create.Flags().StringVar(&createOptions.TableVindexType, "table-vindex-type", "", "The primary vindex name/type to use for lookup table, if the table-keyspace is sharded. This must match the name of a vindex defined in the table-keyspace. If no value is provided then the default type will be use based on the table-owner-columns types.")
+	// VReplication specific flags.
 	create.Flags().StringSliceVar(&createOptions.Cells, "cells", nil, "Cells to look in for source tablets to replicate from.")
 	create.Flags().Var((*topoprotopb.TabletTypeListFlag)(&createOptions.TabletTypes), "tablet-types", "Source tablet types to replicate from.")
 	create.Flags().BoolVar(&createOptions.ContinueAfterCopyWithOwner, "continue-after-copy-with-owner", true, "Vindex will continue materialization after copy when an owner is provided")
@@ -284,7 +304,9 @@ func registerCommands(root *cobra.Command) {
 	base.AddCommand(show)
 
 	// This will also delete the VReplication workflow if the
-	// vindex has an owner.
+	// vindex has an owner as the lookup vindex will then be
+	// managed by VTGate.
+	externalize.Flags().StringVar(&externalizeOptions.Keyspace, "keyspace", "", "The keyspace containing the Lookup Vindex. If no value is specified then the table-keyspace will be used.")
 	base.AddCommand(externalize)
 
 	// The cancel command deletes the VReplication workflow used

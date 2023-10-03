@@ -2260,30 +2260,7 @@ func TestExternalizeLookupVindex(t *testing.T) {
 	}{
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Workflow: "owned_lookup_vdx",
-				Keyspace: ms.SourceKeyspace,
-				Vindex: &vschemapb.Keyspace{
-					Sharded: false,
-					Vindexes: map[string]*vschemapb.Vindex{
-						"owned_lookup": {
-							Type: "lookup_unique",
-							Params: map[string]string{
-								"table":      "targetks.owned_lookup",
-								"from":       "c1",
-								"to":         "c2",
-								"write_only": "true",
-							},
-							Owner: "t1",
-						},
-					},
-				},
-			},
-			vrResponse:   ownedStopped,
-			expectDelete: true,
-		},
-		{
-			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Workflow: "unowned_lookup_vdx",
+				Name:     "unowned_lookup_vdx",
 				Keyspace: ms.TargetKeyspace,
 				Vindex: &vschemapb.Keyspace{
 					Sharded: false,
