@@ -1042,8 +1042,8 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 	expectNontxQueries(t, qh.Expect(
 		// Catchup
 		"/update _vt.vreplication set message='Picked source tablet.*",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) select 1, 'insert in' from dual where (1,1) <= (6,6)",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) select 7, 'insert out' from dual where (7,7) <= (6,6)",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) select /*+ MAX_EXECUTION_TIME(3600000) */ 1, 'insert in' from dual where (1,1) <= (6,6)",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) select /*+ MAX_EXECUTION_TIME(3600000) */ 7, 'insert out' from dual where (7,7) <= (6,6)",
 		"update /*+ MAX_EXECUTION_TIME(3600000) */ dst1 set val='updated' where id=3 and (3,3) <= (6,6)",
 		"update /*+ MAX_EXECUTION_TIME(3600000) */ dst1 set val='updated' where id=10 and (10,10) <= (6,6)",
 		"delete /*+ MAX_EXECUTION_TIME(3600000) */ from dst1 where id=4 and (4,4) <= (6,6)",
