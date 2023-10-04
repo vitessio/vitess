@@ -3304,6 +3304,9 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	)
 
 	// Validate input vindex.
+	if specs == nil {
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no vindex provided")
+	}
 	if len(specs.Vindexes) != 1 {
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "only one vindex must be specified: %v", specs.Vindexes)
 	}
@@ -3379,6 +3382,9 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	}
 
 	// Validate input table and vindex consistency.
+	if sourceTable == nil || len(sourceTable.ColumnVindexes) != 1 {
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No ColumnVindex found for the owner table in the %s keyspace", keyspace)
+	}
 	if sourceTable.ColumnVindexes[0].Name != vindexName {
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ColumnVindex name must match vindex name: %s vs %s", sourceTable.ColumnVindexes[0].Name, vindexName)
 	}

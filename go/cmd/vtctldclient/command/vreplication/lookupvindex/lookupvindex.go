@@ -281,7 +281,6 @@ func registerCommands(root *cobra.Command) {
 
 	// This will create the lookup vindex in the specified keyspace
 	// and setup a VReplication workflow to backfill its lookup table.
-	// vtctldclient --server localhost:15999 LookupVindex --keyspace customer --name corder_lookup_vdx --type consistent_lookup_unique --table-owner corder --table-owner-columns sku --table-keyspace customer --table-name corder_lookup_tbl --table-vindex-type=unicode_loose_xxhash`,
 	create.Flags().StringVar(&createOptions.Keyspace, "keyspace", "", "The keyspace to create the Lookup Vindex in. This is also where the table-owner must exist.")
 	create.MarkFlagRequired("keyspace")
 	create.Flags().StringVar(&createOptions.Type, "type", "", "The type of Lookup Vindex to create.")
@@ -291,7 +290,7 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().StringSliceVar(&createOptions.TableOwnerColumns, "table-owner-columns", nil, "The columns to read from the owner table. These will be used to build the hash which gets stored as the keyspace_id value in the lookup table.")
 	create.MarkFlagRequired("table-owner-columns")
 	create.Flags().StringVar(&createOptions.TableName, "table-name", "", "The name of the lookup table. If not specified, then it will be created using the same name as the Lookup Vindex.")
-	create.Flags().StringVar(&createOptions.TableVindexType, "table-vindex-type", "", "The primary vindex name/type to use for lookup table, if the table-keyspace is sharded. This must match the name of a vindex defined in the table-keyspace. If no value is provided then the default type will be use based on the table-owner-columns types.")
+	create.Flags().StringVar(&createOptions.TableVindexType, "table-vindex-type", "", "The primary vindex name/type to use for the lookup table, if the table-keyspace is sharded. This must match the name of a vindex defined in the table-keyspace. If no value is provided then the default type will be use based on the table-owner-columns types.")
 	create.Flags().BoolVar(&createOptions.IgnoreNulls, "ignore-nulls", false, "Do not add records in the lookup table if any of the owner table's 'from' fields are NULL.")
 	create.Flags().BoolVar(&createOptions.ContinueAfterCopyWithOwner, "continue-after-copy-with-owner", true, "Vindex will continue materialization after copy when an owner is provided.")
 	// VReplication specific flags.
