@@ -1561,7 +1561,7 @@ func TestStreamSelectIN(t *testing.T) {
 func createExecutor(ctx context.Context, serv *sandboxTopo, cell string, resolver *Resolver) *Executor {
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	ex := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4)
+	ex := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
 	ex.SetQueryLogger(queryLogger)
 	return ex
 }
@@ -3185,10 +3185,9 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 		})
 		count++
 	}
-
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	executor := NewExecutor(ctx, serv, cell, resolver, true, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4)
+	executor := NewExecutor(ctx, serv, cell, resolver, true, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
 	executor.SetQueryLogger(queryLogger)
 	defer executor.Close()
 	// some sleep for all goroutines to start
@@ -4150,6 +4149,70 @@ func TestSelectView(t *testing.T) {
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbc.Queries)
+}
+
+func TestWarmingReads(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	executor, primary, replica := createExecutorEnvWithPrimaryReplicaConn(t, ctx, 100)
+
+	executor.normalize = true
+	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+
+	_, err := executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user", map[string]*querypb.BindVariable{})
+	time.Sleep(10 * time.Millisecond)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select age, city from `user`"},
+	}
+	utils.MustMatch(t, wantQueries, primary.Queries)
+	primary.Queries = nil
+
+	wantQueriesReplica := []*querypb.BoundQuery{
+		{Sql: "select age, city from `user`/* warming read */"},
+	}
+	utils.MustMatch(t, wantQueriesReplica, replica.Queries)
+	replica.Queries = nil
+
+	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user /* already has a comment */ ", map[string]*querypb.BindVariable{})
+	time.Sleep(10 * time.Millisecond)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{
+		{Sql: "select age, city from `user` /* already has a comment */"},
+	}
+	utils.MustMatch(t, wantQueries, primary.Queries)
+	primary.Queries = nil
+
+	wantQueriesReplica = []*querypb.BoundQuery{
+		{Sql: "select age, city from `user` /* already has a comment *//* warming read */"},
+	}
+	utils.MustMatch(t, wantQueriesReplica, replica.Queries)
+	replica.Queries = nil
+
+	_, err = executor.Execute(ctx, nil, "TestSelect", session, "insert into user (age, city) values (5, 'Boston')", map[string]*querypb.BindVariable{})
+	time.Sleep(10 * time.Millisecond)
+	require.NoError(t, err)
+	require.Nil(t, replica.Queries)
+
+	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "update user set age=5 where city='Boston'", map[string]*querypb.BindVariable{})
+	time.Sleep(10 * time.Millisecond)
+	require.NoError(t, err)
+	require.Nil(t, replica.Queries)
+
+	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "delete from user where city='Boston'", map[string]*querypb.BindVariable{})
+	time.Sleep(10 * time.Millisecond)
+	require.NoError(t, err)
+	require.Nil(t, replica.Queries)
+	primary.Queries = nil
+
+	executor, primary, replica = createExecutorEnvWithPrimaryReplicaConn(t, ctx, 0)
+	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user", map[string]*querypb.BindVariable{})
+	time.Sleep(10 * time.Millisecond)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{
+		{Sql: "select age, city from `user`"},
+	}
+	utils.MustMatch(t, wantQueries, primary.Queries)
+	require.Nil(t, replica.Queries)
 }
 
 func TestMain(m *testing.M) {

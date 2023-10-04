@@ -111,6 +111,10 @@ var (
 
 	// allowKillStmt to allow execution of kill statement.
 	allowKillStmt bool
+
+	warmingReadsPercent      = 0
+	warmingReadsQueryTimeout = 5 * time.Second
+	warmingReadsConcurrency  = 500
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -144,6 +148,9 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&messageStreamGracePeriod, "message_stream_grace_period", messageStreamGracePeriod, "the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent.")
 	fs.BoolVar(&enableViews, "enable-views", enableViews, "Enable views support in vtgate.")
 	fs.BoolVar(&allowKillStmt, "allow-kill-statement", allowKillStmt, "Allows the execution of kill statement")
+	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm")
+	fs.IntVar(&warmingReadsConcurrency, "warming-reads-concurrency", 500, "Number of concurrent warming reads allowed")
+	fs.DurationVar(&warmingReadsQueryTimeout, "warming-reads-query-timeout", 5*time.Second, "Timeout of warming read queries")
 
 	_ = fs.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 	_ = fs.MarkDeprecated("schema_change_signal_user", "schema tracking uses an internal api and does not require a user to be specified")
@@ -319,6 +326,7 @@ func Init(
 		si,
 		noScatter,
 		pv,
+		warmingReadsPercent,
 	)
 
 	if err := executor.defaultQueryLogger(); err != nil {
