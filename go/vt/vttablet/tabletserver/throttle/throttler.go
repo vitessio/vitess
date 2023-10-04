@@ -137,10 +137,10 @@ type Throttler struct {
 	heartbeatWriter heartbeat.HeartbeatWriter
 
 	// recentCheckTickerValue is an ever increasing number, incrementing once per second.
-	recentCheckTickerValue int64
+	recentCheckTickerValue atomic.Int64
 	// recentCheckValue is set to match or exceed recentCheckTickerValue whenever a "check" was made (other than by the throttler itself).
 	// when recentCheckValue < recentCheckTickerValue that means there hasn't been a recent check.
-	recentCheckValue int64
+	recentCheckValue atomic.Int64
 
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
@@ -161,7 +161,7 @@ type Throttler struct {
 	recentApps             *cache.Cache
 	metricsHealth          *cache.Cache
 
-	lastCheckTimeNano int64
+	lastCheckTimeNano atomic.Int64
 
 	initMutex           sync.Mutex
 	enableMutex         sync.Mutex
@@ -587,7 +587,7 @@ func (throttler *Throttler) ThrottledApps() (result []base.AppThrottle) {
 
 // isDormant returns true when the last check was more than dormantPeriod ago
 func (throttler *Throttler) isDormant() bool {
-	lastCheckTime := time.Unix(0, atomic.LoadInt64(&throttler.lastCheckTimeNano))
+	lastCheckTime := time.Unix(0, throttler.lastCheckTimeNano.Load())
 	return time.Since(lastCheckTime) > dormantPeriod
 }
 
@@ -704,7 +704,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 				throttler.applyThrottlerConfig(ctx, throttlerConfig)
 			case <-recentCheckTicker.C:
 				// Increment recentCheckTickerValue by one.
-				atomic.AddInt64(&throttler.recentCheckTickerValue, 1)
+				throttler.recentCheckTickerValue.Add(1)
 			}
 		}
 	}()
@@ -1115,11 +1115,11 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 		// This check was made by someone other than the throttler itself, i.e. this came from online-ddl or vreplication or other.
 		// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back
 		// to the PRIMARY so that it knows it must renew the heartbeat lease.
-		atomic.StoreInt64(&throttler.recentCheckValue, 1+atomic.LoadInt64(&throttler.recentCheckTickerValue))
+		throttler.recentCheckValue.Store(1 + throttler.recentCheckTickerValue.Load())
 	}
 	checkResult = throttler.check.Check(ctx, appName, "mysql", storeName, remoteAddr, flags)
 
-	if atomic.LoadInt64(&throttler.recentCheckValue) >= atomic.LoadInt64(&throttler.recentCheckTickerValue) {
+	if throttler.recentCheckValue.Load() >= throttler.recentCheckTickerValue.Load() {
 		// This indicates someone, who is not "vitess" ie not internal to the throttling logic, did a _recent_ `check`.
 		// This could be online-ddl, or vreplication or whoever else.
 		// If this tablet is a REPLICA or RDONLY, we want to advertise to the PRIMARY that someone did a recent check,

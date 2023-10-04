@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/stats"
@@ -114,7 +113,7 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, storeTyp
 	}
 
 	checkResult = check.checkAppMetricResult(ctx, appName, storeType, storeName, metricResultFunc, flags)
-	atomic.StoreInt64(&check.throttler.lastCheckTimeNano, time.Now().UnixNano())
+	check.throttler.lastCheckTimeNano.Store(time.Now().UnixNano())
 
 	go func(statusCode int) {
 		stats.GetOrNewCounter("ThrottlerCheckAnyTotal", "total number of checks").Add(1)
