@@ -20,9 +20,10 @@ var CompleteOptions = struct {
 
 func GetCompleteCommand(opts *SubCommandsOpts) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:                   "complete",
-		Short:                 "Complete a MoveTables VReplication workflow.",
-		Example:               `vtctldclient --server localhost:15999 movetables --workflow commerce2customer --target-keyspace customer complete`,
+		Use:   "complete",
+		Short: fmt.Sprintf("Complete a %s VReplication workflow.", opts.SubCommand),
+		Example: fmt.Sprintf(`vtctldclient --server localhost:15999 %s --workflow %s --target-keyspace customer complete`,
+			opts.SubCommand, opts.Workflow),
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Complete"},
 		Args:                  cobra.NoArgs,
@@ -68,7 +69,7 @@ func commandComplete(cmd *cobra.Command, args []string) error {
 		}
 		output = tout.Bytes()
 	}
-	fmt.Printf("%s\n", output)
+	fmt.Println(string(output))
 
 	return nil
 }
