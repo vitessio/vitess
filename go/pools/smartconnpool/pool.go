@@ -625,12 +625,9 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 		for _, conn := range conns {
 			if conn.timeUsed.Add(timeout).Sub(now) < 0 {
 				pool.Metrics.idleClosed.Add(1)
-
 				conn.Close()
-				if err := pool.connReopen(context.Background(), conn, now); err != nil {
-					pool.active.Add(-1)
-					continue
-				}
+				pool.active.Add(-1)
+				continue
 			}
 
 			s.Push(conn)
