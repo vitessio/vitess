@@ -757,18 +757,18 @@ func testPlayerCopyBigTable(t *testing.T) {
 		"insert /*+ MAX_EXECUTION_TIME(500) */ into dst(id,val) values (1,'aaa')",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"1\\"}'.*`,
 		// The next catchup executes the new row insert, but will be a no-op.
-		"insert /*+ MAX_EXECUTION_TIME(500) */ into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
+		"insert /*+ MAX_EXECUTION_TIME(500) */ into dst(id,val) select /*+ MAX_EXECUTION_TIME(500) */ 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
 		// Back to copy mode.
 		// Inserts can happen out-of-order.
 		// Updates happen in-order.
 	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
-		ins1 := expect.Then(qh.Eventually("insert into dst(id,val) values (2,'bbb')"))
+		ins1 := expect.Then(qh.Eventually("insert /*+ MAX_EXECUTION_TIME(500) */ into dst(id,val) values (2,'bbb')"))
 		upd1 := ins1.Then(qh.Eventually(
 			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"2\\"}'.*`,
 		))
 		// Third row copied without going back to catchup state.
-		ins3 := expect.Then(qh.Eventually("insert into dst(id,val) values (3,'ccc')"))
+		ins3 := expect.Then(qh.Eventually("insert /*+ MAX_EXECUTION_TIME(500) */ into dst(id,val) values (3,'ccc')"))
 		upd3 := ins3.Then(qh.Eventually(
 			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"3\\"}'.*`,
 		))

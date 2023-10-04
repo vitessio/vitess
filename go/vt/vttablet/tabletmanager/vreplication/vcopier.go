@@ -24,7 +24,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
 	"google.golang.org/protobuf/encoding/prototext"
