@@ -34,7 +34,7 @@ var (
 	// migrate is the base command for all actions related to the migrate command.
 	migrate = &cobra.Command{
 		Use:                   "Migrate [command] [command-flags]",
-		Short:                 "",
+		Short:                 "Migrate is used to import data from an external cluster into the current cluster.",
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"migrate"},
 		Args:                  cobra.ExactArgs(1),

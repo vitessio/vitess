@@ -31,7 +31,7 @@ var (
 	// mount is the base command for all actions related to the mount action.
 	mount = &cobra.Command{
 		Use:                   "Mount [command] [command-flags]",
-		Short:                 "",
+		Short:                 "Mount is used to link external Vitess clusters to the current cluster to migrate data into.",
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"mount"},
 		Args:                  cobra.ExactArgs(1),
