@@ -113,6 +113,9 @@ type vcursorImpl struct {
 
 	warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
 	pv       plancontext.PlannerVersion
+
+	warmingReadsPercent int
+	warmingReadsChannel chan bool
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
@@ -157,21 +160,29 @@ func newVCursorImpl(
 		connCollation = collations.Default()
 	}
 
+	warmingReadsPct := 0
+	var warmingReadsChan chan bool
+	if executor != nil {
+		warmingReadsPct = executor.warmingReadsPercent
+		warmingReadsChan = executor.warmingReadsChannel
+	}
 	return &vcursorImpl{
-		safeSession:     safeSession,
-		keyspace:        keyspace,
-		tabletType:      tabletType,
-		destination:     destination,
-		marginComments:  marginComments,
-		executor:        executor,
-		logStats:        logStats,
-		collation:       connCollation,
-		resolver:        resolver,
-		vschema:         vschema,
-		vm:              vm,
-		topoServer:      ts,
-		warnShardedOnly: warnShardedOnly,
-		pv:              pv,
+		safeSession:         safeSession,
+		keyspace:            keyspace,
+		tabletType:          tabletType,
+		destination:         destination,
+		marginComments:      marginComments,
+		executor:            executor,
+		logStats:            logStats,
+		collation:           connCollation,
+		resolver:            resolver,
+		vschema:             vschema,
+		vm:                  vm,
+		topoServer:          ts,
+		warnShardedOnly:     warnShardedOnly,
+		pv:                  pv,
+		warmingReadsPercent: warmingReadsPct,
+		warmingReadsChannel: warmingReadsChan,
 	}, nil
 }
 
@@ -1271,4 +1282,44 @@ func (vc *vcursorImpl) StorePrepareData(stmtName string, prepareData *vtgatepb.P
 
 func (vc *vcursorImpl) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
 	return vc.safeSession.GetPrepareData(stmtName)
+}
+
+func (vc *vcursorImpl) GetWarmingReadsPercent() int {
+	return vc.warmingReadsPercent
+}
+
+func (vc *vcursorImpl) GetWarmingReadsChannel() chan bool {
+	return vc.warmingReadsChannel
+}
+
+func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCursor {
+	callerId := callerid.EffectiveCallerIDFromContext(ctx)
+	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
+
+	timedCtx, _ := context.WithTimeout(context.Background(), warmingReadsQueryTimeout) //nolint
+	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
+
+	v := &vcursorImpl{
+		safeSession:         NewAutocommitSession(vc.safeSession.Session),
+		keyspace:            vc.keyspace,
+		tabletType:          topodatapb.TabletType_REPLICA,
+		destination:         vc.destination,
+		marginComments:      vc.marginComments,
+		executor:            vc.executor,
+		resolver:            vc.resolver,
+		topoServer:          vc.topoServer,
+		logStats:            &logstats.LogStats{Ctx: clonedCtx},
+		collation:           vc.collation,
+		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
+		vschema:             vc.vschema,
+		vm:                  vc.vm,
+		semTable:            vc.semTable,
+		warnShardedOnly:     vc.warnShardedOnly,
+		warnings:            vc.warnings,
+		pv:                  vc.pv,
+	}
+
+	v.marginComments.Trailing += "/* warming read */"
+
+	return v
 }

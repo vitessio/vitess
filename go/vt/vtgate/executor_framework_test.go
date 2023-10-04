@@ -26,6 +26,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/cache/theine"
@@ -37,13 +44,9 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
@@ -185,7 +188,7 @@ func createExecutorEnv(t testing.TB) (executor *Executor, sbc1, sbc2, sbclookup 
 	// one-off queries from thrashing the cache. Disable the doorkeeper in the tests to prevent flakiness.
 	plans := theine.NewStore[PlanCacheKey, *engine.Plan](queryPlanCacheMemory, false)
 
-	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4)
+	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
 	executor.SetQueryLogger(queryLogger)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
@@ -218,7 +221,7 @@ func createCustomExecutor(t testing.TB, vschema string) (executor *Executor, sbc
 
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4)
+	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
 	executor.SetQueryLogger(queryLogger)
 
 	t.Cleanup(func() {
@@ -253,10 +256,9 @@ func createCustomExecutorSetValues(t testing.TB, vschema string, values []*sqlty
 		sbcs = append(sbcs, sbc)
 	}
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
-
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4)
+	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
 	executor.SetQueryLogger(queryLogger)
 
 	t.Cleanup(func() {
@@ -266,6 +268,29 @@ func createCustomExecutorSetValues(t testing.TB, vschema string, values []*sqlty
 	})
 
 	return executor, sbcs[0], sbcs[1], sbclookup, ctx
+}
+
+func createExecutorEnvWithPrimaryReplicaConn(t testing.TB, ctx context.Context, warmingReadsPercent int) (executor *Executor, primary, replica *sandboxconn.SandboxConn) {
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithCancel(ctx)
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck(nil)
+	serv := newSandboxForCells(ctx, []string{cell})
+	resolver := newTestResolver(ctx, hc, serv, cell)
+
+	createSandbox(KsTestUnsharded)
+	primary = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	replica = hc.AddTestTablet(cell, "0-replica", 1, KsTestUnsharded, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
+	executor = NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, DefaultPlanCache(), nil, false, querypb.ExecuteOptions_Gen4, warmingReadsPercent)
+	executor.SetQueryLogger(queryLogger)
+
+	t.Cleanup(func() {
+		executor.Close()
+		cancel()
+	})
+	return executor, primary, replica
 }
 
 func executorExecSession(ctx context.Context, executor *Executor, sql string, bv map[string]*querypb.BindVariable, session *vtgatepb.Session) (*sqltypes.Result, error) {

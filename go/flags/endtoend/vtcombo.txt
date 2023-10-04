@@ -423,6 +423,9 @@ Flags:
       --vtgate_grpc_server_name string                                   the server name to use to validate server certificate
       --vttablet_skip_buildinfo_tags string                              comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'. (default "/.*/")
       --wait_for_backup_interval duration                                (init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear
+      --warming-reads-concurrency int                                    Number of concurrent warming reads allowed (default 500)
+      --warming-reads-percent int                                        Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm
+      --warming-reads-query-timeout duration                             Timeout of warming read queries (default 5s)
       --warn_memory_rows int                                             Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented. (default 30000)
       --warn_payload_size int                                            The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.
       --warn_sharded_only                                                If any features that are only available in unsharded mode are used, query execution warnings will be added to the session
