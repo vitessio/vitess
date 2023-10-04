@@ -286,7 +286,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			tableName:    "t1",
 			initialDDL:   "create table t1 (id int not null, c1 int default null, primary key (id), key c1 (c1))",
 			strippedDDL:  "create table t1 (id int not null, c1 int default null, primary key (id))",
-			actionDDL:    "alter table %s.t1 add key c1 (c1)",
+			actionDDL:    "alter table %s.t1 add index c1 (c1)",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_Reshard),
 		},
 		{
@@ -294,7 +294,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			tableName:    "t1",
 			initialDDL:   "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), key c1 (c1), key c2 (c2))",
 			strippedDDL:  "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id))",
-			actionDDL:    "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
+			actionDDL:    "alter table %s.t1 add index c1 (c1), add index c2 (c2)",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 		},
 		{
@@ -302,7 +302,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			tableName:    "t1",
 			initialDDL:   "create table t1 (id int not null, c1 varchar(10) default null, c2 varchar(10) default null, primary key (id), key c1_c2 (c1,c2), key c2 (c2))",
 			strippedDDL:  "create table t1 (id int not null, c1 varchar(10) default null, c2 varchar(10) default null, primary key (id))",
-			actionDDL:    "alter table %s.t1 add key c1_c2 (c1, c2), add key c2 (c2)",
+			actionDDL:    "alter table %s.t1 add index c1_c2 (c1, c2), add index c2 (c2)",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 		},
 		{
@@ -310,7 +310,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			tableName:    "t1",
 			initialDDL:   "create table t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) default null, primary key (id,c1), key c1_c2 (c1,c2), key c2 (c2))",
 			strippedDDL:  "create table t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) default null, primary key (id,c1))",
-			actionDDL:    "alter table %s.t1 add key c1_c2 (c1, c2), add key c2 (c2)",
+			actionDDL:    "alter table %s.t1 add index c1_c2 (c1, c2), add index c2 (c2)",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 		},
 		{
@@ -318,7 +318,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			tableName:    "t1",
 			initialDDL:   "create table t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) not null, primary key (id,c1,c2), key c2 (c2))",
 			strippedDDL:  "create table t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) not null, primary key (id,c1,c2))",
-			actionDDL:    "alter table %s.t1 add key c2 (c2)",
+			actionDDL:    "alter table %s.t1 add index c2 (c2)",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_Reshard),
 		},
 		{
@@ -326,7 +326,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			tableName:   "t1",
 			initialDDL:  "create table t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) not null, primary key (id,c1,c2), key c2 (c2))",
 			strippedDDL: "create table t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) not null, primary key (id,c1,c2))",
-			actionDDL:   "alter table %s.t1 add key c2 (c2)",
+			actionDDL:   "alter table %s.t1 add index c2 (c2)",
 			postStashHook: func() error {
 				myid := id + 1000
 				// Insert second vreplication record to simulate a second controller/vreplicator
@@ -343,7 +343,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 				// when this is called there's no secondary keys to stash anymore.
 				addlAction, err := json.Marshal(PostCopyAction{
 					Type: PostCopyActionSQL,
-					Task: fmt.Sprintf("alter table %s.t1 add key c2 (c2)", dbName),
+					Task: fmt.Sprintf("alter table %s.t1 add index c2 (c2)", dbName),
 				})
 				if err != nil {
 					return err
@@ -366,7 +366,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			tableName:    "t1",
 			initialDDL:   "create table t1 (id int not null, c1 varchar(10) default null, c2 varchar(10) default null, key c1_c2 (c1,c2), key c2 (c2))",
 			strippedDDL:  "create table t1 (id int not null, c1 varchar(10) default null, c2 varchar(10) default null)",
-			actionDDL:    "alter table %s.t1 add key c1_c2 (c1, c2), add key c2 (c2)",
+			actionDDL:    "alter table %s.t1 add index c1_c2 (c1, c2), add index c2 (c2)",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 		},
 		{
@@ -374,8 +374,8 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			tableName:       "t1",
 			initialDDL:      "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), key c1 (c1), key c2 (c2))",
 			strippedDDL:     "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id))",
-			intermediateDDL: "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
-			actionDDL:       "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
+			intermediateDDL: "alter table %s.t1 add index c1 (c1), add index c2 (c2)",
+			actionDDL:       "alter table %s.t1 add index c1 (c1), add index c2 (c2)",
 			WorkflowType:    int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 		},
 		{
@@ -383,8 +383,8 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			tableName:       "t1",
 			initialDDL:      "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), key c1 (c1), key c2 (c2))",
 			strippedDDL:     "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id))",
-			intermediateDDL: "alter table %s.t1 add key c2 (c2), add key c1 (c1)",
-			actionDDL:       "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
+			intermediateDDL: "alter table %s.t1 add index c2 (c2), add index c1 (c1)",
+			actionDDL:       "alter table %s.t1 add index c1 (c1), add index c2 (c2)",
 			WorkflowType:    int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 		},
 		{
@@ -392,8 +392,8 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			tableName:             "t1",
 			initialDDL:            "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), key c1 (c1), key c2 (c2))",
 			strippedDDL:           "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id))",
-			intermediateDDL:       "alter table %s.t1 add unique key c1_c2 (c1,c2), add key c2 (c2), add key c1 (c1)",
-			actionDDL:             "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
+			intermediateDDL:       "alter table %s.t1 add unique index c1_c2 (c1,c2), add index c2 (c2), add index c1 (c1)",
+			actionDDL:             "alter table %s.t1 add index c1 (c1), add index c2 (c2)",
 			WorkflowType:          int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 			expectFinalSchemaDiff: true,
 		},
@@ -402,8 +402,8 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			tableName:       "t1",
 			initialDDL:      "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), key c1 (c1), key c2 (c2))",
 			strippedDDL:     "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id))",
-			intermediateDDL: "alter table %s.t1 add key c2 (c2)",
-			actionDDL:       "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
+			intermediateDDL: "alter table %s.t1 add index c2 (c2)",
+			actionDDL:       "alter table %s.t1 add index c1 (c1), add index c2 (c2)",
 			WorkflowType:    int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 			wantExecErr:     "Duplicate key name 'c2' (errno 1061) (sqlstate 42000)",
 		},
@@ -412,8 +412,8 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			tableName:       "t1",
 			initialDDL:      "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), key c1 (c1), key c2 (c2))",
 			strippedDDL:     "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id))",
-			intermediateDDL: "alter table %s.t1 add key c1 (c1)",
-			actionDDL:       "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
+			intermediateDDL: "alter table %s.t1 add index c1 (c1)",
+			actionDDL:       "alter table %s.t1 add index c1 (c1), add index c2 (c2)",
 			WorkflowType:    int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 			wantExecErr:     "Duplicate key name 'c1' (errno 1061) (sqlstate 42000)",
 		},
@@ -578,9 +578,9 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	getActionsSQLf := "select action from _vt.post_copy_action where vrepl_id=%d and table_name='%s'"
 
 	tableName := "t1"
-	ddl := fmt.Sprintf("create table %s.t1 (id int not null, c1 int default null, c2 int default null, primary key(id), key c1 (c1), key c2 (c2))", dbName)
+	ddl := fmt.Sprintf("create table %s.t1 (id int not null, c1 int default null, c2 int default null, primary key(id), index c1 (c1), index c2 (c2))", dbName)
 	withoutPKs := "create table t1 (id int not null, c1 int default null, c2 int default null, primary key(id))"
-	alter := fmt.Sprintf("alter table %s.t1 add key c1 (c1), add key c2 (c2)", dbName)
+	alter := fmt.Sprintf("alter table %s.t1 add index c1 (c1), add index c2 (c2)", dbName)
 
 	// Create the table.
 	_, err = dbClient.ExecuteFetch(ddl, 1)
