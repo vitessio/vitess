@@ -71,10 +71,7 @@ type (
 		idleTimer *timer.Timer
 		logWait   func(time.Time)
 
-		getCount          atomic.Int64
-		getSettingCount   atomic.Int64
-		diffSettingCount  atomic.Int64
-		resetSettingCount atomic.Int64
+		getCount atomic.Int64
 
 		reopenMutex sync.Mutex
 		refresh     *poolRefresh
@@ -438,19 +435,4 @@ func (rp *ResourcePool) Exhausted() int64 {
 // GetCount returns the number of times get was called
 func (rp *ResourcePool) GetCount() int64 {
 	return rp.getCount.Load()
-}
-
-// GetSettingCount returns the number of times getWithSettings was called
-func (rp *ResourcePool) GetSettingCount() int64 {
-	return rp.getSettingCount.Load()
-}
-
-// DiffSettingCount returns the number of times different setting were applied on the resource.
-func (rp *ResourcePool) DiffSettingCount() int64 {
-	return rp.diffSettingCount.Load()
-}
-
-// ResetSettingCount returns the number of times setting were reset on the resource.
-func (rp *ResourcePool) ResetSettingCount() int64 {
-	return rp.resetSettingCount.Load()
 }
