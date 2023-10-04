@@ -142,6 +142,7 @@ type Throttler struct {
 	ts              throttlerTopoService
 	srvTopoServer   srvtopo.Server
 	heartbeatWriter heartbeat.HeartbeatWriter
+	tmClient        tmclient.TabletManagerClient
 
 	// recentCheckTickerValue is an ever increasing number, incrementing once per second.
 	recentCheckTickerValue atomic.Int64
@@ -512,6 +513,7 @@ func (throttler *Throttler) Open() error {
 	throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecar.GetIdentifier()).Query) // default
 	throttler.initConfig()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
+	throttler.tmClient = tmclient.NewTabletManagerClient()
 
 	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
 
@@ -537,6 +539,7 @@ func (throttler *Throttler) Close() {
 	log.Infof("Throttler: closing pool")
 	throttler.pool.Close()
 	throttler.cancelOpenContext()
+	throttler.tmClient.Close()
 	log.Infof("Throttler: finished execution of Close")
 }
 
@@ -629,28 +632,11 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 
 	go func() {
 		defer log.Infof("Throttler: Operate terminated, tickers stopped")
-		tmClient := tmclient.NewTabletManagerClient()
-		defer tmClient.Close()
 		for _, t := range tickers {
 			defer t.Stop()
 			// since we just started the tickers now, speed up the ticks by forcing an immediate tick
 			go t.TickNow()
 		}
-
-		defer func() {
-			// Exhaust and clear channels. This releases any pending writes to those channels,
-			// which in turn clears some variables. Essentially this ensures a clean exit from the
-			// operations routine, and make it possible to have reliable unit testing.
-			for {
-				select {
-				case <-throttler.mysqlThrottleMetricChan:
-				case <-throttler.mysqlClusterProbesChan:
-				case <-throttler.throttlerConfigChan:
-				default:
-					return
-				}
-			}
-		}()
 
 		for {
 			select {
@@ -689,14 +675,14 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 				if throttler.IsOpen() {
 					// frequent
 					if !throttler.isDormant() {
-						throttler.collectMySQLMetrics(ctx, tmClient)
+						throttler.collectMySQLMetrics(ctx)
 					}
 				}
 			case <-mysqlDormantCollectTicker.C:
 				if throttler.IsOpen() {
 					// infrequent
 					if throttler.isDormant() {
-						throttler.collectMySQLMetrics(ctx, tmClient)
+						throttler.collectMySQLMetrics(ctx)
 					}
 				}
 			case metric := <-throttler.mysqlThrottleMetricChan:
@@ -728,7 +714,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	}()
 }
 
-func (throttler *Throttler) generateTabletProbeFunction(ctx context.Context, tmClient tmclient.TabletManagerClient, clusterName string, probe *mysql.Probe) (probeFunc func() *mysql.MySQLThrottleMetric) {
+func (throttler *Throttler) generateTabletProbeFunction(ctx context.Context, clusterName string, probe *mysql.Probe) (probeFunc func() *mysql.MySQLThrottleMetric) {
 	return func() *mysql.MySQLThrottleMetric {
 		// Some reasonable timeout, to ensure we release connections even if they're hanging (otherwise grpc-go keeps polling those connections forever)
 		ctx, cancel := context.WithTimeout(ctx, 4*mysqlCollectInterval)
@@ -744,7 +730,7 @@ func (throttler *Throttler) generateTabletProbeFunction(ctx context.Context, tmC
 			return mySQLThrottleMetric
 		}
 		req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
-		resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req)
+		resp, gRPCErr := throttler.tmClient.CheckThrottler(ctx, probe.Tablet, req)
 		if gRPCErr != nil {
 			resp.StatusCode = http.StatusInternalServerError
 			mySQLThrottleMetric.Err = fmt.Errorf("gRPC error accessing tablet %v. Err=%v", probe.Alias, gRPCErr)
@@ -763,7 +749,7 @@ func (throttler *Throttler) generateTabletProbeFunction(ctx context.Context, tmC
 	}
 }
 
-func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tmclient.TabletManagerClient) error {
+func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 	// synchronously, get lists of probes
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
 		clusterName := clusterName
@@ -785,10 +771,14 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tm
 					throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, probe)
 				} else {
 					// Throttler probing other tablets:
-					throttleMetricFunc = throttler.generateTabletProbeFunction(ctx, tmClient, clusterName, probe)
+					throttleMetricFunc = throttler.generateTabletProbeFunction(ctx, clusterName, probe)
 				}
 				throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, throttleMetricFunc)
-				throttler.mysqlThrottleMetricChan <- throttleMetrics
+				select {
+				case <-ctx.Done():
+					return
+				case throttler.mysqlThrottleMetricChan <- throttleMetrics:
+				}
 			}()
 		}
 	}
@@ -828,6 +818,15 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 		return true
 	}
 
+	attemptWriteProbes := func(clusterProbes *mysql.ClusterProbes) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case throttler.mysqlClusterProbesChan <- clusterProbes:
+			return nil
+		}
+	}
+
 	for clusterName, clusterSettings := range config.Settings().Stores.MySQL.Clusters {
 		clusterName := clusterName
 		clusterSettings.MetricQuery = metricsQuery
@@ -836,7 +835,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 		clusterSettingsCopy := *clusterSettings
 		// config may dynamically change, but internal structure (config.Settings().Stores.MySQL.Clusters in our case)
 		// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
-		go func() {
+		collect := func() error {
 			throttler.mysqlClusterThresholds.Set(clusterName, math.Float64frombits(clusterSettingsCopy.ThrottleThreshold.Load()), cache.DefaultExpiration)
 			clusterProbes := &mysql.ClusterProbes{
 				ClusterName:      clusterName,
@@ -848,8 +847,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 				// special case: just looking at this tablet's MySQL server.
 				// We will probe this "cluster" (of one server) is a special way.
 				addProbe("", nil, clusterName, &clusterSettingsCopy, clusterProbes.TabletProbes)
-				throttler.mysqlClusterProbesChan <- clusterProbes
-				return
+				return attemptWriteProbes(clusterProbes)
 			}
 			if !throttler.isLeader.Load() {
 				// This tablet may have used to be the primary, but it isn't now. It may have a recollection
@@ -858,32 +856,30 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 				// `clusterProbes` was created above as empty, and identificable via `clusterName`. This will in turn
 				// be used to overwrite throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] in
 				// updateMySQLClusterProbes().
-				throttler.mysqlClusterProbesChan <- clusterProbes
+				return attemptWriteProbes(clusterProbes)
 				// not the leader (primary tablet)? Then no more work for us.
-				return
 			}
 			// The primary tablet is also in charge of collecting the shard's metrics
-			err := func() error {
-				ctx, cancel := context.WithTimeout(ctx, mysqlRefreshInterval)
-				defer cancel()
+			ctx, cancel := context.WithTimeout(ctx, mysqlRefreshInterval)
+			defer cancel()
 
-				tabletAliases, err := throttler.ts.FindAllTabletAliasesInShard(ctx, throttler.keyspace, throttler.shard)
+			tabletAliases, err := throttler.ts.FindAllTabletAliasesInShard(ctx, throttler.keyspace, throttler.shard)
+			if err != nil {
+				return err
+			}
+			for _, tabletAlias := range tabletAliases {
+				tablet, err := throttler.ts.GetTablet(ctx, tabletAlias)
 				if err != nil {
 					return err
 				}
-				for _, tabletAlias := range tabletAliases {
-					tablet, err := throttler.ts.GetTablet(ctx, tabletAlias)
-					if err != nil {
-						return err
-					}
-					if throttler.throttleTabletTypesMap[tablet.Type] {
-						addProbe(topoproto.TabletAliasString(tabletAlias), tablet.Tablet, clusterName, &clusterSettingsCopy, clusterProbes.TabletProbes)
-					}
+				if throttler.throttleTabletTypesMap[tablet.Type] {
+					addProbe(topoproto.TabletAliasString(tabletAlias), tablet.Tablet, clusterName, &clusterSettingsCopy, clusterProbes.TabletProbes)
 				}
-				throttler.mysqlClusterProbesChan <- clusterProbes
-				return nil
-			}()
-			if err != nil {
+			}
+			return attemptWriteProbes(clusterProbes)
+		}
+		go func() {
+			if err := collect(); err != nil {
 				log.Errorf("refreshMySQLInventory: %+v", err)
 			}
 		}()
