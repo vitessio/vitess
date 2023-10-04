@@ -3308,7 +3308,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no vindex provided")
 	}
 	if len(specs.Vindexes) != 1 {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "only one vindex must be specified: %v", specs.Vindexes)
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "only one vindex must be specified")
 	}
 	vindexName = maps.Keys(specs.Vindexes)[0]
 	vindex = maps.Values(specs.Vindexes)[0]
@@ -3317,16 +3317,16 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	}
 	targetKeyspace, targetTableName, err = sqlparser.ParseTable(vindex.Params["table"])
 	if err != nil || targetKeyspace == "" {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex table name must be in the form <keyspace>.<table>. Got: %v", vindex.Params["table"])
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex table name (%s) must be in the form <keyspace>.<table>", vindex.Params["table"])
 	}
 	vindexFromCols = strings.Split(vindex.Params["from"], ",")
 	if strings.Contains(vindex.Type, "unique") {
 		if len(vindexFromCols) != 1 {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unique vindex 'from' should have only one column: %v", vindex)
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unique vindex 'from' should have only one column")
 		}
 	} else {
 		if len(vindexFromCols) < 2 {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "non-unique vindex 'from' should have more than one column: %v", vindex)
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "non-unique vindex 'from' should have more than one column")
 		}
 	}
 	vindexToCol = vindex.Params["to"]
@@ -3345,19 +3345,19 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		case "false":
 			vindexIgnoreNulls = false
 		default:
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ignore_nulls value must be 'true' or 'false': '%s'",
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ignore_nulls (%s) value must be 'true' or 'false'",
 				ignoreNullsStr)
 		}
 	}
 
 	// Validate input table.
 	if len(specs.Tables) < 1 || len(specs.Tables) > 2 {
-		return nil, nil, nil, fmt.Errorf("one or two tables must be specified: %v", specs.Tables)
+		return nil, nil, nil, fmt.Errorf("one or two tables must be specified")
 	}
 	// Loop executes once or twice.
 	for tableName, table := range specs.Tables {
 		if len(table.ColumnVindexes) != 1 {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "exactly one ColumnVindex must be specified for the table: %s", table)
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "exactly one ColumnVindex must be specified for the %s table", tableName)
 		}
 		if tableName != targetTableName { // This is the source table.
 			sourceTableName = tableName
@@ -3371,7 +3371,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 			vindexCols = table.ColumnVindexes[0].Columns
 		} else {
 			if table.ColumnVindexes[0].Column == "" {
-				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "at least one column must be specified in ColumnVindexes: %v", table.ColumnVindexes)
+				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "at least one column must be specified in ColumnVindexes for the %s table", tableName)
 			}
 			vindexCols = []string{table.ColumnVindexes[0].Column}
 		}
@@ -3386,21 +3386,21 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No ColumnVindex found for the owner table in the %s keyspace", keyspace)
 	}
 	if sourceTable.ColumnVindexes[0].Name != vindexName {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ColumnVindex name must match vindex name: %s vs %s", sourceTable.ColumnVindexes[0].Name, vindexName)
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ColumnVindex name (%s) must match vindex name (%s)", sourceTable.ColumnVindexes[0].Name, vindexName)
 	}
 	if vindex.Owner != "" && vindex.Owner != sourceTableName {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex owner must match table name: %v vs %v", vindex.Owner, sourceTableName)
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex owner (%s) must match table name (%s)", vindex.Owner, sourceTableName)
 	}
 	if len(sourceTable.ColumnVindexes[0].Columns) != 0 {
 		sourceVindexColumns = sourceTable.ColumnVindexes[0].Columns
 	} else {
 		if sourceTable.ColumnVindexes[0].Column == "" {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "at least one column must be specified in ColumnVindexes: %v", sourceTable.ColumnVindexes)
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "at least one column must be specified in ColumnVindexes for the %s table", sourceTableName)
 		}
 		sourceVindexColumns = []string{sourceTable.ColumnVindexes[0].Column}
 	}
 	if len(sourceVindexColumns) != len(vindexFromCols) {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "length of table columns differs from length of vindex columns: %v vs %v", sourceVindexColumns, vindexFromCols)
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "length of table columns (%d) differs from length of vindex columns (%d)", len(sourceVindexColumns), len(vindexFromCols))
 	}
 
 	// Validate against source vschema.
@@ -3429,12 +3429,12 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	}
 	if existing, ok := sourceVSchema.Vindexes[vindexName]; ok {
 		if !proto.Equal(existing, vindex) {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a conflicting vindex named %s already exists in the %s keyspace vschema", vindexName, keyspace)
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a conflicting vindex named %s already exists in the %s keyspace", vindexName, keyspace)
 		}
 	}
 	sourceVSchemaTable = sourceVSchema.Tables[sourceTableName]
 	if sourceVSchemaTable == nil && !schema.IsInternalOperationTableName(sourceTableName) {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in the %s keyspace vschema", sourceTableName, keyspace)
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in the %s keyspace", sourceTableName, keyspace)
 	}
 	for _, colVindex := range sourceVSchemaTable.ColumnVindexes {
 		// For a conflict, the vindex name and column should match.
@@ -3446,7 +3446,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 			colName = colVindex.Columns[0]
 		}
 		if colName == sourceVindexColumns[0] {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting ColumnVindex on column %s in table %s already exists in the %s keyspace vschema",
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting ColumnVindex on column %s in table %s already exists in the %s keyspace",
 				colName, sourceTableName, keyspace)
 		}
 	}
@@ -3458,7 +3458,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	}
 	onesource := sourceShards[0]
 	if onesource.PrimaryAlias == nil {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "source shard has no primary: %v", onesource.ShardName())
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "source shard %s has no primary", onesource.ShardName())
 	}
 	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{sourceTableName}}
 	tableSchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, onesource.PrimaryAlias, req)
@@ -3466,7 +3466,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		return nil, nil, nil, err
 	}
 	if len(tableSchema.TableDefinitions) != 1 {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected number of tables returned from %s schema: %v", keyspace, tableSchema.TableDefinitions)
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected number of tables (%d) returned from %s schema", len(tableSchema.TableDefinitions), keyspace)
 	}
 
 	// Generate "create table" statement.
@@ -3560,11 +3560,11 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		}
 		if targetVindex == nil {
 			// Unreachable. We validated column names when generating the DDL.
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column %s not found in target schema %v", sourceVindexColumns[0], tableSchema.TableDefinitions[0])
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column %s not found in target schema %s", sourceVindexColumns[0], tableSchema.TableDefinitions[0].Schema)
 		}
 		if existing, ok := targetVSchema.Vindexes[targetVindexType]; ok {
 			if !proto.Equal(existing, targetVindex) {
-				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting vindex named %v already exists in the %s keyspace vschema", targetVindexType, targetKeyspace)
+				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting vindex named %v already exists in the %s keyspace", targetVindexType, targetKeyspace)
 			}
 		} else {
 			targetVSchema.Vindexes[targetVindexType] = targetVindex
@@ -3581,7 +3581,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	}
 	if existing, ok := targetVSchema.Tables[targetTableName]; ok {
 		if !proto.Equal(existing, targetTable) {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting table named %v already exists in the %s vschema", targetTableName, targetKeyspace)
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting table named %s already exists in the %s vschema", targetTableName, targetKeyspace)
 		}
 	} else {
 		targetVSchema.Tables[targetTableName] = targetTable

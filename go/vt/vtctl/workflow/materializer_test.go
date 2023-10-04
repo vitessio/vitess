@@ -911,7 +911,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 			},
 		},
 		sourceSchema: "",
-		err:          "unexpected number of tables returned from sourceks schema",
+		err:          "unexpected number of tables (0) returned from sourceks schema",
 	}}
 	for _, tcase := range testcases {
 		if tcase.sourceSchema != "" {
@@ -1343,7 +1343,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 				},
 			},
 		},
-		err: "a conflicting vindex named xxhash already exists in the targetks keyspace vschema",
+		err: "a conflicting vindex named xxhash already exists in the targetks keyspace",
 	}, {
 		description:     "sharded, int64, good table",
 		targetTable:     "t2",
@@ -1924,7 +1924,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			err: "only one vindex must be specified in the specs",
+			err: "only one vindex must be specified",
 		},
 		{
 			description: "not a lookup",
@@ -1949,7 +1949,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			err: "vindex table name must be in the form <keyspace>.<table>",
+			err: "vindex table name (t) must be in the form <keyspace>.<table>",
 		},
 		{
 			description: "unique lookup should have only one from column",
@@ -2004,7 +2004,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			input: &vschemapb.Keyspace{
 				Vindexes: unique,
 			},
-			err: "one or two tables must be specified in the specs",
+			err: "one or two tables must be specified",
 		},
 		{
 			description: "too many tables",
@@ -2041,7 +2041,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			err: "one or two tables must be specified in the specs",
+			err: "one or two tables must be specified",
 		},
 		{
 			description: "only one colvindex",
@@ -2051,7 +2051,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					"t1": {},
 				},
 			},
-			err: "exactly one ColumnVindex must be specified for the table",
+			err: "exactly one ColumnVindex must be specified for the t1 table",
 		},
 		{
 			description: "vindex name must match",
@@ -2065,7 +2065,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			err: "ColumnVindex name must match vindex name: other vs v",
+			err: "ColumnVindex name (other) must match vindex name (v)",
 		},
 		{
 			description: "owner must match",
@@ -2089,7 +2089,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			err: "vindex owner must match table name: otherTable vs t1",
+			err: "vindex owner (otherTable) must match table name (t1)",
 		},
 		{
 			description: "owner must match",
@@ -2118,7 +2118,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			err: "length of table columns differs from length of vindex columns",
+			err: "length of table columns (2) differs from length of vindex columns (1)",
 		},
 		{
 			description: "vindex mismatches with what's in vschema",
@@ -2143,7 +2143,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			err: "a conflicting vindex named xxhash already exists in the targetks keyspace vschema",
+			err: "a conflicting vindex named xxhash already exists in the targetks keyspace",
 		},
 		{
 			description: "source table not in vschema",
@@ -2158,7 +2158,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			err: "table other not found in the targetks keyspace vschema",
+			err: "table other not found in the targetks keyspace",
 		},
 	}
 	for _, tcase := range testcases {
