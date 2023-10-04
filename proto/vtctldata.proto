@@ -999,10 +999,10 @@ message LookupVindexCreateRequest {
   string keyspace = 1;
   string workflow = 2;
   repeated string cells = 3;
-  repeated topodata.TabletType tablet_types = 4;
+  vschema.Keyspace vindex = 4;
   bool continue_after_copy_with_owner = 5;
-  tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 6;
-  vschema.Keyspace vindex = 7;
+  repeated topodata.TabletType tablet_types = 6;
+  tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 7;
 }
 
 message LookupVindexCreateResponse {
@@ -1014,7 +1014,7 @@ message LookupVindexExternalizeRequest {
   // This is the name of the lookup vindex and the vreplication workflow.
   string name = 2;
   // Where the vreplication workflow lives.
-  string target_keyspace = 3;
+  string table_keyspace = 3;
 }
 
 message LookupVindexExternalizeResponse {

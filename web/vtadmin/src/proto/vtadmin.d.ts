@@ -54551,17 +54551,17 @@ export namespace vtctldata {
         /** LookupVindexCreateRequest cells */
         cells?: (string[]|null);
 
-        /** LookupVindexCreateRequest tablet_types */
-        tablet_types?: (topodata.TabletType[]|null);
+        /** LookupVindexCreateRequest vindex */
+        vindex?: (vschema.IKeyspace|null);
 
         /** LookupVindexCreateRequest continue_after_copy_with_owner */
         continue_after_copy_with_owner?: (boolean|null);
 
+        /** LookupVindexCreateRequest tablet_types */
+        tablet_types?: (topodata.TabletType[]|null);
+
         /** LookupVindexCreateRequest tablet_selection_preference */
         tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
-
-        /** LookupVindexCreateRequest vindex */
-        vindex?: (vschema.IKeyspace|null);
     }
 
     /** Represents a LookupVindexCreateRequest. */
@@ -54582,17 +54582,17 @@ export namespace vtctldata {
         /** LookupVindexCreateRequest cells. */
         public cells: string[];
 
-        /** LookupVindexCreateRequest tablet_types. */
-        public tablet_types: topodata.TabletType[];
+        /** LookupVindexCreateRequest vindex. */
+        public vindex?: (vschema.IKeyspace|null);
 
         /** LookupVindexCreateRequest continue_after_copy_with_owner. */
         public continue_after_copy_with_owner: boolean;
 
+        /** LookupVindexCreateRequest tablet_types. */
+        public tablet_types: topodata.TabletType[];
+
         /** LookupVindexCreateRequest tablet_selection_preference. */
         public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
-
-        /** LookupVindexCreateRequest vindex. */
-        public vindex?: (vschema.IKeyspace|null);
 
         /**
          * Creates a new LookupVindexCreateRequest instance using the specified properties.
@@ -54772,8 +54772,8 @@ export namespace vtctldata {
         /** LookupVindexExternalizeRequest name */
         name?: (string|null);
 
-        /** LookupVindexExternalizeRequest target_keyspace */
-        target_keyspace?: (string|null);
+        /** LookupVindexExternalizeRequest table_keyspace */
+        table_keyspace?: (string|null);
     }
 
     /** Represents a LookupVindexExternalizeRequest. */
@@ -54791,8 +54791,8 @@ export namespace vtctldata {
         /** LookupVindexExternalizeRequest name. */
         public name: string;
 
-        /** LookupVindexExternalizeRequest target_keyspace. */
-        public target_keyspace: string;
+        /** LookupVindexExternalizeRequest table_keyspace. */
+        public table_keyspace: string;
 
         /**
          * Creates a new LookupVindexExternalizeRequest instance using the specified properties.

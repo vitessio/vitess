@@ -2544,9 +2544,9 @@ func (m *LookupVindexCreateRequest) CloneVT() *LookupVindexCreateRequest {
 	r := &LookupVindexCreateRequest{
 		Keyspace:                   m.Keyspace,
 		Workflow:                   m.Workflow,
+		Vindex:                     m.Vindex.CloneVT(),
 		ContinueAfterCopyWithOwner: m.ContinueAfterCopyWithOwner,
 		TabletSelectionPreference:  m.TabletSelectionPreference,
-		Vindex:                     m.Vindex.CloneVT(),
 	}
 	if rhs := m.Cells; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
@@ -2590,9 +2590,9 @@ func (m *LookupVindexExternalizeRequest) CloneVT() *LookupVindexExternalizeReque
 		return (*LookupVindexExternalizeRequest)(nil)
 	}
 	r := &LookupVindexExternalizeRequest{
-		Keyspace:       m.Keyspace,
-		Name:           m.Name,
-		TargetKeyspace: m.TargetKeyspace,
+		Keyspace:      m.Keyspace,
+		Name:          m.Name,
+		TableKeyspace: m.TableKeyspace,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -11761,30 +11761,10 @@ func (m *LookupVindexCreateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, er
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.Vindex != nil {
-		size, err := m.Vindex.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
-		}
-		i -= size
-		i = encodeVarint(dAtA, i, uint64(size))
-		i--
-		dAtA[i] = 0x3a
-	}
 	if m.TabletSelectionPreference != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.TabletSelectionPreference))
 		i--
-		dAtA[i] = 0x30
-	}
-	if m.ContinueAfterCopyWithOwner {
-		i--
-		if m.ContinueAfterCopyWithOwner {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x28
+		dAtA[i] = 0x38
 	}
 	if len(m.TabletTypes) > 0 {
 		var pksize2 int
@@ -11804,6 +11784,26 @@ func (m *LookupVindexCreateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, er
 			j1++
 		}
 		i = encodeVarint(dAtA, i, uint64(pksize2))
+		i--
+		dAtA[i] = 0x32
+	}
+	if m.ContinueAfterCopyWithOwner {
+		i--
+		if m.ContinueAfterCopyWithOwner {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x28
+	}
+	if m.Vindex != nil {
+		size, err := m.Vindex.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x22
 	}
@@ -11896,10 +11896,10 @@ func (m *LookupVindexExternalizeRequest) MarshalToSizedBufferVT(dAtA []byte) (in
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.TargetKeyspace) > 0 {
-		i -= len(m.TargetKeyspace)
-		copy(dAtA[i:], m.TargetKeyspace)
-		i = encodeVarint(dAtA, i, uint64(len(m.TargetKeyspace)))
+	if len(m.TableKeyspace) > 0 {
+		i -= len(m.TableKeyspace)
+		copy(dAtA[i:], m.TableKeyspace)
+		i = encodeVarint(dAtA, i, uint64(len(m.TableKeyspace)))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -20709,6 +20709,13 @@ func (m *LookupVindexCreateRequest) SizeVT() (n int) {
 			n += 1 + l + sov(uint64(l))
 		}
 	}
+	if m.Vindex != nil {
+		l = m.Vindex.SizeVT()
+		n += 1 + l + sov(uint64(l))
+	}
+	if m.ContinueAfterCopyWithOwner {
+		n += 2
+	}
 	if len(m.TabletTypes) > 0 {
 		l = 0
 		for _, e := range m.TabletTypes {
@@ -20716,15 +20723,8 @@ func (m *LookupVindexCreateRequest) SizeVT() (n int) {
 		}
 		n += 1 + sov(uint64(l)) + l
 	}
-	if m.ContinueAfterCopyWithOwner {
-		n += 2
-	}
 	if m.TabletSelectionPreference != 0 {
 		n += 1 + sov(uint64(m.TabletSelectionPreference))
-	}
-	if m.Vindex != nil {
-		l = m.Vindex.SizeVT()
-		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -20754,7 +20754,7 @@ func (m *LookupVindexExternalizeRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	l = len(m.TargetKeyspace)
+	l = len(m.TableKeyspace)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -39673,6 +39673,62 @@ func (m *LookupVindexCreateRequest) UnmarshalVT(dAtA []byte) error {
 			m.Cells = append(m.Cells, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Vindex", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Vindex == nil {
+				m.Vindex = &vschema.Keyspace{}
+			}
+			if err := m.Vindex.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ContinueAfterCopyWithOwner", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ContinueAfterCopyWithOwner = bool(v != 0)
+		case 6:
 			if wireType == 0 {
 				var v topodata.TabletType
 				for shift := uint(0); ; shift += 7 {
@@ -39741,27 +39797,7 @@ func (m *LookupVindexCreateRequest) UnmarshalVT(dAtA []byte) error {
 			} else {
 				return fmt.Errorf("proto: wrong wireType = %d for field TabletTypes", wireType)
 			}
-		case 5:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ContinueAfterCopyWithOwner", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.ContinueAfterCopyWithOwner = bool(v != 0)
-		case 6:
+		case 7:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TabletSelectionPreference", wireType)
 			}
@@ -39780,42 +39816,6 @@ func (m *LookupVindexCreateRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-		case 7:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Vindex", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Vindex == nil {
-				m.Vindex = &vschema.Keyspace{}
-			}
-			if err := m.Vindex.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -39984,7 +39984,7 @@ func (m *LookupVindexExternalizeRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TargetKeyspace", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field TableKeyspace", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -40012,7 +40012,7 @@ func (m *LookupVindexExternalizeRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.TargetKeyspace = string(dAtA[iNdEx:postIndex])
+			m.TableKeyspace = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

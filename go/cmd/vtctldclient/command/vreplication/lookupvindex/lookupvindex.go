@@ -38,8 +38,8 @@ var (
 	}
 
 	baseOptions = struct {
-		// This is where the vindex lookup table and VReplicaiton
-		// workflow will be created.
+		// This is where the lookup table and VReplicaiton workflow
+		// will be created.
 		TableKeyspace string
 		// This will be the name of the Lookup Vindex and the name
 		// of the VReplication workflow.
@@ -146,7 +146,7 @@ var (
 	create = &cobra.Command{
 		Use:                   "create",
 		Short:                 "Create the Lookup Vindex in the specified keyspace and backfill it with a VReplication workflow.",
-		Example:               `vtctldclient --server localhost:15999 LookupVindex --name corder_lookup_vdx --table-keyspace customer create --keyspace customer --type consistent_lookup_unique --table-owner corder --table-owner-columns sku --table-name corder_lookup_tbl --table-vindex-type=unicode_loose_xxhash`,
+		Example:               `vtctldclient --server localhost:15999 LookupVindex --name corder_lookup_vdx --table-keyspace customer create --keyspace customer --type consistent_lookup_unique --table-owner corder --table-owner-columns sku --table-name corder_lookup_tbl --table-vindex-type unicode_loose_xxhash`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Create"},
@@ -207,10 +207,10 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		Workflow:                   baseOptions.Name,
 		Keyspace:                   createOptions.Keyspace,
 		Vindex:                     baseOptions.Vschema,
+		ContinueAfterCopyWithOwner: createOptions.ContinueAfterCopyWithOwner,
 		Cells:                      createOptions.Cells,
 		TabletTypes:                createOptions.TabletTypes,
 		TabletSelectionPreference:  tsp,
-		ContinueAfterCopyWithOwner: createOptions.ContinueAfterCopyWithOwner,
 	})
 
 	if err != nil {
@@ -233,8 +233,9 @@ func commandExternalize(cmd *cobra.Command, args []string) error {
 	resp, err := common.GetClient().LookupVindexExternalize(common.GetCommandCtx(), &vtctldatapb.LookupVindexExternalizeRequest{
 		Keyspace: externalizeOptions.Keyspace,
 		// The name of the workflow and lookup vindex.
-		Name:           baseOptions.Name,
-		TargetKeyspace: baseOptions.TableKeyspace,
+		Name: baseOptions.Name,
+		// Where the lookup table and VReplication workflow were created.
+		TableKeyspace: baseOptions.TableKeyspace,
 	})
 
 	if err != nil {
@@ -290,9 +291,9 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().StringSliceVar(&createOptions.TableOwnerColumns, "table-owner-columns", nil, "The columns to read from the owner table. These will be used to build the hash which gets stored as the keyspace_id value in the lookup table.")
 	create.MarkFlagRequired("table-owner-columns")
 	create.Flags().StringVar(&createOptions.TableName, "table-name", "", "The name of the lookup table. If not specified, then it will be created using the same name as the Lookup Vindex.")
-	create.Flags().StringVar(&createOptions.TableVindexType, "table-vindex-type", "", "The primary vindex name/type to use for the lookup table, if the table-keyspace is sharded. This must match the name of a vindex defined in the table-keyspace. If no value is provided then the default type will be use based on the table-owner-columns types.")
-	create.Flags().BoolVar(&createOptions.IgnoreNulls, "ignore-nulls", false, "Do not add records in the lookup table if any of the owner table's 'from' fields are NULL.")
-	create.Flags().BoolVar(&createOptions.ContinueAfterCopyWithOwner, "continue-after-copy-with-owner", true, "Vindex will continue materialization after copy when an owner is provided.")
+	create.Flags().StringVar(&createOptions.TableVindexType, "table-vindex-type", "", "The primary vindex name/type to use for the lookup table, if the table-keyspace is sharded. This must match the name of a vindex defined in the table-keyspace. If no value is provided then the default type will be used based on the table-owner-columns types.")
+	create.Flags().BoolVar(&createOptions.IgnoreNulls, "ignore-nulls", false, "Do not add corresponding records in the lookup table if any of the owner table's 'from' fields are NULL.")
+	create.Flags().BoolVar(&createOptions.ContinueAfterCopyWithOwner, "continue-after-copy-with-owner", true, "Vindex will continue materialization after the backfill completes when an owner is provided.")
 	// VReplication specific flags.
 	create.Flags().StringSliceVar(&createOptions.Cells, "cells", nil, "Cells to look in for source tablets to replicate from.")
 	create.Flags().Var((*topoprotopb.TabletTypeListFlag)(&createOptions.TabletTypes), "tablet-types", "Source tablet types to replicate from.")

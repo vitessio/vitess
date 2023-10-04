@@ -969,16 +969,16 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 
 // LookupVindexCreate creates the lookup vindex in the specified
 // keyspace and creates a VReplication workflow to backfill that
-// vindex from the keyspace to the target table specified.
+// vindex from the keyspace to the target/lookup table specified.
 func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.LookupVindexCreateRequest) (*vtctldatapb.LookupVindexCreateResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.LookupVindexCreate")
 	defer span.Finish()
 
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("continue_after_copy_with_owner", req.ContinueAfterCopyWithOwner)
 	span.Annotate("cells", req.Cells)
 	span.Annotate("tablet_types", req.TabletTypes)
-	span.Annotate("continue_after_copy_with_owner", req.ContinueAfterCopyWithOwner)
 
 	ms, sourceVSchema, targetVSchema, err := s.prepareCreateLookup(ctx, req.Workflow, req.Keyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
 	if err != nil {
@@ -1012,9 +1012,9 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("name", req.Name)
-	span.Annotate("target_keyspace", req.TargetKeyspace)
+	span.Annotate("table_keyspace", req.TableKeyspace)
 
-	// Find the lookup vindex by
+	// Find the lookup vindex by by name.
 	sourceVschema, err := s.ts.GetVSchema(ctx, req.Keyspace)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", req.Keyspace)
@@ -1024,7 +1024,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in the %s keyspace", req.Name, req.Keyspace)
 	}
 
-	targetShards, err := s.ts.GetServingShards(ctx, req.TargetKeyspace)
+	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -1104,7 +1104,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 		// the VTGate will now be responsible for keeping the lookup table up to date
 		// with the owner table.
 		if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
-			Keyspace:         req.TargetKeyspace,
+			Keyspace:         req.TableKeyspace,
 			Workflow:         req.Name,
 			KeepData:         true, // Not relevant
 			KeepRoutingRules: true, // Not relevant
@@ -3376,7 +3376,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 			vindexCols = []string{table.ColumnVindexes[0].Column}
 		}
 		if !slices.Equal(vindexCols, vindexFromCols) {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "columns in the target table %s primary vindex (%s) don't match the 'from' columns specified (%s)",
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "columns in the lookup table %s primary vindex (%s) don't match the 'from' columns specified (%s)",
 				tableName, strings.Join(vindexCols, ","), strings.Join(vindexFromCols, ","))
 		}
 	}
@@ -3537,7 +3537,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	// Update targetVSchema.
 	targetTable := specs.Tables[targetTableName]
 	if targetVSchema.Sharded {
-		// Choose a primary vindex type for the target table based on the source
+		// Choose a primary vindex type for the lookup table based on the source
 		// definition if one was not explicitly specified.
 		var targetVindexType string
 		var targetVindex *vschemapb.Vindex

@@ -1859,7 +1859,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		// Keyspace where the vindex is created.
 		SourceKeyspace: "sourceks",
-		// Keyspace where the target table is created.
+		// Keyspace where the lookup table and VReplication workflow is created.
 		TargetKeyspace: "targetks",
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2180,7 +2180,7 @@ func TestExternalizeLookupVindex(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		// Keyspace where the vindex is created.
 		SourceKeyspace: "sourceks",
-		// Keyspace where the target table is created.
+		// Keyspace where the lookup table and VReplication workflow is created.
 		TargetKeyspace: "targetks",
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2261,21 +2261,19 @@ func TestExternalizeLookupVindex(t *testing.T) {
 	}{
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Name:           "owned_lookup",
-				Keyspace:       ms.SourceKeyspace,
-				TargetKeyspace: ms.TargetKeyspace,
+				Name:          "owned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
 			},
 			vrResponse: ownedStopped,
 			expectedVschema: &vschemapb.Keyspace{
-				Sharded: false,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"owned_lookup": {
 						Type: "lookup_unique",
 						Params: map[string]string{
-							"table":      "targetks.owned_lookup",
-							"from":       "c1",
-							"to":         "c2",
-							"write_only": "true",
+							"table": "targetks.owned_lookup",
+							"from":  "c1",
+							"to":    "c2",
 						},
 						Owner: "t1",
 					},
@@ -2285,21 +2283,19 @@ func TestExternalizeLookupVindex(t *testing.T) {
 		},
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Name:           "unowned_lookup",
-				Keyspace:       ms.SourceKeyspace,
-				TargetKeyspace: ms.TargetKeyspace,
+				Name:          "unowned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
 			},
 			vrResponse: unownedStopped,
 			expectedVschema: &vschemapb.Keyspace{
-				Sharded: false,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"unowned_lookup": {
 						Type: "lookup_unique",
 						Params: map[string]string{
-							"table":      "targetks.unowned_lookup",
-							"from":       "c1",
-							"to":         "c2",
-							"write_only": "true",
+							"table": "targetks.unowned_lookup",
+							"from":  "c1",
+							"to":    "c2",
 						},
 					},
 				},
@@ -2308,21 +2304,19 @@ func TestExternalizeLookupVindex(t *testing.T) {
 		},
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Name:           "owned_lookup",
-				Keyspace:       ms.SourceKeyspace,
-				TargetKeyspace: ms.TargetKeyspace,
+				Name:          "owned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
 			},
 			vrResponse: ownedRunning,
 			expectedVschema: &vschemapb.Keyspace{
-				Sharded: false,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"owned_lookup": {
 						Type: "lookup_unique",
 						Params: map[string]string{
-							"table":      "targetks.owned_lookup",
-							"from":       "c1",
-							"to":         "c2",
-							"write_only": "true",
+							"table": "targetks.owned_lookup",
+							"from":  "c1",
+							"to":    "c2",
 						},
 						Owner: "t1",
 					},
@@ -2332,21 +2326,19 @@ func TestExternalizeLookupVindex(t *testing.T) {
 		},
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Name:           "unowned_lookup",
-				Keyspace:       ms.SourceKeyspace,
-				TargetKeyspace: ms.TargetKeyspace,
+				Name:          "unowned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
 			},
 			vrResponse: unownedRunning,
 			expectedVschema: &vschemapb.Keyspace{
-				Sharded: false,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"unowned_lookup": {
 						Type: "lookup_unique",
 						Params: map[string]string{
-							"table":      "targetks.unowned_lookup",
-							"from":       "c1",
-							"to":         "c2",
-							"write_only": "true",
+							"table": "targetks.unowned_lookup",
+							"from":  "c1",
+							"to":    "c2",
 						},
 					},
 				},
@@ -2354,20 +2346,18 @@ func TestExternalizeLookupVindex(t *testing.T) {
 		},
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Name:           "absent_lookup",
-				Keyspace:       ms.SourceKeyspace,
-				TargetKeyspace: ms.TargetKeyspace,
+				Name:          "absent_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
 			},
 			expectedVschema: &vschemapb.Keyspace{
-				Sharded: false,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"absent_lookup": {
 						Type: "lookup_unique",
 						Params: map[string]string{
-							"table":      "targetks.absent_lookup",
-							"from":       "c1",
-							"to":         "c2",
-							"write_only": "true",
+							"table": "targetks.absent_lookup",
+							"from":  "c1",
+							"to":    "c2",
 						},
 					},
 				},
@@ -2407,8 +2397,10 @@ func TestExternalizeLookupVindex(t *testing.T) {
 			aftervschema, err := env.topoServ.GetVSchema(ctx, ms.SourceKeyspace)
 			require.NoError(t, err)
 			vindex := aftervschema.Vindexes[tcase.request.Name]
+			expectedVindex := tcase.expectedVschema.Vindexes[tcase.request.Name]
 			require.NotNil(t, vindex, "vindex %s not found in vschema", tcase.request.Name)
 			require.NotContains(t, vindex.Params, "write_only", tcase.request)
+			require.Equal(t, expectedVindex, vindex, "vindex mismatch. expected: %+v, got: %+v", expectedVindex, vindex)
 		})
 	}
 }
