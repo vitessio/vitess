@@ -312,7 +312,7 @@ func TestRefreshMySQLInventory(t *testing.T) {
 }
 
 // runThrottler opens and enables the throttler, therby making it run the Operate() function, for a given amount of time.
-// Optionally, runnign a given function halfway while the throttler is still open and running.
+// Optionally, running a given function halfway while the throttler is still open and running.
 func runThrottler(t *testing.T, throttler *Throttler, timeout time.Duration, f func(*testing.T)) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
