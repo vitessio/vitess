@@ -682,7 +682,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 				{
 					// sparse
 					if throttler.IsOpen() {
-						go throttler.refreshMySQLInventory(ctx)
+						throttler.refreshMySQLInventory(ctx)
 					}
 				}
 			case probes := <-throttler.mysqlClusterProbesChan:
@@ -782,33 +782,30 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tm
 	// synchronously, get lists of probes
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
 		clusterName := clusterName
-		probes := probes
-		go func() {
-			// probes is known not to change. It can be *replaced*, but not changed.
-			// so it's safe to iterate it
-			for _, probe := range *probes {
-				probe := probe
-				go func() {
-					// Avoid querying the same server twice at the same time. If previous read is still there,
-					// we avoid re-reading it.
-					if !atomic.CompareAndSwapInt64(&probe.QueryInProgress, 0, 1) {
-						return
-					}
-					defer atomic.StoreInt64(&probe.QueryInProgress, 0)
+		// probes is known not to change. It can be *replaced*, but not changed.
+		// so it's safe to iterate it
+		for _, probe := range *probes {
+			probe := probe
+			go func() {
+				// Avoid querying the same server twice at the same time. If previous read is still there,
+				// we avoid re-reading it.
+				if !atomic.CompareAndSwapInt64(&probe.QueryInProgress, 0, 1) {
+					return
+				}
+				defer atomic.StoreInt64(&probe.QueryInProgress, 0)
 
-					var throttleMetricFunc func() *mysql.MySQLThrottleMetric
-					if clusterName == selfStoreName {
-						// Throttler is probing its own tablet's metrics:
-						throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, probe)
-					} else {
-						// Throttler probing other tablets:
-						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, tmClient, clusterName, probe)
-					}
-					throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, throttleMetricFunc)
-					throttler.mysqlThrottleMetricChan <- throttleMetrics
-				}()
-			}
-		}()
+				var throttleMetricFunc func() *mysql.MySQLThrottleMetric
+				if clusterName == selfStoreName {
+					// Throttler is probing its own tablet's metrics:
+					throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, probe)
+				} else {
+					// Throttler probing other tablets:
+					throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, tmClient, clusterName, probe)
+				}
+				throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, throttleMetricFunc)
+				throttler.mysqlThrottleMetricChan <- throttleMetrics
+			}()
+		}
 	}
 	return nil
 }
