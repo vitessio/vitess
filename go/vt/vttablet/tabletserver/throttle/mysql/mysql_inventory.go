@@ -26,7 +26,7 @@ type InstanceMetricResultMap map[ClusterInstanceKey]base.MetricResult
 
 // Inventory has the operational data about probes, their metrics, and relevant configuration
 type Inventory struct {
-	ClustersProbes       map[string](*Probes)
+	ClustersProbes       map[string](Probes)
 	IgnoreHostsCount     map[string]int
 	IgnoreHostsThreshold map[string]float64
 	InstanceKeyMetrics   InstanceMetricResultMap
@@ -35,7 +35,7 @@ type Inventory struct {
 // NewInventory creates a Inventory
 func NewInventory() *Inventory {
 	inventory := &Inventory{
-		ClustersProbes:       make(map[string](*Probes)),
+		ClustersProbes:       make(map[string](Probes)),
 		IgnoreHostsCount:     make(map[string]int),
 		IgnoreHostsThreshold: make(map[string]float64),
 		InstanceKeyMetrics:   make(map[ClusterInstanceKey]base.MetricResult),

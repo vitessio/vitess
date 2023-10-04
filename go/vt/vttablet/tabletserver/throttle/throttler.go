@@ -784,7 +784,7 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tm
 		clusterName := clusterName
 		// probes is known not to change. It can be *replaced*, but not changed.
 		// so it's safe to iterate it
-		for _, probe := range *probes {
+		for _, probe := range probes {
 			probe := probe
 			go func() {
 				// Avoid querying the same server twice at the same time. If previous read is still there,
@@ -815,7 +815,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 	// distribute the query/threshold from the throttler down to the cluster settings and from there to the probes
 	metricsQuery := throttler.GetMetricsQuery()
 	metricsThreshold := throttler.MetricsThreshold.Load()
-	addInstanceKey := func(tablet *topodatapb.Tablet, tabletHost string, tabletPort int, key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
+	addInstanceKey := func(tablet *topodatapb.Tablet, tabletHost string, tabletPort int, key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes mysql.Probes) {
 		for _, ignore := range clusterSettings.IgnoreHosts {
 			if strings.Contains(key.StringCode(), ignore) {
 				log.Infof("Throttler: instance key ignored: %+v", key)
@@ -835,7 +835,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			MetricQuery: clusterSettings.MetricQuery,
 			CacheMillis: clusterSettings.CacheMillis,
 		}
-		(*probes)[*key] = probe
+		probes[*key] = probe
 	}
 
 	for clusterName, clusterSettings := range config.Settings().Stores.MySQL.Clusters {

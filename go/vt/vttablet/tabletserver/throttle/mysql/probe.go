@@ -31,12 +31,12 @@ type ClusterProbes struct {
 	ClusterName          string
 	IgnoreHostsCount     int
 	IgnoreHostsThreshold float64
-	InstanceProbes       *Probes
+	InstanceProbes       Probes
 }
 
 // NewProbes creates Probes
-func NewProbes() *Probes {
-	return &Probes{}
+func NewProbes() Probes {
+	return Probes{}
 }
 
 // NewProbe creates Probe

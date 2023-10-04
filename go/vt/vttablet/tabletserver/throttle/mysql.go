@@ -16,7 +16,7 @@ import (
 
 func aggregateMySQLProbes(
 	ctx context.Context,
-	probes *mysql.Probes,
+	probes mysql.Probes,
 	clusterName string,
 	instanceResultsMap mysql.InstanceMetricResultMap,
 	ignoreHostsCount int,
@@ -26,7 +26,7 @@ func aggregateMySQLProbes(
 	// probes is known not to change. It can be *replaced*, but not changed.
 	// so it's safe to iterate it
 	probeValues := []float64{}
-	for _, probe := range *probes {
+	for _, probe := range probes {
 		instanceMetricResult, ok := instanceResultsMap[mysql.GetClusterInstanceKey(clusterName, &probe.Key)]
 		if !ok {
 			return base.NoMetricResultYet
