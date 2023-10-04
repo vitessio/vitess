@@ -381,6 +381,11 @@ func (client *localVtctldClient) LookupVindexExternalize(ctx context.Context, in
 	return client.s.LookupVindexExternalize(ctx, in)
 }
 
+// MaterializeCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) MaterializeCreate(ctx context.Context, in *vtctldatapb.MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.MaterializeCreateResponse, error) {
+	return client.s.MaterializeCreate(ctx, in)
+}
+
 // MoveTablesComplete is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) MoveTablesComplete(ctx context.Context, in *vtctldatapb.MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldatapb.MoveTablesCompleteResponse, error) {
 	return client.s.MoveTablesComplete(ctx, in)

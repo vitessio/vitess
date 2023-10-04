@@ -497,6 +497,15 @@ func (client *gRPCVtctldClient) LookupVindexExternalize(ctx context.Context, in 
 	return client.c.LookupVindexExternalize(ctx, in, opts...)
 }
 
+// MaterializeCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) MaterializeCreate(ctx context.Context, in *vtctldatapb.MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.MaterializeCreateResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.MaterializeCreate(ctx, in, opts...)
+}
+
 // MoveTablesComplete is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) MoveTablesComplete(ctx context.Context, in *vtctldatapb.MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldatapb.MoveTablesCompleteResponse, error) {
 	if client.c == nil {

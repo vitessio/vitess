@@ -2542,6 +2542,24 @@ func (s *VtctldServer) LookupVindexExternalize(ctx context.Context, req *vtctlda
 	return resp, err
 }
 
+// MaterializeCreate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MaterializeCreate(ctx context.Context, req *vtctldatapb.MaterializeCreateRequest) (resp *vtctldatapb.MaterializeCreateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MaterializeCreate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("workflow", req.Settings.Workflow)
+	span.Annotate("source_keyspace", req.Settings.SourceKeyspace)
+	span.Annotate("target_keyspace", req.Settings.TargetKeyspace)
+	span.Annotate("cells", req.Settings.Cell)
+	span.Annotate("tablet_types", req.Settings.TabletTypes)
+	span.Annotate("table_settings", fmt.Sprintf("%+v", req.Settings.TableSettings))
+
+	err = s.ws.Materialize(ctx, req.Settings)
+	return resp, err
+}
+
 // MoveTablesCreate is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (resp *vtctldatapb.WorkflowStatusResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.MoveTablesCreate")
