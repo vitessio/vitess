@@ -10,26 +10,26 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
-// ClusterInstanceKey combines a cluster name with an instance key
-type ClusterInstanceKey struct {
+// ClusterTablet combines a cluster name with a tablet alias
+type ClusterTablet struct {
 	ClusterName string
-	Key         InstanceKey
+	Alias       string
 }
 
-// GetClusterInstanceKey creates a ClusterInstanceKey object
-func GetClusterInstanceKey(clusterName string, key *InstanceKey) ClusterInstanceKey {
-	return ClusterInstanceKey{ClusterName: clusterName, Key: *key}
+// GetClusterTablet creates a GetClusterTablet object
+func GetClusterTablet(clusterName string, alias string) ClusterTablet {
+	return ClusterTablet{ClusterName: clusterName, Alias: alias}
 }
 
-// InstanceMetricResultMap maps a cluster-instance to a result
-type InstanceMetricResultMap map[ClusterInstanceKey]base.MetricResult
+// TabletResultMap maps a cluster-tablet to a result
+type TabletResultMap map[ClusterTablet]base.MetricResult
 
 // Inventory has the operational data about probes, their metrics, and relevant configuration
 type Inventory struct {
 	ClustersProbes       map[string](Probes)
 	IgnoreHostsCount     map[string]int
 	IgnoreHostsThreshold map[string]float64
-	InstanceKeyMetrics   InstanceMetricResultMap
+	TabletMetrics        TabletResultMap
 }
 
 // NewInventory creates a Inventory
@@ -38,7 +38,7 @@ func NewInventory() *Inventory {
 		ClustersProbes:       make(map[string](Probes)),
 		IgnoreHostsCount:     make(map[string]int),
 		IgnoreHostsThreshold: make(map[string]float64),
-		InstanceKeyMetrics:   make(map[ClusterInstanceKey]base.MetricResult),
+		TabletMetrics:        make(map[ClusterTablet]base.MetricResult),
 	}
 	return inventory
 }

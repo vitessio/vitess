@@ -178,7 +178,7 @@ func TestRefreshMySQLInventory(t *testing.T) {
 						throttler.updateMySQLClusterProbes(ctx, probes)
 
 						numClusterProbesResults++
-						validateProbesCount(t, probes.ClusterName, probes.InstanceProbes)
+						validateProbesCount(t, probes.ClusterName, probes.TabletProbes)
 
 						if numClusterProbesResults == len(clusters) {
 							// Achieved our goal

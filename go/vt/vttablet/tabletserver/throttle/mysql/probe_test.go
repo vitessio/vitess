@@ -14,6 +14,5 @@ import (
 
 func TestNewProbe(t *testing.T) {
 	c := NewProbe()
-	assert.Equal(t, "", c.Key.Hostname)
-	assert.Equal(t, 0, c.Key.Port)
+	assert.Equal(t, "", c.Alias)
 }

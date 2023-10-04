@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -533,7 +534,7 @@ func (throttler *Throttler) generateSelfMySQLThrottleMetricFunc(ctx context.Cont
 func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, probe *mysql.Probe) *mysql.MySQLThrottleMetric {
 	metric := &mysql.MySQLThrottleMetric{
 		ClusterName: selfStoreName,
-		Key:         *mysql.SelfInstanceKey,
+		Alias:       "",
 		Value:       0,
 		Err:         nil,
 	}
@@ -676,7 +677,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 			case metric := <-throttler.mysqlThrottleMetricChan:
 				{
 					// incoming MySQL metric, frequent, as result of collectMySQLMetrics()
-					throttler.mysqlInventory.InstanceKeyMetrics[metric.GetClusterInstanceKey()] = metric
+					throttler.mysqlInventory.TabletMetrics[metric.GetClusterTablet()] = metric
 				}
 			case <-mysqlRefreshTicker.C:
 				{
@@ -721,9 +722,13 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 		// Hit a tablet's `check-self` via HTTP, and convert its CheckResult JSON output into a MySQLThrottleMetric
 		mySQLThrottleMetric := mysql.NewMySQLThrottleMetric()
 		mySQLThrottleMetric.ClusterName = clusterName
-		mySQLThrottleMetric.Key = probe.Key
+		mySQLThrottleMetric.Alias = probe.Alias
 
 		{
+			if probe.Tablet == nil {
+				mySQLThrottleMetric.Err = fmt.Errorf("found nil tablet reference for alias %v, hostname %v", probe.Alias, probe.Tablet.Hostname)
+				return mySQLThrottleMetric
+			}
 			req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
 			if resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req); gRPCErr == nil {
 				mySQLThrottleMetric.Value = resp.Value
@@ -736,14 +741,6 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 					go throttler.heartbeatWriter.RequestHeartbeats()
 				}
 				return mySQLThrottleMetric
-
-				// } else {
-				// In v18 we need to be backwards compatible. If we have a gRPC error it might be because the replica is v17 and
-				// does not support CheckThrottler() RPC. This is why:
-				// 1. We fall back to HTTP
-				// 2. We don't log an error (it would just spam the logs)
-				// In v19 we will remove all HTTP code, and will *potentially* log an error.
-				// log.Errorf("error in GRPC call to tablet %v: %v", probe.Tablet.GetAlias(), gRPCErr)
 			}
 		}
 		// Backwards compatibility to v17: if the underlying tablets do not support CheckThrottler gRPC, attempt a HTTP cehck:
@@ -815,27 +812,38 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 	// distribute the query/threshold from the throttler down to the cluster settings and from there to the probes
 	metricsQuery := throttler.GetMetricsQuery()
 	metricsThreshold := throttler.MetricsThreshold.Load()
-	addInstanceKey := func(tablet *topodatapb.Tablet, tabletHost string, tabletPort int, key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes mysql.Probes) {
+	addProbe := func(alias string, tablet *topodatapb.Tablet, tabletHost string, tabletPort int, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes mysql.Probes) bool {
 		for _, ignore := range clusterSettings.IgnoreHosts {
-			if strings.Contains(key.StringCode(), ignore) {
-				log.Infof("Throttler: instance key ignored: %+v", key)
-				return
+			if strings.Contains(alias, ignore) {
+				log.Infof("Throttler: tablet ignored: %+v", alias)
+				return false
 			}
 		}
-		if !key.IsValid() && !key.IsSelf() {
-			log.Infof("Throttler: read invalid instance key: [%+v] for cluster %+v", key, clusterName)
-			return
+		if clusterName != selfStoreName {
+			if alias == "" {
+				log.Errorf("Throttler: got empty alias for cluster: %+v", clusterName)
+				return false
+			}
+			if tabletHost == "" {
+				log.Errorf("Throttler: got empty host for tablet: %v in cluster: %+v", alias, clusterName)
+				return false
+			}
+			if tablet == nil {
+				log.Errorf("Throttler: got nil tablet for alias: %v in cluster: %+v", alias, clusterName)
+				return false
+			}
 		}
 
 		probe := &mysql.Probe{
-			Key:         *key,
+			Alias:       alias,
 			Tablet:      tablet,
 			TabletHost:  tabletHost,
 			TabletPort:  tabletPort,
 			MetricQuery: clusterSettings.MetricQuery,
 			CacheMillis: clusterSettings.CacheMillis,
 		}
-		probes[*key] = probe
+		probes[alias] = probe
+		return true
 	}
 
 	for clusterName, clusterSettings := range config.Settings().Stores.MySQL.Clusters {
@@ -850,13 +858,13 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			clusterProbes := &mysql.ClusterProbes{
 				ClusterName:      clusterName,
 				IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
-				InstanceProbes:   mysql.NewProbes(),
+				TabletProbes:     mysql.NewProbes(),
 			}
 
 			if clusterName == selfStoreName {
 				// special case: just looking at this tablet's MySQL server.
 				// We will probe this "cluster" (of one server) is a special way.
-				addInstanceKey(nil, "", 0, mysql.SelfInstanceKey, clusterName, clusterSettings, clusterProbes.InstanceProbes)
+				addProbe("", nil, "", 0, clusterName, clusterSettings, clusterProbes.TabletProbes)
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return
 			}
@@ -886,8 +894,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 						return err
 					}
 					if throttler.throttleTabletTypesMap[tablet.Type] {
-						key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}
-						addInstanceKey(tablet.Tablet, tablet.Hostname, int(tablet.PortMap["vt"]), &key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
+						addProbe(topoproto.TabletAliasString(tabletAlias), tablet.Tablet, tablet.Hostname, int(tablet.PortMap["vt"]), clusterName, clusterSettings, clusterProbes.TabletProbes)
 					}
 				}
 				throttler.mysqlClusterProbesChan <- clusterProbes
@@ -903,7 +910,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 
 // synchronous update of inventory
 func (throttler *Throttler) updateMySQLClusterProbes(ctx context.Context, clusterProbes *mysql.ClusterProbes) error {
-	throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] = clusterProbes.InstanceProbes
+	throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] = clusterProbes.TabletProbes
 	throttler.mysqlInventory.IgnoreHostsCount[clusterProbes.ClusterName] = clusterProbes.IgnoreHostsCount
 	throttler.mysqlInventory.IgnoreHostsThreshold[clusterProbes.ClusterName] = clusterProbes.IgnoreHostsThreshold
 	return nil
@@ -915,7 +922,7 @@ func (throttler *Throttler) aggregateMySQLMetrics(ctx context.Context) error {
 		metricName := fmt.Sprintf("mysql/%s", clusterName)
 		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount[clusterName]
 		ignoreHostsThreshold := throttler.mysqlInventory.IgnoreHostsThreshold[clusterName]
-		aggregatedMetric := aggregateMySQLProbes(ctx, probes, clusterName, throttler.mysqlInventory.InstanceKeyMetrics, ignoreHostsCount, config.Settings().Stores.MySQL.IgnoreDialTCPErrors, ignoreHostsThreshold)
+		aggregatedMetric := aggregateMySQLProbes(ctx, probes, clusterName, throttler.mysqlInventory.TabletMetrics, ignoreHostsCount, config.Settings().Stores.MySQL.IgnoreDialTCPErrors, ignoreHostsThreshold)
 		throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 	}
 	return nil

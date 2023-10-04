@@ -14,7 +14,7 @@ import (
 
 // Probe is the minimal configuration required to connect to a MySQL server
 type Probe struct {
-	Key             InstanceKey
+	Alias           string
 	MetricQuery     string
 	Tablet          *topodatapb.Tablet
 	TabletHost      string
@@ -23,15 +23,15 @@ type Probe struct {
 	QueryInProgress int64
 }
 
-// Probes maps instances to probe(s)
-type Probes map[InstanceKey](*Probe)
+// Probes maps tablet aliases to probe(s)
+type Probes map[string](*Probe)
 
 // ClusterProbes has the probes for a specific cluster
 type ClusterProbes struct {
 	ClusterName          string
 	IgnoreHostsCount     int
 	IgnoreHostsThreshold float64
-	InstanceProbes       Probes
+	TabletProbes         Probes
 }
 
 // NewProbes creates Probes
@@ -41,18 +41,10 @@ func NewProbes() Probes {
 
 // NewProbe creates Probe
 func NewProbe() *Probe {
-	config := &Probe{
-		Key: InstanceKey{},
-	}
-	return config
+	return &Probe{}
 }
 
 // String returns a human readable string of this struct
 func (p *Probe) String() string {
-	return fmt.Sprintf("%s, tablet=%s:%d", p.Key.DisplayString(), p.TabletHost, p.TabletPort)
-}
-
-// Equals checks if this probe has same instance key as another
-func (p *Probe) Equals(other *Probe) bool {
-	return p.Key.Equals(&other.Key)
+	return fmt.Sprintf("%s, tablet=%s:%d", p.Alias, p.TabletHost, p.TabletPort)
 }

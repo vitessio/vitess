@@ -18,7 +18,7 @@ func aggregateMySQLProbes(
 	ctx context.Context,
 	probes mysql.Probes,
 	clusterName string,
-	instanceResultsMap mysql.InstanceMetricResultMap,
+	tabletResultsMap mysql.TabletResultMap,
 	ignoreHostsCount int,
 	IgnoreDialTCPErrors bool,
 	ignoreHostsThreshold float64,
@@ -27,12 +27,12 @@ func aggregateMySQLProbes(
 	// so it's safe to iterate it
 	probeValues := []float64{}
 	for _, probe := range probes {
-		instanceMetricResult, ok := instanceResultsMap[mysql.GetClusterInstanceKey(clusterName, &probe.Key)]
+		tabletMetricResult, ok := tabletResultsMap[mysql.GetClusterTablet(clusterName, probe.Alias)]
 		if !ok {
 			return base.NoMetricResultYet
 		}
 
-		value, err := instanceMetricResult.Get()
+		value, err := tabletMetricResult.Get()
 		if err != nil {
 			if IgnoreDialTCPErrors && base.IsDialTCPError(err) {
 				continue
@@ -42,7 +42,7 @@ func aggregateMySQLProbes(
 				ignoreHostsCount = ignoreHostsCount - 1
 				continue
 			}
-			return instanceMetricResult
+			return tabletMetricResult
 		}
 
 		// No error

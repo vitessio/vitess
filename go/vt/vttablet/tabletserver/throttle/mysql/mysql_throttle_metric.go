@@ -33,7 +33,7 @@ const (
 var mysqlMetricCache = cache.New(cache.NoExpiration, 10*time.Second)
 
 func getMySQLMetricCacheKey(probe *Probe) string {
-	return fmt.Sprintf("%s:%s", probe.Key, probe.MetricQuery)
+	return fmt.Sprintf("%s:%s", probe.Alias, probe.MetricQuery)
 }
 
 func cacheMySQLThrottleMetric(probe *Probe, mySQLThrottleMetric *MySQLThrottleMetric) *MySQLThrottleMetric {
@@ -71,10 +71,10 @@ func GetMetricsQueryType(query string) MetricsQueryType {
 	return MetricsQueryTypeUnknown
 }
 
-// MySQLThrottleMetric has the probed metric for a mysql instance
+// MySQLThrottleMetric has the probed metric for a tablet
 type MySQLThrottleMetric struct { // nolint:revive
 	ClusterName string
-	Key         InstanceKey
+	Alias       string
 	Value       float64
 	Err         error
 }
@@ -84,9 +84,9 @@ func NewMySQLThrottleMetric() *MySQLThrottleMetric {
 	return &MySQLThrottleMetric{Value: 0}
 }
 
-// GetClusterInstanceKey returns the ClusterInstanceKey part of the metric
-func (metric *MySQLThrottleMetric) GetClusterInstanceKey() ClusterInstanceKey {
-	return GetClusterInstanceKey(metric.ClusterName, &metric.Key)
+// GetClusterTablet returns the ClusterTablet part of the metric
+func (metric *MySQLThrottleMetric) GetClusterTablet() ClusterTablet {
+	return GetClusterTablet(metric.ClusterName, metric.Alias)
 }
 
 // Get implements MetricResult
@@ -105,7 +105,7 @@ func ReadThrottleMetric(probe *Probe, clusterName string, overrideGetMetricFunc 
 	started := time.Now()
 	mySQLThrottleMetric = NewMySQLThrottleMetric()
 	mySQLThrottleMetric.ClusterName = clusterName
-	mySQLThrottleMetric.Key = probe.Key
+	mySQLThrottleMetric.Alias = probe.Alias
 
 	defer func(metric *MySQLThrottleMetric, started time.Time) {
 		go func() {
