@@ -101,32 +101,6 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
 }
 `
 
-	createLookupVindexVSchema = `
-{
-  "sharded": true,
-  "vindexes": {
-    "customer_name_keyspace_id": {
-      "type": "consistent_lookup",
-      "params": {
-        "table": "product.customer_name_keyspace_id",
-        "from": "name,cid",
-        "to": "keyspace_id",
-        "ignore_nulls": "true"
-      },
-      "owner": "customer"
-    }
-  },
-  "tables": {
-    "customer": {
-      "column_vindexes": [{
-        "columns": ["name", "cid"],
-        "name": "customer_name_keyspace_id"
-      }]
-    }
-  }
-}
-`
-
 	customerSchema  = ""
 	customerVSchema = `
 {

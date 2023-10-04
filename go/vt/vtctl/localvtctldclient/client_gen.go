@@ -371,6 +371,16 @@ func (client *localVtctldClient) LaunchSchemaMigration(ctx context.Context, in *
 	return client.s.LaunchSchemaMigration(ctx, in)
 }
 
+// LookupVindexCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) LookupVindexCreate(ctx context.Context, in *vtctldatapb.LookupVindexCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.LookupVindexCreateResponse, error) {
+	return client.s.LookupVindexCreate(ctx, in)
+}
+
+// LookupVindexExternalize is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) LookupVindexExternalize(ctx context.Context, in *vtctldatapb.LookupVindexExternalizeRequest, opts ...grpc.CallOption) (*vtctldatapb.LookupVindexExternalizeResponse, error) {
+	return client.s.LookupVindexExternalize(ctx, in)
+}
+
 // MoveTablesComplete is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) MoveTablesComplete(ctx context.Context, in *vtctldatapb.MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldatapb.MoveTablesCompleteResponse, error) {
 	return client.s.MoveTablesComplete(ctx, in)

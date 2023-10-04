@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -113,7 +114,7 @@ func NewTestVtctldServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *Vtc
 
 func panicHandler(err *error) {
 	if x := recover(); x != nil {
-		*err = fmt.Errorf("uncaught panic: %v", x)
+		*err = fmt.Errorf("uncaught panic: %v from: %v", x, string(debug.Stack()))
 	}
 }
 
@@ -2507,6 +2508,38 @@ func (s *VtctldServer) LaunchSchemaMigration(ctx context.Context, req *vtctldata
 		RowsAffectedByShard: qr.RowsAffectedByShard,
 	}
 	return resp, nil
+}
+
+// LookupVindexCreate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) LookupVindexCreate(ctx context.Context, req *vtctldatapb.LookupVindexCreateRequest) (resp *vtctldatapb.LookupVindexCreateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.LookupVindexCreate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("continue_after_copy_with_owner", req.ContinueAfterCopyWithOwner)
+	span.Annotate("cells", req.Cells)
+	span.Annotate("tablet_types", req.TabletTypes)
+
+	resp, err = s.ws.LookupVindexCreate(ctx, req)
+	return resp, err
+}
+
+// LookupVindexExternalize is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.LookupVindexExternalizeRequest) (resp *vtctldatapb.LookupVindexExternalizeResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.LookupVindexExternalize")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("name", req.Name)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("table_keyspace", req.TableKeyspace)
+
+	resp, err = s.ws.LookupVindexExternalize(ctx, req)
+	return resp, err
 }
 
 // MoveTablesCreate is part of the vtctlservicepb.VtctldServer interface.
