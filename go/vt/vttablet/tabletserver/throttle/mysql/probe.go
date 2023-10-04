@@ -17,8 +17,6 @@ type Probe struct {
 	Alias           string
 	MetricQuery     string
 	Tablet          *topodatapb.Tablet
-	TabletHost      string
-	TabletPort      int
 	CacheMillis     int
 	QueryInProgress int64
 }
@@ -46,5 +44,5 @@ func NewProbe() *Probe {
 
 // String returns a human readable string of this struct
 func (p *Probe) String() string {
-	return fmt.Sprintf("%s, tablet=%s:%d", p.Alias, p.TabletHost, p.TabletPort)
+	return fmt.Sprintf("probe alias=%s", p.Alias)
 }
