@@ -282,6 +282,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 func TestBasicVreplicationWorkflow(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mysql-8.0"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
+	//testBasicVreplicationWorkflow(t, "noblob")
 	testBasicVreplicationWorkflow(t, "noblob")
 }
 
@@ -386,7 +387,8 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		_, err = vtgateConn.ExecuteFetch(insert, -1, false)
 		require.NoError(t, err, "error executing %q: %v", insert, err)
 
-		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--keyspace=customer", "create", "--tablet-types=PRIMARY", createLookupVindexVSchema)
+		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name=corder_lookup", "--table-keyspace=product", "create", "--keyspace=customer",
+			"--type=consistent_lookup", "--table-owner=customer", "--table-name=customer", "--table-owner-columns=name,cid", "--ignore-nulls", "--tablet-types=PRIMARY")
 		require.NoError(t, err, "error executing LookupVindex create: %v", err)
 		waitForWorkflowState(t, vc, "product.customer_name_keyspace_id_vdx", binlogdatapb.VReplicationWorkflowState_Running.String())
 		waitForRowCount(t, vtgateConn, "product", "customer_name_keyspace_id", int(rows))
@@ -396,7 +398,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		require.NotNil(t, vdx, "lookup vindex customer_name_keyspace_id not found")
 		require.Equal(t, "true", vdx.Get("params.write_only").String(), "expected write_only parameter to be true")
 
-		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--keyspace=customer", "externalize", createLookupVindexVSchema)
+		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name=corder_lookup", "--table-keyspace=product", "externalize")
 		require.NoError(t, err, "error executing LookupVindex externalize: %v", err)
 		customerVSchema, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", "customer")
 		require.NoError(t, err, "error executing GetVSchema: %v", err)

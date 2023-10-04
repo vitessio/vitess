@@ -3305,7 +3305,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 
 	// Validate input vindex.
 	if len(specs.Vindexes) != 1 {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "only one vindex must be specified in the specs: %v", specs.Vindexes)
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "only one vindex must be specified: %v", specs.Vindexes)
 	}
 	vindexName = maps.Keys(specs.Vindexes)[0]
 	vindex = maps.Values(specs.Vindexes)[0]
@@ -3349,7 +3349,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 
 	// Validate input table.
 	if len(specs.Tables) < 1 || len(specs.Tables) > 2 {
-		return nil, nil, nil, fmt.Errorf("one or two tables must be specified in the specs: %v", specs.Tables)
+		return nil, nil, nil, fmt.Errorf("one or two tables must be specified: %v", specs.Tables)
 	}
 	// Loop executes once or twice.
 	for tableName, table := range specs.Tables {
@@ -3531,7 +3531,8 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	// Update targetVSchema.
 	targetTable := specs.Tables[targetTableName]
 	if targetVSchema.Sharded {
-		// Choose a primary vindex type for the target table based on the source definition.
+		// Choose a primary vindex type for the target table based on the source
+		// definition if one was not explicitly specified.
 		var targetVindexType string
 		var targetVindex *vschemapb.Vindex
 		for _, field := range tableSchema.TableDefinitions[0].Fields {
