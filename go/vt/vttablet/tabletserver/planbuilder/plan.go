@@ -260,12 +260,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbNam
 }
 
 // BuildStreaming builds a streaming plan based on the schema.
-func BuildStreaming(sql string, tables map[string]*schema.Table) (*Plan, error) {
-	statement, err := sqlparser.Parse(sql)
-	if err != nil {
-		return nil, err
-	}
-
+func BuildStreaming(statement sqlparser.Statement, tables map[string]*schema.Table) (*Plan, error) {
 	plan := &Plan{
 		PlanID:      PlanSelectStream,
 		FullQuery:   GenerateFullQuery(statement),
