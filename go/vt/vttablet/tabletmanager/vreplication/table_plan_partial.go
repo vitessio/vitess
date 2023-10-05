@@ -19,14 +19,15 @@ package vreplication
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vttablet"
-
-	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
 // isBitSet returns true if the bit at index is set
@@ -81,7 +82,7 @@ func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuf
 }
 
 func (tpb *tablePlanBuilder) generatePartialInsertPart(buf *sqlparser.TrackedBuffer, dataColumns *binlogdatapb.RowChange_Bitmap) *sqlparser.ParsedQuery {
-	buf.Myprintf("insert into %v(", tpb.name)
+	buf.Myprintf("insert %sinto %v(", vstreamer.GetVReplicationMaxExecutionTimeQueryHint(), tpb.name)
 	separator := ""
 	for ind, cexpr := range tpb.colExprs {
 		if tpb.isColumnGenerated(cexpr.colName) {
@@ -138,7 +139,7 @@ func (tpb *tablePlanBuilder) createPartialInsertQuery(dataColumns *binlogdatapb.
 func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.RowChange_Bitmap) *sqlparser.ParsedQuery {
 	bvf := &bindvarFormatter{}
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
-	buf.Myprintf("update %v set ", tpb.name)
+	buf.Myprintf("update %s%v set ", vstreamer.GetVReplicationMaxExecutionTimeQueryHint(), tpb.name)
 	separator := ""
 	for i, cexpr := range tpb.colExprs {
 		if cexpr.isPK {
