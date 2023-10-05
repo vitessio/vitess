@@ -28,10 +28,8 @@ var (
 
 	// workflow is a parent command for Workflow* sub commands.
 	workflow = &cobra.Command{
-		Use:   "Workflow --keyspace <keyspace> [command] [command-flags]",
-		Short: "Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace.",
-		Long: `Workflow commands: List, Show, Start, Stop, Update, and Delete.
-See the --help output for each command for more details.`,
+		Use:                   "Workflow --keyspace <keyspace> [command] [command-flags]",
+		Short:                 "Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace.",
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"workflow"},
 		Args:                  cobra.ExactArgs(1),

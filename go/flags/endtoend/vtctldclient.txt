@@ -51,6 +51,7 @@ Available Commands:
   GetVSchema                  Prints a JSON representation of a keyspace's topo record.
   GetWorkflows                Gets all vreplication workflows (Reshard, MoveTables, etc) in the given keyspace.
   LegacyVtctlCommand          Invoke a legacy vtctlclient command. Flag parsing is best effort.
+  LookupVindex                Perform commands related to creating, backfilling, and externalizing Lookup Vindexes using VReplication workflows.
   MoveTables                  Perform commands related to moving tables from a source keyspace to a target keyspace.
   OnlineDDL                   Operates on online DDL (schema migrations).
   PingTablet                  Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.

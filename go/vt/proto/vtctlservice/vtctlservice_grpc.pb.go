@@ -275,6 +275,8 @@ type VtctldClient interface {
 	InitShardPrimary(ctx context.Context, in *vtctldata.InitShardPrimaryRequest, opts ...grpc.CallOption) (*vtctldata.InitShardPrimaryResponse, error)
 	// LaunchSchemaMigration launches one or all migrations executed with --postpone-launch.
 	LaunchSchemaMigration(ctx context.Context, in *vtctldata.LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.LaunchSchemaMigrationResponse, error)
+	LookupVindexCreate(ctx context.Context, in *vtctldata.LookupVindexCreateRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexCreateResponse, error)
+	LookupVindexExternalize(ctx context.Context, in *vtctldata.LookupVindexExternalizeRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexExternalizeResponse, error)
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
 	MoveTablesCreate(ctx context.Context, in *vtctldata.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
@@ -949,6 +951,24 @@ func (c *vtctldClient) LaunchSchemaMigration(ctx context.Context, in *vtctldata.
 	return out, nil
 }
 
+func (c *vtctldClient) LookupVindexCreate(ctx context.Context, in *vtctldata.LookupVindexCreateRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexCreateResponse, error) {
+	out := new(vtctldata.LookupVindexCreateResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/LookupVindexCreate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) LookupVindexExternalize(ctx context.Context, in *vtctldata.LookupVindexExternalizeRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexExternalizeResponse, error) {
+	out := new(vtctldata.LookupVindexExternalizeResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/LookupVindexExternalize", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) MoveTablesCreate(ctx context.Context, in *vtctldata.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
 	out := new(vtctldata.WorkflowStatusResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/MoveTablesCreate", in, out, opts...)
@@ -1574,6 +1594,8 @@ type VtctldServer interface {
 	InitShardPrimary(context.Context, *vtctldata.InitShardPrimaryRequest) (*vtctldata.InitShardPrimaryResponse, error)
 	// LaunchSchemaMigration launches one or all migrations executed with --postpone-launch.
 	LaunchSchemaMigration(context.Context, *vtctldata.LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error)
+	LookupVindexCreate(context.Context, *vtctldata.LookupVindexCreateRequest) (*vtctldata.LookupVindexCreateResponse, error)
+	LookupVindexExternalize(context.Context, *vtctldata.LookupVindexExternalizeRequest) (*vtctldata.LookupVindexExternalizeResponse, error)
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
 	MoveTablesCreate(context.Context, *vtctldata.MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
@@ -1892,6 +1914,12 @@ func (UnimplementedVtctldServer) InitShardPrimary(context.Context, *vtctldata.In
 }
 func (UnimplementedVtctldServer) LaunchSchemaMigration(context.Context, *vtctldata.LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LaunchSchemaMigration not implemented")
+}
+func (UnimplementedVtctldServer) LookupVindexCreate(context.Context, *vtctldata.LookupVindexCreateRequest) (*vtctldata.LookupVindexCreateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LookupVindexCreate not implemented")
+}
+func (UnimplementedVtctldServer) LookupVindexExternalize(context.Context, *vtctldata.LookupVindexExternalizeRequest) (*vtctldata.LookupVindexExternalizeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LookupVindexExternalize not implemented")
 }
 func (UnimplementedVtctldServer) MoveTablesCreate(context.Context, *vtctldata.MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesCreate not implemented")
@@ -2979,6 +3007,42 @@ func _Vtctld_LaunchSchemaMigration_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).LaunchSchemaMigration(ctx, req.(*vtctldata.LaunchSchemaMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_LookupVindexCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.LookupVindexCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).LookupVindexCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/LookupVindexCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).LookupVindexCreate(ctx, req.(*vtctldata.LookupVindexCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_LookupVindexExternalize_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.LookupVindexExternalizeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).LookupVindexExternalize(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/LookupVindexExternalize",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).LookupVindexExternalize(ctx, req.(*vtctldata.LookupVindexExternalizeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4106,6 +4170,14 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LaunchSchemaMigration",
 			Handler:    _Vtctld_LaunchSchemaMigration_Handler,
+		},
+		{
+			MethodName: "LookupVindexCreate",
+			Handler:    _Vtctld_LookupVindexCreate_Handler,
+		},
+		{
+			MethodName: "LookupVindexExternalize",
+			Handler:    _Vtctld_LookupVindexExternalize_Handler,
 		},
 		{
 			MethodName: "MoveTablesCreate",

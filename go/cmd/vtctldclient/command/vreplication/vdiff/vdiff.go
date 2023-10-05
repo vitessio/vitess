@@ -117,10 +117,8 @@ var (
 
 	// base is the base command for all actions related to VDiff.
 	base = &cobra.Command{
-		Use:   "VDiff --workflow <workflow> --keyspace <keyspace> [command] [command-flags]",
-		Short: "Perform commands related to diffing tables involved in a VReplication workflow between the source and target.",
-		Long: `VDiff commands: create, resume, show, stop, and delete.
-See the --help output for each command for more details.`,
+		Use:                   "VDiff --workflow <workflow> --keyspace <keyspace> [command] [command-flags]",
+		Short:                 "Perform commands related to diffing tables involved in a VReplication workflow between the source and target.",
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"vdiff"},
 		Args:                  cobra.NoArgs,
@@ -854,7 +852,7 @@ func commandStop(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func registerVDiffCommands(root *cobra.Command) {
+func registerCommands(root *cobra.Command) {
 	common.AddCommonFlags(base)
 	root.AddCommand(base)
 
@@ -885,5 +883,5 @@ func registerVDiffCommands(root *cobra.Command) {
 }
 
 func init() {
-	common.RegisterCommandHandler("VDiff", registerVDiffCommands)
+	common.RegisterCommandHandler("VDiff", registerCommands)
 }
