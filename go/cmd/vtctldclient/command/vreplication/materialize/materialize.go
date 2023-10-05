@@ -23,8 +23,8 @@ import (
 )
 
 var (
-	// materialize is the base command for all actions related to Materialize.
-	materialize = &cobra.Command{
+	// base is the base command for all actions related to Materialize.
+	base = &cobra.Command{
 		Use:                   "Materialize --workflow <workflow> --target-keyspace <keyspace> [command] [command-flags]",
 		Short:                 "Perform commands related to materializing query results from the source keyspace into tables in the target keyspace.",
 		DisableFlagsInUseLine: true,
@@ -34,25 +34,25 @@ var (
 )
 
 func registerCommands(root *cobra.Command) {
-	common.AddCommonFlags(materialize)
-	root.AddCommand(materialize)
+	common.AddCommonFlags(base)
+	root.AddCommand(base)
 
 	common.AddCommonCreateFlags(create)
 	create.Flags().StringVar(&createOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables are being moved from.")
 	create.MarkFlagRequired("source-keyspace")
 	create.Flags().Var(&createOptions.TableSettings, "table-settings", "A JSON array where each value must contain two key/value pairs. The first key is 'target_table' and it is the name of the table in the target-keyspace to store the results in. The second key is 'source_expression' and its value is the select to run against the source table. An optional k/v pair can be specified for 'create_ddl' which provides the DDL to create the target table if it does not exist.")
 	create.MarkFlagRequired("table-settings")
-	root.AddCommand(create)
+	base.AddCommand(create)
 
 	// Generic workflow commands.
 	opts := &common.SubCommandsOpts{
 		SubCommand: "Materialize",
 		Workflow:   "product_sales",
 	}
-	materialize.AddCommand(common.GetCancelCommand(opts))
-	materialize.AddCommand(common.GetShowCommand(opts))
-	materialize.AddCommand(common.GetStartCommand(opts))
-	materialize.AddCommand(common.GetStopCommand(opts))
+	base.AddCommand(common.GetCancelCommand(opts))
+	base.AddCommand(common.GetShowCommand(opts))
+	base.AddCommand(common.GetStartCommand(opts))
+	base.AddCommand(common.GetStopCommand(opts))
 }
 
 func init() {
