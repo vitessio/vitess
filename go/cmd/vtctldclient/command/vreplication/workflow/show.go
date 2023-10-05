@@ -37,27 +37,27 @@ var (
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"List"},
 		Args:                  cobra.NoArgs,
-		RunE:                  commandWorkflowShow,
+		RunE:                  commandShow,
 	}
 
-	// WorkflowShow makes a GetWorkflows gRPC call to a vtctld.
-	workflowShow = &cobra.Command{
+	// show makes a GetWorkflows gRPC call to a vtctld.
+	show = &cobra.Command{
 		Use:                   "show",
 		Short:                 "Show the details for a VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer show --workflow commerce2customer`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Show"},
 		Args:                  cobra.NoArgs,
-		RunE:                  commandWorkflowShow,
+		RunE:                  commandShow,
 	}
 )
 
-func commandWorkflowShow(cmd *cobra.Command, args []string) error {
+func commandShow(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.GetWorkflowsRequest{
-		Keyspace: workflowOptions.Keyspace,
-		Workflow: workflowDeleteOptions.Workflow,
+		Keyspace: baseOptions.Keyspace,
+		Workflow: baseOptions.Workflow,
 	}
 	resp, err := common.GetClient().GetWorkflows(common.GetCommandCtx(), req)
 	if err != nil {
@@ -81,9 +81,4 @@ func commandWorkflowShow(cmd *cobra.Command, args []string) error {
 	fmt.Printf("%s\n", data)
 
 	return nil
-}
-
-func addWorkflowShowFlags(cmd *cobra.Command) {
-	workflowShow.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want the details for (required).")
-	workflowShow.MarkFlagRequired("workflow")
 }

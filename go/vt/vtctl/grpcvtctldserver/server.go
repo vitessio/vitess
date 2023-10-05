@@ -4876,6 +4876,7 @@ func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.Work
 	span.Annotate("cells", req.TabletRequest.Cells)
 	span.Annotate("tablet_types", req.TabletRequest.TabletTypes)
 	span.Annotate("on_ddl", req.TabletRequest.OnDdl)
+	span.Annotate("state", req.TabletRequest.State)
 
 	resp, err = s.ws.WorkflowUpdate(ctx, req)
 	return resp, err
