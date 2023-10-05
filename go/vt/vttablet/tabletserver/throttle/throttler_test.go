@@ -117,7 +117,7 @@ func newTestThrottler() *Throttler {
 		mysqlInventory:         mysql.NewInventory(),
 		pool:                   connpool.NewPool(env, "ThrottlerPool", tabletenv.ConnPoolConfig{}),
 		tabletTypeFunc:         func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY },
-		tmClient:               &fakeTMClient{},
+		overrideTmClient:       &fakeTMClient{},
 	}
 	throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
 	throttler.mysqlInventoryChan = make(chan *mysql.Inventory, 1)
