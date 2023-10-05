@@ -520,7 +520,7 @@ func TestPlayerSavepoint(t *testing.T) {
 	})
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"/insert into t1.*2.*",
+		"/insert /\\*\\+ MAX_EXECUTION_TIME\\(3600000\\) \\*/ into t1.*2.*",
 		"/insert /\\*\\+ MAX_EXECUTION_TIME\\(3600000\\) \\*/ into t1.*3.*",
 		"/update _vt.vreplication set pos=",
 		"commit",
@@ -663,7 +663,7 @@ func TestPlayerStatementMode(t *testing.T) {
 
 	output := qh.Expect(
 		"begin",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into src1 values(1, 'aaa')",
+		"insert into src1 values(1, 'aaa')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	)
@@ -771,7 +771,7 @@ func TestPlayerFilters(t *testing.T) {
 		},
 		logs: []LogExpectation{
 			{"FIELD", "/src1.*id.*INT32.*val.*VARBINARY.*"},
-			{"ROWCHANGE", "insert into dst1(id,val) values (1,'aaa')"},
+			{"ROWCHANGE", "insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) values (1,'aaa')"},
 			{"ROW", "/src1.*3.*1aaa.*"},
 		},
 	}, {
@@ -788,7 +788,7 @@ func TestPlayerFilters(t *testing.T) {
 			{"1", "bbb"},
 		},
 		logs: []LogExpectation{
-			{"ROWCHANGE", "update dst1 set val='bbb' where id=1"},
+			{"ROWCHANGE", "update /*+ MAX_EXECUTION_TIME(3600000) */ dst1 set val='bbb' where id=1"},
 			{"ROW", "/src1.*3.*1aaa.*"},
 		},
 	}, {
@@ -803,7 +803,7 @@ func TestPlayerFilters(t *testing.T) {
 		table: "dst1",
 		data:  [][]string{},
 		logs: []LogExpectation{
-			{"ROWCHANGE", "delete from dst1 where id=1"},
+			{"ROWCHANGE", "delete /*+ MAX_EXECUTION_TIME(3600000) */ from dst1 where id=1"},
 			{"ROW", "/src1.*3.*1bbb.*"},
 		},
 	}, {
@@ -821,7 +821,7 @@ func TestPlayerFilters(t *testing.T) {
 		},
 		logs: []LogExpectation{
 			{"FIELD", "/src2.*id.*val1.*val2.*"},
-			{"ROWCHANGE", "insert into dst2(id,val1,sval2,rcount) values (1,2,ifnull(3, 0),1) on duplicate key update val1=values(val1), sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1"},
+			{"ROWCHANGE", "insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst2(id,val1,sval2,rcount) values (1,2,ifnull(3, 0),1) on duplicate key update val1=values(val1), sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1"},
 		},
 	}, {
 		// update with insertOnDup
@@ -837,7 +837,7 @@ func TestPlayerFilters(t *testing.T) {
 			{"1", "5", "1", "1"},
 		},
 		logs: []LogExpectation{
-			{"ROWCHANGE", "update dst2 set val1=5, sval2=sval2-ifnull(3, 0)+ifnull(1, 0), rcount=rcount where id=1"},
+			{"ROWCHANGE", "update /*+ MAX_EXECUTION_TIME(3600000) */ dst2 set val1=5, sval2=sval2-ifnull(3, 0)+ifnull(1, 0), rcount=rcount where id=1"},
 			{"ROW", "/src2.*123.*"},
 		},
 	}, {
@@ -2633,7 +2633,7 @@ func TestTimestamp(t *testing.T) {
 		"begin",
 		// The insert value for ts will be in UTC.
 		// We'll check the row instead.
-		"/insert into t1",
+		"/insert /\\*\\+ MAX_EXECUTION_TIME\\(3600000\\) \\*/ into t1",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))

@@ -1063,7 +1063,7 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id1\\" type:INT32 charset:63 flags:53251} fields:{name:\\"id2\\" type:INT32 charset:63 flags:53251} rows:{lengths:2 lengths:1 values:\\"126\\"}'.*`,
 	)).Then(qh.Immediately(
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
-		"insert into not_copied(id,val) values (1,'bbb')",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into not_copied(id,val) values (1,'bbb')",
 	)).Then(qh.Eventually(
 		// Copy again. There should be no events for catchup.
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\\"id\\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\\"1\\\"}'.*`,
@@ -1384,7 +1384,7 @@ func testPlayerCopyTablesStopAfterCopy(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 	).Then(qh.Eventually(
 		"begin",
-		"insert into dst1(id,val) values (1,'aaa'), (2,'bbb')",
+		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) values (1,'aaa'), (2,'bbb')",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 	)).Then(qh.Immediately(
