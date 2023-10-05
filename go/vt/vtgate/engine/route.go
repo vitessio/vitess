@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -40,6 +42,13 @@ import (
 )
 
 var _ Primitive = (*Route)(nil)
+
+var (
+	replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
+		"ReplicaWarmingReadsMirrored",
+		"Number of reads mirrored to replicas to warm their bufferpools",
+		[]string{"Keyspace"})
+)
 
 // Route represents the instructions to route a read query to
 // one or many vttablets.
@@ -239,6 +248,8 @@ func (route *Route) executeShards(
 
 	queries := getQueries(route.Query, bvs)
 	result, errs := vcursor.ExecuteMultiShard(ctx, route, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+
+	route.executeWarmingReplicaRead(ctx, vcursor, bindVars, queries)
 
 	if errs != nil {
 		errs = filterOutNilErrors(errs)
@@ -580,4 +591,43 @@ func getQueries(query string, bvs []map[string]*querypb.BindVariable) []*querypb
 
 func orderByToString(in any) string {
 	return in.(OrderByParams).String()
+}
+
+func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, queries []*querypb.BoundQuery) {
+	switch route.Opcode {
+	case Unsharded, Scatter, Equal, EqualUnique, IN, MultiEqual:
+		// no-op
+	default:
+		return
+	}
+
+	if vcursor.GetWarmingReadsPercent() == 0 || rand.Intn(100) > vcursor.GetWarmingReadsPercent() {
+		return
+	}
+
+	replicaVCursor := vcursor.CloneForReplicaWarming(ctx)
+	warmingReadsChannel := vcursor.GetWarmingReadsChannel()
+
+	select {
+	// if there's no more room in the channel, drop the warming read
+	case warmingReadsChannel <- true:
+		go func(replicaVCursor VCursor) {
+			defer func() {
+				<-warmingReadsChannel
+			}()
+			rss, _, err := route.findRoute(ctx, replicaVCursor, bindVars)
+			if err != nil {
+				return
+			}
+
+			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false /* rollbackOnError */, false /* autocommit */)
+			if len(errs) > 0 {
+				log.Warningf("Failed to execute warming replica read: %v", errs)
+			} else {
+				replicaWarmingReadsMirrored.Add([]string{route.Keyspace.Name}, 1)
+			}
+		}(replicaVCursor)
+	default:
+		log.Warning("Failed to execute warming replica read as pool is full")
+	}
 }

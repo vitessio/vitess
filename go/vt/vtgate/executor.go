@@ -119,6 +119,9 @@ type Executor struct {
 
 	// queryLogger is passed in for logging from this vtgate executor.
 	queryLogger *streamlog.StreamLogger[*logstats.LogStats]
+
+	warmingReadsPercent int
+	warmingReadsChannel chan bool
 }
 
 var executorOnce sync.Once
@@ -148,20 +151,23 @@ func NewExecutor(
 	schemaTracker SchemaInfo,
 	noScatter bool,
 	pv plancontext.PlannerVersion,
+	warmingReadsPercent int,
 ) *Executor {
 	e := &Executor{
-		serv:            serv,
-		cell:            cell,
-		resolver:        resolver,
-		scatterConn:     resolver.scatterConn,
-		txConn:          resolver.scatterConn.txConn,
-		normalize:       normalize,
-		warnShardedOnly: warnOnShardedOnly,
-		streamSize:      streamSize,
-		schemaTracker:   schemaTracker,
-		allowScatter:    !noScatter,
-		pv:              pv,
-		plans:           plans,
+		serv:                serv,
+		cell:                cell,
+		resolver:            resolver,
+		scatterConn:         resolver.scatterConn,
+		txConn:              resolver.scatterConn.txConn,
+		normalize:           normalize,
+		warnShardedOnly:     warnOnShardedOnly,
+		streamSize:          streamSize,
+		schemaTracker:       schemaTracker,
+		allowScatter:        !noScatter,
+		pv:                  pv,
+		plans:               plans,
+		warmingReadsPercent: warmingReadsPercent,
+		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
 	}
 
 	vschemaacl.Init()

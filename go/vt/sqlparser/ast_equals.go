@@ -2854,10 +2854,6 @@ func (cmp *Comparator) RefOfIndexInfo(a, b *IndexInfo) bool {
 		return false
 	}
 	return a.Type == b.Type &&
-		a.Primary == b.Primary &&
-		a.Spatial == b.Spatial &&
-		a.Fulltext == b.Fulltext &&
-		a.Unique == b.Unique &&
 		cmp.IdentifierCI(a.Name, b.Name) &&
 		cmp.IdentifierCI(a.ConstraintName, b.ConstraintName)
 }
