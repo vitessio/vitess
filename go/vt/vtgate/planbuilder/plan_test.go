@@ -77,6 +77,8 @@ func TestPlan(t *testing.T) {
 	testFile(t, "select_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "symtab_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "unsupported_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "unknown_schema_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "error_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "vindex_func_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "wireup_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "memory_sort_cases.json", testOutputTempDir, vschemaWrapper, false)
