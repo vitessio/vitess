@@ -1054,7 +1054,7 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) select /*+ MAX_EXECUTION_TIME(3600000) */ 12, 'move out' from dual where (12,6) <= (6,6)",
 		"delete /*+ MAX_EXECUTION_TIME(3600000) */ from dst1 where id=11 and (11,11) <= (6,6)",
 		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) select /*+ MAX_EXECUTION_TIME(3600000) */ 4, 'move in' from dual where (4,11) <= (6,6)",
-		"update copied set val='bbb' where id=1",
+		"update /*+ MAX_EXECUTION_TIME(3600000) */ copied set val='bbb' where id=1",
 		// Fast-forward
 		"update /*+ MAX_EXECUTION_TIME(3600000) */ dst1 set val='updated again' where id=3 and (3,3) <= (6,6)",
 	).Then(qh.Immediately(
