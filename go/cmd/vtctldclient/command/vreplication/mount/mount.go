@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -46,8 +47,8 @@ var mountOptions struct {
 
 var register = &cobra.Command{
 	Use:                   "register",
-	Short:                 "Register a mount",
-	Example:               `vtctldclient --server localhost:15999 Mount Register --topo-type etcd2 --topo-server localhost:12379 --topo-root /vitess/global ext1`,
+	Short:                 "Register an external Vitess Cluster",
+	Example:               `vtctldclient --server localhost:15999 mount register --topo-type etcd2 --topo-server localhost:12379 --topo-root /vitess/global ext1`,
 	DisableFlagsInUseLine: true,
 	Aliases:               []string{"Register"},
 	Args:                  cobra.ExactArgs(1),
@@ -73,8 +74,8 @@ func commandRegister(cmd *cobra.Command, args []string) error {
 
 var unregister = &cobra.Command{
 	Use:                   "unregister",
-	Short:                 "Unregister a mount",
-	Example:               `vtctldclient --server localhost:15999 Mount Unregister ext1`,
+	Short:                 "Unregister a previously mounted external Vitess Cluster",
+	Example:               `vtctldclient --server localhost:15999 mount unregister ext1`,
 	DisableFlagsInUseLine: true,
 	Aliases:               []string{"Unregister"},
 	Args:                  cobra.ExactArgs(1),
@@ -97,7 +98,7 @@ func commandUnregister(cmd *cobra.Command, args []string) error {
 
 var show = &cobra.Command{
 	Use:                   "show",
-	Short:                 "Show attributes of a mount",
+	Short:                 "Show attributes of a previously mounted external Vitess Cluster",
 	Example:               `vtctldclient --server localhost:15999 Mount Show ext1`,
 	DisableFlagsInUseLine: true,
 	Aliases:               []string{"Show"},
@@ -125,8 +126,8 @@ func commandShow(cmd *cobra.Command, args []string) error {
 
 var list = &cobra.Command{
 	Use:                   "list",
-	Short:                 "List all mounts",
-	Example:               `vtctldclient --server localhost:15999 Mount List`,
+	Short:                 "List all mounted external Vitess Clusters",
+	Example:               `vtctldclient --server localhost:15999 mount list`,
 	DisableFlagsInUseLine: true,
 	Aliases:               []string{"List"},
 	Args:                  cobra.NoArgs,
@@ -165,9 +166,9 @@ func addRegisterFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&mountOptions.TopoType, "topo-type", "", "Topo server implementation to use")
 	cmd.Flags().StringVar(&mountOptions.TopoServer, "topo-server", "", "Topo server address")
 	cmd.Flags().StringVar(&mountOptions.TopoRoot, "topo-root", "", "Topo server root path")
-	for _, flag := range []string{"topo-type", "topo-server", "topo-root"} {
-		cmd.MarkFlagRequired(flag)
-	}
+	cmd.MarkFlagRequired("topo-type")
+	cmd.MarkFlagRequired("topo-server")
+	cmd.MarkFlagRequired("topo-root")
 }
 
 func init() {

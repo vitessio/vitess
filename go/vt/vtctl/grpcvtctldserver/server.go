@@ -2549,7 +2549,7 @@ func (s *VtctldServer) MigrateCreate(ctx context.Context, req *vtctldatapb.Migra
 
 	defer panicHandler(&err)
 
-	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("target_keyspace", req.TargetKeyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("cells", req.Cells)
 	span.Annotate("tablet_types", req.TabletTypes)
