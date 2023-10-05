@@ -11063,7 +11063,7 @@ yydefault:
 		var yyLOCAL *AlterTable
 //line sql.y:1250
 		{
-			yyLOCAL = &AlterTable{Table: yyDollar[7].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[4].identifierCI, Type: string(yyDollar[3].str)}, Options: yyDollar[5].indexOptionsUnion()}}}}
+			yyLOCAL = &AlterTable{Table: yyDollar[7].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[4].identifierCI}, Options: yyDollar[5].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.union = yyLOCAL
@@ -11072,7 +11072,7 @@ yydefault:
 		var yyLOCAL *AlterTable
 //line sql.y:1255
 		{
-			yyLOCAL = &AlterTable{Table: yyDollar[8].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCI, Type: string(yyDollar[3].str) + " " + string(yyDollar[4].str), Fulltext: true}, Options: yyDollar[6].indexOptionsUnion()}}}}
+			yyLOCAL = &AlterTable{Table: yyDollar[8].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCI, Type: IndexTypeFullText}, Options: yyDollar[6].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.union = yyLOCAL
@@ -11081,7 +11081,7 @@ yydefault:
 		var yyLOCAL *AlterTable
 //line sql.y:1260
 		{
-			yyLOCAL = &AlterTable{Table: yyDollar[8].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCI, Type: string(yyDollar[3].str) + " " + string(yyDollar[4].str), Spatial: true}, Options: yyDollar[6].indexOptionsUnion()}}}}
+			yyLOCAL = &AlterTable{Table: yyDollar[8].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCI, Type: IndexTypeSpatial}, Options: yyDollar[6].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.union = yyLOCAL
@@ -11090,7 +11090,7 @@ yydefault:
 		var yyLOCAL *AlterTable
 //line sql.y:1265
 		{
-			yyLOCAL = &AlterTable{Table: yyDollar[8].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCI, Type: string(yyDollar[3].str) + " " + string(yyDollar[4].str), Unique: true}, Options: yyDollar[6].indexOptionsUnion()}}}}
+			yyLOCAL = &AlterTable{Table: yyDollar[8].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[5].identifierCI, Type: IndexTypeUnique}, Options: yyDollar[6].indexOptionsUnion()}}}}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.union = yyLOCAL
@@ -12819,7 +12819,7 @@ yydefault:
 		var yyLOCAL *IndexInfo
 //line sql.y:2419
 		{
-			yyLOCAL = &IndexInfo{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), ConstraintName: NewIdentifierCI(yyDollar[1].str), Name: NewIdentifierCI("PRIMARY"), Primary: true, Unique: true}
+			yyLOCAL = &IndexInfo{Type: IndexTypePrimary, ConstraintName: NewIdentifierCI(yyDollar[1].str), Name: NewIdentifierCI("PRIMARY")}
 		}
 		yyVAL.union = yyLOCAL
 	case 404:
@@ -12827,7 +12827,7 @@ yydefault:
 		var yyLOCAL *IndexInfo
 //line sql.y:2423
 		{
-			yyLOCAL = &IndexInfo{Type: string(yyDollar[1].str) + " " + string(yyDollar[2].str), Name: NewIdentifierCI(yyDollar[3].str), Spatial: true, Unique: false}
+			yyLOCAL = &IndexInfo{Type: IndexTypeSpatial, Name: NewIdentifierCI(yyDollar[3].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 405:
@@ -12835,7 +12835,7 @@ yydefault:
 		var yyLOCAL *IndexInfo
 //line sql.y:2427
 		{
-			yyLOCAL = &IndexInfo{Type: string(yyDollar[1].str) + " " + string(yyDollar[2].str), Name: NewIdentifierCI(yyDollar[3].str), Fulltext: true, Unique: false}
+			yyLOCAL = &IndexInfo{Type: IndexTypeFullText, Name: NewIdentifierCI(yyDollar[3].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 406:
@@ -12843,7 +12843,7 @@ yydefault:
 		var yyLOCAL *IndexInfo
 //line sql.y:2431
 		{
-			yyLOCAL = &IndexInfo{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), ConstraintName: NewIdentifierCI(yyDollar[1].str), Name: NewIdentifierCI(yyDollar[4].str), Unique: true}
+			yyLOCAL = &IndexInfo{Type: IndexTypeUnique, ConstraintName: NewIdentifierCI(yyDollar[1].str), Name: NewIdentifierCI(yyDollar[4].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 407:
@@ -12851,7 +12851,7 @@ yydefault:
 		var yyLOCAL *IndexInfo
 //line sql.y:2435
 		{
-			yyLOCAL = &IndexInfo{Type: string(yyDollar[1].str), Name: NewIdentifierCI(yyDollar[2].str), Unique: false}
+			yyLOCAL = &IndexInfo{Type: IndexTypeDefault, Name: NewIdentifierCI(yyDollar[2].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 408:
@@ -12900,7 +12900,7 @@ yydefault:
 		yyDollar = yyS[yypt-0 : yypt+1]
 //line sql.y:2473
 		{
-			yyVAL.str = "key"
+			yyVAL.str = ""
 		}
 	case 416:
 		yyDollar = yyS[yypt-1 : yypt+1]

@@ -477,10 +477,10 @@ func TestDiffSchemas(t *testing.T) {
 			from: "create table t1 (id mediumint unsigned NOT NULL, deleted_at timestamp, primary key (id), unique key deleted_check (id, (if((deleted_at is null),0,NULL))))",
 			to:   "create table t1 (id mediumint unsigned NOT NULL, deleted_at timestamp, primary key (id), unique key deleted_check (id, (if((deleted_at is not null),0,NULL))))",
 			diffs: []string{
-				"alter table t1 drop key deleted_check, add unique key deleted_check (id, (if(deleted_at is not null, 0, null)))",
+				"alter table t1 drop key deleted_check, add unique index deleted_check (id, (if(deleted_at is not null, 0, null)))",
 			},
 			cdiffs: []string{
-				"ALTER TABLE `t1` DROP KEY `deleted_check`, ADD UNIQUE KEY `deleted_check` (`id`, (if(`deleted_at` IS NOT NULL, 0, NULL)))",
+				"ALTER TABLE `t1` DROP KEY `deleted_check`, ADD UNIQUE INDEX `deleted_check` (`id`, (if(`deleted_at` IS NOT NULL, 0, NULL)))",
 			},
 		},
 		{
@@ -656,13 +656,13 @@ func TestDiffSchemas(t *testing.T) {
 			to:   "create table t7(id int primary key); create table t5 (id int primary key, i int, constraint f5 foreign key (i) references t7(id)); create table t4 (id int primary key, i int, constraint f4 foreign key (i) references t7(id));",
 			diffs: []string{
 				"create table t7 (\n\tid int,\n\tprimary key (id)\n)",
-				"create table t4 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tkey f4 (i),\n\tconstraint f4 foreign key (i) references t7 (id)\n)",
-				"create table t5 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tkey f5 (i),\n\tconstraint f5 foreign key (i) references t7 (id)\n)",
+				"create table t4 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tindex f4 (i),\n\tconstraint f4 foreign key (i) references t7 (id)\n)",
+				"create table t5 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tindex f5 (i),\n\tconstraint f5 foreign key (i) references t7 (id)\n)",
 			},
 			cdiffs: []string{
 				"CREATE TABLE `t7` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
-				"CREATE TABLE `t4` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f4` (`i`),\n\tCONSTRAINT `f4` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n)",
-				"CREATE TABLE `t5` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f5` (`i`),\n\tCONSTRAINT `f5` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n)",
+				"CREATE TABLE `t4` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tINDEX `f4` (`i`),\n\tCONSTRAINT `f4` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n)",
+				"CREATE TABLE `t5` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tINDEX `f5` (`i`),\n\tCONSTRAINT `f5` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n)",
 			},
 		},
 		{
