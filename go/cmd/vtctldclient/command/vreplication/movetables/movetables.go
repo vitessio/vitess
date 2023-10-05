@@ -33,7 +33,7 @@ var (
 	}
 )
 
-func registerMoveTablesCommands(root *cobra.Command) {
+func registerCommands(root *cobra.Command) {
 	common.AddCommonFlags(base)
 	root.AddCommand(base)
 
@@ -81,5 +81,5 @@ func registerMoveTablesCommands(root *cobra.Command) {
 }
 
 func init() {
-	common.RegisterCommandHandler("MoveTables", registerMoveTablesCommands)
+	common.RegisterCommandHandler("MoveTables", registerCommands)
 }

@@ -41,7 +41,7 @@ var (
 	create = &cobra.Command{
 		Use:                   "create",
 		Short:                 "Create and run a Materialize VReplication workflow.",
-		Example:               `vtctldclient --server localhost:15999 materialize --workflow product_sales --target-keyspace customer create --source-keyspace commerce --table-settings 'target-table=sales_by_sku,"source-query=select sku, count(*), sum(price) from corder group by order_id"' --cells zone1 --cells zone2 --tablet-types replica`,
+		Example:               `vtctldclient --server localhost:15999 materialize --workflow product_sales --target-keyspace commerce create --source-keyspace commerce --table-settings '[{"target_table": "sales_by_sku", "source_expression": "select sku, count(*), sum(price) from corder group by order_id"}]' --cells zone1 --cells zone2 --tablet-types replica`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Create"},

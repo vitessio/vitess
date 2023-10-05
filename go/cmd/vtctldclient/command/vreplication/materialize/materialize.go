@@ -44,16 +44,15 @@ func registerCommands(root *cobra.Command) {
 	create.MarkFlagRequired("table-settings")
 	root.AddCommand(create)
 
+	// Generic workflow commands.
 	opts := &common.SubCommandsOpts{
 		SubCommand: "Materialize",
 		Workflow:   "product_sales",
 	}
+	materialize.AddCommand(common.GetCancelCommand(opts))
 	materialize.AddCommand(common.GetShowCommand(opts))
-
 	materialize.AddCommand(common.GetStartCommand(opts))
 	materialize.AddCommand(common.GetStopCommand(opts))
-
-	materialize.AddCommand(common.GetCancelCommand(opts))
 }
 
 func init() {
