@@ -234,7 +234,7 @@ func testMaterialize(t *testing.T) {
 	waitForQueryResult(t, vtgateConn, targetKs, "select id, val, ts, day, month, x from mat2", want)
 }
 
-// TestMaterialize runs all the individual materialize tests defined above
+// TestMaterialize runs all the individual materialize tests defined above.
 func TestMaterialize(t *testing.T) {
 	t.Run("Materialize", func(t *testing.T) {
 		testMaterialize(t)
@@ -243,3 +243,17 @@ func TestMaterialize(t *testing.T) {
 		testShardedMaterialize(t)
 	})
 }
+
+// TestMaterializeVtctldClient runs all the individual materialize tests
+// defined above using vtctldclient instead of vtctlclient.
+// TODO: implement me bro.
+/*
+func TestMaterializeVtctldClient(t *testing.T) {
+	t.Run("Materialize", func(t *testing.T) {
+		testMaterializeWithVtctldClient(t)
+	})
+	t.Run("ShardedMaterialize", func(t *testing.T) {
+		testShardedMaterializeWithVtctldClient(t)
+	})
+}
+*/

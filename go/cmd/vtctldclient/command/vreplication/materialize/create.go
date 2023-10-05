@@ -41,7 +41,7 @@ var (
 	create = &cobra.Command{
 		Use:                   "create",
 		Short:                 "Create and run a Materialize VReplication workflow.",
-		Example:               `vtctldclient --server localhost:15999 materialize --workflow product_sales --target-keyspace commerce create --source-keyspace commerce --table-settings '[{"target_table": "sales_by_sku", "create_ddl": "create table sales_by_sku (sku bigint not null primary key, orders int, revenue bigint)", "source_expression": "select sku, count(*) as orders, sum(price) as revenue from corder group by sku"}]' --cells zone1 --cells zone2 --tablet-types replica`,
+		Example:               `vtctldclient --server localhost:15999 materialize --workflow product_sales --target-keyspace commerce create --source-keyspace commerce --table-settings '[{"target_table": "sales_by_sku", "create_ddl": "create table sales_by_sku (sku varbinary(128) not null primary key, orders bigint, revenue bigint)", "source_expression": "select sku, count(*) as orders, sum(price) as revenue from corder group by sku"}]' --cells zone1 --cells zone2 --tablet-types replicas`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Create"},
@@ -122,8 +122,7 @@ func (ts *tableSettings) Set(v string) error {
 		return fmt.Errorf("empty table-settings")
 	}
 
-	// You cannot have multiple source expressions against the
-	// same table.
+	// Validate the provided queries.
 	seenSourceTables := make(map[string]bool)
 	for _, tms := range ts.val {
 		if tms.TargetTable == "" || tms.SourceExpression == "" {
@@ -153,6 +152,7 @@ func (ts *tableSettings) Set(v string) error {
 			return err
 		}
 	}
+
 	return nil
 }
 

@@ -290,7 +290,6 @@ func (tmc *testMaterializerTMClient) expectVRQuery(tabletID int, query string, r
 
 func (tmc *testMaterializerTMClient) verifyQueries(t *testing.T) {
 	t.Helper()
-
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 

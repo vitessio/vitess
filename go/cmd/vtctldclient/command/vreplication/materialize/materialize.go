@@ -41,9 +41,9 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().StringSliceVarP(&common.CreateOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to copy table data from.")
 	create.Flags().Var((*topoproto.TabletTypeListFlag)(&common.CreateOptions.TabletTypes), "tablet-types", "Source tablet types to replicate table data from (e.g. PRIMARY,REPLICA,RDONLY).")
 	create.Flags().BoolVar(&common.CreateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-preference-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
-	create.Flags().StringVar(&createOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables are being moved from.")
+	create.Flags().StringVar(&createOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables queried in the 'source_expression' values within table-settings live.")
 	create.MarkFlagRequired("source-keyspace")
-	create.Flags().Var(&createOptions.TableSettings, "table-settings", "A JSON array where each value must contain two key/value pairs. The first key is 'target_table' and it is the name of the table in the target-keyspace to store the results in. The second key is 'source_expression' and its value is the select to run against the source table. An optional k/v pair can be specified for 'create_ddl' which provides the DDL to create the target table if it does not exist (you can specify a value of 'copy' if the target-table should be copied as-is from the source keyspace).")
+	create.Flags().Var(&createOptions.TableSettings, "table-settings", "A JSON array where each value must contain two key/value pairs. The first required key is 'target_table' and it is the name of the table in the target-keyspace to store the results in. The second required key is 'source_expression' and its value is the select query to run against the source table. An optional k/v pair can also be specified for 'create_ddl' which provides the DDL to create the target table if it does not exist (you can specify a value of 'copy' if the target-table should be copied as-is from the source keyspace).")
 	create.MarkFlagRequired("table-settings")
 	base.AddCommand(create)
 

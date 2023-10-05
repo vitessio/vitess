@@ -40,7 +40,7 @@ func registerCommands(root *cobra.Command) {
 	common.AddCommonCreateFlags(create)
 	create.PersistentFlags().StringVar(&createOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables are being moved from.")
 	create.MarkPersistentFlagRequired("source-keyspace")
-	create.Flags().StringSliceVar(&createOptions.SourceShards, "source-shards", nil, "Source shards to copy data from when performing a partial moveTables (experimental).")
+	create.Flags().StringSliceVar(&createOptions.SourceShards, "source-shards", nil, "Source shards to copy data from when performing a partial MoveTables (experimental).")
 	create.Flags().StringVar(&createOptions.SourceTimeZone, "source-time-zone", "", "Specifying this causes any DATETIME fields to be converted from the given time zone into UTC.")
 	create.Flags().BoolVar(&createOptions.AllTables, "all-tables", false, "Copy all tables from the source.")
 	create.Flags().StringSliceVar(&createOptions.IncludeTables, "tables", nil, "Source tables to copy.")
@@ -68,15 +68,15 @@ func registerCommands(root *cobra.Command) {
 	base.AddCommand(reverseTrafficCommand)
 
 	complete := common.GetCompleteCommand(opts)
-	complete.Flags().BoolVar(&common.CompleteOptions.KeepData, "keep-data", false, "Keep the original source table data that was copied by the MoveTables workflow")
-	complete.Flags().BoolVar(&common.CompleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules in place that direct table traffic from the source keyspace to the target keyspace of the MoveTables workflow")
-	complete.Flags().BoolVar(&common.CompleteOptions.RenameTables, "rename-tables", false, "Keep the original source table data that was copied by the MoveTables workflow, but rename each table to '_<tablename>_old'")
-	complete.Flags().BoolVar(&common.CompleteOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
+	complete.Flags().BoolVar(&common.CompleteOptions.KeepData, "keep-data", false, "Keep the original source table data that was copied by the MoveTables workflow.")
+	complete.Flags().BoolVar(&common.CompleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules in place that direct table traffic from the source keyspace to the target keyspace of the MoveTables workflow.")
+	complete.Flags().BoolVar(&common.CompleteOptions.RenameTables, "rename-tables", false, "Keep the original source table data that was copied by the MoveTables workflow, but rename each table to '_<tablename>_old'.")
+	complete.Flags().BoolVar(&common.CompleteOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred.")
 	base.AddCommand(complete)
 
 	cancel := common.GetCancelCommand(opts)
-	cancel.Flags().BoolVar(&common.CancelOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the MoveTables workflow in the target keyspace")
-	cancel.Flags().BoolVar(&common.CancelOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the MoveTables workflow")
+	cancel.Flags().BoolVar(&common.CancelOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the MoveTables workflow in the target keyspace.")
+	cancel.Flags().BoolVar(&common.CancelOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the MoveTables workflow.")
 	base.AddCommand(cancel)
 }
 
