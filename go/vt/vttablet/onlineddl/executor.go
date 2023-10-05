@@ -124,7 +124,7 @@ const (
 	readyToCompleteHint                      = "ready_to_complete"
 	databasePoolSize                         = 3
 	qrBufferExtraTimeout                     = 5 * time.Second
-	grpcTimeout                              = 5 * time.Second
+	grpcTimeout                              = 30 * time.Second
 	vreplicationTestSuiteWaitSeconds         = 5
 )
 
