@@ -29,6 +29,7 @@ import (
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -4157,62 +4158,81 @@ func TestWarmingReads(t *testing.T) {
 
 	executor.normalize = true
 	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	// Since queries on the replica will run in a separate go-routine, we need sycnronization for the Queries field in the sandboxconn.
+	replica.RequireQueriesLocking()
 
 	_, err := executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user", map[string]*querypb.BindVariable{})
-	time.Sleep(10 * time.Millisecond)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select age, city from `user`"},
 	}
-	utils.MustMatch(t, wantQueries, primary.Queries)
-	primary.Queries = nil
+	utils.MustMatch(t, wantQueries, primary.GetQueries())
+	primary.ClearQueries()
 
+	waitUntilQueryCount(t, replica, 1)
 	wantQueriesReplica := []*querypb.BoundQuery{
 		{Sql: "select age, city from `user`/* warming read */"},
 	}
-	utils.MustMatch(t, wantQueriesReplica, replica.Queries)
-	replica.Queries = nil
+	utils.MustMatch(t, wantQueriesReplica, replica.GetQueries())
+	replica.ClearQueries()
 
 	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user /* already has a comment */ ", map[string]*querypb.BindVariable{})
-	time.Sleep(10 * time.Millisecond)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select age, city from `user` /* already has a comment */"},
 	}
-	utils.MustMatch(t, wantQueries, primary.Queries)
-	primary.Queries = nil
+	utils.MustMatch(t, wantQueries, primary.GetQueries())
+	primary.ClearQueries()
 
+	waitUntilQueryCount(t, replica, 1)
 	wantQueriesReplica = []*querypb.BoundQuery{
 		{Sql: "select age, city from `user` /* already has a comment *//* warming read */"},
 	}
-	utils.MustMatch(t, wantQueriesReplica, replica.Queries)
-	replica.Queries = nil
+	utils.MustMatch(t, wantQueriesReplica, replica.GetQueries())
+	replica.ClearQueries()
 
 	_, err = executor.Execute(ctx, nil, "TestSelect", session, "insert into user (age, city) values (5, 'Boston')", map[string]*querypb.BindVariable{})
-	time.Sleep(10 * time.Millisecond)
+	waitUntilQueryCount(t, replica, 0)
 	require.NoError(t, err)
-	require.Nil(t, replica.Queries)
+	require.Nil(t, replica.GetQueries())
 
 	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "update user set age=5 where city='Boston'", map[string]*querypb.BindVariable{})
-	time.Sleep(10 * time.Millisecond)
+	waitUntilQueryCount(t, replica, 0)
 	require.NoError(t, err)
-	require.Nil(t, replica.Queries)
+	require.Nil(t, replica.GetQueries())
 
 	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "delete from user where city='Boston'", map[string]*querypb.BindVariable{})
-	time.Sleep(10 * time.Millisecond)
+	waitUntilQueryCount(t, replica, 0)
 	require.NoError(t, err)
-	require.Nil(t, replica.Queries)
-	primary.Queries = nil
+	require.Nil(t, replica.GetQueries())
+	primary.ClearQueries()
 
 	executor, primary, replica = createExecutorEnvWithPrimaryReplicaConn(t, ctx, 0)
+	replica.RequireQueriesLocking()
 	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user", map[string]*querypb.BindVariable{})
-	time.Sleep(10 * time.Millisecond)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select age, city from `user`"},
 	}
-	utils.MustMatch(t, wantQueries, primary.Queries)
-	require.Nil(t, replica.Queries)
+	utils.MustMatch(t, wantQueries, primary.GetQueries())
+	waitUntilQueryCount(t, replica, 0)
+	require.Nil(t, replica.GetQueries())
+}
+
+// waitUntilQueryCount waits until the number of queries run on the tablet reach the specified count.
+func waitUntilQueryCount(t *testing.T, tab *sandboxconn.SandboxConn, count int) {
+	timeout := time.After(1 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("Timed out waiting for tablet %v query count to reach %v", topoproto.TabletAliasString(tab.Tablet().Alias), count)
+		default:
+			time.Sleep(10 * time.Millisecond)
+			if len(tab.GetQueries()) == count {
+				return
+			}
+		}
+	}
 }
 
 func TestMain(m *testing.M) {
