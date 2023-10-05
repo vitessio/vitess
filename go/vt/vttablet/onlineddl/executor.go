@@ -1225,7 +1225,7 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlin
 			// we do not pass ALGORITHM. We choose our own ALGORITHM.
 			continue
 		case *sqlparser.AddIndexDefinition:
-			if opt.IndexDefinition.Info.Fulltext {
+			if opt.IndexDefinition.Info.Type == sqlparser.IndexTypeFullText {
 				countAddFullTextStatements++
 				if countAddFullTextStatements > 1 {
 					// We've already got one ADD FULLTEXT KEY. We can't have another
