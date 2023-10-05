@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
+	"vitess.io/vitess/go/vt/vttablet"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -79,7 +79,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, vstreamer.CopyPhaseDuration)
+	ctx, cancel := context.WithTimeout(ctx, vttablet.CopyPhaseDuration)
 	defer cancel()
 
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)

@@ -96,10 +96,10 @@ func testPlayerCopyCharPK(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := vstreamer.CopyPhaseDuration
+	savedCopyPhaseDuration := vttablet.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	vstreamer.CopyPhaseDuration = 500 * time.Millisecond
-	defer func() { vstreamer.CopyPhaseDuration = savedCopyPhaseDuration }()
+	vttablet.CopyPhaseDuration = 500 * time.Millisecond
+	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -203,10 +203,10 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := vstreamer.CopyPhaseDuration
+	savedCopyPhaseDuration := vttablet.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	vstreamer.CopyPhaseDuration = 500 * time.Millisecond
-	defer func() { vstreamer.CopyPhaseDuration = savedCopyPhaseDuration }()
+	vttablet.CopyPhaseDuration = 500 * time.Millisecond
+	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multiple times.
@@ -326,10 +326,10 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := vstreamer.CopyPhaseDuration
+	savedCopyPhaseDuration := vttablet.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	vstreamer.CopyPhaseDuration = 500 * time.Millisecond
-	defer func() { vstreamer.CopyPhaseDuration = savedCopyPhaseDuration }()
+	vttablet.CopyPhaseDuration = 500 * time.Millisecond
+	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -674,10 +674,10 @@ func testPlayerCopyBigTable(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := vstreamer.CopyPhaseDuration
+	savedCopyPhaseDuration := vttablet.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	vstreamer.CopyPhaseDuration = 500 * time.Millisecond
-	defer func() { vstreamer.CopyPhaseDuration = savedCopyPhaseDuration }()
+	vttablet.CopyPhaseDuration = 500 * time.Millisecond
+	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multiple times.
@@ -805,10 +805,10 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := vstreamer.CopyPhaseDuration
+	savedCopyPhaseDuration := vttablet.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	vstreamer.CopyPhaseDuration = 500 * time.Millisecond
-	defer func() { vstreamer.CopyPhaseDuration = savedCopyPhaseDuration }()
+	vttablet.CopyPhaseDuration = 500 * time.Millisecond
+	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -1522,14 +1522,14 @@ func testPlayerCopyTableCancel(t *testing.T) {
 	})
 	env.SchemaEngine.Reload(context.Background())
 
-	saveTimeout := vstreamer.CopyPhaseDuration
-	vstreamer.CopyPhaseDuration = 1 * time.Millisecond
-	defer func() { vstreamer.CopyPhaseDuration = saveTimeout }()
+	saveTimeout := vttablet.CopyPhaseDuration
+	vttablet.CopyPhaseDuration = 1 * time.Millisecond
+	defer func() { vttablet.CopyPhaseDuration = saveTimeout }()
 
 	// Set a hook to reset the copy timeout after first call.
 	vstreamRowsHook = func(ctx context.Context) {
 		<-ctx.Done()
-		vstreamer.CopyPhaseDuration = saveTimeout
+		vttablet.CopyPhaseDuration = saveTimeout
 		vstreamRowsHook = nil
 	}
 
