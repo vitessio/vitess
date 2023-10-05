@@ -571,10 +571,18 @@ func (throttler *Throttler) Close() {
 	throttler.Disable()
 	throttler.isLeader.Store(false)
 
-	log.Infof("Throttler: closing pool")
-	throttler.pool.Close()
-	throttler.cancelOpenContext()
-	throttler.tmClient.Close()
+	// The below " != nil " checks are relevant to unit tests, where perhaps not all
+	// fields are supplied.
+	if throttler.pool != nil {
+		log.Infof("Throttler: closing pool")
+		throttler.pool.Close()
+	}
+	if throttler.cancelOpenContext != nil {
+		throttler.cancelOpenContext()
+	}
+	if throttler.tmClient != nil {
+		throttler.tmClient.Close()
+	}
 	log.Infof("Throttler: finished execution of Close")
 }
 
