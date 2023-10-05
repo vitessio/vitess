@@ -33,7 +33,7 @@ func notExistsError(name string) error {
 func (s *Server) MountRegister(ctx context.Context, req *vtctldatapb.MountRegisterRequest) (*vtctldatapb.MountRegisterResponse, error) {
 	vci, err := s.ts.GetExternalVitessCluster(ctx, req.Name)
 	if err != nil {
-		return &vtctldatapb.MountRegisterResponse{}, err
+		return &vtctldatapb.MountRegisterResponse{}, vterrors.Wrap(err, "failed to get external vitess cluster in MountRegister")
 	}
 	if vci != nil {
 		return &vtctldatapb.MountRegisterResponse{}, notExistsError(req.Name)
@@ -51,7 +51,7 @@ func (s *Server) MountRegister(ctx context.Context, req *vtctldatapb.MountRegist
 func (s *Server) MountUnregister(ctx context.Context, req *vtctldatapb.MountUnregisterRequest) (*vtctldatapb.MountUnregisterResponse, error) {
 	vci, err := s.ts.GetExternalVitessCluster(ctx, req.Name)
 	if err != nil {
-		return &vtctldatapb.MountUnregisterResponse{}, err
+		return &vtctldatapb.MountUnregisterResponse{}, vterrors.Wrap(err, "failed to get external vitess cluster in MountUnregister")
 	}
 	if vci == nil {
 		return &vtctldatapb.MountUnregisterResponse{}, notExistsError(req.Name)
@@ -62,7 +62,7 @@ func (s *Server) MountUnregister(ctx context.Context, req *vtctldatapb.MountUnre
 func (s *Server) MountList(ctx context.Context, req *vtctldatapb.MountListRequest) (*vtctldatapb.MountListResponse, error) {
 	vciList, err := s.ts.GetExternalVitessClusters(ctx)
 	if err != nil {
-		return &vtctldatapb.MountListResponse{}, err
+		return &vtctldatapb.MountListResponse{}, vterrors.Wrap(err, "failed to get external vitess clusters in MountList")
 	}
 	return &vtctldatapb.MountListResponse{Names: vciList}, nil
 }
@@ -70,7 +70,7 @@ func (s *Server) MountList(ctx context.Context, req *vtctldatapb.MountListReques
 func (s *Server) MountShow(ctx context.Context, req *vtctldatapb.MountShowRequest) (*vtctldatapb.MountShowResponse, error) {
 	vci, err := s.ts.GetExternalVitessCluster(ctx, req.Name)
 	if err != nil {
-		return &vtctldatapb.MountShowResponse{}, err
+		return &vtctldatapb.MountShowResponse{}, vterrors.Wrap(err, "failed to get external vitess cluster in MountShow")
 	}
 	if vci == nil {
 		return &vtctldatapb.MountShowResponse{}, notExistsError(req.Name)

@@ -259,6 +259,20 @@ func TestVtctldMigrate(t *testing.T) {
 		vdiffSideBySide(t, ksWorkflow, "extcell1")
 
 		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
+			"--target-keyspace", "product", "--workflow", "e1", "Show"); err != nil {
+			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
+		}
+		wf := gjson.Get(output, "workflows").Array()[0]
+		require.Equal(t, "e1", wf.Get("name").String())
+		require.Equal(t, "Migrate", wf.Get("workflow_type").String())
+
+		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
+			"--target-keyspace", "product", "--workflow", "e1", "Progress"); err != nil {
+			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
+		}
+		require.Equal(t, "Running", gjson.Get(output, "shard_streams.product/0.streams.0.status").String())
+
+		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
 			"--target-keyspace", "product", "--workflow", "e1", "Complete"); err != nil {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
 		}

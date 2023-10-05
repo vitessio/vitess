@@ -31,39 +31,36 @@ var (
 	// mount is the base command for all actions related to the mount action.
 	mount = &cobra.Command{
 		Use:                   "Mount [command] [command-flags]",
-		Short:                 "Mount is used to link external Vitess clusters to the current cluster to migrate data into.",
+		Short:                 "Mount is used to link an external Vitess cluster in order to migrate data from it.",
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"mount"},
 		Args:                  cobra.ExactArgs(1),
 	}
 )
 
-var MountOptions struct {
+var mountOptions struct {
 	TopoType   string
 	TopoServer string
 	TopoRoot   string
 }
 
-func GetRegisterCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:                   "register",
-		Short:                 "Register a mount",
-		Example:               `vtctldclient --server localhost:15999 Mount Register --topo-type etcd2 --topo-server localhost:12379 --topo-root /vitess/global ext1`,
-		DisableFlagsInUseLine: true,
-		Aliases:               []string{"Register"},
-		Args:                  cobra.ExactArgs(1),
-		RunE:                  commandRegister,
-	}
-	return cmd
+var register = &cobra.Command{
+	Use:                   "register",
+	Short:                 "Register a mount",
+	Example:               `vtctldclient --server localhost:15999 Mount Register --topo-type etcd2 --topo-server localhost:12379 --topo-root /vitess/global ext1`,
+	DisableFlagsInUseLine: true,
+	Aliases:               []string{"Register"},
+	Args:                  cobra.ExactArgs(1),
+	RunE:                  commandRegister,
 }
 
 func commandRegister(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.MountRegisterRequest{
-		TopoType:   MountOptions.TopoType,
-		TopoServer: MountOptions.TopoServer,
-		TopoRoot:   MountOptions.TopoRoot,
+		TopoType:   mountOptions.TopoType,
+		TopoServer: mountOptions.TopoServer,
+		TopoRoot:   mountOptions.TopoRoot,
 		Name:       cmd.Flags().Arg(0),
 	}
 	_, err := common.GetClient().MountRegister(common.GetCommandCtx(), req)
@@ -74,17 +71,14 @@ func commandRegister(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func GetUnregisterCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:                   "unregister",
-		Short:                 "Unregister a mount",
-		Example:               `vtctldclient --server localhost:15999 Mount Unregister ext1`,
-		DisableFlagsInUseLine: true,
-		Aliases:               []string{"Unregister"},
-		Args:                  cobra.ExactArgs(1),
-		RunE:                  commandUnregister,
-	}
-	return cmd
+var unregister = &cobra.Command{
+	Use:                   "unregister",
+	Short:                 "Unregister a mount",
+	Example:               `vtctldclient --server localhost:15999 Mount Unregister ext1`,
+	DisableFlagsInUseLine: true,
+	Aliases:               []string{"Unregister"},
+	Args:                  cobra.ExactArgs(1),
+	RunE:                  commandUnregister,
 }
 
 func commandUnregister(cmd *cobra.Command, args []string) error {
@@ -101,17 +95,14 @@ func commandUnregister(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func GetShowCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:                   "show",
-		Short:                 "Show attributes of a mount",
-		Example:               `vtctldclient --server localhost:15999 Mount Show ext1`,
-		DisableFlagsInUseLine: true,
-		Aliases:               []string{"Show"},
-		Args:                  cobra.ExactArgs(1),
-		RunE:                  commandShow,
-	}
-	return cmd
+var show = &cobra.Command{
+	Use:                   "show",
+	Short:                 "Show attributes of a mount",
+	Example:               `vtctldclient --server localhost:15999 Mount Show ext1`,
+	DisableFlagsInUseLine: true,
+	Aliases:               []string{"Show"},
+	Args:                  cobra.ExactArgs(1),
+	RunE:                  commandShow,
 }
 
 func commandShow(cmd *cobra.Command, args []string) error {
@@ -132,17 +123,14 @@ func commandShow(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func GetListCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:                   "list",
-		Short:                 "List all mounts",
-		Example:               `vtctldclient --server localhost:15999 Mount List`,
-		DisableFlagsInUseLine: true,
-		Aliases:               []string{"List"},
-		Args:                  cobra.NoArgs,
-		RunE:                  commandList,
-	}
-	return cmd
+var list = &cobra.Command{
+	Use:                   "list",
+	Short:                 "List all mounts",
+	Example:               `vtctldclient --server localhost:15999 Mount List`,
+	DisableFlagsInUseLine: true,
+	Aliases:               []string{"List"},
+	Args:                  cobra.NoArgs,
+	RunE:                  commandList,
 }
 
 func commandList(cmd *cobra.Command, args []string) error {
@@ -164,22 +152,24 @@ func commandList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func registerMountCommands(root *cobra.Command) {
+func registerCommands(root *cobra.Command) {
 	root.AddCommand(mount)
-	registerCommand := GetRegisterCommand()
-	addRegisterFlags(registerCommand)
-	mount.AddCommand(registerCommand)
-	mount.AddCommand(GetUnregisterCommand())
-	mount.AddCommand(GetShowCommand())
-	mount.AddCommand(GetListCommand())
+	addRegisterFlags(register)
+	mount.AddCommand(register)
+	mount.AddCommand(unregister)
+	mount.AddCommand(show)
+	mount.AddCommand(list)
 }
 
 func addRegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&MountOptions.TopoType, "topo-type", "", "Topo server implementation to use")
-	cmd.Flags().StringVar(&MountOptions.TopoServer, "topo-server", "", "Topo server address")
-	cmd.Flags().StringVar(&MountOptions.TopoRoot, "topo-root", "", "Topo server root path")
+	cmd.Flags().StringVar(&mountOptions.TopoType, "topo-type", "", "Topo server implementation to use")
+	cmd.Flags().StringVar(&mountOptions.TopoServer, "topo-server", "", "Topo server address")
+	cmd.Flags().StringVar(&mountOptions.TopoRoot, "topo-root", "", "Topo server root path")
+	for _, flag := range []string{"topo-type", "topo-server", "topo-root"} {
+		cmd.MarkFlagRequired(flag)
+	}
 }
 
 func init() {
-	common.RegisterCommandHandler("Mount", registerMountCommands)
+	common.RegisterCommandHandler("Mount", registerCommands)
 }

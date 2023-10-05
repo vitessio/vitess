@@ -33,7 +33,7 @@ import (
 var (
 	// migrate is the base command for all actions related to the migrate command.
 	migrate = &cobra.Command{
-		Use:                   "Migrate [command] [command-flags]",
+		Use:                   "Migrate --workflow <workflow> --keyspace <keyspace> [command] [command-flags]",
 		Short:                 "Migrate is used to import data from an external cluster into the current cluster.",
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"migrate"},
@@ -112,7 +112,6 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 
 func addCreateFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&createOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables are being moved from.")
-	cmd.MarkPersistentFlagRequired("source-keyspace")
 	cmd.Flags().StringVar(&createOptions.SourceTimeZone, "source-time-zone", "", "Specifying this causes any DATETIME fields to be converted from the given time zone into UTC.")
 	cmd.Flags().BoolVar(&createOptions.AllTables, "all-tables", false, "Copy all tables from the source.")
 	cmd.Flags().StringSliceVar(&createOptions.IncludeTables, "tables", nil, "Source tables to copy.")
@@ -130,7 +129,7 @@ func addCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&createOptions.StopAfterCopy, "stop-after-copy", false, "Stop the MoveTables workflow after it's finished copying the existing rows and before it starts replicating changes.")
 }
 
-func registerMigrateCommands(root *cobra.Command) {
+func registerCommands(root *cobra.Command) {
 	common.AddCommonFlags(migrate)
 	root.AddCommand(migrate)
 	addCreateFlags(createCommand)
@@ -141,8 +140,10 @@ func registerMigrateCommands(root *cobra.Command) {
 	}
 	migrate.AddCommand(common.GetCompleteCommand(opts))
 	migrate.AddCommand(common.GetCancelCommand(opts))
+	migrate.AddCommand(common.GetShowCommand(opts))
+	migrate.AddCommand(common.GetStatusCommand(opts))
 }
 
 func init() {
-	common.RegisterCommandHandler("Migrate", registerMigrateCommands)
+	common.RegisterCommandHandler("Migrate", registerCommands)
 }

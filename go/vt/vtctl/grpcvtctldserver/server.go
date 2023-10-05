@@ -2566,10 +2566,10 @@ func (s *VtctldServer) MountRegister(ctx context.Context, req *vtctldatapb.Mount
 
 	defer panicHandler(&err)
 
-	span.Annotate("topoType", req.TopoType)
-	span.Annotate("topoServer", req.TopoServer)
-	span.Annotate("topoRoot", req.TopoRoot)
-	span.Annotate("mountName", req.Name)
+	span.Annotate("topo_type", req.TopoType)
+	span.Annotate("topo_server", req.TopoServer)
+	span.Annotate("topo_root", req.TopoRoot)
+	span.Annotate("mount_name", req.Name)
 
 	resp, err = s.ws.MountRegister(ctx, req)
 	return resp, err
@@ -2582,7 +2582,7 @@ func (s *VtctldServer) MountUnregister(ctx context.Context, req *vtctldatapb.Mou
 
 	defer panicHandler(&err)
 
-	span.Annotate("mountName", req.Name)
+	span.Annotate("mount_name", req.Name)
 
 	resp, err = s.ws.MountUnregister(ctx, req)
 	return resp, err
@@ -2606,7 +2606,7 @@ func (s *VtctldServer) MountShow(ctx context.Context, req *vtctldatapb.MountShow
 
 	defer panicHandler(&err)
 
-	span.Annotate("mountName", req.Name)
+	span.Annotate("mount_name", req.Name)
 
 	resp, err = s.ws.MountShow(ctx, req)
 	return resp, err
