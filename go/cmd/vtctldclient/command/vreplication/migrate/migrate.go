@@ -23,10 +23,6 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -42,20 +38,13 @@ var (
 )
 
 var createOptions = struct {
-	MountName                    string
-	SourceKeyspace               string
-	AllTables                    bool
-	IncludeTables                []string
-	ExcludeTables                []string
-	SourceTimeZone               string
-	NoRoutingRules               bool
-	Cells                        []string
-	TabletTypes                  []topodatapb.TabletType
-	TabletTypesInPreferenceOrder bool
-	OnDDL                        string
-	DeferSecondaryKeys           bool
-	AutoStart                    bool
-	StopAfterCopy                bool
+	MountName      string
+	SourceKeyspace string
+	AllTables      bool
+	IncludeTables  []string
+	ExcludeTables  []string
+	SourceTimeZone string
+	NoRoutingRules bool
 }{}
 
 var createCommand = &cobra.Command{
@@ -89,16 +78,16 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		SourceKeyspace:            createOptions.SourceKeyspace,
 		MountName:                 createOptions.MountName,
 		SourceTimeZone:            createOptions.SourceTimeZone,
-		Cells:                     createOptions.Cells,
-		TabletTypes:               createOptions.TabletTypes,
+		Cells:                     common.CreateOptions.Cells,
+		TabletTypes:               common.CreateOptions.TabletTypes,
 		TabletSelectionPreference: tsp,
 		AllTables:                 createOptions.AllTables,
 		IncludeTables:             createOptions.IncludeTables,
 		ExcludeTables:             createOptions.ExcludeTables,
-		OnDdl:                     createOptions.OnDDL,
-		DeferSecondaryKeys:        createOptions.DeferSecondaryKeys,
-		AutoStart:                 createOptions.AutoStart,
-		StopAfterCopy:             createOptions.StopAfterCopy,
+		OnDdl:                     common.CreateOptions.OnDDL,
+		DeferSecondaryKeys:        common.CreateOptions.DeferSecondaryKeys,
+		AutoStart:                 common.CreateOptions.AutoStart,
+		StopAfterCopy:             common.CreateOptions.StopAfterCopy,
 		NoRoutingRules:            createOptions.NoRoutingRules,
 	}
 
@@ -111,22 +100,17 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 }
 
 func addCreateFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringVar(&createOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables are being moved from.")
+	common.AddCommonCreateFlags(cmd)
+	cmd.Flags().StringVar(&createOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables are being moved from.")
+	cmd.MarkFlagRequired("source-keyspace")
+	cmd.Flags().StringVar(&createOptions.MountName, "mount-name", "", "Name external cluster is mounted as.")
+	cmd.MarkFlagRequired("mount-name")
 	cmd.Flags().StringVar(&createOptions.SourceTimeZone, "source-time-zone", "", "Specifying this causes any DATETIME fields to be converted from the given time zone into UTC.")
 	cmd.Flags().BoolVar(&createOptions.AllTables, "all-tables", false, "Copy all tables from the source.")
 	cmd.Flags().StringSliceVar(&createOptions.IncludeTables, "tables", nil, "Source tables to copy.")
 	cmd.Flags().StringSliceVar(&createOptions.ExcludeTables, "exclude-tables", nil, "Source tables to exclude from copying.")
 	cmd.Flags().BoolVar(&createOptions.NoRoutingRules, "no-routing-rules", false, "(Advanced) Do not create routing rules while creating the workflow. See the reference documentation for limitations if you use this flag.")
 
-	cmd.Flags().StringVar(&createOptions.MountName, "mount-name", "", "Name external cluster is mounted as.")
-	cmd.Flags().StringSliceVarP(&createOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to copy table data from.")
-	cmd.Flags().Var((*topoproto.TabletTypeListFlag)(&createOptions.TabletTypes), "tablet-types", "Source tablet types to replicate table data from (e.g. PRIMARY,REPLICA,RDONLY).")
-	cmd.Flags().BoolVar(&createOptions.TabletTypesInPreferenceOrder, "tablet-types-in-preference-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
-	onDDLDefault := binlogdatapb.OnDDLAction_IGNORE.String()
-	cmd.Flags().StringVar(&createOptions.OnDDL, "on-ddl", onDDLDefault, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
-	cmd.Flags().BoolVar(&createOptions.DeferSecondaryKeys, "defer-secondary-keys", false, "Defer secondary index creation for a table until after it has been copied.")
-	cmd.Flags().BoolVar(&createOptions.AutoStart, "auto-start", true, "Start the MoveTables workflow after creating it.")
-	cmd.Flags().BoolVar(&createOptions.StopAfterCopy, "stop-after-copy", false, "Stop the MoveTables workflow after it's finished copying the existing rows and before it starts replicating changes.")
 }
 
 func registerCommands(root *cobra.Command) {
