@@ -680,7 +680,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 		tmClient := throttler.overrideTmClient
 		if tmClient == nil {
 			// This is the normal production behavior.
-			// throttler.tmClient != nil only in unit testing
+			// throttler.overrideTmClient != nil only in unit testing
 			tmClient = tmclient.NewTabletManagerClient()
 			defer tmClient.Close()
 		}
