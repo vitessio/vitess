@@ -457,14 +457,10 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	if err != nil {
 		return nil, err
 	}
-	// second-best case: we've been able to open a connection here
-	if conn != nil {
-		return conn, nil
-	}
-
 	// if we don't have capacity, try popping a connection from any of the setting stacks
-	conn = pool.getFromSettingsStack(nil)
-
+	if conn == nil {
+		conn = pool.getFromSettingsStack(nil)
+	}
 	// if there are no connections in the setting stacks and we've lent out connections
 	// to other clients, wait until one of the connections is returned
 	if conn == nil && pool.borrowed.Load() > 0 {
