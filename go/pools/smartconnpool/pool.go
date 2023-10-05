@@ -185,14 +185,18 @@ func (pool *ConnPool[C]) open() {
 	pool.close = make(chan struct{})
 	pool.capacity.Store(pool.config.maxCapacity)
 
+	// The expire worker takes care of removing from the waiter list any clients whose
+	// context has been cancelled. It also forcefully removes all blocked clients when
+	// the pool starts shutting down.
 	pool.runWorker(pool.close, 1*time.Second, func(_ time.Time) bool {
 		force := pool.capacity.Load() == 0 && pool.borrowed.Load() == 0
-		_ = pool.wait.expire(force)
+		pool.wait.expire(force)
 		return true
 	})
 
 	idleTimeout := pool.IdleTimeout()
 	if idleTimeout != 0 {
+		// The idle worker takes care of closing connections that have been idle too long
 		pool.runWorker(pool.close, idleTimeout/10, func(now time.Time) bool {
 			pool.closeIdleResources(now)
 			return true
@@ -201,6 +205,9 @@ func (pool *ConnPool[C]) open() {
 
 	refreshInterval := pool.RefreshInterval()
 	if refreshInterval != 0 && pool.config.refresh != nil {
+		// The refresh worker periodically checks the refresh callback in this pool
+		// to decide whether all the connections in the pool need to be cycled
+		// (this usually only happens when there's a global DNS change).
 		pool.runWorker(pool.close, refreshInterval, func(_ time.Time) bool {
 			refresh, err := pool.config.refresh()
 			if err != nil {
@@ -445,15 +452,19 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 		return conn, nil
 	}
 
-	// check if we have enough capacity to open a brand new connection to return
+	// check if we have enough capacity to open a brand-new connection to return
 	conn, err := pool.getNew(ctx)
 	if err != nil {
 		return nil, err
 	}
-	// if we don't have capacity, try popping a connection from any of the setting stacks
-	if conn == nil {
-		conn = pool.getFromSettingsStack(nil)
+	// second-best case: we've been able to open a connection here
+	if conn != nil {
+		return conn, nil
 	}
+
+	// if we don't have capacity, try popping a connection from any of the setting stacks
+	conn = pool.getFromSettingsStack(nil)
+
 	// if there are no connections in the setting stacks and we've lent out connections
 	// to other clients, wait until one of the connections is returned
 	if conn == nil && pool.borrowed.Load() > 0 {

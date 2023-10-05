@@ -66,49 +66,6 @@ func TestConnPoolTimeout(t *testing.T) {
 	assert.EqualError(t, err, "resource pool timed out")
 }
 
-/*
-func TestConnPoolMaxWaiters(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	connPool := NewPool(tabletenv.NewEnv(nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
-		Size:       1,
-		MaxWaiters: 1,
-	})
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	defer connPool.Close()
-	dbConn, err := connPool.Get(context.Background(), nil)
-	require.NoError(t, err)
-
-	// waiter 1
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		c1, err := connPool.Get(context.Background(), nil)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-			return
-		}
-		c1.Recycle()
-	}()
-	// Wait for the first waiter to increment count.
-	for {
-		runtime.Gosched()
-		if connPool.waiterCount.Load() == 1 {
-			break
-		}
-	}
-
-	// waiter 2
-	_, err = connPool.Get(context.Background(), nil)
-	assert.EqualError(t, err, "pool TestPool waiter count exceeded")
-
-	// This recycle will make waiter1 succeed.
-	dbConn.Recycle()
-	wg.Wait()
-}
-*/
-
 func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
 	db := fakesqldb.New(t)
 	debugConn := db.ConnParamsWithUname("")

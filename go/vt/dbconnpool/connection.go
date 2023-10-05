@@ -38,7 +38,7 @@ type DBConnection struct {
 	info dbconfigs.Connector
 }
 
-var errSettingNotSupported = errors.New("TODO")
+var errSettingNotSupported = errors.New("DBConnection does not support connection settings")
 
 func (dbc *DBConnection) ApplySetting(ctx context.Context, setting *smartconnpool.Setting) error {
 	return errSettingNotSupported

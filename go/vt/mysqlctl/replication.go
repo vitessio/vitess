@@ -146,7 +146,7 @@ func (mysqld *Mysqld) StopSQLThread(ctx context.Context) error {
 	}
 	defer conn.Recycle()
 
-	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.Conn.StopSQLThreadCommand()})
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopSQLThreadCommand()})
 }
 
 // RestartReplication stops, resets and starts replication.

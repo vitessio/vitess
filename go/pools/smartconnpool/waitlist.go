@@ -73,9 +73,9 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting) (*Pool
 
 // expire removes and wakes any expired waiter in the waitlist.
 // if force is true, it'll wake and remove all the waiters.
-func (wl *waitlist[C]) expire(force bool) (waiting int) {
+func (wl *waitlist[C]) expire(force bool) {
 	if wl.list.Len() == 0 {
-		return 0
+		return
 	}
 
 	var expired []*list.Element[waiter[C]]
@@ -89,7 +89,6 @@ func (wl *waitlist[C]) expire(force bool) (waiting int) {
 			expired = append(expired, e)
 			continue
 		}
-		waiting++
 	}
 	wl.mu.Unlock()
 
@@ -97,7 +96,6 @@ func (wl *waitlist[C]) expire(force bool) (waiting int) {
 	for _, e := range expired {
 		e.Value.sema.notify(false)
 	}
-	return waiting
 }
 
 // tryReturnConn tries handing over a connection to one of the waiters in the pool.
@@ -127,6 +125,11 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 			target = e
 			break
 		}
+		// this only ages the waiters that are being skipped over: we'll start
+		// aging the waiters in the back once they get to the front of the pool.
+		// the maxAge of 8 has been set empirically: smaller values cause clients
+		// with a specific setting to slightly starve, and aging all the clients
+		// in the list every time leads to unfairness when the system is at capacity
 		e.Value.age++
 	}
 	if target != nil {
