@@ -277,10 +277,16 @@ type VtctldClient interface {
 	LaunchSchemaMigration(ctx context.Context, in *vtctldata.LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.LaunchSchemaMigrationResponse, error)
 	LookupVindexCreate(ctx context.Context, in *vtctldata.LookupVindexCreateRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexCreateResponse, error)
 	LookupVindexExternalize(ctx context.Context, in *vtctldata.LookupVindexExternalizeRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexExternalizeResponse, error)
+	// MigrateCreate creates a workflow which migrates one or more tables from an
+	// external cluster into Vitess.
 	MigrateCreate(ctx context.Context, in *vtctldata.MigrateCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
+	// MountRegister registers a new external Vitess cluster.
 	MountRegister(ctx context.Context, in *vtctldata.MountRegisterRequest, opts ...grpc.CallOption) (*vtctldata.MountRegisterResponse, error)
+	// MountUnregister unregisters an external Vitess cluster.
 	MountUnregister(ctx context.Context, in *vtctldata.MountUnregisterRequest, opts ...grpc.CallOption) (*vtctldata.MountUnregisterResponse, error)
+	// MountShow returns information about an external Vitess cluster.
 	MountShow(ctx context.Context, in *vtctldata.MountShowRequest, opts ...grpc.CallOption) (*vtctldata.MountShowResponse, error)
+	// MountList lists all registered external Vitess clusters.
 	MountList(ctx context.Context, in *vtctldata.MountListRequest, opts ...grpc.CallOption) (*vtctldata.MountListResponse, error)
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
@@ -1646,10 +1652,16 @@ type VtctldServer interface {
 	LaunchSchemaMigration(context.Context, *vtctldata.LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error)
 	LookupVindexCreate(context.Context, *vtctldata.LookupVindexCreateRequest) (*vtctldata.LookupVindexCreateResponse, error)
 	LookupVindexExternalize(context.Context, *vtctldata.LookupVindexExternalizeRequest) (*vtctldata.LookupVindexExternalizeResponse, error)
+	// MigrateCreate creates a workflow which migrates one or more tables from an
+	// external cluster into Vitess.
 	MigrateCreate(context.Context, *vtctldata.MigrateCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
+	// MountRegister registers a new external Vitess cluster.
 	MountRegister(context.Context, *vtctldata.MountRegisterRequest) (*vtctldata.MountRegisterResponse, error)
+	// MountUnregister unregisters an external Vitess cluster.
 	MountUnregister(context.Context, *vtctldata.MountUnregisterRequest) (*vtctldata.MountUnregisterResponse, error)
+	// MountShow returns information about an external Vitess cluster.
 	MountShow(context.Context, *vtctldata.MountShowRequest) (*vtctldata.MountShowResponse, error)
+	// MountList lists all registered external Vitess clusters.
 	MountList(context.Context, *vtctldata.MountListRequest) (*vtctldata.MountListResponse, error)
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
