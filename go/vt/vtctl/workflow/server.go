@@ -846,6 +846,7 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 	// target of the workflow initiated by the user for checking routing rules.
 	// Similarly we use a target shard of the reverse workflow as the original
 	// source to check if writes have been switched.
+
 	if strings.HasSuffix(workflowName, "_reverse") {
 		reverse = true
 		// Flip the source and target keyspaces.
@@ -930,6 +931,9 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 		if !shard.IsPrimaryServing {
 			state.WritesSwitched = true
 		}
+	}
+	if ts.workflowType == binlogdatapb.VReplicationWorkflowType_Migrate {
+		state.WorkflowType = TypeMigrate
 	}
 
 	return ts, state, nil
@@ -1144,6 +1148,12 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 // It passes the embedded TabletRequest object to the given keyspace's
 // target primary tablets that will be executing the workflow.
 func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (res *vtctldatapb.WorkflowStatusResponse, err error) {
+	return s.moveTablesCreate(ctx, req, binlogdatapb.VReplicationWorkflowType_MoveTables)
+}
+
+func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest,
+	workflowType binlogdatapb.VReplicationWorkflowType) (res *vtctldatapb.WorkflowStatusResponse, err error) {
+
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.MoveTablesCreate")
 	defer span.Finish()
 
@@ -1258,11 +1268,12 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		})
 	}
 	mz := &materializer{
-		ctx:      ctx,
-		ts:       s.ts,
-		sourceTs: sourceTopo,
-		tmc:      s.tmc,
-		ms:       ms,
+		ctx:          ctx,
+		ts:           s.ts,
+		sourceTs:     sourceTopo,
+		tmc:          s.tmc,
+		ms:           ms,
+		workflowType: workflowType,
 	}
 	err = mz.createMoveTablesStreams(req)
 	if err != nil {
@@ -3620,4 +3631,27 @@ func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (stri
 		}
 	}
 	return "", fmt.Errorf("column %s not found in schema %v", sourceVindexCol, lines)
+}
+
+func (s *Server) MigrateCreate(ctx context.Context, req *vtctldatapb.MigrateCreateRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
+	moveTablesCreateRequest := &vtctldatapb.MoveTablesCreateRequest{
+		Workflow:                  req.Workflow,
+		SourceKeyspace:            req.SourceKeyspace,
+		TargetKeyspace:            req.TargetKeyspace,
+		ExternalClusterName:       req.MountName,
+		Cells:                     req.Cells,
+		TabletTypes:               req.TabletTypes,
+		TabletSelectionPreference: req.TabletSelectionPreference,
+		AllTables:                 req.AllTables,
+		IncludeTables:             req.IncludeTables,
+		ExcludeTables:             req.ExcludeTables,
+		SourceTimeZone:            req.SourceTimeZone,
+		OnDdl:                     req.OnDdl,
+		StopAfterCopy:             req.StopAfterCopy,
+		DeferSecondaryKeys:        req.DeferSecondaryKeys,
+		DropForeignKeys:           req.DropForeignKeys,
+		AutoStart:                 req.AutoStart,
+		NoRoutingRules:            req.NoRoutingRules,
+	}
+	return s.moveTablesCreate(ctx, moveTablesCreateRequest, binlogdatapb.VReplicationWorkflowType_Migrate)
 }
