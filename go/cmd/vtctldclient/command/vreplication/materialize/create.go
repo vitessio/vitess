@@ -69,6 +69,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		TargetKeyspace:            common.BaseOptions.TargetKeyspace,
 		SourceKeyspace:            createOptions.SourceKeyspace,
 		TableSettings:             createOptions.TableSettings.val,
+		StopAfterCopy:             common.CreateOptions.StopAfterCopy,
 		Cell:                      strings.Join(common.CreateOptions.Cells, ","),
 		TabletTypes:               topoproto.MakeStringTypeCSV(common.CreateOptions.TabletTypes),
 		TabletSelectionPreference: tsp,

@@ -45,6 +45,7 @@ func registerCommands(root *cobra.Command) {
 	create.MarkFlagRequired("source-keyspace")
 	create.Flags().Var(&createOptions.TableSettings, "table-settings", "A JSON array where each value must contain two key/value pairs. The first required key is 'target_table' and it is the name of the table in the target-keyspace to store the results in. The second required key is 'source_expression' and its value is the select query to run against the source table. An optional k/v pair can also be specified for 'create_ddl' which provides the DDL to create the target table if it does not exist (you can specify a value of 'copy' if the target-table should be copied as-is from the source keyspace).")
 	create.MarkFlagRequired("table-settings")
+	create.Flags().BoolVar(&common.CreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the workflow after it's finished copying the existing rows and before it starts replicating changes.")
 	base.AddCommand(create)
 
 	// Generic workflow commands.

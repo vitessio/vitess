@@ -1196,8 +1196,10 @@ func materialize(t *testing.T, spec string, useVtctldClient bool) {
 			require.NotEmpty(t, targetKeyspace, "target_keyspace not found in spec: %s", spec)
 			tableSettings := sj.Get("table_settings").String()
 			require.NotEmpty(t, tableSettings, "table_settings not found in spec: %s", spec)
+			stopAfterCopy := sj.Get("stop-after-copy").Bool() // Optional
 			err := vc.VtctldClient.ExecuteCommand("materialize", "--workflow", workflow, "--target-keyspace", targetKeyspace,
-				"create", "--source-keyspace", sourceKeyspace, "--table-settings", tableSettings)
+				"create", "--source-keyspace", sourceKeyspace, "--table-settings", tableSettings,
+				fmt.Sprintf("--stop-after-copy=%t", stopAfterCopy))
 			require.NoError(t, err, "Materialize")
 		})
 	} else {
