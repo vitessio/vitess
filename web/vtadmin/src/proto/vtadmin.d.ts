@@ -54969,6 +54969,1223 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a MigrateCreateRequest. */
+    interface IMigrateCreateRequest {
+
+        /** MigrateCreateRequest workflow */
+        workflow?: (string|null);
+
+        /** MigrateCreateRequest source_keyspace */
+        source_keyspace?: (string|null);
+
+        /** MigrateCreateRequest target_keyspace */
+        target_keyspace?: (string|null);
+
+        /** MigrateCreateRequest mount_name */
+        mount_name?: (string|null);
+
+        /** MigrateCreateRequest cells */
+        cells?: (string[]|null);
+
+        /** MigrateCreateRequest tablet_types */
+        tablet_types?: (topodata.TabletType[]|null);
+
+        /** MigrateCreateRequest tablet_selection_preference */
+        tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
+
+        /** MigrateCreateRequest all_tables */
+        all_tables?: (boolean|null);
+
+        /** MigrateCreateRequest include_tables */
+        include_tables?: (string[]|null);
+
+        /** MigrateCreateRequest exclude_tables */
+        exclude_tables?: (string[]|null);
+
+        /** MigrateCreateRequest source_time_zone */
+        source_time_zone?: (string|null);
+
+        /** MigrateCreateRequest on_ddl */
+        on_ddl?: (string|null);
+
+        /** MigrateCreateRequest stop_after_copy */
+        stop_after_copy?: (boolean|null);
+
+        /** MigrateCreateRequest drop_foreign_keys */
+        drop_foreign_keys?: (boolean|null);
+
+        /** MigrateCreateRequest defer_secondary_keys */
+        defer_secondary_keys?: (boolean|null);
+
+        /** MigrateCreateRequest auto_start */
+        auto_start?: (boolean|null);
+
+        /** MigrateCreateRequest no_routing_rules */
+        no_routing_rules?: (boolean|null);
+    }
+
+    /** Represents a MigrateCreateRequest. */
+    class MigrateCreateRequest implements IMigrateCreateRequest {
+
+        /**
+         * Constructs a new MigrateCreateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMigrateCreateRequest);
+
+        /** MigrateCreateRequest workflow. */
+        public workflow: string;
+
+        /** MigrateCreateRequest source_keyspace. */
+        public source_keyspace: string;
+
+        /** MigrateCreateRequest target_keyspace. */
+        public target_keyspace: string;
+
+        /** MigrateCreateRequest mount_name. */
+        public mount_name: string;
+
+        /** MigrateCreateRequest cells. */
+        public cells: string[];
+
+        /** MigrateCreateRequest tablet_types. */
+        public tablet_types: topodata.TabletType[];
+
+        /** MigrateCreateRequest tablet_selection_preference. */
+        public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
+
+        /** MigrateCreateRequest all_tables. */
+        public all_tables: boolean;
+
+        /** MigrateCreateRequest include_tables. */
+        public include_tables: string[];
+
+        /** MigrateCreateRequest exclude_tables. */
+        public exclude_tables: string[];
+
+        /** MigrateCreateRequest source_time_zone. */
+        public source_time_zone: string;
+
+        /** MigrateCreateRequest on_ddl. */
+        public on_ddl: string;
+
+        /** MigrateCreateRequest stop_after_copy. */
+        public stop_after_copy: boolean;
+
+        /** MigrateCreateRequest drop_foreign_keys. */
+        public drop_foreign_keys: boolean;
+
+        /** MigrateCreateRequest defer_secondary_keys. */
+        public defer_secondary_keys: boolean;
+
+        /** MigrateCreateRequest auto_start. */
+        public auto_start: boolean;
+
+        /** MigrateCreateRequest no_routing_rules. */
+        public no_routing_rules: boolean;
+
+        /**
+         * Creates a new MigrateCreateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MigrateCreateRequest instance
+         */
+        public static create(properties?: vtctldata.IMigrateCreateRequest): vtctldata.MigrateCreateRequest;
+
+        /**
+         * Encodes the specified MigrateCreateRequest message. Does not implicitly {@link vtctldata.MigrateCreateRequest.verify|verify} messages.
+         * @param message MigrateCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMigrateCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MigrateCreateRequest message, length delimited. Does not implicitly {@link vtctldata.MigrateCreateRequest.verify|verify} messages.
+         * @param message MigrateCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMigrateCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MigrateCreateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MigrateCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MigrateCreateRequest;
+
+        /**
+         * Decodes a MigrateCreateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MigrateCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MigrateCreateRequest;
+
+        /**
+         * Verifies a MigrateCreateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MigrateCreateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MigrateCreateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MigrateCreateRequest;
+
+        /**
+         * Creates a plain object from a MigrateCreateRequest message. Also converts values to other types if specified.
+         * @param message MigrateCreateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MigrateCreateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MigrateCreateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MigrateCreateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MigrateCompleteRequest. */
+    interface IMigrateCompleteRequest {
+
+        /** MigrateCompleteRequest workflow */
+        workflow?: (string|null);
+
+        /** MigrateCompleteRequest target_keyspace */
+        target_keyspace?: (string|null);
+
+        /** MigrateCompleteRequest keep_data */
+        keep_data?: (boolean|null);
+
+        /** MigrateCompleteRequest keep_routing_rules */
+        keep_routing_rules?: (boolean|null);
+
+        /** MigrateCompleteRequest rename_tables */
+        rename_tables?: (boolean|null);
+
+        /** MigrateCompleteRequest dry_run */
+        dry_run?: (boolean|null);
+    }
+
+    /** Represents a MigrateCompleteRequest. */
+    class MigrateCompleteRequest implements IMigrateCompleteRequest {
+
+        /**
+         * Constructs a new MigrateCompleteRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMigrateCompleteRequest);
+
+        /** MigrateCompleteRequest workflow. */
+        public workflow: string;
+
+        /** MigrateCompleteRequest target_keyspace. */
+        public target_keyspace: string;
+
+        /** MigrateCompleteRequest keep_data. */
+        public keep_data: boolean;
+
+        /** MigrateCompleteRequest keep_routing_rules. */
+        public keep_routing_rules: boolean;
+
+        /** MigrateCompleteRequest rename_tables. */
+        public rename_tables: boolean;
+
+        /** MigrateCompleteRequest dry_run. */
+        public dry_run: boolean;
+
+        /**
+         * Creates a new MigrateCompleteRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MigrateCompleteRequest instance
+         */
+        public static create(properties?: vtctldata.IMigrateCompleteRequest): vtctldata.MigrateCompleteRequest;
+
+        /**
+         * Encodes the specified MigrateCompleteRequest message. Does not implicitly {@link vtctldata.MigrateCompleteRequest.verify|verify} messages.
+         * @param message MigrateCompleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMigrateCompleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MigrateCompleteRequest message, length delimited. Does not implicitly {@link vtctldata.MigrateCompleteRequest.verify|verify} messages.
+         * @param message MigrateCompleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMigrateCompleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MigrateCompleteRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MigrateCompleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MigrateCompleteRequest;
+
+        /**
+         * Decodes a MigrateCompleteRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MigrateCompleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MigrateCompleteRequest;
+
+        /**
+         * Verifies a MigrateCompleteRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MigrateCompleteRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MigrateCompleteRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MigrateCompleteRequest;
+
+        /**
+         * Creates a plain object from a MigrateCompleteRequest message. Also converts values to other types if specified.
+         * @param message MigrateCompleteRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MigrateCompleteRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MigrateCompleteRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MigrateCompleteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MigrateCompleteResponse. */
+    interface IMigrateCompleteResponse {
+
+        /** MigrateCompleteResponse summary */
+        summary?: (string|null);
+
+        /** MigrateCompleteResponse dry_run_results */
+        dry_run_results?: (string[]|null);
+    }
+
+    /** Represents a MigrateCompleteResponse. */
+    class MigrateCompleteResponse implements IMigrateCompleteResponse {
+
+        /**
+         * Constructs a new MigrateCompleteResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMigrateCompleteResponse);
+
+        /** MigrateCompleteResponse summary. */
+        public summary: string;
+
+        /** MigrateCompleteResponse dry_run_results. */
+        public dry_run_results: string[];
+
+        /**
+         * Creates a new MigrateCompleteResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MigrateCompleteResponse instance
+         */
+        public static create(properties?: vtctldata.IMigrateCompleteResponse): vtctldata.MigrateCompleteResponse;
+
+        /**
+         * Encodes the specified MigrateCompleteResponse message. Does not implicitly {@link vtctldata.MigrateCompleteResponse.verify|verify} messages.
+         * @param message MigrateCompleteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMigrateCompleteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MigrateCompleteResponse message, length delimited. Does not implicitly {@link vtctldata.MigrateCompleteResponse.verify|verify} messages.
+         * @param message MigrateCompleteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMigrateCompleteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MigrateCompleteResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MigrateCompleteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MigrateCompleteResponse;
+
+        /**
+         * Decodes a MigrateCompleteResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MigrateCompleteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MigrateCompleteResponse;
+
+        /**
+         * Verifies a MigrateCompleteResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MigrateCompleteResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MigrateCompleteResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MigrateCompleteResponse;
+
+        /**
+         * Creates a plain object from a MigrateCompleteResponse message. Also converts values to other types if specified.
+         * @param message MigrateCompleteResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MigrateCompleteResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MigrateCompleteResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MigrateCompleteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MountRegisterRequest. */
+    interface IMountRegisterRequest {
+
+        /** MountRegisterRequest topo_type */
+        topo_type?: (string|null);
+
+        /** MountRegisterRequest topo_server */
+        topo_server?: (string|null);
+
+        /** MountRegisterRequest topo_root */
+        topo_root?: (string|null);
+
+        /** MountRegisterRequest name */
+        name?: (string|null);
+    }
+
+    /** Represents a MountRegisterRequest. */
+    class MountRegisterRequest implements IMountRegisterRequest {
+
+        /**
+         * Constructs a new MountRegisterRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMountRegisterRequest);
+
+        /** MountRegisterRequest topo_type. */
+        public topo_type: string;
+
+        /** MountRegisterRequest topo_server. */
+        public topo_server: string;
+
+        /** MountRegisterRequest topo_root. */
+        public topo_root: string;
+
+        /** MountRegisterRequest name. */
+        public name: string;
+
+        /**
+         * Creates a new MountRegisterRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MountRegisterRequest instance
+         */
+        public static create(properties?: vtctldata.IMountRegisterRequest): vtctldata.MountRegisterRequest;
+
+        /**
+         * Encodes the specified MountRegisterRequest message. Does not implicitly {@link vtctldata.MountRegisterRequest.verify|verify} messages.
+         * @param message MountRegisterRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMountRegisterRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MountRegisterRequest message, length delimited. Does not implicitly {@link vtctldata.MountRegisterRequest.verify|verify} messages.
+         * @param message MountRegisterRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMountRegisterRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MountRegisterRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MountRegisterRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MountRegisterRequest;
+
+        /**
+         * Decodes a MountRegisterRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MountRegisterRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MountRegisterRequest;
+
+        /**
+         * Verifies a MountRegisterRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MountRegisterRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MountRegisterRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MountRegisterRequest;
+
+        /**
+         * Creates a plain object from a MountRegisterRequest message. Also converts values to other types if specified.
+         * @param message MountRegisterRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MountRegisterRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MountRegisterRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MountRegisterRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MountRegisterResponse. */
+    interface IMountRegisterResponse {
+    }
+
+    /** Represents a MountRegisterResponse. */
+    class MountRegisterResponse implements IMountRegisterResponse {
+
+        /**
+         * Constructs a new MountRegisterResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMountRegisterResponse);
+
+        /**
+         * Creates a new MountRegisterResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MountRegisterResponse instance
+         */
+        public static create(properties?: vtctldata.IMountRegisterResponse): vtctldata.MountRegisterResponse;
+
+        /**
+         * Encodes the specified MountRegisterResponse message. Does not implicitly {@link vtctldata.MountRegisterResponse.verify|verify} messages.
+         * @param message MountRegisterResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMountRegisterResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MountRegisterResponse message, length delimited. Does not implicitly {@link vtctldata.MountRegisterResponse.verify|verify} messages.
+         * @param message MountRegisterResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMountRegisterResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MountRegisterResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MountRegisterResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MountRegisterResponse;
+
+        /**
+         * Decodes a MountRegisterResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MountRegisterResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MountRegisterResponse;
+
+        /**
+         * Verifies a MountRegisterResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MountRegisterResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MountRegisterResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MountRegisterResponse;
+
+        /**
+         * Creates a plain object from a MountRegisterResponse message. Also converts values to other types if specified.
+         * @param message MountRegisterResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MountRegisterResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MountRegisterResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MountRegisterResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MountUnregisterRequest. */
+    interface IMountUnregisterRequest {
+
+        /** MountUnregisterRequest name */
+        name?: (string|null);
+    }
+
+    /** Represents a MountUnregisterRequest. */
+    class MountUnregisterRequest implements IMountUnregisterRequest {
+
+        /**
+         * Constructs a new MountUnregisterRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMountUnregisterRequest);
+
+        /** MountUnregisterRequest name. */
+        public name: string;
+
+        /**
+         * Creates a new MountUnregisterRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MountUnregisterRequest instance
+         */
+        public static create(properties?: vtctldata.IMountUnregisterRequest): vtctldata.MountUnregisterRequest;
+
+        /**
+         * Encodes the specified MountUnregisterRequest message. Does not implicitly {@link vtctldata.MountUnregisterRequest.verify|verify} messages.
+         * @param message MountUnregisterRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMountUnregisterRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MountUnregisterRequest message, length delimited. Does not implicitly {@link vtctldata.MountUnregisterRequest.verify|verify} messages.
+         * @param message MountUnregisterRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMountUnregisterRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MountUnregisterRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MountUnregisterRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MountUnregisterRequest;
+
+        /**
+         * Decodes a MountUnregisterRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MountUnregisterRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MountUnregisterRequest;
+
+        /**
+         * Verifies a MountUnregisterRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MountUnregisterRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MountUnregisterRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MountUnregisterRequest;
+
+        /**
+         * Creates a plain object from a MountUnregisterRequest message. Also converts values to other types if specified.
+         * @param message MountUnregisterRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MountUnregisterRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MountUnregisterRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MountUnregisterRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MountUnregisterResponse. */
+    interface IMountUnregisterResponse {
+    }
+
+    /** Represents a MountUnregisterResponse. */
+    class MountUnregisterResponse implements IMountUnregisterResponse {
+
+        /**
+         * Constructs a new MountUnregisterResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMountUnregisterResponse);
+
+        /**
+         * Creates a new MountUnregisterResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MountUnregisterResponse instance
+         */
+        public static create(properties?: vtctldata.IMountUnregisterResponse): vtctldata.MountUnregisterResponse;
+
+        /**
+         * Encodes the specified MountUnregisterResponse message. Does not implicitly {@link vtctldata.MountUnregisterResponse.verify|verify} messages.
+         * @param message MountUnregisterResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMountUnregisterResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MountUnregisterResponse message, length delimited. Does not implicitly {@link vtctldata.MountUnregisterResponse.verify|verify} messages.
+         * @param message MountUnregisterResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMountUnregisterResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MountUnregisterResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MountUnregisterResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MountUnregisterResponse;
+
+        /**
+         * Decodes a MountUnregisterResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MountUnregisterResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MountUnregisterResponse;
+
+        /**
+         * Verifies a MountUnregisterResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MountUnregisterResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MountUnregisterResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MountUnregisterResponse;
+
+        /**
+         * Creates a plain object from a MountUnregisterResponse message. Also converts values to other types if specified.
+         * @param message MountUnregisterResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MountUnregisterResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MountUnregisterResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MountUnregisterResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MountShowRequest. */
+    interface IMountShowRequest {
+
+        /** MountShowRequest name */
+        name?: (string|null);
+    }
+
+    /** Represents a MountShowRequest. */
+    class MountShowRequest implements IMountShowRequest {
+
+        /**
+         * Constructs a new MountShowRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMountShowRequest);
+
+        /** MountShowRequest name. */
+        public name: string;
+
+        /**
+         * Creates a new MountShowRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MountShowRequest instance
+         */
+        public static create(properties?: vtctldata.IMountShowRequest): vtctldata.MountShowRequest;
+
+        /**
+         * Encodes the specified MountShowRequest message. Does not implicitly {@link vtctldata.MountShowRequest.verify|verify} messages.
+         * @param message MountShowRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMountShowRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MountShowRequest message, length delimited. Does not implicitly {@link vtctldata.MountShowRequest.verify|verify} messages.
+         * @param message MountShowRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMountShowRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MountShowRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MountShowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MountShowRequest;
+
+        /**
+         * Decodes a MountShowRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MountShowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MountShowRequest;
+
+        /**
+         * Verifies a MountShowRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MountShowRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MountShowRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MountShowRequest;
+
+        /**
+         * Creates a plain object from a MountShowRequest message. Also converts values to other types if specified.
+         * @param message MountShowRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MountShowRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MountShowRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MountShowRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MountShowResponse. */
+    interface IMountShowResponse {
+
+        /** MountShowResponse topo_type */
+        topo_type?: (string|null);
+
+        /** MountShowResponse topo_server */
+        topo_server?: (string|null);
+
+        /** MountShowResponse topo_root */
+        topo_root?: (string|null);
+
+        /** MountShowResponse name */
+        name?: (string|null);
+    }
+
+    /** Represents a MountShowResponse. */
+    class MountShowResponse implements IMountShowResponse {
+
+        /**
+         * Constructs a new MountShowResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMountShowResponse);
+
+        /** MountShowResponse topo_type. */
+        public topo_type: string;
+
+        /** MountShowResponse topo_server. */
+        public topo_server: string;
+
+        /** MountShowResponse topo_root. */
+        public topo_root: string;
+
+        /** MountShowResponse name. */
+        public name: string;
+
+        /**
+         * Creates a new MountShowResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MountShowResponse instance
+         */
+        public static create(properties?: vtctldata.IMountShowResponse): vtctldata.MountShowResponse;
+
+        /**
+         * Encodes the specified MountShowResponse message. Does not implicitly {@link vtctldata.MountShowResponse.verify|verify} messages.
+         * @param message MountShowResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMountShowResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MountShowResponse message, length delimited. Does not implicitly {@link vtctldata.MountShowResponse.verify|verify} messages.
+         * @param message MountShowResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMountShowResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MountShowResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MountShowResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MountShowResponse;
+
+        /**
+         * Decodes a MountShowResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MountShowResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MountShowResponse;
+
+        /**
+         * Verifies a MountShowResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MountShowResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MountShowResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MountShowResponse;
+
+        /**
+         * Creates a plain object from a MountShowResponse message. Also converts values to other types if specified.
+         * @param message MountShowResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MountShowResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MountShowResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MountShowResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MountListRequest. */
+    interface IMountListRequest {
+    }
+
+    /** Represents a MountListRequest. */
+    class MountListRequest implements IMountListRequest {
+
+        /**
+         * Constructs a new MountListRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMountListRequest);
+
+        /**
+         * Creates a new MountListRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MountListRequest instance
+         */
+        public static create(properties?: vtctldata.IMountListRequest): vtctldata.MountListRequest;
+
+        /**
+         * Encodes the specified MountListRequest message. Does not implicitly {@link vtctldata.MountListRequest.verify|verify} messages.
+         * @param message MountListRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMountListRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MountListRequest message, length delimited. Does not implicitly {@link vtctldata.MountListRequest.verify|verify} messages.
+         * @param message MountListRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMountListRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MountListRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MountListRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MountListRequest;
+
+        /**
+         * Decodes a MountListRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MountListRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MountListRequest;
+
+        /**
+         * Verifies a MountListRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MountListRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MountListRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MountListRequest;
+
+        /**
+         * Creates a plain object from a MountListRequest message. Also converts values to other types if specified.
+         * @param message MountListRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MountListRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MountListRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MountListRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MountListResponse. */
+    interface IMountListResponse {
+
+        /** MountListResponse names */
+        names?: (string[]|null);
+    }
+
+    /** Represents a MountListResponse. */
+    class MountListResponse implements IMountListResponse {
+
+        /**
+         * Constructs a new MountListResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMountListResponse);
+
+        /** MountListResponse names. */
+        public names: string[];
+
+        /**
+         * Creates a new MountListResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MountListResponse instance
+         */
+        public static create(properties?: vtctldata.IMountListResponse): vtctldata.MountListResponse;
+
+        /**
+         * Encodes the specified MountListResponse message. Does not implicitly {@link vtctldata.MountListResponse.verify|verify} messages.
+         * @param message MountListResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMountListResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MountListResponse message, length delimited. Does not implicitly {@link vtctldata.MountListResponse.verify|verify} messages.
+         * @param message MountListResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMountListResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MountListResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MountListResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MountListResponse;
+
+        /**
+         * Decodes a MountListResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MountListResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MountListResponse;
+
+        /**
+         * Verifies a MountListResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MountListResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MountListResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MountListResponse;
+
+        /**
+         * Creates a plain object from a MountListResponse message. Also converts values to other types if specified.
+         * @param message MountListResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MountListResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MountListResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MountListResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a MoveTablesCreateRequest. */
     interface IMoveTablesCreateRequest {
 
