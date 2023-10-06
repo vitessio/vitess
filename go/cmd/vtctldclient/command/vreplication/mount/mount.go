@@ -47,7 +47,7 @@ var mountOptions struct {
 
 var register = &cobra.Command{
 	Use:                   "register",
-	Short:                 "Register an external Vitess Cluster",
+	Short:                 "Register an external Vitess Cluster.",
 	Example:               `vtctldclient --server localhost:15999 mount register --topo-type etcd2 --topo-server localhost:12379 --topo-root /vitess/global ext1`,
 	DisableFlagsInUseLine: true,
 	Aliases:               []string{"Register"},
@@ -74,7 +74,7 @@ func commandRegister(cmd *cobra.Command, args []string) error {
 
 var unregister = &cobra.Command{
 	Use:                   "unregister",
-	Short:                 "Unregister a previously mounted external Vitess Cluster",
+	Short:                 "Unregister a previously mounted external Vitess Cluster.",
 	Example:               `vtctldclient --server localhost:15999 mount unregister ext1`,
 	DisableFlagsInUseLine: true,
 	Aliases:               []string{"Unregister"},
@@ -98,7 +98,7 @@ func commandUnregister(cmd *cobra.Command, args []string) error {
 
 var show = &cobra.Command{
 	Use:                   "show",
-	Short:                 "Show attributes of a previously mounted external Vitess Cluster",
+	Short:                 "Show attributes of a previously mounted external Vitess Cluster.",
 	Example:               `vtctldclient --server localhost:15999 Mount Show ext1`,
 	DisableFlagsInUseLine: true,
 	Aliases:               []string{"Show"},
@@ -126,7 +126,7 @@ func commandShow(cmd *cobra.Command, args []string) error {
 
 var list = &cobra.Command{
 	Use:                   "list",
-	Short:                 "List all mounted external Vitess Clusters",
+	Short:                 "List all mounted external Vitess Clusters.",
 	Example:               `vtctldclient --server localhost:15999 mount list`,
 	DisableFlagsInUseLine: true,
 	Aliases:               []string{"List"},
@@ -163,9 +163,9 @@ func registerCommands(root *cobra.Command) {
 }
 
 func addRegisterFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&mountOptions.TopoType, "topo-type", "", "Topo server implementation to use")
-	cmd.Flags().StringVar(&mountOptions.TopoServer, "topo-server", "", "Topo server address")
-	cmd.Flags().StringVar(&mountOptions.TopoRoot, "topo-root", "", "Topo server root path")
+	cmd.Flags().StringVar(&mountOptions.TopoType, "topo-type", "", "Topo server implementation to use.")
+	cmd.Flags().StringVar(&mountOptions.TopoServer, "topo-server", "", "Topo server address.")
+	cmd.Flags().StringVar(&mountOptions.TopoRoot, "topo-root", "", "Topo server root path.")
 	cmd.MarkFlagRequired("topo-type")
 	cmd.MarkFlagRequired("topo-server")
 	cmd.MarkFlagRequired("topo-root")

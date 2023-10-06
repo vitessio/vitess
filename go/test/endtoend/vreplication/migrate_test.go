@@ -202,7 +202,7 @@ func TestVtctldMigrate(t *testing.T) {
 	// create external cluster
 	extCell := "extcell1"
 	extCells := []string{extCell}
-	extVc := NewVitessCluster(t, "TestMigrateExternal", extCells, externalClusterConfig)
+	extVc := NewVitessCluster(t, t.Name(), extCells, externalClusterConfig)
 	require.NotNil(t, extVc)
 	defer extVc.TearDown(t)
 
@@ -221,20 +221,19 @@ func TestVtctldMigrate(t *testing.T) {
 	var output, expected string
 
 	t.Run("mount external cluster", func(t *testing.T) {
-		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "Register", "--topo-type=etcd2",
-			fmt.Sprintf("--topo-server=localhost:%d", extVc.ClusterConfig.topoPort), "--topo-root=/vitess/global", "ext1"); err != nil {
-			t.Fatalf("Mount Register command failed with %+v : %s\n", err, output)
-		}
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Mount", "Register", "--topo-type=etcd2",
+			fmt.Sprintf("--topo-server=localhost:%d", extVc.ClusterConfig.topoPort), "--topo-root=/vitess/global", "ext1")
+		require.NoError(t, err, "Mount Register command failed with %s", output)
 
-		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "List"); err != nil {
-			t.Fatalf("Mount List command failed with %+v : %s\n", err, output)
-		}
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "List")
+		require.NoError(t, err, "Mount List command failed with %s", output)
+
 		names := gjson.Get(output, "names")
 		require.Equal(t, 1, len(names.Array()))
 		require.Equal(t, "ext1", names.Array()[0].String())
-		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "Show", "ext1"); err != nil {
-			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
-		}
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "Show", "ext1")
+		require.NoError(t, err, "Mount command failed with %s\n", output)
+
 		require.Equal(t, "etcd2", gjson.Get(output, "topo_type").String())
 		require.Equal(t, "localhost:12379", gjson.Get(output, "topo_server").String())
 		require.Equal(t, "/vitess/global", gjson.Get(output, "topo_root").String())
@@ -258,42 +257,40 @@ func TestVtctldMigrate(t *testing.T) {
 		waitForRowCount(t, vtgateConn, "product:0", "review", 4)
 		vdiffSideBySide(t, ksWorkflow, "extcell1")
 
-		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
-			"--target-keyspace", "product", "--workflow", "e1", "Show"); err != nil {
-			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
-		}
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
+			"--target-keyspace", "product", "--workflow", "e1", "Show")
+		require.NoError(t, err, "Migrate command failed with %s", output)
+
 		wf := gjson.Get(output, "workflows").Array()[0]
 		require.Equal(t, "e1", wf.Get("name").String())
 		require.Equal(t, "Migrate", wf.Get("workflow_type").String())
 
-		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
-			"--target-keyspace", "product", "--workflow", "e1", "Progress"); err != nil {
-			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
-		}
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
+			"--target-keyspace", "product", "--workflow", "e1", "Progress")
+		require.NoError(t, err, "Migrate command failed with %s", output)
+
 		require.Equal(t, "Running", gjson.Get(output, "shard_streams.product/0.streams.0.status").String())
 
-		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
-			"--target-keyspace", "product", "--workflow", "e1", "Complete"); err != nil {
-			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
-		}
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
+			"--target-keyspace", "product", "--workflow", "e1", "Complete")
+		require.NoError(t, err, "Migrate command failed with %s", output)
 
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 0)
 	})
 	t.Run("cancel migrate workflow", func(t *testing.T) {
 		execVtgateQuery(t, vtgateConn, "product", "drop table review,rating")
-		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
 			"--target-keyspace", "product", "--workflow", "e1", "Create", "--source-keyspace", "rating",
-			"--mount-name", "ext1", "--all-tables", "--auto-start=false", "--cells=extcell1"); err != nil {
-			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
-		}
+			"--mount-name", "ext1", "--all-tables", "--auto-start=false", "--cells=extcell1")
+		require.NoError(t, err, "Migrate command failed with %s", output)
 
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)
 		waitForRowCount(t, vtgateConn, "product:0", "rating", 0)
 		waitForRowCount(t, vtgateConn, "product:0", "review", 0)
-		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
-			"--target-keyspace", "product", "--workflow", "e1", "Cancel"); err != nil {
-			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
-		}
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
+			"--target-keyspace", "product", "--workflow", "e1", "Cancel")
+		require.NoError(t, err, "Migrate command failed with %s", output)
+
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 0)
 		var found bool
 		found, err = checkIfTableExists(t, vc, "zone1-100", "review")
@@ -305,13 +302,11 @@ func TestVtctldMigrate(t *testing.T) {
 	})
 
 	t.Run("unmount external cluster", func(t *testing.T) {
-		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "Unregister", "ext1"); err != nil {
-			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
-		}
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "Unregister", "ext1")
+		require.NoError(t, err, "Mount command failed with %s\n", output)
 
-		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "List"); err != nil {
-			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
-		}
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "List")
+		require.NoError(t, err, "Mount command failed with %+v : %s\n", output)
 		expected = "{}\n"
 		require.Equal(t, expected, output)
 
