@@ -108,6 +108,12 @@ func (ts *tableStreamer) Stream() error {
 	if _, err := conn.ExecuteFetch("set names 'binary'", 1, false); err != nil {
 		return err
 	}
+	if _, err := conn.ExecuteFetch("set @@session.net_read_timeout = 300", 1, false); err != nil {
+		return err
+	}
+	if _, err := conn.ExecuteFetch("set @@session.net_write_timeout = 600", 1, false); err != nil {
+		return err
+	}
 
 	rs, err := conn.ExecuteFetch("show tables", -1, true)
 	if err != nil {
