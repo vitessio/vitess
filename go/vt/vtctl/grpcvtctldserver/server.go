@@ -2542,6 +2542,76 @@ func (s *VtctldServer) LookupVindexExternalize(ctx context.Context, req *vtctlda
 	return resp, err
 }
 
+// MigrateCreate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MigrateCreate(ctx context.Context, req *vtctldatapb.MigrateCreateRequest) (resp *vtctldatapb.WorkflowStatusResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MigrateCreate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("target_keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("cells", req.Cells)
+	span.Annotate("tablet_types", req.TabletTypes)
+	span.Annotate("on_ddl", req.OnDdl)
+
+	resp, err = s.ws.MigrateCreate(ctx, req)
+	return resp, err
+}
+
+// MountRegister is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MountRegister(ctx context.Context, req *vtctldatapb.MountRegisterRequest) (resp *vtctldatapb.MountRegisterResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MountRegister")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("topo_type", req.TopoType)
+	span.Annotate("topo_server", req.TopoServer)
+	span.Annotate("topo_root", req.TopoRoot)
+	span.Annotate("mount_name", req.Name)
+
+	resp, err = s.ws.MountRegister(ctx, req)
+	return resp, err
+}
+
+// MountUnregister is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MountUnregister(ctx context.Context, req *vtctldatapb.MountUnregisterRequest) (resp *vtctldatapb.MountUnregisterResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MountUnregister")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("mount_name", req.Name)
+
+	resp, err = s.ws.MountUnregister(ctx, req)
+	return resp, err
+}
+
+// MountList is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MountList(ctx context.Context, req *vtctldatapb.MountListRequest) (resp *vtctldatapb.MountListResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MountList")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	resp, err = s.ws.MountList(ctx, req)
+	return resp, err
+}
+
+// MountShow is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MountShow(ctx context.Context, req *vtctldatapb.MountShowRequest) (resp *vtctldatapb.MountShowResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MountShow")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("mount_name", req.Name)
+
+	resp, err = s.ws.MountShow(ctx, req)
+	return resp, err
+}
+
 // MoveTablesCreate is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (resp *vtctldatapb.WorkflowStatusResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.MoveTablesCreate")
