@@ -36,6 +36,8 @@ var (
 		Long: `Registers a local topology service in a new cell by creating the CellInfo
 with the provided parameters.
 
+This is a test change for cobradocs preview.
+
 The address will be used to connect to the topology service, and Vitess data will
 be stored starting at the provided root.`,
 		DisableFlagsInUseLine: true,
