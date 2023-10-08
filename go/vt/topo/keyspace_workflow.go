@@ -18,11 +18,8 @@ package topo
 
 import (
 	"context"
-	"fmt"
 
 	"vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func (ts *Server) SaveWorkflowMetadata(ctx context.Context, targetKeyspace string, wm *topodata.WorkflowMetadata) (err error) {
@@ -34,10 +31,10 @@ func (ts *Server) SaveWorkflowMetadata(ctx context.Context, targetKeyspace strin
 	defer unlock(&err)
 
 	ki, err := ts.GetKeyspace(ctx, targetKeyspace)
-	for _, w := range ki.Workflows {
+	// we overwrite the workflow if it already exists
+	for i, w := range ki.Workflows {
 		if w.Name == wm.Name {
-			return vterrors.New(vtrpc.Code_ALREADY_EXISTS,
-				fmt.Sprintf("workflow %s already exists in %s", w.Name, ki.KeyspaceName()))
+			ki.Workflows = append(ki.Workflows[:i], ki.Workflows[i+1:]...)
 		}
 	}
 	ki.Workflows = append(ki.Workflows, &topodata.WorkflowMetadata{
