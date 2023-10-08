@@ -34,8 +34,15 @@ import (
 )
 
 var (
-	// WorkflowUpdate makes a WorkflowUpdate gRPC call to a vtctld.
-	workflowUpdate = &cobra.Command{
+	updateOptions = struct {
+		Cells                        []string
+		TabletTypes                  []topodatapb.TabletType
+		TabletTypesInPreferenceOrder bool
+		OnDDL                        string
+	}{}
+
+	// update makes a WorkflowUpdate gRPC call to a vtctld.
+	update = &cobra.Command{
 		Use:                   "update",
 		Short:                 "Update the configuration parameters for a VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer update --workflow commerce2customer --cells zone1 --cells zone2 -c "zone3,zone4" -c zone5`,
@@ -46,21 +53,21 @@ var (
 			changes := false
 			if cmd.Flags().Lookup("cells").Changed { // Validate the provided value(s)
 				changes = true
-				for i, cell := range workflowUpdateOptions.Cells { // Which only means trimming whitespace
-					workflowUpdateOptions.Cells[i] = strings.TrimSpace(cell)
+				for i, cell := range updateOptions.Cells { // Which only means trimming whitespace
+					updateOptions.Cells[i] = strings.TrimSpace(cell)
 				}
 			} else {
-				workflowUpdateOptions.Cells = textutil.SimulatedNullStringSlice
+				updateOptions.Cells = textutil.SimulatedNullStringSlice
 			}
 			if cmd.Flags().Lookup("tablet-types").Changed {
 				changes = true
 			} else {
-				workflowUpdateOptions.TabletTypes = []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}
+				updateOptions.TabletTypes = []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}
 			}
 			if cmd.Flags().Lookup("on-ddl").Changed { // Validate the provided value
 				changes = true
-				if _, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(workflowUpdateOptions.OnDDL)]; !ok {
-					return fmt.Errorf("invalid on-ddl value: %s", workflowUpdateOptions.OnDDL)
+				if _, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(updateOptions.OnDDL)]; !ok {
+					return fmt.Errorf("invalid on-ddl value: %s", updateOptions.OnDDL)
 				}
 			} // Simulated NULL will need to be handled in command
 			if !changes {
@@ -68,25 +75,25 @@ var (
 			}
 			return nil
 		},
-		RunE: commandWorkflowUpdate,
+		RunE: commandUpdate,
 	}
 )
 
-func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
+func commandUpdate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	// We've already validated any provided value, if one WAS provided.
 	// Now we need to do the mapping from the string representation to
 	// the enum value.
 	onddl := int32(textutil.SimulatedNullInt) // Simulated NULL when no value provided
-	if val, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(workflowUpdateOptions.OnDDL)]; ok {
+	if val, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(updateOptions.OnDDL)]; ok {
 		onddl = val
 	}
 
 	// Simulated NULL when no value is provided.
 	tsp := tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN
 	if cmd.Flags().Lookup("tablet-types-in-order").Changed {
-		if workflowUpdateOptions.TabletTypesInPreferenceOrder {
+		if updateOptions.TabletTypesInPreferenceOrder {
 			tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
 		} else {
 			tsp = tabletmanagerdatapb.TabletSelectionPreference_ANY
@@ -94,11 +101,11 @@ func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	req := &vtctldatapb.WorkflowUpdateRequest{
-		Keyspace: workflowOptions.Keyspace,
+		Keyspace: baseOptions.Keyspace,
 		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
-			Workflow:                  workflowUpdateOptions.Workflow,
-			Cells:                     workflowUpdateOptions.Cells,
-			TabletTypes:               workflowUpdateOptions.TabletTypes,
+			Workflow:                  baseOptions.Workflow,
+			Cells:                     updateOptions.Cells,
+			TabletTypes:               updateOptions.TabletTypes,
 			TabletSelectionPreference: tsp,
 			OnDdl:                     binlogdatapb.OnDDLAction(onddl),
 		},

@@ -1023,6 +1023,13 @@ message LookupVindexExternalizeResponse {
   bool workflow_deleted = 1;
 }
 
+message MaterializeCreateRequest {
+  MaterializeSettings settings = 1;
+}
+
+message MaterializeCreateResponse {
+}
+
 message MigrateCreateRequest {
   // The necessary info gets passed on to each primary tablet involved
   // in the workflow via the CreateVReplicationWorkflow tabletmanager RPC.

@@ -29,32 +29,31 @@ import (
 )
 
 var (
-	workflowDeleteOptions = struct {
-		Workflow         string
+	deleteOptions = struct {
 		KeepData         bool
 		KeepRoutingRules bool
 	}{}
 
-	// WorkflowDelete makes a WorkflowDelete gRPC call to a vtctld.
-	workflowDelete = &cobra.Command{
+	// delete makes a WorkflowDelete gRPC call to a vtctld.
+	delete = &cobra.Command{
 		Use:                   "delete",
 		Short:                 "Delete a VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer delete --workflow commerce2customer`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Delete"},
 		Args:                  cobra.NoArgs,
-		RunE:                  commandWorkflowDelete,
+		RunE:                  commandDelete,
 	}
 )
 
-func commandWorkflowDelete(cmd *cobra.Command, args []string) error {
+func commandDelete(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.WorkflowDeleteRequest{
-		Keyspace:         workflowOptions.Keyspace,
-		Workflow:         workflowDeleteOptions.Workflow,
-		KeepData:         workflowDeleteOptions.KeepData,
-		KeepRoutingRules: workflowDeleteOptions.KeepRoutingRules,
+		Keyspace:         baseOptions.Keyspace,
+		Workflow:         baseOptions.Workflow,
+		KeepData:         deleteOptions.KeepData,
+		KeepRoutingRules: deleteOptions.KeepRoutingRules,
 	}
 	resp, err := common.GetClient().WorkflowDelete(common.GetCommandCtx(), req)
 	if err != nil {

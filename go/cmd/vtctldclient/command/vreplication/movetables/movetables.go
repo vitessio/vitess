@@ -23,9 +23,9 @@ import (
 )
 
 var (
-	// moveTables is the base command for all actions related to moveTables.
-	moveTables = &cobra.Command{
-		Use:                   "MoveTables --workflow <workflow> --keyspace <keyspace> [command] [command-flags]",
+	// base is the base command for all actions related to MoveTables.
+	base = &cobra.Command{
+		Use:                   "MoveTables --workflow <workflow> --target-keyspace <keyspace> [command] [command-flags]",
 		Short:                 "Perform commands related to moving tables from a source keyspace to a target keyspace.",
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"movetables"},
@@ -33,33 +33,53 @@ var (
 	}
 )
 
-func registerMoveTablesCommands(root *cobra.Command) {
-	common.AddCommonFlags(moveTables)
-	root.AddCommand(moveTables)
+func registerCommands(root *cobra.Command) {
+	common.AddCommonFlags(base)
+	root.AddCommand(base)
 
-	registerCreateCommand(moveTables)
+	common.AddCommonCreateFlags(create)
+	create.PersistentFlags().StringVar(&createOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables are being moved from.")
+	create.MarkPersistentFlagRequired("source-keyspace")
+	create.Flags().StringSliceVar(&createOptions.SourceShards, "source-shards", nil, "Source shards to copy data from when performing a partial MoveTables (experimental).")
+	create.Flags().StringVar(&createOptions.SourceTimeZone, "source-time-zone", "", "Specifying this causes any DATETIME fields to be converted from the given time zone into UTC.")
+	create.Flags().BoolVar(&createOptions.AllTables, "all-tables", false, "Copy all tables from the source.")
+	create.Flags().StringSliceVar(&createOptions.IncludeTables, "tables", nil, "Source tables to copy.")
+	create.Flags().StringSliceVar(&createOptions.ExcludeTables, "exclude-tables", nil, "Source tables to exclude from copying.")
+	create.Flags().BoolVar(&createOptions.NoRoutingRules, "no-routing-rules", false, "(Advanced) Do not create routing rules while creating the workflow. See the reference documentation for limitations if you use this flag.")
+	create.Flags().BoolVar(&createOptions.AtomicCopy, "atomic-copy", false, "(EXPERIMENTAL) A single copy phase is run for all tables from the source. Use this, for example, if your source keyspace has tables which use foreign key constraints.")
+	base.AddCommand(create)
+
 	opts := &common.SubCommandsOpts{
 		SubCommand: "MoveTables",
 		Workflow:   "commerce2customer",
 	}
-	moveTables.AddCommand(common.GetShowCommand(opts))
-	moveTables.AddCommand(common.GetStatusCommand(opts))
+	base.AddCommand(common.GetShowCommand(opts))
+	base.AddCommand(common.GetStatusCommand(opts))
 
-	moveTables.AddCommand(common.GetStartCommand(opts))
-	moveTables.AddCommand(common.GetStopCommand(opts))
+	base.AddCommand(common.GetStartCommand(opts))
+	base.AddCommand(common.GetStopCommand(opts))
 
 	switchTrafficCommand := common.GetSwitchTrafficCommand(opts)
 	common.AddCommonSwitchTrafficFlags(switchTrafficCommand, true)
-	moveTables.AddCommand(switchTrafficCommand)
+	base.AddCommand(switchTrafficCommand)
 
 	reverseTrafficCommand := common.GetReverseTrafficCommand(opts)
 	common.AddCommonSwitchTrafficFlags(reverseTrafficCommand, false)
-	moveTables.AddCommand(reverseTrafficCommand)
+	base.AddCommand(reverseTrafficCommand)
 
-	moveTables.AddCommand(common.GetCompleteCommand(opts))
-	moveTables.AddCommand(common.GetCancelCommand(opts))
+	complete := common.GetCompleteCommand(opts)
+	complete.Flags().BoolVar(&common.CompleteOptions.KeepData, "keep-data", false, "Keep the original source table data that was copied by the MoveTables workflow.")
+	complete.Flags().BoolVar(&common.CompleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules in place that direct table traffic from the source keyspace to the target keyspace of the MoveTables workflow.")
+	complete.Flags().BoolVar(&common.CompleteOptions.RenameTables, "rename-tables", false, "Keep the original source table data that was copied by the MoveTables workflow, but rename each table to '_<tablename>_old'.")
+	complete.Flags().BoolVar(&common.CompleteOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred.")
+	base.AddCommand(complete)
+
+	cancel := common.GetCancelCommand(opts)
+	cancel.Flags().BoolVar(&common.CancelOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the MoveTables workflow in the target keyspace.")
+	cancel.Flags().BoolVar(&common.CancelOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the MoveTables workflow.")
+	base.AddCommand(cancel)
 }
 
 func init() {
-	common.RegisterCommandHandler("MoveTables", registerMoveTablesCommands)
+	common.RegisterCommandHandler("MoveTables", registerCommands)
 }
