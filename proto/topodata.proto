@@ -256,6 +256,14 @@ message Shard {
   reserved 5;
 }
 
+message WorkflowMetadata {
+  string name = 1;
+  string type = 2;
+  repeated string target_shards = 4;
+  string source_keyspace = 5;
+  repeated string source_shards = 6;
+}
+
 // A Keyspace contains data about a keyspace.
 message Keyspace {
   // OBSOLETE string sharding_column_name = 1;
@@ -312,6 +320,10 @@ message Keyspace {
   // used for various system metadata that is stored in each
   // tablet's mysqld instance.
   string sidecar_db_name = 10;
+
+  // WorkflowMetadata is the metadata for workflows in this keyspace.
+  repeated WorkflowMetadata workflows = 11;
+
 }
 
 // ShardReplication describes the MySQL replication relationships

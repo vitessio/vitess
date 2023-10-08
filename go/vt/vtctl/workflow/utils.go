@@ -647,6 +647,40 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 	return nil
 }
 
+func FilterShardsForWorkflow(ctx context.Context, ts *topo.Server, keyspace, workflow string, shards []string) ([]string, error) {
+	log.Infof("Filtering shards for workflow %s in keyspace %s", workflow, keyspace)
+	ks, err := ts.GetKeyspace(ctx, keyspace)
+	if ks.Keyspace == nil || err != nil {
+		return shards, nil // keyspace doesn't exist, so we can't filter shards, should only come here in tests.
+	}
+	wm, err := ts.GetWorkflowMetadata(ctx, keyspace, workflow)
+	if err != nil {
+		return nil, err
+	}
+	if wm == nil {
+		return shards, nil
+	}
+
+	var targetShards []string
+	for _, shard := range shards {
+		for _, s := range wm.TargetShards {
+			if shard == s {
+				targetShards = append(targetShards, shard)
+			}
+		}
+	}
+
+	if len(targetShards) != len(wm.TargetShards) {
+		return nil, fmt.Errorf("target shards %v for workflow %s does not match the shards in the metadata for keyspace %s",
+			wm.TargetShards, workflow, keyspace)
+	}
+
+	if len(shards) != len(targetShards) {
+		log.Infof("workflow has fewer shards: %d than the keyspace: %d", len(targetShards), len(shards))
+	}
+	return targetShards, nil
+}
+
 // LegacyBuildTargets collects MigrationTargets and other metadata (see TargetInfo)
 // from a workflow in the target keyspace. It uses VReplicationExec to get the workflow
 // details rather than the new TabletManager ReadVReplicationWorkflow RPC. This is
@@ -658,7 +692,12 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 //
 // It returns ErrNoStreams if there are no targets found for the workflow.
 func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string) (*TargetInfo, error) {
-	targetShards, err := ts.GetShardNames(ctx, targetKeyspace)
+	shards, err := ts.GetShardNames(ctx, targetKeyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	targetShards, err := FilterShardsForWorkflow(ctx, ts, targetKeyspace, workflow, shards)
 	if err != nil {
 		return nil, err
 	}
@@ -687,6 +726,7 @@ func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.Table
 	// two target shards will have vreplication streams, and the other shards in
 	// the target keyspace will not.
 	for _, targetShard := range targetShards {
+		log.Infof("Checking shard %s for workflow %s", targetShard, workflow)
 		si, err := ts.GetShard(ctx, targetKeyspace, targetShard)
 		if err != nil {
 			return nil, err

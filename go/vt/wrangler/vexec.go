@@ -220,6 +220,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 		wg.Add(1)
 		go func(ctx context.Context, primary *topo.TabletInfo) {
 			defer wg.Done()
+			log.Infof("Executing query on tablet %s", primary.AliasString())
 			qr, err := vx.planner.exec(ctx, primary.Alias, vx.plannedQuery)
 			if err != nil {
 				allErrors.RecordError(err)
@@ -294,9 +295,15 @@ func (vx *vexec) getPrimaries() error {
 	if len(shards) == 0 {
 		return fmt.Errorf("no shards found in keyspace %s", vx.keyspace)
 	}
+
+	targetShards, err := workflow2.FilterShardsForWorkflow(vx.ctx, vx.wr.ts, vx.keyspace, vx.workflow, shards)
+	if err != nil {
+		return err
+	}
+
 	var allPrimaries []*topo.TabletInfo
 	var primary *topo.TabletInfo
-	for _, shard := range shards {
+	for _, shard := range targetShards {
 		if primary, err = vx.getPrimaryForShard(shard); err != nil {
 			return err
 		}

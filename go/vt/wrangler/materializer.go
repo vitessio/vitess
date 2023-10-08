@@ -27,6 +27,8 @@ import (
 	"text/template"
 	"time"
 
+	"vitess.io/vitess/go/vt/proto/topodata"
+
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
@@ -136,7 +138,6 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
-
 	if externalCluster != "" { // when the source is an external mysql cluster mounted using the Mount command
 		externalTopo, err = wr.ts.OpenExternalVitessClusterServer(ctx, externalCluster)
 		if err != nil {
@@ -359,6 +360,23 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			return fmt.Errorf(msg)
 		}
 	}
+	var participatingShards []string
+	for _, si := range mz.targetShards {
+		participatingShards = append(participatingShards, si.ShardName())
+	}
+
+	wm := &topodata.WorkflowMetadata{
+		Name:           workflow,
+		Type:           "MoveTables",
+		TargetShards:   participatingShards,
+		SourceKeyspace: sourceKeyspace,
+		SourceShards:   participatingShards,
+	}
+	log.Infof("Going to save workflow metadata for workflow %s: %+v", workflow, wm)
+	if err := wr.ts.SaveWorkflowMetadata(ctx, targetKeyspace, wm); err != nil {
+		return err
+	}
+
 	if autoStart {
 		return mz.startStreams(ctx)
 	}

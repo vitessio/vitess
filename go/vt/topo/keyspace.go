@@ -203,7 +203,7 @@ func (ts *Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceIn
 	if err = k.UnmarshalVT(data); err != nil {
 		return nil, vterrors.Wrap(err, "bad keyspace data")
 	}
-
+	log.Infof("GetKeyspace:%v:%v:%v:", keyspace, version, k)
 	return &KeyspaceInfo{
 		keyspace: keyspace,
 		version:  version,
