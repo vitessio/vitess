@@ -364,6 +364,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("active_only", req.ActiveOnly)
+	span.Annotate("include_logs", req.IncludeLogs)
 
 	where := ""
 	predicates := []string{}
@@ -627,6 +628,7 @@ SELECT
 	count
 FROM
 	_vt.vreplication_log
+WHERE vrepl_id IN %a
 ORDER BY
 	vrepl_id ASC,
 	id ASC
@@ -640,7 +642,23 @@ ORDER BY
 		span.Annotate("keyspace", req.Keyspace)
 		span.Annotate("workflow", workflow.Name)
 
-		results, err := vx.WithWorkflow(workflow.Name).QueryContext(ctx, vrepLogQuery)
+		vreplIDs := make([]int64, 0, len(workflow.ShardStreams))
+		for _, shardStream := range maps.Values(workflow.ShardStreams) {
+			for _, stream := range shardStream.Streams {
+				vreplIDs = append(vreplIDs, stream.Id)
+			}
+		}
+		idsBV, err := sqltypes.BuildBindVariable(vreplIDs)
+		if err != nil {
+			return
+		}
+
+		query, err := sqlparser.ParseAndBind(vrepLogQuery, idsBV)
+		if err != nil {
+			return
+		}
+
+		results, err := vx.WithWorkflow(workflow.Name).QueryContext(ctx, query)
 		if err != nil {
 			// Note that we do not return here. If there are any query results
 			// in the map (i.e. some tablets returned successfully), we will

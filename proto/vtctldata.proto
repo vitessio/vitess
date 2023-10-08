@@ -968,6 +968,7 @@ message GetWorkflowsRequest {
   bool name_only = 3;
   // If you only want a specific workflow then set this field.
   string workflow = 4;
+  bool include_logs = 5;
 }
 
 message GetWorkflowsResponse {

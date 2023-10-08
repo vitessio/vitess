@@ -53929,6 +53929,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest workflow */
         workflow?: (string|null);
+
+        /** GetWorkflowsRequest include_logs */
+        include_logs?: (boolean|null);
     }
 
     /** Represents a GetWorkflowsRequest. */
@@ -53951,6 +53954,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest workflow. */
         public workflow: string;
+
+        /** GetWorkflowsRequest include_logs. */
+        public include_logs: boolean;
 
         /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.
