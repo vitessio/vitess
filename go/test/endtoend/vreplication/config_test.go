@@ -381,11 +381,11 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
 	materializeProductSpec = `
 	{
 	"workflow": "cproduct",
-	"sourceKeyspace": "product",
-	"targetKeyspace": "customer",
-	"tableSettings": [{
-		"targetTable": "cproduct",
-		"sourceExpression": "select * from product",
+	"source_keyspace": "product",
+	"target_keyspace": "customer",
+	"table_settings": [{
+		"target_table": "cproduct",
+		"source_expression": "select * from product",
 		"create_ddl": "create table cproduct(pid bigint, description varchar(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid)) CHARSET=utf8mb4"
 	}]
 }
@@ -436,11 +436,11 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
 	materializeMerchantOrdersSpec = `
 {
   "workflow": "morders",
-  "sourceKeyspace": "customer",
-  "targetKeyspace": "merchant-type",
-  "tableSettings": [{
-    "targetTable": "morders",
-    "sourceExpression": "select oid, cid, mname, pid, price, qty, total from orders",
+  "source_keyspace": "customer",
+  "target_keyspace": "merchant-type",
+  "table_settings": [{
+    "target_table": "morders",
+    "source_expression": "select oid, cid, mname, pid, price, qty, total from orders",
     "create_ddl": "create table morders(oid int, cid int, mname varchar(128), pid int, price int, qty int, total int, total2 int as (10 * total), primary key(oid)) CHARSET=utf8"
   }]
 }
@@ -449,11 +449,11 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
 	materializeMerchantSalesSpec = `
 {
   "workflow": "msales",
-  "sourceKeyspace": "customer",
-  "targetKeyspace": "merchant-type",
-  "tableSettings": [{
-    "targetTable": "msales",
-	"sourceExpression": "select mname as merchant_name, count(*) as kount, sum(price) as amount from orders group by merchant_name",
+  "source_keyspace": "customer",
+  "target_keyspace": "merchant-type",
+  "table_settings": [{
+    "target_table": "msales",
+	"source_expression": "select mname as merchant_name, count(*) as kount, sum(price) as amount from orders group by merchant_name",
     "create_ddl": "create table msales(merchant_name varchar(128), kount int, amount int, primary key(merchant_name)) CHARSET=utf8"
   }]
 }
@@ -476,11 +476,11 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
 	materializeSalesSpec = `
 {
   "workflow": "sales",
-  "sourceKeyspace": "customer",
-  "targetKeyspace": "product",
-  "tableSettings": [{
-    "targetTable": "sales",
-    "sourceExpression": "select pid, count(*) as kount, sum(price) as amount from orders group by pid",
+  "source_keyspace": "customer",
+  "target_keyspace": "product",
+  "table_settings": [{
+    "target_Table": "sales",
+    "source_expression": "select pid, count(*) as kount, sum(price) as amount from orders group by pid",
     "create_ddl": "create table sales(pid int, kount int, amount int, primary key(pid)) CHARSET=utf8"
   }]
 }
@@ -488,11 +488,11 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
 	materializeRollupSpec = `
 {
   "workflow": "rollup",
-  "sourceKeyspace": "product",
-  "targetKeyspace": "product",
-  "tableSettings": [{
-    "targetTable": "rollup",
-    "sourceExpression": "select 'total' as rollupname, count(*) as kount from product group by rollupname",
+  "source_keyspace": "product",
+  "target_keyspace": "product",
+  "table_settings": [{
+    "target_table": "rollup",
+    "source_expression": "select 'total' as rollupname, count(*) as kount from product group by rollupname",
     "create_ddl": "create table rollup(rollupname varchar(100), kount int, primary key (rollupname)) CHARSET=utf8mb4"
   }]
 }
