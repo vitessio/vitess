@@ -58,6 +58,11 @@ should be copied as-is from the source keyspace. Here's an example value for tab
     "source_expression": "select email from customer where customer_id=1"
   },
   {
+    "target_table": "states",
+    "source_expression": "select * from states",
+	"create_ddl": "copy"
+  },
+  {
     "target_table": "sales_by_sku",
     "source_expression": "select sku, count(*) as orders, sum(price) as revenue from corder group by sku",
     "create_ddl": "create table sales_by_sku (sku varbinary(128) not null primary key, orders bigint, revenue bigint)"
