@@ -39,9 +39,31 @@ var (
 
 	// create makes a MaterializeCreate gRPC call to a vtctld.
 	create = &cobra.Command{
-		Use:                   "create",
-		Short:                 "Create and run a Materialize VReplication workflow.",
-		Example:               `vtctldclient --server localhost:15999 materialize --workflow product_sales --target-keyspace commerce create --source-keyspace commerce --table-settings '[{"target_table": "sales_by_sku", "create_ddl": "create table sales_by_sku (sku varbinary(128) not null primary key, orders bigint, revenue bigint)", "source_expression": "select sku, count(*) as orders, sum(price) as revenue from corder group by sku"}]' --cells zone1 --cells zone2 --tablet-types replicas`,
+		Use:     "create",
+		Short:   "Create and run a Materialize VReplication workflow.",
+		Example: `vtctldclient --server localhost:15999 materialize --workflow product_sales --target-keyspace commerce create --source-keyspace commerce --table-settings '[{"target_table": "sales_by_sku", "create_ddl": "create table sales_by_sku (sku varbinary(128) not null primary key, orders bigint, revenue bigint)", "source_expression": "select sku, count(*) as orders, sum(price) as revenue from corder group by sku"}]' --cells zone1 --cells zone2 --tablet-types replica`,
+		Long: `Materialize is a lower level VReplication command that allows for generalized materialization
+of tables. The target tables can be copies, aggregations, or views. The target tables are kept
+in sync in near-realtime. The primary flag used to define the materializations (you can have
+multiple per workflow) is table-settings which is a JSON array where each value must contain
+two key/value pairs. The first required key is 'target_table' and it is the name of the table
+in the target-keyspace to store the results in. The second required key is 'source_expression'
+and its value is the select query to run against the source table. An optional key/value pair
+can also be specified for 'create_ddl' which provides the DDL to create the target table if it
+does not exist -- you can alternatively specify a value of 'copy' if the target table schema
+should be copied as-is from the source keyspace. Here's an example value for table-settings:
+[
+  {
+    "target_table": "customer_one_email",
+    "source_expression": "select email from customer where customer_id=1"
+  },
+  {
+    "target_table": "sales_by_sku",
+    "source_expression": "select sku, count(*) as orders, sum(price) as revenue from corder group by sku",
+    "create_ddl": "create table sales_by_sku (sku varbinary(128) not null primary key, orders bigint, revenue bigint)"
+  }
+]
+`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Create"},
