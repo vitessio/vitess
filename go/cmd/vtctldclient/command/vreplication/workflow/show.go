@@ -56,8 +56,9 @@ func commandWorkflowShow(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.GetWorkflowsRequest{
-		Keyspace: workflowOptions.Keyspace,
-		Workflow: workflowDeleteOptions.Workflow,
+		Keyspace:    workflowOptions.Keyspace,
+		Workflow:    workflowDeleteOptions.Workflow,
+		IncludeLogs: workflowShowOptions.IncludeLogs,
 	}
 	resp, err := common.GetClient().GetWorkflows(common.GetCommandCtx(), req)
 	if err != nil {
@@ -81,9 +82,4 @@ func commandWorkflowShow(cmd *cobra.Command, args []string) error {
 	fmt.Printf("%s\n", data)
 
 	return nil
-}
-
-func addWorkflowShowFlags(cmd *cobra.Command) {
-	workflowShow.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want the details for (required).")
-	workflowShow.MarkFlagRequired("workflow")
 }

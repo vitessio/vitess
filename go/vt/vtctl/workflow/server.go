@@ -336,10 +336,11 @@ func (s *Server) GetCellsWithTableReadsSwitched(
 	return cellsSwitched, cellsNotSwitched, nil
 }
 
-func (s *Server) GetWorkflow(ctx context.Context, keyspace, workflow string) (*vtctldatapb.Workflow, error) {
+func (s *Server) GetWorkflow(ctx context.Context, keyspace, workflow string, includeLogs bool) (*vtctldatapb.Workflow, error) {
 	res, err := s.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
-		Keyspace: keyspace,
-		Workflow: workflow,
+		Keyspace:    keyspace,
+		Workflow:    workflow,
+		IncludeLogs: includeLogs,
 	})
 	if err != nil {
 		return nil, err
@@ -636,7 +637,7 @@ ORDER BY
 	)
 
 	fetchStreamLogs := func(ctx context.Context, workflow *vtctldatapb.Workflow) {
-		span, ctx := trace.NewSpan(ctx, "workflow.Server.scanWorkflow")
+		span, ctx := trace.NewSpan(ctx, "workflow.Server.fetchStreamLogs")
 		defer span.Finish()
 
 		span.Annotate("keyspace", req.Keyspace)
@@ -818,12 +819,14 @@ ORDER BY
 
 		workflows = append(workflows, workflow)
 
-		// Fetch logs for all streams associated with this workflow in the background.
-		fetchLogsWG.Add(1)
-		go func(ctx context.Context, workflow *vtctldatapb.Workflow) {
-			defer fetchLogsWG.Done()
-			fetchStreamLogs(ctx, workflow)
-		}(ctx, workflow)
+		if req.IncludeLogs {
+			// Fetch logs for all streams associated with this workflow in the background.
+			fetchLogsWG.Add(1)
+			go func(ctx context.Context, workflow *vtctldatapb.Workflow) {
+				defer fetchLogsWG.Done()
+				fetchStreamLogs(ctx, workflow)
+			}(ctx, workflow)
+		}
 	}
 
 	// Wait for all the log fetchers to finish.
@@ -1820,7 +1823,7 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 		}
 	}
 
-	workflow, err := s.GetWorkflow(ctx, req.Keyspace, req.Workflow)
+	workflow, err := s.GetWorkflow(ctx, req.Keyspace, req.Workflow, false)
 	if err != nil {
 		return nil, err
 	}
@@ -3134,7 +3137,7 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 		log.Infof("writes already switched no need to check lag")
 		return "", nil
 	}
-	wf, err := s.GetWorkflow(ctx, state.TargetKeyspace, state.Workflow)
+	wf, err := s.GetWorkflow(ctx, state.TargetKeyspace, state.Workflow, false)
 	if err != nil {
 		return "", err
 	}

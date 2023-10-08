@@ -2196,6 +2196,7 @@ func (s *VtctldServer) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWor
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("active_only", req.ActiveOnly)
+	span.Annotate("include_logs", req.IncludeLogs)
 
 	resp, err = s.ws.GetWorkflows(ctx, req)
 	return resp, err

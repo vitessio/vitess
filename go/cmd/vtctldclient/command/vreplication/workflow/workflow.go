@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 var (
@@ -49,6 +50,10 @@ var (
 		TabletTypesInPreferenceOrder bool
 		OnDDL                        string
 	}{}
+
+	workflowShowOptions = struct {
+		IncludeLogs bool
+	}{}
 )
 
 func RegisterWorkflowCommands(root *cobra.Command) {
@@ -56,21 +61,32 @@ func RegisterWorkflowCommands(root *cobra.Command) {
 	workflow.MarkPersistentFlagRequired("keyspace")
 	root.AddCommand(workflow)
 
-	addGetWorkflowsFlags(getWorkflows)
+	getWorkflows.Flags().BoolVar(&workflowShowOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflow.")
+	getWorkflows.Flags().BoolVarP(&getWorkflowsOptions.ShowAll, "show-all", "a", false, "Show all workflows instead of just active workflows.")
 	root.AddCommand(getWorkflows)
 
-	addWorkflowDeleteFlags(workflowDelete)
+	workflowDelete.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want to delete (required).")
+	workflowDelete.MarkFlagRequired("workflow")
+	workflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the workflow in the target keyspace.")
+	workflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the workflow.")
 	workflow.AddCommand(workflowDelete)
 
 	workflow.AddCommand(workflowList)
 
-	addWorkflowShowFlags(workflowShow)
+	workflowShow.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want the details for (required).")
+	workflowShow.MarkFlagRequired("workflow")
+	workflowShow.Flags().BoolVar(&workflowShowOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflow.")
 	workflow.AddCommand(workflowShow)
 
 	workflow.AddCommand(workflowStart)
 	workflow.AddCommand(workflowStop)
 
-	addWorkflowUpdateFlags(workflowUpdate)
+	workflowUpdate.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to update (required).")
+	workflowUpdate.MarkFlagRequired("workflow")
+	workflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.Cells, "cells", "c", nil, "New Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
+	workflowUpdate.Flags().VarP((*topoproto.TabletTypeListFlag)(&workflowUpdateOptions.TabletTypes), "tablet-types", "t", "New source tablet types to replicate from (e.g. PRIMARY,REPLICA,RDONLY).")
+	workflowUpdate.Flags().BoolVar(&workflowUpdateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
+	workflowUpdate.Flags().StringVar(&workflowUpdateOptions.OnDDL, "on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
 	workflow.AddCommand(workflowUpdate)
 }
 
