@@ -55,12 +55,12 @@ should be copied as-is from the source keyspace. Here's an example value for tab
 [
   {
     "target_table": "customer_one_email",
-    "source_expression": "select email from customer where customer_id=1"
+    "source_expression": "select email from customer where customer_id = 1"
   },
   {
     "target_table": "states",
     "source_expression": "select * from states",
-	"create_ddl": "copy"
+    "create_ddl": "copy"
   },
   {
     "target_table": "sales_by_sku",
