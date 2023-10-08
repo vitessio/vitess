@@ -20,7 +20,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
-
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
@@ -52,7 +51,7 @@ func registerCommands(root *cobra.Command) {
 	base.MarkPersistentFlagRequired("keyspace")
 	root.AddCommand(base)
 
-	getWorkflows.Flags().BoolVar(&workflowShowOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflow.")
+	getWorkflows.Flags().BoolVar(&workflowShowOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflows.")
 	getWorkflows.Flags().BoolVarP(&getWorkflowsOptions.ShowAll, "show-all", "a", false, "Show all workflows instead of just active workflows.")
 	root.AddCommand(getWorkflows) // Yes this is supposed to be root as GetWorkflows is a top-level command.
 
