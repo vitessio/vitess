@@ -20,14 +20,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 var (
-
-	// workflow is a parent command for Workflow* sub commands.
-	workflow = &cobra.Command{
+	// base is a parent command for Workflow commands.
+	base = &cobra.Command{
 		Use:                   "Workflow --keyspace <keyspace> [command] [command-flags]",
 		Short:                 "Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace.",
 		DisableFlagsInUseLine: true,
@@ -38,42 +36,49 @@ var (
 )
 
 var (
-	workflowOptions = struct {
+	baseOptions = struct {
 		Keyspace string
-	}{}
-
-	workflowUpdateOptions = struct {
-		Workflow                     string
-		Cells                        []string
-		TabletTypes                  []topodatapb.TabletType
-		TabletTypesInPreferenceOrder bool
-		OnDDL                        string
+		Workflow string
 	}{}
 )
 
-func RegisterWorkflowCommands(root *cobra.Command) {
-	workflow.PersistentFlags().StringVarP(&workflowOptions.Keyspace, "keyspace", "k", "", "Keyspace context for the workflow (required).")
-	workflow.MarkPersistentFlagRequired("keyspace")
-	root.AddCommand(workflow)
+func registerCommands(root *cobra.Command) {
+	base.PersistentFlags().StringVarP(&baseOptions.Keyspace, "keyspace", "k", "", "Keyspace context for the workflow.")
+	base.MarkPersistentFlagRequired("keyspace")
+	root.AddCommand(base)
 
-	addGetWorkflowsFlags(getWorkflows)
-	root.AddCommand(getWorkflows)
+	getWorkflows.Flags().BoolVarP(&getWorkflowsOptions.ShowAll, "show-all", "a", false, "Show all workflows instead of just active workflows.")
+	root.AddCommand(getWorkflows) // Yes this is supposed to be root as GetWorkflows is a top-level command.
 
-	addWorkflowDeleteFlags(workflowDelete)
-	workflow.AddCommand(workflowDelete)
+	delete.Flags().StringVarP(&baseOptions.Workflow, "workflow", "w", "", "The workflow you want to delete.")
+	delete.MarkFlagRequired("workflow")
+	delete.Flags().BoolVar(&deleteOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the workflow in the target keyspace.")
+	delete.Flags().BoolVar(&deleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the workflow.")
+	base.AddCommand(delete)
 
-	workflow.AddCommand(workflowList)
+	base.AddCommand(workflowList)
 
-	addWorkflowShowFlags(workflowShow)
-	workflow.AddCommand(workflowShow)
+	show.Flags().StringVarP(&baseOptions.Workflow, "workflow", "w", "", "The workflow you want the details for.")
+	show.MarkFlagRequired("workflow")
+	base.AddCommand(show)
 
-	workflow.AddCommand(workflowStart)
-	workflow.AddCommand(workflowStop)
+	start.Flags().StringVarP(&baseOptions.Workflow, "workflow", "w", "", "The workflow you want to start.")
+	start.MarkFlagRequired("workflow")
+	base.AddCommand(start)
 
-	addWorkflowUpdateFlags(workflowUpdate)
-	workflow.AddCommand(workflowUpdate)
+	stop.Flags().StringVarP(&baseOptions.Workflow, "workflow", "w", "", "The workflow you want to stop.")
+	stop.MarkFlagRequired("workflow")
+	base.AddCommand(stop)
+
+	update.Flags().StringVarP(&baseOptions.Workflow, "workflow", "w", "", "The workflow you want to update.")
+	update.MarkFlagRequired("workflow")
+	update.Flags().StringSliceVarP(&updateOptions.Cells, "cells", "c", nil, "New Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
+	update.Flags().VarP((*topoproto.TabletTypeListFlag)(&updateOptions.TabletTypes), "tablet-types", "t", "New source tablet types to replicate from (e.g. PRIMARY,REPLICA,RDONLY).")
+	update.Flags().BoolVar(&updateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
+	update.Flags().StringVar(&updateOptions.OnDDL, "on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
+	base.AddCommand(update)
 }
 
 func init() {
-	common.RegisterCommandHandler("Workflow", RegisterWorkflowCommands)
+	common.RegisterCommandHandler("Workflow", registerCommands)
 }

@@ -64,7 +64,3 @@ func commandGetWorkflows(cmd *cobra.Command, args []string) error {
 
 	return nil
 }
-
-func addGetWorkflowsFlags(cmd *cobra.Command) {
-	cmd.Flags().BoolVarP(&getWorkflowsOptions.ShowAll, "show-all", "a", false, "Show all workflows instead of just active workflows.")
-}

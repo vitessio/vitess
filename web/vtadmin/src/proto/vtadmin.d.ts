@@ -54975,6 +54975,194 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a MaterializeCreateRequest. */
+    interface IMaterializeCreateRequest {
+
+        /** MaterializeCreateRequest settings */
+        settings?: (vtctldata.IMaterializeSettings|null);
+    }
+
+    /** Represents a MaterializeCreateRequest. */
+    class MaterializeCreateRequest implements IMaterializeCreateRequest {
+
+        /**
+         * Constructs a new MaterializeCreateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMaterializeCreateRequest);
+
+        /** MaterializeCreateRequest settings. */
+        public settings?: (vtctldata.IMaterializeSettings|null);
+
+        /**
+         * Creates a new MaterializeCreateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MaterializeCreateRequest instance
+         */
+        public static create(properties?: vtctldata.IMaterializeCreateRequest): vtctldata.MaterializeCreateRequest;
+
+        /**
+         * Encodes the specified MaterializeCreateRequest message. Does not implicitly {@link vtctldata.MaterializeCreateRequest.verify|verify} messages.
+         * @param message MaterializeCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMaterializeCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MaterializeCreateRequest message, length delimited. Does not implicitly {@link vtctldata.MaterializeCreateRequest.verify|verify} messages.
+         * @param message MaterializeCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMaterializeCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MaterializeCreateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MaterializeCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MaterializeCreateRequest;
+
+        /**
+         * Decodes a MaterializeCreateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MaterializeCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MaterializeCreateRequest;
+
+        /**
+         * Verifies a MaterializeCreateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MaterializeCreateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MaterializeCreateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MaterializeCreateRequest;
+
+        /**
+         * Creates a plain object from a MaterializeCreateRequest message. Also converts values to other types if specified.
+         * @param message MaterializeCreateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MaterializeCreateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MaterializeCreateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MaterializeCreateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MaterializeCreateResponse. */
+    interface IMaterializeCreateResponse {
+    }
+
+    /** Represents a MaterializeCreateResponse. */
+    class MaterializeCreateResponse implements IMaterializeCreateResponse {
+
+        /**
+         * Constructs a new MaterializeCreateResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMaterializeCreateResponse);
+
+        /**
+         * Creates a new MaterializeCreateResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MaterializeCreateResponse instance
+         */
+        public static create(properties?: vtctldata.IMaterializeCreateResponse): vtctldata.MaterializeCreateResponse;
+
+        /**
+         * Encodes the specified MaterializeCreateResponse message. Does not implicitly {@link vtctldata.MaterializeCreateResponse.verify|verify} messages.
+         * @param message MaterializeCreateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMaterializeCreateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MaterializeCreateResponse message, length delimited. Does not implicitly {@link vtctldata.MaterializeCreateResponse.verify|verify} messages.
+         * @param message MaterializeCreateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMaterializeCreateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MaterializeCreateResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MaterializeCreateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MaterializeCreateResponse;
+
+        /**
+         * Decodes a MaterializeCreateResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MaterializeCreateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MaterializeCreateResponse;
+
+        /**
+         * Verifies a MaterializeCreateResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MaterializeCreateResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MaterializeCreateResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MaterializeCreateResponse;
+
+        /**
+         * Creates a plain object from a MaterializeCreateResponse message. Also converts values to other types if specified.
+         * @param message MaterializeCreateResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MaterializeCreateResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MaterializeCreateResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MaterializeCreateResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a MigrateCreateRequest. */
     interface IMigrateCreateRequest {
 
