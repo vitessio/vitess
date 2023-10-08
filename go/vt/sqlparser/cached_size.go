@@ -1776,10 +1776,8 @@ func (cached *IndexInfo) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(80)
 	}
-	// field Type string
-	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
 	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
 	size += cached.Name.CachedSize(false)
 	// field ConstraintName vitess.io/vitess/go/vt/sqlparser.IdentifierCI

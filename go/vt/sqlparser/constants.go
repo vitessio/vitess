@@ -1062,3 +1062,11 @@ const (
 	ConnectionType KillType = iota
 	QueryType
 )
+
+const (
+	IndexTypeDefault IndexType = iota
+	IndexTypePrimary
+	IndexTypeUnique
+	IndexTypeSpatial
+	IndexTypeFullText
+)

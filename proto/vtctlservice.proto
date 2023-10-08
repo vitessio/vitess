@@ -170,9 +170,27 @@ service Vtctld {
   rpc InitShardPrimary(vtctldata.InitShardPrimaryRequest) returns (vtctldata.InitShardPrimaryResponse) {};
   // LaunchSchemaMigration launches one or all migrations executed with --postpone-launch.
   rpc LaunchSchemaMigration(vtctldata.LaunchSchemaMigrationRequest) returns (vtctldata.LaunchSchemaMigrationResponse) {};
+
   rpc LookupVindexCreate(vtctldata.LookupVindexCreateRequest) returns (vtctldata.LookupVindexCreateResponse) {};
   rpc LookupVindexExternalize(vtctldata.LookupVindexExternalizeRequest) returns (vtctldata.LookupVindexExternalizeResponse) {};
+
+  // MaterializeCreate creates a workflow to materialize one or more tables
+  // from a source keyspace to a target keyspace using a provided expressions.
   rpc MaterializeCreate(vtctldata.MaterializeCreateRequest) returns (vtctldata.MaterializeCreateResponse) {};
+
+  // MigrateCreate creates a workflow which migrates one or more tables from an
+  // external cluster into Vitess.
+  rpc MigrateCreate(vtctldata.MigrateCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};
+
+  // MountRegister registers a new external Vitess cluster.
+  rpc MountRegister(vtctldata.MountRegisterRequest) returns (vtctldata.MountRegisterResponse) {};
+  // MountUnregister unregisters an external Vitess cluster.
+  rpc MountUnregister(vtctldata.MountUnregisterRequest) returns (vtctldata.MountUnregisterResponse) {};
+  // MountShow returns information about an external Vitess cluster.
+  rpc MountShow(vtctldata.MountShowRequest) returns (vtctldata.MountShowResponse) {};
+  // MountList lists all registered external Vitess clusters.
+  rpc MountList(vtctldata.MountListRequest) returns (vtctldata.MountListResponse) {};
+
   // MoveTablesCreate creates a workflow which moves one or more tables from a
   // source keyspace to a target keyspace.
   rpc MoveTablesCreate(vtctldata.MoveTablesCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};

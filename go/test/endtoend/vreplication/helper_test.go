@@ -386,7 +386,7 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 			require.NotNil(t, createTable)
 			require.NotNil(t, createTable.GetTableSpec())
 			for _, index := range createTable.GetTableSpec().Indexes {
-				if !index.Info.Primary {
+				if index.Info.Type != sqlparser.IndexTypePrimary {
 					secondaryKeys++
 				}
 			}

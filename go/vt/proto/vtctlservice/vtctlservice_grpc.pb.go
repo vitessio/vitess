@@ -277,7 +277,20 @@ type VtctldClient interface {
 	LaunchSchemaMigration(ctx context.Context, in *vtctldata.LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.LaunchSchemaMigrationResponse, error)
 	LookupVindexCreate(ctx context.Context, in *vtctldata.LookupVindexCreateRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexCreateResponse, error)
 	LookupVindexExternalize(ctx context.Context, in *vtctldata.LookupVindexExternalizeRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexExternalizeResponse, error)
+	// MaterializeCreate creates a workflow to materialize one or more tables
+	// from a source keyspace to a target keyspace using a provided expressions.
 	MaterializeCreate(ctx context.Context, in *vtctldata.MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldata.MaterializeCreateResponse, error)
+	// MigrateCreate creates a workflow which migrates one or more tables from an
+	// external cluster into Vitess.
+	MigrateCreate(ctx context.Context, in *vtctldata.MigrateCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
+	// MountRegister registers a new external Vitess cluster.
+	MountRegister(ctx context.Context, in *vtctldata.MountRegisterRequest, opts ...grpc.CallOption) (*vtctldata.MountRegisterResponse, error)
+	// MountUnregister unregisters an external Vitess cluster.
+	MountUnregister(ctx context.Context, in *vtctldata.MountUnregisterRequest, opts ...grpc.CallOption) (*vtctldata.MountUnregisterResponse, error)
+	// MountShow returns information about an external Vitess cluster.
+	MountShow(ctx context.Context, in *vtctldata.MountShowRequest, opts ...grpc.CallOption) (*vtctldata.MountShowResponse, error)
+	// MountList lists all registered external Vitess clusters.
+	MountList(ctx context.Context, in *vtctldata.MountListRequest, opts ...grpc.CallOption) (*vtctldata.MountListResponse, error)
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
 	MoveTablesCreate(ctx context.Context, in *vtctldata.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
@@ -979,6 +992,51 @@ func (c *vtctldClient) MaterializeCreate(ctx context.Context, in *vtctldata.Mate
 	return out, nil
 }
 
+func (c *vtctldClient) MigrateCreate(ctx context.Context, in *vtctldata.MigrateCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
+	out := new(vtctldata.WorkflowStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/MigrateCreate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) MountRegister(ctx context.Context, in *vtctldata.MountRegisterRequest, opts ...grpc.CallOption) (*vtctldata.MountRegisterResponse, error) {
+	out := new(vtctldata.MountRegisterResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/MountRegister", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) MountUnregister(ctx context.Context, in *vtctldata.MountUnregisterRequest, opts ...grpc.CallOption) (*vtctldata.MountUnregisterResponse, error) {
+	out := new(vtctldata.MountUnregisterResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/MountUnregister", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) MountShow(ctx context.Context, in *vtctldata.MountShowRequest, opts ...grpc.CallOption) (*vtctldata.MountShowResponse, error) {
+	out := new(vtctldata.MountShowResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/MountShow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) MountList(ctx context.Context, in *vtctldata.MountListRequest, opts ...grpc.CallOption) (*vtctldata.MountListResponse, error) {
+	out := new(vtctldata.MountListResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/MountList", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) MoveTablesCreate(ctx context.Context, in *vtctldata.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
 	out := new(vtctldata.WorkflowStatusResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/MoveTablesCreate", in, out, opts...)
@@ -1606,7 +1664,20 @@ type VtctldServer interface {
 	LaunchSchemaMigration(context.Context, *vtctldata.LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error)
 	LookupVindexCreate(context.Context, *vtctldata.LookupVindexCreateRequest) (*vtctldata.LookupVindexCreateResponse, error)
 	LookupVindexExternalize(context.Context, *vtctldata.LookupVindexExternalizeRequest) (*vtctldata.LookupVindexExternalizeResponse, error)
+	// MaterializeCreate creates a workflow to materialize one or more tables
+	// from a source keyspace to a target keyspace using a provided expressions.
 	MaterializeCreate(context.Context, *vtctldata.MaterializeCreateRequest) (*vtctldata.MaterializeCreateResponse, error)
+	// MigrateCreate creates a workflow which migrates one or more tables from an
+	// external cluster into Vitess.
+	MigrateCreate(context.Context, *vtctldata.MigrateCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
+	// MountRegister registers a new external Vitess cluster.
+	MountRegister(context.Context, *vtctldata.MountRegisterRequest) (*vtctldata.MountRegisterResponse, error)
+	// MountUnregister unregisters an external Vitess cluster.
+	MountUnregister(context.Context, *vtctldata.MountUnregisterRequest) (*vtctldata.MountUnregisterResponse, error)
+	// MountShow returns information about an external Vitess cluster.
+	MountShow(context.Context, *vtctldata.MountShowRequest) (*vtctldata.MountShowResponse, error)
+	// MountList lists all registered external Vitess clusters.
+	MountList(context.Context, *vtctldata.MountListRequest) (*vtctldata.MountListResponse, error)
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
 	MoveTablesCreate(context.Context, *vtctldata.MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
@@ -1934,6 +2005,21 @@ func (UnimplementedVtctldServer) LookupVindexExternalize(context.Context, *vtctl
 }
 func (UnimplementedVtctldServer) MaterializeCreate(context.Context, *vtctldata.MaterializeCreateRequest) (*vtctldata.MaterializeCreateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MaterializeCreate not implemented")
+}
+func (UnimplementedVtctldServer) MigrateCreate(context.Context, *vtctldata.MigrateCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MigrateCreate not implemented")
+}
+func (UnimplementedVtctldServer) MountRegister(context.Context, *vtctldata.MountRegisterRequest) (*vtctldata.MountRegisterResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MountRegister not implemented")
+}
+func (UnimplementedVtctldServer) MountUnregister(context.Context, *vtctldata.MountUnregisterRequest) (*vtctldata.MountUnregisterResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MountUnregister not implemented")
+}
+func (UnimplementedVtctldServer) MountShow(context.Context, *vtctldata.MountShowRequest) (*vtctldata.MountShowResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MountShow not implemented")
+}
+func (UnimplementedVtctldServer) MountList(context.Context, *vtctldata.MountListRequest) (*vtctldata.MountListResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MountList not implemented")
 }
 func (UnimplementedVtctldServer) MoveTablesCreate(context.Context, *vtctldata.MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesCreate not implemented")
@@ -3079,6 +3165,96 @@ func _Vtctld_MaterializeCreate_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_MigrateCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.MigrateCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).MigrateCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/MigrateCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).MigrateCreate(ctx, req.(*vtctldata.MigrateCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_MountRegister_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.MountRegisterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).MountRegister(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/MountRegister",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).MountRegister(ctx, req.(*vtctldata.MountRegisterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_MountUnregister_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.MountUnregisterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).MountUnregister(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/MountUnregister",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).MountUnregister(ctx, req.(*vtctldata.MountUnregisterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_MountShow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.MountShowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).MountShow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/MountShow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).MountShow(ctx, req.(*vtctldata.MountShowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_MountList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.MountListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).MountList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/MountList",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).MountList(ctx, req.(*vtctldata.MountListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_MoveTablesCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.MoveTablesCreateRequest)
 	if err := dec(in); err != nil {
@@ -4214,6 +4390,26 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MaterializeCreate",
 			Handler:    _Vtctld_MaterializeCreate_Handler,
+		},
+		{
+			MethodName: "MigrateCreate",
+			Handler:    _Vtctld_MigrateCreate_Handler,
+		},
+		{
+			MethodName: "MountRegister",
+			Handler:    _Vtctld_MountRegister_Handler,
+		},
+		{
+			MethodName: "MountUnregister",
+			Handler:    _Vtctld_MountUnregister_Handler,
+		},
+		{
+			MethodName: "MountShow",
+			Handler:    _Vtctld_MountShow_Handler,
+		},
+		{
+			MethodName: "MountList",
+			Handler:    _Vtctld_MountList_Handler,
 		},
 		{
 			MethodName: "MoveTablesCreate",

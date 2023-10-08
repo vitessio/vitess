@@ -82,6 +82,8 @@ type SandboxConn struct {
 	ReleaseCount             atomic.Int64
 	GetSchemaCount           atomic.Int64
 
+	queriesRequireLocking bool
+	queriesMu             sync.Mutex
 	// Queries stores the non-batch requests received.
 	Queries []*querypb.BoundQuery
 
@@ -140,6 +142,39 @@ func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
 	}
 }
 
+// RequireQueriesLocking sets the sandboxconn to require locking the access of Queries field.
+func (sbc *SandboxConn) RequireQueriesLocking() {
+	sbc.queriesRequireLocking = true
+	sbc.queriesMu = sync.Mutex{}
+}
+
+// GetQueries gets the Queries from sandboxconn.
+func (sbc *SandboxConn) GetQueries() []*querypb.BoundQuery {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
+	return sbc.Queries
+}
+
+// ClearQueries clears the Queries in sandboxconn.
+func (sbc *SandboxConn) ClearQueries() {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
+	sbc.Queries = nil
+}
+
+// appendToQueries appends to the Queries in sandboxconn.
+func (sbc *SandboxConn) appendToQueries(q *querypb.BoundQuery) {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
+	sbc.Queries = append(sbc.Queries, q)
+}
+
 func (sbc *SandboxConn) getError() error {
 	for code, count := range sbc.MustFailCodes {
 		if count == 0 {
@@ -181,7 +216,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 	for k, v := range bindVars {
 		bv[k] = v
 	}
-	sbc.Queries = append(sbc.Queries, &querypb.BoundQuery{
+	sbc.appendToQueries(&querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,
 	})
@@ -206,7 +241,7 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 	for k, v := range bindVars {
 		bv[k] = v
 	}
-	sbc.Queries = append(sbc.Queries, &querypb.BoundQuery{
+	sbc.appendToQueries(&querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,
 	})
@@ -673,6 +708,10 @@ func (sbc *SandboxConn) getTxReservedID(txID int64) int64 {
 
 // StringQueries returns the queries executed as a slice of strings
 func (sbc *SandboxConn) StringQueries() []string {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
 	result := make([]string, len(sbc.Queries))
 	for i, query := range sbc.Queries {
 		result[i] = query.Sql
