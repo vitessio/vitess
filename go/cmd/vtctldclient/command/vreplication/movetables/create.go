@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	moveTablesCreateOptions = struct {
+	createOptions = struct {
 		SourceKeyspace      string
 		SourceShards        []string
 		ExternalClusterName string
@@ -41,8 +41,8 @@ var (
 		AtomicCopy          bool
 	}{}
 
-	// moveTablesCreate makes a moveTablesCreate gRPC call to a vtctld.
-	moveTablesCreate = &cobra.Command{
+	// create makes a MoveTablesCreate gRPC call to a vtctld.
+	create = &cobra.Command{
 		Use:                   "create",
 		Short:                 "Create and optionally run a MoveTables VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 movetables --workflow commerce2customer --target-keyspace customer create --source-keyspace commerce --cells zone1 --cells zone2 --tablet-types replica`,
@@ -60,13 +60,13 @@ var (
 			}
 			checkAtomicCopyOptions := func() error {
 				var errors []string
-				if !moveTablesCreateOptions.AtomicCopy {
+				if !createOptions.AtomicCopy {
 					return nil
 				}
-				if !moveTablesCreateOptions.AllTables {
+				if !createOptions.AllTables {
 					errors = append(errors, "atomic copy requires --all-tables")
 				}
-				if len(moveTablesCreateOptions.IncludeTables) > 0 || len(moveTablesCreateOptions.ExcludeTables) > 0 {
+				if len(createOptions.IncludeTables) > 0 || len(createOptions.ExcludeTables) > 0 {
 					errors = append(errors, "atomic copy does not support specifying tables")
 				}
 				if len(errors) > 0 {
@@ -79,11 +79,11 @@ var (
 			}
 			return nil
 		},
-		RunE: commandMoveTablesCreate,
+		RunE: commandCreate,
 	}
 )
 
-func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
+func commandCreate(cmd *cobra.Command, args []string) error {
 	format, err := common.GetOutputFormat(cmd)
 	if err != nil {
 		return err
@@ -94,21 +94,21 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 	req := &vtctldatapb.MoveTablesCreateRequest{
 		Workflow:                  common.BaseOptions.Workflow,
 		TargetKeyspace:            common.BaseOptions.TargetKeyspace,
-		SourceKeyspace:            moveTablesCreateOptions.SourceKeyspace,
-		SourceShards:              moveTablesCreateOptions.SourceShards,
-		SourceTimeZone:            moveTablesCreateOptions.SourceTimeZone,
+		SourceKeyspace:            createOptions.SourceKeyspace,
+		SourceShards:              createOptions.SourceShards,
+		SourceTimeZone:            createOptions.SourceTimeZone,
 		Cells:                     common.CreateOptions.Cells,
 		TabletTypes:               common.CreateOptions.TabletTypes,
 		TabletSelectionPreference: tsp,
-		AllTables:                 moveTablesCreateOptions.AllTables,
-		IncludeTables:             moveTablesCreateOptions.IncludeTables,
-		ExcludeTables:             moveTablesCreateOptions.ExcludeTables,
+		AllTables:                 createOptions.AllTables,
+		IncludeTables:             createOptions.IncludeTables,
+		ExcludeTables:             createOptions.ExcludeTables,
 		OnDdl:                     common.CreateOptions.OnDDL,
 		DeferSecondaryKeys:        common.CreateOptions.DeferSecondaryKeys,
 		AutoStart:                 common.CreateOptions.AutoStart,
 		StopAfterCopy:             common.CreateOptions.StopAfterCopy,
-		NoRoutingRules:            moveTablesCreateOptions.NoRoutingRules,
-		AtomicCopy:                moveTablesCreateOptions.AtomicCopy,
+		NoRoutingRules:            createOptions.NoRoutingRules,
+		AtomicCopy:                createOptions.AtomicCopy,
 	}
 
 	resp, err := common.GetClient().MoveTablesCreate(common.GetCommandCtx(), req)
@@ -119,18 +119,4 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	return nil
-}
-
-func registerCreateCommand(root *cobra.Command) {
-	common.AddCommonCreateFlags(moveTablesCreate)
-	moveTablesCreate.PersistentFlags().StringVar(&moveTablesCreateOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables are being moved from.")
-	moveTablesCreate.MarkPersistentFlagRequired("source-keyspace")
-	moveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.SourceShards, "source-shards", nil, "Source shards to copy data from when performing a partial moveTables (experimental).")
-	moveTablesCreate.Flags().StringVar(&moveTablesCreateOptions.SourceTimeZone, "source-time-zone", "", "Specifying this causes any DATETIME fields to be converted from the given time zone into UTC.")
-	moveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.AllTables, "all-tables", false, "Copy all tables from the source.")
-	moveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.IncludeTables, "tables", nil, "Source tables to copy.")
-	moveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.ExcludeTables, "exclude-tables", nil, "Source tables to exclude from copying.")
-	moveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.NoRoutingRules, "no-routing-rules", false, "(Advanced) Do not create routing rules while creating the workflow. See the reference documentation for limitations if you use this flag.")
-	moveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.AtomicCopy, "atomic-copy", false, "(EXPERIMENTAL) A single copy phase is run for all tables from the source. Use this, for example, if your source keyspace has tables which use foreign key constraints.")
-	moveTables.AddCommand(moveTablesCreate)
 }
