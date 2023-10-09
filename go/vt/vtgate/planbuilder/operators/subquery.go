@@ -177,7 +177,7 @@ func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bo
 	return sq.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
 }
 
-func (sq *SubQuery) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (sq *SubQuery) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return sq.Outer.FindCol(ctx, expr, underRoute)
 }
 

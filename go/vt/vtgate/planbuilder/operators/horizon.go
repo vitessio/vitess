@@ -118,10 +118,7 @@ func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, reuse bool, _ bool
 	if !ok {
 		panic(vterrors.VT13001("cannot push non-ColName expression to horizon"))
 	}
-	offset, err := h.FindCol(ctx, col, false)
-	if err != nil {
-		panic(err)
-	}
+	offset := h.FindCol(ctx, col, false)
 	if offset < 0 {
 		panic(errNoNewColumns)
 	}
@@ -147,18 +144,18 @@ func canReuseColumn[T any](
 	return
 }
 
-func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) (int, error) {
+func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
 	for idx, se := range sqlparser.GetFirstSelect(h.Query).SelectExprs {
 		ae, ok := se.(*sqlparser.AliasedExpr)
 		if !ok {
-			return 0, vterrors.VT09015()
+			panic(vterrors.VT09015())
 		}
 		if ctx.SemTable.EqualsExprWithDeps(ae.Expr, expr) {
-			return idx, nil
+			return idx
 		}
 	}
 
-	return -1, nil
+	return -1
 }
 
 func (h *Horizon) GetColumns(ctx *plancontext.PlanningContext) (exprs []*sqlparser.AliasedExpr, err error) {

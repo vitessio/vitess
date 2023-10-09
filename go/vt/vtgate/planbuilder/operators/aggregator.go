@@ -124,15 +124,15 @@ func (a *Aggregator) isDerived() bool {
 	return a.DT != nil
 }
 
-func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr, _ bool) (int, error) {
+func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr, _ bool) int {
 	expr, err := a.DT.RewriteExpression(ctx, in)
 	if err != nil {
-		return 0, err
+		panic(err)
 	}
 	if offset, found := canReuseColumn(ctx, a.Columns, expr, extractExpr); found {
-		return offset, nil
+		return offset
 	}
-	return -1, nil
+	return -1
 }
 
 func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, groupBy bool, ae *sqlparser.AliasedExpr) int {
@@ -188,14 +188,11 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 
 func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
 	expr := ae.Expr
-	offset, err := a.FindCol(ctx, expr, false)
-	if err != nil {
-		return 0, err
-	}
+	offset := a.FindCol(ctx, expr, false)
 	if offset >= 0 {
-		return offset, err
+		return offset, nil
 	}
-	expr, err = a.DT.RewriteExpression(ctx, expr)
+	expr, err := a.DT.RewriteExpression(ctx, expr)
 	if err != nil {
 		return 0, err
 	}

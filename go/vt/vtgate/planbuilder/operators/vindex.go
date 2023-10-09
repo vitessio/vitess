@@ -67,10 +67,7 @@ func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool
 		panic(vterrors.VT13001("tried to add group by to a table"))
 	}
 	if reuse {
-		offset, err := v.FindCol(ctx, ae.Expr, true)
-		if err != nil {
-			panic(err)
-		}
+		offset := v.FindCol(ctx, ae.Expr, true)
 		if offset > -1 {
 			return offset
 		}
@@ -86,14 +83,14 @@ func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {
 	}
 }
 
-func (v *Vindex) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (v *Vindex) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	for idx, col := range v.Columns {
 		if ctx.SemTable.EqualsExprWithDeps(expr, col) {
-			return idx, nil
+			return idx
 		}
 	}
 
-	return -1, nil
+	return -1
 }
 
 func (v *Vindex) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {

@@ -99,7 +99,7 @@ func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bo
 	return d.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
-func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return d.Source.FindCol(ctx, expr, underRoute)
 }
 

@@ -56,7 +56,7 @@ func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 	return l.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
-func (l *Limit) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (l *Limit) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return l.Source.FindCol(ctx, expr, underRoute)
 }
 

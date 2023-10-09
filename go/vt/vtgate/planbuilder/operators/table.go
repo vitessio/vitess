@@ -69,19 +69,19 @@ func (to *Table) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.
 	panic(vterrors.VT13001("did not expect this method to be called"))
 }
 
-func (to *Table) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (to *Table) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	colToFind, ok := expr.(*sqlparser.ColName)
 	if !ok {
-		return -1, nil
+		return -1
 	}
 
 	for idx, colName := range to.Columns {
 		if colName.Name.Equal(colToFind.Name) {
-			return idx, nil
+			return idx
 		}
 	}
 
-	return -1, nil
+	return -1
 }
 
 func (to *Table) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {

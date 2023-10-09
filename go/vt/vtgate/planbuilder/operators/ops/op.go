@@ -46,7 +46,7 @@ type (
 
 		AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int
 
-		FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error)
+		FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int
 
 		GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error)
 		GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error)

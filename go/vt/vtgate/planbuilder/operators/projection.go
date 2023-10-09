@@ -244,23 +244,23 @@ func (p *Projection) isDerived() bool {
 	return p.DT != nil
 }
 
-func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
-		return 0, err
+		panic(err)
 	}
 
 	if underRoute && p.isDerived() {
-		return -1, nil
+		return -1
 	}
 
 	for offset, pe := range ap {
 		if ctx.SemTable.EqualsExprWithDeps(pe.ColExpr, expr) {
-			return offset, nil
+			return offset
 		}
 	}
 
-	return -1, nil
+	return -1
 }
 
 func (p *Projection) addProjExpr(pe *ProjExpr) (int, error) {
@@ -325,10 +325,7 @@ func (p *Projection) addColumn(
 	}
 
 	if reuse {
-		offset, err := p.FindCol(ctx, expr, false)
-		if err != nil {
-			return 0, err
-		}
+		offset := p.FindCol(ctx, expr, false)
 		if offset >= 0 {
 			return offset, nil
 		}

@@ -550,10 +550,7 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 	removeKeyspaceFromSelectExpr(expr)
 
 	if reuse {
-		offset, err := r.FindCol(ctx, expr.Expr, true)
-		if err != nil {
-			panic(err)
-		}
+		offset := r.FindCol(ctx, expr.Expr, true)
 		if offset != -1 {
 			return offset
 		}
@@ -655,7 +652,7 @@ func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Op
 	}
 }
 
-func (r *Route) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) (int, error) {
+func (r *Route) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
 	return r.Source.FindCol(ctx, expr, true)
 }
 

@@ -55,7 +55,7 @@ func (l *LockAndComment) AddColumn(ctx *plancontext.PlanningContext, reuseExisti
 	return l.Source.AddColumn(ctx, reuseExisting, addToGroupBy, expr)
 }
 
-func (l *LockAndComment) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (l *LockAndComment) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return l.Source.FindCol(ctx, expr, underRoute)
 }
 

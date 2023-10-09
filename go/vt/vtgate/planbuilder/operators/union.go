@@ -182,11 +182,7 @@ func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
 
 func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	if reuse {
-		offset, err := u.FindCol(ctx, expr.Expr, false)
-		if err != nil {
-			panic(err)
-		}
-
+		offset := u.FindCol(ctx, expr.Expr, false)
 		if offset >= 0 {
 			return offset
 		}
@@ -249,19 +245,19 @@ func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx
 	return
 }
 
-func (u *Union) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (u *Union) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	columns, err := u.GetColumns(ctx)
 	if err != nil {
-		return 0, err
+		panic(err)
 	}
 
 	for idx, col := range columns {
 		if ctx.SemTable.EqualsExprWithDeps(expr, col.Expr) {
-			return idx, nil
+			return idx
 		}
 	}
 
-	return -1, nil
+	return -1
 }
 
 func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparser.AliasedExpr, err error) {

@@ -89,7 +89,7 @@ func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool
 	return f.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
-func (f *Filter) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (f *Filter) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return f.Source.FindCol(ctx, expr, underRoute)
 }
 

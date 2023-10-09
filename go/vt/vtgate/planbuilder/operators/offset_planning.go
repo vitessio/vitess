@@ -152,7 +152,7 @@ func pullDistinctFromUNION(_ *plancontext.PlanningContext, root ops.Operator) (o
 func getOffsetRewritingVisitor(
 	ctx *plancontext.PlanningContext,
 	// this is the function that will be called to try to find the offset for an expression
-	findCol func(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error),
+	findCol func(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int,
 	// this function will be called when an expression has been found on the input
 	found func(sqlparser.Expr, int),
 	// if we have an expression that mush be fetched, this method will be called
@@ -167,11 +167,7 @@ func getOffsetRewritingVisitor(
 		if !ok {
 			return true
 		}
-		var offset int
-		offset, err = findCol(ctx, e, false)
-		if err != nil {
-			return false
-		}
+		offset := findCol(ctx, e, false)
 		if offset >= 0 {
 			found(e, offset)
 			return false
