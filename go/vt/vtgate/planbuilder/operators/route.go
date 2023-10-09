@@ -376,7 +376,7 @@ func findVSchemaTableAndCreateRoute(
 ) (*Route, error) {
 	vschemaTable, _, _, _, target, err := ctx.VSchema.FindTableOrVindex(tableName)
 	if target != nil {
-		return nil, vterrors.VT12001("SELECT with a target destination")
+		return nil, vterrors.VT09017("SELECT with a target destination is not allowed")
 	}
 	if err != nil {
 		return nil, err

@@ -4045,5 +4045,10 @@
         "user.multicol_tbl"
       ]
     }
+  },
+  {
+    "comment": "select with a target destination",
+    "query": "select * from `user[-]`.user_metadata",
+    "plan": "VT09017: SELECT with a target destination is not allowed"
   }
 ]
