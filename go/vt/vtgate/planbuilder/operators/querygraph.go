@@ -176,8 +176,8 @@ func (qg *QueryGraph) Clone([]ops.Operator) ops.Operator {
 	return result
 }
 
-func (qg *QueryGraph) GetOrdering() ([]ops.OrderBy, error) {
-	return nil, nil
+func (qg *QueryGraph) GetOrdering() []ops.OrderBy {
+	return nil
 }
 
 func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {

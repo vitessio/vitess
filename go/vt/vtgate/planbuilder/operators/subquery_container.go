@@ -49,7 +49,7 @@ func (sqc *SubQueryContainer) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
-func (sqc *SubQueryContainer) GetOrdering() ([]ops.OrderBy, error) {
+func (sqc *SubQueryContainer) GetOrdering() []ops.OrderBy {
 	return sqc.Outer.GetOrdering()
 }
 

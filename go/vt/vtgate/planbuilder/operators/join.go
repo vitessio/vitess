@@ -48,8 +48,8 @@ func (j *Join) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
-func (j *Join) GetOrdering() ([]ops.OrderBy, error) {
-	return nil, nil
+func (j *Join) GetOrdering() []ops.OrderBy {
+	return nil
 }
 
 // Inputs implements the Operator interface

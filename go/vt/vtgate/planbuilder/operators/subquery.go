@@ -126,7 +126,7 @@ func (sq *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
 	return &klone
 }
 
-func (sq *SubQuery) GetOrdering() ([]ops.OrderBy, error) {
+func (sq *SubQuery) GetOrdering() []ops.OrderBy {
 	return sq.Outer.GetOrdering()
 }
 

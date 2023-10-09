@@ -175,7 +175,7 @@ func (aj *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser
 	return transformColumnsToSelectExprs(ctx, aj)
 }
 
-func (aj *ApplyJoin) GetOrdering() ([]ops.OrderBy, error) {
+func (aj *ApplyJoin) GetOrdering() []ops.OrderBy {
 	return aj.LHS.GetOrdering()
 }
 

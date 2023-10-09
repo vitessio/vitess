@@ -68,7 +68,7 @@ func (l *Limit) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.Sele
 	return l.Source.GetSelectExprs(ctx)
 }
 
-func (l *Limit) GetOrdering() ([]ops.OrderBy, error) {
+func (l *Limit) GetOrdering() []ops.OrderBy {
 	return l.Source.GetOrdering()
 }
 

@@ -118,7 +118,7 @@ func (d *Distinct) ShortDescription() string {
 	return "Performance"
 }
 
-func (d *Distinct) GetOrdering() ([]ops.OrderBy, error) {
+func (d *Distinct) GetOrdering() []ops.OrderBy {
 	return d.Source.GetOrdering()
 }
 

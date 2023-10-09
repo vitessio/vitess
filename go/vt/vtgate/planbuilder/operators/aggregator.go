@@ -271,7 +271,7 @@ func (a *Aggregator) ShortDescription() string {
 	return fmt.Sprintf("%s%s group by %s", org, strings.Join(columns, ", "), strings.Join(grouping, ","))
 }
 
-func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
+func (a *Aggregator) GetOrdering() []ops.OrderBy {
 	return a.Source.GetOrdering()
 }
 

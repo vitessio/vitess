@@ -411,7 +411,7 @@ func (p *Projection) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.Sel
 	}
 }
 
-func (p *Projection) GetOrdering() ([]ops.OrderBy, error) {
+func (p *Projection) GetOrdering() []ops.OrderBy {
 	return p.Source.GetOrdering()
 }
 

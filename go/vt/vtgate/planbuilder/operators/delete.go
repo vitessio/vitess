@@ -62,8 +62,8 @@ func (d *Delete) TablesUsed() []string {
 	return nil
 }
 
-func (d *Delete) GetOrdering() ([]ops.OrderBy, error) {
-	return nil, nil
+func (d *Delete) GetOrdering() []ops.OrderBy {
+	return nil
 }
 
 func (d *Delete) ShortDescription() string {

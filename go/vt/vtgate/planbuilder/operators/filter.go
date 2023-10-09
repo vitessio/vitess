@@ -101,7 +101,7 @@ func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.Sel
 	return f.Source.GetSelectExprs(ctx)
 }
 
-func (f *Filter) GetOrdering() ([]ops.OrderBy, error) {
+func (f *Filter) GetOrdering() []ops.OrderBy {
 	return f.Source.GetOrdering()
 }
 

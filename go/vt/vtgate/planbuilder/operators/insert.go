@@ -96,8 +96,8 @@ func (i *Insert) ShortDescription() string {
 	return i.VTable.String()
 }
 
-func (i *Insert) GetOrdering() ([]ops.OrderBy, error) {
-	return nil, nil
+func (i *Insert) GetOrdering() []ops.OrderBy {
+	return nil
 }
 
 var _ ops.Operator = (*Insert)(nil)

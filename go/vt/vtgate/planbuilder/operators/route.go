@@ -664,7 +664,7 @@ func (r *Route) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.Sele
 	return r.Source.GetSelectExprs(ctx)
 }
 
-func (r *Route) GetOrdering() ([]ops.OrderBy, error) {
+func (r *Route) GetOrdering() []ops.OrderBy {
 	return r.Source.GetOrdering()
 }
 
@@ -696,9 +696,9 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 
 	// if we are getting results from multiple shards, we need to do a merge-sort
 	// between them to get the final output correctly sorted
-	ordering, err := r.Source.GetOrdering()
-	if err != nil || len(ordering) == 0 {
-		return err
+	ordering := r.Source.GetOrdering()
+	if len(ordering) == 0 {
+		return nil
 	}
 
 	for _, order := range ordering {
@@ -743,11 +743,7 @@ func (r *Route) ShortDescription() string {
 		first += " " + info.extraInfo()
 	}
 
-	orderBy, err := r.Source.GetOrdering()
-	if err != nil {
-		return first
-	}
-
+	orderBy := r.Source.GetOrdering()
 	ordering := ""
 	if len(orderBy) > 0 {
 		var oo []string
