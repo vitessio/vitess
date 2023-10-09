@@ -187,10 +187,7 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 			return offset
 		}
 	}
-	cols, err := u.GetColumns(ctx)
-	if err != nil {
-		panic(err)
-	}
+	cols := u.GetColumns(ctx)
 
 	switch e := expr.Expr.(type) {
 	case *sqlparser.ColName:
@@ -246,10 +243,7 @@ func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx
 }
 
 func (u *Union) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
-	columns, err := u.GetColumns(ctx)
-	if err != nil {
-		panic(err)
-	}
+	columns := u.GetColumns(ctx)
 
 	for idx, col := range columns {
 		if ctx.SemTable.EqualsExprWithDeps(expr, col.Expr) {
@@ -260,7 +254,7 @@ func (u *Union) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, u
 	return -1
 }
 
-func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparser.AliasedExpr, err error) {
+func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparser.AliasedExpr) {
 	if u.unionColumnsAsAlisedExprs == nil {
 		allOk := true
 		u.unionColumnsAsAlisedExprs = slice.Map(u.unionColumns, func(from sqlparser.SelectExpr) *sqlparser.AliasedExpr {
@@ -269,24 +263,20 @@ func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparse
 			return expr
 		})
 		if !allOk {
-			return nil, vterrors.VT09015()
+			panic(vterrors.VT09015())
 		}
 	}
 
 	// if any of the inputs has more columns that we expect, we want to show on top of UNION, so the results can
 	// be truncated to the expected result columns and nothing else
 	for _, src := range u.Sources {
-		columns, err := src.GetColumns(ctx)
-		if err != nil {
-			return nil, err
-		}
-
+		columns := src.GetColumns(ctx)
 		for len(columns) > len(u.unionColumnsAsAlisedExprs) {
 			u.unionColumnsAsAlisedExprs = append(u.unionColumnsAsAlisedExprs, aeWrap(sqlparser.NewIntLiteral("0")))
 		}
 	}
 
-	return u.unionColumnsAsAlisedExprs, nil
+	return u.unionColumnsAsAlisedExprs
 }
 
 func (u *Union) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {

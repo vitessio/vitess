@@ -429,10 +429,7 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) {
 
 	qb.clearProjections()
 
-	cols, err := op.GetColumns(qb.ctx)
-	if err != nil {
-		panic(err)
-	}
+	cols := op.GetColumns(qb.ctx)
 	for _, column := range cols {
 		qb.addProjection(column)
 	}

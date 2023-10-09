@@ -60,7 +60,7 @@ func (l *Limit) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, u
 	return l.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (l *Limit) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (l *Limit) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return l.Source.GetColumns(ctx)
 }
 

@@ -167,8 +167,8 @@ func (aj *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser
 	return offset, nil
 }
 
-func (aj *ApplyJoin) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
-	return slice.Map(aj.JoinColumns, joinColumnToAliasedExpr), nil
+func (aj *ApplyJoin) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	return slice.Map(aj.JoinColumns, joinColumnToAliasedExpr)
 }
 
 func (aj *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {

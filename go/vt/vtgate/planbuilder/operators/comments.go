@@ -59,7 +59,7 @@ func (l *LockAndComment) FindCol(ctx *plancontext.PlanningContext, expr sqlparse
 	return l.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (l *LockAndComment) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (l *LockAndComment) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return l.Source.GetColumns(ctx)
 }
 

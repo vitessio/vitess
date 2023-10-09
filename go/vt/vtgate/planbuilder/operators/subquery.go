@@ -181,7 +181,7 @@ func (sq *SubQuery) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Exp
 	return sq.Outer.FindCol(ctx, expr, underRoute)
 }
 
-func (sq *SubQuery) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (sq *SubQuery) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return sq.Outer.GetColumns(ctx)
 }
 

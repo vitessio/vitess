@@ -77,7 +77,7 @@ func (dt *DerivedTable) introducesTableID() semantics.TableSet {
 type (
 	// ProjCols is used to enable projections that are only valid if we can push them into a route, and we never need to ask it about offsets
 	ProjCols interface {
-		GetColumns() ([]*sqlparser.AliasedExpr, error)
+		GetColumns() []*sqlparser.AliasedExpr
 		GetSelectExprs() sqlparser.SelectExprs
 		AddColumn(*sqlparser.AliasedExpr) (ProjCols, int, error)
 	}
@@ -135,8 +135,8 @@ func newAliasedProjection(src ops.Operator) *Projection {
 	}
 }
 
-func (sp StarProjections) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return nil, vterrors.VT09015()
+func (sp StarProjections) GetColumns() []*sqlparser.AliasedExpr {
+	panic(vterrors.VT09015())
 }
 
 func (sp StarProjections) AddColumn(*sqlparser.AliasedExpr) (ProjCols, int, error) {
@@ -147,10 +147,10 @@ func (sp StarProjections) GetSelectExprs() sqlparser.SelectExprs {
 	return sqlparser.SelectExprs(sp)
 }
 
-func (ap AliasedProjections) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+func (ap AliasedProjections) GetColumns() []*sqlparser.AliasedExpr {
 	return slice.Map(ap, func(from *ProjExpr) *sqlparser.AliasedExpr {
 		return aeWrap(from.ColExpr)
-	}), nil
+	})
 }
 
 func (ap AliasedProjections) GetSelectExprs() sqlparser.SelectExprs {
@@ -386,7 +386,7 @@ func (p *Projection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpars
 	return p
 }
 
-func (p *Projection) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (p *Projection) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return p.Columns.GetColumns()
 }
 
@@ -535,7 +535,7 @@ func (p *Projection) compactWithRoute(ctx *plancontext.PlanningContext, rb *Rout
 			return p, rewrite.SameTree, nil
 		}
 	}
-	columns, err := rb.GetColumns(ctx)
+	columns := rb.GetColumns(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

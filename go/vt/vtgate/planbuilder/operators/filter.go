@@ -93,7 +93,7 @@ func (f *Filter) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, 
 	return f.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (f *Filter) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (f *Filter) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return f.Source.GetColumns(ctx)
 }
 

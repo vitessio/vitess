@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"errors"
 	"slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -93,7 +94,7 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	}
 	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 	if err != nil {
-		if err == semantics.ErrNotSingleTable {
+		if errors.Is(err, semantics.ErrNotSingleTable) {
 			return &Filter{
 				Source:     h,
 				Predicates: []sqlparser.Expr{expr},
@@ -158,16 +159,16 @@ func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr,
 	return -1
 }
 
-func (h *Horizon) GetColumns(ctx *plancontext.PlanningContext) (exprs []*sqlparser.AliasedExpr, err error) {
+func (h *Horizon) GetColumns(ctx *plancontext.PlanningContext) (exprs []*sqlparser.AliasedExpr) {
 	for _, expr := range ctx.SemTable.SelectExprs(h.Query) {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil, vterrors.VT09015()
+			panic(vterrors.VT09015())
 		}
 		exprs = append(exprs, ae)
 	}
 
-	return exprs, nil
+	return exprs
 }
 
 func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {

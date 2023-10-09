@@ -221,25 +221,22 @@ func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, ae *sqlpa
 	return -1, nil
 }
 
-func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	if _, isSourceDerived := a.Source.(*Horizon); isSourceDerived {
-		return a.Columns, nil
+		return a.Columns
 	}
 
 	// we update the incoming columns, so we know about any new columns that have been added
 	// in the optimization phase, other operators could be pushed down resulting in additional columns for aggregator.
 	// Aggregator should be made aware of these to truncate them in final result.
-	columns, err := a.Source.GetColumns(ctx)
-	if err != nil {
-		return nil, err
-	}
+	columns := a.Source.GetColumns(ctx)
 
 	// if this operator is producing more columns than expected, we want to know about it
 	if len(columns) > len(a.Columns) {
 		a.Columns = append(a.Columns, columns[len(a.Columns):]...)
 	}
 
-	return a.Columns, nil
+	return a.Columns
 }
 
 func (a *Aggregator) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {

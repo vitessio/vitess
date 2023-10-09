@@ -93,8 +93,8 @@ func (v *Vindex) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, 
 	return -1
 }
 
-func (v *Vindex) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
-	return slice.Map(v.Columns, colNameToExpr), nil
+func (v *Vindex) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	return slice.Map(v.Columns, colNameToExpr)
 }
 
 func (v *Vindex) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {

@@ -533,10 +533,7 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 
 func createProjection(ctx *plancontext.PlanningContext, src ops.Operator) (*Projection, error) {
 	proj := newAliasedProjection(src)
-	cols, err := src.GetColumns(ctx)
-	if err != nil {
-		return nil, err
-	}
+	cols := src.GetColumns(ctx)
 	for _, col := range cols {
 		_, err := proj.addUnexploredExpr(col, col.Expr)
 		if err != nil {
@@ -634,10 +631,7 @@ func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Op
 	case *Union:
 		tableID := semantics.SingleTableSet(len(ctx.SemTable.Tables))
 		ctx.SemTable.Tables = append(ctx.SemTable.Tables, nil)
-		unionColumns, err := op.GetColumns(ctx)
-		if err != nil {
-			return op, false, nil
-		}
+		unionColumns := op.GetColumns(ctx)
 		proj := &Projection{
 			Source:  op,
 			Columns: AliasedProjections(slice.Map(unionColumns, newProjExpr)),
@@ -656,7 +650,7 @@ func (r *Route) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _
 	return r.Source.FindCol(ctx, expr, true)
 }
 
-func (r *Route) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (r *Route) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return r.Source.GetColumns(ctx)
 }
 

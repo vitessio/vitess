@@ -47,10 +47,7 @@ type (
 )
 
 func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
-	columns, err := d.GetColumns(ctx)
-	if err != nil {
-		return err
-	}
+	columns := d.GetColumns(ctx)
 	for idx, col := range columns {
 		e := d.QP.GetSimplifiedExpr(col.Expr)
 		var wsCol *int
@@ -103,7 +100,7 @@ func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr
 	return d.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (d *Distinct) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (d *Distinct) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return d.Source.GetColumns(ctx)
 }
 

@@ -66,7 +66,7 @@ func (o *Ordering) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr
 	return o.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (o *Ordering) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (o *Ordering) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return o.Source.GetColumns(ctx)
 }
 

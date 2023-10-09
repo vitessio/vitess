@@ -84,8 +84,8 @@ func (to *Table) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, 
 	return -1
 }
 
-func (to *Table) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
-	return slice.Map(to.Columns, colNameToExpr), nil
+func (to *Table) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	return slice.Map(to.Columns, colNameToExpr)
 }
 
 func (to *Table) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
