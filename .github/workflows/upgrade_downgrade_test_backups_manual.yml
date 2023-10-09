@@ -33,7 +33,8 @@ jobs:
     timeout-minutes: 40
     if: always() && (needs.get_previous_release.result == 'success')
     name: Run Upgrade Downgrade Test - Backups - Manual
-    runs-on: ubuntu-20.04
+    runs-on:
+      group: vitess-ubuntu20
     needs:
       - get_previous_release
 
@@ -42,7 +43,7 @@ jobs:
       id: skip-workflow
       run: |
         skip='false'
-        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/slack-vitess-r[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
           skip='true'
         fi
         echo Skip ${skip}

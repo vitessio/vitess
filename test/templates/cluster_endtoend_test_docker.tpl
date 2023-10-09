@@ -4,14 +4,15 @@ on: [push, pull_request]
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-latest{{end}}
+    runs-on:
+      group: vitess-ubuntu20
 
     steps:
     - name: Check if workflow needs to be skipped
       id: skip-workflow
       run: |
         skip='false'
-        if [[ "{{"${{github.event.pull_request}}"}}" ==  "" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/main" ]] && [[ ! "{{"${{github.ref}}"}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "{{"${{github.ref}}"}}" =~ "refs/tags/.*" ]]; then
+        if [[ "{{"${{github.event.pull_request}}"}}" ==  "" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/main" ]] && [[ ! "{{"${{github.ref}}"}}" =~ ^refs/heads/slack-vitess-r[0-9]+\.[0-9]$ ]] && [[ ! "{{"${{github.ref}}"}}" =~ "refs/tags/.*" ]]; then
           skip='true'
         fi
         echo Skip ${skip}
