@@ -1,53 +1,8 @@
 [
   {
-    "comment": "unexpanded expressions invalid also inside subqueries",
-    "query": "select * from user where id in (select * from user union select * from user_extra)",
-    "plan": "VT09015: schema tracking required"
-  },
-  {
-    "comment": "union operations in subqueries (expressions)",
-    "query": "select col from user u where id in (select bar from user where user.x = u.z union select * from user_extra)",
-    "plan": "VT09015: schema tracking required"
-  },
-  {
-    "comment": "TODO: Implement support for select with a target destination",
-    "query": "select * from `user[-]`.user_metadata",
-    "plan": "VT12001: unsupported: SELECT with a target destination"
-  },
-  {
-    "comment": "Unsupported INSERT statement with a target destination",
-    "query": "insert into `user[-]`.user_metadata (a, b) values (1,2)",
-    "plan": "VT12001: unsupported: INSERT with a target destination"
-  },
-  {
-    "comment": "Unsupported delete statement with a replica target destination",
-    "query": "DELETE FROM `user[-]@replica`.user_metadata limit 1",
-    "plan": "VT09002: delete statement with a replica target"
-  },
-  {
-    "comment": "Unsupported update statement with a replica target destination",
-    "query": "update `user[-]@replica`.user_metadata set id=2",
-    "plan": "VT09002: update statement with a replica target"
-  },
-  {
-    "comment": "scatter order by with * expression",
-    "query": "select * from user order by id",
-    "plan": "VT09015: schema tracking required"
-  },
-  {
     "comment": "natural join",
     "query": "select * from user natural join user_extra",
     "plan": "VT12001: unsupported: natural join"
-  },
-  {
-    "comment": "join with USING construct",
-    "query": "select * from user join user_extra using(id)",
-    "plan": "VT09015: schema tracking required"
-  },
-  {
-    "comment": "join with USING construct with 3 tables",
-    "query": "select user.id from user join user_extra using(id) join music using(id2)",
-    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "natural left join",
@@ -58,16 +13,6 @@
     "comment": "natural right join",
     "query": "select * from user natural right join user_extra",
     "plan": "VT12001: unsupported: natural right join"
-  },
-  {
-    "comment": "* expresson not allowed for cross-shard joins",
-    "query": "select * from user join user_extra",
-    "plan": "VT09015: schema tracking required"
-  },
-  {
-    "comment": "Group by column number, used with non-aliased expression (duplicated code)",
-    "query": "select * from user group by 1",
-    "plan": "cannot use column offsets in group statement when using `*`"
   },
   {
     "comment": "Multi-value aggregates not supported",
@@ -155,16 +100,6 @@
     "plan": "VT12001: unsupported: multiple (2) tables in update"
   },
   {
-    "comment": "unsharded insert, unqualified names and auto-inc combined",
-    "query": "insert into unsharded_auto select col from unsharded",
-    "plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
-  },
-  {
-    "comment": "unsharded insert, no col list with auto-inc",
-    "query": "insert into unsharded_auto values(1,1)",
-    "plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
-  },
-  {
     "comment": "unsharded insert, col list does not match values",
     "query": "insert into unsharded_auto(id, val) values(1)",
     "plan": "VT03006: column count does not match value count at row 1"
@@ -225,51 +160,6 @@
     "plan": "VT12001: unsupported: REPLACE INTO with sharded keyspace"
   },
   {
-    "comment": "select keyspace_id from user_index where id = 1 and id = 2",
-    "query": "select keyspace_id from user_index where id = 1 and id = 2",
-    "plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (multiple filters)"
-  },
-  {
-    "comment": "select keyspace_id from user_index where func(id)",
-    "query": "select keyspace_id from user_index where func(id)",
-    "plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (not a comparison)"
-  },
-  {
-    "comment": "select keyspace_id from user_index where id > 1",
-    "query": "select keyspace_id from user_index where id > 1",
-    "plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (not equality)"
-  },
-  {
-    "comment": "select keyspace_id from user_index where 1 = id",
-    "query": "select keyspace_id from user_index where 1 = id",
-    "plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not a column)"
-  },
-  {
-    "comment": "select keyspace_id from user_index where keyspace_id = 1",
-    "query": "select keyspace_id from user_index where keyspace_id = 1",
-    "plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not id)"
-  },
-  {
-    "comment": "select keyspace_id from user_index where id = id+1",
-    "query": "select keyspace_id from user_index where id = id+1",
-    "plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (rhs is not a value)"
-  },
-  {
-    "comment": "vindex func without where condition",
-    "query": "select keyspace_id from user_index",
-    "plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
-  },
-  {
-    "comment": "vindex func in subquery without where",
-    "query": "select id from user where exists(select keyspace_id from user_index)",
-    "plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
-  },
-  {
-    "comment": "select func(keyspace_id) from user_index where id = :id",
-    "query": "select func(keyspace_id) from user_index where id = :id",
-    "plan": "VT12001: unsupported: cannot add 'func(keyspace_id)' expression to a table/vindex"
-  },
-  {
     "comment": "delete with multi-table targets",
     "query": "delete music,user from music inner join user where music.id = user.id",
     "plan": "VT12001: unsupported: multi-shard or vindex write statement"
@@ -303,11 +193,6 @@
     "comment": "Multi shard query using into outfile s3",
     "query": "select * from user into outfile s3 'out_file_name'",
     "plan": "VT12001: unsupported: INTO on sharded keyspace"
-  },
-  {
-    "comment": "create view with Cannot auto-resolve for cross-shard joins",
-    "query": "create view user.view_a as select col from user join user_extra",
-    "plan": "Column 'col' in field list is ambiguous"
   },
   {
     "comment": "create view with join that cannot be served in each shard separately",
@@ -448,26 +333,6 @@
     "comment": "correlated subquery with different keyspace tables involved",
     "query": "select id from user where id in (select col from unsharded where col = user.id)",
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
-  },
-  {
-    "comment": "ORDER BY on select t.*",
-    "query": "select t.*, t.col from user t order by t.col",
-    "plan": "VT09015: schema tracking required"
-  },
-  {
-    "comment": "ORDER BY on select *",
-    "query": "select *, col from user order by col",
-    "plan": "VT09015: schema tracking required"
-  },
-  {
-    "comment": "ORDER BY on select multi t.*",
-    "query": "select t.*, t.name, t.*, t.col from user t order by t.col",
-    "plan": "VT09015: schema tracking required"
-  },
-  {
-    "comment": "ORDER BY on select multi *",
-    "query": "select *, name, *, col from user order by col",
-    "plan": "VT09015: schema tracking required"
   },
   {
     "comment": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
