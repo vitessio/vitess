@@ -18,20 +18,21 @@ package smartconnpool
 
 import (
 	"runtime"
-	"sync/atomic"
+
+	"vitess.io/vitess/go/atomic2"
 )
 
 // connStack is a lock-free stack for Connection objects. It is safe to
 // use from several goroutines.
 type connStack[C Connection] struct {
-	top atomic.Pointer[Pooled[C]]
+	top atomic2.PointerAndUint64[Pooled[C]]
 }
 
 func (s *connStack[C]) Push(item *Pooled[C]) {
 	for {
-		oldHead := s.top.Load()
+		oldHead, popCount := s.top.Load()
 		item.next.Store(oldHead)
-		if s.top.CompareAndSwap(oldHead, item) {
+		if s.top.CompareAndSwap(oldHead, popCount, item, popCount) {
 			return
 		}
 		runtime.Gosched()
@@ -39,17 +40,14 @@ func (s *connStack[C]) Push(item *Pooled[C]) {
 }
 
 func (s *connStack[C]) Pop() (*Pooled[C], bool) {
-	var oldHead *Pooled[C]
-	var newHead *Pooled[C]
-
 	for {
-		oldHead = s.top.Load()
+		oldHead, popCount := s.top.Load()
 		if oldHead == nil {
 			return nil, false
 		}
 
-		newHead = oldHead.next.Load()
-		if s.top.CompareAndSwap(oldHead, newHead) {
+		newHead := oldHead.next.Load()
+		if s.top.CompareAndSwap(oldHead, popCount, newHead, popCount+1) {
 			return oldHead, true
 		}
 		runtime.Gosched()
@@ -60,11 +58,12 @@ func (s *connStack[C]) PopAll(out []*Pooled[C]) []*Pooled[C] {
 	var oldHead *Pooled[C]
 
 	for {
-		oldHead = s.top.Load()
+		var popCount uint64
+		oldHead, popCount = s.top.Load()
 		if oldHead == nil {
 			return out
 		}
-		if s.top.CompareAndSwap(oldHead, nil) {
+		if s.top.CompareAndSwap(oldHead, popCount, nil, popCount+1) {
 			break
 		}
 		runtime.Gosched()
