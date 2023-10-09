@@ -174,6 +174,10 @@ service Vtctld {
   rpc LookupVindexCreate(vtctldata.LookupVindexCreateRequest) returns (vtctldata.LookupVindexCreateResponse) {};
   rpc LookupVindexExternalize(vtctldata.LookupVindexExternalizeRequest) returns (vtctldata.LookupVindexExternalizeResponse) {};
 
+  // MaterializeCreate creates a workflow to materialize one or more tables
+  // from a source keyspace to a target keyspace using a provided expressions.
+  rpc MaterializeCreate(vtctldata.MaterializeCreateRequest) returns (vtctldata.MaterializeCreateResponse) {};
+
   // MigrateCreate creates a workflow which migrates one or more tables from an
   // external cluster into Vitess.
   rpc MigrateCreate(vtctldata.MigrateCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};

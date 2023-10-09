@@ -34,6 +34,7 @@ import (
 	// These imports ensure init()s within them get called and they register their commands/subcommands.
 	vreplcommon "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/lookupvindex"
+	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/materialize"
 	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/migrate"
 	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/mount"
 	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/movetables"
