@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -446,7 +447,22 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			return err
 		}
 
-		pos := row["pos"].ToString()
+		// The value in the pos column can be compressed and thus not
+		// have a valid GTID consisting of valid UTF-8 characters so we
+		// have to decode it so that it's properly decompressed first
+		// when needed.
+		pos, err := row.ToString("pos")
+		if err != nil {
+			return err
+		}
+		if pos != "" {
+			mpos, err := binlogplayer.DecodePosition(pos)
+			if err != nil {
+				return err
+			}
+			pos = mpos.String()
+		}
+
 		stopPos := row["stop_pos"].ToString()
 		state := row["state"].ToString()
 		dbName := row["db_name"].ToString()
