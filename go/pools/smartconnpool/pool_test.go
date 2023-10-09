@@ -18,7 +18,6 @@ package smartconnpool
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"sync/atomic"
@@ -37,6 +36,12 @@ var (
 type TestState struct {
 	lastID, open, close, reset atomic.Int64
 	waits                      []time.Time
+
+	chaos struct {
+		delayConnect time.Duration
+		failConnect  bool
+		failApply    bool
+	}
 }
 
 func (ts *TestState) LogWait(start time.Time) {
@@ -94,26 +99,21 @@ func (tr *TestConn) Close() {
 
 var _ Connection = (*TestConn)(nil)
 
-func newConnector(counts *TestState) Connector[*TestConn] {
+func newConnector(state *TestState) Connector[*TestConn] {
 	return func(ctx context.Context) (*TestConn, error) {
-		counts.open.Add(1)
-		return &TestConn{num: counts.lastID.Add(1), timeCreated: time.Now(), counts: counts}, nil
-	}
-}
-
-func connectorFail(context.Context) (*TestConn, error) {
-	return nil, errors.New("Failed")
-}
-
-func connectorSlowFail(context.Context) (*TestConn, error) {
-	time.Sleep(10 * time.Millisecond)
-	return nil, errors.New("Failed")
-}
-
-func newConnectorWithoutSettings(counts *TestState) Connector[*TestConn] {
-	return func(ctx context.Context) (*TestConn, error) {
-		counts.open.Add(1)
-		return &TestConn{num: counts.lastID.Add(1), failApply: true, counts: counts}, nil
+		state.open.Add(1)
+		if state.chaos.delayConnect != 0 {
+			time.Sleep(state.chaos.delayConnect)
+		}
+		if state.chaos.failConnect {
+			return nil, fmt.Errorf("failed to connect: forced failure")
+		}
+		return &TestConn{
+			num:         state.lastID.Add(1),
+			timeCreated: time.Now(),
+			counts:      state,
+			failApply:   state.chaos.failApply,
+		}, nil
 	}
 }
 
@@ -592,7 +592,7 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 		// Change the factory before putting back
 		// to prevent race with the idle closer, who will
 		// try to use it.
-		p.config.connect = connectorFail
+		state.chaos.failConnect = true
 		p.put(r)
 		timeout := time.After(1 * time.Second)
 		for p.Active() != 0 {
@@ -603,7 +603,7 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 			}
 		}
 		// reset factory for next run.
-		p.config.connect = connector
+		state.chaos.failConnect = false
 	}
 }
 
@@ -694,16 +694,17 @@ func TestExtendedLifetimeTimeout(t *testing.T) {
 
 func TestCreateFail(t *testing.T) {
 	var state TestState
+	state.chaos.failConnect = true
 
 	ctx := context.Background()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    5,
 		IdleTimeout: time.Second,
 		LogWait:     state.LogWait,
-	}).Open(connectorFail, nil)
+	}).Open(newConnector(&state), nil)
 
 	for _, setting := range []*Setting{nil, sFoo} {
-		if _, err := p.Get(ctx, setting); err.Error() != "Failed" {
+		if _, err := p.Get(ctx, setting); err.Error() != "failed to connect: forced failure" {
 			t.Errorf("Expecting Failed, received %v", err)
 		}
 		stats := p.StatsJSON()
@@ -740,40 +741,57 @@ func TestCreateFailOnPut(t *testing.T) {
 		require.NoError(t, err)
 
 		// change factory to fail the put.
-		p.config.connect = connectorFail
+		state.chaos.failConnect = true
 		p.put(nil)
 		assert.Zero(t, p.Active())
 
 		// change back for next iteration.
-		p.config.connect = connector
+		state.chaos.failConnect = false
 	}
 }
 
 func TestSlowCreateFail(t *testing.T) {
 	var state TestState
+	state.chaos.delayConnect = 10 * time.Millisecond
 
 	ctx := context.Background()
-	p := NewPool(&Config[*TestConn]{
-		Capacity:    2,
-		IdleTimeout: time.Second,
-		LogWait:     state.LogWait,
-	}).Open(connectorSlowFail, nil)
+	ch := make(chan *Pooled[*TestConn])
 
-	defer p.Close()
-
-	ch := make(chan bool)
 	for _, setting := range []*Setting{nil, sFoo} {
-		// The third Get should not wait indefinitely
+		p := NewPool(&Config[*TestConn]{
+			Capacity:    2,
+			IdleTimeout: time.Second,
+			LogWait:     state.LogWait,
+		}).Open(newConnector(&state), nil)
+
+		state.chaos.failConnect = true
+
 		for i := 0; i < 3; i++ {
 			go func() {
-				_, _ = p.Get(ctx, setting)
-				ch <- true
+				conn, _ := p.Get(ctx, setting)
+				ch <- conn
 			}()
 		}
-		for i := 0; i < 3; i++ {
-			<-ch
+		assert.Nil(t, <-ch)
+		assert.Nil(t, <-ch)
+		assert.Equalf(t, p.Capacity(), int64(2), "pool should not be out of capacity")
+		assert.Equalf(t, p.Available(), int64(2), "pool should not be out of availability")
+
+		select {
+		case <-ch:
+			assert.Fail(t, "there should be no capacity for a third connection")
+		default:
 		}
-		assert.EqualValues(t, 2, p.Available())
+
+		state.chaos.failConnect = false
+		conn, err := p.Get(ctx, setting)
+		require.NoError(t, err)
+
+		p.put(conn)
+		conn = <-ch
+		assert.NotNil(t, conn)
+		p.put(conn)
+		p.Close()
 	}
 }
 
@@ -974,7 +992,7 @@ func TestApplySettingsFailure(t *testing.T) {
 	}
 
 	// any new connection created will fail to apply setting
-	p.config.connect = newConnectorWithoutSettings(&state)
+	state.chaos.failApply = true
 
 	// Get the resource with "foo" setting
 	// For an applied connection if the setting are same it will be returned as-is.

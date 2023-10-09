@@ -68,7 +68,10 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting) (*Pool
 	conn := elem.Value.conn
 	wl.nodes.Put(elem)
 
-	return conn, ctx.Err()
+	if conn != nil {
+		return conn, nil
+	}
+	return nil, ctx.Err()
 }
 
 // expire removes and wakes any expired waiter in the waitlist.

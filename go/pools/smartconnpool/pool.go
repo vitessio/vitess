@@ -334,7 +334,14 @@ func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C],
 func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 	pool.borrowed.Add(-1)
 
-	if conn != nil {
+	if conn == nil {
+		var err error
+		conn, err = pool.connNew(context.Background())
+		if err != nil {
+			pool.closedConn()
+			return
+		}
+	} else {
 		conn.timeUsed = time.Now()
 
 		lifetime := pool.extendedMaxLifetime()
@@ -342,16 +349,9 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 			pool.Metrics.maxLifetimeClosed.Add(1)
 			conn.Close()
 			if err := pool.connReopen(context.Background(), conn, conn.timeUsed); err != nil {
+				pool.closedConn()
 				return
 			}
-		}
-	}
-	if conn == nil {
-		var err error
-		conn, err = pool.connNew(context.Background())
-		if err != nil {
-			pool.active.Add(-1)
-			return
 		}
 	}
 
@@ -424,6 +424,10 @@ func (pool *ConnPool[C]) getFromSettingsStack(setting *Setting) *Pooled[C] {
 	return nil
 }
 
+func (pool *ConnPool[C]) closedConn() {
+	_ = pool.active.Add(-1)
+}
+
 func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
 	for {
 		open := pool.active.Load()
@@ -434,7 +438,7 @@ func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
 		if pool.active.CompareAndSwap(open, open+1) {
 			conn, err := pool.connNew(ctx)
 			if err != nil {
-				pool.active.Add(-1)
+				pool.closedConn()
 				return nil, err
 			}
 			return conn, nil
@@ -463,15 +467,10 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	}
 	// if there are no connections in the setting stacks and we've lent out connections
 	// to other clients, wait until one of the connections is returned
-	if conn == nil && pool.borrowed.Load() > 0 {
+	if conn == nil {
 		start := time.Now()
 		conn, err = pool.wait.waitForConn(ctx, nil)
 		if err != nil {
-			if conn != nil {
-				// our context expired but we managed to get a conn from
-				// the waitlist; put it back!
-				pool.put(conn)
-			}
 			return nil, ErrTimeout
 		}
 		pool.recordWait(start)
@@ -490,7 +489,7 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 			conn.Close()
 			err = pool.connReopen(ctx, conn, time.Now())
 			if err != nil {
-				pool.active.Add(-1)
+				pool.closedConn()
 				return nil, err
 			}
 		}
@@ -525,15 +524,10 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 	}
 	// no connections anywhere in the pool; if we've lent out connections to other clients
 	// wait for one of them
-	if conn == nil && pool.borrowed.Load() > 0 {
+	if conn == nil {
 		start := time.Now()
 		conn, err = pool.wait.waitForConn(ctx, setting)
 		if err != nil {
-			if conn != nil {
-				// our context expired but we managed to get a conn from
-				// the waitlist; put it back!
-				pool.put(conn)
-			}
 			return nil, ErrTimeout
 		}
 		pool.recordWait(start)
@@ -555,7 +549,7 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 				conn.Close()
 				err = pool.connReopen(ctx, conn, time.Now())
 				if err != nil {
-					pool.active.Add(-1)
+					pool.closedConn()
 					return nil, err
 				}
 			}
@@ -564,7 +558,7 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 		// and close it without returning to the pool
 		if err := conn.Conn.ApplySetting(ctx, setting); err != nil {
 			conn.Close()
-			pool.active.Add(-1)
+			pool.closedConn()
 			return nil, err
 		}
 	}
@@ -582,17 +576,12 @@ func (pool *ConnPool[C]) SetCapacity(newcap int64) {
 		panic("negative capacity")
 	}
 
-	var oldcap int64
-
-	for {
-		oldcap = pool.capacity.Load()
-		if oldcap == newcap {
-			return
-		}
-		if pool.capacity.CompareAndSwap(oldcap, newcap) {
-			break
-		}
+	oldcap := pool.capacity.Swap(newcap)
+	if oldcap == newcap {
+		return
 	}
+
+	backoff := 1 * time.Millisecond
 
 	// close connections until we're under capacity
 	for pool.active.Load() > newcap {
@@ -601,16 +590,13 @@ func (pool *ConnPool[C]) SetCapacity(newcap int64) {
 		if conn == nil {
 			conn, _ = pool.clean.Pop()
 		}
-		// if we can't find connections in the stacks, try waiting for clients
-		// to return one
 		if conn == nil {
-			conn, _ = pool.wait.waitForConn(context.Background(), nil)
-		}
-		if conn == nil {
+			time.Sleep(backoff)
+			backoff += 1 * time.Millisecond
 			continue
 		}
 		conn.Close()
-		pool.active.Add(-1)
+		pool.closedConn()
 	}
 }
 
@@ -633,7 +619,7 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 			if conn.timeUsed.Add(timeout).Sub(now) < 0 {
 				pool.Metrics.idleClosed.Add(1)
 				conn.Close()
-				pool.active.Add(-1)
+				pool.closedConn()
 				continue
 			}
 
