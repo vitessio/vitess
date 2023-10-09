@@ -90,13 +90,9 @@ func (d *Distinct) SetInputs(operators []ops.Operator) {
 	d.Source = operators[0]
 }
 
-func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := d.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	d.Source = newSrc
-	return d, nil
+func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	d.Source = d.Source.AddPredicate(ctx, expr)
+	return d
 }
 
 func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {

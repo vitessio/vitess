@@ -180,11 +180,11 @@ func (qg *QueryGraph) GetOrdering() ([]ops.OrderBy, error) {
 	return nil, nil
 }
 
-func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		qg.collectPredicate(ctx, e)
 	}
-	return qg, nil
+	return qg
 }
 
 // Clone implements the Operator interface

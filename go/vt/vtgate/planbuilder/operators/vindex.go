@@ -124,31 +124,31 @@ func (v *Vindex) CheckValid() error {
 	return nil
 }
 
-func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		deps := ctx.SemTable.RecursiveDeps(e)
 		if deps.NumberOfTables() > 1 {
-			return nil, vterrors.VT09018(wrongWhereCond + " (multiple tables involved)")
+			panic(vterrors.VT09018(wrongWhereCond + " (multiple tables involved)"))
 		}
 		// check if we already have a predicate
 		if v.OpCode != engine.VindexNone {
-			return nil, vterrors.VT09018(wrongWhereCond + " (multiple filters)")
+			panic(vterrors.VT09018(wrongWhereCond + " (multiple filters)"))
 		}
 
 		// check LHS
 		comparison, ok := e.(*sqlparser.ComparisonExpr)
 		if !ok {
-			return nil, vterrors.VT09018(wrongWhereCond + " (not a comparison)")
+			panic(vterrors.VT09018(wrongWhereCond + " (not a comparison)"))
 		}
 		if comparison.Operator != sqlparser.EqualOp && comparison.Operator != sqlparser.InOp {
-			return nil, vterrors.VT09018(wrongWhereCond + " (not equality)")
+			panic(vterrors.VT09018(wrongWhereCond + " (not equality)"))
 		}
 		colname, ok := comparison.Left.(*sqlparser.ColName)
 		if !ok {
-			return nil, vterrors.VT09018(wrongWhereCond + " (lhs is not a column)")
+			panic(vterrors.VT09018(wrongWhereCond + " (lhs is not a column)"))
 		}
 		if !colname.Name.EqualString("id") {
-			return nil, vterrors.VT09018(wrongWhereCond + " (lhs is not id)")
+			panic(vterrors.VT09018(wrongWhereCond + " (lhs is not id)"))
 		}
 
 		// check RHS
@@ -156,15 +156,15 @@ func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 		if sqlparser.IsValue(comparison.Right) || sqlparser.IsSimpleTuple(comparison.Right) {
 			v.Value = comparison.Right
 		} else {
-			return nil, vterrors.VT09018(wrongWhereCond + " (rhs is not a value)")
+			panic(vterrors.VT09018(wrongWhereCond + " (rhs is not a value)"))
 		}
 		if err != nil {
-			return nil, vterrors.VT09018(wrongWhereCond+": %v", err)
+			panic(vterrors.VT09018(wrongWhereCond+": %v", err))
 		}
 		v.OpCode = engine.VindexMap
 		v.Table.Predicates = append(v.Table.Predicates, e)
 	}
-	return v, nil
+	return v
 }
 
 // TablesUsed implements the Operator interface.

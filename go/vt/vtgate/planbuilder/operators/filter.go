@@ -80,13 +80,9 @@ func (f *Filter) UnsolvedPredicates(st *semantics.SemTable) []sqlparser.Expr {
 	return result
 }
 
-func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := f.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	f.Source = newSrc
-	return f, nil
+func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	f.Source = f.Source.AddPredicate(ctx, expr)
+	return f
 }
 
 func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {

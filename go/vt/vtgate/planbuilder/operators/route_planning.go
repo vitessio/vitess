@@ -224,10 +224,7 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]ops.O
 			return nil, err
 		}
 		if qg.NoDeps != nil {
-			plan, err = plan.AddPredicate(ctx, qg.NoDeps)
-			if err != nil {
-				return nil, err
-			}
+			plan = plan.AddPredicate(ctx, qg.NoDeps)
 		}
 		plans[i] = plan
 	}
@@ -621,10 +618,7 @@ func pushJoinPredicates(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr
 	}
 
 	for _, expr := range exprs {
-		_, err := AddPredicate(ctx, op, expr, true, newFilter)
-		if err != nil {
-			return nil, err
-		}
+		AddPredicate(ctx, op, expr, true, newFilter)
 	}
 
 	return op, nil

@@ -93,39 +93,36 @@ Notice how `X.col = 42` has been translated to `foo = 42` and `id = 42` on respe
 The first SELECT of the union dictates the column names, and the second is whatever expression
 can be found on the same offset. The names of the RHS are discarded.
 */
-func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
 	offsets := make(map[string]int)
 	sel, err := u.GetSelectFor(0)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	for i, selectExpr := range sel.SelectExprs {
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil, vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT")
+			panic(vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT"))
 		}
 		offsets[ae.ColumnName()] = i
 	}
 
 	needsFilter, exprPerSource, err := u.predicatePerSource(expr, offsets)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	if needsFilter {
 		return &Filter{
 			Source:     u,
 			Predicates: []sqlparser.Expr{expr},
-		}, nil
-	}
-
-	for i, src := range u.Sources {
-		u.Sources[i], err = src.AddPredicate(ctx, exprPerSource[i])
-		if err != nil {
-			return nil, err
 		}
 	}
 
-	return u, nil
+	for i, src := range u.Sources {
+		u.Sources[i] = src.AddPredicate(ctx, exprPerSource[i])
+	}
+
+	return u
 }
 
 func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) (bool, []sqlparser.Expr, error) {

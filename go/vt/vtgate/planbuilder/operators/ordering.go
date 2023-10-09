@@ -53,13 +53,9 @@ func (o *Ordering) SetInputs(operators []ops.Operator) {
 	o.Source = operators[0]
 }
 
-func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := o.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	o.Source = newSrc
-	return o, nil
+func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	o.Source = o.Source.AddPredicate(ctx, expr)
+	return o
 }
 
 func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {

@@ -518,21 +518,17 @@ func createAlternateRoutesFromVSchemaTable(
 	return routes, nil
 }
 
-func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
 	// first we see if the predicate changes how we route
 	newRouting, err := UpdateRoutingLogic(ctx, expr, r.Routing)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	r.Routing = newRouting
 
 	// we also need to push the predicate down into the query
-	newSrc, err := r.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	r.Source = newSrc
-	return r, err
+	r.Source = r.Source.AddPredicate(ctx, expr)
+	return r
 }
 
 func createProjection(ctx *plancontext.PlanningContext, src ops.Operator) (*Projection, error) {

@@ -61,8 +61,8 @@ func (to *Table) introducesTableID() semantics.TableSet {
 }
 
 // AddPredicate implements the PhysicalOperator interface
-func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	return newFilter(to, expr), nil
+func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	return newFilter(to, expr)
 }
 
 func (to *Table) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) int {

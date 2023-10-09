@@ -47,13 +47,9 @@ func (l *Limit) SetInputs(operators []ops.Operator) {
 	l.Source = operators[0]
 }
 
-func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := l.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	l.Source = newSrc
-	return l, nil
+func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	l.Source = l.Source.AddPredicate(ctx, expr)
+	return l
 }
 
 func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {

@@ -168,13 +168,9 @@ func (sq *SubQuery) ShortDescription() string {
 	return fmt.Sprintf("%s %v%s", typ, sq.FilterType.String(), pred)
 }
 
-func (sq *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newOuter, err := sq.Outer.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	sq.Outer = newOuter
-	return sq, nil
+func (sq *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	sq.Outer = sq.Outer.AddPredicate(ctx, expr)
+	return sq
 }
 
 func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) int {

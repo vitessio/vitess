@@ -42,7 +42,7 @@ type (
 		// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
 		// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
 		// TODO: we should remove this and replace it with rewriters
-		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
+		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator
 
 		AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int
 

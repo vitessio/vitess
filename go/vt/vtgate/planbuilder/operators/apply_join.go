@@ -110,7 +110,7 @@ func (aj *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
 	return &kopy
 }
 
-func (aj *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (aj *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
 	return AddPredicate(ctx, aj, expr, false, newFilter)
 }
 
@@ -156,10 +156,7 @@ func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sql
 		return err
 	}
 	aj.JoinPredicates = append(aj.JoinPredicates, col)
-	rhs, err := aj.RHS.AddPredicate(ctx, col.RHSExpr)
-	if err != nil {
-		return err
-	}
+	rhs := aj.RHS.AddPredicate(ctx, col.RHSExpr)
 	aj.RHS = rhs
 
 	return nil

@@ -133,8 +133,8 @@ func (noColumns) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectE
 }
 
 // AddPredicate implements the Operator interface
-func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (ops.Operator, error) {
-	return nil, vterrors.VT13001("the noColumns operator cannot accept predicates")
+func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) ops.Operator {
+	panic(vterrors.VT13001("the noColumns operator cannot accept predicates"))
 }
 
 // tryTruncateColumnsAt will see if we can truncate the columns by just asking the operator to do it for us

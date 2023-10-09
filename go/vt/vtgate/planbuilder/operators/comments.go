@@ -46,13 +46,9 @@ func (l *LockAndComment) SetInputs(operators []ops.Operator) {
 	l.Source = operators[0]
 }
 
-func (l *LockAndComment) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := l.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	l.Source = newSrc
-	return l, nil
+func (l *LockAndComment) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	l.Source = l.Source.AddPredicate(ctx, expr)
+	return l
 }
 
 func (l *LockAndComment) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {

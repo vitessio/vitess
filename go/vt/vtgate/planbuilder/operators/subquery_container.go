@@ -71,10 +71,9 @@ func (sqc *SubQueryContainer) ShortDescription() string {
 	return ""
 }
 
-func (sqc *SubQueryContainer) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := sqc.Outer.AddPredicate(ctx, expr)
-	sqc.Outer = newSrc
-	return sqc, err
+func (sqc *SubQueryContainer) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	sqc.Outer = sqc.Outer.AddPredicate(ctx, expr)
+	return sqc
 }
 
 func (sqc *SubQueryContainer) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) int {

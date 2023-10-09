@@ -85,12 +85,11 @@ func (h *Horizon) SetInputs(ops []ops.Operator) {
 	h.Source = ops[0]
 }
 
-func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
 	if _, isUNion := h.Source.(*Union); isUNion {
 		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
-		var err error
-		h.Source, err = h.Source.AddPredicate(ctx, expr)
-		return h, err
+		h.Source = h.Source.AddPredicate(ctx, expr)
+		return h
 	}
 	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 	if err != nil {
@@ -98,20 +97,17 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 			return &Filter{
 				Source:     h,
 				Predicates: []sqlparser.Expr{expr},
-			}, nil
+			}
 		}
-		return nil, err
+		panic(err)
 	}
 
 	newExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
 	if sqlparser.ContainsAggregation(newExpr) {
-		return &Filter{Source: h, Predicates: []sqlparser.Expr{expr}}, nil
+		return &Filter{Source: h, Predicates: []sqlparser.Expr{expr}}
 	}
-	h.Source, err = h.Source.AddPredicate(ctx, newExpr)
-	if err != nil {
-		return nil, err
-	}
-	return h, nil
+	h.Source = h.Source.AddPredicate(ctx, newExpr)
+	return h
 }
 
 func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, reuse bool, _ bool, expr *sqlparser.AliasedExpr) int {

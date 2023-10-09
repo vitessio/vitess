@@ -383,14 +383,10 @@ func (p *Projection) SetInputs(operators []ops.Operator) {
 	p.Source = operators[0]
 }
 
-func (p *Projection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (p *Projection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
 	// we just pass through the predicate to our source
-	src, err := p.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	p.Source = src
-	return p, nil
+	p.Source = p.Source.AddPredicate(ctx, expr)
+	return p
 }
 
 func (p *Projection) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
