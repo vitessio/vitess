@@ -89,7 +89,7 @@ func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	return f, nil
 }
 
-func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) (int, error) {
+func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	return f.Source.AddColumn(ctx, reuse, gb, expr)
 }
 

@@ -135,10 +135,10 @@ func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr
 	return -1, nil
 }
 
-func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, groupBy bool, ae *sqlparser.AliasedExpr) (int, error) {
+func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, groupBy bool, ae *sqlparser.AliasedExpr) int {
 	rewritten, err := a.DT.RewriteExpression(ctx, ae.Expr)
 	if err != nil {
-		return 0, err
+		panic(err)
 	}
 
 	ae = &sqlparser.AliasedExpr{
@@ -149,10 +149,10 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 	if reuse {
 		offset, err := a.findColInternal(ctx, ae, groupBy)
 		if err != nil {
-			return 0, err
+			panic(err)
 		}
 		if offset >= 0 {
-			return offset, nil
+			return offset
 		}
 	}
 
@@ -177,16 +177,13 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 
 	offset := len(a.Columns)
 	a.Columns = append(a.Columns, ae)
-	incomingOffset, err := a.Source.AddColumn(ctx, false, groupBy, ae)
-	if err != nil {
-		return 0, err
-	}
+	incomingOffset := a.Source.AddColumn(ctx, false, groupBy, ae)
 
 	if offset != incomingOffset {
-		return 0, errFailedToPlan(ae)
+		panic(errFailedToPlan(ae))
 	}
 
-	return offset, nil
+	return offset
 }
 
 func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
@@ -373,10 +370,7 @@ func (a *Aggregator) addIfAggregationColumn(ctx *plancontext.PlanningContext, co
 		}
 
 		wrap := aeWrap(aggr.getPushColumn())
-		offset, err := a.Source.AddColumn(ctx, false, false, wrap)
-		if err != nil {
-			return 0, err
-		}
+		offset := a.Source.AddColumn(ctx, false, false, wrap)
 		if aggr.ColOffset != offset {
 			return -1, errFailedToPlan(aggr.Original)
 		}
@@ -397,11 +391,7 @@ func (a *Aggregator) addIfGroupingColumn(ctx *plancontext.PlanningContext, colId
 		}
 
 		expr := a.Columns[colIdx]
-		offset, err := a.Source.AddColumn(ctx, false, true, expr)
-		if err != nil {
-			return -1, err
-		}
-
+		offset := a.Source.AddColumn(ctx, false, true, expr)
 		if gb.ColOffset != offset {
 			return -1, errFailedToPlan(expr)
 		}
@@ -451,10 +441,7 @@ func (a *Aggregator) setTruncateColumnCount(offset int) {
 }
 
 func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
-	offset, err := a.Source.AddColumn(ctx, true, addToGroupBy, aliasedExpr)
-	if err != nil {
-		return 0, err
-	}
+	offset := a.Source.AddColumn(ctx, true, addToGroupBy, aliasedExpr)
 
 	if offset == len(a.Columns) {
 		// if we get an offset at the end of our current column list, it means we added a new column

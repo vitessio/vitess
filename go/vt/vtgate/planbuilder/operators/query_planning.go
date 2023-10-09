@@ -269,10 +269,7 @@ func pushProjectionInVindex(
 		return nil, nil, err
 	}
 	for _, pe := range ap {
-		_, err = src.AddColumn(ctx, true, false, aeWrap(pe.EvalExpr))
-		if err != nil {
-			return nil, nil, err
-		}
+		src.AddColumn(ctx, true, false, aeWrap(pe.EvalExpr))
 	}
 	return src, rewrite.NewTree("push projection into vindex", p), nil
 }

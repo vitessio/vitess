@@ -56,7 +56,7 @@ func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return l, nil
 }
 
-func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) (int, error) {
+func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	return l.Source.AddColumn(ctx, reuse, gb, expr)
 }
 

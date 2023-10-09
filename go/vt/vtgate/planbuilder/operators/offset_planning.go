@@ -68,10 +68,7 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Op
 
 	notFound := func(e sqlparser.Expr) error {
 		_, addToGroupBy := e.(*sqlparser.ColName)
-		offset, err := in.AddColumn(ctx, true, addToGroupBy, aeWrap(e))
-		if err != nil {
-			return err
-		}
+		offset := in.AddColumn(ctx, true, addToGroupBy, aeWrap(e))
 		exprOffset = sqlparser.NewOffset(offset, e)
 		return nil
 	}

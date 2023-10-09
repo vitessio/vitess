@@ -44,7 +44,7 @@ type (
 		// TODO: we should remove this and replace it with rewriters
 		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
 
-		AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) (int, error)
+		AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int
 
 		FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error)
 

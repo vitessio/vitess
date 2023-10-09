@@ -77,7 +77,7 @@ func (sqc *SubQueryContainer) AddPredicate(ctx *plancontext.PlanningContext, exp
 	return sqc, err
 }
 
-func (sqc *SubQueryContainer) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) (int, error) {
+func (sqc *SubQueryContainer) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) int {
 	return sqc.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
 }
 

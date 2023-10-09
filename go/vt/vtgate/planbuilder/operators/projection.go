@@ -201,10 +201,7 @@ func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjectio
 		if err != nil {
 			return nil, err
 		}
-		offset, err := p.Source.AddColumn(ctx, true, false, ae)
-		if err != nil {
-			return nil, err
-		}
+		offset := p.Source.AddColumn(ctx, true, false, ae)
 		expr := newProjExpr(ae)
 		expr.Info = Offset(offset)
 		_, err = p.addProjExpr(expr)
@@ -307,8 +304,12 @@ func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, 
 	return offsets, nil
 }
 
-func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) (int, error) {
-	return p.addColumn(ctx, reuse, addToGroupBy, ae, true)
+func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) int {
+	column, err := p.addColumn(ctx, reuse, addToGroupBy, ae, true)
+	if err != nil {
+		panic(err)
+	}
+	return column
 }
 
 func (p *Projection) addColumn(
@@ -355,10 +356,7 @@ func (p *Projection) addColumn(
 	}
 
 	// we need to push down this column to our input
-	inputOffset, err := p.Source.AddColumn(ctx, true, addToGroupBy, ae)
-	if err != nil {
-		return 0, err
-	}
+	inputOffset := p.Source.AddColumn(ctx, true, addToGroupBy, ae)
 
 	pe.Info = Offset(inputOffset) // since we already know the offset, let's save the information
 	return p.addProjExpr(pe)

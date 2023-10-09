@@ -114,22 +114,22 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	return h, nil
 }
 
-func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, reuse bool, _ bool, expr *sqlparser.AliasedExpr) (int, error) {
+func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, reuse bool, _ bool, expr *sqlparser.AliasedExpr) int {
 	if !reuse {
-		return 0, errNoNewColumns
+		panic(errNoNewColumns)
 	}
 	col, ok := expr.Expr.(*sqlparser.ColName)
 	if !ok {
-		return 0, vterrors.VT13001("cannot push non-ColName expression to horizon")
+		panic(vterrors.VT13001("cannot push non-ColName expression to horizon"))
 	}
 	offset, err := h.FindCol(ctx, col, false)
 	if err != nil {
-		return 0, err
+		panic(err)
 	}
 	if offset < 0 {
-		return 0, errNoNewColumns
+		panic(errNoNewColumns)
 	}
-	return offset, nil
+	return offset
 }
 
 var errNoNewColumns = vterrors.VT13001("can't add new columns to Horizon")

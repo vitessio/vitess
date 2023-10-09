@@ -550,16 +550,16 @@ func createProjection(ctx *plancontext.PlanningContext, src ops.Operator) (*Proj
 	return proj, nil
 }
 
-func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) (int, error) {
+func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	removeKeyspaceFromSelectExpr(expr)
 
 	if reuse {
 		offset, err := r.FindCol(ctx, expr.Expr, true)
 		if err != nil {
-			return 0, err
+			panic(err)
 		}
 		if offset != -1 {
-			return offset, nil
+			return offset
 		}
 	}
 
@@ -568,18 +568,18 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 	op, ok, offsets := addMultipleColumnsToInput(ctx, r.Source, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
 	r.Source = op
 	if ok {
-		return offsets[0], nil
+		return offsets[0]
 	}
 
 	// If no-one could be found, we probably don't have one yet, so we add one here
 	src, err := createProjection(ctx, r.Source)
 	if err != nil {
-		return 0, err
+		panic(err)
 	}
 	r.Source = src
 
 	offsets, _ = src.addColumnsWithoutPushing(ctx, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
-	return offsets[0], nil
+	return offsets[0]
 }
 
 type selectExpressions interface {
@@ -712,14 +712,8 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 		if isSpecialOrderBy(order) {
 			continue
 		}
-		offset, err := r.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
-		if err != nil {
-			return err
-		}
+		offset := r.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
 
-		if err != nil {
-			return err
-		}
 		o := RouteOrdering{
 			AST:       order.Inner.Expr,
 			Offset:    offset,
@@ -728,10 +722,7 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 		}
 		if ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
 			ws := weightStringFor(order.SimplifiedExpr)
-			offset, err := r.AddColumn(ctx, true, false, aeWrap(ws))
-			if err != nil {
-				return err
-			}
+			offset := r.AddColumn(ctx, true, false, aeWrap(ws))
 			o.WOffset = offset
 		}
 		r.Ordering = append(r.Ordering, o)

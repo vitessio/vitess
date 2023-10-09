@@ -62,10 +62,7 @@ func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) error {
 	}
 	for _, jc := range columns {
 		for _, lhsExpr := range jc.LHSExprs {
-			offset, err := sq.Outer.AddColumn(ctx, true, false, aeWrap(lhsExpr.Expr))
-			if err != nil {
-				return err
-			}
+			offset := sq.Outer.AddColumn(ctx, true, false, aeWrap(lhsExpr.Expr))
 			sq.Vars[lhsExpr.Name] = offset
 		}
 	}
@@ -180,7 +177,7 @@ func (sq *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparse
 	return sq, nil
 }
 
-func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) (int, error) {
+func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) int {
 	return sq.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
 }
 

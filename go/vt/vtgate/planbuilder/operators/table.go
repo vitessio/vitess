@@ -65,8 +65,8 @@ func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Exp
 	return newFilter(to, expr), nil
 }
 
-func (to *Table) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) (int, error) {
-	return 0, vterrors.VT13001("did not expect this method to be called")
+func (to *Table) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) int {
+	panic(vterrors.VT13001("did not expect this method to be called"))
 }
 
 func (to *Table) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
@@ -111,20 +111,20 @@ func (to *Table) TablesUsed() []string {
 	return SingleQualifiedIdentifier(to.VTable.Keyspace, to.VTable.Name)
 }
 
-func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.Expr) (int, error) {
+func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.Expr) int {
 	col, ok := e.(*sqlparser.ColName)
 	if !ok {
-		return 0, vterrors.VT09018(fmt.Sprintf("cannot add '%s' expression to a table/vindex", sqlparser.String(e)))
+		panic(vterrors.VT09018(fmt.Sprintf("cannot add '%s' expression to a table/vindex", sqlparser.String(e))))
 	}
 	sqlparser.RemoveKeyspaceFromColName(col)
 	cols := op.GetColNames()
 	colAsExpr := func(c *sqlparser.ColName) sqlparser.Expr { return c }
 	if offset, found := canReuseColumn(ctx, cols, e, colAsExpr); found {
-		return offset, nil
+		return offset
 	}
 	offset := len(cols)
 	op.AddCol(col)
-	return offset, nil
+	return offset
 }
 
 func (to *Table) ShortDescription() string {

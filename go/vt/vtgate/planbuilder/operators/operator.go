@@ -58,7 +58,9 @@ type (
 )
 
 // PlanQuery creates a query plan for a given SQL statement
-func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.Operator, error) {
+func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (result ops.Operator, err error) {
+	defer PanicHandler(&err)
+
 	op, err := translateQueryToOp(ctx, stmt)
 	if err != nil {
 		return nil, err
@@ -90,6 +92,17 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.
 	return op, err
 }
 
+func PanicHandler(err *error) {
+	if r := recover(); r != nil {
+		badness, ok := r.(error)
+		if !ok {
+			panic(r)
+		}
+
+		*err = badness
+	}
+}
+
 // Inputs implements the Operator interface
 func (noInputs) Inputs() []ops.Operator {
 	return nil
@@ -103,8 +116,8 @@ func (noInputs) SetInputs(ops []ops.Operator) {
 }
 
 // AddColumn implements the Operator interface
-func (noColumns) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) (int, error) {
-	return 0, vterrors.VT13001("noColumns operators have no column")
+func (noColumns) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) int {
+	panic(vterrors.VT13001("noColumns operators have no column"))
 }
 
 func (noColumns) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {

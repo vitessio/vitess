@@ -55,7 +55,7 @@ func (l *LockAndComment) AddPredicate(ctx *plancontext.PlanningContext, expr sql
 	return l, nil
 }
 
-func (l *LockAndComment) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) (int, error) {
+func (l *LockAndComment) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
 	return l.Source.AddColumn(ctx, reuseExisting, addToGroupBy, expr)
 }
 

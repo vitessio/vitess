@@ -57,10 +57,7 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 		typ, coll, _ := ctx.SemTable.TypeForExpr(e)
 
 		if ctx.SemTable.NeedsWeightString(e) {
-			offset, err := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(e)))
-			if err != nil {
-				return err
-			}
+			offset := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(e)))
 			wsCol = &offset
 		}
 
@@ -102,7 +99,7 @@ func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser
 	return d, nil
 }
 
-func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) (int, error) {
+func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	return d.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
