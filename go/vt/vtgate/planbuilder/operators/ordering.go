@@ -70,7 +70,7 @@ func (o *Ordering) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.Ali
 	return o.Source.GetColumns(ctx)
 }
 
-func (o *Ordering) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (o *Ordering) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return o.Source.GetSelectExprs(ctx)
 }
 

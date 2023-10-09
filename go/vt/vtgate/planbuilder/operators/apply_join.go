@@ -171,7 +171,7 @@ func (aj *ApplyJoin) GetColumns(*plancontext.PlanningContext) []*sqlparser.Alias
 	return slice.Map(aj.JoinColumns, joinColumnToAliasedExpr)
 }
 
-func (aj *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (aj *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return transformColumnsToSelectExprs(ctx, aj)
 }
 

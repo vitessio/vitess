@@ -97,7 +97,7 @@ func (f *Filter) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.Alias
 	return f.Source.GetColumns(ctx)
 }
 
-func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return f.Source.GetSelectExprs(ctx)
 }
 

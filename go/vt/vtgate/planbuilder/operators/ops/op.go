@@ -49,7 +49,7 @@ type (
 		FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int
 
 		GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr
-		GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error)
+		GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs
 
 		ShortDescription() string
 

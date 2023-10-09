@@ -104,7 +104,7 @@ func (d *Distinct) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.Ali
 	return d.Source.GetColumns(ctx)
 }
 
-func (d *Distinct) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (d *Distinct) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return d.Source.GetSelectExprs(ctx)
 }
 

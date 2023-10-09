@@ -88,7 +88,7 @@ func (to *Table) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedEx
 	return slice.Map(to.Columns, colNameToExpr)
 }
 
-func (to *Table) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (to *Table) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return transformColumnsToSelectExprs(ctx, to)
 }
 

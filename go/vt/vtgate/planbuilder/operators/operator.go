@@ -128,8 +128,8 @@ func (noColumns) FindCol(*plancontext.PlanningContext, sqlparser.Expr, bool) int
 	panic(vterrors.VT13001("noColumns operators have no column"))
 }
 
-func (noColumns) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
-	return nil, vterrors.VT13001("noColumns operators have no column")
+func (noColumns) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectExprs {
+	panic(vterrors.VT13001("noColumns operators have no column"))
 }
 
 // AddPredicate implements the Operator interface
@@ -164,10 +164,10 @@ func tryTruncateColumnsAt(op ops.Operator, truncateAt int) bool {
 	}
 }
 
-func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op ops.Operator) (sqlparser.SelectExprs, error) {
+func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op ops.Operator) sqlparser.SelectExprs {
 	columns := op.GetColumns(ctx)
 	selExprs := slice.Map(columns, func(from *sqlparser.AliasedExpr) sqlparser.SelectExpr {
 		return from
 	})
-	return selExprs, nil
+	return selExprs
 }

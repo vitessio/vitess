@@ -97,7 +97,7 @@ func (v *Vindex) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedEx
 	return slice.Map(v.Columns, colNameToExpr)
 }
 
-func (v *Vindex) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (v *Vindex) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return transformColumnsToSelectExprs(ctx, v)
 }
 

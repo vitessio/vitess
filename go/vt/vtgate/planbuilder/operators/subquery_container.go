@@ -88,6 +88,6 @@ func (sqc *SubQueryContainer) GetColumns(ctx *plancontext.PlanningContext) []*sq
 	return sqc.Outer.GetColumns(ctx)
 }
 
-func (sqc *SubQueryContainer) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (sqc *SubQueryContainer) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return sqc.Outer.GetSelectExprs(ctx)
 }

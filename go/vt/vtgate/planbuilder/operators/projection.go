@@ -390,10 +390,10 @@ func (p *Projection) GetColumns(*plancontext.PlanningContext) []*sqlparser.Alias
 	return p.Columns.GetColumns()
 }
 
-func (p *Projection) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (p *Projection) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectExprs {
 	switch cols := p.Columns.(type) {
 	case StarProjections:
-		return sqlparser.SelectExprs(cols), nil
+		return sqlparser.SelectExprs(cols)
 	case AliasedProjections:
 		var output sqlparser.SelectExprs
 		for _, pe := range cols {
@@ -405,7 +405,7 @@ func (p *Projection) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.Sel
 			}
 			output = append(output, ae)
 		}
-		return output, nil
+		return output
 	default:
 		panic("unknown type")
 	}

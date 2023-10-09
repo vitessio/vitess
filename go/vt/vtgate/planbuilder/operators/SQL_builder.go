@@ -477,10 +477,7 @@ func buildProjection(op *Projection, qb *queryBuilder) {
 	_, isSel := qb.stmt.(*sqlparser.Select)
 	if isSel {
 		qb.clearProjections()
-		cols, err := op.GetSelectExprs(qb.ctx)
-		if err != nil {
-			panic(err)
-		}
+		cols := op.GetSelectExprs(qb.ctx)
 		for _, column := range cols {
 			qb.addProjection(column)
 		}
@@ -497,10 +494,7 @@ func buildProjection(op *Projection, qb *queryBuilder) {
 	}
 
 	if !isSel {
-		cols, err := op.GetSelectExprs(qb.ctx)
-		if err != nil {
-			panic(err)
-		}
+		cols := op.GetSelectExprs(qb.ctx)
 		for _, column := range cols {
 			qb.addProjection(column)
 		}

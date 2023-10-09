@@ -171,8 +171,8 @@ func (h *Horizon) GetColumns(ctx *plancontext.PlanningContext) (exprs []*sqlpars
 	return exprs
 }
 
-func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
-	return sqlparser.GetFirstSelect(h.Query).SelectExprs, nil
+func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectExprs {
+	return sqlparser.GetFirstSelect(h.Query).SelectExprs
 }
 
 func (h *Horizon) GetOrdering() []ops.OrderBy {

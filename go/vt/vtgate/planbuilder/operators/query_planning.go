@@ -858,11 +858,7 @@ func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, o
 		return output, nil
 	}
 
-	cols, err := output.GetSelectExprs(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+	cols := output.GetSelectExprs(ctx)
 	sel := sqlparser.GetFirstSelect(horizon.Query)
 	if len(sel.SelectExprs) == len(cols) {
 		return output, nil

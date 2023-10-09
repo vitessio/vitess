@@ -654,7 +654,7 @@ func (r *Route) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.Aliase
 	return r.Source.GetColumns(ctx)
 }
 
-func (r *Route) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (r *Route) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return r.Source.GetSelectExprs(ctx)
 }
 

@@ -185,7 +185,7 @@ func (sq *SubQuery) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.Al
 	return sq.Outer.GetColumns(ctx)
 }
 
-func (sq *SubQuery) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (sq *SubQuery) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return sq.Outer.GetSelectExprs(ctx)
 }
 
