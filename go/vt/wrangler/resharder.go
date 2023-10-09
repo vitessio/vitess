@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/proto/topodata"
+
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
@@ -93,6 +95,17 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 	}
 	if err := rs.createStreams(ctx); err != nil {
 		return vterrors.Wrap(err, "createStreams")
+	}
+
+	wm := &topodata.WorkflowMetadata{
+		Name:         workflow,
+		Type:         "Reshard",
+		TargetShards: targets,
+		SourceShards: sources,
+	}
+	log.Infof("Going to save workflow metadata for workflow %s: %+v", workflow, wm)
+	if err := wr.ts.SaveWorkflowMetadata(ctx, keyspace, wm); err != nil {
+		return err
 	}
 
 	if autoStart {
