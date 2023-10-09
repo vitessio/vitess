@@ -564,10 +564,10 @@ func (p *Projection) needsEvaluation(ctx *plancontext.PlanningContext, e sqlpars
 	return false
 }
 
-func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
+func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	for _, pe := range ap {
@@ -577,10 +577,7 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 
 		// first step is to replace the expressions we expect to get from our input with the offsets for these
-		rewritten, err := useOffsets(ctx, pe.EvalExpr, p)
-		if err != nil {
-			return err
-		}
+		rewritten := useOffsets(ctx, pe.EvalExpr, p)
 		pe.EvalExpr = rewritten
 
 		// if we get a pure offset back. No need to do anything else
@@ -593,15 +590,13 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 		// for everything else, we'll turn to the evalengine
 		eexpr, err := evalengine.Translate(rewritten, nil)
 		if err != nil {
-			return err
+			panic(err)
 		}
 
 		pe.Info = &EvalEngine{
 			EExpr: eexpr,
 		}
 	}
-
-	return nil
 }
 
 func (p *Projection) introducesTableID() semantics.TableSet {

@@ -46,7 +46,7 @@ type (
 	}
 )
 
-func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
+func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) {
 	columns := d.GetColumns(ctx)
 	for idx, col := range columns {
 		e := d.QP.GetSimplifiedExpr(col.Expr)
@@ -65,7 +65,6 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 			Collation: coll,
 		})
 	}
-	return nil
 }
 
 func (d *Distinct) Clone(inputs []ops.Operator) ops.Operator {

@@ -119,27 +119,23 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.A
 	return f, rewrite.NewTree("two filters merged into one", f), nil
 }
 
-func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
+func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) {
 	cfg := &evalengine.Config{
 		ResolveType: ctx.SemTable.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
 	}
 
 	predicate := sqlparser.AndExpressions(f.Predicates...)
-	rewritten, err := useOffsets(ctx, predicate, f)
-	if err != nil {
-		return err
-	}
+	rewritten := useOffsets(ctx, predicate, f)
 	eexpr, err := evalengine.Translate(rewritten, cfg)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), evalengine.ErrTranslateExprNotSupported) {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", evalengine.ErrTranslateExprNotSupported, sqlparser.String(predicate))
+			panic(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", evalengine.ErrTranslateExprNotSupported, sqlparser.String(predicate)))
 		}
-		return err
+		panic(err)
 	}
 
 	f.PredicateWithOffsets = eexpr
-	return nil
 }
 
 func (f *Filter) ShortDescription() string {

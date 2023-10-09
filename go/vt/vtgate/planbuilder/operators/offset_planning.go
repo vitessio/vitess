@@ -30,7 +30,7 @@ import (
 // planOffsets will walk the tree top down, adding offset information to columns in the tree for use in further optimization,
 func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	type offsettable interface {
-		planOffsets(ctx *plancontext.PlanningContext) error
+		planOffsets(ctx *plancontext.PlanningContext)
 	}
 
 	visitor := func(in ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -39,7 +39,7 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 		case *Horizon:
 			return nil, nil, vterrors.VT13001(fmt.Sprintf("should not see %T here", in))
 		case offsettable:
-			err = op.planOffsets(ctx)
+			op.planOffsets(ctx)
 		}
 		if err != nil {
 			return nil, nil, err
@@ -60,7 +60,7 @@ func fetchByOffset(e sqlparser.SQLNode) bool {
 }
 
 // useOffsets rewrites an expression to use values from the input
-func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (sqlparser.Expr, error) {
+func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) sqlparser.Expr {
 	var exprOffset *sqlparser.Offset
 
 	in := op.Inputs()[0]
@@ -85,7 +85,7 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Op
 
 	rewritten := sqlparser.CopyOnRewrite(expr, visitor, up, ctx.SemTable.CopySemanticInfo)
 
-	return rewritten.(sqlparser.Expr), nil
+	return rewritten.(sqlparser.Expr)
 }
 
 // addColumnsToInput adds columns needed by an operator to its input.

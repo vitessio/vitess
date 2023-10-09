@@ -243,14 +243,11 @@ func (aj *ApplyJoin) AddColumn(
 	return offset
 }
 
-func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
+func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) {
 	for _, col := range aj.JoinColumns {
 		// Read the type description for JoinColumn to understand the following code
 		for _, lhsExpr := range col.LHSExprs {
 			offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
-			if err != nil {
-				return err
-			}
 			if col.RHSExpr == nil {
 				// if we don't have an RHS expr, it means that this is a pure LHS expression
 				aj.addOffset(-offset - 1)
@@ -269,16 +266,12 @@ func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 			offset := aj.LHS.AddColumn(ctx, true, false, aeWrap(lhsExpr.Expr))
 			aj.Vars[lhsExpr.Name] = offset
 		}
-		if err != nil {
-			return err
-		}
 	}
 
 	for _, lhsExpr := range aj.ExtraLHSVars {
 		offset := aj.LHS.AddColumn(ctx, true, false, aeWrap(lhsExpr.Expr))
 		aj.Vars[lhsExpr.Name] = offset
 	}
-	return nil
 }
 
 func (aj *ApplyJoin) addOffset(offset int) {
