@@ -4944,9 +4944,9 @@ analyze_statement:
   }
 
 analyze_opt:
-  table_name UPDATE HISTOGRAM ON paren_column_list USING value_expression
+  table_name UPDATE HISTOGRAM ON paren_column_list USING DATA value_expression
   {
-    $$ = &Analyze{Tables: []TableName{$1}, Action: UpdateStr, Columns: $5, Using: $7}
+    $$ = &Analyze{Tables: []TableName{$1}, Action: UpdateStr, Columns: $5, Using: $8}
   }
 | table_name DROP HISTOGRAM ON paren_column_list
   {

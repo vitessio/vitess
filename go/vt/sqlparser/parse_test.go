@@ -1681,14 +1681,14 @@ var (
 			input:  "analyze table a, b, c",
 			output: "analyze table a, b, c",
 		}, {
-			input:  "analyze table a update histogram on (x, y) using '{\"buckets\": [[0,10],[10,20]]}'",
-			output: "analyze table a update histogram on (x, y) using '{\\\"buckets\\\": [[0,10],[10,20]]}'",
+			input:  "analyze table a update histogram on (x, y) using data '{\"buckets\": [[0,10],[10,20]]}'",
+			output: "analyze table a update histogram on (x, y) using data '{\\\"buckets\\\": [[0,10],[10,20]]}'",
 		}, {
 			input:  "analyze table a drop histogram on (x, y)",
 			output: "analyze table a drop histogram on (x, y)",
 		}, {
-			input:  "analyze table a update histogram on x, y using '{\"buckets\": [[0,10],[10,20]]}'",
-			output: "analyze table a update histogram on (x, y) using '{\\\"buckets\\\": [[0,10],[10,20]]}'",
+			input:  "analyze table a update histogram on x, y using data '{\"buckets\": [[0,10],[10,20]]}'",
+			output: "analyze table a update histogram on (x, y) using data '{\\\"buckets\\\": [[0,10],[10,20]]}'",
 		}, {
 			input:  "analyze table a drop histogram on x, y",
 			output: "analyze table a drop histogram on (x, y)",

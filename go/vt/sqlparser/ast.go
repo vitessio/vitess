@@ -7021,7 +7021,7 @@ func (node *Analyze) walkSubtree(visit Visit) error {
 func (node *Analyze) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case UpdateStr:
-		buf.Myprintf("analyze table %v update histogram on %v using %v", node.Tables, node.Columns, node.Using)
+		buf.Myprintf("analyze table %v update histogram on %v using data %v", node.Tables, node.Columns, node.Using)
 	case DropStr:
 		buf.Myprintf("analyze table %v drop histogram on %v", node.Tables, node.Columns)
 	default:
