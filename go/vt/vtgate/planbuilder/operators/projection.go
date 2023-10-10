@@ -288,8 +288,12 @@ func (p *Projection) addSubqueryExpr(ae *sqlparser.AliasedExpr, expr sqlparser.E
 	return err
 }
 
-func (p *Projection) addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _ bool) (int, error) {
-	return p.addColumn(ctx, true, false, expr, false)
+func (p *Projection) addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _ bool) int {
+	column, err := p.addColumn(ctx, true, false, expr, false)
+	if err != nil {
+		panic(err)
+	}
+	return column
 }
 
 func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, _ []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {

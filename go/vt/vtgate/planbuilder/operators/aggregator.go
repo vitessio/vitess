@@ -87,7 +87,7 @@ func (a *Aggregator) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser
 	}
 }
 
-func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
+func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
 	offset := len(a.Columns)
 	a.Columns = append(a.Columns, expr)
 
@@ -106,15 +106,12 @@ func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, e
 		aggr.ColOffset = offset
 		a.Aggregations = append(a.Aggregations, aggr)
 	}
-	return offset, nil
+	return offset
 }
 
 func (a *Aggregator) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, groupby []bool, exprs []*sqlparser.AliasedExpr) (offsets []int, err error) {
 	for i, ae := range exprs {
-		offset, err := a.addColumnWithoutPushing(ctx, ae, groupby[i])
-		if err != nil {
-			return nil, err
-		}
+		offset := a.addColumnWithoutPushing(ctx, ae, groupby[i])
 		offsets = append(offsets, offset)
 	}
 	return
