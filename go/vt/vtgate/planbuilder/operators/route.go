@@ -568,14 +568,14 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 	}
 	r.Source = src
 
-	offsets, _ = src.addColumnsWithoutPushing(ctx, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
+	offsets = src.addColumnsWithoutPushing(ctx, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
 	return offsets[0]
 }
 
 type selectExpressions interface {
 	ops.Operator
 	addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int
-	addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error)
+	addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) []int
 	isDerived() bool
 }
 
@@ -625,7 +625,7 @@ func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Op
 			// we have to add a new projection and can't build on this one
 			return op, false, nil
 		}
-		offset, _ := op.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs)
+		offset := op.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs)
 		return op, true, offset
 
 	case *Union:

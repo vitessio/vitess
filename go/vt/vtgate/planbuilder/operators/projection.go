@@ -296,16 +296,16 @@ func (p *Projection) addColumnWithoutPushing(ctx *plancontext.PlanningContext, e
 	return column
 }
 
-func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, _ []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, _ []bool, exprs []*sqlparser.AliasedExpr) []int {
 	offsets := make([]int, len(exprs))
 	for idx, expr := range exprs {
 		offset, err := p.addColumn(ctx, reuse, false, expr, false)
 		if err != nil {
-			return nil, err
+			panic(err)
 		}
 		offsets[idx] = offset
 	}
-	return offsets, nil
+	return offsets
 }
 
 func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) int {
