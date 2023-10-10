@@ -30,6 +30,14 @@ const (
 	jsonPrefix = ""
 )
 
+var DefaultMarshalOptions = protojson.MarshalOptions{
+	Multiline:       true,
+	Indent:          jsonIndent,
+	UseEnumNumbers:  false,
+	UseProtoNames:   true,
+	EmitUnpopulated: true, // Can be set to false via the --compact flag
+}
+
 // MarshalJSON marshals obj to a JSON string. It uses the jsonpb marshaler for
 // proto.Message types, with some sensible defaults, and falls back to the
 // standard Go marshaler otherwise. In both cases, the marshaled JSON is
@@ -39,16 +47,19 @@ const (
 // either by being a proto message type or by anonymously embedding one, so for
 // other types that may have nested struct fields, we still use the standard Go
 // marshaler, which will result in different formattings.
-func MarshalJSON(obj any) ([]byte, error) {
+func MarshalJSON(obj any, marshalOptions ...protojson.MarshalOptions) ([]byte, error) {
 	switch obj := obj.(type) {
 	case proto.Message:
-		m := protojson.MarshalOptions{
-			Multiline:       true,
-			Indent:          jsonIndent,
-			UseEnumNumbers:  true,
-			UseProtoNames:   true,
-			EmitUnpopulated: true,
+		m := DefaultMarshalOptions
+		switch len(marshalOptions) {
+		case 0: // Use default
+		case 1: // Use provided one
+			m = marshalOptions[0]
+		default:
+			return nil, fmt.Errorf("there should only be one optional MarshalJSON value but we had %d",
+				len(marshalOptions))
 		}
+
 		return m.Marshal(obj)
 	default:
 		data, err := json.MarshalIndent(obj, jsonPrefix, jsonIndent)
@@ -60,25 +71,10 @@ func MarshalJSON(obj any) ([]byte, error) {
 	}
 }
 
-// MarshalJSONPretty works the same as MarshalJSON but elides zero value
-// elements and uses ENUM names instead of numbers.
+// MarshalJSONPretty works the same as MarshalJSON but uses ENUM names
+// instead of numbers.
 func MarshalJSONPretty(obj any) ([]byte, error) {
-	switch obj := obj.(type) {
-	case proto.Message:
-		m := protojson.MarshalOptions{
-			Multiline:       true,
-			Indent:          jsonIndent,
-			UseEnumNumbers:  false,
-			UseProtoNames:   true,
-			EmitUnpopulated: false, // elide zero value elements
-		}
-		return m.Marshal(obj)
-	default:
-		data, err := json.MarshalIndent(obj, jsonPrefix, jsonIndent)
-		if err != nil {
-			return nil, fmt.Errorf("json.Marshal = %v", err)
-		}
-
-		return data, nil
-	}
+	marshalOptions := DefaultMarshalOptions
+	marshalOptions.UseEnumNumbers = false
+	return MarshalJSON(obj, marshalOptions)
 }
