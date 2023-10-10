@@ -267,20 +267,14 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) {
 
 	for idx, gb := range a.Grouping {
 		if gb.ColOffset == -1 {
-			offset, err := a.internalAddColumn(ctx, aeWrap(gb.Inner), false)
-			if err != nil {
-				panic(err)
-			}
+			offset := a.internalAddColumn(ctx, aeWrap(gb.Inner), false)
 			a.Grouping[idx].ColOffset = offset
 		}
 		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.SimplifiedExpr) {
 			continue
 		}
 
-		offset, err := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.SimplifiedExpr)), true)
-		if err != nil {
-			panic(err)
-		}
+		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.SimplifiedExpr)), true)
 		a.Grouping[idx].WSOffset = offset
 	}
 
@@ -288,10 +282,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) {
 		if !aggr.NeedsWeightString(ctx) {
 			continue
 		}
-		offset, err := a.internalAddColumn(ctx, aeWrap(weightStringFor(aggr.Func.GetArg())), true)
-		if err != nil {
-			panic(err)
-		}
+		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(aggr.Func.GetArg())), true)
 		a.Aggregations[idx].WSOffset = offset
 	}
 }
@@ -316,18 +307,12 @@ func (a *Aggregator) planOffsetsNotPushed(ctx *plancontext.PlanningContext) {
 	a.Source = newAliasedProjection(a.Source)
 	// we need to keep things in the column order, so we can't iterate over the aggregations or groupings
 	for colIdx := range a.Columns {
-		idx, err := a.addIfGroupingColumn(ctx, colIdx)
-		if err != nil {
-			panic(err)
-		}
+		idx := a.addIfGroupingColumn(ctx, colIdx)
 		if idx >= 0 {
 			continue
 		}
 
-		idx, err = a.addIfAggregationColumn(ctx, colIdx)
-		if err != nil {
-			panic(err)
-		}
+		idx = a.addIfAggregationColumn(ctx, colIdx)
 
 		if idx < 0 {
 			panic(vterrors.VT13001("failed to find the corresponding column"))
@@ -337,7 +322,7 @@ func (a *Aggregator) planOffsetsNotPushed(ctx *plancontext.PlanningContext) {
 	a.pushRemainingGroupingColumnsAndWeightStrings(ctx)
 }
 
-func (a *Aggregator) addIfAggregationColumn(ctx *plancontext.PlanningContext, colIdx int) (int, error) {
+func (a *Aggregator) addIfAggregationColumn(ctx *plancontext.PlanningContext, colIdx int) int {
 	for _, aggr := range a.Aggregations {
 		if aggr.ColOffset != colIdx {
 			continue
@@ -346,19 +331,19 @@ func (a *Aggregator) addIfAggregationColumn(ctx *plancontext.PlanningContext, co
 		wrap := aeWrap(aggr.getPushColumn())
 		offset := a.Source.AddColumn(ctx, false, false, wrap)
 		if aggr.ColOffset != offset {
-			return -1, errFailedToPlan(aggr.Original)
+			panic(errFailedToPlan(aggr.Original))
 		}
 
-		return offset, nil
+		return offset
 	}
-	return -1, nil
+	return -1
 }
 
 func errFailedToPlan(original *sqlparser.AliasedExpr) *vterrors.VitessError {
 	return vterrors.VT12001(fmt.Sprintf("failed to plan aggregation on: %s", sqlparser.String(original)))
 }
 
-func (a *Aggregator) addIfGroupingColumn(ctx *plancontext.PlanningContext, colIdx int) (int, error) {
+func (a *Aggregator) addIfGroupingColumn(ctx *plancontext.PlanningContext, colIdx int) int {
 	for _, gb := range a.Grouping {
 		if gb.ColOffset != colIdx {
 			continue
@@ -367,22 +352,19 @@ func (a *Aggregator) addIfGroupingColumn(ctx *plancontext.PlanningContext, colId
 		expr := a.Columns[colIdx]
 		offset := a.Source.AddColumn(ctx, false, true, expr)
 		if gb.ColOffset != offset {
-			return -1, errFailedToPlan(expr)
+			panic(errFailedToPlan(expr))
 		}
 
-		return offset, nil
+		return offset
 	}
-	return -1, nil
+	return -1
 }
 
 // pushRemainingGroupingColumnsAndWeightStrings pushes any grouping column that is not part of the columns list and weight strings needed for performing grouping aggregations.
 func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *plancontext.PlanningContext) {
 	for idx, gb := range a.Grouping {
 		if gb.ColOffset == -1 {
-			offset, err := a.internalAddColumn(ctx, aeWrap(gb.Inner), false)
-			if err != nil {
-				panic(err)
-			}
+			offset := a.internalAddColumn(ctx, aeWrap(gb.Inner), false)
 			a.Grouping[idx].ColOffset = offset
 		}
 
@@ -390,10 +372,7 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 			continue
 		}
 
-		offset, err := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.SimplifiedExpr)), false)
-		if err != nil {
-			panic(err)
-		}
+		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.SimplifiedExpr)), false)
 		a.Grouping[idx].WSOffset = offset
 	}
 	for idx, aggr := range a.Aggregations {
@@ -401,10 +380,7 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 			continue
 		}
 
-		offset, err := a.internalAddColumn(ctx, aeWrap(weightStringFor(aggr.Func.GetArg())), false)
-		if err != nil {
-			panic(err)
-		}
+		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(aggr.Func.GetArg())), false)
 		a.Aggregations[idx].WSOffset = offset
 	}
 }
@@ -413,14 +389,14 @@ func (a *Aggregator) setTruncateColumnCount(offset int) {
 	a.ResultColumns = offset
 }
 
-func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
+func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) int {
 	offset := a.Source.AddColumn(ctx, true, addToGroupBy, aliasedExpr)
 
 	if offset == len(a.Columns) {
 		// if we get an offset at the end of our current column list, it means we added a new column
 		a.Columns = append(a.Columns, aliasedExpr)
 	}
-	return offset, nil
+	return offset
 }
 
 // SplitAggregatorBelowRoute returns the aggregator that will live under the Route.
