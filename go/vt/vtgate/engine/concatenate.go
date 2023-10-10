@@ -24,6 +24,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // Concatenate Primitive is used to concatenate results from multiple sources.
@@ -309,21 +310,32 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 
 // GetFields fetches the field info.
 func (c *Concatenate) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	// TODO: type coercions
 	res, err := c.Sources[0].GetFields(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
+
+	columns := make([][]sqltypes.Type, len(res.Fields))
+
+	addFields := func(fields []*querypb.Field) {
+		for idx, field := range fields {
+			columns[idx] = append(columns[idx], field.Type)
+		}
+	}
+
+	addFields(res.Fields)
 
 	for i := 1; i < len(c.Sources); i++ {
 		result, err := c.Sources[i].GetFields(ctx, vcursor, bindVars)
 		if err != nil {
 			return nil, err
 		}
-		err = c.compareFields(res.Fields, result.Fields)
-		if err != nil {
-			return nil, err
-		}
+		addFields(result.Fields)
+	}
+
+	// The resulting column types need to be the coercion of all the input columns
+	for colIdx, t := range columns {
+		res.Fields[colIdx].Type = evalengine.AggregateTypes(t)
 	}
 
 	return res, nil

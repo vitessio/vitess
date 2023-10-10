@@ -18,6 +18,7 @@ package operators
 
 import (
 	"slices"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 )
@@ -96,7 +97,7 @@ func (fkc *FkCascade) Clone(inputs []ops.Operator) ops.Operator {
 }
 
 // GetOrdering implements the Operator interface
-func (fkc *FkCascade) GetOrdering() []ops.OrderBy {
+func (fkc *FkCascade) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
 	return nil
 }
 

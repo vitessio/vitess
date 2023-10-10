@@ -92,7 +92,7 @@ func (to *Table) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.Sele
 	return transformColumnsToSelectExprs(ctx, to)
 }
 
-func (to *Table) GetOrdering() []ops.OrderBy {
+func (to *Table) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
 	return nil
 }
 

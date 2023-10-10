@@ -96,7 +96,7 @@ func (i *Insert) ShortDescription() string {
 	return i.VTable.String()
 }
 
-func (i *Insert) GetOrdering() []ops.OrderBy {
+func (i *Insert) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
 	return nil
 }
 

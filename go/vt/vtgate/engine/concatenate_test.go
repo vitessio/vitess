@@ -19,8 +19,11 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -155,4 +158,36 @@ func TestConcatenate_WithErrors(t *testing.T) {
 	require.EqualError(t, err, strFailed)
 	_, err = wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
 	require.EqualError(t, err, strFailed)
+}
+
+func TestConcatenateTypes(t *testing.T) {
+	tests := []struct {
+		t1, t2, expected string
+	}{
+		{t1: "int32", t2: "int64", expected: "int64"},
+		{t1: "int32", t2: "int32", expected: "int32"},
+		{t1: "int32", t2: "varchar", expected: "varchar"},
+		{t1: "int32", t2: "decimal", expected: "decimal"},
+		{t1: "hexval", t2: "uint64", expected: "varchar"},
+	}
+
+	for _, test := range tests {
+		name := fmt.Sprintf("%s - %s", test.t1, test.t2)
+		t.Run(name, func(t *testing.T) {
+			in1 := r("id", test.t1, "1")
+			in2 := r("id", test.t2, "1")
+			concatenate := NewConcatenate(
+				[]Primitive{
+					&fakePrimitive{results: []*sqltypes.Result{in1}},
+					&fakePrimitive{results: []*sqltypes.Result{in2}},
+				}, nil,
+			)
+
+			res, err := concatenate.GetFields(context.Background(), &noopVCursor{}, nil)
+			require.NoError(t, err)
+
+			expected := fmt.Sprintf(`[name:"id" type:%s]`, test.expected)
+			assert.Equal(t, expected, strings.ToLower(fmt.Sprintf("%v", res.Fields)))
+		})
+	}
 }
