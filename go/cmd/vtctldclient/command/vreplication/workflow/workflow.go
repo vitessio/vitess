@@ -40,6 +40,10 @@ var (
 		Keyspace string
 		Workflow string
 	}{}
+
+	workflowShowOptions = struct {
+		IncludeLogs bool
+	}{}
 )
 
 func registerCommands(root *cobra.Command) {
@@ -47,6 +51,7 @@ func registerCommands(root *cobra.Command) {
 	base.MarkPersistentFlagRequired("keyspace")
 	root.AddCommand(base)
 
+	getWorkflows.Flags().BoolVar(&workflowShowOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflows.")
 	getWorkflows.Flags().BoolVarP(&getWorkflowsOptions.ShowAll, "show-all", "a", false, "Show all workflows instead of just active workflows.")
 	root.AddCommand(getWorkflows) // Yes this is supposed to be root as GetWorkflows is a top-level command.
 
@@ -60,6 +65,7 @@ func registerCommands(root *cobra.Command) {
 
 	show.Flags().StringVarP(&baseOptions.Workflow, "workflow", "w", "", "The workflow you want the details for.")
 	show.MarkFlagRequired("workflow")
+	show.Flags().BoolVar(&workflowShowOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflow.")
 	base.AddCommand(show)
 
 	start.Flags().StringVarP(&baseOptions.Workflow, "workflow", "w", "", "The workflow you want to start.")

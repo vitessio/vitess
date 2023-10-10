@@ -47,8 +47,9 @@ func commandGetWorkflows(cmd *cobra.Command, args []string) error {
 	ks := cmd.Flags().Arg(0)
 
 	resp, err := common.GetClient().GetWorkflows(common.GetCommandCtx(), &vtctldatapb.GetWorkflowsRequest{
-		Keyspace:   ks,
-		ActiveOnly: !getWorkflowsOptions.ShowAll,
+		Keyspace:    ks,
+		ActiveOnly:  !getWorkflowsOptions.ShowAll,
+		IncludeLogs: workflowShowOptions.IncludeLogs,
 	})
 
 	if err != nil {

@@ -731,8 +731,9 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 			}
 
 			resp, err := c.Vtctld.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
-				Keyspace:   ks,
-				ActiveOnly: opts.ActiveOnly,
+				Keyspace:    ks,
+				ActiveOnly:  opts.ActiveOnly,
+				IncludeLogs: true,
 			})
 			c.workflowReadPool.Release()
 

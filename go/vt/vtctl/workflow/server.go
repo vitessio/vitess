@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -336,10 +337,11 @@ func (s *Server) GetCellsWithTableReadsSwitched(
 	return cellsSwitched, cellsNotSwitched, nil
 }
 
-func (s *Server) GetWorkflow(ctx context.Context, keyspace, workflow string) (*vtctldatapb.Workflow, error) {
+func (s *Server) GetWorkflow(ctx context.Context, keyspace, workflow string, includeLogs bool) (*vtctldatapb.Workflow, error) {
 	res, err := s.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
-		Keyspace: keyspace,
-		Workflow: workflow,
+		Keyspace:    keyspace,
+		Workflow:    workflow,
+		IncludeLogs: includeLogs,
 	})
 	if err != nil {
 		return nil, err
@@ -364,6 +366,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("active_only", req.ActiveOnly)
+	span.Annotate("include_logs", req.IncludeLogs)
 
 	where := ""
 	predicates := []string{}
@@ -444,7 +447,22 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			return err
 		}
 
-		pos := row["pos"].ToString()
+		// The value in the pos column can be compressed and thus not
+		// have a valid GTID consisting of valid UTF-8 characters so we
+		// have to decode it so that it's properly decompressed first
+		// when needed.
+		pos, err := row.ToString("pos")
+		if err != nil {
+			return err
+		}
+		if pos != "" {
+			mpos, err := binlogplayer.DecodePosition(pos)
+			if err != nil {
+				return err
+			}
+			pos = mpos.String()
+		}
+
 		stopPos := row["stop_pos"].ToString()
 		state := row["state"].ToString()
 		dbName := row["db_name"].ToString()
@@ -627,6 +645,7 @@ SELECT
 	count
 FROM
 	_vt.vreplication_log
+WHERE vrepl_id IN %a
 ORDER BY
 	vrepl_id ASC,
 	id ASC
@@ -634,13 +653,29 @@ ORDER BY
 	)
 
 	fetchStreamLogs := func(ctx context.Context, workflow *vtctldatapb.Workflow) {
-		span, ctx := trace.NewSpan(ctx, "workflow.Server.scanWorkflow")
+		span, ctx := trace.NewSpan(ctx, "workflow.Server.fetchStreamLogs")
 		defer span.Finish()
 
 		span.Annotate("keyspace", req.Keyspace)
 		span.Annotate("workflow", workflow.Name)
 
-		results, err := vx.WithWorkflow(workflow.Name).QueryContext(ctx, vrepLogQuery)
+		vreplIDs := make([]int64, 0, len(workflow.ShardStreams))
+		for _, shardStream := range maps.Values(workflow.ShardStreams) {
+			for _, stream := range shardStream.Streams {
+				vreplIDs = append(vreplIDs, stream.Id)
+			}
+		}
+		idsBV, err := sqltypes.BuildBindVariable(vreplIDs)
+		if err != nil {
+			return
+		}
+
+		query, err := sqlparser.ParseAndBind(vrepLogQuery, idsBV)
+		if err != nil {
+			return
+		}
+
+		results, err := vx.WithWorkflow(workflow.Name).QueryContext(ctx, query)
 		if err != nil {
 			// Note that we do not return here. If there are any query results
 			// in the map (i.e. some tablets returned successfully), we will
@@ -800,12 +835,14 @@ ORDER BY
 
 		workflows = append(workflows, workflow)
 
-		// Fetch logs for all streams associated with this workflow in the background.
-		fetchLogsWG.Add(1)
-		go func(ctx context.Context, workflow *vtctldatapb.Workflow) {
-			defer fetchLogsWG.Done()
-			fetchStreamLogs(ctx, workflow)
-		}(ctx, workflow)
+		if req.IncludeLogs {
+			// Fetch logs for all streams associated with this workflow in the background.
+			fetchLogsWG.Add(1)
+			go func(ctx context.Context, workflow *vtctldatapb.Workflow) {
+				defer fetchLogsWG.Done()
+				fetchStreamLogs(ctx, workflow)
+			}(ctx, workflow)
+		}
 	}
 
 	// Wait for all the log fetchers to finish.
@@ -1802,7 +1839,7 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 		}
 	}
 
-	workflow, err := s.GetWorkflow(ctx, req.Keyspace, req.Workflow)
+	workflow, err := s.GetWorkflow(ctx, req.Keyspace, req.Workflow, false)
 	if err != nil {
 		return nil, err
 	}
@@ -3117,7 +3154,7 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 		log.Infof("writes already switched no need to check lag")
 		return "", nil
 	}
-	wf, err := s.GetWorkflow(ctx, state.TargetKeyspace, state.Workflow)
+	wf, err := s.GetWorkflow(ctx, state.TargetKeyspace, state.Workflow, false)
 	if err != nil {
 		return "", err
 	}
