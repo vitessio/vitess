@@ -404,7 +404,7 @@ type Statement interface {
 
 type Statements []Statement
 
-func (*SetOp)  iStatement()            {}
+func (*SetOp) iStatement()             {}
 func (*Select) iStatement()            {}
 func (*Stream) iStatement()            {}
 func (*Insert) iStatement()            {}
@@ -1600,9 +1600,9 @@ type InsertRows interface {
 	SQLNode
 }
 
-func (*Select) iInsertRows() {}
-func (*SetOp) iInsertRows()  {}
-func (Values) iInsertRows()  {}
+func (*Select) iInsertRows()      {}
+func (*SetOp) iInsertRows()       {}
+func (Values) iInsertRows()       {}
 func (*ParenSelect) iInsertRows() {}
 
 // Update represents an UPDATE statement.
@@ -7002,6 +7002,11 @@ func compliantName(in string) string {
 
 type Analyze struct {
 	Tables TableNames
+	// UPDATE or DELETE
+	Action  string
+	Columns Columns
+	// JSON data for stats
+	Using Expr
 }
 
 func (*Analyze) iStatement() {}
@@ -7014,7 +7019,14 @@ func (node *Analyze) walkSubtree(visit Visit) error {
 }
 
 func (node *Analyze) Format(buf *TrackedBuffer) {
-	buf.Myprintf("analyze table %v", node.Tables)
+	switch node.Action {
+	case UpdateStr:
+		buf.Myprintf("analyze table %v update histogram on %v using data %v", node.Tables, node.Columns, node.Using)
+	case DropStr:
+		buf.Myprintf("analyze table %v drop histogram on %v", node.Tables, node.Columns)
+	default:
+		buf.Myprintf("analyze table %v", node.Tables)
+	}
 }
 
 type Prepare struct {

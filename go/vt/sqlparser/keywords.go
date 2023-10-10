@@ -283,6 +283,7 @@ var keywords = map[string]int{
 	"hash":                          HASH,
 	"having":                        HAVING,
 	"high_priority":                 HIGH_PRIORITY,
+	"histogram":                     HISTOGRAM,
 	"history":                       HISTORY,
 	"hosts":                         HOSTS,
 	"hour":                          HOUR,
