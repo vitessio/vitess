@@ -26,7 +26,7 @@ for i in 101 102; do
   echo "Shutting down mysql zone1-$i"
   CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-down.sh
   echo "Removing tablet directory zone1-$i"
-  vtctlclient DeleteTablet -- --allow_primary=true zone1-$i
+  vtctldclient DeleteTablets --allow-primary=true zone1-$i
   rm -Rf $VTDATAROOT/vt_0000000$i
   echo "Starting tablet zone1-$i again"
   CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
@@ -39,7 +39,7 @@ for i in 201 202; do
   echo "Shutting down mysql zone1-$i"
   CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-down.sh
   echo "Removing tablet directory zone1-$i"
-  vtctlclient DeleteTablet -- --allow_primary=true zone1-$i
+  vtctldclient DeleteTablets --allow-primary=true zone1-$i
   rm -Rf $VTDATAROOT/vt_0000000$i
   echo "Starting tablet zone1-$i again"
   CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
@@ -52,7 +52,7 @@ for i in 301 302; do
   echo "Shutting down mysql zone1-$i"
   CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-down.sh
   echo "Removing tablet directory zone1-$i"
-  vtctlclient DeleteTablet -- --allow_primary=true zone1-$i
+  vtctldclient DeleteTablets --allow-primary=true zone1-$i
   rm -Rf $VTDATAROOT/vt_0000000$i
   echo "Starting tablet zone1-$i again"
   CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
