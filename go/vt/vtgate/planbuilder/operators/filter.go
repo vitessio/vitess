@@ -80,32 +80,28 @@ func (f *Filter) UnsolvedPredicates(st *semantics.SemTable) []sqlparser.Expr {
 	return result
 }
 
-func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := f.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	f.Source = newSrc
-	return f, nil
+func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	f.Source = f.Source.AddPredicate(ctx, expr)
+	return f
 }
 
-func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) (int, error) {
+func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	return f.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
-func (f *Filter) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (f *Filter) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return f.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (f *Filter) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (f *Filter) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return f.Source.GetColumns(ctx)
 }
 
-func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return f.Source.GetSelectExprs(ctx)
 }
 
-func (f *Filter) GetOrdering() ([]ops.OrderBy, error) {
+func (f *Filter) GetOrdering() []ops.OrderBy {
 	return f.Source.GetOrdering()
 }
 
@@ -123,27 +119,23 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.A
 	return f, rewrite.NewTree("two filters merged into one", f), nil
 }
 
-func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
+func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) {
 	cfg := &evalengine.Config{
 		ResolveType: ctx.SemTable.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
 	}
 
 	predicate := sqlparser.AndExpressions(f.Predicates...)
-	rewritten, err := useOffsets(ctx, predicate, f)
-	if err != nil {
-		return err
-	}
+	rewritten := useOffsets(ctx, predicate, f)
 	eexpr, err := evalengine.Translate(rewritten, cfg)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), evalengine.ErrTranslateExprNotSupported) {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", evalengine.ErrTranslateExprNotSupported, sqlparser.String(predicate))
+			panic(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", evalengine.ErrTranslateExprNotSupported, sqlparser.String(predicate)))
 		}
-		return err
+		panic(err)
 	}
 
 	f.PredicateWithOffsets = eexpr
-	return nil
 }
 
 func (f *Filter) ShortDescription() string {

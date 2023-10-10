@@ -48,8 +48,8 @@ func (j *Join) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
-func (j *Join) GetOrdering() ([]ops.OrderBy, error) {
-	return nil, nil
+func (j *Join) GetOrdering() []ops.OrderBy {
+	return nil
 }
 
 // Inputs implements the Operator interface
@@ -127,15 +127,12 @@ func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.Join
 		if subq != nil {
 			continue
 		}
-		op, err = op.AddPredicate(ctx, pred)
-		if err != nil {
-			return nil, err
-		}
+		op = op.AddPredicate(ctx, pred)
 	}
 	return sqc.getRootOperator(op), nil
 }
 
-func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
 	return AddPredicate(ctx, j, expr, false, newFilter)
 }
 

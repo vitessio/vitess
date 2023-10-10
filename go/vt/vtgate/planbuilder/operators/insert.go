@@ -96,8 +96,8 @@ func (i *Insert) ShortDescription() string {
 	return i.VTable.String()
 }
 
-func (i *Insert) GetOrdering() ([]ops.OrderBy, error) {
-	return nil, nil
+func (i *Insert) GetOrdering() []ops.OrderBy {
+	return nil
 }
 
 var _ ops.Operator = (*Insert)(nil)
@@ -170,7 +170,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 
 func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.Insert, vTbl *vindexes.Table, routing Routing) (ops.Operator, error) {
 	if _, target := routing.(*TargetedRouting); target {
-		return nil, vterrors.VT12001("INSERT with a target destination")
+		return nil, vterrors.VT09017("INSERT with a target destination is not allowed")
 	}
 
 	insOp := &Insert{

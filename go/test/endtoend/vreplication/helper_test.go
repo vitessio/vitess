@@ -158,10 +158,13 @@ func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow st
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", "--", ksWorkflow, "show")
+		// We don't need log records for this so pass --include-logs=false.
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", keyspace, "show", "--workflow", worfklow, "--include-logs=false")
 		require.NoError(t, err)
-		lag, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
-		require.NoError(t, err)
+		// Confirm that we got no log records back.
+		require.NotEmpty(t, len(gjson.Get(output, "workflows.0.shard_streams.*.streams.0").String()), "workflow %q had no streams listed in the output: %s", ksWorkflow, output)
+		require.Equal(t, 0, len(gjson.Get(output, "workflows.0.shard_streams.*.streams.0.logs").Array()), "workflow %q returned log records when we expected none", ksWorkflow)
+		lag = gjson.Get(output, "workflows.0.max_v_replication_lag").Int()
 		if lag == 0 {
 			return
 		}
@@ -386,7 +389,7 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 			require.NotNil(t, createTable)
 			require.NotNil(t, createTable.GetTableSpec())
 			for _, index := range createTable.GetTableSpec().Indexes {
-				if !index.Info.Primary {
+				if index.Info.Type != sqlparser.IndexTypePrimary {
 					secondaryKeys++
 				}
 			}

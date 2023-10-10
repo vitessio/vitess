@@ -49,7 +49,7 @@ func (sqc *SubQueryContainer) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
-func (sqc *SubQueryContainer) GetOrdering() ([]ops.OrderBy, error) {
+func (sqc *SubQueryContainer) GetOrdering() []ops.OrderBy {
 	return sqc.Outer.GetOrdering()
 }
 
@@ -71,24 +71,23 @@ func (sqc *SubQueryContainer) ShortDescription() string {
 	return ""
 }
 
-func (sqc *SubQueryContainer) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := sqc.Outer.AddPredicate(ctx, expr)
-	sqc.Outer = newSrc
-	return sqc, err
+func (sqc *SubQueryContainer) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	sqc.Outer = sqc.Outer.AddPredicate(ctx, expr)
+	return sqc
 }
 
-func (sqc *SubQueryContainer) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) (int, error) {
+func (sqc *SubQueryContainer) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) int {
 	return sqc.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
 }
 
-func (sqc *SubQueryContainer) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (sqc *SubQueryContainer) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return sqc.Outer.FindCol(ctx, expr, underRoute)
 }
 
-func (sqc *SubQueryContainer) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (sqc *SubQueryContainer) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return sqc.Outer.GetColumns(ctx)
 }
 
-func (sqc *SubQueryContainer) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (sqc *SubQueryContainer) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return sqc.Outer.GetSelectExprs(ctx)
 }

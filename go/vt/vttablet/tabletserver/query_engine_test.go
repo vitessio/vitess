@@ -250,6 +250,77 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 	qe.ClearQueryPlanCache()
 }
 
+func TestStreamQueryPlanCache(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	firstQuery := "select * from test_table_01"
+	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
+	db.AddQuery("select * from test_table_02 where 1 != 1", &sqltypes.Result{})
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	ctx := context.Background()
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+
+	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, false)
+	require.NoError(t, err)
+	require.NotNil(t, firstPlan, "plan should not be nil")
+	assertPlanCacheSize(t, qe, 1)
+	qe.ClearQueryPlanCache()
+}
+
+func TestNoStreamQueryPlanCache(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	firstQuery := "select * from test_table_01"
+	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
+	db.AddQuery("select * from test_table_02 where 1 != 1", &sqltypes.Result{})
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	ctx := context.Background()
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, true)
+	require.NoError(t, err)
+	require.NotNil(t, firstPlan)
+	assertPlanCacheSize(t, qe, 0)
+	qe.ClearQueryPlanCache()
+}
+
+func TestNoStreamQueryPlanCacheDirective(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	firstQuery := "select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_01"
+	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
+	db.AddQuery("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_01 where 1 != 1", &sqltypes.Result{})
+	db.AddQuery("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_02 where 1 != 1", &sqltypes.Result{})
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	ctx := context.Background()
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, false)
+	require.NoError(t, err)
+	require.NotNil(t, firstPlan)
+	assertPlanCacheSize(t, qe, 0)
+	qe.ClearQueryPlanCache()
+}
+
 func TestStatsURL(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()

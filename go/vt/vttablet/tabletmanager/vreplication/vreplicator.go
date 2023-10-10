@@ -657,7 +657,7 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 			//   to each record.
 			// - You can not add/remove multiple fulltext keys
 			//   in a single ALTER statement.
-			if secondaryKey.Info.Primary || secondaryKey.Info.Fulltext {
+			if secondaryKey.Info.Type == sqlparser.IndexTypePrimary || secondaryKey.Info.Type == sqlparser.IndexTypeFullText {
 				continue
 			}
 			alterDrop.AlterOptions = append(alterDrop.AlterOptions,
@@ -740,7 +740,7 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 	}
 
 	for _, index := range createTable.GetTableSpec().Indexes {
-		if !index.Info.Primary {
+		if index.Info.Type != sqlparser.IndexTypePrimary {
 			secondaryKeys = append(secondaryKeys, index)
 		}
 	}

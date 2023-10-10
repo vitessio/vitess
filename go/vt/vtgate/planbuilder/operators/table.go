@@ -61,39 +61,39 @@ func (to *Table) introducesTableID() semantics.TableSet {
 }
 
 // AddPredicate implements the PhysicalOperator interface
-func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	return newFilter(to, expr), nil
+func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	return newFilter(to, expr)
 }
 
-func (to *Table) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) (int, error) {
-	return 0, vterrors.VT13001("did not expect this method to be called")
+func (to *Table) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) int {
+	panic(vterrors.VT13001("did not expect this method to be called"))
 }
 
-func (to *Table) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (to *Table) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	colToFind, ok := expr.(*sqlparser.ColName)
 	if !ok {
-		return -1, nil
+		return -1
 	}
 
 	for idx, colName := range to.Columns {
 		if colName.Name.Equal(colToFind.Name) {
-			return idx, nil
+			return idx
 		}
 	}
 
-	return -1, nil
+	return -1
 }
 
-func (to *Table) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
-	return slice.Map(to.Columns, colNameToExpr), nil
+func (to *Table) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	return slice.Map(to.Columns, colNameToExpr)
 }
 
-func (to *Table) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (to *Table) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return transformColumnsToSelectExprs(ctx, to)
 }
 
-func (to *Table) GetOrdering() ([]ops.OrderBy, error) {
-	return nil, nil
+func (to *Table) GetOrdering() []ops.OrderBy {
+	return nil
 }
 
 func (to *Table) GetColNames() []*sqlparser.ColName {
@@ -111,20 +111,20 @@ func (to *Table) TablesUsed() []string {
 	return SingleQualifiedIdentifier(to.VTable.Keyspace, to.VTable.Name)
 }
 
-func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.Expr) (int, error) {
+func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.Expr) int {
 	col, ok := e.(*sqlparser.ColName)
 	if !ok {
-		return 0, vterrors.VT12001(fmt.Sprintf("cannot add '%s' expression to a table/vindex", sqlparser.String(e)))
+		panic(vterrors.VT09018(fmt.Sprintf("cannot add '%s' expression to a table/vindex", sqlparser.String(e))))
 	}
 	sqlparser.RemoveKeyspaceFromColName(col)
 	cols := op.GetColNames()
 	colAsExpr := func(c *sqlparser.ColName) sqlparser.Expr { return c }
 	if offset, found := canReuseColumn(ctx, cols, e, colAsExpr); found {
-		return offset, nil
+		return offset
 	}
 	offset := len(cols)
 	op.AddCol(col)
-	return offset, nil
+	return offset
 }
 
 func (to *Table) ShortDescription() string {

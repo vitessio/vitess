@@ -52,6 +52,9 @@ Available Commands:
   GetWorkflows                Gets all vreplication workflows (Reshard, MoveTables, etc) in the given keyspace.
   LegacyVtctlCommand          Invoke a legacy vtctlclient command. Flag parsing is best effort.
   LookupVindex                Perform commands related to creating, backfilling, and externalizing Lookup Vindexes using VReplication workflows.
+  Materialize                 Perform commands related to materializing query results from the source keyspace into tables in the target keyspace.
+  Migrate                     Migrate is used to import data from an external cluster into the current cluster.
+  Mount                       Mount is used to link an external Vitess cluster in order to migrate data from it.
   MoveTables                  Perform commands related to moving tables from a source keyspace to a target keyspace.
   OnlineDDL                   Operates on online DDL (schema migrations).
   PingTablet                  Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.

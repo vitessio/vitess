@@ -169,7 +169,7 @@ func isTableOrSchemaRoutable(cmp *sqlparser.ComparisonExpr) (
 	return false, nil
 }
 
-func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, routingB Routing, m merger, lhsRoute, rhsRoute *Route) (*Route, error) {
+func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, routingB Routing, m merger, lhsRoute, rhsRoute *Route) *Route {
 	// we have already checked type earlier, so this should always be safe
 	isrA := routingA.(*InfoSchemaRouting)
 	isrB := routingB.(*InfoSchemaRouting)
@@ -188,7 +188,7 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 		for k, expr := range isrB.SysTableTableName {
 			if e, found := isrA.SysTableTableName[k]; found && !sqlparser.Equals.Expr(expr, e) {
 				// schema names are the same, but we have contradicting table names, so we give up
-				return nil, nil
+				return nil
 			}
 			isrA.SysTableTableName[k] = expr
 		}
@@ -203,9 +203,8 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 
 	// give up
 	default:
-		return nil, nil
+		return nil
 	}
-
 }
 
 var (

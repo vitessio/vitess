@@ -56,15 +56,15 @@ func (dt *DerivedTable) String() string {
 	return fmt.Sprintf("DERIVED %s(%s)", dt.Alias, sqlparser.String(dt.Columns))
 }
 
-func (dt *DerivedTable) RewriteExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (sqlparser.Expr, error) {
+func (dt *DerivedTable) RewriteExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
 	if dt == nil {
-		return expr, nil
+		return expr
 	}
 	tableInfo, err := ctx.SemTable.TableInfoFor(dt.TableID)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	return semantics.RewriteDerivedTableExpression(expr, tableInfo), nil
+	return semantics.RewriteDerivedTableExpression(expr, tableInfo)
 }
 
 func (dt *DerivedTable) introducesTableID() semantics.TableSet {
@@ -77,7 +77,7 @@ func (dt *DerivedTable) introducesTableID() semantics.TableSet {
 type (
 	// ProjCols is used to enable projections that are only valid if we can push them into a route, and we never need to ask it about offsets
 	ProjCols interface {
-		GetColumns() ([]*sqlparser.AliasedExpr, error)
+		GetColumns() []*sqlparser.AliasedExpr
 		GetSelectExprs() sqlparser.SelectExprs
 		AddColumn(*sqlparser.AliasedExpr) (ProjCols, int, error)
 	}
@@ -135,8 +135,8 @@ func newAliasedProjection(src ops.Operator) *Projection {
 	}
 }
 
-func (sp StarProjections) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return nil, vterrors.VT09015()
+func (sp StarProjections) GetColumns() []*sqlparser.AliasedExpr {
+	panic(vterrors.VT09015())
 }
 
 func (sp StarProjections) AddColumn(*sqlparser.AliasedExpr) (ProjCols, int, error) {
@@ -147,10 +147,10 @@ func (sp StarProjections) GetSelectExprs() sqlparser.SelectExprs {
 	return sqlparser.SelectExprs(sp)
 }
 
-func (ap AliasedProjections) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+func (ap AliasedProjections) GetColumns() []*sqlparser.AliasedExpr {
 	return slice.Map(ap, func(from *ProjExpr) *sqlparser.AliasedExpr {
 		return aeWrap(from.ColExpr)
-	}), nil
+	})
 }
 
 func (ap AliasedProjections) GetSelectExprs() sqlparser.SelectExprs {
@@ -201,10 +201,7 @@ func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjectio
 		if err != nil {
 			return nil, err
 		}
-		offset, err := p.Source.AddColumn(ctx, true, false, ae)
-		if err != nil {
-			return nil, err
-		}
+		offset := p.Source.AddColumn(ctx, true, false, ae)
 		expr := newProjExpr(ae)
 		expr.Info = Offset(offset)
 		_, err = p.addProjExpr(expr)
@@ -247,23 +244,23 @@ func (p *Projection) isDerived() bool {
 	return p.DT != nil
 }
 
-func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
-		return 0, err
+		panic(err)
 	}
 
 	if underRoute && p.isDerived() {
-		return -1, nil
+		return -1
 	}
 
 	for offset, pe := range ap {
 		if ctx.SemTable.EqualsExprWithDeps(pe.ColExpr, expr) {
-			return offset, nil
+			return offset
 		}
 	}
 
-	return -1, nil
+	return -1
 }
 
 func (p *Projection) addProjExpr(pe *ProjExpr) (int, error) {
@@ -291,24 +288,32 @@ func (p *Projection) addSubqueryExpr(ae *sqlparser.AliasedExpr, expr sqlparser.E
 	return err
 }
 
-func (p *Projection) addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _ bool) (int, error) {
-	return p.addColumn(ctx, true, false, expr, false)
+func (p *Projection) addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _ bool) int {
+	column, err := p.addColumn(ctx, true, false, expr, false)
+	if err != nil {
+		panic(err)
+	}
+	return column
 }
 
-func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, _ []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, _ []bool, exprs []*sqlparser.AliasedExpr) []int {
 	offsets := make([]int, len(exprs))
 	for idx, expr := range exprs {
 		offset, err := p.addColumn(ctx, reuse, false, expr, false)
 		if err != nil {
-			return nil, err
+			panic(err)
 		}
 		offsets[idx] = offset
 	}
-	return offsets, nil
+	return offsets
 }
 
-func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) (int, error) {
-	return p.addColumn(ctx, reuse, addToGroupBy, ae, true)
+func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) int {
+	column, err := p.addColumn(ctx, reuse, addToGroupBy, ae, true)
+	if err != nil {
+		panic(err)
+	}
+	return column
 }
 
 func (p *Projection) addColumn(
@@ -318,16 +323,10 @@ func (p *Projection) addColumn(
 	ae *sqlparser.AliasedExpr,
 	push bool,
 ) (int, error) {
-	expr, err := p.DT.RewriteExpression(ctx, ae.Expr)
-	if err != nil {
-		return 0, err
-	}
+	expr := p.DT.RewriteExpression(ctx, ae.Expr)
 
 	if reuse {
-		offset, err := p.FindCol(ctx, expr, false)
-		if err != nil {
-			return 0, err
-		}
+		offset := p.FindCol(ctx, expr, false)
 		if offset >= 0 {
 			return offset, nil
 		}
@@ -355,10 +354,7 @@ func (p *Projection) addColumn(
 	}
 
 	// we need to push down this column to our input
-	inputOffset, err := p.Source.AddColumn(ctx, true, addToGroupBy, ae)
-	if err != nil {
-		return 0, err
-	}
+	inputOffset := p.Source.AddColumn(ctx, true, addToGroupBy, ae)
 
 	pe.Info = Offset(inputOffset) // since we already know the offset, let's save the information
 	return p.addProjExpr(pe)
@@ -385,24 +381,20 @@ func (p *Projection) SetInputs(operators []ops.Operator) {
 	p.Source = operators[0]
 }
 
-func (p *Projection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (p *Projection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
 	// we just pass through the predicate to our source
-	src, err := p.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	p.Source = src
-	return p, nil
+	p.Source = p.Source.AddPredicate(ctx, expr)
+	return p
 }
 
-func (p *Projection) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (p *Projection) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return p.Columns.GetColumns()
 }
 
-func (p *Projection) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (p *Projection) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectExprs {
 	switch cols := p.Columns.(type) {
 	case StarProjections:
-		return sqlparser.SelectExprs(cols), nil
+		return sqlparser.SelectExprs(cols)
 	case AliasedProjections:
 		var output sqlparser.SelectExprs
 		for _, pe := range cols {
@@ -414,13 +406,13 @@ func (p *Projection) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.Sel
 			}
 			output = append(output, ae)
 		}
-		return output, nil
+		return output
 	default:
 		panic("unknown type")
 	}
 }
 
-func (p *Projection) GetOrdering() ([]ops.OrderBy, error) {
+func (p *Projection) GetOrdering() []ops.OrderBy {
 	return p.Source.GetOrdering()
 }
 
@@ -544,7 +536,7 @@ func (p *Projection) compactWithRoute(ctx *plancontext.PlanningContext, rb *Rout
 			return p, rewrite.SameTree, nil
 		}
 	}
-	columns, err := rb.GetColumns(ctx)
+	columns := rb.GetColumns(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -573,10 +565,10 @@ func (p *Projection) needsEvaluation(ctx *plancontext.PlanningContext, e sqlpars
 	return false
 }
 
-func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
+func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	for _, pe := range ap {
@@ -586,10 +578,7 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 
 		// first step is to replace the expressions we expect to get from our input with the offsets for these
-		rewritten, err := useOffsets(ctx, pe.EvalExpr, p)
-		if err != nil {
-			return err
-		}
+		rewritten := useOffsets(ctx, pe.EvalExpr, p)
 		pe.EvalExpr = rewritten
 
 		// if we get a pure offset back. No need to do anything else
@@ -602,15 +591,13 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 		// for everything else, we'll turn to the evalengine
 		eexpr, err := evalengine.Translate(rewritten, nil)
 		if err != nil {
-			return err
+			panic(err)
 		}
 
 		pe.Info = &EvalEngine{
 			EExpr: eexpr,
 		}
 	}
-
-	return nil
 }
 
 func (p *Projection) introducesTableID() semantics.TableSet {

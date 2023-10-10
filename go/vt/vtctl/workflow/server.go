@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -336,10 +337,11 @@ func (s *Server) GetCellsWithTableReadsSwitched(
 	return cellsSwitched, cellsNotSwitched, nil
 }
 
-func (s *Server) GetWorkflow(ctx context.Context, keyspace, workflow string) (*vtctldatapb.Workflow, error) {
+func (s *Server) GetWorkflow(ctx context.Context, keyspace, workflow string, includeLogs bool) (*vtctldatapb.Workflow, error) {
 	res, err := s.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
-		Keyspace: keyspace,
-		Workflow: workflow,
+		Keyspace:    keyspace,
+		Workflow:    workflow,
+		IncludeLogs: includeLogs,
 	})
 	if err != nil {
 		return nil, err
@@ -364,6 +366,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("active_only", req.ActiveOnly)
+	span.Annotate("include_logs", req.IncludeLogs)
 
 	where := ""
 	predicates := []string{}
@@ -444,7 +447,22 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			return err
 		}
 
-		pos := row["pos"].ToString()
+		// The value in the pos column can be compressed and thus not
+		// have a valid GTID consisting of valid UTF-8 characters so we
+		// have to decode it so that it's properly decompressed first
+		// when needed.
+		pos, err := row.ToString("pos")
+		if err != nil {
+			return err
+		}
+		if pos != "" {
+			mpos, err := binlogplayer.DecodePosition(pos)
+			if err != nil {
+				return err
+			}
+			pos = mpos.String()
+		}
+
 		stopPos := row["stop_pos"].ToString()
 		state := row["state"].ToString()
 		dbName := row["db_name"].ToString()
@@ -627,6 +645,7 @@ SELECT
 	count
 FROM
 	_vt.vreplication_log
+WHERE vrepl_id IN %a
 ORDER BY
 	vrepl_id ASC,
 	id ASC
@@ -634,13 +653,29 @@ ORDER BY
 	)
 
 	fetchStreamLogs := func(ctx context.Context, workflow *vtctldatapb.Workflow) {
-		span, ctx := trace.NewSpan(ctx, "workflow.Server.scanWorkflow")
+		span, ctx := trace.NewSpan(ctx, "workflow.Server.fetchStreamLogs")
 		defer span.Finish()
 
 		span.Annotate("keyspace", req.Keyspace)
 		span.Annotate("workflow", workflow.Name)
 
-		results, err := vx.WithWorkflow(workflow.Name).QueryContext(ctx, vrepLogQuery)
+		vreplIDs := make([]int64, 0, len(workflow.ShardStreams))
+		for _, shardStream := range maps.Values(workflow.ShardStreams) {
+			for _, stream := range shardStream.Streams {
+				vreplIDs = append(vreplIDs, stream.Id)
+			}
+		}
+		idsBV, err := sqltypes.BuildBindVariable(vreplIDs)
+		if err != nil {
+			return
+		}
+
+		query, err := sqlparser.ParseAndBind(vrepLogQuery, idsBV)
+		if err != nil {
+			return
+		}
+
+		results, err := vx.WithWorkflow(workflow.Name).QueryContext(ctx, query)
 		if err != nil {
 			// Note that we do not return here. If there are any query results
 			// in the map (i.e. some tablets returned successfully), we will
@@ -800,12 +835,14 @@ ORDER BY
 
 		workflows = append(workflows, workflow)
 
-		// Fetch logs for all streams associated with this workflow in the background.
-		fetchLogsWG.Add(1)
-		go func(ctx context.Context, workflow *vtctldatapb.Workflow) {
-			defer fetchLogsWG.Done()
-			fetchStreamLogs(ctx, workflow)
-		}(ctx, workflow)
+		if req.IncludeLogs {
+			// Fetch logs for all streams associated with this workflow in the background.
+			fetchLogsWG.Add(1)
+			go func(ctx context.Context, workflow *vtctldatapb.Workflow) {
+				defer fetchLogsWG.Done()
+				fetchStreamLogs(ctx, workflow)
+			}(ctx, workflow)
+		}
 	}
 
 	// Wait for all the log fetchers to finish.
@@ -846,6 +883,7 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 	// target of the workflow initiated by the user for checking routing rules.
 	// Similarly we use a target shard of the reverse workflow as the original
 	// source to check if writes have been switched.
+
 	if strings.HasSuffix(workflowName, "_reverse") {
 		reverse = true
 		// Flip the source and target keyspaces.
@@ -930,6 +968,9 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 		if !shard.IsPrimaryServing {
 			state.WritesSwitched = true
 		}
+	}
+	if ts.workflowType == binlogdatapb.VReplicationWorkflowType_Migrate {
+		state.WorkflowType = TypeMigrate
 	}
 
 	return ts, state, nil
@@ -1144,6 +1185,12 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 // It passes the embedded TabletRequest object to the given keyspace's
 // target primary tablets that will be executing the workflow.
 func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (res *vtctldatapb.WorkflowStatusResponse, err error) {
+	return s.moveTablesCreate(ctx, req, binlogdatapb.VReplicationWorkflowType_MoveTables)
+}
+
+func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest,
+	workflowType binlogdatapb.VReplicationWorkflowType) (res *vtctldatapb.WorkflowStatusResponse, err error) {
+
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.MoveTablesCreate")
 	defer span.Finish()
 
@@ -1258,11 +1305,12 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		})
 	}
 	mz := &materializer{
-		ctx:      ctx,
-		ts:       s.ts,
-		sourceTs: sourceTopo,
-		tmc:      s.tmc,
-		ms:       ms,
+		ctx:          ctx,
+		ts:           s.ts,
+		sourceTs:     sourceTopo,
+		tmc:          s.tmc,
+		ms:           ms,
+		workflowType: workflowType,
 	}
 	err = mz.createMoveTablesStreams(req)
 	if err != nil {
@@ -1791,7 +1839,7 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 		}
 	}
 
-	workflow, err := s.GetWorkflow(ctx, req.Keyspace, req.Workflow)
+	workflow, err := s.GetWorkflow(ctx, req.Keyspace, req.Workflow, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1991,6 +2039,7 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	span.Annotate("cells", req.TabletRequest.Cells)
 	span.Annotate("tablet_types", req.TabletRequest.TabletTypes)
 	span.Annotate("on_ddl", req.TabletRequest.OnDdl)
+	span.Annotate("state", req.TabletRequest.State)
 
 	vx := vexec.NewVExec(req.Keyspace, req.TabletRequest.Workflow, s.ts, s.tmc)
 	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
@@ -3105,7 +3154,7 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 		log.Infof("writes already switched no need to check lag")
 		return "", nil
 	}
-	wf, err := s.GetWorkflow(ctx, state.TargetKeyspace, state.Workflow)
+	wf, err := s.GetWorkflow(ctx, state.TargetKeyspace, state.Workflow, false)
 	if err != nil {
 		return "", err
 	}
@@ -3620,4 +3669,27 @@ func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (stri
 		}
 	}
 	return "", fmt.Errorf("column %s not found in schema %v", sourceVindexCol, lines)
+}
+
+func (s *Server) MigrateCreate(ctx context.Context, req *vtctldatapb.MigrateCreateRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
+	moveTablesCreateRequest := &vtctldatapb.MoveTablesCreateRequest{
+		Workflow:                  req.Workflow,
+		SourceKeyspace:            req.SourceKeyspace,
+		TargetKeyspace:            req.TargetKeyspace,
+		ExternalClusterName:       req.MountName,
+		Cells:                     req.Cells,
+		TabletTypes:               req.TabletTypes,
+		TabletSelectionPreference: req.TabletSelectionPreference,
+		AllTables:                 req.AllTables,
+		IncludeTables:             req.IncludeTables,
+		ExcludeTables:             req.ExcludeTables,
+		SourceTimeZone:            req.SourceTimeZone,
+		OnDdl:                     req.OnDdl,
+		StopAfterCopy:             req.StopAfterCopy,
+		DeferSecondaryKeys:        req.DeferSecondaryKeys,
+		DropForeignKeys:           req.DropForeignKeys,
+		AutoStart:                 req.AutoStart,
+		NoRoutingRules:            req.NoRoutingRules,
+	}
+	return s.moveTablesCreate(ctx, moveTablesCreateRequest, binlogdatapb.VReplicationWorkflowType_Migrate)
 }

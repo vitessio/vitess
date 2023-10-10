@@ -376,7 +376,7 @@ func findVSchemaTableAndCreateRoute(
 ) (*Route, error) {
 	vschemaTable, _, _, _, target, err := ctx.VSchema.FindTableOrVindex(tableName)
 	if target != nil {
-		return nil, vterrors.VT12001("SELECT with a target destination")
+		return nil, vterrors.VT09017("SELECT with a target destination is not allowed")
 	}
 	if err != nil {
 		return nil, err
@@ -518,29 +518,22 @@ func createAlternateRoutesFromVSchemaTable(
 	return routes, nil
 }
 
-func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
 	// first we see if the predicate changes how we route
 	newRouting, err := UpdateRoutingLogic(ctx, expr, r.Routing)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	r.Routing = newRouting
 
 	// we also need to push the predicate down into the query
-	newSrc, err := r.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	r.Source = newSrc
-	return r, err
+	r.Source = r.Source.AddPredicate(ctx, expr)
+	return r
 }
 
 func createProjection(ctx *plancontext.PlanningContext, src ops.Operator) (*Projection, error) {
 	proj := newAliasedProjection(src)
-	cols, err := src.GetColumns(ctx)
-	if err != nil {
-		return nil, err
-	}
+	cols := src.GetColumns(ctx)
 	for _, col := range cols {
 		_, err := proj.addUnexploredExpr(col, col.Expr)
 		if err != nil {
@@ -550,16 +543,13 @@ func createProjection(ctx *plancontext.PlanningContext, src ops.Operator) (*Proj
 	return proj, nil
 }
 
-func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) (int, error) {
+func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	removeKeyspaceFromSelectExpr(expr)
 
 	if reuse {
-		offset, err := r.FindCol(ctx, expr.Expr, true)
-		if err != nil {
-			return 0, err
-		}
+		offset := r.FindCol(ctx, expr.Expr, true)
 		if offset != -1 {
-			return offset, nil
+			return offset
 		}
 	}
 
@@ -568,24 +558,24 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 	op, ok, offsets := addMultipleColumnsToInput(ctx, r.Source, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
 	r.Source = op
 	if ok {
-		return offsets[0], nil
+		return offsets[0]
 	}
 
 	// If no-one could be found, we probably don't have one yet, so we add one here
 	src, err := createProjection(ctx, r.Source)
 	if err != nil {
-		return 0, err
+		panic(err)
 	}
 	r.Source = src
 
-	offsets, _ = src.addColumnsWithoutPushing(ctx, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
-	return offsets[0], nil
+	offsets = src.addColumnsWithoutPushing(ctx, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
+	return offsets[0]
 }
 
 type selectExpressions interface {
 	ops.Operator
-	addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error)
-	addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error)
+	addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int
+	addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) []int
 	isDerived() bool
 }
 
@@ -635,16 +625,13 @@ func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Op
 			// we have to add a new projection and can't build on this one
 			return op, false, nil
 		}
-		offset, _ := op.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs)
+		offset := op.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs)
 		return op, true, offset
 
 	case *Union:
 		tableID := semantics.SingleTableSet(len(ctx.SemTable.Tables))
 		ctx.SemTable.Tables = append(ctx.SemTable.Tables, nil)
-		unionColumns, err := op.GetColumns(ctx)
-		if err != nil {
-			return op, false, nil
-		}
+		unionColumns := op.GetColumns(ctx)
 		proj := &Projection{
 			Source:  op,
 			Columns: AliasedProjections(slice.Map(unionColumns, newProjExpr)),
@@ -659,19 +646,19 @@ func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Op
 	}
 }
 
-func (r *Route) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) (int, error) {
+func (r *Route) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
 	return r.Source.FindCol(ctx, expr, true)
 }
 
-func (r *Route) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (r *Route) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return r.Source.GetColumns(ctx)
 }
 
-func (r *Route) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (r *Route) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return r.Source.GetSelectExprs(ctx)
 }
 
-func (r *Route) GetOrdering() ([]ops.OrderBy, error) {
+func (r *Route) GetOrdering() []ops.OrderBy {
 	return r.Source.GetOrdering()
 }
 
@@ -695,31 +682,25 @@ func isSpecialOrderBy(o ops.OrderBy) bool {
 	return isFunction && f.Name.Lowered() == "rand"
 }
 
-func (r *Route) planOffsets(ctx *plancontext.PlanningContext) (err error) {
+func (r *Route) planOffsets(ctx *plancontext.PlanningContext) {
 	// if operator is returning data from a single shard, we don't need to do anything more
 	if r.IsSingleShard() {
-		return nil
+		return
 	}
 
 	// if we are getting results from multiple shards, we need to do a merge-sort
 	// between them to get the final output correctly sorted
-	ordering, err := r.Source.GetOrdering()
-	if err != nil || len(ordering) == 0 {
-		return err
+	ordering := r.Source.GetOrdering()
+	if len(ordering) == 0 {
+		return
 	}
 
 	for _, order := range ordering {
 		if isSpecialOrderBy(order) {
 			continue
 		}
-		offset, err := r.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
-		if err != nil {
-			return err
-		}
+		offset := r.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
 
-		if err != nil {
-			return err
-		}
 		o := RouteOrdering{
 			AST:       order.Inner.Expr,
 			Offset:    offset,
@@ -728,16 +709,11 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 		}
 		if ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
 			ws := weightStringFor(order.SimplifiedExpr)
-			offset, err := r.AddColumn(ctx, true, false, aeWrap(ws))
-			if err != nil {
-				return err
-			}
+			offset := r.AddColumn(ctx, true, false, aeWrap(ws))
 			o.WOffset = offset
 		}
 		r.Ordering = append(r.Ordering, o)
 	}
-
-	return nil
 }
 
 func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
@@ -759,11 +735,7 @@ func (r *Route) ShortDescription() string {
 		first += " " + info.extraInfo()
 	}
 
-	orderBy, err := r.Source.GetOrdering()
-	if err != nil {
-		return first
-	}
-
+	orderBy := r.Source.GetOrdering()
 	ordering := ""
 	if len(orderBy) > 0 {
 		var oo []string

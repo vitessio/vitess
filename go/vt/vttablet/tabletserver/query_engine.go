@@ -377,7 +377,7 @@ func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string) (*TabletPla
 	return plan, nil
 }
 
-// GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.
+// GetPlan returns the TabletPlan that for the query. Plans are cached in a theine LRU cache.
 func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetPlan")
 	defer span.Finish()
@@ -401,17 +401,56 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	return plan, err
 }
 
-// GetStreamPlan is similar to GetPlan, but doesn't use the cache
-// and doesn't enforce a limit. It just returns the parsed query.
-func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
-	splan, err := planbuilder.BuildStreaming(sql, qe.schema.Load().tables)
+func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*TabletPlan, error) {
+	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
+
+	splan, err := planbuilder.BuildStreaming(statement, curSchema.tables)
+
+	if err != nil {
+		return nil, err
+	}
+
 	plan := &TabletPlan{Plan: splan, Original: sql}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.buildAuthorized()
+
+	if sqlparser.SkipQueryPlanCacheDirective(statement) {
+		return plan, errNoCache
+	}
+
 	return plan, nil
+}
+
+// GetStreamPlan returns the TabletPlan that for the query. Plans are cached in a theine LRU cache.
+func (qe *QueryEngine) GetStreamPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
+	span, _ := trace.NewSpan(ctx, "QueryEngine.GetStreamPlan")
+	defer span.Finish()
+
+	var plan *TabletPlan
+	var err error
+
+	curSchema := qe.schema.Load()
+
+	if skipQueryPlanCache {
+		plan, err = qe.getStreamPlan(curSchema, sql)
+	} else {
+		plan, logStats.CachedPlan, err = qe.plans.GetOrLoad(PlanCacheKey(qe.getStreamPlanCacheKey(sql)), curSchema.epoch, func() (*TabletPlan, error) {
+			return qe.getStreamPlan(curSchema, sql)
+		})
+	}
+
+	if errors.Is(err, errNoCache) {
+		err = nil
+	}
+	return plan, err
+}
+
+// gets key used to cache stream query plan
+func (qe *QueryEngine) getStreamPlanCacheKey(sql string) string {
+	return "__STREAM__" + sql
 }
 
 // GetMessageStreamPlan builds a plan for Message streaming.

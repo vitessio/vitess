@@ -831,13 +831,21 @@ func (ii *IndexInfo) Format(buf *TrackedBuffer) {
 	if !ii.ConstraintName.IsEmpty() {
 		buf.astPrintf(ii, "constraint %v ", ii.ConstraintName)
 	}
-	if ii.Primary {
-		buf.astPrintf(ii, "%s", ii.Type)
-	} else {
-		buf.astPrintf(ii, "%s", ii.Type)
-		if !ii.Name.IsEmpty() {
-			buf.astPrintf(ii, " %v", ii.Name)
-		}
+	switch ii.Type {
+	case IndexTypePrimary:
+		buf.astPrintf(ii, "%s %s", keywordStrings[PRIMARY], keywordStrings[KEY])
+		return
+	case IndexTypeDefault:
+		buf.astPrintf(ii, "%s", keywordStrings[INDEX])
+	case IndexTypeUnique:
+		buf.astPrintf(ii, "%s %s", keywordStrings[UNIQUE], keywordStrings[INDEX])
+	case IndexTypeSpatial:
+		buf.astPrintf(ii, "%s %s", keywordStrings[SPATIAL], keywordStrings[INDEX])
+	case IndexTypeFullText:
+		buf.astPrintf(ii, "%s %s", keywordStrings[FULLTEXT], keywordStrings[INDEX])
+	}
+	if !ii.Name.IsEmpty() {
+		buf.astPrintf(ii, " %v", ii.Name)
 	}
 }
 

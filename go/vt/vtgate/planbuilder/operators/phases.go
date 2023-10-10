@@ -88,7 +88,7 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Opera
 	case cleanOutPerfDistinct:
 		return removePerformanceDistinctAboveRoute(ctx, op)
 	case subquerySettling:
-		return settleSubqueries(ctx, op)
+		return settleSubqueries(ctx, op), nil
 	}
 
 	return op, nil
@@ -165,10 +165,7 @@ func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) (bool, erro
 	if len(requiredOrder) == 0 {
 		return false, nil
 	}
-	srcOrdering, err := in.Source.GetOrdering()
-	if err != nil {
-		return false, err
-	}
+	srcOrdering := in.Source.GetOrdering()
 	if len(srcOrdering) < len(requiredOrder) {
 		return true, nil
 	}

@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"errors"
 	"slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -85,51 +86,44 @@ func (h *Horizon) SetInputs(ops []ops.Operator) {
 	h.Source = ops[0]
 }
 
-func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
 	if _, isUNion := h.Source.(*Union); isUNion {
 		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
-		var err error
-		h.Source, err = h.Source.AddPredicate(ctx, expr)
-		return h, err
+		h.Source = h.Source.AddPredicate(ctx, expr)
+		return h
 	}
 	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 	if err != nil {
-		if err == semantics.ErrNotSingleTable {
+		if errors.Is(err, semantics.ErrNotSingleTable) {
 			return &Filter{
 				Source:     h,
 				Predicates: []sqlparser.Expr{expr},
-			}, nil
+			}
 		}
-		return nil, err
+		panic(err)
 	}
 
 	newExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
 	if sqlparser.ContainsAggregation(newExpr) {
-		return &Filter{Source: h, Predicates: []sqlparser.Expr{expr}}, nil
+		return &Filter{Source: h, Predicates: []sqlparser.Expr{expr}}
 	}
-	h.Source, err = h.Source.AddPredicate(ctx, newExpr)
-	if err != nil {
-		return nil, err
-	}
-	return h, nil
+	h.Source = h.Source.AddPredicate(ctx, newExpr)
+	return h
 }
 
-func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, reuse bool, _ bool, expr *sqlparser.AliasedExpr) (int, error) {
+func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, reuse bool, _ bool, expr *sqlparser.AliasedExpr) int {
 	if !reuse {
-		return 0, errNoNewColumns
+		panic(errNoNewColumns)
 	}
 	col, ok := expr.Expr.(*sqlparser.ColName)
 	if !ok {
-		return 0, vterrors.VT13001("cannot push non-ColName expression to horizon")
+		panic(vterrors.VT13001("cannot push non-ColName expression to horizon"))
 	}
-	offset, err := h.FindCol(ctx, col, false)
-	if err != nil {
-		return 0, err
-	}
+	offset := h.FindCol(ctx, col, false)
 	if offset < 0 {
-		return 0, errNoNewColumns
+		panic(errNoNewColumns)
 	}
-	return offset, nil
+	return offset
 }
 
 var errNoNewColumns = vterrors.VT13001("can't add new columns to Horizon")
@@ -151,41 +145,41 @@ func canReuseColumn[T any](
 	return
 }
 
-func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) (int, error) {
+func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
 	for idx, se := range sqlparser.GetFirstSelect(h.Query).SelectExprs {
 		ae, ok := se.(*sqlparser.AliasedExpr)
 		if !ok {
-			return 0, vterrors.VT09015()
+			panic(vterrors.VT09015())
 		}
 		if ctx.SemTable.EqualsExprWithDeps(ae.Expr, expr) {
-			return idx, nil
+			return idx
 		}
 	}
 
-	return -1, nil
+	return -1
 }
 
-func (h *Horizon) GetColumns(ctx *plancontext.PlanningContext) (exprs []*sqlparser.AliasedExpr, err error) {
+func (h *Horizon) GetColumns(ctx *plancontext.PlanningContext) (exprs []*sqlparser.AliasedExpr) {
 	for _, expr := range ctx.SemTable.SelectExprs(h.Query) {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil, vterrors.VT09015()
+			panic(vterrors.VT09015())
 		}
 		exprs = append(exprs, ae)
 	}
 
-	return exprs, nil
+	return exprs
 }
 
-func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
-	return sqlparser.GetFirstSelect(h.Query).SelectExprs, nil
+func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectExprs {
+	return sqlparser.GetFirstSelect(h.Query).SelectExprs
 }
 
-func (h *Horizon) GetOrdering() ([]ops.OrderBy, error) {
+func (h *Horizon) GetOrdering() []ops.OrderBy {
 	if h.QP == nil {
-		return nil, vterrors.VT13001("QP should already be here")
+		panic(vterrors.VT13001("QP should already be here"))
 	}
-	return h.QP.OrderExprs, nil
+	return h.QP.OrderExprs
 }
 
 // TODO: REMOVE

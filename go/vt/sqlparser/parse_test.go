@@ -1527,13 +1527,17 @@ var (
 	}, {
 		input: "alter table a alter index x visible, alter index x2 invisible",
 	}, {
-		input: "alter table a add spatial key foo (column1)",
+		input:  "alter table a add spatial key foo (column1)",
+		output: "alter table a add spatial index foo (column1)",
 	}, {
-		input: "alter table a add fulltext key foo (column1), order by a, b, c",
+		input:  "alter table a add fulltext key foo (column1), order by a, b, c",
+		output: "alter table a add fulltext index foo (column1), order by a, b, c",
 	}, {
-		input: "alter table a add unique key foo (column1)",
+		input:  "alter table a add unique key foo (column1)",
+		output: "alter table a add unique index foo (column1)",
 	}, {
-		input: "alter /*vt+ strategy=online */ table a add unique key foo (column1)",
+		input:  "alter /*vt+ strategy=online */ table a add unique key foo (column1)",
+		output: "alter /*vt+ strategy=online */ table a add unique index foo (column1)",
 	}, {
 		input: "alter table a change column s foo int default 1 after x",
 	}, {
@@ -1673,7 +1677,8 @@ var (
 	}, {
 		input: "alter table a add constraint b primary key (id)",
 	}, {
-		input: "alter table a add constraint b unique key (id)",
+		input:  "alter table a add constraint b unique key (id)",
+		output: "alter table a add constraint b unique index (id)",
 	}, {
 		input:  "alter table t add column iii int signed not null",
 		output: "alter table t add column iii int not null",
@@ -1681,7 +1686,7 @@ var (
 		input: "alter table t add column iii int unsigned not null",
 	}, {
 		input:  "alter table a add constraint b unique c (id)",
-		output: "alter table a add constraint b unique key c (id)",
+		output: "alter table a add constraint b unique index c (id)",
 	}, {
 		input:  "alter table a add constraint check (id)",
 		output: "alter table a add check (id)",
@@ -1828,7 +1833,7 @@ var (
 		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 	}, {
 		input:  "create table a (b1 bool NOT NULL PRIMARY KEY, b2 boolean not null references b (a) on delete restrict, KEY b2_idx(b))",
-		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null references b (a) on delete restrict,\n\tKEY b2_idx (b)\n)",
+		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null references b (a) on delete restrict,\n\tindex b2_idx (b)\n)",
 	}, {
 		input: "create temporary table a (\n\tid bigint\n)",
 	}, {
@@ -4658,6 +4663,22 @@ func TestCreateTable(t *testing.T) {
 	index by_status (status_nonkeyword),
 	key by_full_name (full_name)
 )`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar,
+	email varchar,
+	full_name varchar,
+	geom point not null,
+	status_nonkeyword varchar,
+	primary key (id),
+	spatial index geom (geom),
+	fulltext index fts (full_name),
+	unique index by_username (username),
+	unique index by_username2 (username),
+	unique index by_username3 (username),
+	index by_status (status_nonkeyword),
+	index by_full_name (full_name)
+)`,
 		},
 		// test defining index visibility
 		{
@@ -4668,6 +4689,13 @@ func TestCreateTable(t *testing.T) {
 	unique key by_username2 (username) invisible,
 	unique index by_username3 (username)
 )`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar,
+	unique index by_username (username) visible,
+	unique index by_username2 (username) invisible,
+	unique index by_username3 (username)
+)`,
 		},
 		// test adding engine attributes
 		{
@@ -4675,6 +4703,12 @@ func TestCreateTable(t *testing.T) {
 	id int auto_increment,
 	username varchar,
 	unique key by_username (username) engine_attribute '{}' secondary_engine_attribute '{}',
+	unique index by_username3 (username)
+)`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar,
+	unique index by_username (username) engine_attribute '{}' secondary_engine_attribute '{}',
 	unique index by_username3 (username)
 )`,
 		},
@@ -4716,11 +4750,11 @@ func TestCreateTable(t *testing.T) {
 	full_name varchar,
 	status_nonkeyword varchar,
 	primary key (id) using BTREE,
-	unique key by_username (username) using HASH,
-	unique key by_username2 (username) using OTHER,
+	unique index by_username (username) using HASH,
+	unique index by_username2 (username) using OTHER,
 	unique index by_username3 (username) using XYZ,
 	index by_status (status_nonkeyword) using PDQ,
-	key by_full_name (full_name) using OTHER
+	index by_full_name (full_name) using OTHER
 )`,
 		},
 		// test other index options
@@ -4730,7 +4764,7 @@ func TestCreateTable(t *testing.T) {
 	username varchar,
 	email varchar,
 	primary key (id) comment 'hi',
-	unique key by_username (username) key_block_size 8,
+	unique index by_username (username) key_block_size 8,
 	unique index by_username4 (username) comment 'hi' using BTREE,
 	unique index by_username4 (username) using BTREE key_block_size 4 comment 'hi'
 )`,
@@ -4756,7 +4790,8 @@ func TestCreateTable(t *testing.T) {
 )`,
 		},
 		{
-			input: "create table t2 (\n\tid int not null,\n\textra tinyint(1) as (id = 1) stored,\n\tPRIMARY KEY (id)\n)",
+			input:  "create table t2 (\n\tid int not null,\n\textra tinyint(1) as (id = 1) stored,\n\tPRIMARY KEY (id)\n)",
+			output: "create table t2 (\n\tid int not null,\n\textra tinyint(1) as (id = 1) stored,\n\tprimary key (id)\n)",
 		},
 		// multi-column indexes
 		{
@@ -4772,6 +4807,19 @@ func TestCreateTable(t *testing.T) {
 	unique key by_abc (a, b, c),
 	unique key (a, b, c),
 	key by_email (email(10), username)
+)`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar,
+	email varchar,
+	full_name varchar,
+	a int,
+	b int,
+	c int,
+	primary key (id, username),
+	unique index by_abc (a, b, c),
+	unique index (a, b, c),
+	index by_email (email(10), username)
 )`,
 		},
 		// geometrycollection & geomcollection alias
@@ -4843,7 +4891,7 @@ func TestCreateTable(t *testing.T) {
 	newCol int references t2 (a) on update no action,
 	newCol int references t2 (a) on update cascade,
 	primary key (id, username),
-	key by_email (email(10), username),
+	index by_email (email(10), username),
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b),
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete restrict,
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete no action,
@@ -4866,7 +4914,7 @@ func TestCreateTable(t *testing.T) {
 	id int(11) not null auto_increment,
 	user_id int(11) not null,
 	primary key (id),
-	unique key post_user_unique (user_id),
+	unique index post_user_unique (user_id),
 	constraint ` + "`" + `Post With Space_ibfk_1` + "`" + ` foreign key (user_id) references ` + "`" + `User` + "`" + ` (id)
 ) ENGINE Innodb`,
 		},
@@ -4926,9 +4974,9 @@ func TestCreateTable(t *testing.T) {
 			output: `create table t (
 	id int auto_increment,
 	username varchar,
-	unique key by_username (username) key_block_size 8,
-	unique key by_username2 (username) key_block_size 8,
-	unique key by_username3 (username) key_block_size 4
+	unique index by_username (username) key_block_size 8,
+	unique index by_username2 (username) key_block_size 8,
+	unique index by_username3 (username) key_block_size 4
 )`,
 		}, {
 			// test defaults
@@ -5546,6 +5594,14 @@ partition by list (val)
 	primary key (id),
 	key email_idx (email, (if(username = '', nickname, username)))
 )`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar(64),
+	nickname varchar(64),
+	email varchar(64),
+	primary key (id),
+	index email_idx (email, (if(username = '', nickname, username)))
+)`,
 		},
 		{
 			input: `create table entries (
@@ -5557,10 +5613,10 @@ partition by list (val)
 	labels json default null,
 	spec json default null,
 	salaryInfo json default null,
-	PRIMARY KEY (namespace, uid),
-	UNIQUE KEY namespaced_name (namespace, place),
-	UNIQUE KEY unique_uid (uid),
-	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt')))
+	primary key (namespace, uid),
+	unique index namespaced_name (namespace, place),
+	unique index unique_uid (uid),
+	index entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt')))
 ) ENGINE InnoDB,
   CHARSET utf8mb4,
   COLLATE utf8mb4_bin`,
@@ -5572,7 +5628,7 @@ partition by list (val)
 )`,
 			output: `create table t1 (
 	j JSON,
-	INDEX i1 ((json_value(j, '$.id' returning UNSIGNED)))
+	index i1 ((json_value(j, '$.id' returning UNSIGNED)))
 )`,
 		}, {
 			input: `CREATE TABLE entries (
@@ -5598,10 +5654,10 @@ partition by list (val)
 	labels json default null,
 	spec json default null,
 	salaryInfo json default null,
-	PRIMARY KEY (namespace, uid),
-	UNIQUE KEY namespaced_employee (namespace, employee),
-	UNIQUE KEY unique_uid (uid),
-	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt' returning datetime)))
+	primary key (namespace, uid),
+	unique index namespaced_employee (namespace, employee),
+	unique index unique_uid (uid),
+	index entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt' returning datetime)))
 ) ENGINE InnoDB,
   CHARSET utf8mb4,
   COLLATE utf8mb4_bin`,
@@ -5668,7 +5724,7 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 		},
 		{
 			input:  "create table t (id int, info JSON, INDEX zips((CAST(info->'$.field' AS unsigned ARRAY))))",
-			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tINDEX zips ((cast(info -> '$.field' as unsigned array)))\n)",
+			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tindex zips ((cast(info -> '$.field' as unsigned array)))\n)",
 		},
 	}
 	for _, test := range createTableQueries {

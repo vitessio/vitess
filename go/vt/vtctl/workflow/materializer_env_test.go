@@ -247,6 +247,13 @@ func (tmc *testMaterializerTMClient) DeleteVReplicationWorkflow(ctx context.Cont
 	}, nil
 }
 
+func (tmc *testMaterializerTMClient) getSchemaRequestCount(uid uint32) int {
+	tmc.muSchemaCount.Lock()
+	defer tmc.muSchemaCount.Unlock()
+	key := strconv.Itoa(int(uid))
+	return tmc.getSchemaCounts[key]
+}
+
 func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	tmc.schemaRequested(tablet.Alias.Uid)
 	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
@@ -279,6 +286,22 @@ func (tmc *testMaterializerTMClient) expectVRQuery(tabletID int, query string, r
 		query:  query,
 		result: sqltypes.ResultToProto3(result),
 	})
+}
+
+func (tmc *testMaterializerTMClient) verifyQueries(t *testing.T) {
+	t.Helper()
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	for tabletID, qrs := range tmc.vrQueries {
+		if len(qrs) != 0 {
+			var list []string
+			for _, qr := range qrs {
+				list = append(list, qr.query)
+			}
+			t.Errorf("tablet %v: found queries that were expected but never got executed by the test: %v", tabletID, list)
+		}
+	}
 }
 
 func (tmc *testMaterializerTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
