@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG bootstrap_version=14.8
+ARG bootstrap_version=14.9
 ARG image="vitess/bootstrap:${bootstrap_version}-mysql80"
 
 FROM "${image}"
