@@ -255,7 +255,7 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 }
 
 func pickTablet(ctx context.Context, ts *topo.Server, cells []string, localCell, keyspace, shard, tabletTypes string) (*topodata.Tablet, error) {
-	tp, err := discovery.NewTabletPicker(ctx, ts, cells, localCell, keyspace, shard, tabletTypes, discovery.TabletPickerOptions{})
+	tp, err := discovery.NewTabletPicker(ctx, ts, cells, localCell, keyspace, shard, tabletTypes, discovery.TabletPickerOptions{}, make(map[string]topodata.TabletAlias))
 	if err != nil {
 		return nil, err
 	}

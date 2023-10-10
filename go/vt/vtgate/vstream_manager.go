@@ -473,6 +473,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 	// journalDone is assigned a channel when a journal event is encountered.
 	// It will be closed when all journal events converge.
 	var journalDone chan struct{}
+	var ignoreTablets map[string]topodatapb.TabletAlias
 
 	errCount := 0
 	for {
@@ -490,7 +491,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		var eventss [][]*binlogdatapb.VEvent
 		var err error
 		cells := vs.getCells()
-		tp, err := discovery.NewTabletPicker(ctx, vs.ts, cells, vs.vsm.cell, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String(), vs.tabletPickerOptions)
+		tp, err := discovery.NewTabletPicker(ctx, vs.ts, cells, vs.vsm.cell, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String(), vs.tabletPickerOptions, ignoreTablets)
 		if err != nil {
 			log.Errorf(err.Error())
 			return err
@@ -670,10 +671,11 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			// Unreachable.
 			err = vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "vstream ended unexpectedly")
 		}
-		if vterrors.Code(err) != vtrpcpb.Code_FAILED_PRECONDITION && vterrors.Code(err) != vtrpcpb.Code_UNAVAILABLE {
+		if !vs.isRetriableError(err) {
 			log.Errorf("vstream for %s/%s error: %v", sgtid.Keyspace, sgtid.Shard, err)
 			return err
 		}
+		ignoreTablets[tablet.Alias.String()] = *tablet.GetAlias()
 		errCount++
 		if errCount >= 3 {
 			log.Errorf("vstream for %s/%s had three consecutive failures: %v", sgtid.Keyspace, sgtid.Shard, err)
@@ -681,6 +683,20 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		}
 		log.Infof("vstream for %s/%s error, retrying: %v", sgtid.Keyspace, sgtid.Shard, err)
 	}
+}
+
+func (vs *vstream) isRetriableError(err error) bool {
+	errCode := vterrors.Code(err)
+
+	if errCode == vtrpcpb.Code_FAILED_PRECONDITION || errCode == vtrpcpb.Code_UNAVAILABLE || errCode == vtrpcpb.Code_NOT_FOUND {
+		return true
+	}
+
+	if errCode == vtrpcpb.Code_INVALID_ARGUMENT && strings.HasPrefix(err.Error(), "GTIDSet Mismatch") {
+		return true
+	}
+
+	return false
 }
 
 // sendAll sends a group of events together while holding the lock.

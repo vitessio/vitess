@@ -135,6 +135,7 @@ type TabletPicker struct {
 	inOrder       bool
 	cellPref      TabletPickerCellPreference
 	localCellInfo localCellInfo
+	ignoreTablets map[string]topodatapb.TabletAlias
 }
 
 // NewTabletPicker returns a TabletPicker.
@@ -144,6 +145,7 @@ func NewTabletPicker(
 	cells []string,
 	localCell, keyspace, shard, tabletTypesStr string,
 	options TabletPickerOptions,
+	ignoreTablets map[string]topodatapb.TabletAlias,
 ) (*TabletPicker, error) {
 	// Keep inOrder parsing here for backward compatability until TabletPickerTabletOrder is fully adopted.
 	if tabletTypesStr == "" {
@@ -228,6 +230,7 @@ func NewTabletPicker(
 		tabletTypes:   tabletTypes,
 		inOrder:       inOrder,
 		cellPref:      cellPref,
+		ignoreTablets: ignoreTablets,
 	}, nil
 }
 
@@ -433,7 +436,10 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 					}
 					return vterrors.New(vtrpcpb.Code_INTERNAL, "tablet is not healthy and serving")
 				}); err == nil || err == io.EOF {
-					tablets = append(tablets, tabletInfo)
+					// if this tablet is not in the ignore list, then add it as a candidate
+					if _, ok := tp.ignoreTablets[tabletInfo.Alias.String()]; !ok {
+						tablets = append(tablets, tabletInfo)
+					}
 				}
 				_ = conn.Close(ctx)
 			}
