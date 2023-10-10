@@ -94,7 +94,7 @@ func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
 		queryResult [][]string
 	}{{
 		input:  "insert into t1(val) values ('aaa')",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(my_row_id,val) values (1,'aaa')",
+		output: "insert into t1(my_row_id,val) values (1,'aaa')",
 		table:  "t1",
 		data: [][]string{
 			{"aaa"},
@@ -105,7 +105,7 @@ func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
 		},
 	}, {
 		input:  "insert into t2(val) values ('bbb')",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into t2(my_row_id,val) values (1,'bbb')",
+		output: "insert into t2(my_row_id,val) values (1,'bbb')",
 		table:  "t2",
 		data: [][]string{
 			{"1", "bbb"},
@@ -169,7 +169,7 @@ func TestPlayerInvisibleColumns(t *testing.T) {
 		queryResult [][]string
 	}{{
 		input:  "insert into t1(id,val,id2,pk2) values (1,'aaa',10,100)",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val,id2,pk2) values (1,'aaa',10,100)",
+		output: "insert into t1(id,val,id2,pk2) values (1,'aaa',10,100)",
 		table:  "t1",
 		data: [][]string{
 			{"1", "aaa"},
@@ -275,7 +275,7 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 		require.NoError(t, err)
 		return timeUpdated, transactionTimestamp, timeHeartbeat
 	}
-	expectNontxQueries(t, qh.Expect("insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (1,'aaa')"))
+	expectNontxQueries(t, qh.Expect("insert into t1(id,val) values (1,'aaa')"))
 	time.Sleep(1 * time.Second)
 	timeUpdated1, transactionTimestamp1, timeHeartbeat1 := getTimestamps()
 	time.Sleep(2 * time.Second)
@@ -341,56 +341,56 @@ func TestCharPK(t *testing.T) {
 		data   [][]string
 	}{{ //binary(2)
 		input:  "insert into t1 values(1, 'a')",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (1,'a\\0')",
+		output: "insert into t1(id,val) values (1,'a\\0')",
 		table:  "t1",
 		data: [][]string{
 			{"1", "a\000"},
 		},
 	}, {
 		input:  "update t1 set id = 2 where val = 'a\000'",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set id=2 where val='a\\0'",
+		output: "update t1 set id=2 where val='a\\0'",
 		table:  "t1",
 		data: [][]string{
 			{"2", "a\000"},
 		},
 	}, { //char(2)
 		input:  "insert into t2 values(1, 'a')",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into t2(id,val) values (1,'a')",
+		output: "insert into t2(id,val) values (1,'a')",
 		table:  "t2",
 		data: [][]string{
 			{"1", "a"},
 		},
 	}, {
 		input:  "update t2 set id = 2 where val = 'a'",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t2 set id=2 where val='a'",
+		output: "update t2 set id=2 where val='a'",
 		table:  "t2",
 		data: [][]string{
 			{"2", "a"},
 		},
 	}, { //varbinary(2)
 		input:  "insert into t3 values(1, 'a')",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into t3(id,val) values (1,'a')",
+		output: "insert into t3(id,val) values (1,'a')",
 		table:  "t3",
 		data: [][]string{
 			{"1", "a"},
 		},
 	}, {
 		input:  "update t3 set id = 2 where val = 'a'",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t3 set id=2 where val='a'",
+		output: "update t3 set id=2 where val='a'",
 		table:  "t3",
 		data: [][]string{
 			{"2", "a"},
 		},
 	}, { //varchar(2)
 		input:  "insert into t4 values(1, 'a')",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into t4(id,val) values (1,'a')",
+		output: "insert into t4(id,val) values (1,'a')",
 		table:  "t4",
 		data: [][]string{
 			{"1", "a"},
 		},
 	}, {
 		input:  "update t4 set id = 2 where val = 'a'",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t4 set id=2 where val='a'",
+		output: "update t4 set id=2 where val='a'",
 		table:  "t4",
 		data: [][]string{
 			{"2", "a"},
@@ -448,7 +448,7 @@ func TestRollup(t *testing.T) {
 	}{{
 		// Start with all nulls
 		input:  "insert into t1 values(1, 'a')",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(rollupname,kount) values ('total',1) on duplicate key update kount=kount+1",
+		output: "insert into t1(rollupname,kount) values ('total',1) on duplicate key update kount=kount+1",
 		table:  "t1",
 		data: [][]string{
 			{"total", "1"},
@@ -501,7 +501,7 @@ func TestPlayerSavepoint(t *testing.T) {
 	execStatements(t, []string{"insert into t1 values(1)"})
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id) values (1)",
+		"insert into t1(id) values (1)",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
@@ -520,8 +520,8 @@ func TestPlayerSavepoint(t *testing.T) {
 	})
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"/insert /\\*\\+ MAX_EXECUTION_TIME\\(3600000\\) \\*/ into t1.*2.*",
-		"/insert /\\*\\+ MAX_EXECUTION_TIME\\(3600000\\) \\*/ into t1.*3.*",
+		"/insert into t1.*2.*",
+		"/insert into t1.*3.*",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
@@ -761,7 +761,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src1 values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) values (1,'aaa')",
+			"insert into dst1(id,val) values (1,'aaa')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -771,7 +771,7 @@ func TestPlayerFilters(t *testing.T) {
 		},
 		logs: []LogExpectation{
 			{"FIELD", "/src1.*id.*INT32.*val.*VARBINARY.*"},
-			{"ROWCHANGE", "insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) values (1,'aaa')"},
+			{"ROWCHANGE", "insert into dst1(id,val) values (1,'aaa')"},
 			{"ROW", "/src1.*3.*1aaa.*"},
 		},
 	}, {
@@ -779,7 +779,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update src1 set val='bbb'",
 		output: qh.Expect(
 			"begin",
-			"update /*+ MAX_EXECUTION_TIME(3600000) */ dst1 set val='bbb' where id=1",
+			"update dst1 set val='bbb' where id=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -788,7 +788,7 @@ func TestPlayerFilters(t *testing.T) {
 			{"1", "bbb"},
 		},
 		logs: []LogExpectation{
-			{"ROWCHANGE", "update /*+ MAX_EXECUTION_TIME(3600000) */ dst1 set val='bbb' where id=1"},
+			{"ROWCHANGE", "update dst1 set val='bbb' where id=1"},
 			{"ROW", "/src1.*3.*1aaa.*"},
 		},
 	}, {
@@ -796,14 +796,14 @@ func TestPlayerFilters(t *testing.T) {
 		input: "delete from src1 where id=1",
 		output: qh.Expect(
 			"begin",
-			"delete /*+ MAX_EXECUTION_TIME(3600000) */ from dst1 where id=1",
+			"delete from dst1 where id=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
 		table: "dst1",
 		data:  [][]string{},
 		logs: []LogExpectation{
-			{"ROWCHANGE", "delete /*+ MAX_EXECUTION_TIME(3600000) */ from dst1 where id=1"},
+			{"ROWCHANGE", "delete from dst1 where id=1"},
 			{"ROW", "/src1.*3.*1bbb.*"},
 		},
 	}, {
@@ -811,7 +811,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src2 values(1, 2, 3)",
 		output: qh.Expect(
 			"begin",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst2(id,val1,sval2,rcount) values (1,2,ifnull(3, 0),1) on duplicate key update val1=values(val1), sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1",
+			"insert into dst2(id,val1,sval2,rcount) values (1,2,ifnull(3, 0),1) on duplicate key update val1=values(val1), sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -821,14 +821,14 @@ func TestPlayerFilters(t *testing.T) {
 		},
 		logs: []LogExpectation{
 			{"FIELD", "/src2.*id.*val1.*val2.*"},
-			{"ROWCHANGE", "insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst2(id,val1,sval2,rcount) values (1,2,ifnull(3, 0),1) on duplicate key update val1=values(val1), sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1"},
+			{"ROWCHANGE", "insert into dst2(id,val1,sval2,rcount) values (1,2,ifnull(3, 0),1) on duplicate key update val1=values(val1), sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1"},
 		},
 	}, {
 		// update with insertOnDup
 		input: "update src2 set val1=5, val2=1 where id=1",
 		output: qh.Expect(
 			"begin",
-			"update /*+ MAX_EXECUTION_TIME(3600000) */ dst2 set val1=5, sval2=sval2-ifnull(3, 0)+ifnull(1, 0), rcount=rcount where id=1",
+			"update dst2 set val1=5, sval2=sval2-ifnull(3, 0)+ifnull(1, 0), rcount=rcount where id=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -837,7 +837,7 @@ func TestPlayerFilters(t *testing.T) {
 			{"1", "5", "1", "1"},
 		},
 		logs: []LogExpectation{
-			{"ROWCHANGE", "update /*+ MAX_EXECUTION_TIME(3600000) */ dst2 set val1=5, sval2=sval2-ifnull(3, 0)+ifnull(1, 0), rcount=rcount where id=1"},
+			{"ROWCHANGE", "update dst2 set val1=5, sval2=sval2-ifnull(3, 0)+ifnull(1, 0), rcount=rcount where id=1"},
 			{"ROW", "/src2.*123.*"},
 		},
 	}, {
@@ -845,7 +845,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "delete from src2 where id=1",
 		output: qh.Expect(
 			"begin",
-			"update /*+ MAX_EXECUTION_TIME(3600000) */ dst2 set val1=null, sval2=sval2-ifnull(1, 0), rcount=rcount-1 where id=1",
+			"update dst2 set val1=null, sval2=sval2-ifnull(1, 0), rcount=rcount-1 where id=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -858,7 +858,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src3 values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ ignore into dst3(id,val) values (1,'aaa')",
+			"insert ignore into dst3(id,val) values (1,'aaa')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -871,7 +871,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update src3 set val='bbb'",
 		output: qh.Expect(
 			"begin",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ ignore into dst3(id,val) values (1,'bbb')",
+			"insert ignore into dst3(id,val) values (1,'bbb')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -896,7 +896,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into yes values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into yes(id,val) values (1,'aaa')",
+			"insert into yes(id,val) values (1,'aaa')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -909,7 +909,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update yes set val='bbb'",
 		output: qh.Expect(
 			"begin",
-			"update /*+ MAX_EXECUTION_TIME(3600000) */ yes set val='bbb' where id=1",
+			"update yes set val='bbb' where id=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -926,7 +926,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into nopk values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into nopk(id,val) values (1,'aaa')",
+			"insert into nopk(id,val) values (1,'aaa')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -939,8 +939,8 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update nopk set val='bbb' where id=1",
 		output: qh.Expect(
 			"begin",
-			"delete /*+ MAX_EXECUTION_TIME(3600000) */ from nopk where id=1 and val='aaa'",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into nopk(id,val) values (1,'bbb')",
+			"delete from nopk where id=1 and val='aaa'",
+			"insert into nopk(id,val) values (1,'bbb')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -953,7 +953,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "delete from nopk where id=1",
 		output: qh.Expect(
 			"begin",
-			"delete /*+ MAX_EXECUTION_TIME(3600000) */ from nopk where id=1 and val='bbb'",
+			"delete from nopk where id=1 and val='bbb'",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -964,8 +964,8 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src4 values (1,100,'aaa'),(2,200,'bbb'),(3,100,'ccc')",
 		output: qh.Expect(
 			"begin",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst4(id1,val) values (1,'aaa')",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst4(id1,val) values (3,'ccc')",
+			"insert into dst4(id1,val) values (1,'aaa')",
+			"insert into dst4(id1,val) values (3,'ccc')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -976,8 +976,8 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src5 values (1,100,'abc'),(2,200,'xyz'),(3,100,'xyz'),(4,300,'abc'),(5,200,'xyz')",
 		output: qh.Expect(
 			"begin",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst5(id1,val) values (1,'abc')",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst5(id1,val) values (4,'abc')",
+			"insert into dst5(id1,val) values (1,'abc')",
+			"insert into dst5(id1,val) values (4,'abc')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -988,7 +988,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into srcCharset values (1,'木元')",
 		output: qh.Expect(
 			"begin",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dstCharset(id1,val,val2) values (1,concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'),concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'))",
+			"insert into dstCharset(id1,val,val2) values (1,concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'),concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'))",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1064,7 +1064,7 @@ func TestPlayerKeywordNames(t *testing.T) {
 		input: "insert into `begin` values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into `begin`(`primary`,`column`) values (1,'aaa')",
+			"insert into `begin`(`primary`,`column`) values (1,'aaa')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1076,7 +1076,7 @@ func TestPlayerKeywordNames(t *testing.T) {
 		input: "update `begin` set `column`='bbb'",
 		output: qh.Expect(
 			"begin",
-			"update /*+ MAX_EXECUTION_TIME(3600000) */ `begin` set `column`='bbb' where `primary`=1",
+			"update `begin` set `column`='bbb' where `primary`=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1088,7 +1088,7 @@ func TestPlayerKeywordNames(t *testing.T) {
 		input: "delete from `begin` where `primary`=1",
 		output: qh.Expect(
 			"begin",
-			"delete /*+ MAX_EXECUTION_TIME(3600000) */ from `begin` where `primary`=1",
+			"delete from `begin` where `primary`=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1098,7 +1098,7 @@ func TestPlayerKeywordNames(t *testing.T) {
 		input: "insert into `rollback` values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into `rollback`(`primary`,`column`) values (1,'aaa')",
+			"insert into `rollback`(`primary`,`column`) values (1,'aaa')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1110,7 +1110,7 @@ func TestPlayerKeywordNames(t *testing.T) {
 		input: "update `rollback` set `column`='bbb'",
 		output: qh.Expect(
 			"begin",
-			"update /*+ MAX_EXECUTION_TIME(3600000) */ `rollback` set `column`='bbb' where `primary`=1",
+			"update `rollback` set `column`='bbb' where `primary`=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1122,7 +1122,7 @@ func TestPlayerKeywordNames(t *testing.T) {
 		input: "delete from `rollback` where `primary`=1",
 		output: qh.Expect(
 			"begin",
-			"delete /*+ MAX_EXECUTION_TIME(3600000) */ from `rollback` where `primary`=1",
+			"delete from `rollback` where `primary`=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1132,7 +1132,7 @@ func TestPlayerKeywordNames(t *testing.T) {
 		input: "insert into `commit` values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into `commit`(`primary`,`column`) values (1 + 1,concat('aaa', 'a'))",
+			"insert into `commit`(`primary`,`column`) values (1 + 1,concat('aaa', 'a'))",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1144,7 +1144,7 @@ func TestPlayerKeywordNames(t *testing.T) {
 		input: "update `commit` set `column`='bbb' where `primary`=1",
 		output: qh.Expect(
 			"begin",
-			"update /*+ MAX_EXECUTION_TIME(3600000) */ `commit` set `column`=concat('bbb', 'a') where `primary`=(1 + 1)",
+			"update `commit` set `column`=concat('bbb', 'a') where `primary`=(1 + 1)",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1156,8 +1156,8 @@ func TestPlayerKeywordNames(t *testing.T) {
 		input: "update `commit` set `primary`=2 where `primary`=1",
 		output: qh.Expect(
 			"begin",
-			"delete /*+ MAX_EXECUTION_TIME(3600000) */ from `commit` where `primary`=(1 + 1)",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into `commit`(`primary`,`column`) values (2 + 1,concat('bbb', 'a'))",
+			"delete from `commit` where `primary`=(1 + 1)",
+			"insert into `commit`(`primary`,`column`) values (2 + 1,concat('bbb', 'a'))",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1169,7 +1169,7 @@ func TestPlayerKeywordNames(t *testing.T) {
 		input: "delete from `commit` where `primary`=2",
 		output: qh.Expect(
 			"begin",
-			"delete /*+ MAX_EXECUTION_TIME(3600000) */ from `commit` where `primary`=(2 + 1)",
+			"delete from `commit` where `primary`=(2 + 1)",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1248,7 +1248,7 @@ func TestPlayerKeyspaceID(t *testing.T) {
 		input: "insert into src1 values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) values (1,'\x16k@\xb4J\xbaK\xd6')",
+			"insert into dst1(id,val) values (1,'\x16k@\xb4J\xbaK\xd6')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1306,7 +1306,7 @@ func TestUnicode(t *testing.T) {
 		output: qh.Expect(
 			"begin",
 			// We should expect the "Mojibaked" version.
-			"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,val) values (1,'ðŸ‘\u008d')",
+			"insert into dst1(id,val) values (1,'ðŸ‘\u008d')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1376,7 +1376,7 @@ func TestPlayerUpdates(t *testing.T) {
 	}{{
 		// Start with all nulls
 		input:  "insert into t1 values(1, null, null, null)",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,grouped,ungrouped,summed,rcount) values (1,null,null,ifnull(null, 0),1) on duplicate key update ungrouped=values(ungrouped), summed=summed+ifnull(values(summed), 0), rcount=rcount+1",
+		output: "insert into t1(id,grouped,ungrouped,summed,rcount) values (1,null,null,ifnull(null, 0),1) on duplicate key update ungrouped=values(ungrouped), summed=summed+ifnull(values(summed), 0), rcount=rcount+1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "", "", "0", "1"},
@@ -1384,7 +1384,7 @@ func TestPlayerUpdates(t *testing.T) {
 	}, {
 		// null to null values
 		input:  "update t1 set grouped=1 where id=1",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set ungrouped=null, summed=summed-ifnull(null, 0)+ifnull(null, 0), rcount=rcount where id=1",
+		output: "update t1 set ungrouped=null, summed=summed-ifnull(null, 0)+ifnull(null, 0), rcount=rcount where id=1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "", "", "0", "1"},
@@ -1392,7 +1392,7 @@ func TestPlayerUpdates(t *testing.T) {
 	}, {
 		// null to non-null values
 		input:  "update t1 set ungrouped=1, summed=1 where id=1",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set ungrouped=1, summed=summed-ifnull(null, 0)+ifnull(1, 0), rcount=rcount where id=1",
+		output: "update t1 set ungrouped=1, summed=summed-ifnull(null, 0)+ifnull(1, 0), rcount=rcount where id=1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "", "1", "1", "1"},
@@ -1400,7 +1400,7 @@ func TestPlayerUpdates(t *testing.T) {
 	}, {
 		// non-null to non-null values
 		input:  "update t1 set ungrouped=2, summed=2 where id=1",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set ungrouped=2, summed=summed-ifnull(1, 0)+ifnull(2, 0), rcount=rcount where id=1",
+		output: "update t1 set ungrouped=2, summed=summed-ifnull(1, 0)+ifnull(2, 0), rcount=rcount where id=1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "", "2", "2", "1"},
@@ -1408,7 +1408,7 @@ func TestPlayerUpdates(t *testing.T) {
 	}, {
 		// non-null to null values
 		input:  "update t1 set ungrouped=null, summed=null where id=1",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set ungrouped=null, summed=summed-ifnull(2, 0)+ifnull(null, 0), rcount=rcount where id=1",
+		output: "update t1 set ungrouped=null, summed=summed-ifnull(2, 0)+ifnull(null, 0), rcount=rcount where id=1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "", "", "0", "1"},
@@ -1416,7 +1416,7 @@ func TestPlayerUpdates(t *testing.T) {
 	}, {
 		// insert non-null values
 		input:  "insert into t1 values(2, 2, 3, 4)",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,grouped,ungrouped,summed,rcount) values (2,2,3,ifnull(4, 0),1) on duplicate key update ungrouped=values(ungrouped), summed=summed+ifnull(values(summed), 0), rcount=rcount+1",
+		output: "insert into t1(id,grouped,ungrouped,summed,rcount) values (2,2,3,ifnull(4, 0),1) on duplicate key update ungrouped=values(ungrouped), summed=summed+ifnull(values(summed), 0), rcount=rcount+1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "", "", "0", "1"},
@@ -1425,7 +1425,7 @@ func TestPlayerUpdates(t *testing.T) {
 	}, {
 		// delete non-null values
 		input:  "delete from t1 where id=2",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set ungrouped=null, summed=summed-ifnull(4, 0), rcount=rcount-1 where id=2",
+		output: "update t1 set ungrouped=null, summed=summed-ifnull(4, 0), rcount=rcount-1 where id=2",
 		table:  "t1",
 		data: [][]string{
 			{"1", "", "", "0", "1"},
@@ -1489,9 +1489,9 @@ func TestPlayerRowMove(t *testing.T) {
 	})
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst(val1,sval2,rcount) values (1,ifnull(1, 0),1) on duplicate key update sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst(val1,sval2,rcount) values (2,ifnull(2, 0),1) on duplicate key update sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst(val1,sval2,rcount) values (2,ifnull(3, 0),1) on duplicate key update sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1",
+		"insert into dst(val1,sval2,rcount) values (1,ifnull(1, 0),1) on duplicate key update sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1",
+		"insert into dst(val1,sval2,rcount) values (2,ifnull(2, 0),1) on duplicate key update sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1",
+		"insert into dst(val1,sval2,rcount) values (2,ifnull(3, 0),1) on duplicate key update sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
@@ -1506,8 +1506,8 @@ func TestPlayerRowMove(t *testing.T) {
 	})
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"update /*+ MAX_EXECUTION_TIME(3600000) */ dst set sval2=sval2-ifnull(3, 0), rcount=rcount-1 where val1=2",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst(val1,sval2,rcount) values (1,ifnull(4, 0),1) on duplicate key update sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1",
+		"update dst set sval2=sval2-ifnull(3, 0), rcount=rcount-1 where val1=2",
+		"insert into dst(val1,sval2,rcount) values (1,ifnull(4, 0),1) on duplicate key update sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
@@ -1584,49 +1584,49 @@ func TestPlayerTypes(t *testing.T) {
 	}
 	testcases := []testcase{{
 		input:  "insert into vitess_ints values(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012)",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into vitess_ints(tiny,tinyu,small,smallu,medium,mediumu,normal,normalu,big,bigu,y) values (-128,255,-32768,65535,-8388608,16777215,-2147483648,4294967295,-9223372036854775808,18446744073709551615,2012)",
+		output: "insert into vitess_ints(tiny,tinyu,small,smallu,medium,mediumu,normal,normalu,big,bigu,y) values (-128,255,-32768,65535,-8388608,16777215,-2147483648,4294967295,-9223372036854775808,18446744073709551615,2012)",
 		table:  "vitess_ints",
 		data: [][]string{
 			{"-128", "255", "-32768", "65535", "-8388608", "16777215", "-2147483648", "4294967295", "-9223372036854775808", "18446744073709551615", "2012"},
 		},
 	}, {
 		input:  "insert into vitess_fracts values(1, 1.99, 2.99, 3.99, 4.99)",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into vitess_fracts(id,deci,num,f,d) values (1,1.99,2.99,3.99E+00,4.99E+00)",
+		output: "insert into vitess_fracts(id,deci,num,f,d) values (1,1.99,2.99,3.99E+00,4.99E+00)",
 		table:  "vitess_fracts",
 		data: [][]string{
 			{"1", "1.99", "2.99", "3.99", "4.99"},
 		},
 	}, {
 		input:  "insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c','d\\0\\0\\0\\0','e','f','g','h',1,'3')",
+		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c','d\\0\\0\\0\\0','e','f','g','h',1,'3')",
 		table:  "vitess_strings",
 		data: [][]string{
 			{"a", "b", "c", "d\000\000\000\000", "e", "f", "g", "h", "a", "a,b"},
 		},
 	}, {
 		input:  "insert into vitess_misc values(1, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45', point(1, 2))",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into vitess_misc(id,b,d,dt,t,g) values (1,b'00000001','2012-01-01','2012-01-01 15:45:45','15:45:45','\\0\\0\\0\\0\x01\x01\\0\\0\\0\\0\\0\\0\\0\\0\\0\xf0?\\0\\0\\0\\0\\0\\0\\0@')",
+		output: "insert into vitess_misc(id,b,d,dt,t,g) values (1,b'00000001','2012-01-01','2012-01-01 15:45:45','15:45:45','\\0\\0\\0\\0\x01\x01\\0\\0\\0\\0\\0\\0\\0\\0\\0\xf0?\\0\\0\\0\\0\\0\\0\\0@')",
 		table:  "vitess_misc",
 		data: [][]string{
 			{"1", "\x01", "2012-01-01", "2012-01-01 15:45:45", "15:45:45", "\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@"},
 		},
 	}, {
 		input:  "insert into vitess_null values(1, null)",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into vitess_null(id,val) values (1,null)",
+		output: "insert into vitess_null(id,val) values (1,null)",
 		table:  "vitess_null",
 		data: [][]string{
 			{"1", ""},
 		},
 	}, {
 		input:  "insert into binary_pk values('a', 'aaa')",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into binary_pk(b,val) values ('a\\0\\0\\0','aaa')",
+		output: "insert into binary_pk(b,val) values ('a\\0\\0\\0','aaa')",
 		table:  "binary_pk",
 		data: [][]string{
 			{"a\000\000\000", "aaa"},
 		},
 	}, {
 		input:  "insert into vitess_decimal values(1, 0, 1, null, 0, 1.1, 1)",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into vitess_decimal(id,d1,d2,d3,d4,d5,d6) values (1,0,1,null,.0,1.1,1.0)",
+		output: "insert into vitess_decimal(id,d1,d2,d3,d4,d5,d6) values (1,0,1,null,.0,1.1,1.0)",
 		table:  "vitess_decimal",
 		data: [][]string{
 			{"1", "0", "1", "", "0.0", "1.1", "1.0"},
@@ -1634,21 +1634,21 @@ func TestPlayerTypes(t *testing.T) {
 	}, {
 		// Binary pk is a special case: https://github.com/vitessio/vitess/issues/3984
 		input:  "update binary_pk set val='bbb' where b='a\\0\\0\\0'",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ binary_pk set val='bbb' where b='a\\0\\0\\0'",
+		output: "update binary_pk set val='bbb' where b='a\\0\\0\\0'",
 		table:  "binary_pk",
 		data: [][]string{
 			{"a\000\000\000", "bbb"},
 		},
 	}, {
 		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into vitess_json(id,val1,val2,val3,val4,val5) values (1,null,JSON_OBJECT(),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
+		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1,null,JSON_OBJECT(),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
 		table:  "vitess_json",
 		data: [][]string{
 			{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 		},
 	}, {
 		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values ('null', '{\"name\":null}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into vitess_json(id,val1,val2,val3,val4,val5) values (2,CAST(_utf8mb4'null' as JSON),JSON_OBJECT(_utf8mb4'name', null),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
+		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (2,CAST(_utf8mb4'null' as JSON),JSON_OBJECT(_utf8mb4'name', null),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
 		table:  "vitess_json",
 		data: [][]string{
 			{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
@@ -1656,7 +1656,7 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4) where id=1",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ vitess_json set val1=JSON_OBJECT(_utf8mb4'bar', _utf8mb4'foo'), val2=JSON_OBJECT(), val3=CAST(123 as JSON), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
+		output: "update vitess_json set val1=JSON_OBJECT(_utf8mb4'bar', _utf8mb4'foo'), val2=JSON_OBJECT(), val3=CAST(123 as JSON), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
 		table:  "vitess_json",
 		data: [][]string{
 			{"1", `{"bar": "foo"}`, "{}", "123", `{"a": [98, 123]}`, `{}`},
@@ -1710,7 +1710,7 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"insert into t1 values(1)"})
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id) values (1)",
+		"insert into t1(id) values (1)",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
@@ -1921,7 +1921,7 @@ func TestPlayerStopPos(t *testing.T) {
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update.*'Running'",
 		"begin",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into yes(id,val) values (1,'aaa')",
+		"insert into yes(id,val) values (1,'aaa')",
 		fmt.Sprintf("/update.*compress.*'%s'", stopPos),
 		"/update.*'Stopped'",
 		"commit",
@@ -2063,11 +2063,11 @@ func TestPlayerStopAtOther(t *testing.T) {
 
 	// This is approximately the expected sequence of updates.
 	expectDBClientQueries(t, qh.Expect(
-		"update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set val='ccc' where id=1",
+		"update t1 set val='ccc' where id=1",
 		"/update _vt.vreplication set pos=",
 		"commit",
 		"begin",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (2,'ddd')",
+		"insert into t1(id,val) values (2,'ddd')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 		fmt.Sprintf("/update _vt.vreplication set pos='%s'", stopPos),
@@ -2112,7 +2112,7 @@ func TestPlayerIdleUpdate(t *testing.T) {
 	start := time.Now()
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (1,'aaa')",
+		"insert into t1(id,val) values (1,'aaa')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	),
@@ -2170,8 +2170,8 @@ func TestPlayerSplitTransaction(t *testing.T) {
 	// but still combined as one transaction.
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (1,'123456')",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (2,'789012')",
+		"insert into t1(id,val) values (1,'123456')",
+		"insert into t1(id,val) values (2,'789012')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
@@ -2212,8 +2212,8 @@ func TestPlayerLockErrors(t *testing.T) {
 	})
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (1,'aaa')",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (2,'bbb')",
+		"insert into t1(id,val) values (1,'aaa')",
+		"insert into t1(id,val) values (2,'bbb')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
@@ -2241,8 +2241,8 @@ func TestPlayerLockErrors(t *testing.T) {
 	// The innodb lock wait timeout is set to 1s.
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set val='ccc' where id=1",
-		"update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set val='ccc' where id=2",
+		"update t1 set val='ccc' where id=1",
+		"update t1 set val='ccc' where id=2",
 		"rollback",
 	))
 
@@ -2250,8 +2250,8 @@ func TestPlayerLockErrors(t *testing.T) {
 	_, _ = vconn.ExecuteFetch("rollback", 1)
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set val='ccc' where id=1",
-		"update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set val='ccc' where id=2",
+		"update t1 set val='ccc' where id=1",
+		"update t1 set val='ccc' where id=2",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
@@ -2286,12 +2286,12 @@ func TestPlayerCancelOnLock(t *testing.T) {
 
 	execStatements(t, []string{
 		"begin",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1 values(1, 'aaa')",
+		"insert into t1 values(1, 'aaa')",
 		"commit",
 	})
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (1,'aaa')",
+		"insert into t1(id,val) values (1,'aaa')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
@@ -2318,7 +2318,7 @@ func TestPlayerCancelOnLock(t *testing.T) {
 	// The innodb lock wait timeout is set to 1s.
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set val='ccc' where id=1",
+		"update t1 set val='ccc' where id=1",
 		"rollback",
 	))
 
@@ -2367,7 +2367,7 @@ func TestPlayerBatching(t *testing.T) {
 	})
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (1,'aaa')",
+		"insert into t1(id,val) values (1,'aaa')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
@@ -2409,12 +2409,12 @@ func TestPlayerBatching(t *testing.T) {
 	// transactions must be batched into one. But the
 	// DDLs should be on their own.
 	expectDBClientQueries(t, qh.Expect(
-		"update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set val='ccc' where id=1",
+		"update t1 set val='ccc' where id=1",
 		"/update _vt.vreplication set pos=",
 		"commit",
 		"begin",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (2,'aaa')",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (3,'aaa')",
+		"insert into t1(id,val) values (2,'aaa')",
+		"insert into t1(id,val) values (3,'aaa')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 		"alter table t1 add column val2 varbinary(128)",
@@ -2473,7 +2473,7 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 			})
 			expectDBClientQueries(t, qh.Expect(
 				"begin",
-				"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (1,'123456')",
+				"insert into t1(id,val) values (1,'123456')",
 				"/update _vt.vreplication set pos=",
 				"commit",
 			))
@@ -2515,16 +2515,16 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 			// will wait to be sent to the relay until the player fetches
 			// them.
 			expectDBClientQueries(t, qh.Expect(
-				"update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set val='ccc' where id=1",
+				"update t1 set val='ccc' where id=1",
 				"/update _vt.vreplication set pos=",
 				"commit",
 				"begin",
-				"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (2,'789012')",
-				"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (3,'345678')",
+				"insert into t1(id,val) values (2,'789012')",
+				"insert into t1(id,val) values (3,'345678')",
 				"/update _vt.vreplication set pos=",
 				"commit",
 				"begin",
-				"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (4,'901234')",
+				"insert into t1(id,val) values (4,'901234')",
 				"/update _vt.vreplication set pos=",
 				"commit",
 			))
@@ -2568,7 +2568,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 	})
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (1,'aaa')",
+		"insert into t1(id,val) values (1,'aaa')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
@@ -2585,7 +2585,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update _vt.vreplication set state='Running'",
 		"begin",
-		"insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val) values (2,'aaa')",
+		"insert into t1(id,val) values (2,'aaa')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
@@ -2633,7 +2633,7 @@ func TestTimestamp(t *testing.T) {
 		"begin",
 		// The insert value for ts will be in UTC.
 		// We'll check the row instead.
-		"/insert /\\*\\+ MAX_EXECUTION_TIME\\(3600000\\) \\*/ into t1",
+		"/insert into t1",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
@@ -2708,7 +2708,7 @@ func TestPlayerJSONDocs(t *testing.T) {
 			execStatements(t, []string{tcase.input})
 			want := qh.Expect(
 				"begin",
-				"/insert /\\*\\+ MAX_EXECUTION_TIME\\(3600000\\) \\*/ into vitess_json",
+				"/insert into vitess_json",
 				"/update _vt.vreplication set pos=",
 				"commit",
 			)
@@ -2772,7 +2772,7 @@ func TestPlayerJSONTwoColumns(t *testing.T) {
 			execStatements(t, []string{tcase.input})
 			want := qh.Expect(
 				"begin",
-				"/insert /\\*\\+ MAX_EXECUTION_TIME\\(3600000\\) \\*/ into vitess_json2",
+				"/insert into vitess_json2",
 				"/update _vt.vreplication set pos=",
 				"commit",
 			)
@@ -2851,28 +2851,28 @@ func TestGeneratedColumns(t *testing.T) {
 		data   [][]string
 	}{{
 		input:  "insert into t1(id, val, id2) values (1, 'aaa', 10)",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val,val3,id2) values (1,'aaa','aaa1',10)",
+		output: "insert into t1(id,val,val3,id2) values (1,'aaa','aaa1',10)",
 		table:  "t1",
 		data: [][]string{
 			{"1", "aaa", "1aaa", "aaa1", "10"},
 		},
 	}, {
 		input:  "update t1 set val = 'bbb', id2 = 11 where id = 1",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set val='bbb', val3='bbb1', id2=11 where id=1",
+		output: "update t1 set val='bbb', val3='bbb1', id2=11 where id=1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "bbb", "1bbb", "bbb1", "11"},
 		},
 	}, {
 		input:  "insert into t2(id, val, id2) values (1, 'aaa', 10)",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into t2(id,val3,val,id2) values (1,'aaa1','aaa',10)",
+		output: "insert into t2(id,val3,val,id2) values (1,'aaa1','aaa',10)",
 		table:  "t2",
 		data: [][]string{
 			{"1", "aaa1", "aaa", "10"},
 		},
 	}, {
 		input:  "update t2 set val = 'bbb', id2 = 11 where id = 1",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t2 set val3='bbb1', val='bbb', id2=11 where id=1",
+		output: "update t2 set val3='bbb1', val='bbb', id2=11 where id=1",
 		table:  "t2",
 		data: [][]string{
 			{"1", "bbb1", "bbb", "11"},
@@ -2934,14 +2934,14 @@ func TestPlayerInvalidDates(t *testing.T) {
 		data   [][]string
 	}{{
 		input:  "select 1 from dual",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,dt) values (1,'0000-00-00')",
+		output: "insert into dst1(id,dt) values (1,'0000-00-00')",
 		table:  "dst1",
 		data: [][]string{
 			{"1", "0000-00-00"},
 		},
 	}, {
 		input:  "insert into src1 values (2, '2020-01-01')",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into dst1(id,dt) values (2,'2020-01-01')",
+		output: "insert into dst1(id,dt) values (2,'2020-01-01')",
 		table:  "dst1",
 		data: [][]string{
 			{"1", "0000-00-00"},
@@ -3014,35 +3014,35 @@ func TestPlayerNoBlob(t *testing.T) {
 		data   [][]string
 	}{{ // 1. PartialQueryTemplate-Insert=1, PartialQueryCount-Insert=1 (blb1,blb2 are not inserted)
 		input:  "insert into t1(id,val1,blb1,id2,val2) values (1,'aaa','blb1',10,'AAA')",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into t1(id,val1,blb1,id2,val2) values (1,'aaa','blb1',10,'AAA')",
+		output: "insert into t1(id,val1,blb1,id2,val2) values (1,'aaa','blb1',10,'AAA')",
 		table:  "t1",
 		data: [][]string{
 			{"1", "aaa", "blb1", "10", "", "AAA"},
 		},
 	}, { // 2. PartialQueryTemplate-Update=1, PartialQueryCount-Update=1 (blb1 is not updated)
 		input:  "update t1 set blb2 = 'blb22' where id = 1",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set val1='aaa', id2=10, blb2='blb22', val2='AAA' where id=1",
+		output: "update t1 set val1='aaa', id2=10, blb2='blb22', val2='AAA' where id=1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "aaa", "blb1", "10", "blb22", "AAA"},
 		},
 	}, { // 3. PartialQueryTemplate-Update=2, PartialQueryCount-Update=2 (blb1 and blb2 are not updated)
 		input:  "update t1 set val1 = 'bbb' where id = 1",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set val1='bbb', id2=10, val2='AAA' where id=1",
+		output: "update t1 set val1='bbb', id2=10, val2='AAA' where id=1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "bbb", "blb1", "10", "blb22", "AAA"},
 		},
 	}, { // 4. PartialQueryTemplate-Update=2, PartialQueryCount-Update=3 (blb1 and blb2 are not updated, same #3)
 		input:  "update t1 set val2 = 'CCC', id2=99 where id = 1",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set val1='bbb', id2=99, val2='CCC' where id=1",
+		output: "update t1 set val1='bbb', id2=99, val2='CCC' where id=1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "bbb", "blb1", "99", "blb22", "CCC"},
 		},
 	}, { // 5. PartialQueryTemplate-Update=2, PartialQueryCount-Update=4 (blb1 is not updated, same as #1)
 		input:  "update t1 set blb2 = 'blb21' where id = 1",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set val1='bbb', id2=99, blb2='blb21', val2='CCC' where id=1",
+		output: "update t1 set val1='bbb', id2=99, blb2='blb21', val2='CCC' where id=1",
 
 		table: "t1",
 		data: [][]string{
@@ -3050,21 +3050,21 @@ func TestPlayerNoBlob(t *testing.T) {
 		},
 	}, { // 6. Not a partial update
 		input:  "update t1 set blb2 = 'blb222', blb1 = 'blb11' where id = 1",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t1 set val1='bbb', blb1='blb11', id2=99, blb2='blb222', val2='CCC' where id=1",
+		output: "update t1 set val1='bbb', blb1='blb11', id2=99, blb2='blb222', val2='CCC' where id=1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "bbb", "blb11", "99", "blb222", "CCC"},
 		},
 	}, { // 7. PartialQueryTemplate-Insert=2, PartialQueryCount-Insert=2 (txt1 is not inserted)
 		input:  "insert into t2(id,val1,id2,val2) values (1,'aaa',10,'AAA')",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into t2(id,val1,id2,val2) values (1,'aaa',10,'AAA')",
+		output: "insert into t2(id,val1,id2,val2) values (1,'aaa',10,'AAA')",
 		table:  "t2",
 		data: [][]string{
 			{"1", "aaa", "", "10", "AAA"},
 		},
 	}, { // 7. PartialQueryTemplate-Insert=2, PartialQueryCount-Insert=3 (txt1 is not inserted, same as #7)
 		input:  "insert into t2(id,val1,id2,val2) values (1,'bbb',20,'BBB')",
-		output: "insert /*+ MAX_EXECUTION_TIME(3600000) */ into t2(id,val1,id2,val2) values (1,'bbb',20,'BBB')",
+		output: "insert into t2(id,val1,id2,val2) values (1,'bbb',20,'BBB')",
 		table:  "t2",
 		data: [][]string{
 			{"1", "aaa", "", "10", "AAA"},
@@ -3072,7 +3072,7 @@ func TestPlayerNoBlob(t *testing.T) {
 		},
 	}, { // 8. Not a partial update, all columns are present
 		input:  "update t2 set txt1 = 'txt1' where id = 1 and val1 = 'aaa'",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t2 set txt1='txt1', id2=10, val2='AAA' where id=1 and val1='aaa'",
+		output: "update t2 set txt1='txt1', id2=10, val2='AAA' where id=1 and val1='aaa'",
 		table:  "t2",
 		data: [][]string{
 			{"1", "aaa", "txt1", "10", "AAA"},
@@ -3080,7 +3080,7 @@ func TestPlayerNoBlob(t *testing.T) {
 		},
 	}, { // 9. Not a partial update, all columns are present, same as #8
 		input:  "update t2 set val2 = 'DDD', txt1 = 'txt2' where id = 1 and val1 = 'bbb'",
-		output: "update /*+ MAX_EXECUTION_TIME(3600000) */ t2 set txt1='txt2', id2=20, val2='DDD' where id=1 and val1='bbb'",
+		output: "update t2 set txt1='txt2', id2=20, val2='DDD' where id=1 and val1='bbb'",
 		table:  "t2",
 		data: [][]string{
 			{"1", "aaa", "txt1", "10", "AAA"},

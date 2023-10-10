@@ -672,9 +672,9 @@ func (tpb *tablePlanBuilder) generateInsertStatement() *sqlparser.ParsedQuery {
 
 func (tpb *tablePlanBuilder) generateInsertPart(buf *sqlparser.TrackedBuffer) *sqlparser.ParsedQuery {
 	if tpb.onInsert == insertIgnore {
-		buf.Myprintf("insert %signore into %v(", vstreamer.GetVReplicationMaxExecutionTimeQueryHint(), tpb.name)
+		buf.Myprintf("insert ignore into %v(", tpb.name)
 	} else {
-		buf.Myprintf("insert %sinto %v(", vstreamer.GetVReplicationMaxExecutionTimeQueryHint(), tpb.name)
+		buf.Myprintf("insert into %v(", tpb.name)
 	}
 	separator := ""
 	for _, cexpr := range tpb.colExprs {
@@ -790,7 +790,7 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 	}
 	bvf := &bindvarFormatter{}
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
-	buf.Myprintf("update %s%v set ", vstreamer.GetVReplicationMaxExecutionTimeQueryHint(), tpb.name)
+	buf.Myprintf("update %v set ", tpb.name)
 	separator := ""
 	tpb.pkIndices = make([]bool, len(tpb.colExprs))
 	for i, cexpr := range tpb.colExprs {
@@ -841,11 +841,11 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 	switch tpb.onInsert {
 	case insertNormal:
-		buf.Myprintf("delete %sfrom %v", vstreamer.GetVReplicationMaxExecutionTimeQueryHint(), tpb.name)
+		buf.Myprintf("delete from %v", tpb.name)
 		tpb.generateWhere(buf, bvf)
 	case insertOnDup:
 		bvf.mode = bvBefore
-		buf.Myprintf("update %s%v set ", vstreamer.GetVReplicationMaxExecutionTimeQueryHint(), tpb.name)
+		buf.Myprintf("update %v set ", tpb.name)
 		separator := ""
 		for _, cexpr := range tpb.colExprs {
 			if cexpr.isGrouped || cexpr.isPK {
