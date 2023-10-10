@@ -4665,6 +4665,28 @@
     }
   },
   {
+    "comment": "name is in backfill vindex - not selected for vindex lookup",
+    "query": "select * from customer where name = 'x'",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from customer where name = 'x'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from customer where 1 != 1",
+        "Query": "select * from customer where name = 'x'",
+        "Table": "customer"
+      },
+      "TablesUsed": [
+        "user.customer"
+      ]
+    }
+  },
+  {
     "comment": "email vindex is costly than phone vindex - but phone vindex is backfiling hence ignored",
     "query": "select * from customer where email = 'a@mail.com' and phone = 123456",
     "plan": {

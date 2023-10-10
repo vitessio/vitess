@@ -166,6 +166,16 @@
               "to": "keyspace_id",
               "cost": "300"
             }
+        },
+        "lkp_bf_vdx": {
+          "type": "name_lkp_test",
+          "owner": "customer",
+          "params": {
+            "table": "lkp_shard_vdx",
+            "from": " ",
+            "to": "keyspace_id",
+            "write_only": "true"
+          }
         }
       },
       "tables": {
@@ -476,6 +486,10 @@
             {
               "column": "phone",
               "name": "unq_lkp_bf_vdx"
+            },
+            {
+              "column": "name",
+              "name": "lkp_bf_vdx"
             }
           ]
         },
