@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
 	"vitess.io/vitess/go/vt/vttablet"
 
 	"vitess.io/vitess/go/mysql/collations"

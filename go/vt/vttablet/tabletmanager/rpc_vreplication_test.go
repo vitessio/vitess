@@ -24,6 +24,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"testing"
+
 	"vitess.io/vitess/go/vt/vttablet"
 
 	"github.com/stretchr/testify/require"

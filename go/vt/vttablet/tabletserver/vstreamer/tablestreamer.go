@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strings"
 	"sync/atomic"
+
 	"vitess.io/vitess/go/vt/vttablet"
 
 	"vitess.io/vitess/go/sqlescape"

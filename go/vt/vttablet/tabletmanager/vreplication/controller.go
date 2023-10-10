@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
 	"vitess.io/vitess/go/vt/vttablet"
 
 	"google.golang.org/protobuf/encoding/prototext"

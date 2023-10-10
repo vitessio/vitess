@@ -18,6 +18,7 @@ package vttablet
 
 import (
 	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/servenv"
 )
 
