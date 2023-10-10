@@ -219,7 +219,7 @@ message Workflow {
   // the timestamp of the last transaction OR heartbeat timestamp (if there
   // have been no writes to replicate from the source).
   int64 max_v_replication_transaction_lag = 8;
-	// This specifies whether to defer the creation of secondary keys.
+  // This specifies whether to defer the creation of secondary keys.
   bool defer_secondary_keys = 9;
 
   message ReplicationLocation {
