@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -125,6 +126,10 @@ type (
 
 		// QuerySignature is used to identify shortcuts in the planning process
 		QuerySignature QuerySignature
+
+		// TODO - comments
+		ChildForeignKeysInvolved  map[TableSet][]vindexes.ChildFKInfo
+		ParentForeignKeysInvolved map[TableSet][]vindexes.ParentFKInfo
 	}
 
 	columnName struct {
@@ -136,6 +141,8 @@ type (
 	SchemaInformation interface {
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 		ConnCollation() collations.ID
+		// ForeignKeyMode returns the foreign_key flag value
+		ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
 	}
 )
 

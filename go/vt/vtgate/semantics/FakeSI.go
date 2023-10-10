@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -41,6 +42,10 @@ func (s *FakeSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Tab
 	return nil, s.VindexTables[sqlparser.String(tablename)], "", 0, nil, nil
 }
 
-func (FakeSI) ConnCollation() collations.ID {
+func (*FakeSI) ConnCollation() collations.ID {
 	return 45
+}
+
+func (s *FakeSI) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
+	return vschemapb.Keyspace_FK_UNMANAGED, nil
 }

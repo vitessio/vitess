@@ -18,8 +18,10 @@ package semantics
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // analyzer controls the flow of the analysis.
@@ -74,9 +76,7 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	}
 
 	// Creation of the semantic table
-	semTable := analyzer.newSemTable(statement, si.ConnCollation())
-
-	return semTable, nil
+	return analyzer.newSemTable(statement, si.ConnCollation())
 }
 
 // AnalyzeStrict analyzes the parsed query, and fails the analysis for any possible errors
@@ -96,7 +96,7 @@ func AnalyzeStrict(statement sqlparser.Statement, currentDb string, si SchemaInf
 	return st, nil
 }
 
-func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID) *SemTable {
+func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID) (*SemTable, error) {
 	var comments *sqlparser.ParsedComments
 	commentedStmt, isCommented := statement.(sqlparser.Commented)
 	if isCommented {
@@ -107,22 +107,29 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		columns[union] = info.exprs
 	}
 
-	return &SemTable{
-		Recursive:         a.binder.recursive,
-		Direct:            a.binder.direct,
-		ExprTypes:         a.typer.exprTypes,
-		Tables:            a.tables.Tables,
-		NotSingleRouteErr: a.projErr,
-		NotUnshardedErr:   a.unshardedErr,
-		Warning:           a.warning,
-		Comments:          comments,
-		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
-		Collation:         coll,
-		ExpandedColumns:   a.rewriter.expandedColumns,
-		columns:           columns,
-		StatementIDs:      a.scoper.statementIDs,
-		QuerySignature:    a.sig,
+	childFks, parentFks, err := a.getInvolvedForeignKeys(statement)
+	if err != nil {
+		return nil, err
 	}
+
+	return &SemTable{
+		Recursive:                 a.binder.recursive,
+		Direct:                    a.binder.direct,
+		ExprTypes:                 a.typer.exprTypes,
+		Tables:                    a.tables.Tables,
+		NotSingleRouteErr:         a.projErr,
+		NotUnshardedErr:           a.unshardedErr,
+		Warning:                   a.warning,
+		Comments:                  comments,
+		ColumnEqualities:          map[columnName][]sqlparser.Expr{},
+		Collation:                 coll,
+		ExpandedColumns:           a.rewriter.expandedColumns,
+		columns:                   columns,
+		StatementIDs:              a.scoper.statementIDs,
+		QuerySignature:            a.sig,
+		ChildForeignKeysInvolved:  childFks,
+		ParentForeignKeysInvolved: parentFks,
+	}, nil
 }
 
 func (a *analyzer) setError(err error) {
@@ -310,6 +317,132 @@ func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
 	case sqlparser.AggrFunc:
 		a.sig.Aggregation = true
 	}
+}
+
+// TODO: comment
+func (a *analyzer) getInvolvedForeignKeys(statement sqlparser.Statement) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, error) {
+	switch stmt := statement.(type) {
+	case *sqlparser.Insert, *sqlparser.Delete:
+		return a.getAllManagedForeignKeys()
+	case *sqlparser.Update:
+		allChildFks, allParentFks, err := a.getAllManagedForeignKeys()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if len(allChildFks) == 0 && len(allParentFks) == 0 {
+			return nil, nil, nil
+		}
+
+		pFksRequired := make(map[TableSet][]bool, len(allParentFks))
+		cFksRequired := make(map[TableSet][]bool, len(allChildFks))
+		for ts, fks := range allParentFks {
+			pFksRequired[ts] = make([]bool, len(fks))
+		}
+		for ts, fks := range allChildFks {
+			cFksRequired[ts] = make([]bool, len(fks))
+		}
+
+		UpdExprToTableSet := make(map[*sqlparser.ColName]TableSet)
+
+		// Go over all the update expressions
+		for _, updateExpr := range stmt.Exprs {
+			deps := a.binder.direct.dependencies(updateExpr.Name)
+			if deps.NumberOfTables() != 1 {
+				panic("expected to have single table dependency")
+			}
+			UpdExprToTableSet[updateExpr.Name] = deps
+			childFks := allChildFks[deps]
+			parentFKs := allParentFks[deps]
+
+			// Any foreign key to a child table for a column that has been updated
+			// will require the cascade operations or restrict verification to happen, so we include all such foreign keys.
+			for idx, childFk := range childFks {
+				if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+					cFksRequired[deps][idx] = true
+				}
+			}
+			// If we are setting a column to NULL, then we don't need to verify the existance of an
+			// equivalent row in the parent table, even if this column was part of a foreign key to a parent table.
+			if sqlparser.IsNull(updateExpr.Expr) {
+				continue
+			}
+			// We add all the possible parent foreign key constraints that need verification that an equivalent row
+			// exists, given that this column has changed.
+			for idx, parentFk := range parentFKs {
+				if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+					pFksRequired[deps][idx] = true
+				}
+			}
+		}
+		// For the parent foreign keys, if any of the columns part of the fk is set to NULL,
+		// then, we don't care for the existence of an equivalent row in the parent table.
+		for _, updateExpr := range stmt.Exprs {
+			if !sqlparser.IsNull(updateExpr.Expr) {
+				continue
+			}
+			ts := UpdExprToTableSet[updateExpr.Name]
+			parentFKs := allParentFks[ts]
+			for idx, parentFk := range parentFKs {
+				if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+					pFksRequired[ts][idx] = false
+				}
+			}
+		}
+
+		// Get the filtered lists and return them.
+		pFksNeedsHandling := map[TableSet][]vindexes.ParentFKInfo{}
+		cFksNeedsHandling := map[TableSet][]vindexes.ChildFKInfo{}
+		for ts, parentFks := range allParentFks {
+			var pFKNeeded []vindexes.ParentFKInfo
+			for idx, fk := range parentFks {
+				if pFksRequired[ts][idx] {
+					pFKNeeded = append(pFKNeeded, fk)
+				}
+			}
+			pFksNeedsHandling[ts] = pFKNeeded
+
+		}
+		for ts, childFks := range allChildFks {
+			var cFKNeeded []vindexes.ChildFKInfo
+			for idx, fk := range childFks {
+				if cFksRequired[ts][idx] {
+					cFKNeeded = append(cFKNeeded, fk)
+				}
+			}
+			cFksNeedsHandling[ts] = cFKNeeded
+
+		}
+		return cFksNeedsHandling, pFksNeedsHandling, nil
+	default:
+		return nil, nil, nil
+	}
+}
+
+// TODO: comment
+func (a *analyzer) getAllManagedForeignKeys() (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, error) {
+	allChildFKs := make(map[TableSet][]vindexes.ChildFKInfo)
+	allParentFKs := make(map[TableSet][]vindexes.ParentFKInfo)
+
+	for idx, table := range a.tables.Tables {
+		vi := table.GetVindexTable()
+		if vi == nil || vi.Keyspace == nil {
+			// If is not a real table, so should be skipped.
+			continue
+		}
+		fkMode, err := a.tables.si.ForeignKeyMode(vi.Keyspace.Name)
+		if err != nil {
+			return nil, nil, err
+		}
+		if fkMode != vschemapb.Keyspace_FK_MANAGED {
+			continue
+		}
+
+		ts := SingleTableSet(idx)
+		allChildFKs[ts] = vi.ChildForeignKeys
+		allParentFKs[ts] = vi.ParentForeignKeys
+	}
+	return allChildFKs, allParentFKs, nil
 }
 
 // ProjError is used to mark an error as something that should only be returned
