@@ -156,8 +156,8 @@ func getClientForCommand(cmd *cobra.Command) (vtctldclient.VtctldClient, error) 
 }
 
 func init() {
-	Root.PersistentFlags().StringVar(&server, "server", "", "VtCtld server to use for the connection (required).")
-	Root.PersistentFlags().DurationVar(&actionTimeout, "action_timeout", time.Hour, "Timeout to use for the command.")
-	Root.PersistentFlags().BoolVar(&compactOutput, "compact", false, "Use compact format for otherwise verbose outputs.")
+	Root.PersistentFlags().StringVar(&server, "server", "", "server to use for the connection (required)")
+	Root.PersistentFlags().DurationVar(&actionTimeout, "action_timeout", time.Hour, "timeout to use for the command")
+	Root.PersistentFlags().BoolVar(&compactOutput, "compact", false, "use compact format for otherwise verbose outputs")
 	vreplcommon.RegisterCommands(Root)
 }
