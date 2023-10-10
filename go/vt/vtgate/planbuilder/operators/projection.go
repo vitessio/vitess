@@ -56,15 +56,15 @@ func (dt *DerivedTable) String() string {
 	return fmt.Sprintf("DERIVED %s(%s)", dt.Alias, sqlparser.String(dt.Columns))
 }
 
-func (dt *DerivedTable) RewriteExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (sqlparser.Expr, error) {
+func (dt *DerivedTable) RewriteExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
 	if dt == nil {
-		return expr, nil
+		return expr
 	}
 	tableInfo, err := ctx.SemTable.TableInfoFor(dt.TableID)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	return semantics.RewriteDerivedTableExpression(expr, tableInfo), nil
+	return semantics.RewriteDerivedTableExpression(expr, tableInfo)
 }
 
 func (dt *DerivedTable) introducesTableID() semantics.TableSet {
@@ -319,10 +319,7 @@ func (p *Projection) addColumn(
 	ae *sqlparser.AliasedExpr,
 	push bool,
 ) (int, error) {
-	expr, err := p.DT.RewriteExpression(ctx, ae.Expr)
-	if err != nil {
-		return 0, err
-	}
+	expr := p.DT.RewriteExpression(ctx, ae.Expr)
 
 	if reuse {
 		offset := p.FindCol(ctx, expr, false)

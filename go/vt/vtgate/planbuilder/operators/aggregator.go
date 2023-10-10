@@ -80,7 +80,7 @@ func (a *Aggregator) SetInputs(operators []ops.Operator) {
 	a.Source = operators[0]
 }
 
-func (a *Aggregator) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (a *Aggregator) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
 	return &Filter{
 		Source:     a,
 		Predicates: []sqlparser.Expr{expr},
@@ -125,10 +125,7 @@ func (a *Aggregator) isDerived() bool {
 }
 
 func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr, _ bool) int {
-	expr, err := a.DT.RewriteExpression(ctx, in)
-	if err != nil {
-		panic(err)
-	}
+	expr := a.DT.RewriteExpression(ctx, in)
 	if offset, found := canReuseColumn(ctx, a.Columns, expr, extractExpr); found {
 		return offset
 	}
@@ -136,10 +133,7 @@ func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr
 }
 
 func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, groupBy bool, ae *sqlparser.AliasedExpr) int {
-	rewritten, err := a.DT.RewriteExpression(ctx, ae.Expr)
-	if err != nil {
-		panic(err)
-	}
+	rewritten := a.DT.RewriteExpression(ctx, ae.Expr)
 
 	ae = &sqlparser.AliasedExpr{
 		Expr: rewritten,
@@ -192,10 +186,7 @@ func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, ae *sqlpa
 	if offset >= 0 {
 		return offset, nil
 	}
-	expr, err := a.DT.RewriteExpression(ctx, expr)
-	if err != nil {
-		return 0, err
-	}
+	expr = a.DT.RewriteExpression(ctx, expr)
 
 	// Aggregator is little special and cannot work if the input offset are not matched with the aggregation columns.
 	// So, before pushing anything from above the aggregator offset planning needs to be completed.
