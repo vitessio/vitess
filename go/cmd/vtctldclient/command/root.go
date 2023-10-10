@@ -136,6 +136,13 @@ func getClientForCommand(cmd *cobra.Command) (vtctldclient.VtctldClient, error) 
 		}
 	}
 
+	// Reserved cobra commands for shell completion that we don't want to fail
+	// here.
+	switch {
+	case cmd.Name() == "__complete", cmd.Parent() != nil && cmd.Parent().Name() == "completion":
+		return nil, nil
+	}
+
 	if VtctldClientProtocol != "local" && server == "" {
 		return nil, errNoServer
 	}
