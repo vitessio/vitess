@@ -98,10 +98,7 @@ func pushAggregationThroughSubquery(
 			if idx >= 0 {
 				continue
 			}
-			_, err := pushedAggr.addColumnWithoutPushing(ctx, aeWrap(colName), true)
-			if err != nil {
-				return nil, nil, err
-			}
+			pushedAggr.addColumnWithoutPushing(ctx, aeWrap(colName), true)
 		}
 	}
 
@@ -256,10 +253,7 @@ withNextColumn:
 				continue withNextColumn
 			}
 		}
-		_, err := pushedAggr.addColumnWithoutPushing(ctx, aeWrap(col), true)
-		if err != nil {
-			return nil, nil, err
-		}
+		pushedAggr.addColumnWithoutPushing(ctx, aeWrap(col), true)
 	}
 
 	// Set the source of the filter to the new aggregator placed below the route.

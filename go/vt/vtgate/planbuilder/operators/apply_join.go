@@ -110,7 +110,7 @@ func (aj *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
 	return &kopy
 }
 
-func (aj *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (aj *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
 	return AddPredicate(ctx, aj, expr, false, newFilter)
 }
 
@@ -156,40 +156,26 @@ func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sql
 		return err
 	}
 	aj.JoinPredicates = append(aj.JoinPredicates, col)
-	rhs, err := aj.RHS.AddPredicate(ctx, col.RHSExpr)
-	if err != nil {
-		return err
-	}
+	rhs := aj.RHS.AddPredicate(ctx, col.RHSExpr)
 	aj.RHS = rhs
 
 	return nil
 }
 
-func (aj *ApplyJoin) pushColLeft(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
-	offset, err := aj.LHS.AddColumn(ctx, true, addToGroupBy, e)
-	if err != nil {
-		return 0, err
-	}
-	return offset, nil
-}
-
 func (aj *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
-	offset, err := aj.RHS.AddColumn(ctx, true, addToGroupBy, e)
-	if err != nil {
-		return 0, err
-	}
+	offset := aj.RHS.AddColumn(ctx, true, addToGroupBy, e)
 	return offset, nil
 }
 
-func (aj *ApplyJoin) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
-	return slice.Map(aj.JoinColumns, joinColumnToAliasedExpr), nil
+func (aj *ApplyJoin) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	return slice.Map(aj.JoinColumns, joinColumnToAliasedExpr)
 }
 
-func (aj *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (aj *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return transformColumnsToSelectExprs(ctx, aj)
 }
 
-func (aj *ApplyJoin) GetOrdering() ([]ops.OrderBy, error) {
+func (aj *ApplyJoin) GetOrdering() []ops.OrderBy {
 	return aj.LHS.GetOrdering()
 }
 
@@ -228,12 +214,12 @@ func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sq
 	return
 }
 
-func (aj *ApplyJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) (int, error) {
+func (aj *ApplyJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
 	offset, found := canReuseColumn(ctx, aj.JoinColumns, expr, joinColumnToExpr)
 	if !found {
-		return -1, nil
+		return -1
 	}
-	return offset, nil
+	return offset
 }
 
 func (aj *ApplyJoin) AddColumn(
@@ -241,33 +227,27 @@ func (aj *ApplyJoin) AddColumn(
 	reuse bool,
 	groupBy bool,
 	expr *sqlparser.AliasedExpr,
-) (int, error) {
+) int {
 	if reuse {
-		offset, err := aj.FindCol(ctx, expr.Expr, false)
-		if err != nil {
-			return 0, err
-		}
+		offset := aj.FindCol(ctx, expr.Expr, false)
 		if offset != -1 {
-			return offset, nil
+			return offset
 		}
 	}
 	col, err := aj.getJoinColumnFor(ctx, expr, expr.Expr, groupBy)
 	if err != nil {
-		return 0, err
+		panic(err)
 	}
 	offset := len(aj.JoinColumns)
 	aj.JoinColumns = append(aj.JoinColumns, col)
-	return offset, nil
+	return offset
 }
 
-func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
+func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) {
 	for _, col := range aj.JoinColumns {
 		// Read the type description for JoinColumn to understand the following code
 		for _, lhsExpr := range col.LHSExprs {
-			offset, err := aj.pushColLeft(ctx, aeWrap(lhsExpr.Expr), col.GroupBy)
-			if err != nil {
-				return err
-			}
+			offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
 			if col.RHSExpr == nil {
 				// if we don't have an RHS expr, it means that this is a pure LHS expression
 				aj.addOffset(-offset - 1)
@@ -276,35 +256,22 @@ func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 			}
 		}
 		if col.RHSExpr != nil {
-			offset, err := aj.pushColRight(ctx, aeWrap(col.RHSExpr), col.GroupBy)
-			if err != nil {
-				return err
-			}
+			offset := aj.RHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.RHSExpr))
 			aj.addOffset(offset + 1)
 		}
 	}
 
 	for _, col := range aj.JoinPredicates {
 		for _, lhsExpr := range col.LHSExprs {
-			offset, err := aj.pushColLeft(ctx, aeWrap(lhsExpr.Expr), false)
-			if err != nil {
-				return err
-			}
+			offset := aj.LHS.AddColumn(ctx, true, false, aeWrap(lhsExpr.Expr))
 			aj.Vars[lhsExpr.Name] = offset
-		}
-		if err != nil {
-			return err
 		}
 	}
 
 	for _, lhsExpr := range aj.ExtraLHSVars {
-		offset, err := aj.pushColLeft(ctx, aeWrap(lhsExpr.Expr), false)
-		if err != nil {
-			return err
-		}
+		offset := aj.LHS.AddColumn(ctx, true, false, aeWrap(lhsExpr.Expr))
 		aj.Vars[lhsExpr.Name] = offset
 	}
-	return nil
 }
 
 func (aj *ApplyJoin) addOffset(offset int) {

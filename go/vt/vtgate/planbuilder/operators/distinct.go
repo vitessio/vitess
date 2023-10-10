@@ -46,21 +46,15 @@ type (
 	}
 )
 
-func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
-	columns, err := d.GetColumns(ctx)
-	if err != nil {
-		return err
-	}
+func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) {
+	columns := d.GetColumns(ctx)
 	for idx, col := range columns {
 		e := d.QP.GetSimplifiedExpr(col.Expr)
 		var wsCol *int
 		typ, coll, _ := ctx.SemTable.TypeForExpr(e)
 
 		if ctx.SemTable.NeedsWeightString(e) {
-			offset, err := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(e)))
-			if err != nil {
-				return err
-			}
+			offset := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(e)))
 			wsCol = &offset
 		}
 
@@ -71,7 +65,6 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 			Collation: coll,
 		})
 	}
-	return nil
 }
 
 func (d *Distinct) Clone(inputs []ops.Operator) ops.Operator {
@@ -93,28 +86,24 @@ func (d *Distinct) SetInputs(operators []ops.Operator) {
 	d.Source = operators[0]
 }
 
-func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := d.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	d.Source = newSrc
-	return d, nil
+func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	d.Source = d.Source.AddPredicate(ctx, expr)
+	return d
 }
 
-func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) (int, error) {
+func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	return d.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
-func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return d.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (d *Distinct) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (d *Distinct) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return d.Source.GetColumns(ctx)
 }
 
-func (d *Distinct) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (d *Distinct) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return d.Source.GetSelectExprs(ctx)
 }
 
@@ -125,7 +114,7 @@ func (d *Distinct) ShortDescription() string {
 	return "Performance"
 }
 
-func (d *Distinct) GetOrdering() ([]ops.OrderBy, error) {
+func (d *Distinct) GetOrdering() []ops.OrderBy {
 	return d.Source.GetOrdering()
 }
 

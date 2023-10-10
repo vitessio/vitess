@@ -30,7 +30,7 @@ import (
 // planOffsets will walk the tree top down, adding offset information to columns in the tree for use in further optimization,
 func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	type offsettable interface {
-		planOffsets(ctx *plancontext.PlanningContext) error
+		planOffsets(ctx *plancontext.PlanningContext)
 	}
 
 	visitor := func(in ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -39,7 +39,7 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 		case *Horizon:
 			return nil, nil, vterrors.VT13001(fmt.Sprintf("should not see %T here", in))
 		case offsettable:
-			err = op.planOffsets(ctx)
+			op.planOffsets(ctx)
 		}
 		if err != nil {
 			return nil, nil, err
@@ -60,7 +60,7 @@ func fetchByOffset(e sqlparser.SQLNode) bool {
 }
 
 // useOffsets rewrites an expression to use values from the input
-func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (sqlparser.Expr, error) {
+func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) sqlparser.Expr {
 	var exprOffset *sqlparser.Offset
 
 	in := op.Inputs()[0]
@@ -68,10 +68,7 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Op
 
 	notFound := func(e sqlparser.Expr) error {
 		_, addToGroupBy := e.(*sqlparser.ColName)
-		offset, err := in.AddColumn(ctx, true, addToGroupBy, aeWrap(e))
-		if err != nil {
-			return err
-		}
+		offset := in.AddColumn(ctx, true, addToGroupBy, aeWrap(e))
 		exprOffset = sqlparser.NewOffset(offset, e)
 		return nil
 	}
@@ -88,7 +85,7 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Op
 
 	rewritten := sqlparser.CopyOnRewrite(expr, visitor, up, ctx.SemTable.CopySemanticInfo)
 
-	return rewritten.(sqlparser.Expr), nil
+	return rewritten.(sqlparser.Expr)
 }
 
 // addColumnsToInput adds columns needed by an operator to its input.
@@ -109,10 +106,7 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root ops.Operator) (ops
 		found := func(expr sqlparser.Expr, i int) {}
 		notFound := func(e sqlparser.Expr) error {
 			_, addToGroupBy := e.(*sqlparser.ColName)
-			_, err := proj.addColumnWithoutPushing(ctx, aeWrap(e), addToGroupBy)
-			if err != nil {
-				return err
-			}
+			proj.addColumnWithoutPushing(ctx, aeWrap(e), addToGroupBy)
 			addedColumns = true
 			return nil
 		}
@@ -155,7 +149,7 @@ func pullDistinctFromUNION(_ *plancontext.PlanningContext, root ops.Operator) (o
 func getOffsetRewritingVisitor(
 	ctx *plancontext.PlanningContext,
 	// this is the function that will be called to try to find the offset for an expression
-	findCol func(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error),
+	findCol func(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int,
 	// this function will be called when an expression has been found on the input
 	found func(sqlparser.Expr, int),
 	// if we have an expression that mush be fetched, this method will be called
@@ -170,11 +164,7 @@ func getOffsetRewritingVisitor(
 		if !ok {
 			return true
 		}
-		var offset int
-		offset, err = findCol(ctx, e, false)
-		if err != nil {
-			return false
-		}
+		offset := findCol(ctx, e, false)
 		if offset >= 0 {
 			found(e, offset)
 			return false

@@ -54,22 +54,18 @@ type SubQuery struct {
 	IsProjection bool
 }
 
-func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) error {
+func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) {
 	sq.Vars = make(map[string]int)
 	columns, err := sq.GetJoinColumns(ctx, sq.Outer)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	for _, jc := range columns {
 		for _, lhsExpr := range jc.LHSExprs {
-			offset, err := sq.Outer.AddColumn(ctx, true, false, aeWrap(lhsExpr.Expr))
-			if err != nil {
-				return err
-			}
+			offset := sq.Outer.AddColumn(ctx, true, false, aeWrap(lhsExpr.Expr))
 			sq.Vars[lhsExpr.Name] = offset
 		}
 	}
-	return nil
 }
 
 func (sq *SubQuery) OuterExpressionsNeeded(ctx *plancontext.PlanningContext, outer ops.Operator) (result []*sqlparser.ColName, err error) {
@@ -129,7 +125,7 @@ func (sq *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
 	return &klone
 }
 
-func (sq *SubQuery) GetOrdering() ([]ops.OrderBy, error) {
+func (sq *SubQuery) GetOrdering() []ops.OrderBy {
 	return sq.Outer.GetOrdering()
 }
 
@@ -171,28 +167,24 @@ func (sq *SubQuery) ShortDescription() string {
 	return fmt.Sprintf("%s %v%s", typ, sq.FilterType.String(), pred)
 }
 
-func (sq *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newOuter, err := sq.Outer.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	sq.Outer = newOuter
-	return sq, nil
+func (sq *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	sq.Outer = sq.Outer.AddPredicate(ctx, expr)
+	return sq
 }
 
-func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) (int, error) {
+func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) int {
 	return sq.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
 }
 
-func (sq *SubQuery) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (sq *SubQuery) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return sq.Outer.FindCol(ctx, expr, underRoute)
 }
 
-func (sq *SubQuery) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (sq *SubQuery) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return sq.Outer.GetColumns(ctx)
 }
 
-func (sq *SubQuery) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (sq *SubQuery) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return sq.Outer.GetSelectExprs(ctx)
 }
 
