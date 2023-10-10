@@ -42,18 +42,18 @@ type (
 		// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
 		// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
 		// TODO: we should remove this and replace it with rewriters
-		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
+		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator
 
-		AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) (int, error)
+		AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int
 
-		FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error)
+		FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int
 
-		GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error)
-		GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error)
+		GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr
+		GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs
 
 		ShortDescription() string
 
-		GetOrdering() ([]OrderBy, error)
+		GetOrdering() []OrderBy
 	}
 
 	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.

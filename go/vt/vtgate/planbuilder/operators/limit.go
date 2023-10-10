@@ -47,32 +47,28 @@ func (l *Limit) SetInputs(operators []ops.Operator) {
 	l.Source = operators[0]
 }
 
-func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := l.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	l.Source = newSrc
-	return l, nil
+func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	l.Source = l.Source.AddPredicate(ctx, expr)
+	return l
 }
 
-func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) (int, error) {
+func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	return l.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
-func (l *Limit) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (l *Limit) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return l.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (l *Limit) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (l *Limit) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return l.Source.GetColumns(ctx)
 }
 
-func (l *Limit) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (l *Limit) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return l.Source.GetSelectExprs(ctx)
 }
 
-func (l *Limit) GetOrdering() ([]ops.OrderBy, error) {
+func (l *Limit) GetOrdering() []ops.OrderBy {
 	return l.Source.GetOrdering()
 }
 

@@ -70,8 +70,8 @@ func (fkv *FkVerify) Clone(inputs []ops.Operator) ops.Operator {
 }
 
 // GetOrdering implements the Operator interface
-func (fkv *FkVerify) GetOrdering() ([]ops.OrderBy, error) {
-	return nil, nil
+func (fkv *FkVerify) GetOrdering() []ops.OrderBy {
+	return nil
 }
 
 // ShortDescription implements the Operator interface

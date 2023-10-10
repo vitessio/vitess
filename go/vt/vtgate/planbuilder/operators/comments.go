@@ -46,28 +46,24 @@ func (l *LockAndComment) SetInputs(operators []ops.Operator) {
 	l.Source = operators[0]
 }
 
-func (l *LockAndComment) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := l.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	l.Source = newSrc
-	return l, nil
+func (l *LockAndComment) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	l.Source = l.Source.AddPredicate(ctx, expr)
+	return l
 }
 
-func (l *LockAndComment) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) (int, error) {
+func (l *LockAndComment) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
 	return l.Source.AddColumn(ctx, reuseExisting, addToGroupBy, expr)
 }
 
-func (l *LockAndComment) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (l *LockAndComment) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return l.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (l *LockAndComment) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (l *LockAndComment) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return l.Source.GetColumns(ctx)
 }
 
-func (l *LockAndComment) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (l *LockAndComment) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return l.Source.GetSelectExprs(ctx)
 }
 
@@ -80,6 +76,6 @@ func (l *LockAndComment) ShortDescription() string {
 	return strings.Join(s, " ")
 }
 
-func (l *LockAndComment) GetOrdering() ([]ops.OrderBy, error) {
+func (l *LockAndComment) GetOrdering() []ops.OrderBy {
 	return l.Source.GetOrdering()
 }

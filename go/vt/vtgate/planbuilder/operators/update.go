@@ -76,8 +76,8 @@ func (u *Update) Clone([]ops.Operator) ops.Operator {
 	return &upd
 }
 
-func (u *Update) GetOrdering() ([]ops.OrderBy, error) {
-	return nil, nil
+func (u *Update) GetOrdering() []ops.OrderBy {
+	return nil
 }
 
 func (u *Update) TablesUsed() []string {
