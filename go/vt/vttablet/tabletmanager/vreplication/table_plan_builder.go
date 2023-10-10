@@ -30,7 +30,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
 // This file contains just the builders for ReplicatorPlan and TablePlan.
@@ -727,7 +726,6 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 func (tpb *tablePlanBuilder) generateSelectPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) *sqlparser.ParsedQuery {
 	bvf.mode = bvAfter
 	buf.WriteString(" select ")
-	buf.WriteString(vstreamer.GetVReplicationMaxExecutionTimeQueryHint())
 	separator := ""
 	for _, cexpr := range tpb.colExprs {
 		if tpb.isColumnGenerated(cexpr.colName) {

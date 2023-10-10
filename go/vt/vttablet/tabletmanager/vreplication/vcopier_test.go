@@ -286,7 +286,7 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		"insert into dst(idc,val) values ('a',1)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR charset:45 flags:20483} rows:{lengths:1 values:\\"a\\"}'.*`,
 		// Copy-catchup mode.
-		`/insert into dst\(idc,val\) select /\*\+ MAX_EXECUTION_TIME\(500\) \*/ 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`,
+		`/insert into dst\(idc,val\) select 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`,
 	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
 		// Back to copy mode.
 		// Inserts can happen out of order.
@@ -409,7 +409,7 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 		"insert into dst(id,idc,idc2,val) values (1,'a','a',1)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} fields:{name:\\"idc\\" type:VARBINARY charset:63 flags:20611} fields:{name:\\"idc2\\" type:VARBINARY charset:63 flags:20611} rows:{lengths:1 lengths:1 lengths:1 values:\\"1aa\\"}'.*`,
 		// Copy-catchup mode.
-		`insert into dst(id,idc,idc2,val) select /*+ MAX_EXECUTION_TIME(500) */ 1, 'B', 'B', 3 from dual where (1,'B','B') <= (1,'a','a')`,
+		`insert into dst(id,idc,idc2,val) select 1, 'B', 'B', 3 from dual where (1,'B','B') <= (1,'a','a')`,
 		// Copy mode.
 		"insert into dst(id,idc,idc2,val) values (1,'c','c',2)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} fields:{name:\\"idc\\" type:VARBINARY charset:63 flags:20611} fields:{name:\\"idc2\\" type:VARBINARY charset:63 flags:20611} rows:{lengths:1 lengths:1 lengths:1 values:\\"1cc\\"}'.*`,
@@ -757,7 +757,7 @@ func testPlayerCopyBigTable(t *testing.T) {
 		"insert into dst(id,val) values (1,'aaa')",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"1\\"}'.*`,
 		// The next catchup executes the new row insert, but will be a no-op.
-		"insert into dst(id,val) select /*+ MAX_EXECUTION_TIME(500) */ 3, 'ccc' from dual where (3) <= (1)",
+		"insert into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
 		// Back to copy mode.
 		// Inserts can happen out-of-order.
@@ -887,7 +887,7 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 		"insert into src(id,val) values (1,'aaa')",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"1\\"}'.*`,
 		// The next catchup executes the new row insert, but will be a no-op.
-		"insert into src(id,val) select /*+ MAX_EXECUTION_TIME(500) */ 3, 'ccc' from dual where (3) <= (1)",
+		"insert into src(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
 		// Return to copy mode.
 		// Inserts can happen out-of-order.
@@ -1042,18 +1042,18 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 	expectNontxQueries(t, qh.Expect(
 		// Catchup
 		"/update _vt.vreplication set message='Picked source tablet.*",
-		"insert into dst1(id,val) select /*+ MAX_EXECUTION_TIME(3600000) */ 1, 'insert in' from dual where (1,1) <= (6,6)",
-		"insert into dst1(id,val) select /*+ MAX_EXECUTION_TIME(3600000) */ 7, 'insert out' from dual where (7,7) <= (6,6)",
+		"insert into dst1(id,val) select 1, 'insert in' from dual where (1,1) <= (6,6)",
+		"insert into dst1(id,val) select 7, 'insert out' from dual where (7,7) <= (6,6)",
 		"update dst1 set val='updated' where id=3 and (3,3) <= (6,6)",
 		"update dst1 set val='updated' where id=10 and (10,10) <= (6,6)",
 		"delete from dst1 where id=4 and (4,4) <= (6,6)",
 		"delete from dst1 where id=9 and (9,9) <= (6,6)",
 		"delete from dst1 where id=5 and (5,5) <= (6,6)",
-		"insert into dst1(id,val) select /*+ MAX_EXECUTION_TIME(3600000) */ 5, 'move within' from dual where (5,10) <= (6,6)",
+		"insert into dst1(id,val) select 5, 'move within' from dual where (5,10) <= (6,6)",
 		"delete from dst1 where id=6 and (6,6) <= (6,6)",
-		"insert into dst1(id,val) select /*+ MAX_EXECUTION_TIME(3600000) */ 12, 'move out' from dual where (12,6) <= (6,6)",
+		"insert into dst1(id,val) select 12, 'move out' from dual where (12,6) <= (6,6)",
 		"delete from dst1 where id=11 and (11,11) <= (6,6)",
-		"insert into dst1(id,val) select /*+ MAX_EXECUTION_TIME(3600000) */ 4, 'move in' from dual where (4,11) <= (6,6)",
+		"insert into dst1(id,val) select 4, 'move in' from dual where (4,11) <= (6,6)",
 		"update copied set val='bbb' where id=1",
 		// Fast-forward
 		"update dst1 set val='updated again' where id=3 and (3,3) <= (6,6)",
@@ -1174,7 +1174,7 @@ func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 		"/update _vt.vreplication set message='Picked source tablet.*",
 	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
 		if !optimizeInsertsEnabled {
-			expect = expect.Then(qh.Immediately("insert into dst(id,val) select /*+ MAX_EXECUTION_TIME(3600000) */ 4, 'new' from dual where (4) <= (2)"))
+			expect = expect.Then(qh.Immediately("insert into dst(id,val) select 4, 'new' from dual where (4) <= (2)"))
 		}
 		return expect.Then(qh.Immediately("insert into dst(id,val) values (3,'uncopied'), (4,'new')"))
 	}).Then(qh.Immediately(
