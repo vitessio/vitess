@@ -88,7 +88,7 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Opera
 	case cleanOutPerfDistinct:
 		return removePerformanceDistinctAboveRoute(ctx, op)
 	case subquerySettling:
-		return settleSubqueries(ctx, op)
+		return settleSubqueries(ctx, op), nil
 	}
 
 	return op, nil
