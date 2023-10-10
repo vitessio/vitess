@@ -18,7 +18,6 @@ package vttablet
 
 import (
 	"github.com/spf13/pflag"
-
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -27,7 +26,11 @@ const (
 	VReplicationExperimentalFlagAllowNoBlobBinlogRowImage = int64(2)
 )
 
-var VReplicationExperimentalFlags = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
+var (
+	VReplicationExperimentalFlags = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
+	VReplicationNetReadTimeout    = 300
+	VReplicationNetWriteTimeout   = 600
+)
 
 func init() {
 	servenv.OnParseFor("vttablet", registerFlags)
@@ -36,4 +39,6 @@ func init() {
 func registerFlags(fs *pflag.FlagSet) {
 	fs.Int64Var(&VReplicationExperimentalFlags, "vreplication_experimental_flags", VReplicationExperimentalFlags,
 		"(Bitmask) of experimental features in vreplication to enable")
+	fs.IntVar(&VReplicationNetReadTimeout, "vreplication_net_read_timeout", VReplicationNetReadTimeout, "Session value of net_read_timeout for vreplication, in seconds")
+	fs.IntVar(&VReplicationNetWriteTimeout, "vreplication_net_write_timeout", VReplicationNetWriteTimeout, "Session value of net_write_timeout for vreplication, in seconds")
 }

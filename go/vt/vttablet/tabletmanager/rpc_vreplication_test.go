@@ -24,6 +24,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"testing"
+	"vitess.io/vitess/go/vt/vttablet"
 
 	"github.com/stretchr/testify/require"
 
@@ -60,8 +61,6 @@ const (
 	getAutoIncrementStep     = "select @@session.auto_increment_increment"
 	setSessionTZ             = "set @@session.time_zone = '+00:00'"
 	setNames                 = "set names 'binary'"
-	setNetReadTimeout        = "set @@session.net_read_timeout = 300"
-	setNetWriteTimeout       = "set @@session.net_write_timeout = 600"
 	getBinlogRowImage        = "select @@binlog_row_image"
 	insertStreamsCreatedLog  = "insert into _vt.vreplication_log(vrepl_id, type, state, message) values(1, 'Stream Created', '', '%s'"
 	getVReplicationRecord    = "select * from _vt.vreplication where id = 1"
@@ -86,7 +85,9 @@ var (
 			},
 		},
 	}
-	position = fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition)
+	position           = fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition)
+	setNetReadTimeout  = fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout)
+	setNetWriteTimeout = fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout)
 )
 
 // TestCreateVReplicationWorkflow tests the query generated
