@@ -186,11 +186,9 @@ func (pool *ConnPool[C]) open() {
 	pool.capacity.Store(pool.config.maxCapacity)
 
 	// The expire worker takes care of removing from the waiter list any clients whose
-	// context has been cancelled. It also forcefully removes all blocked clients when
-	// the pool starts shutting down.
+	// context has been cancelled.
 	pool.runWorker(pool.close, 1*time.Second, func(_ time.Time) bool {
-		force := pool.capacity.Load() == 0 && pool.borrowed.Load() == 0
-		pool.wait.expire(force)
+		pool.wait.expire(false)
 		return true
 	})
 
@@ -322,6 +320,9 @@ func (pool *ConnPool[C]) recordWait(start time.Time) {
 func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C], error) {
 	if ctx.Err() != nil {
 		return nil, ErrCtxTimeout
+	}
+	if pool.capacity.Load() == 0 {
+		return nil, ErrTimeout
 	}
 	if setting == nil {
 		return pool.get(ctx)
@@ -597,6 +598,12 @@ func (pool *ConnPool[C]) SetCapacity(newcap int64) {
 		}
 		conn.Close()
 		pool.closedConn()
+	}
+
+	// if we're closing down the pool, wake up any blocked waiters because no connections
+	// are going to be returned in the future
+	if newcap == 0 {
+		pool.wait.expire(true)
 	}
 }
 
