@@ -138,10 +138,7 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 	}
 
 	if reuse {
-		offset, err := a.findColInternal(ctx, ae, groupBy)
-		if err != nil {
-			panic(err)
-		}
+		offset := a.findColInternal(ctx, ae, groupBy)
 		if offset >= 0 {
 			return offset
 		}
@@ -177,11 +174,11 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 	return offset
 }
 
-func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
+func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, addToGroupBy bool) int {
 	expr := ae.Expr
 	offset := a.FindCol(ctx, expr, false)
 	if offset >= 0 {
-		return offset, nil
+		return offset
 	}
 	expr = a.DT.RewriteExpression(ctx, expr)
 
@@ -189,20 +186,20 @@ func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, ae *sqlpa
 	// So, before pushing anything from above the aggregator offset planning needs to be completed.
 	a.planOffsets(ctx)
 	if offset, found := canReuseColumn(ctx, a.Columns, expr, extractExpr); found {
-		return offset, nil
+		return offset
 	}
 	colName, isColName := expr.(*sqlparser.ColName)
 	for i, col := range a.Columns {
 		if isColName && colName.Name.EqualString(col.As.String()) {
-			return i, nil
+			return i
 		}
 	}
 
 	if addToGroupBy {
-		return 0, vterrors.VT13001("did not expect to add group by here")
+		panic(vterrors.VT13001("did not expect to add group by here"))
 	}
 
-	return -1, nil
+	return -1
 }
 
 func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
