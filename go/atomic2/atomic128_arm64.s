@@ -1,6 +1,4 @@
 // Copyright 2023 The Vitess Authors.
-// Copyright (c) 2021, Carlo Alberto Ferraris
-// Copyright (c) 2017, Tom Thorogood
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,33 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Use of this source code is governed by a
-// Modified BSD License that can be found in
-// the LICENSE file.
-
 //+build !noasm,!appengine
 
 #include "textflag.h"
 
 TEXT ·compareAndSwapUint128_(SB), NOSPLIT, $0-41
-	MOVQ addr+0(FP), R8
-	MOVQ oldp+8(FP), AX
-	MOVQ oldu+16(FP), DX
-	MOVQ newp+24(FP), BX
-	MOVQ newu+32(FP), CX
-	LOCK
-	CMPXCHG16B (R8)
-	SETEQ swapped+40(FP)
+	MOVD addr+0(FP), R5
+	MOVD oldp+8(FP), R0
+	MOVD oldu+16(FP), R1
+	MOVD newp+24(FP), R2
+	MOVD newu+32(FP), R3
+	MOVD R0, R6
+	MOVD R1, R7
+	CASPD (R0, R1), (R5), (R2, R3)
+	CMP R0, R6
+	CCMP EQ, R1, R7, $0
+	CSET EQ, R0
+	MOVB R0, ret+40(FP)
 	RET
 
 TEXT ·loadUint128_(SB), NOSPLIT, $0-24
-	MOVQ addr+0(FP), R8
-	XORQ AX, AX
-	XORQ DX, DX
-	XORQ BX, BX
-	XORQ CX, CX
-	LOCK
-	CMPXCHG16B (R8)
-	MOVQ AX, pp+8(FP)
-	MOVQ DX, uu+16(FP)
+	MOVD addr+0(FP), R3
+	LDAXP (R3), (R0, R1)
+	MOVD R0, val+8(FP)
+	MOVD R1, val+16(FP)
 	RET
