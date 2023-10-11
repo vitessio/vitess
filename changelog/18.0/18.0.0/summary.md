@@ -5,6 +5,8 @@
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [Local examples now use etcd v3 storage and API](#local-examples-etcd-v3)
+  - **[Deprecations and Removals](#deprecations-and-removals)**
+    - [Legacy Clients](#legacy-clients)
   - **[New command line flags and behavior](#new-flag)**
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
     - [VTOrc flag `--change-tablets-with-errant-gtid-to-drained`](#new-flag-errant-gtid-convert)
@@ -46,6 +48,30 @@ removed this legacy etcd usage and instead use the new (default) etcd v3 storage
 [PR #13791](https://github.com/vitessio/vitess/pull/13791) for additional info. If you are using the local
 examples in any sort of long-term non-testing capacity, then you will need to explicitly use the v2 storage
 and API mode or [migrate your existing data from v2 to v3](https://etcd.io/docs/v3.5/tutorials/how-to-migrate/).
+
+### <a id="deprecations-and-removals"/>Deprecations and Removals
+
+#### <a id="legacy-clients"/>Legacy Clients
+
+`vtctldclient` is our new modern *Vitess controller daemon* (`vtctld`) *client* – which you will use to perform commands
+and take actions in your Vitess clusters. It is [replacing the legacy `vtctl`/`vtctlclient` clients](https://vitess.io/docs/18.0/reference/vtctldclient-transition/overview/).
+Some of the benefits are:
+
+- [Dedicated RPCs for each command](https://github.com/vitessio/vitess/blob/release-18.0/proto/vtctlservice.proto#L32-L353)
+that are used between `vtctldclient` and `vtctld` – this offers clean separation of commands and makes it easier to
+develop new features without impacting other commands. This also presents an [API that other clients (both Vitess and
+3rd party) can use to interface with Vitess](https://vitess.io/blog/2023-04-17-vtctldserver-api/).
+- Use of modern frameworks: [`pFlag`](https://github.com/spf13/pflag#readme), [`Cobra`](https://cobra.dev), and [`Viper`](https://github.com/spf13/viper#readme).
+This makes development easier while also offering a better UX. For example, this offers a way to use
+[configuration files](https://vitess.io/docs/18.0/reference/viper/config-files/) with support for
+[dynamic configuration](https://vitess.io/docs/18.0/reference/viper/dynamic-values/) ([see also](https://github.com/vitessio/vitess/blob/release-18.0/doc/viper/viper.md)).
+- As noted above, the [reference documentation](https://vitess.io/docs/reference/programs/vtctldclient/) is now built
+through code. This removes a burden from developers while helping users by ensuring the docs are always correct and up-to-date.
+
+In Vitess 18.0 we have completed migrating all client commands to `vtctldclient` – the last ones being the [OnlineDDL](https://github.com/vitessio/vitess/issues/13712)
+and [VReplication](https://github.com/vitessio/vitess/issues/12152) commands. With this work now completed, the
+legacy `vtctl`/`vtctlclient` binaries are now fully deprecated and we plan to remove them in Vitess 19.0. You should
+[begin your transition](https://vitess.io/docs/18.0/reference/vtctldclient-transition/) before upgrading to 18.0.
 
 ### <a id="new-flag"/>New command line flags and behavior
 
