@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"

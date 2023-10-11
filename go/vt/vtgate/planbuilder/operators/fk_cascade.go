@@ -18,9 +18,9 @@ package operators
 
 import (
 	"slices"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // FkChild is used to represent a foreign key child table operation
