@@ -38,7 +38,7 @@ import (
 const (
 	// DefaultServerVersion is the default server version we're sending to the client.
 	// Can be changed.
-	DefaultServerVersion = "5.7.9-Vitess"
+	DefaultServerVersion = "8.0.33"
 
 	// timing metric keys
 	connectTimingKey  = "Connect"
