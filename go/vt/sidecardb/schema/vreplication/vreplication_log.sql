@@ -24,5 +24,6 @@ CREATE TABLE IF NOT EXISTS vreplication_log
     `updated_at` timestamp      NULL     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `message`    text           NOT NULL,
     `count`      bigint         NOT NULL DEFAULT '1',
-    PRIMARY KEY (`id`)
+    PRIMARY KEY (`id`),
+    KEY `vrepl_id_idx` (`vrepl_id`)
 ) ENGINE = InnoDB

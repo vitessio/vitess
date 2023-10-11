@@ -56,8 +56,9 @@ func commandShow(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.GetWorkflowsRequest{
-		Keyspace: baseOptions.Keyspace,
-		Workflow: baseOptions.Workflow,
+		Keyspace:    baseOptions.Keyspace,
+		Workflow:    baseOptions.Workflow,
+		IncludeLogs: workflowShowOptions.IncludeLogs,
 	}
 	resp, err := common.GetClient().GetWorkflows(common.GetCommandCtx(), req)
 	if err != nil {
