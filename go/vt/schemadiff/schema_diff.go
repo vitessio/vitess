@@ -18,8 +18,11 @@ package schemadiff
 
 import (
 	"fmt"
+	"math"
+	"sort"
 
 	"vitess.io/vitess/go/mathutil"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type DiffDependencyType int
@@ -68,6 +71,36 @@ func (d *DiffDependency) Type() DiffDependencyType {
 	return d.typ
 }
 
+// sortDiffsHeuristically takes a list of diffs and sorts it according to a simple heuristic: DROPs come first, CREATEs
+// come later. This ordering will be used as one of the first permutations to apply for conflicting diffs, in the hope
+// that it cuts short the search for a successful permutation. In fact, it serves as the seed for the rest of the permutations.
+func sortDiffsHeuristically(diffs []EntityDiff) {
+	if len(diffs) <= 1 {
+		return
+	}
+	diffOrder := func(diff EntityDiff) int {
+		switch diff.Statement().(type) {
+		case *sqlparser.DropView:
+			return 0
+		case *sqlparser.DropTable:
+			return 1
+		case *sqlparser.AlterTable:
+			return 2
+		case *sqlparser.AlterView:
+			return 3
+		case *sqlparser.CreateTable:
+			return 4
+		case *sqlparser.CreateView:
+			return 5
+		default:
+			return math.MaxInt
+		}
+	}
+	sort.SliceStable(diffs, func(i, j int) bool {
+		return diffOrder(diffs[i]) < diffOrder(diffs[j])
+	})
+}
+
 /*
 The below is adapted from https://yourbasic.org/golang/generate-permutation-slice-string/
 Licensed under https://creativecommons.org/licenses/by/3.0/
@@ -76,11 +109,15 @@ Modified to have an early break
 
 // permutateDiffs calls `callback` with each permutation of a. If the function returns `true`, that means
 // the callback has returned `true` for an early break, thus possibly not all permutations have been evaluated.
-func permutateDiffs(a []EntityDiff, callback func([]EntityDiff) (earlyBreak bool)) (earlyBreak bool) {
-	if len(a) == 0 {
+func permutateDiffs(diffs []EntityDiff, callback func([]EntityDiff) (earlyBreak bool)) (earlyBreak bool) {
+	if len(diffs) == 0 {
 		return false
 	}
-	return permDiff(a, callback, 0)
+	// Sort by a heristic (DROPs first, ALTERs next, CREATEs last). This ordering is then used first in the permutation
+	// search and serves as seed for the rest of permutations.
+	sortDiffsHeuristically(diffs)
+
+	return permDiff(diffs, callback, 0)
 }
 
 // permDiff is a recursive function to permutate given `a` and call `callback` for each permutation.
@@ -250,12 +287,11 @@ func (d *SchemaDiff) OrderedDiffs() ([]EntityDiff, error) {
 		// We will now permutate the diffs in this equivalence class, and hopefully find
 		// a valid permutation (one where if we apply the diffs in-order, the schema remains valid throughout the process)
 		foundValidPathForClass := permutateDiffs(classDiffs, func(permutatedDiffs []EntityDiff) bool {
-			permutationSchema := lastGoodSchema
+			permutationSchema := lastGoodSchema.copy()
 			// We want to apply the changes one by one, and validate the schema after each change
-			var err error
 			for i := range permutatedDiffs {
-				permutationSchema, err = permutationSchema.Apply(permutatedDiffs[i : i+1])
-				if err != nil {
+				// apply inline
+				if err := permutationSchema.apply(permutatedDiffs[i : i+1]); err != nil {
 					// permutation is invalid
 					return false // continue searching
 				}

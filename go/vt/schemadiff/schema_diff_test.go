@@ -114,19 +114,20 @@ func TestPermutations(t *testing.T) {
 				allPerms := map[string]bool{}
 				allDiffs := schemaDiff.UnorderedDiffs()
 				originalSingleString := toSingleString(allDiffs)
+				numEquals := 0
 				earlyBreak := permutateDiffs(allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
+					defer func() { iteration++ }()
 					// cover all permutations
-					allPerms[toSingleString(pdiffs)] = true
-					if iteration == 0 {
-						// First permutation should be the same as original
-						require.Equal(t, originalSingleString, toSingleString(pdiffs))
-					} else {
-						// rest of permutations must be different than original (later we also verify they are all unique)
-						require.NotEqualf(t, originalSingleString, toSingleString(pdiffs), "in iteration %d", iteration)
+					singleString := toSingleString(pdiffs)
+					allPerms[singleString] = true
+					if originalSingleString == singleString {
+						numEquals++
 					}
-					iteration++
 					return false
 				})
+				if len(allDiffs) > 0 {
+					assert.Equal(t, numEquals, 1)
+				}
 				assert.False(t, earlyBreak)
 				assert.Equal(t, tc.expectPermutations, len(allPerms))
 			})
@@ -336,13 +337,11 @@ func TestSchemaDiff(t *testing.T) {
 				"create table t1 (id int primary key, info int not null, dt datetime);",
 				"create table t2 (id int primary key, ts timestamp, v varchar);",
 				"create view v1 as select id from t1",
-				// "create view v2 as select id from t1",
 				"create view v2 as select info, ts from t1, t2",
-				// "create view v2 as select info, ts from t1, t2",
 			},
 			expectDiffs: 3,
 			expectDeps:  2,
-			entityOrder: []string{"t1", "v2", "t2"},
+			entityOrder: []string{"t1", "t2", "v2"},
 		},
 		{
 			name: "alter view depending on 2 tables, uses new column, alter tables",
