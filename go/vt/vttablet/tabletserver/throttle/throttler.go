@@ -689,7 +689,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 				{
 					// sparse
 					if throttler.IsOpen() {
-						go throttler.refreshMySQLInventory(ctx)
+						throttler.refreshMySQLInventory(ctx)
 					}
 				}
 			case probes := <-throttler.mysqlClusterProbesChan:
