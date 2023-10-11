@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	// These imports ensure init()s within them get called and they register their commands/subcommands.
+	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	vreplcommon "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/lookupvindex"
 	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/materialize"
@@ -55,6 +56,7 @@ var (
 
 	server        string
 	actionTimeout time.Duration
+	compactOutput bool
 
 	// Root is the main entrypoint to the vtctldclient CLI.
 	Root = &cobra.Command{
@@ -71,6 +73,9 @@ var (
 				ctx = context.Background()
 			}
 			commandCtx, commandCancel = context.WithTimeout(ctx, actionTimeout)
+			if compactOutput {
+				cli.DefaultMarshalOptions.EmitUnpopulated = false
+			}
 			vreplcommon.SetClient(client)
 			vreplcommon.SetCommandCtx(commandCtx)
 			return err
@@ -151,7 +156,8 @@ func getClientForCommand(cmd *cobra.Command) (vtctldclient.VtctldClient, error) 
 }
 
 func init() {
-	Root.PersistentFlags().StringVar(&server, "server", "", "server to use for connection (required)")
-	Root.PersistentFlags().DurationVar(&actionTimeout, "action_timeout", time.Hour, "timeout for the total command")
+	Root.PersistentFlags().StringVar(&server, "server", "", "server to use for the connection (required)")
+	Root.PersistentFlags().DurationVar(&actionTimeout, "action_timeout", time.Hour, "timeout to use for the command")
+	Root.PersistentFlags().BoolVar(&compactOutput, "compact", false, "use compact format for otherwise verbose outputs")
 	vreplcommon.RegisterCommands(Root)
 }
