@@ -766,9 +766,12 @@ func (ins *Insert) getInsertShardedRoute(
 			if keyspaceIDs[index] != nil {
 				mids = append(mids, sqlparser.String(ins.Mid[index]))
 				for _, expr := range ins.Mid[index] {
-					if arg, ok := expr.(*sqlparser.Argument); ok {
-						shardBindVars[arg.Name] = bindVars[arg.Name]
-					}
+					_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+						if arg, ok := node.(*sqlparser.Argument); ok {
+							shardBindVars[arg.Name] = bindVars[arg.Name]
+						}
+						return true, nil
+					}, expr, nil)
 				}
 			}
 		}
