@@ -6501,6 +6501,28 @@
     }
   },
   {
+    "comment": "left join with using has to be transformed into inner join with on condition",
+    "query": "SELECT * FROM unsharded_authoritative as A LEFT JOIN unsharded_authoritative as B USING(col1)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM unsharded_authoritative as A LEFT JOIN unsharded_authoritative as B USING(col1)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select A.col1 as col1, A.col2 as col2, B.col2 as col2 from unsharded_authoritative as A left join unsharded_authoritative as B on A.col1 = B.col1 where 1 != 1",
+        "Query": "select A.col1 as col1, A.col2 as col2, B.col2 as col2 from unsharded_authoritative as A left join unsharded_authoritative as B on A.col1 = B.col1",
+        "Table": "unsharded_authoritative"
+      },
+      "TablesUsed": [
+        "main.unsharded_authoritative"
+      ]
+    }
+  },
+  {
     "comment": "join query using table with muticolumn vindex",
     "query": "select 1 from multicol_tbl m1 join multicol_tbl m2 on m1.cola = m2.cola",
     "v3-plan": {
