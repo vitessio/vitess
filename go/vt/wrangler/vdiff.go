@@ -828,7 +828,7 @@ func (df *vdiff) selectTablets(ctx context.Context, ts *trafficSwitcher) error {
 	go func() {
 		defer wg.Done()
 		err2 = df.forAll(df.targets, func(shard string, target *shardStreamer) error {
-			tp, err := discovery.NewTabletPicker(ctx, df.ts.TopoServer(), []string{df.targetCell}, df.targetCell, df.ts.TargetKeyspaceName(), shard, df.tabletTypesStr, discovery.TabletPickerOptions{})
+			tp, err := discovery.NewTabletPicker(ctx, df.ts.TopoServer(), []string{df.targetCell}, df.targetCell, df.ts.TargetKeyspaceName(), shard, df.tabletTypesStr, discovery.TabletPickerOptions{}, make(map[string]topodatapb.TabletAlias))
 			if err != nil {
 				return err
 			}

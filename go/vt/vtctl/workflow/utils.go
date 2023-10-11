@@ -626,7 +626,7 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 			if cells == nil {
 				cells = append(cells, shard.PrimaryAlias.Cell)
 			}
-			tp, err := discovery.NewTabletPicker(ctx, ts.ws.ts, cells, shard.PrimaryAlias.Cell, keyspace, shard.ShardName(), tabletTypesStr, discovery.TabletPickerOptions{})
+			tp, err := discovery.NewTabletPicker(ctx, ts.ws.ts, cells, shard.PrimaryAlias.Cell, keyspace, shard.ShardName(), tabletTypesStr, discovery.TabletPickerOptions{}, make(map[string]topodatapb.TabletAlias))
 			if err != nil {
 				allErrors.RecordError(err)
 				return
