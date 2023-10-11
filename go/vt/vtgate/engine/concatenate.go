@@ -110,7 +110,13 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 			return nil, errWrongNumberOfColumnsInSelect
 		}
 
-		rows = append(rows, r.Rows...)
+		for _, row := range r.Rows {
+			newRow, err := c.coerceValuesTo(row, fields)
+			if err != nil {
+				return nil, err
+			}
+			rows = append(rows, newRow)
+		}
 	}
 
 	return &sqltypes.Result{
@@ -120,27 +126,60 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	}, nil
 }
 
-func (c *Concatenate) getFields(res []*sqltypes.Result) ([]*querypb.Field, error) {
+func (c *Concatenate) coerceValuesTo(row sqltypes.Row, fields []*querypb.Field) (sqltypes.Row, error) {
+	if len(row) != len(fields) {
+		panic("wrong number of fields")
+	}
+
+	for i, value := range row {
+		if _, found := c.NoNeedToTypeCheck[i]; found {
+			continue
+		}
+
+		newValue, err := evalengine.CoerceTo(value, fields[i].Type)
+		if err != nil {
+			return nil, err
+		}
+		row[i] = newValue
+	}
+	return row, nil
+}
+
+func (c *Concatenate) getFields(res []*sqltypes.Result) (resultFields []*querypb.Field, err error) {
 	if len(res) == 0 {
 		return nil, nil
 	}
 
-	var fields []*querypb.Field
+	resultFields = res[0].Fields
+	columns := make([][]sqltypes.Type, len(resultFields))
+
+	addFields := func(fields []*querypb.Field) {
+		if len(fields) != len(columns) {
+			err = errWrongNumberOfColumnsInSelect
+			return
+		}
+		for idx, field := range fields {
+			columns[idx] = append(columns[idx], field.Type)
+		}
+	}
+
 	for _, r := range res {
 		if r.Fields == nil {
 			continue
 		}
-		if fields == nil {
-			fields = r.Fields
+		addFields(r.Fields)
+	}
+
+	// The resulting column types need to be the coercion of all the input columns
+	for colIdx, t := range columns {
+		if _, found := c.NoNeedToTypeCheck[colIdx]; found {
 			continue
 		}
 
-		err := c.compareFields(fields, r.Fields)
-		if err != nil {
-			return nil, err
-		}
+		resultFields[colIdx].Type = evalengine.AggregateTypes(t)
 	}
-	return fields, nil
+
+	return resultFields, nil
 }
 
 func (c *Concatenate) execSources(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {

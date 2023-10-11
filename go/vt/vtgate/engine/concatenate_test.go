@@ -23,6 +23,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -71,7 +73,7 @@ func TestConcatenate_NoErrors(t *testing.T) {
 			r("id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1", "2|a2|b2"),
 			r("id|col3|col4", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2"),
 		},
-		expectedError: "merging field of different types is not supported",
+		expectedResult: r("id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1", "2|a2|b2", "1|a1|b1", "2|a2|b2", "1|a1|b1", "2|a2|b2"),
 	}, {
 		testName: "ignored field types - ignored",
 		inputs: []*sqltypes.Result{
@@ -110,7 +112,8 @@ func TestConcatenate_NoErrors(t *testing.T) {
 			qr, err := concatenate.TryExecute(context.Background(), &noopVCursor{}, nil, true)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
-				require.Equal(t, tc.expectedResult, qr)
+				utils.MustMatch(t, tc.expectedResult.Fields, qr.Fields, "fields")
+				utils.MustMatch(t, tc.expectedResult.Rows, qr.Rows)
 			} else {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tc.expectedError)
@@ -169,6 +172,7 @@ func TestConcatenateTypes(t *testing.T) {
 		{t1: "int32", t2: "varchar", expected: "varchar"},
 		{t1: "int32", t2: "decimal", expected: "decimal"},
 		{t1: "hexval", t2: "uint64", expected: "varchar"},
+		{t1: "varchar", t2: "varbinary", expected: "varbinary"},
 	}
 
 	for _, test := range tests {
