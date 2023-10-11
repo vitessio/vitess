@@ -84,7 +84,7 @@
     "@types/lodash-es": "^4.17.4",
     "autoprefixer": "^10.4.2",
     "msw": "^0.36.8",
-    "postcss": "^8.4.6",
+    "postcss": "^8.4.31",
     "prettier": "^2.2.1",
     "protobufjs": "^6.11.3",
     "serve": "^13.0.2",
