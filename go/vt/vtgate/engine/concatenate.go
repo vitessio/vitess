@@ -136,7 +136,7 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 
 func (c *Concatenate) coerceValuesTo(row sqltypes.Row, fields []*querypb.Field) error {
 	if len(row) != len(fields) {
-		panic("wrong number of fields")
+		return errWrongNumberOfColumnsInSelect
 	}
 
 	for i, value := range row {
@@ -305,7 +305,7 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 					rest[currIndex] = resultChunk
 					res := fieldRec.Add(-1)
 					if res == 0 {
-						// We have received fields from all sources. We can now calculate the output types //WALKING THE DOGS! push and THANKS!
+						// We have received fields from all sources. We can now calculate the output types
 						var err error
 						fields, err = c.getFields(rest)
 						if err != nil {
@@ -346,39 +346,64 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 
 func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	// all the below fields ensure that the fields are sent only once.
-	var seenFields []*querypb.Field
-	var fieldsMu sync.Mutex
-	var fieldsSent bool
+	results := make([][]*sqltypes.Result, len(c.Sources))
 
 	for idx, source := range c.Sources {
-		err := vcursor.StreamExecutePrimitive(ctx, source, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
-			// if we have fields to compare, make sure all the fields are all the same
-			if idx == 0 {
-				fieldsMu.Lock()
-				defer fieldsMu.Unlock()
-				if !fieldsSent {
-					fieldsSent = true
-					seenFields = resultChunk.Fields
-					return callback(resultChunk)
-				}
-			}
-			if resultChunk.Fields != nil {
-				err := c.compareFields(seenFields, resultChunk.Fields)
-				if err != nil {
-					return err
-				}
-			}
+		err := vcursor.StreamExecutePrimitive(ctx, source, bindVars, true, func(resultChunk *sqltypes.Result) error {
+			// This visitor will just accumulate all the results into slices
+			results[idx] = append(results[idx], resultChunk)
+
 			// check if context has expired.
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			return callback(resultChunk)
-
+			return nil
 		})
 		if err != nil {
 			return err
 		}
 	}
+
+	firsts := make([]*sqltypes.Result, len(c.Sources))
+	for i, result := range results {
+		firsts[i] = result[0]
+	}
+
+	fields, err := c.getFields(firsts)
+	if err != nil {
+		return err
+	}
+
+	for _, res := range results {
+		for _, r := range res {
+			if len(r.Rows) > 0 &&
+				len(fields) != len(r.Rows[0]) {
+				return errWrongNumberOfColumnsInSelect
+			}
+
+			needsCoercion := false
+			for idx, field := range r.Fields {
+				if fields[idx].Type != field.Type {
+					needsCoercion = true
+					break
+				}
+			}
+			if needsCoercion {
+				for _, row := range r.Rows {
+					err := c.coerceValuesTo(row, fields)
+					if err != nil {
+						return err
+					}
+				}
+			}
+			err := callback(r)
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+
 	return nil
 }
 
@@ -432,20 +457,4 @@ func (c *Concatenate) Inputs() ([]Primitive, []map[string]any) {
 
 func (c *Concatenate) description() PrimitiveDescription {
 	return PrimitiveDescription{OperatorType: c.RouteType()}
-}
-
-func (c *Concatenate) compareFields(fields1 []*querypb.Field, fields2 []*querypb.Field) error {
-	if len(fields1) != len(fields2) {
-		return errWrongNumberOfColumnsInSelect
-	}
-	for i, field1 := range fields1 {
-		if _, found := c.NoNeedToTypeCheck[i]; found {
-			continue
-		}
-		field2 := fields2[i]
-		if field1.Type != field2.Type {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "merging field of different types is not supported, name: (%v, %v) types: (%v, %v)", field1.Name, field2.Name, field1.Type, field2.Type)
-		}
-	}
-	return nil
 }

@@ -100,36 +100,42 @@ func TestConcatenate_NoErrors(t *testing.T) {
 	}}
 
 	for _, tc := range testCases {
-		var sources []Primitive
-		for _, input := range tc.inputs {
-			// input is added twice, since the first one is used by execute and the next by stream execute
-			sources = append(sources, &fakePrimitive{results: []*sqltypes.Result{input, input}})
+		for _, tx := range []bool{false, true} {
+			var sources []Primitive
+			for _, input := range tc.inputs {
+				// input is added twice, since the first one is used by execute and the next by stream execute
+				sources = append(sources, &fakePrimitive{results: []*sqltypes.Result{input, input}})
+			}
+
+			concatenate := NewConcatenate(sources, tc.ignoreTypes)
+			vcursor := &noopVCursor{inTx: tx}
+			txStr := "InTx"
+			if !tx {
+				txStr = "NotInTx"
+			}
+			t.Run(fmt.Sprintf("%s-%s-Exec", txStr, tc.testName), func(t *testing.T) {
+				qr, err := concatenate.TryExecute(context.Background(), vcursor, nil, true)
+				if tc.expectedError == "" {
+					require.NoError(t, err)
+					utils.MustMatch(t, tc.expectedResult.Fields, qr.Fields, "fields")
+					utils.MustMatch(t, tc.expectedResult.Rows, qr.Rows)
+				} else {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), tc.expectedError)
+				}
+			})
+
+			t.Run(fmt.Sprintf("%s-%s-StreamExec", txStr, tc.testName), func(t *testing.T) {
+				qr, err := wrapStreamExecute(concatenate, vcursor, nil, true)
+				if tc.expectedError == "" {
+					require.NoError(t, err)
+					require.NoError(t, sqltypes.RowsEquals(tc.expectedResult.Rows, qr.Rows))
+				} else {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), tc.expectedError)
+				}
+			})
 		}
-
-		concatenate := NewConcatenate(sources, tc.ignoreTypes)
-
-		t.Run(tc.testName+"-Execute", func(t *testing.T) {
-			qr, err := concatenate.TryExecute(context.Background(), &noopVCursor{}, nil, true)
-			if tc.expectedError == "" {
-				require.NoError(t, err)
-				utils.MustMatch(t, tc.expectedResult.Fields, qr.Fields, "fields")
-				utils.MustMatch(t, tc.expectedResult.Rows, qr.Rows)
-			} else {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tc.expectedError)
-			}
-		})
-
-		t.Run(tc.testName+"-StreamExecute", func(t *testing.T) {
-			qr, err := wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
-			if tc.expectedError == "" {
-				require.NoError(t, err)
-				require.NoError(t, sqltypes.RowsEquals(tc.expectedResult.Rows, qr.Rows))
-			} else {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tc.expectedError)
-			}
-		})
 	}
 }
 
