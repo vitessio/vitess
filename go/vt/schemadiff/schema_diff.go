@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sort"
@@ -109,35 +110,38 @@ Modified to have an early break
 
 // permutateDiffs calls `callback` with each permutation of a. If the function returns `true`, that means
 // the callback has returned `true` for an early break, thus possibly not all permutations have been evaluated.
-func permutateDiffs(diffs []EntityDiff, callback func([]EntityDiff) (earlyBreak bool)) (earlyBreak bool) {
+func permutateDiffs(ctx context.Context, diffs []EntityDiff, callback func([]EntityDiff) (earlyBreak bool)) (earlyBreak bool, err error) {
 	if len(diffs) == 0 {
-		return false
+		return false, nil
 	}
 	// Sort by a heristic (DROPs first, ALTERs next, CREATEs last). This ordering is then used first in the permutation
 	// search and serves as seed for the rest of permutations.
 	sortDiffsHeuristically(diffs)
 
-	return permDiff(diffs, callback, 0)
+	return permDiff(ctx, diffs, callback, 0)
 }
 
 // permDiff is a recursive function to permutate given `a` and call `callback` for each permutation.
 // If `callback` returns `true`, then so does this function, and this indicates a request for an early
 // break, in which case this function will not be called again.
-func permDiff(a []EntityDiff, callback func([]EntityDiff) (earlyBreak bool), i int) (earlyBreak bool) {
-	if i > len(a) {
-		return callback(a)
+func permDiff(ctx context.Context, a []EntityDiff, callback func([]EntityDiff) (earlyBreak bool), i int) (earlyBreak bool, err error) {
+	if err := ctx.Err(); err != nil {
+		return true, err // early break
 	}
-	if permDiff(a, callback, i+1) {
-		return true
+	if i > len(a) {
+		return callback(a), nil
+	}
+	if brk, err := permDiff(ctx, a, callback, i+1); brk {
+		return true, err
 	}
 	for j := i + 1; j < len(a); j++ {
 		a[i], a[j] = a[j], a[i]
-		if permDiff(a, callback, i+1) {
-			return true
+		if brk, err := permDiff(ctx, a, callback, i+1); brk {
+			return true, err
 		}
 		a[i], a[j] = a[j], a[i]
 	}
-	return false
+	return false, nil
 }
 
 // SchemaDiff is a rich diff between two schemas. It includes the following:
@@ -269,7 +273,7 @@ func (d *SchemaDiff) HasSequentialExecutionDependencies() bool {
 
 // OrderedDiffs returns the list of diff in applicable order, if possible. This is a linearized representation
 // where diffs may be applied in-order one after another, keeping the schema in valid state at all times.
-func (d *SchemaDiff) OrderedDiffs() ([]EntityDiff, error) {
+func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 	lastGoodSchema := d.schema
 	var orderedDiffs []EntityDiff
 	m := d.r.Map()
@@ -286,7 +290,7 @@ func (d *SchemaDiff) OrderedDiffs() ([]EntityDiff, error) {
 		}
 		// We will now permutate the diffs in this equivalence class, and hopefully find
 		// a valid permutation (one where if we apply the diffs in-order, the schema remains valid throughout the process)
-		foundValidPathForClass := permutateDiffs(classDiffs, func(permutatedDiffs []EntityDiff) bool {
+		foundValidPathForClass, err := permutateDiffs(ctx, classDiffs, func(permutatedDiffs []EntityDiff) bool {
 			permutationSchema := lastGoodSchema.copy()
 			// We want to apply the changes one by one, and validate the schema after each change
 			for i := range permutatedDiffs {
@@ -301,6 +305,9 @@ func (d *SchemaDiff) OrderedDiffs() ([]EntityDiff, error) {
 			lastGoodSchema = permutationSchema
 			return true // early break! No need to keep searching
 		})
+		if err != nil {
+			return nil, err
+		}
 		if !foundValidPathForClass {
 			// In this equivalence class, there is no valid permutation. We cannot linearize the diffs.
 			return nil, &ImpossibleApplyDiffOrderError{

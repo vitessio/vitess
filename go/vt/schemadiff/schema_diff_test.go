@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -25,6 +26,7 @@ import (
 )
 
 func TestPermutations(t *testing.T) {
+	ctx := context.Background()
 	tt := []struct {
 		name               string
 		fromQueries        []string
@@ -115,7 +117,7 @@ func TestPermutations(t *testing.T) {
 				allDiffs := schemaDiff.UnorderedDiffs()
 				originalSingleString := toSingleString(allDiffs)
 				numEquals := 0
-				earlyBreak := permutateDiffs(allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
+				earlyBreak, err := permutateDiffs(ctx, allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
 					defer func() { iteration++ }()
 					// cover all permutations
 					singleString := toSingleString(pdiffs)
@@ -125,6 +127,7 @@ func TestPermutations(t *testing.T) {
 					}
 					return false
 				})
+				assert.NoError(t, err)
 				if len(allDiffs) > 0 {
 					assert.Equal(t, numEquals, 1)
 				}
@@ -135,7 +138,7 @@ func TestPermutations(t *testing.T) {
 				allPerms := map[string]bool{}
 				allDiffs := schemaDiff.UnorderedDiffs()
 				originalSingleString := toSingleString(allDiffs)
-				earlyBreak := permutateDiffs(allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
+				earlyBreak, err := permutateDiffs(ctx, allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
 					// Single visit
 					allPerms[toSingleString(pdiffs)] = true
 					// First permutation should be the same as original
@@ -143,6 +146,7 @@ func TestPermutations(t *testing.T) {
 					// early break; this callback function should not be invoked again
 					return true
 				})
+				assert.NoError(t, err)
 				if len(allDiffs) > 0 {
 					assert.True(t, earlyBreak)
 					assert.Equal(t, 1, len(allPerms))
@@ -156,7 +160,20 @@ func TestPermutations(t *testing.T) {
 	}
 }
 
+func TestPermutationsContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	allDiffs := []EntityDiff{&DropViewEntityDiff{}}
+	earlyBreak, err := permutateDiffs(ctx, allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
+		return false
+	})
+	assert.True(t, earlyBreak) // proves that termination was due to context cancel
+	assert.Error(t, err)       // proves that termination was due to context cancel
+}
+
 func TestSchemaDiff(t *testing.T) {
+	ctx := context.Background()
 	var (
 		createQueries = []string{
 			"create table t1 (id int primary key, info int not null);",
@@ -681,7 +698,7 @@ func TestSchemaDiff(t *testing.T) {
 			assert.Equalf(t, tc.expectDeps, len(deps), "found deps: %v", depsKeys)
 			assert.Equal(t, tc.sequential, schemaDiff.HasSequentialExecutionDependencies())
 
-			orderedDiffs, err := schemaDiff.OrderedDiffs()
+			orderedDiffs, err := schemaDiff.OrderedDiffs(ctx)
 			if tc.conflictingDiffs > 0 {
 				require.Greater(t, tc.conflictingDiffs, 1) // self integrity. If there's a conflict, then obviously there's at least two conflicting diffs (a single diff has nothing to conflict with)
 				assert.Error(t, err)
