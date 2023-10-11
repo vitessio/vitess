@@ -533,8 +533,13 @@ func generateDefaultShard(tabAlias int, shard string, keyspaceData keyspaceInfo,
 - op: add
   path: /services/init_shard_primary%[2]d
   value:
+<<<<<<< HEAD
     image: vitess/lite:v18.0.0-rc1
     command: ["sh", "-c", "/vt/bin/vtctlclient %[5]s InitShardPrimary -force %[4]s/%[3]s %[6]s-%[2]d "]
+=======
+    image: vitess/lite:${VITESS_TAG:-latest}
+    command: ["sh", "-c", "/vt/bin/vtctldclient %[5]s InitShardPrimary --force %[4]s/%[3]s %[6]s-%[2]d "]
+>>>>>>> 8d7b507a2a (Move all examples to vtctldclient (#14226))
     %[1]s
 `, dependsOn, aliases[0], shard, keyspaceData.keyspace, opts.topologyFlags, opts.cell)
 }
