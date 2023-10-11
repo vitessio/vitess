@@ -88,7 +88,7 @@ func formatTwoOptionsNicely(a, b string) string {
 var errWrongNumberOfColumnsInSelect = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
 
 // TryExecute performs a non-streaming exec.
-func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	res, err := c.execSources(ctx, vcursor, bindVars, true)
 	if err != nil {
 		return nil, err
@@ -100,32 +100,12 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	}
 
 	var rows [][]sqltypes.Value
-
-	for _, r := range res {
-		if len(rows) > 0 &&
-			len(r.Rows) > 0 &&
-			len(rows[0]) != len(r.Rows[0]) {
-			return nil, errWrongNumberOfColumnsInSelect
-		}
-
-		needsCoercion := false
-		for idx, field := range r.Fields {
-			if fields[idx].Type != field.Type {
-				needsCoercion = true
-				break
-			}
-		}
-		if needsCoercion {
-			for _, row := range r.Rows {
-				err := c.coerceValuesTo(row, fields)
-				if err != nil {
-					return nil, err
-				}
-				rows = append(rows, row)
-			}
-		} else {
-			rows = append(rows, r.Rows...)
-		}
+	err = c.coerceAndVisitResults(res, fields, func(result *sqltypes.Result) error {
+		rows = append(rows, result.Rows...)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return &sqltypes.Result{
@@ -204,7 +184,7 @@ func (c *Concatenate) execSources(ctx context.Context, vcursor VCursor, bindVars
 	return c.parallelExec(ctx, vcursor, bindVars, wantfields)
 }
 
-func (c *Concatenate) parallelExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
+func (c *Concatenate) parallelExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) ([]*sqltypes.Result, error) {
 	results := make([]*sqltypes.Result, len(c.Sources))
 	var outerErr error
 
@@ -230,7 +210,7 @@ func (c *Concatenate) parallelExec(ctx context.Context, vcursor VCursor, bindVar
 	return results, outerErr
 }
 
-func (c *Concatenate) sequentialExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
+func (c *Concatenate) sequentialExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) ([]*sqltypes.Result, error) {
 	results := make([]*sqltypes.Result, len(c.Sources))
 	for i, source := range c.Sources {
 		currIndex, currSource := i, source
@@ -245,17 +225,17 @@ func (c *Concatenate) sequentialExec(ctx context.Context, vcursor VCursor, bindV
 }
 
 // TryStreamExecute performs a streaming exec.
-func (c *Concatenate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (c *Concatenate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
 	if vcursor.Session().InTransaction() {
 		// as we are in a transaction, we need to execute all queries inside a single connection,
 		// which holds the single transaction we have
-		return c.sequentialStreamExec(ctx, vcursor, bindVars, wantfields, callback)
+		return c.sequentialStreamExec(ctx, vcursor, bindVars, callback)
 	}
 	// not in transaction, so execute in parallel.
-	return c.parallelStreamExec(ctx, vcursor, bindVars, wantfields, callback)
+	return c.parallelStreamExec(ctx, vcursor, bindVars, callback)
 }
 
-func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, in func(*sqltypes.Result) error) error {
+func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, in func(*sqltypes.Result) error) error {
 	ctx, cancel := context.WithCancel(inCtx)
 	defer cancel()
 	var outerErr error
@@ -344,7 +324,7 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 	return outerErr
 }
 
-func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	// all the below fields ensure that the fields are sent only once.
 	results := make([][]*sqltypes.Result, len(c.Sources))
 
@@ -373,37 +353,47 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 	if err != nil {
 		return err
 	}
-
 	for _, res := range results {
-		for _, r := range res {
-			if len(r.Rows) > 0 &&
-				len(fields) != len(r.Rows[0]) {
-				return errWrongNumberOfColumnsInSelect
-			}
-
-			needsCoercion := false
-			for idx, field := range r.Fields {
-				if fields[idx].Type != field.Type {
-					needsCoercion = true
-					break
-				}
-			}
-			if needsCoercion {
-				for _, row := range r.Rows {
-					err := c.coerceValuesTo(row, fields)
-					if err != nil {
-						return err
-					}
-				}
-			}
-			err := callback(r)
-			if err != nil {
-				return err
-			}
+		err := c.coerceAndVisitResults(res, fields, callback)
+		if err != nil {
+			return err
 		}
-
 	}
 
+	return nil
+}
+
+func (c *Concatenate) coerceAndVisitResults(
+	res []*sqltypes.Result,
+	fields []*querypb.Field,
+	callback func(*sqltypes.Result) error,
+) error {
+	for _, r := range res {
+		if len(r.Rows) > 0 &&
+			len(fields) != len(r.Rows[0]) {
+			return errWrongNumberOfColumnsInSelect
+		}
+
+		needsCoercion := false
+		for idx, field := range r.Fields {
+			if fields[idx].Type != field.Type {
+				needsCoercion = true
+				break
+			}
+		}
+		if needsCoercion {
+			for _, row := range r.Rows {
+				err := c.coerceValuesTo(row, fields)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		err := callback(r)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
