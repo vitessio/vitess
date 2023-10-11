@@ -23,7 +23,6 @@ import (
 	"sort"
 
 	"vitess.io/vitess/go/mathutil"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type DiffDependencyType int
@@ -80,19 +79,21 @@ func sortDiffsHeuristically(diffs []EntityDiff) {
 		return
 	}
 	diffOrder := func(diff EntityDiff) int {
-		switch diff.Statement().(type) {
-		case *sqlparser.DropView:
+		switch diff.(type) {
+		case *DropViewEntityDiff:
 			return 0
-		case *sqlparser.DropTable:
+		case *DropTableEntityDiff:
 			return 1
-		case *sqlparser.AlterTable:
+		case *AlterTableEntityDiff:
 			return 2
-		case *sqlparser.AlterView:
+		case *RenameTableEntityDiff:
 			return 3
-		case *sqlparser.CreateTable:
+		case *AlterViewEntityDiff:
 			return 4
-		case *sqlparser.CreateView:
+		case *CreateTableEntityDiff:
 			return 5
+		case *CreateViewEntityDiff:
+			return 6
 		default:
 			return math.MaxInt
 		}
