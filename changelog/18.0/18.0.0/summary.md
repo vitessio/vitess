@@ -65,8 +65,8 @@ develop new features without impacting other commands. This also presents an [AP
 This makes development easier while also offering a better UX. For example, this offers a way to use
 [configuration files](https://vitess.io/docs/18.0/reference/viper/config-files/) with support for
 [dynamic configuration](https://vitess.io/docs/18.0/reference/viper/dynamic-values/) ([see also](https://github.com/vitessio/vitess/blob/release-18.0/doc/viper/viper.md)).
-- As noted above, the [reference documentation](https://vitess.io/docs/reference/programs/vtctldclient/) is now built
-through code. This removes a burden from developers while helping users by ensuring the docs are always correct and up-to-date.
+- The [reference documentation](https://vitess.io/docs/reference/programs/vtctldclient/) is now built through code. This
+removes a burden from developers while helping users by ensuring the docs are always correct and up-to-date.
 
 In Vitess 18.0 we have completed migrating all client commands to `vtctldclient` – the last ones being the [OnlineDDL](https://github.com/vitessio/vitess/issues/13712)
 and [VReplication](https://github.com/vitessio/vitess/issues/12152) commands. With this work now completed, the
