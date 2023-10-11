@@ -43182,6 +43182,12 @@ export namespace vtctldata {
 
         /** Workflow workflow_sub_type */
         workflow_sub_type?: (string|null);
+
+        /** Workflow max_v_replication_transaction_lag */
+        max_v_replication_transaction_lag?: (number|Long|null);
+
+        /** Workflow defer_secondary_keys */
+        defer_secondary_keys?: (boolean|null);
     }
 
     /** Represents a Workflow. */
@@ -43213,6 +43219,12 @@ export namespace vtctldata {
 
         /** Workflow workflow_sub_type. */
         public workflow_sub_type: string;
+
+        /** Workflow max_v_replication_transaction_lag. */
+        public max_v_replication_transaction_lag: (number|Long);
+
+        /** Workflow defer_secondary_keys. */
+        public defer_secondary_keys: boolean;
 
         /**
          * Creates a new Workflow instance using the specified properties.
@@ -43553,6 +43565,12 @@ export namespace vtctldata {
 
             /** Stream tags */
             tags?: (string[]|null);
+
+            /** Stream rows_copied */
+            rows_copied?: (number|Long|null);
+
+            /** Stream throttler_status */
+            throttler_status?: (vtctldata.Workflow.Stream.IThrottlerStatus|null);
         }
 
         /** Represents a Stream. */
@@ -43608,6 +43626,12 @@ export namespace vtctldata {
 
             /** Stream tags. */
             public tags: string[];
+
+            /** Stream rows_copied. */
+            public rows_copied: (number|Long);
+
+            /** Stream throttler_status. */
+            public throttler_status?: (vtctldata.Workflow.Stream.IThrottlerStatus|null);
 
             /**
              * Creates a new Stream instance using the specified properties.
@@ -43925,6 +43949,109 @@ export namespace vtctldata {
 
                 /**
                  * Gets the default type url for Log
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a ThrottlerStatus. */
+            interface IThrottlerStatus {
+
+                /** ThrottlerStatus component_throttled */
+                component_throttled?: (string|null);
+
+                /** ThrottlerStatus time_throttled */
+                time_throttled?: (vttime.ITime|null);
+            }
+
+            /** Represents a ThrottlerStatus. */
+            class ThrottlerStatus implements IThrottlerStatus {
+
+                /**
+                 * Constructs a new ThrottlerStatus.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: vtctldata.Workflow.Stream.IThrottlerStatus);
+
+                /** ThrottlerStatus component_throttled. */
+                public component_throttled: string;
+
+                /** ThrottlerStatus time_throttled. */
+                public time_throttled?: (vttime.ITime|null);
+
+                /**
+                 * Creates a new ThrottlerStatus instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns ThrottlerStatus instance
+                 */
+                public static create(properties?: vtctldata.Workflow.Stream.IThrottlerStatus): vtctldata.Workflow.Stream.ThrottlerStatus;
+
+                /**
+                 * Encodes the specified ThrottlerStatus message. Does not implicitly {@link vtctldata.Workflow.Stream.ThrottlerStatus.verify|verify} messages.
+                 * @param message ThrottlerStatus message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: vtctldata.Workflow.Stream.IThrottlerStatus, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified ThrottlerStatus message, length delimited. Does not implicitly {@link vtctldata.Workflow.Stream.ThrottlerStatus.verify|verify} messages.
+                 * @param message ThrottlerStatus message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: vtctldata.Workflow.Stream.IThrottlerStatus, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a ThrottlerStatus message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns ThrottlerStatus
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.Workflow.Stream.ThrottlerStatus;
+
+                /**
+                 * Decodes a ThrottlerStatus message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns ThrottlerStatus
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.Workflow.Stream.ThrottlerStatus;
+
+                /**
+                 * Verifies a ThrottlerStatus message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a ThrottlerStatus message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns ThrottlerStatus
+                 */
+                public static fromObject(object: { [k: string]: any }): vtctldata.Workflow.Stream.ThrottlerStatus;
+
+                /**
+                 * Creates a plain object from a ThrottlerStatus message. Also converts values to other types if specified.
+                 * @param message ThrottlerStatus
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: vtctldata.Workflow.Stream.ThrottlerStatus, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this ThrottlerStatus to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for ThrottlerStatus
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
