@@ -43,17 +43,17 @@ dest_tablet=$(echo "$TABLET_INFO "| grep -v "ext_" | grep "primary" | awk '{ pri
 
 
 # Disable foreign_key checks on destination
-/vt/bin/vtctldclient --server $VTCTLD_SERVER ExecuteFetchAsDba $dest_alias 'SET GLOBAL FOREIGN_KEY_CHECKS=0;'
+/vt/bin/vtctldclient --server $VTCTLD_SERVER ExecuteFetchAsDBA $dest_alias 'SET GLOBAL FOREIGN_KEY_CHECKS=0;'
 
 # Get source_sql mode
-source_sql_mode=$(/vt/bin/vtctldclient --server $VTCTLD_SERVER ExecuteFetchAsDba $source_alias 'SELECT @@GLOBAL.sql_mode' | awk 'NR==4 {print $2}')
+source_sql_mode=$(/vt/bin/vtctldclient --server $VTCTLD_SERVER ExecuteFetchAsDBA $source_alias 'SELECT @@GLOBAL.sql_mode' | awk 'NR==4 {print $2}')
 
 # Apply source sql_mode to destination
 # The intention is to avoid replication errors
-/vt/bin/vtctldclient --server $VTCTLD_SERVER ExecuteFetchAsDba $dest_alias "SET GLOBAL sql_mode='$source_sql_mode';"
+/vt/bin/vtctldclient --server $VTCTLD_SERVER ExecuteFetchAsDBA $dest_alias "SET GLOBAL sql_mode='$source_sql_mode';"
 
 # Verify sql_mode matches
-[ $source_sql_mode == $(/vt/bin/vtctldclient --server $VTCTLD_SERVER ExecuteFetchAsDba $dest_alias 'SELECT @@GLOBAL.sql_mode' | awk 'NR==4 {print $2}') ] && \
+[ $source_sql_mode == $(/vt/bin/vtctldclient --server $VTCTLD_SERVER ExecuteFetchAsDBA $dest_alias 'SELECT @@GLOBAL.sql_mode' | awk 'NR==4 {print $2}') ] && \
 echo "Source and Destination sql_mode Match." || echo "sql_mode MisMatch"
 
 until /vt/bin/vtctldclient --server $VTCTLD_SERVER GetSchema $dest_alias; do

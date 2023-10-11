@@ -29,7 +29,7 @@ for tablet in 100 200 300; do
       echo "Shutting down mysql zone1-$uid"
       CELL=zone1 TABLET_UID=$uid ../common/scripts/mysqlctl-down.sh
       echo "Removing tablet directory zone1-$uid"
-      vtctldclient DeleteTablets --allow-primary=true zone1-$uid
+      vtctldclient DeleteTablets --allow-primary zone1-$uid
       rm -Rf $VTDATAROOT/vt_0000000$uid
     done
   fi
