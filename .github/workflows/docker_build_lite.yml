@@ -1,0 +1,48 @@
+name: Docker Build Lite
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Docker Build Lite')
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  build_and_push:
+    name: Build and push vitess/lite Docker images
+    runs-on: gh-hosted-runners-16cores-1
+    if: github.repository == 'vitessio/vitess'
+
+    strategy:
+      fail-fast: true
+      matrix:
+        branch: [ latest, mysql57, mysql80, percona57, percona80 ]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ matrix.branch }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+#      - name: Build and push
+#        uses: docker/build-push-action@v5
+#        with:
+#          push: true
+#          tags: vitess/lite:$$matrix
