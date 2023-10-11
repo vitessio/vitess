@@ -1715,3 +1715,7 @@ func (c *Conn) IsShuttingDown() bool {
 func GetTestConn() *Conn {
 	return newConn(testConn{})
 }
+
+func GetTestServerConn(listener *Listener) *Conn {
+	return newServerConn(testConn{}, listener)
+}
