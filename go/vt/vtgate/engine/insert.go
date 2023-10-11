@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -76,7 +75,7 @@ type (
 
 		// Prefix, Mid and Suffix are for sharded insert plans.
 		Prefix string
-		Mid    sqlparser.Values
+		Mid    []string
 		Suffix string
 
 		// Option to override the standard behavior and allow a multi-shard insert
@@ -133,7 +132,7 @@ func NewInsert(
 	vindexValues [][][]evalengine.Expr,
 	table *vindexes.Table,
 	prefix string,
-	mid sqlparser.Values,
+	mid []string,
 	suffix string,
 ) *Insert {
 	ins := &Insert{
@@ -759,23 +758,17 @@ func (ins *Insert) getInsertShardedRoute(
 
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
-		shardBindVars := map[string]*querypb.BindVariable{}
 		var mids []string
 		for _, indexValue := range indexesPerRss[i] {
 			index, _ := strconv.ParseInt(string(indexValue.Value), 0, 64)
 			if keyspaceIDs[index] != nil {
-				mids = append(mids, sqlparser.String(ins.Mid[index]))
-				for _, expr := range ins.Mid[index] {
-					if arg, ok := expr.(*sqlparser.Argument); ok {
-						shardBindVars[arg.Name] = bindVars[arg.Name]
-					}
-				}
+				mids = append(mids, ins.Mid[index])
 			}
 		}
 		rewritten := ins.Prefix + strings.Join(mids, ",") + ins.Suffix
 		queries[i] = &querypb.BoundQuery{
 			Sql:           rewritten,
-			BindVariables: shardBindVars,
+			BindVariables: bindVars,
 		}
 	}
 
@@ -992,10 +985,7 @@ func (ins *Insert) description() PrimitiveDescription {
 		other["VindexOffsetFromSelect"] = valuesOffsets
 	}
 	if len(ins.Mid) > 0 {
-		mids := slice.Map(ins.Mid, func(from sqlparser.ValTuple) string {
-			return sqlparser.String(from)
-		})
-		shardQuery := fmt.Sprintf("%s%s%s", ins.Prefix, strings.Join(mids, ", "), ins.Suffix)
+		shardQuery := fmt.Sprintf("%s%s%s", ins.Prefix, strings.Join(ins.Mid, ", "), ins.Suffix)
 		if shardQuery != ins.Query {
 			other["ShardedQuery"] = shardQuery
 		}

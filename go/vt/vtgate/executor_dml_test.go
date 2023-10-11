@@ -1273,6 +1273,7 @@ func TestInsertSharded(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.StringBindVariable("myname"),
+			"__seq0":  sqltypes.Int64BindVariable(1),
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries)
@@ -1298,6 +1299,7 @@ func TestInsertSharded(t *testing.T) {
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(3),
+			"__seq0":  sqltypes.Int64BindVariable(3),
 			"_name_0": sqltypes.StringBindVariable("myname2"),
 		},
 	}}
@@ -1343,7 +1345,10 @@ func TestInsertSharded(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
+			"__seq0":  sqltypes.Int64BindVariable(1),
+			"vtg1":    sqltypes.Int64BindVariable(1),
 			"vtg2":    sqltypes.Int64BindVariable(2),
+			"vtg3":    sqltypes.StringBindVariable("myname"),
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries)
@@ -1443,6 +1448,7 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 			"_Id_0":    sqltypes.Int64BindVariable(1),
 			"_music_0": sqltypes.StringBindVariable("star"),
 			"_name_0":  sqltypes.StringBindVariable("myname"),
+			"__seq0":   sqltypes.Int64BindVariable(1),
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries)
@@ -1504,18 +1510,27 @@ func TestInsertShardedIgnore(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"_pv_0":     sqltypes.Int64BindVariable(1),
 			"_pv_4":     sqltypes.Int64BindVariable(5),
+			"_pv_5":     sqltypes.Int64BindVariable(6),
 			"_owned_0":  sqltypes.Int64BindVariable(1),
 			"_owned_4":  sqltypes.Int64BindVariable(5),
+			"_owned_5":  sqltypes.Int64BindVariable(6),
 			"_verify_0": sqltypes.Int64BindVariable(1),
 			"_verify_4": sqltypes.Int64BindVariable(1),
+			"_verify_5": sqltypes.Int64BindVariable(3),
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv_5, :_owned_5, :_verify_5)",
 		BindVariables: map[string]*querypb.BindVariable{
+			"_pv_0":     sqltypes.Int64BindVariable(1),
+			"_pv_4":     sqltypes.Int64BindVariable(5),
 			"_pv_5":     sqltypes.Int64BindVariable(6),
+			"_owned_0":  sqltypes.Int64BindVariable(1),
+			"_owned_4":  sqltypes.Int64BindVariable(5),
 			"_owned_5":  sqltypes.Int64BindVariable(6),
+			"_verify_0": sqltypes.Int64BindVariable(1),
+			"_verify_4": sqltypes.Int64BindVariable(1),
 			"_verify_5": sqltypes.Int64BindVariable(3),
 		},
 	}}
@@ -1685,6 +1700,7 @@ func TestInsertComments(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.StringBindVariable("myname"),
+			"__seq0":  sqltypes.Int64BindVariable(1),
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries)
@@ -1718,6 +1734,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 		Sql: "insert into `user`(v, `name`, id) values (2, :_name_0, :_Id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
+			"__seq0":  sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.StringBindVariable("myname"),
 		},
 	}}
@@ -1839,6 +1856,7 @@ func TestInsertLookupOwned(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(2),
 			"_id_0":      sqltypes.Int64BindVariable(3),
+			"__seq0":     sqltypes.Int64BindVariable(3),
 		},
 	}}
 	assertQueries(t, sbc, wantQueries)
@@ -1872,6 +1890,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(2),
 			"_id_0":      sqltypes.Int64BindVariable(4),
+			"__seq0":     sqltypes.Int64BindVariable(4),
 		},
 	}}
 	assertQueries(t, sbc, wantQueries)
@@ -2001,6 +2020,7 @@ func TestInsertPartialFail2(t *testing.T) {
 			Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
 			BindVariables: map[string]*querypb.BindVariable{
 				"_Id_0":   sqltypes.Int64BindVariable(1),
+				"__seq0":  sqltypes.Int64BindVariable(1),
 				"_name_0": sqltypes.StringBindVariable("myname"),
 			},
 		}, {
@@ -2023,14 +2043,22 @@ func TestMultiInsertSharded(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.StringBindVariable("myname1"),
+			"__seq0":  sqltypes.Int64BindVariable(1),
+			"_Id_1":   sqltypes.Int64BindVariable(3),
+			"_name_1": sqltypes.StringBindVariable("myname3"),
+			"__seq1":  sqltypes.Int64BindVariable(3),
 		},
 	}}
 
 	wantQueries2 := []*querypb.BoundQuery{{
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_1, 3, :_name_1)",
 		BindVariables: map[string]*querypb.BindVariable{
+			"_Id_0":   sqltypes.Int64BindVariable(1),
+			"_name_0": sqltypes.StringBindVariable("myname1"),
+			"__seq0":  sqltypes.Int64BindVariable(1),
 			"_Id_1":   sqltypes.Int64BindVariable(3),
 			"_name_1": sqltypes.StringBindVariable("myname3"),
+			"__seq1":  sqltypes.Int64BindVariable(3),
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries1)
@@ -2056,8 +2084,10 @@ func TestMultiInsertSharded(t *testing.T) {
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 1, :_name_0),(:_Id_1, 2, :_name_1)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
+			"__seq0":  sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.StringBindVariable("myname1"),
 			"_Id_1":   sqltypes.Int64BindVariable(2),
+			"__seq1":  sqltypes.Int64BindVariable(2),
 			"_name_1": sqltypes.StringBindVariable("myname2"),
 		},
 	}}
@@ -2087,18 +2117,12 @@ func TestMultiInsertSharded(t *testing.T) {
 			"_id_0":       sqltypes.Int64BindVariable(2),
 			"_name_0":     sqltypes.StringBindVariable("myname"),
 			"_lastname_0": sqltypes.StringBindVariable("mylastname"),
-		},
-	}}
-	assertQueries(t, sbc1, wantQueries)
-	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into user2(id, `name`, lastname) values (:_id_1, :_name_1, :_lastname_1)",
-		BindVariables: map[string]*querypb.BindVariable{
 			"_id_1":       sqltypes.Int64BindVariable(3),
 			"_name_1":     sqltypes.StringBindVariable("myname2"),
 			"_lastname_1": sqltypes.StringBindVariable("mylastname2"),
 		},
 	}}
-	assertQueries(t, sbc2, wantQueries)
+	assertQueries(t, sbc1, wantQueries)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into name_lastname_keyspace_id_map(`name`, lastname, keyspace_id) values (:name_0, :lastname_0, :keyspace_id_0), (:name_1, :lastname_1, :keyspace_id_1)",
 		BindVariables: map[string]*querypb.BindVariable{
@@ -2131,9 +2155,12 @@ func TestMultiInsertGenerator(t *testing.T) {
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into music(user_id, `name`, id) values (:_user_id_0, 'myname1', :_id_0),(:_user_id_1, 'myname2', :_id_1)",
 		BindVariables: map[string]*querypb.BindVariable{
+			"u":          sqltypes.Int64BindVariable(2),
 			"_id_0":      sqltypes.Int64BindVariable(1),
+			"__seq0":     sqltypes.Int64BindVariable(1),
 			"_user_id_0": sqltypes.Int64BindVariable(2),
 			"_id_1":      sqltypes.Int64BindVariable(2),
+			"__seq1":     sqltypes.Int64BindVariable(2),
 			"_user_id_1": sqltypes.Int64BindVariable(2),
 		},
 	}}
@@ -2176,11 +2203,15 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into music(id, user_id, `name`) values (:_id_0, :_user_id_0, 'myname1'),(:_id_1, :_user_id_1, 'myname2'),(:_id_2, :_user_id_2, 'myname3')",
 		BindVariables: map[string]*querypb.BindVariable{
+			"u":          sqltypes.Int64BindVariable(2),
 			"_id_0":      sqltypes.Int64BindVariable(1),
+			"__seq0":     sqltypes.Int64BindVariable(1),
 			"_user_id_0": sqltypes.Int64BindVariable(2),
 			"_id_1":      sqltypes.Int64BindVariable(2),
+			"__seq1":     sqltypes.Int64BindVariable(2),
 			"_user_id_1": sqltypes.Int64BindVariable(2),
 			"_id_2":      sqltypes.Int64BindVariable(2),
+			"__seq2":     sqltypes.Int64BindVariable(2),
 			"_user_id_2": sqltypes.Int64BindVariable(2),
 		},
 	}}
@@ -2704,8 +2735,12 @@ func TestPartialVindexInsertQueryFailure(t *testing.T) {
 	}, {
 		Sql: "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
+			"unq_col_0":     sqltypes.Int64BindVariable(1),
 			"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
+			"unq_col_1":     sqltypes.Int64BindVariable(3),
+			"keyspace_id_1": sqltypes.BytesBindVariable([]byte("\x06\xe7\xea\"Βp\x8f")),
 			"_unq_col_0":    sqltypes.Int64BindVariable(1),
+			"_unq_col_1":    sqltypes.Int64BindVariable(3),
 		},
 	}, {
 		Sql:           "rollback to x",
@@ -2722,10 +2757,6 @@ func TestPartialVindexInsertQueryFailure(t *testing.T) {
 
 	// only parameter in expected query changes
 	wantQ[1].Sql = "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_1, :keyspace_id_1)"
-	wantQ[1].BindVariables = map[string]*querypb.BindVariable{
-		"keyspace_id_1": sqltypes.BytesBindVariable([]byte("\x06\xe7\xea\"Βp\x8f")),
-		"_unq_col_1":    sqltypes.Int64BindVariable(3),
-	}
 	assertQueriesWithSavepoint(t, sbc2, wantQ)
 
 	testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
@@ -2749,8 +2780,12 @@ func TestPartialVindexInsertQueryFailureAutoCommit(t *testing.T) {
 	wantQ := []*querypb.BoundQuery{{
 		Sql: "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
+			"unq_col_0":     sqltypes.Int64BindVariable(1),
 			"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
+			"unq_col_1":     sqltypes.Int64BindVariable(3),
+			"keyspace_id_1": sqltypes.BytesBindVariable([]byte("\x06\xe7\xea\"Βp\x8f")),
 			"_unq_col_0":    sqltypes.Int64BindVariable(1),
+			"_unq_col_1":    sqltypes.Int64BindVariable(3),
 		},
 	}}
 
@@ -2764,10 +2799,6 @@ func TestPartialVindexInsertQueryFailureAutoCommit(t *testing.T) {
 
 	// only parameter in expected query changes
 	wantQ[0].Sql = "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_1, :keyspace_id_1)"
-	wantQ[0].BindVariables = map[string]*querypb.BindVariable{
-		"keyspace_id_1": sqltypes.BytesBindVariable([]byte("\x06\xe7\xea\"Βp\x8f")),
-		"_unq_col_1":    sqltypes.Int64BindVariable(3),
-	}
 	assertQueriesWithSavepoint(t, sbc2, wantQ)
 
 	testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1)", 2)
@@ -2796,6 +2827,7 @@ func TestMultiInternalSavepoint(t *testing.T) {
 		Sql: "insert into user_extra(user_id) values (:_user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(1),
+			"_user_id_1": sqltypes.Int64BindVariable(4),
 		},
 	}}
 	assertQueriesWithSavepoint(t, sbc1, wantQ)
@@ -2814,6 +2846,7 @@ func TestMultiInternalSavepoint(t *testing.T) {
 		Sql: "insert into user_extra(user_id) values (:_user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(3),
+			"_user_id_1": sqltypes.Int64BindVariable(6),
 		},
 	}}
 	assertQueriesWithSavepoint(t, sbc2, wantQ)

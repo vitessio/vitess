@@ -417,18 +417,11 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	size += cached.Generate.CachedSize(true)
 	// field Prefix string
 	size += hack.RuntimeAllocSize(int64(len(cached.Prefix)))
-	// field Mid vitess.io/vitess/go/vt/sqlparser.Values
+	// field Mid []string
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Mid)) * int64(24))
+		size += hack.RuntimeAllocSize(int64(cap(cached.Mid)) * int64(16))
 		for _, elem := range cached.Mid {
-			{
-				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(16))
-				for _, elem := range elem {
-					if cc, ok := elem.(cachedObject); ok {
-						size += cc.CachedSize(true)
-					}
-				}
-			}
+			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
 	// field Suffix string

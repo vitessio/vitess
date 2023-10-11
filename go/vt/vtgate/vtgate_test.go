@@ -626,14 +626,14 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 		Sql: "insert into sp_tbl(user_id) values (:_user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(1),
+			"_user_id_1": sqltypes.Int64BindVariable(3),
+			"vtg1":       sqltypes.Int64BindVariable(1),
+			"vtg2":       sqltypes.Int64BindVariable(3),
 		},
 	}}
 
 	assertQueriesWithSavepoint(t, sbc1, wantQ)
 	wantQ[1].Sql = "insert into sp_tbl(user_id) values (:_user_id_1)"
-	wantQ[1].BindVariables = map[string]*querypb.BindVariable{
-		"_user_id_1": sqltypes.Int64BindVariable(3),
-	}
 	assertQueriesWithSavepoint(t, sbc2, wantQ)
 	assert.Len(t, sbc3.Queries, 0)
 	// internal savepoint should be removed.
@@ -650,7 +650,10 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	}, {
 		Sql: "insert into sp_tbl(user_id) values (:_user_id_1)",
 		BindVariables: map[string]*querypb.BindVariable{
+			"_user_id_0": sqltypes.Int64BindVariable(2),
 			"_user_id_1": sqltypes.Int64BindVariable(4),
+			"vtg1":       sqltypes.Int64BindVariable(2),
+			"vtg2":       sqltypes.Int64BindVariable(4),
 		},
 	}}
 	assertQueriesWithSavepoint(t, sbc3, wantQ)
@@ -666,6 +669,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 		Sql: "insert into sp_tbl(user_id) values (:_user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(5),
+			"vtg1":       sqltypes.Int64BindVariable(5),
 		},
 	}}
 	assertQueriesWithSavepoint(t, sbc2, wantQ)
