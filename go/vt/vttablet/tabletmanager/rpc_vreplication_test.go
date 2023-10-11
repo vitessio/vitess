@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -84,7 +86,9 @@ var (
 			},
 		},
 	}
-	position = fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition)
+	position           = fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition)
+	setNetReadTimeout  = fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout)
+	setNetWriteTimeout = fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout)
 )
 
 // TestCreateVReplicationWorkflow tests the query generated
@@ -324,6 +328,8 @@ func TestMoveTables(t *testing.T) {
 		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(updatePickedSourceTablet, tenv.cells[0], sourceTabletUID), &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(setSessionTZ, &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(setNames, &sqltypes.Result{}, nil)
+		ftc.vrdbClient.ExpectRequest(setNetReadTimeout, &sqltypes.Result{}, nil)
+		ftc.vrdbClient.ExpectRequest(setNetWriteTimeout, &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(getRowsCopied,
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -895,6 +901,8 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 		&sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(setSessionTZ, &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(setNames, &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(setNetReadTimeout, &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(setNetWriteTimeout, &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(getRowsCopied,
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
