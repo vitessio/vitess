@@ -56,7 +56,7 @@ func MarshalJSON(obj any, marshalOptions ...protojson.MarshalOptions) ([]byte, e
 		case 1: // Use provided one
 			m = marshalOptions[0]
 		default:
-			return nil, fmt.Errorf("there should only be one optional MarshalJSON value but we had %d",
+			return nil, fmt.Errorf("there should only be one optional MarshalOptions value but we had %d",
 				len(marshalOptions))
 		}
 
