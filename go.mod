@@ -71,13 +71,13 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.8
 	go.etcd.io/etcd/client/v3 v3.5.8
 	go.uber.org/mock v0.2.0
-	golang.org/x/crypto v0.12.0 // indirect
+	golang.org/x/crypto v0.14.0 // indirect
 	golang.org/x/mod v0.12.0 // indirect
-	golang.org/x/net v0.14.0
+	golang.org/x/net v0.17.0
 	golang.org/x/oauth2 v0.7.0
-	golang.org/x/sys v0.11.0
-	golang.org/x/term v0.11.0
-	golang.org/x/text v0.12.0
+	golang.org/x/sys v0.13.0
+	golang.org/x/term v0.13.0
+	golang.org/x/text v0.13.0
 	golang.org/x/time v0.3.0
 	golang.org/x/tools v0.12.1-0.20230815132531-74c255bcf846
 	google.golang.org/api v0.121.0
