@@ -48,7 +48,7 @@ jobs:
           context: .
           file: ${{ env.DOCKERFILE }}
           push: true
-          tags: vitess/lite:${{ matrix.branch }}
+          tags: frouioui/lite:${{ matrix.branch }}
 
       - name: Get the Git tag
         if: startsWith(github.ref, 'refs/tags/')
