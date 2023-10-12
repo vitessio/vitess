@@ -15,8 +15,8 @@ permissions: read-all
 jobs:
   build_and_push:
     name: Build and push vitess/lite Docker images
-    runs-on: ubuntu-latest # TODO: replace by larger runners
-    #TODO: uncomment: if: github.repository == 'vitessio/vitess'
+    runs-on: gh-hosted-runners-16cores-1
+    if: github.repository == 'vitessio/vitess'
 
     strategy:
       fail-fast: true
@@ -48,7 +48,7 @@ jobs:
           context: .
           file: ${{ env.DOCKERFILE }}
           push: true
-          tags: frouioui/lite:${{ matrix.branch }}
+          tags: vitess/lite:${{ matrix.branch }}
 
       - name: Get the Git tag
         if: startsWith(github.ref, 'refs/tags/')
@@ -58,9 +58,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           if [[ "${{ matrix.branch }}" == "latest" ]]; then
-            echo "DOCKER_TAG=frouioui/lite:${TAG_NAME}" >> $GITHUB_ENV
+            echo "DOCKER_TAG=vitess/lite:${TAG_NAME}" >> $GITHUB_ENV
           else
-            echo "DOCKER_TAG=frouioui/lite:${TAG_NAME}-${{ matrix.branch }}" >> $GITHUB_ENV
+            echo "DOCKER_TAG=vitess/lite:${TAG_NAME}-${{ matrix.branch }}" >> $GITHUB_ENV
           fi
 
       - name: Build and push on main
