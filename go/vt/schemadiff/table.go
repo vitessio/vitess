@@ -36,7 +36,8 @@ type AlterTableEntityDiff struct {
 	to         *CreateTableEntity
 	alterTable *sqlparser.AlterTable
 
-	subsequentDiff *AlterTableEntityDiff
+	canonicalStatementString string
+	subsequentDiff           *AlterTableEntityDiff
 }
 
 // IsEmpty implements EntityDiff
@@ -79,11 +80,16 @@ func (d *AlterTableEntityDiff) StatementString() (s string) {
 }
 
 // CanonicalStatementString implements EntityDiff
-func (d *AlterTableEntityDiff) CanonicalStatementString() (s string) {
-	if stmt := d.Statement(); stmt != nil {
-		s = sqlparser.CanonicalString(stmt)
+func (d *AlterTableEntityDiff) CanonicalStatementString() string {
+	if d == nil {
+		return ""
 	}
-	return s
+	if d.canonicalStatementString == "" {
+		if stmt := d.Statement(); stmt != nil {
+			d.canonicalStatementString = sqlparser.CanonicalString(stmt)
+		}
+	}
+	return d.canonicalStatementString
 }
 
 // SubsequentDiff implements EntityDiff
@@ -118,6 +124,8 @@ func (d *AlterTableEntityDiff) addSubsequentDiff(diff *AlterTableEntityDiff) {
 type CreateTableEntityDiff struct {
 	to          *CreateTableEntity
 	createTable *sqlparser.CreateTable
+
+	canonicalStatementString string
 }
 
 // IsEmpty implements EntityDiff
@@ -160,11 +168,16 @@ func (d *CreateTableEntityDiff) StatementString() (s string) {
 }
 
 // CanonicalStatementString implements EntityDiff
-func (d *CreateTableEntityDiff) CanonicalStatementString() (s string) {
-	if stmt := d.Statement(); stmt != nil {
-		s = sqlparser.CanonicalString(stmt)
+func (d *CreateTableEntityDiff) CanonicalStatementString() string {
+	if d == nil {
+		return ""
 	}
-	return s
+	if d.canonicalStatementString == "" {
+		if stmt := d.Statement(); stmt != nil {
+			d.canonicalStatementString = sqlparser.CanonicalString(stmt)
+		}
+	}
+	return d.canonicalStatementString
 }
 
 // SubsequentDiff implements EntityDiff
@@ -179,6 +192,8 @@ func (d *CreateTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 type DropTableEntityDiff struct {
 	from      *CreateTableEntity
 	dropTable *sqlparser.DropTable
+
+	canonicalStatementString string
 }
 
 // IsEmpty implements EntityDiff
@@ -221,11 +236,16 @@ func (d *DropTableEntityDiff) StatementString() (s string) {
 }
 
 // CanonicalStatementString implements EntityDiff
-func (d *DropTableEntityDiff) CanonicalStatementString() (s string) {
-	if stmt := d.Statement(); stmt != nil {
-		s = sqlparser.CanonicalString(stmt)
+func (d *DropTableEntityDiff) CanonicalStatementString() string {
+	if d == nil {
+		return ""
 	}
-	return s
+	if d.canonicalStatementString == "" {
+		if stmt := d.Statement(); stmt != nil {
+			d.canonicalStatementString = sqlparser.CanonicalString(stmt)
+		}
+	}
+	return d.canonicalStatementString
 }
 
 // SubsequentDiff implements EntityDiff
@@ -241,6 +261,8 @@ type RenameTableEntityDiff struct {
 	from        *CreateTableEntity
 	to          *CreateTableEntity
 	renameTable *sqlparser.RenameTable
+
+	canonicalStatementString string
 }
 
 // IsEmpty implements EntityDiff
@@ -283,11 +305,16 @@ func (d *RenameTableEntityDiff) StatementString() (s string) {
 }
 
 // CanonicalStatementString implements EntityDiff
-func (d *RenameTableEntityDiff) CanonicalStatementString() (s string) {
-	if stmt := d.Statement(); stmt != nil {
-		s = sqlparser.CanonicalString(stmt)
+func (d *RenameTableEntityDiff) CanonicalStatementString() string {
+	if d == nil {
+		return ""
 	}
-	return s
+	if d.canonicalStatementString == "" {
+		if stmt := d.Statement(); stmt != nil {
+			d.canonicalStatementString = sqlparser.CanonicalString(stmt)
+		}
+	}
+	return d.canonicalStatementString
 }
 
 // SubsequentDiff implements EntityDiff
