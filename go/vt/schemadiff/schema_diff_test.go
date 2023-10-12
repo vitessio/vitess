@@ -117,7 +117,7 @@ func TestPermutations(t *testing.T) {
 				allDiffs := schemaDiff.UnorderedDiffs()
 				originalSingleString := toSingleString(allDiffs)
 				numEquals := 0
-				earlyBreak, err := permutateDiffs(ctx, allDiffs, schemaDiff.dependencies, func(pdiffs []EntityDiff) (earlyBreak bool) {
+				earlyBreak, err := permutateDiffs(ctx, allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
 					defer func() { iteration++ }()
 					// cover all permutations
 					singleString := toSingleString(pdiffs)
@@ -138,7 +138,7 @@ func TestPermutations(t *testing.T) {
 				allPerms := map[string]bool{}
 				allDiffs := schemaDiff.UnorderedDiffs()
 				originalSingleString := toSingleString(allDiffs)
-				earlyBreak, err := permutateDiffs(ctx, allDiffs, schemaDiff.dependencies, func(pdiffs []EntityDiff) (earlyBreak bool) {
+				earlyBreak, err := permutateDiffs(ctx, allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
 					// Single visit
 					allPerms[toSingleString(pdiffs)] = true
 					// First permutation should be the same as original
@@ -165,7 +165,7 @@ func TestPermutationsContext(t *testing.T) {
 	cancel()
 
 	allDiffs := []EntityDiff{&DropViewEntityDiff{}}
-	earlyBreak, err := permutateDiffs(ctx, allDiffs, nil, func(pdiffs []EntityDiff) (earlyBreak bool) {
+	earlyBreak, err := permutateDiffs(ctx, allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
 		return false
 	})
 	assert.True(t, earlyBreak) // proves that termination was due to context cancel
@@ -706,7 +706,7 @@ func TestSchemaDiff(t *testing.T) {
 				assert.True(t, ok)
 				assert.Equal(t, tc.conflictingDiffs, len(impossibleOrderErr.ConflictingDiffs))
 			} else {
-				require.NoError(t, err)
+				require.NoErrorf(t, err, "Unordered diffs: %v", allDiffsStatements)
 			}
 			diffStatementStrings := []string{}
 			for _, diff := range orderedDiffs {

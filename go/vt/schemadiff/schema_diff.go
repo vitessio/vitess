@@ -19,7 +19,6 @@ package schemadiff
 import (
 	"context"
 	"fmt"
-	"math"
 	"sort"
 
 	"vitess.io/vitess/go/mathutil"
@@ -34,10 +33,6 @@ const (
 	DiffDependencyInOrderCompletion
 	DiffDependencySequentialExecution
 )
-
-func diffDependencyHashKey(diff EntityDiff, dependentDiff EntityDiff) string {
-	return diff.CanonicalStatementString() + "/" + dependentDiff.CanonicalStatementString()
-}
 
 // DiffDependency indicates a dependency between two diffs, and the type of that dependency
 type DiffDependency struct {
@@ -56,7 +51,7 @@ func NewDiffDependency(diff EntityDiff, dependentDiff EntityDiff, typ DiffDepend
 }
 
 func (d *DiffDependency) hashKey() string {
-	return diffDependencyHashKey(d.diff, d.dependentDiff)
+	return d.diff.CanonicalStatementString() + "/" + d.dependentDiff.CanonicalStatementString()
 }
 
 // Diff returns the "benefactor" diff, on which DependentDiff() depends on, ie, should run 1st.
@@ -75,41 +70,14 @@ func (d *DiffDependency) Type() DiffDependencyType {
 	return d.typ
 }
 
+// IsInOrder returns true if this dependency indicates a known order
+func (d *DiffDependency) IsInOrder() bool {
+	return d.typ >= DiffDependencyInOrderCompletion
+}
+
 // IsSequential returns true if this is a sequential dependency
 func (d *DiffDependency) IsSequential() bool {
 	return d.typ >= DiffDependencySequentialExecution
-}
-
-// sortDiffsHeuristically takes a list of diffs and sorts it according to a simple heuristic: DROPs come first, CREATEs
-// come later. This ordering will be used as one of the first permutations to apply for conflicting diffs, in the hope
-// that it cuts short the search for a successful permutation. In fact, it serves as the seed for the rest of the permutations.
-func sortDiffsHeuristically(diffs []EntityDiff) {
-	if len(diffs) <= 1 {
-		return
-	}
-	diffOrder := func(diff EntityDiff) int {
-		switch diff.(type) {
-		case *DropViewEntityDiff:
-			return 0
-		case *DropTableEntityDiff:
-			return 1
-		case *AlterTableEntityDiff:
-			return 2
-		case *RenameTableEntityDiff:
-			return 3
-		case *AlterViewEntityDiff:
-			return 4
-		case *CreateTableEntityDiff:
-			return 5
-		case *CreateViewEntityDiff:
-			return 6
-		default:
-			return math.MaxInt
-		}
-	}
-	sort.SliceStable(diffs, func(i, j int) bool {
-		return diffOrder(diffs[i]) < diffOrder(diffs[j])
-	})
 }
 
 /*
@@ -120,46 +88,35 @@ Modified to have an early break
 
 // permutateDiffs calls `callback` with each permutation of a. If the function returns `true`, that means
 // the callback has returned `true` for an early break, thus possibly not all permutations have been evaluated.
-func permutateDiffs(ctx context.Context, diffs []EntityDiff, dependencies map[string]*DiffDependency, callback func([]EntityDiff) (earlyBreak bool)) (earlyBreak bool, err error) {
+func permutateDiffs(ctx context.Context, diffs []EntityDiff, callback func([]EntityDiff) (earlyBreak bool)) (earlyBreak bool, err error) {
 	if len(diffs) == 0 {
 		return false, nil
 	}
 	// Sort by a heristic (DROPs first, ALTERs next, CREATEs last). This ordering is then used first in the permutation
 	// search and serves as seed for the rest of permutations.
-	sortDiffsHeuristically(diffs)
 
-	return permDiff(ctx, diffs, dependencies, callback, 0)
+	return permDiff(ctx, diffs, callback, 0)
 }
 
 // permDiff is a recursive function to permutate given `a` and call `callback` for each permutation.
 // If `callback` returns `true`, then so does this function, and this indicates a request for an early
 // break, in which case this function will not be called again.
-func permDiff(ctx context.Context, diffs []EntityDiff, dependencies map[string]*DiffDependency, callback func([]EntityDiff) (earlyBreak bool), i int) (earlyBreak bool, err error) {
+func permDiff(ctx context.Context, a []EntityDiff, callback func([]EntityDiff) (earlyBreak bool), i int) (earlyBreak bool, err error) {
 	if err := ctx.Err(); err != nil {
 		return true, err // early break
 	}
-	if i > len(diffs) {
-		return callback(diffs), nil
+	if i > len(a) {
+		return callback(a), nil
 	}
-	if brk, err := permDiff(ctx, diffs, dependencies, callback, i+1); brk {
+	if brk, err := permDiff(ctx, a, callback, i+1); brk {
 		return true, err
 	}
-	dependsOn := func(diff, dependentDiff EntityDiff) bool {
-		hashKey := diffDependencyHashKey(diff, dependentDiff)
-		if dep, ok := dependencies[hashKey]; ok {
-			return dep.typ >= DiffDependencySequentialExecution
-		}
-		return false
-	}
-	for j := i + 1; j < len(diffs); j++ {
-		if dependsOn(diffs[j], diffs[i]) {
-			continue
-		}
-		diffs[i], diffs[j] = diffs[j], diffs[i]
-		if brk, err := permDiff(ctx, diffs, dependencies, callback, i+1); brk {
+	for j := i + 1; j < len(a); j++ {
+		a[i], a[j] = a[j], a[i]
+		if brk, err := permDiff(ctx, a, callback, i+1); brk {
 			return true, err
 		}
-		diffs[i], diffs[j] = diffs[j], diffs[i]
+		a[i], a[j] = a[j], a[i]
 	}
 	return false, nil
 }
@@ -176,18 +133,15 @@ type SchemaDiff struct {
 	diffMap      map[string]EntityDiff // key is diff's CanonicalStatementString()
 	dependencies map[string]*DiffDependency
 
-	sequentialDependencyDiffs map[EntityDiff]([]EntityDiff)
-
 	r *mathutil.EquivalenceRelation // internal structure to help determine diffs
 }
 
 func NewSchemaDiff(schema *Schema) *SchemaDiff {
 	return &SchemaDiff{
-		schema:                    schema,
-		dependencies:              make(map[string]*DiffDependency),
-		diffMap:                   make(map[string]EntityDiff),
-		sequentialDependencyDiffs: make(map[EntityDiff][]EntityDiff),
-		r:                         mathutil.NewEquivalenceRelation(),
+		schema:       schema,
+		dependencies: make(map[string]*DiffDependency),
+		diffMap:      make(map[string]EntityDiff),
+		r:            mathutil.NewEquivalenceRelation(),
 	}
 }
 
@@ -199,14 +153,13 @@ func (d *SchemaDiff) loadDiffs(diffs []EntityDiff) {
 		allSubsequent := AllSubsequent(diff)
 		for i, sdiff := range allSubsequent {
 			d.diffs = append(d.diffs, sdiff)
-			canonicalStatementString := sdiff.CanonicalStatementString()
-			d.diffMap[canonicalStatementString] = sdiff
+			d.diffMap[sdiff.CanonicalStatementString()] = sdiff
 			if i > 0 {
 				// So this is a 2nd, 3rd etc. diff operating on same table
 				// Two migrations on same entity (table in our case) must run sequentially.
 				d.addDep(sdiff, allSubsequent[0], DiffDependencySequentialExecution)
 			}
-			d.r.Add(canonicalStatementString)
+			d.r.Add(sdiff.CanonicalStatementString())
 			// since we've exploded the subsequent diffs, we now clear any subsequent diffs
 			// so that they do not auto-Apply() when we compute a valid path.
 			sdiff.SetSubsequentDiff(nil)
@@ -228,7 +181,6 @@ func (d *SchemaDiff) addDep(diff EntityDiff, dependentDiff EntityDiff, typ DiffD
 	}
 	// Either the dep wasn't found, or we've just introduced a dep with a more severe type
 	d.dependencies[diffDep.hashKey()] = diffDep
-	d.sequentialDependencyDiffs[dependentDiff] = append(d.sequentialDependencyDiffs[dependentDiff], diff)
 	return diffDep
 }
 
@@ -299,9 +251,14 @@ func (d *SchemaDiff) HasSequentialExecutionDependencies() bool {
 // OrderedDiffs returns the list of diff in applicable order, if possible. This is a linearized representation
 // where diffs may be applied in-order one after another, keeping the schema in valid state at all times.
 func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
-	lastGoodSchema := d.schema
+	lastGoodSchema := d.schema.copy()
 	var orderedDiffs []EntityDiff
 	m := d.r.Map()
+
+	unorderedDiffsMap := map[string]int{}
+	for i, diff := range d.UnorderedDiffs() {
+		unorderedDiffsMap[diff.CanonicalStatementString()] = i
+	}
 	// The order of classes in the quivalence relation is, generally speaking, loyal to the order of original diffs.
 	for _, class := range d.r.OrderedClasses() {
 		classDiffs := []EntityDiff{}
@@ -313,9 +270,13 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 			}
 			classDiffs = append(classDiffs, diff)
 		}
+		sort.SliceStable(classDiffs, func(i, j int) bool {
+			return unorderedDiffsMap[classDiffs[i].CanonicalStatementString()] < unorderedDiffsMap[classDiffs[j].CanonicalStatementString()]
+		})
+
 		// We will now permutate the diffs in this equivalence class, and hopefully find
 		// a valid permutation (one where if we apply the diffs in-order, the schema remains valid throughout the process)
-		foundValidPathForClass, err := permutateDiffs(ctx, classDiffs, d.dependencies, func(permutatedDiffs []EntityDiff) bool {
+		foundValidPathForClass, err := permutateDiffs(ctx, classDiffs, func(permutatedDiffs []EntityDiff) bool {
 			permutationSchema := lastGoodSchema.copy()
 			// We want to apply the changes one by one, and validate the schema after each change
 			for i := range permutatedDiffs {
@@ -340,6 +301,7 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 				ConflictingDiffs: classDiffs,
 			}
 		}
+
 		// Done taking care of this equivalence class.
 	}
 	return orderedDiffs, nil
