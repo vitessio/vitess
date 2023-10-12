@@ -112,6 +112,34 @@ func permDiff(ctx context.Context, a []EntityDiff, callback func([]EntityDiff) (
 		return true, err
 	}
 	for j := i + 1; j < len(a); j++ {
+		iIsCreateDropView := false
+		iIsTable := false
+		switch a[i].(type) {
+		case *DropViewEntityDiff, *CreateViewEntityDiff:
+			iIsCreateDropView = true
+		case *DropTableEntityDiff, *AlterTableEntityDiff, *CreateTableEntityDiff:
+			iIsTable = true
+		}
+
+		jIsCreateDropView := false
+		jIsTable := false
+		switch a[j].(type) {
+		case *DropViewEntityDiff, *CreateViewEntityDiff:
+			jIsCreateDropView = true
+		case *DropTableEntityDiff, *AlterTableEntityDiff, *CreateTableEntityDiff:
+			jIsTable = true
+		}
+
+		if iIsCreateDropView && jIsCreateDropView {
+			continue
+		}
+		if iIsCreateDropView && jIsTable {
+			continue
+		}
+		if iIsTable && jIsCreateDropView {
+			continue
+		}
+
 		a[i], a[j] = a[j], a[i]
 		if brk, err := permDiff(ctx, a, callback, i+1); brk {
 			return true, err

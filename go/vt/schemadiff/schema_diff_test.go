@@ -83,7 +83,80 @@ func TestPermutations(t *testing.T) {
 				"create view v2 as select id from t2",
 			},
 			expectDiffs:        4,
-			expectPermutations: 24,
+			expectPermutations: 8, // because CREATE VIEW does not permutate with TABLE operations
+		},
+		{
+			name: "multiple drop view diffs",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+				"create view v1 as select id from t1",
+				"create view v2 as select id from v1",
+				"create view v0 as select id from v2",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+			},
+			expectDiffs:        3,
+			expectPermutations: 1, // because DROP VIEW don't permutate between themselves
+		},
+		{
+			name: "multiple drop view diffs with ALTER TABLE",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+				"create view v1 as select id from t1",
+				"create view v2 as select id from v1",
+				"create view v0 as select id from v2",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info bigint not null);",
+			},
+			expectDiffs:        4,
+			expectPermutations: 1, // because DROP VIEW don't permutate between themselves and with TABLE operations
+		},
+		{
+			name: "multiple create view diffs",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+				"create view v1 as select id from t1",
+				"create view v2 as select id from v1",
+				"create view v3 as select id from v2",
+			},
+			expectDiffs:        3,
+			expectPermutations: 1, // because CREATE VIEW don't permutate between themselves
+		},
+		{
+			name: "multiple create view diffs with ALTER TABLE",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info bigint not null);",
+				"create view v1 as select id from t1",
+				"create view v2 as select id from v1",
+				"create view v3 as select id from v2",
+			},
+			expectDiffs:        4,
+			expectPermutations: 1, // because CREATE VIEW don't permutate between themselves and with TABLE operations
+		},
+		{
+			name: "multiple create and drop view diffs with ALTER TABLE",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+				"create view v101 as select id from t1",
+				"create view v102 as select id from v101",
+				"create view v103 as select id from v102",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info bigint not null);",
+				"create view v201 as select id from t1",
+				"create view v202 as select id from v201",
+				"create view v203 as select id from v202",
+			},
+			expectDiffs:        7,
+			expectPermutations: 1, // because CREATE/DROP VIEW don't permutate between themselves and with TABLE operations
 		},
 	}
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
@@ -114,6 +187,7 @@ func TestPermutations(t *testing.T) {
 			t.Run("no early break", func(t *testing.T) {
 				iteration := 0
 				allPerms := map[string]bool{}
+				allPermsStatements := []string{}
 				allDiffs := schemaDiff.UnorderedDiffs()
 				originalSingleString := toSingleString(allDiffs)
 				numEquals := 0
@@ -122,6 +196,7 @@ func TestPermutations(t *testing.T) {
 					// cover all permutations
 					singleString := toSingleString(pdiffs)
 					allPerms[singleString] = true
+					allPermsStatements = append(allPermsStatements, singleString)
 					if originalSingleString == singleString {
 						numEquals++
 					}
@@ -131,8 +206,9 @@ func TestPermutations(t *testing.T) {
 				if len(allDiffs) > 0 {
 					assert.Equal(t, numEquals, 1)
 				}
+
 				assert.False(t, earlyBreak)
-				assert.Equal(t, tc.expectPermutations, len(allPerms))
+				assert.Equalf(t, tc.expectPermutations, len(allPerms), "all perms: %v", strings.Join(allPermsStatements, "\n"))
 			})
 			t.Run("early break", func(t *testing.T) {
 				allPerms := map[string]bool{}
