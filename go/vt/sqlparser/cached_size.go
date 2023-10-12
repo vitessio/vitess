@@ -301,6 +301,18 @@ func (cached *AlterVschema) CachedSize(alloc bool) int64 {
 	size += cached.AutoIncSpec.CachedSize(true)
 	return size
 }
+func (cached *Analyze) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
+	size += cached.Table.CachedSize(false)
+	return size
+}
 func (cached *AndExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

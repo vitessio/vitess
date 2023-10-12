@@ -3966,7 +3966,7 @@ truncate_statement:
 analyze_statement:
   ANALYZE TABLE table_name
   {
-    $$ = &OtherRead{}
+    $$ = &Analyze{Table: $3}
   }
 
 purge_statement:

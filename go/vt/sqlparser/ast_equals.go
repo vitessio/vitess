@@ -116,6 +116,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfAlterVschema(a, b)
+	case *Analyze:
+		b, ok := inB.(*Analyze)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAnalyze(a, b)
 	case *AndExpr:
 		b, ok := inB.(*AndExpr)
 		if !ok {
@@ -1034,12 +1040,6 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfOtherAdmin(a, b)
-	case *OtherRead:
-		b, ok := inB.(*OtherRead)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfOtherRead(a, b)
 	case *OverClause:
 		b, ok := inB.(*OverClause)
 		if !ok {
@@ -1817,6 +1817,17 @@ func (cmp *Comparator) RefOfAlterVschema(a, b *AlterVschema) bool {
 		cmp.RefOfVindexSpec(a.VindexSpec, b.VindexSpec) &&
 		cmp.SliceOfIdentifierCI(a.VindexCols, b.VindexCols) &&
 		cmp.RefOfAutoIncSpec(a.AutoIncSpec, b.AutoIncSpec)
+}
+
+// RefOfAnalyze does deep equals between the two objects.
+func (cmp *Comparator) RefOfAnalyze(a, b *Analyze) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.TableName(a.Table, b.Table)
 }
 
 // RefOfAndExpr does deep equals between the two objects.
@@ -3683,17 +3694,6 @@ func (cmp *Comparator) RefOfOrderByOption(a, b *OrderByOption) bool {
 
 // RefOfOtherAdmin does deep equals between the two objects.
 func (cmp *Comparator) RefOfOtherAdmin(a, b *OtherAdmin) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return true
-}
-
-// RefOfOtherRead does deep equals between the two objects.
-func (cmp *Comparator) RefOfOtherRead(a, b *OtherRead) bool {
 	if a == b {
 		return true
 	}
@@ -6748,6 +6748,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfAlterVschema(a, b)
+	case *Analyze:
+		b, ok := inB.(*Analyze)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAnalyze(a, b)
 	case *Begin:
 		b, ok := inB.(*Begin)
 		if !ok {
@@ -6874,12 +6880,6 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfOtherAdmin(a, b)
-	case *OtherRead:
-		b, ok := inB.(*OtherRead)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfOtherRead(a, b)
 	case *PrepareStmt:
 		b, ok := inB.(*PrepareStmt)
 		if !ok {

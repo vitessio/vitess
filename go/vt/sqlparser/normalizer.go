@@ -80,7 +80,7 @@ func (nz *normalizer) walkStatementUp(cursor *Cursor) bool {
 func (nz *normalizer) walkStatementDown(node, parent SQLNode) bool {
 	switch node := node.(type) {
 	// no need to normalize the statement types
-	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, DDLStatement, *SRollback, *Release, *OtherAdmin, *OtherRead:
+	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, DDLStatement, *SRollback, *Release, *OtherAdmin, *Analyze:
 		return false
 	case *Select:
 		_, isDerived := parent.(*DerivedTable)

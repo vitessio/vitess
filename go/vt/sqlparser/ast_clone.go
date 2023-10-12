@@ -53,6 +53,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAlterView(in)
 	case *AlterVschema:
 		return CloneRefOfAlterVschema(in)
+	case *Analyze:
+		return CloneRefOfAnalyze(in)
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
 	case *AnyValue:
@@ -359,8 +361,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfOrderByOption(in)
 	case *OtherAdmin:
 		return CloneRefOfOtherAdmin(in)
-	case *OtherRead:
-		return CloneRefOfOtherRead(in)
 	case *OverClause:
 		return CloneRefOfOverClause(in)
 	case *ParenTableExpr:
@@ -717,6 +717,16 @@ func CloneRefOfAlterVschema(n *AlterVschema) *AlterVschema {
 	out.VindexSpec = CloneRefOfVindexSpec(n.VindexSpec)
 	out.VindexCols = CloneSliceOfIdentifierCI(n.VindexCols)
 	out.AutoIncSpec = CloneRefOfAutoIncSpec(n.AutoIncSpec)
+	return &out
+}
+
+// CloneRefOfAnalyze creates a deep clone of the input.
+func CloneRefOfAnalyze(n *Analyze) *Analyze {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Table = CloneTableName(n.Table)
 	return &out
 }
 
@@ -2334,15 +2344,6 @@ func CloneRefOfOrderByOption(n *OrderByOption) *OrderByOption {
 
 // CloneRefOfOtherAdmin creates a deep clone of the input.
 func CloneRefOfOtherAdmin(n *OtherAdmin) *OtherAdmin {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
-}
-
-// CloneRefOfOtherRead creates a deep clone of the input.
-func CloneRefOfOtherRead(n *OtherRead) *OtherRead {
 	if n == nil {
 		return nil
 	}
@@ -4121,6 +4122,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfAlterView(in)
 	case *AlterVschema:
 		return CloneRefOfAlterVschema(in)
+	case *Analyze:
+		return CloneRefOfAnalyze(in)
 	case *Begin:
 		return CloneRefOfBegin(in)
 	case *CallProc:
@@ -4163,8 +4166,6 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfLockTables(in)
 	case *OtherAdmin:
 		return CloneRefOfOtherAdmin(in)
-	case *OtherRead:
-		return CloneRefOfOtherRead(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
 	case *PurgeBinaryLogs:

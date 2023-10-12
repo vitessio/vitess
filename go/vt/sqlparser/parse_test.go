@@ -2116,8 +2116,7 @@ var (
 		input:  "drop index `PRIMARY` on a lock none",
 		output: "alter table a drop primary key, lock none",
 	}, {
-		input:  "analyze table a",
-		output: "otherread",
+		input: "analyze table a",
 	}, {
 		input: "flush tables",
 	}, {

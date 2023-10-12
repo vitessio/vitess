@@ -682,10 +682,10 @@ type (
 		Name     IdentifierCI
 	}
 
-	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
-	// It should be used only as an indicator. It does not contain
-	// the full AST for the statement.
-	OtherRead struct{}
+	// Analyze represents the Analyze statement.
+	Analyze struct {
+		Table TableName
+	}
 
 	// OtherAdmin represents a misc statement that relies on ADMIN privileges,
 	// such as REPAIR, OPTIMIZE, or TRUNCATE statement.
@@ -729,7 +729,7 @@ func (*Rollback) iStatement()            {}
 func (*SRollback) iStatement()           {}
 func (*Savepoint) iStatement()           {}
 func (*Release) iStatement()             {}
-func (*OtherRead) iStatement()           {}
+func (*Analyze) iStatement()             {}
 func (*OtherAdmin) iStatement()          {}
 func (*CommentOnly) iStatement()         {}
 func (*Select) iSelectStatement()        {}

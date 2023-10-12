@@ -1424,8 +1424,9 @@ func (node *CallProc) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *OtherRead) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("otherread")
+func (node *Analyze) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("analyze table ")
+	node.Table.formatFast(buf)
 }
 
 // formatFast formats the node.

@@ -52,6 +52,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfAlterView(parent, node, replacer)
 	case *AlterVschema:
 		return a.rewriteRefOfAlterVschema(parent, node, replacer)
+	case *Analyze:
+		return a.rewriteRefOfAnalyze(parent, node, replacer)
 	case *AndExpr:
 		return a.rewriteRefOfAndExpr(parent, node, replacer)
 	case *AnyValue:
@@ -358,8 +360,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfOrderByOption(parent, node, replacer)
 	case *OtherAdmin:
 		return a.rewriteRefOfOtherAdmin(parent, node, replacer)
-	case *OtherRead:
-		return a.rewriteRefOfOtherRead(parent, node, replacer)
 	case *OverClause:
 		return a.rewriteRefOfOverClause(parent, node, replacer)
 	case *ParenTableExpr:
@@ -1023,6 +1023,33 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 	}
 	if !a.rewriteRefOfAutoIncSpec(node, node.AutoIncSpec, func(newNode, parent SQLNode) {
 		parent.(*AlterVschema).AutoIncSpec = newNode.(*AutoIncSpec)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfAnalyze(parent SQLNode, node *Analyze, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*Analyze).Table = newNode.(TableName)
 	}) {
 		return false
 	}
@@ -6196,30 +6223,6 @@ func (a *application) rewriteRefOfOtherAdmin(parent SQLNode, node *OtherAdmin, r
 	}
 	return true
 }
-func (a *application) rewriteRefOfOtherRead(parent SQLNode, node *OtherRead, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
 func (a *application) rewriteRefOfOverClause(parent SQLNode, node *OverClause, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10210,6 +10213,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfAlterView(parent, node, replacer)
 	case *AlterVschema:
 		return a.rewriteRefOfAlterVschema(parent, node, replacer)
+	case *Analyze:
+		return a.rewriteRefOfAnalyze(parent, node, replacer)
 	case *Begin:
 		return a.rewriteRefOfBegin(parent, node, replacer)
 	case *CallProc:
@@ -10252,8 +10257,6 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfLockTables(parent, node, replacer)
 	case *OtherAdmin:
 		return a.rewriteRefOfOtherAdmin(parent, node, replacer)
-	case *OtherRead:
-		return a.rewriteRefOfOtherRead(parent, node, replacer)
 	case *PrepareStmt:
 		return a.rewriteRefOfPrepareStmt(parent, node, replacer)
 	case *PurgeBinaryLogs:

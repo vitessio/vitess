@@ -36,7 +36,7 @@
     "comment": "Analyze statement",
     "query": "analyze table t1",
     "plan": {
-      "QueryType": "OTHER",
+      "QueryType": "ANALYZE",
       "Original": "analyze table t1",
       "Instructions": {
         "OperatorType": "Send",

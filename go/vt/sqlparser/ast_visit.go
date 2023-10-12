@@ -52,6 +52,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAlterView(in, f)
 	case *AlterVschema:
 		return VisitRefOfAlterVschema(in, f)
+	case *Analyze:
+		return VisitRefOfAnalyze(in, f)
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
 	case *AnyValue:
@@ -358,8 +360,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfOrderByOption(in, f)
 	case *OtherAdmin:
 		return VisitRefOfOtherAdmin(in, f)
-	case *OtherRead:
-		return VisitRefOfOtherRead(in, f)
 	case *OverClause:
 		return VisitRefOfOverClause(in, f)
 	case *ParenTableExpr:
@@ -780,6 +780,18 @@ func VisitRefOfAlterVschema(in *AlterVschema, f Visit) error {
 		}
 	}
 	if err := VisitRefOfAutoIncSpec(in.AutoIncSpec, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfAnalyze(in *Analyze, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.Table, f); err != nil {
 		return err
 	}
 	return nil
@@ -2935,15 +2947,6 @@ func VisitRefOfOtherAdmin(in *OtherAdmin, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfOtherRead(in *OtherRead, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	return nil
-}
 func VisitRefOfOverClause(in *OverClause, f Visit) error {
 	if in == nil {
 		return nil
@@ -5056,6 +5059,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfAlterView(in, f)
 	case *AlterVschema:
 		return VisitRefOfAlterVschema(in, f)
+	case *Analyze:
+		return VisitRefOfAnalyze(in, f)
 	case *Begin:
 		return VisitRefOfBegin(in, f)
 	case *CallProc:
@@ -5098,8 +5103,6 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfLockTables(in, f)
 	case *OtherAdmin:
 		return VisitRefOfOtherAdmin(in, f)
-	case *OtherRead:
-		return VisitRefOfOtherRead(in, f)
 	case *PrepareStmt:
 		return VisitRefOfPrepareStmt(in, f)
 	case *PurgeBinaryLogs:

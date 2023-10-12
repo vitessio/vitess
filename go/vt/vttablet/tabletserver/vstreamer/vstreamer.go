@@ -157,7 +157,7 @@ func (vs *vstreamer) Cancel() {
 
 // Stream streams binlog events.
 func (vs *vstreamer) Stream() error {
-	//defer vs.cancel()
+	// defer vs.cancel()
 	ctx := context.Background()
 	vs.vse.vstreamerCount.Add(1)
 	defer func() {
@@ -534,7 +534,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			//
 			// Vitess only supports row based replication, so skipping the creation of savepoints
 			// reduces the amount of data send over to vplayer.
-		case sqlparser.StmtOther, sqlparser.StmtPriv, sqlparser.StmtSet, sqlparser.StmtComment, sqlparser.StmtFlush:
+		case sqlparser.StmtOther, sqlparser.StmtAnalyze, sqlparser.StmtPriv, sqlparser.StmtSet, sqlparser.StmtComment, sqlparser.StmtFlush:
 			// These are either:
 			// 1) DBA statements like REPAIR that can be ignored.
 			// 2) Privilege-altering statements like GRANT/REVOKE
