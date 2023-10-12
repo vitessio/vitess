@@ -194,8 +194,8 @@ func SkipIfBinaryIsBelowVersion(t *testing.T, majorVersion int, binary string) {
 	}
 }
 
-// BinaryIsAtVersion returns true if this binary is at or above the required version
-func BinaryIsAtVersion(majorVersion int, binary string) bool {
+// BinaryIsAtLeastAtVersion returns true if this binary is at or above the required version
+func BinaryIsAtLeastAtVersion(majorVersion int, binary string) bool {
 	version, err := cluster.GetMajorVersion(binary)
 	if err != nil {
 		return false
