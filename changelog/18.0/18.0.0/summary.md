@@ -5,8 +5,6 @@
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [Local examples now use etcd v3 storage and API](#local-examples-etcd-v3)
-  - **[Deprecations and Removals](#deprecations-and-removals)**
-    - [Legacy Clients](#legacy-clients)
   - **[New command line flags and behavior](#new-flag)**
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
     - [VTOrc flag `--change-tablets-with-errant-gtid-to-drained`](#new-flag-errant-gtid-convert)
@@ -16,6 +14,7 @@
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v18.16.0](#update-node)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Legacy Client Binaries](#legacy-client-binaries)
     - [Deprecated Flags](#deprecated-flags)
     - [Deprecated Stats](#deprecated-stats)
     - [Deleted Flags](#deleted-flags)
@@ -51,10 +50,10 @@ and API mode or [migrate your existing data from v2 to v3](https://etcd.io/docs/
 
 ### <a id="deprecations-and-removals"/>Deprecations and Removals
 
-#### <a id="legacy-clients"/>Legacy Clients
+#### <a id="legacy-client-binaries"/>Legacy Client Binaries
 
 `vtctldclient` is our new modern *Vitess controller daemon* (`vtctld`) *client* – which you will use to perform commands
-and take actions in your Vitess clusters. It is [replacing the legacy `vtctl`/`vtctlclient` clients](https://vitess.io/docs/18.0/reference/vtctldclient-transition/overview/).
+and take actions in your Vitess clusters. It is [replacing the legacy `vtctl`/`vtctlclient` binaries](https://vitess.io/docs/18.0/reference/vtctldclient-transition/overview/).
 Some of the benefits are:
 
 - [Dedicated RPCs for each command](https://github.com/vitessio/vitess/blob/release-18.0/proto/vtctlservice.proto#L32-L353)
