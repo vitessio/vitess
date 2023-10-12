@@ -76,16 +76,16 @@ require (
 	go.etcd.io/etcd/api/v3 v3.5.7
 	go.etcd.io/etcd/client/pkg/v3 v3.5.7
 	go.etcd.io/etcd/client/v3 v3.5.7
-	golang.org/x/crypto v0.5.0 // indirect
+	golang.org/x/crypto v0.14.0 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
-	golang.org/x/mod v0.7.0 // indirect
-	golang.org/x/net v0.7.0
+	golang.org/x/mod v0.8.0 // indirect
+	golang.org/x/net v0.17.0
 	golang.org/x/oauth2 v0.4.0
-	golang.org/x/sys v0.5.0 // indirect
-	golang.org/x/term v0.5.0
-	golang.org/x/text v0.7.0
+	golang.org/x/sys v0.13.0 // indirect
+	golang.org/x/term v0.13.0
+	golang.org/x/text v0.13.0
 	golang.org/x/time v0.3.0
-	golang.org/x/tools v0.5.0
+	golang.org/x/tools v0.6.0
 	google.golang.org/api v0.109.0
 	google.golang.org/genproto v0.0.0-20230131230820-1c016267d619 // indirect
 	google.golang.org/grpc v1.52.3
@@ -114,6 +114,7 @@ require (
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	github.com/spyzhov/ajson v0.8.0
 	golang.org/x/exp v0.0.0-20230131160201-f062dba9d201
+	golang.org/x/tools/cmd/cover v0.1.0-deprecated
 	modernc.org/sqlite v1.20.3
 )
 
