@@ -43,7 +43,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v5
         with:
-          file: ${{ (matrix.branch == 'latest') && './docker/lite/Dockerfile' || './docker/lite/Dockerfile.' + matrix.branch }}
+          file: ${{ (matrix.branch == 'latest') && './docker/lite/Dockerfile' || './docker/lite/Dockerfile.' matrix.branch }}
           push: true
           tags: vitess/lite:${{ matrix.branch }}
 
@@ -55,6 +55,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: docker/build-push-action@v5
         with:
-          file: ${{ (matrix.branch == 'latest') && './docker/lite/Dockerfile' || './docker/lite/Dockerfile.' + matrix.branch }}
+          file: ${{ (matrix.branch == 'latest') && './docker/lite/Dockerfile' || './docker/lite/Dockerfile.' matrix.branch }}
           push: true
-          tags: ${{ (matrix.branch == 'latest') && 'vitess/lite:' + env.TAG_NAME || 'vitess/lite:' + env.TAG_NAME + '-' + matrix.branch }}
+          tags: ${{ (matrix.branch == 'latest' && 'vitess/lite:' env.TAG_NAME) || ('vitess/lite:' env.TAG_NAME '-' matrix.branch) }}
