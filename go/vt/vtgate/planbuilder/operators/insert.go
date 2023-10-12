@@ -153,17 +153,13 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 		return insOp, nil
 	}
 
-	parentFKsForInsert := vindexTable.ParentFKsNeedsHandling(ctx.VerifyAllFKs, ctx.ParentFKToIgnore)
-	if len(parentFKsForInsert) > 0 {
+	parentFKs := ctx.SemTable.GetParentForeignKeysList()
+	childFks := ctx.SemTable.GetChildForeignKeysList()
+	if len(childFks) == 0 && len(parentFKs) == 0 {
+		return insOp, nil
+	}
+	if len(parentFKs) > 0 {
 		return nil, vterrors.VT12002()
-	}
-	if len(ins.OnDup) == 0 {
-		return insOp, nil
-	}
-
-	parentFksForUpdate, childFksForUpdate := getFKRequirementsForUpdate(ctx, sqlparser.UpdateExprs(ins.OnDup), vindexTable)
-	if len(parentFksForUpdate) == 0 && len(childFksForUpdate) == 0 {
-		return insOp, nil
 	}
 	return nil, vterrors.VT12001("ON DUPLICATE KEY UPDATE with foreign keys")
 }

@@ -176,8 +176,9 @@ func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectE
 }
 
 func (h *Horizon) GetOrdering() []ops.OrderBy {
+	// DML queries don't have a QP.
 	if h.QP == nil {
-		panic(vterrors.VT13001("QP should already be here"))
+		return nil
 	}
 	return h.QP.OrderExprs
 }

@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -47,8 +46,13 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
+	// Remove all the foreign keys that don't require any handling.
+	err = ctx.SemTable.RemoveNonRequiredForeignKeys(ctx.VerifyAllFKs, vindexes.UpdateAction)
+	if err != nil {
+		return nil, err
+	}
 	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
-		if fkManagementNotRequiredForUpdate(ctx, tables, updStmt.Exprs) {
+		if !ctx.SemTable.ForeignKeysPresent() {
 			plan := updateUnshardedShortcut(updStmt, ks, tables)
 			plan = pushCommentDirectivesOnPlan(plan, updStmt)
 			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
@@ -83,59 +87,6 @@ func gen4UpdateStmtPlanner(
 	}
 
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
-}
-
-// TODO: Handle all this in semantic analysis.
-func fkManagementNotRequiredForUpdate(ctx *plancontext.PlanningContext, vTables []*vindexes.Table, updateExprs sqlparser.UpdateExprs) bool {
-	childFkMap := make(map[string][]vindexes.ChildFKInfo)
-
-	// Find the foreign key mode and check for any managed child foreign keys.
-	for _, vTable := range vTables {
-		ksMode, err := ctx.VSchema.ForeignKeyMode(vTable.Keyspace.Name)
-		if err != nil {
-			return false
-		}
-		if ksMode != vschemapb.Keyspace_FK_MANAGED {
-			continue
-		}
-		childFks := vTable.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.UpdateAction)
-		if len(childFks) > 0 {
-			childFkMap[vTable.String()] = childFks
-		}
-	}
-
-	getFKInfo := func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
-		tblInfo, err := ctx.SemTable.TableInfoForExpr(expr.Name)
-		if err != nil {
-			return nil, nil
-		}
-		vTable := tblInfo.GetVindexTable()
-		return vTable.ParentForeignKeys, childFkMap[vTable.String()]
-	}
-
-	// Check if any column in the parent table is being updated which has a child foreign key.
-	return !columnModified(updateExprs, getFKInfo)
-}
-
-// columnModified checks if any column in the parent table is being updated which has a child foreign key.
-func columnModified(exprs sqlparser.UpdateExprs, getFks func(expr *sqlparser.UpdateExpr) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo)) bool {
-	for _, updateExpr := range exprs {
-		parentFKs, childFks := getFks(updateExpr)
-		for _, childFk := range childFks {
-			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				return true
-			}
-		}
-		if sqlparser.IsNull(updateExpr.Expr) {
-			continue
-		}
-		for _, parentFk := range parentFKs {
-			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func updateUnshardedShortcut(stmt *sqlparser.Update, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
