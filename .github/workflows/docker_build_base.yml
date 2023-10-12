@@ -16,7 +16,7 @@ jobs:
   build_and_push_base:
     name: Build and push vitess/base Docker images
     runs-on: ubuntu-latest
-    if: github.repository == 'vitessio/vitess'
+#    if: github.repository == 'vitessio/vitess'
 
     strategy:
       fail-fast: true
