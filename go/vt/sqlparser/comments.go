@@ -322,86 +322,44 @@ func (d *CommentDirectives) GetString(key string, defaultVal string) (string, bo
 
 // MultiShardAutocommitDirective returns true if multishard autocommit directive is set to true in query.
 func MultiShardAutocommitDirective(stmt Statement) bool {
-	var comments *ParsedComments
-	switch stmt := stmt.(type) {
-	case *Insert:
-		comments = stmt.Comments
-	case *Update:
-		comments = stmt.Comments
-	case *Delete:
-		comments = stmt.Comments
-	}
-	return comments != nil && comments.Directives().IsSet(DirectiveMultiShardAutocommit)
+	return checkDirective(stmt, DirectiveMultiShardAutocommit)
 }
 
 // SkipQueryPlanCacheDirective returns true if skip query plan cache directive is set to true in query.
 func SkipQueryPlanCacheDirective(stmt Statement) bool {
-	var comments *ParsedComments
-	switch stmt := stmt.(type) {
-	case *Select:
-		comments = stmt.Comments
-	case *Insert:
-		comments = stmt.Comments
-	case *Update:
-		comments = stmt.Comments
-	case *Delete:
-		comments = stmt.Comments
-	}
-	return comments != nil && comments.Directives().IsSet(DirectiveSkipQueryPlanCache)
+	return checkDirective(stmt, DirectiveSkipQueryPlanCache)
 }
 
 // IgnoreMaxPayloadSizeDirective returns true if the max payload size override
 // directive is set to true.
 func IgnoreMaxPayloadSizeDirective(stmt Statement) bool {
-	var comments *ParsedComments
 	switch stmt := stmt.(type) {
 	// For transactional statements, they should always be passed down and
 	// should not come into max payload size requirement.
 	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release:
 		return true
-	case *Select:
-		comments = stmt.Comments
-	case *Insert:
-		comments = stmt.Comments
-	case *Update:
-		comments = stmt.Comments
-	case *Delete:
-		comments = stmt.Comments
+	default:
+		return checkDirective(stmt, DirectiveIgnoreMaxPayloadSize)
 	}
-	return comments != nil && comments.Directives().IsSet(DirectiveIgnoreMaxPayloadSize)
 }
 
 // IgnoreMaxMaxMemoryRowsDirective returns true if the max memory rows override
 // directive is set to true.
 func IgnoreMaxMaxMemoryRowsDirective(stmt Statement) bool {
-	var comments *ParsedComments
-	switch stmt := stmt.(type) {
-	case *Select:
-		comments = stmt.Comments
-	case *Insert:
-		comments = stmt.Comments
-	case *Update:
-		comments = stmt.Comments
-	case *Delete:
-		comments = stmt.Comments
-	}
-	return comments != nil && comments.Directives().IsSet(DirectiveIgnoreMaxMemoryRows)
+	return checkDirective(stmt, DirectiveIgnoreMaxMemoryRows)
 }
 
 // AllowScatterDirective returns true if the allow scatter override is set to true
 func AllowScatterDirective(stmt Statement) bool {
-	var comments *ParsedComments
-	switch stmt := stmt.(type) {
-	case *Select:
-		comments = stmt.Comments
-	case *Insert:
-		comments = stmt.Comments
-	case *Update:
-		comments = stmt.Comments
-	case *Delete:
-		comments = stmt.Comments
+	return checkDirective(stmt, DirectiveAllowScatter)
+}
+
+func checkDirective(stmt Statement, key string) bool {
+	cmt, ok := stmt.(Commented)
+	if ok {
+		return cmt.GetParsedComments().Directives().IsSet(key)
 	}
-	return comments != nil && comments.Directives().IsSet(DirectiveAllowScatter)
+	return false
 }
 
 // GetPriorityFromStatement gets the priority from the provided Statement, using DirectivePriority

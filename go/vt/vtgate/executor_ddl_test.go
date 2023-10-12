@@ -26,8 +26,6 @@ import (
 )
 
 func TestDDLFlags(t *testing.T) {
-	executor, _, _, _, ctx := createExecutorEnv(t)
-	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
 	defer func() {
 		enableOnlineDDL = true
 		enableDirectDDL = true
@@ -57,6 +55,8 @@ func TestDDLFlags(t *testing.T) {
 	}
 	for _, testcase := range testcases {
 		t.Run(fmt.Sprintf("%s-%v-%v", testcase.sql, testcase.enableDirectDDL, testcase.enableOnlineDDL), func(t *testing.T) {
+			executor, _, _, _, ctx := createExecutorEnv(t)
+			session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
 			enableDirectDDL = testcase.enableDirectDDL
 			enableOnlineDDL = testcase.enableOnlineDDL
 			_, err := executor.Execute(ctx, nil, "TestDDLFlags", session, testcase.sql, nil)

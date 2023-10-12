@@ -1,0 +1,26 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "user_index": {
+      "type": "hash"
+    }
+  },
+  "tables": {
+    "user": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "user_index"
+        }
+      ]
+    },
+    "music": {
+      "column_vindexes": [
+        {
+          "column": "user_id",
+          "name": "user_index"
+        }
+      ]
+    }
+  }
+}

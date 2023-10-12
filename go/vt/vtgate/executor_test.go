@@ -1372,8 +1372,6 @@ func TestExecutorDDL(t *testing.T) {
 }
 
 func TestExecutorDDLFk(t *testing.T) {
-	executor, _, _, sbc, ctx := createExecutorEnv(t)
-
 	mName := "TestExecutorDDLFk"
 	stmts := []string{
 		"create table t1(id bigint primary key, foreign key (id) references t2(id))",
@@ -1383,6 +1381,7 @@ func TestExecutorDDLFk(t *testing.T) {
 	for _, stmt := range stmts {
 		for _, fkMode := range []string{"allow", "disallow"} {
 			t.Run(stmt+fkMode, func(t *testing.T) {
+				executor, _, _, sbc, ctx := createExecutorEnv(t)
 				sbc.ExecCount.Store(0)
 				foreignKeyMode = fkMode
 				_, err := executor.Execute(ctx, nil, mName, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)

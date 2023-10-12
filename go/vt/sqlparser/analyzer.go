@@ -142,22 +142,7 @@ func CanNormalize(stmt Statement) bool {
 
 // CachePlan takes Statement and returns true if the query plan should be cached
 func CachePlan(stmt Statement) bool {
-	var comments *ParsedComments
-	switch stmt := stmt.(type) {
-	case *Select:
-		comments = stmt.Comments
-	case *Insert:
-		comments = stmt.Comments
-	case *Update:
-		comments = stmt.Comments
-	case *Delete:
-		comments = stmt.Comments
-	case *Union, *Stream:
-		return true
-	default:
-		return false
-	}
-	return !comments.Directives().IsSet(DirectiveSkipQueryPlanCache)
+	return !checkDirective(stmt, DirectiveSkipQueryPlanCache)
 }
 
 // MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
