@@ -16,7 +16,7 @@ jobs:
   build_and_push:
     name: Build and push vitess/lite Docker images
     runs-on: ubuntu-latest # TODO: replace by larger runners
-    if: github.repository == 'vitessio/vitess'
+    #TODO: uncomment: if: github.repository == 'vitessio/vitess'
 
     strategy:
       fail-fast: true
