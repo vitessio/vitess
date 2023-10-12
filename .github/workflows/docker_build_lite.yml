@@ -39,22 +39,39 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Set Dockerfile path
+        run: |
+          if [[ "${{ matrix.branch }}" == "latest" ]]; then
+            echo "DOCKERFILE=./docker/lite/Dockerfile" >> $GITHUB_ENV
+          else
+            echo "DOCKERFILE=./docker/lite/Dockerfile.${{ matrix.branch }}" >> $GITHUB_ENV
+          fi
+
       - name: Build and push on main
         if: github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v5
         with:
-          file: ${{ (matrix.branch == 'latest') && './docker/lite/Dockerfile' || './docker/lite/Dockerfile.' matrix.branch }}
+          file: ${{ env.DOCKERFILE }}
           push: true
           tags: vitess/lite:${{ matrix.branch }}
 
-      - name: Get the tag name
+      - name: Get the Git tag
         if: startsWith(github.ref, 'refs/tags/')
         run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Set Docker tag name
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          if [[ "${{ matrix.branch }}" == "latest" ]]; then
+            echo "DOCKER_TAG=vitess/lite:${TAG_NAME}" >> $GITHUB_ENV
+          else
+            echo "DOCKER_TAG=vitess/lite:${TAG_NAME}-${{ matrix.branch }}" >> $GITHUB_ENV
+          fi
 
       - name: Build and push on main
         if: startsWith(github.ref, 'refs/tags/')
         uses: docker/build-push-action@v5
         with:
-          file: ${{ (matrix.branch == 'latest') && './docker/lite/Dockerfile' || './docker/lite/Dockerfile.' matrix.branch }}
+          file: ${{ env.DOCKERFILE }}
           push: true
-          tags: ${{ (matrix.branch == 'latest' && 'vitess/lite:' env.TAG_NAME) || ('vitess/lite:' env.TAG_NAME '-' matrix.branch) }}
+          tags: ${{ env.DOCKER_TAG }}
