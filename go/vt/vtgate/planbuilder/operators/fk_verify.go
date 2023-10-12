@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // VerifyOp keeps the information about the foreign key verification operation.
@@ -70,7 +71,7 @@ func (fkv *FkVerify) Clone(inputs []ops.Operator) ops.Operator {
 }
 
 // GetOrdering implements the Operator interface
-func (fkv *FkVerify) GetOrdering() []ops.OrderBy {
+func (fkv *FkVerify) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
 	return nil
 }
 

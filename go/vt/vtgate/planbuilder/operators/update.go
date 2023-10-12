@@ -76,7 +76,7 @@ func (u *Update) Clone([]ops.Operator) ops.Operator {
 	return &upd
 }
 
-func (u *Update) GetOrdering() []ops.OrderBy {
+func (u *Update) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
 	return nil
 }
 

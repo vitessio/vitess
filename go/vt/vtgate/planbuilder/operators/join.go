@@ -48,7 +48,7 @@ func (j *Join) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
-func (j *Join) GetOrdering() []ops.OrderBy {
+func (j *Join) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
 	return nil
 }
 

@@ -249,8 +249,8 @@ func (a *Aggregator) ShortDescription() string {
 	return fmt.Sprintf("%s%s group by %s", org, strings.Join(columns, ", "), strings.Join(grouping, ","))
 }
 
-func (a *Aggregator) GetOrdering() []ops.OrderBy {
-	return a.Source.GetOrdering()
+func (a *Aggregator) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+	return a.Source.GetOrdering(ctx)
 }
 
 func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) {
