@@ -328,15 +328,19 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 	// all the below fields ensure that the fields are sent only once.
 	results := make([][]*sqltypes.Result, len(c.Sources))
 
+	var mu sync.Mutex
 	for idx, source := range c.Sources {
 		err := vcursor.StreamExecutePrimitive(ctx, source, bindVars, true, func(resultChunk *sqltypes.Result) error {
-			// This visitor will just accumulate all the results into slices
-			results[idx] = append(results[idx], resultChunk)
-
 			// check if context has expired.
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			// This visitor will just accumulate all the results into slices
+			results[idx] = append(results[idx], resultChunk)
+
 			return nil
 		})
 		if err != nil {
@@ -354,8 +358,7 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 		return err
 	}
 	for _, res := range results {
-		err := c.coerceAndVisitResults(res, fields, callback)
-		if err != nil {
+		if err = c.coerceAndVisitResults(res, fields, callback); err != nil {
 			return err
 		}
 	}
