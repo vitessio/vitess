@@ -15,7 +15,7 @@ permissions: read-all
 jobs:
   build_and_push:
     name: Build and push vitess/lite Docker images
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on: ubuntu-latest # TODO: replace by larger runners
     if: github.repository == 'vitessio/vitess'
 
     strategy:
@@ -26,8 +26,6 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v3
-        with:
-          ref: ${{ matrix.branch }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -41,8 +39,22 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-#      - name: Build and push
-#        uses: docker/build-push-action@v5
-#        with:
-#          push: true
-#          tags: vitess/lite:$$matrix
+      - name: Build and push on main
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v5
+        with:
+          file: ${{ (matrix.branch == 'latest') && './docker/lite/Dockerfile' || './docker/lite/Dockerfile.' + matrix.branch }}
+          push: true
+          tags: vitess/lite:${{ matrix.branch }}
+
+      - name: Get the tag name
+        if: startsWith(github.ref, 'refs/tags/')
+        run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Build and push on main
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: docker/build-push-action@v5
+        with:
+          file: ${{ (matrix.branch == 'latest') && './docker/lite/Dockerfile' || './docker/lite/Dockerfile.' + matrix.branch }}
+          push: true
+          tags: ${{ (matrix.branch == 'latest') && 'vitess/lite:' + env.TAG_NAME || 'vitess/lite:' + env.TAG_NAME + '-' + matrix.branch }}
