@@ -15,7 +15,7 @@ permissions: read-all
 jobs:
   build_and_push_base:
     name: Build and push vitess/base Docker images
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on: ubuntu-latest
     if: github.repository == 'vitessio/vitess'
 
     strategy:
