@@ -18,7 +18,6 @@ package operators
 
 import (
 	"fmt"
-	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
@@ -658,8 +657,8 @@ func (r *Route) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.Selec
 	return r.Source.GetSelectExprs(ctx)
 }
 
-func (r *Route) GetOrdering() []ops.OrderBy {
-	return r.Source.GetOrdering()
+func (r *Route) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+	return r.Source.GetOrdering(ctx)
 }
 
 // TablesUsed returns tables used by MergedWith routes, which are not included
@@ -690,7 +689,7 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) {
 
 	// if we are getting results from multiple shards, we need to do a merge-sort
 	// between them to get the final output correctly sorted
-	ordering := r.Source.GetOrdering()
+	ordering := r.Source.GetOrdering(ctx)
 	if len(ordering) == 0 {
 		return
 	}
@@ -735,15 +734,6 @@ func (r *Route) ShortDescription() string {
 		first += " " + info.extraInfo()
 	}
 
-	orderBy := r.Source.GetOrdering()
-	ordering := ""
-	if len(orderBy) > 0 {
-		var oo []string
-		for _, o := range orderBy {
-			oo = append(oo, sqlparser.String(o.Inner))
-		}
-		ordering = " order by " + strings.Join(oo, ",")
-	}
 	comments := ""
 	if r.Comments != nil {
 		comments = " comments: " + sqlparser.String(r.Comments)
@@ -752,7 +742,7 @@ func (r *Route) ShortDescription() string {
 	if r.Lock != sqlparser.NoLock {
 		lock = " lock: " + r.Lock.ToString()
 	}
-	return first + ordering + comments + lock
+	return first + comments + lock
 }
 
 func (r *Route) setTruncateColumnCount(offset int) {

@@ -49,6 +49,7 @@ var _ SessionActions = (*noopVCursor)(nil)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
+	inTx bool
 }
 
 func (t *noopVCursor) Commit(ctx context.Context) error {
@@ -61,7 +62,7 @@ func (t *noopVCursor) GetUDV(key string) *querypb.BindVariable {
 }
 
 func (t *noopVCursor) InTransaction() bool {
-	return false
+	return t.inTx
 }
 
 func (t *noopVCursor) SetCommitOrder(co vtgatepb.CommitOrder) {

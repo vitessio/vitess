@@ -176,7 +176,7 @@ func (qg *QueryGraph) Clone([]ops.Operator) ops.Operator {
 	return result
 }
 
-func (qg *QueryGraph) GetOrdering() []ops.OrderBy {
+func (qg *QueryGraph) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
 	return nil
 }
 
