@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"time"
 	"unsafe"
+
 	"vitess.io/vitess/go/test/dbg"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -427,19 +428,19 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 				return
 			}
 
-			// First we check if this expression is already being returned
-			for _, column := range cols {
-				if ctx.SemTable.EqualsExprWithDeps(column.Expr, this) {
-					col := sqlparser.NewColName(column.As.String())
-					cursor.Replace(col)
-					return
-				}
-			}
-
 			// If we didn't find it, and we are dealing with a ColName, we have to add it to the derived table
 			colExpr, ok := this.(*sqlparser.ColName)
 			if !ok {
 				return
+			}
+
+			// First we check if this expression is already being returned
+			for _, column := range cols {
+				if ctx.SemTable.EqualsExprWithDeps(column.Expr, colExpr) {
+					col := sqlparser.NewColName(column.ColumnName())
+					cursor.Replace(col)
+					return
+				}
 			}
 
 			colAlias := fmt.Sprintf("%s_vt_%s_%s", p.DT.Alias, sqlparser.String(colExpr), RandString(2))
@@ -463,20 +464,21 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 		return e, nil
 	}
 
-	for i, pred := range src.JoinPredicates {
-		x, err := pred.Map(f)
+	//for i, pred := range src.JoinPredicates {
+	//	x, err := pred.Map(f)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	src.JoinPredicates[i] = x
+	//}
+
+	for i, col := range src.JoinColumns {
+		var err error
+		src.JoinColumns[i], err = col.Map(f)
 		if err != nil {
 			return err
 		}
-		src.JoinPredicates[i] = x
 	}
-
-	// for i, col := range src.JoinColumns {
-	// 	src.JoinColumns[i], err = col.Map(f)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// }
 	return nil
 }
 
