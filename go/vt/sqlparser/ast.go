@@ -684,7 +684,8 @@ type (
 
 	// Analyze represents the Analyze statement.
 	Analyze struct {
-		Table TableName
+		IsLocal bool
+		Table   TableName
 	}
 
 	// OtherAdmin represents a misc statement that relies on ADMIN privileges,

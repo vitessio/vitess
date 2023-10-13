@@ -157,7 +157,6 @@ func (vs *vstreamer) Cancel() {
 
 // Stream streams binlog events.
 func (vs *vstreamer) Stream() error {
-	// defer vs.cancel()
 	ctx := context.Background()
 	vs.vse.vstreamerCount.Add(1)
 	defer func() {

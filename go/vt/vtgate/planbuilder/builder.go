@@ -195,8 +195,10 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 		return buildExplainPlan(ctx, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.VExplainStmt:
 		return buildVExplainPlan(ctx, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
-	case *sqlparser.Analyze, *sqlparser.OtherAdmin:
+	case *sqlparser.OtherAdmin:
 		return buildOtherReadAndAdmin(query, vschema)
+	case *sqlparser.Analyze:
+		return buildAnalyzePlan(stmt, vschema)
 	case *sqlparser.Set:
 		return buildSetPlan(stmt, vschema)
 	case *sqlparser.Load:
@@ -235,6 +237,28 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unexpected statement type: %T", stmt))
+}
+
+func buildAnalyzePlan(stmt *sqlparser.Analyze, vschema plancontext.VSchema) (*planResult, error) {
+	tbl, _, _, _, dest, err := vschema.FindTableOrVindex(stmt.Table)
+	if err != nil {
+		return nil, err
+	}
+	if tbl == nil {
+		return nil, vterrors.VT05004(sqlparser.String(stmt.Table))
+	}
+	if dest == nil {
+		dest = key.DestinationAllShards{}
+	}
+	stmt.Table.Qualifier = sqlparser.NewIdentifierCS("")
+	stmt.Table.Name = tbl.Name
+
+	prim := &engine.Send{
+		Keyspace:          tbl.Keyspace,
+		TargetDestination: dest,
+		Query:             sqlparser.String(stmt),
+	}
+	return newPlanResult(prim, sqlparser.String(stmt.Table)), nil
 }
 
 func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {

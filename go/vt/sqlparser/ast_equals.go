@@ -1827,7 +1827,8 @@ func (cmp *Comparator) RefOfAnalyze(a, b *Analyze) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.TableName(a.Table, b.Table)
+	return a.IsLocal == b.IsLocal &&
+		cmp.TableName(a.Table, b.Table)
 }
 
 // RefOfAndExpr does deep equals between the two objects.

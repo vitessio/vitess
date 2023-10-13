@@ -2118,6 +2118,11 @@ var (
 	}, {
 		input: "analyze table a",
 	}, {
+		input:  "analyze NO_WRITE_TO_BINLOG table a",
+		output: "analyze local table a",
+	}, {
+		input: "analyze local table a",
+	}, {
 		input: "flush tables",
 	}, {
 		input: "flush tables with read lock",

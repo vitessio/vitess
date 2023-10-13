@@ -1425,7 +1425,11 @@ func (node *CallProc) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *Analyze) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("analyze table ")
+	buf.WriteString("analyze ")
+	if node.IsLocal {
+		buf.WriteString("local ")
+	}
+	buf.WriteString("table ")
 	node.Table.formatFast(buf)
 }
 
