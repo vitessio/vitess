@@ -188,8 +188,7 @@ func (st *SemTable) RemoveParentForeignKey(fkToIgnore string) error {
 		}
 		vt := ti.GetVindexTable()
 		for idx, info := range fkInfos {
-			x := info.String(vt)
-			if x == fkToIgnore {
+			if info.String(vt) == fkToIgnore {
 				st.parentForeignKeysInvolved[ts] = append(fkInfos[0:idx], fkInfos[idx+1:]...)
 				return nil
 			}

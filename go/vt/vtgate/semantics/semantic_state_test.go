@@ -318,7 +318,7 @@ func TestGetChildForeignKeysList(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.EqualValues(t, tt.childFksWanted, tt.semTable.GetChildForeignKeysList())
+			require.ElementsMatch(t, tt.childFksWanted, tt.semTable.GetChildForeignKeysList())
 		})
 	}
 }
@@ -371,7 +371,7 @@ func TestGetParentForeignKeysList(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.EqualValues(t, tt.parentFksWanted, tt.semTable.GetParentForeignKeysList())
+			require.ElementsMatch(t, tt.parentFksWanted, tt.semTable.GetParentForeignKeysList())
 		})
 	}
 }
@@ -473,7 +473,278 @@ func TestRemoveParentForeignKey(t *testing.T) {
 				require.EqualError(t, err, tt.expectedErr)
 				return
 			}
-			require.EqualValues(t, tt.parentFksWanted, tt.semTable.GetParentForeignKeysList())
+			require.ElementsMatch(t, tt.parentFksWanted, tt.semTable.GetParentForeignKeysList())
+		})
+	}
+}
+
+// TestRemoveNonRequiredForeignKeys tests the functionality of RemoveNonRequiredForeignKeys.
+func TestRemoveNonRequiredForeignKeys(t *testing.T) {
+	hashVindex := &vindexes.Hash{}
+	xxhashVindex := &vindexes.XXHash{}
+	t1Table := &vindexes.Table{
+		Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+		Name:     sqlparser.NewIdentifierCS("t1"),
+		ColumnVindexes: []*vindexes.ColumnVindex{
+			{
+				Vindex:  hashVindex,
+				Columns: sqlparser.MakeColumns("cola"),
+			},
+		},
+	}
+	t2Table := &vindexes.Table{
+		Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+		Name:     sqlparser.NewIdentifierCS("t2"),
+		ColumnVindexes: []*vindexes.ColumnVindex{
+			{
+				Vindex:  xxhashVindex,
+				Columns: sqlparser.MakeColumns("cola", "colb", "colc"),
+			},
+		},
+	}
+	t4Table := &vindexes.Table{
+		Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+		Name:     sqlparser.NewIdentifierCS("t4"),
+		ColumnVindexes: []*vindexes.ColumnVindex{
+			{
+				Vindex:  hashVindex,
+				Columns: sqlparser.MakeColumns("cola"),
+			},
+		},
+	}
+	t3Table := &vindexes.Table{
+		Keyspace: &vindexes.Keyspace{Name: "ks2"},
+		Name:     sqlparser.NewIdentifierCS("t3"),
+	}
+	tests := []struct {
+		name           string
+		verifyAllFks   bool
+		semTable       *SemTable
+		expectedErr    string
+		childFkWanted  map[TableSet][]vindexes.ChildFKInfo
+		parentFkWanted map[TableSet][]vindexes.ParentFKInfo
+	}{
+		{
+			name:         "VerifyAllFks specified",
+			verifyAllFks: true,
+			semTable: &SemTable{
+				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
+					SingleTableSet(0): {
+						ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
+						ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+						ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+						ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+					},
+					SingleTableSet(1): {
+						ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+						ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
+						ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+					},
+				},
+				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{
+					SingleTableSet(0): {
+						pkInfo(nil, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
+						pkInfo(nil, []string{"pcolc"}, []string{"colc"}),
+						pkInfo(nil, []string{"pcolb", "pcola"}, []string{"colb", "cola"}),
+						pkInfo(nil, []string{"pcolb"}, []string{"colb"}),
+						pkInfo(nil, []string{"pcola"}, []string{"cola"}),
+						pkInfo(nil, []string{"pcolb", "pcolx"}, []string{"colb", "colx"}),
+					},
+				},
+			},
+			childFkWanted: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+				},
+				SingleTableSet(1): {
+					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
+					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+				},
+			},
+			parentFkWanted: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(nil, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
+					pkInfo(nil, []string{"pcolc"}, []string{"colc"}),
+					pkInfo(nil, []string{"pcolb", "pcola"}, []string{"colb", "cola"}),
+					pkInfo(nil, []string{"pcolb"}, []string{"colb"}),
+					pkInfo(nil, []string{"pcola"}, []string{"cola"}),
+					pkInfo(nil, []string{"pcolb", "pcolx"}, []string{"colb", "colx"}),
+				},
+			},
+		},
+		{
+			name: "Filtering - Keep cross keyspace parent foreign key",
+			semTable: &SemTable{
+				Tables: []TableInfo{
+					&RealTable{
+						Table: t1Table,
+					},
+					&RealTable{
+						Table: t2Table,
+					},
+				},
+				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{},
+				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{
+					SingleTableSet(0): {
+						pkInfo(t3Table, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
+					},
+					SingleTableSet(1): {
+						pkInfo(t3Table, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
+					},
+				},
+			},
+			childFkWanted: map[TableSet][]vindexes.ChildFKInfo{},
+			parentFkWanted: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(t3Table, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
+				},
+				SingleTableSet(1): {
+					pkInfo(t3Table, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
+				},
+			},
+		},
+		{
+			name: "Filtering - Shard scoped parent foreign keys",
+			semTable: &SemTable{
+				Tables: []TableInfo{
+					&RealTable{
+						Table: t1Table,
+					},
+					&RealTable{
+						Table: t2Table,
+					},
+				},
+				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{},
+				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{
+					SingleTableSet(0): {
+						pkInfo(t4Table, []string{"cola", "colx"}, []string{"cola", "colx"}),
+					},
+					SingleTableSet(1): {
+						pkInfo(t4Table, []string{"colc", "colx"}, []string{"colc", "colx"}),
+					},
+				},
+			},
+			childFkWanted: map[TableSet][]vindexes.ChildFKInfo{},
+			parentFkWanted: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): nil,
+				SingleTableSet(1): {
+					pkInfo(t4Table, []string{"colc", "colx"}, []string{"colc", "colx"}),
+				},
+			},
+		},
+		{
+			name: "Filtering - Keep cross keyspace child foreign key",
+			semTable: &SemTable{
+				Tables: []TableInfo{
+					&RealTable{
+						Table: t1Table,
+					},
+					&RealTable{
+						Table: t2Table,
+					},
+				},
+				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
+					SingleTableSet(0): {
+						ckInfo(t3Table, []string{"cola", "colx"}, []string{"cola", "colx"}, sqlparser.Restrict),
+					},
+					SingleTableSet(1): {
+						ckInfo(t3Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Cascade),
+					},
+				},
+				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{},
+			},
+			childFkWanted: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(t3Table, []string{"cola", "colx"}, []string{"cola", "colx"}, sqlparser.Restrict),
+				},
+				SingleTableSet(1): {
+					ckInfo(t3Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Cascade),
+				},
+			},
+			parentFkWanted: map[TableSet][]vindexes.ParentFKInfo{},
+		},
+		{
+			name: "Filtering - Remove Restrict shard scoped foreign keys",
+			semTable: &SemTable{
+				Tables: []TableInfo{
+					&RealTable{
+						Table: t1Table,
+					},
+					&RealTable{
+						Table: t2Table,
+					},
+				},
+				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
+					SingleTableSet(0): {
+						ckInfo(t4Table, []string{"cola", "colx"}, []string{"cola", "colx"}, sqlparser.Restrict),
+						ckInfo(t4Table, []string{"cola", "coly"}, []string{"cola", "coly"}, sqlparser.Cascade),
+					},
+					SingleTableSet(1): {
+						ckInfo(t4Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Restrict),
+					},
+				},
+				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{},
+			},
+			childFkWanted: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(t4Table, []string{"cola", "coly"}, []string{"cola", "coly"}, sqlparser.Cascade),
+				},
+				SingleTableSet(1): {
+					ckInfo(t4Table, []string{"colc", "colx"}, []string{"colc", "colx"}, sqlparser.Restrict),
+				},
+			},
+			parentFkWanted: map[TableSet][]vindexes.ParentFKInfo{},
+		},
+		{
+			name: "Error - Reading table info for parent foreign keys",
+			semTable: &SemTable{
+				Tables: []TableInfo{
+					&RealTable{
+						Table: t1Table,
+					},
+					&RealTable{
+						Table: t2Table,
+					},
+				},
+				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{},
+				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{
+					SingleTableSet(0).Merge(SingleTableSet(1)): {},
+				},
+			},
+			expectedErr: "[BUG] should only be used for single tables",
+		},
+		{
+			name: "Error - Reading table info for child foreign keys",
+			semTable: &SemTable{
+				Tables: []TableInfo{
+					&RealTable{
+						Table: t1Table,
+					},
+					&RealTable{
+						Table: t2Table,
+					},
+				},
+				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
+					SingleTableSet(0).Merge(SingleTableSet(1)): {},
+				},
+				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{},
+			},
+			expectedErr: "[BUG] should only be used for single tables",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.semTable.RemoveNonRequiredForeignKeys(tt.verifyAllFks, vindexes.DeleteAction)
+			if tt.expectedErr != "" {
+				require.EqualError(t, err, tt.expectedErr)
+				return
+			}
+			require.EqualValues(t, tt.childFkWanted, tt.semTable.childForeignKeysInvolved)
+			require.EqualValues(t, tt.parentFkWanted, tt.semTable.parentForeignKeysInvolved)
 		})
 	}
 }
