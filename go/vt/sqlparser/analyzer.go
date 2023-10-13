@@ -44,6 +44,7 @@ const (
 	StmtShow
 	StmtUse
 	StmtOther
+	StmtAnalyze
 	StmtUnknown
 	StmtComment
 	StmtPriv
@@ -88,8 +89,10 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtShowMigrationLogs
 	case *Use:
 		return StmtUse
-	case *OtherRead, *OtherAdmin, *Load:
+	case *OtherAdmin, *Load:
 		return StmtOther
+	case *Analyze:
+		return StmtAnalyze
 	case Explain, *VExplainStmt:
 		return StmtExplain
 	case *Begin:
@@ -245,8 +248,10 @@ func Preview(sql string) StatementType {
 		return StmtUse
 	case "describe", "desc", "explain":
 		return StmtExplain
-	case "analyze", "repair", "optimize":
+	case "repair", "optimize":
 		return StmtOther
+	case "analyze":
+		return StmtAnalyze
 	case "grant", "revoke":
 		return StmtPriv
 	case "release":
@@ -293,6 +298,8 @@ func (s StatementType) String() string {
 		return "USE"
 	case StmtOther:
 		return "OTHER"
+	case StmtAnalyze:
+		return "ANALYZE"
 	case StmtPriv:
 		return "PRIV"
 	case StmtExplain:
