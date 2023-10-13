@@ -198,7 +198,7 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 	case *sqlparser.OtherAdmin:
 		return buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Analyze:
-		return buildAnalyzePlan(stmt, vschema)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildAnalyzePlan)
 	case *sqlparser.Set:
 		return buildSetPlan(stmt, vschema)
 	case *sqlparser.Load:
@@ -239,38 +239,41 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 	return nil, vterrors.VT13001(fmt.Sprintf("unexpected statement type: %T", stmt))
 }
 
-func buildAnalyzePlan(stmt *sqlparser.Analyze, vschema plancontext.VSchema) (*planResult, error) {
+func buildAnalyzePlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
+	analyzeStmt := stmt.(*sqlparser.Analyze)
+
 	var ks *vindexes.Keyspace
 	var err error
 	dest := key.Destination(key.DestinationAllShards{})
-	if !stmt.Table.Qualifier.IsEmpty() && sqlparser.SystemSchema(stmt.Table.Qualifier.String()) {
+
+	if !analyzeStmt.Table.Qualifier.IsEmpty() && sqlparser.SystemSchema(analyzeStmt.Table.Qualifier.String()) {
 		ks, err = vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		tbl, _, _, _, destKs, err := vschema.FindTableOrVindex(stmt.Table)
+		tbl, _, _, _, destKs, err := vschema.FindTableOrVindex(analyzeStmt.Table)
 		if err != nil {
 			return nil, err
 		}
 		if tbl == nil {
-			return nil, vterrors.VT05004(sqlparser.String(stmt.Table))
+			return nil, vterrors.VT05004(sqlparser.String(analyzeStmt.Table))
 		}
 
 		ks = tbl.Keyspace
 		if destKs != nil {
 			dest = destKs
 		}
-		stmt.Table.Name = tbl.Name
+		analyzeStmt.Table.Name = tbl.Name
 	}
-	stmt.Table.Qualifier = sqlparser.NewIdentifierCS("")
+	analyzeStmt.Table.Qualifier = sqlparser.NewIdentifierCS("")
 
 	prim := &engine.Send{
 		Keyspace:          ks,
 		TargetDestination: dest,
-		Query:             sqlparser.String(stmt),
+		Query:             sqlparser.String(analyzeStmt),
 	}
-	return newPlanResult(prim, sqlparser.String(stmt.Table)), nil
+	return newPlanResult(prim, sqlparser.String(analyzeStmt.Table)), nil
 }
 
 func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
