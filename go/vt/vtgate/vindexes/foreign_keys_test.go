@@ -16,10 +16,6 @@ limitations under the License.
 
 package vindexes
 
-import (
-	"vitess.io/vitess/go/vt/sqlparser"
-)
-
 var (
 	uks  = &Keyspace{Name: "uks"}
 	uks2 = &Keyspace{Name: "uks2"}
@@ -173,14 +169,6 @@ var (
 //	}
 //}
 
-func pkInfo(parentTable *Table, pCols []string, cCols []string) ParentFKInfo {
-	return ParentFKInfo{
-		Table:         parentTable,
-		ParentColumns: sqlparser.MakeColumns(pCols...),
-		ChildColumns:  sqlparser.MakeColumns(cCols...),
-	}
-}
-
 // TODO: move this to new function
 // TestChildFKs tests the ChildFKsNeedsHandling method is provides the child foreign key table whose
 // rows needs to be managed by vitess.
@@ -301,12 +289,3 @@ func pkInfo(parentTable *Table, pCols []string, cCols []string) ParentFKInfo {
 //		})
 //	}
 //}
-
-func ckInfo(cTable *Table, pCols []string, cCols []string, refAction sqlparser.ReferenceAction) ChildFKInfo {
-	return ChildFKInfo{
-		Table:         cTable,
-		ParentColumns: sqlparser.MakeColumns(pCols...),
-		ChildColumns:  sqlparser.MakeColumns(cCols...),
-		OnDelete:      refAction,
-	}
-}
