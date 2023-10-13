@@ -548,8 +548,8 @@
                       "[COLUMN 0] * [COLUMN 1] as revenue",
                       "[COLUMN 2] as supp_nation",
                       "[COLUMN 3] as l_year",
-                      "[COLUMN 4] as orders.o_custkey",
-                      "[COLUMN 5] as n1.n_name",
+                      "[COLUMN 4] as o_custkey",
+                      "[COLUMN 5] as n_name",
                       "[COLUMN 6] as weight_string(supp_nation)",
                       "[COLUMN 7] as weight_string(l_year)"
                     ],
@@ -568,9 +568,9 @@
                             "Expressions": [
                               "[COLUMN 0] * [COLUMN 1] as revenue",
                               "[COLUMN 2] as l_year",
-                              "[COLUMN 3] as orders.o_custkey",
-                              "[COLUMN 4] as n1.n_name",
-                              "[COLUMN 5] as lineitem.l_suppkey",
+                              "[COLUMN 3] as o_custkey",
+                              "[COLUMN 4] as n_name",
+                              "[COLUMN 5] as l_suppkey",
                               "[COLUMN 6] as weight_string(l_year)"
                             ],
                             "Inputs": [
@@ -590,9 +590,9 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select sum(volume) as revenue, l_year, shipping.`orders.o_custkey`, shipping.`n1.n_name`, shipping.`lineitem.l_suppkey`, shipping.`lineitem.l_orderkey`, weight_string(l_year), supp_nation, weight_string(supp_nation), cust_nation, weight_string(cust_nation) from (select extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, orders.o_custkey as `orders.o_custkey`, lineitem.l_suppkey as `lineitem.l_suppkey`, lineitem.l_orderkey as `lineitem.l_orderkey` from lineitem where 1 != 1) as shipping where 1 != 1 group by l_year, shipping.`orders.o_custkey`, shipping.`n1.n_name`, shipping.`lineitem.l_suppkey`, shipping.`lineitem.l_orderkey`, weight_string(l_year)",
+                                    "FieldQuery": "select sum(volume) as revenue, l_year, o_custkey, n_name, l_suppkey, l_orderkey, weight_string(l_year), supp_nation, weight_string(supp_nation), cust_nation, weight_string(cust_nation) from (select extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume from lineitem where 1 != 1) as shipping where 1 != 1 group by l_year, o_custkey, n_name, l_suppkey, l_orderkey, weight_string(l_year)",
                                     "OrderBy": "(7|8) ASC, (9|10) ASC, (1|6) ASC",
-                                    "Query": "select sum(volume) as revenue, l_year, shipping.`orders.o_custkey`, shipping.`n1.n_name`, shipping.`lineitem.l_suppkey`, shipping.`lineitem.l_orderkey`, weight_string(l_year), supp_nation, weight_string(supp_nation), cust_nation, weight_string(cust_nation) from (select extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, orders.o_custkey as `orders.o_custkey`, lineitem.l_suppkey as `lineitem.l_suppkey`, lineitem.l_orderkey as `lineitem.l_orderkey` from lineitem where l_shipdate between date('1995-01-01') and date('1996-12-31')) as shipping group by l_year, shipping.`orders.o_custkey`, shipping.`n1.n_name`, shipping.`lineitem.l_suppkey`, shipping.`lineitem.l_orderkey`, weight_string(l_year) order by supp_nation asc, cust_nation asc, l_year asc",
+                                    "Query": "select sum(volume) as revenue, l_year, o_custkey, n_name, l_suppkey, l_orderkey, weight_string(l_year), supp_nation, weight_string(supp_nation), cust_nation, weight_string(cust_nation) from (select extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume from lineitem where l_shipdate between date('1995-01-01') and date('1996-12-31')) as shipping group by l_year, o_custkey, n_name, l_suppkey, l_orderkey, weight_string(l_year) order by supp_nation asc, cust_nation asc, l_year asc",
                                     "Table": "lineitem"
                                   },
                                   {
@@ -638,8 +638,8 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select count(*), shipping.`supplier.s_nationkey` from (select supplier.s_nationkey as `supplier.s_nationkey` from supplier where 1 != 1) as shipping where 1 != 1 group by shipping.`supplier.s_nationkey`",
-                                    "Query": "select count(*), shipping.`supplier.s_nationkey` from (select supplier.s_nationkey as `supplier.s_nationkey` from supplier where s_suppkey = :l_suppkey) as shipping group by shipping.`supplier.s_nationkey`",
+                                    "FieldQuery": "select count(*), s_nationkey from supplier where 1 != 1 group by s_nationkey",
+                                    "Query": "select count(*), s_nationkey from supplier where s_suppkey = :l_suppkey group by s_nationkey",
                                     "Table": "supplier",
                                     "Values": [
                                       ":l_suppkey"
@@ -693,8 +693,8 @@
                               "Name": "main",
                               "Sharded": true
                             },
-                            "FieldQuery": "select count(*), shipping.`customer.c_nationkey` from (select customer.c_nationkey as `customer.c_nationkey` from customer where 1 != 1) as shipping where 1 != 1 group by shipping.`customer.c_nationkey`",
-                            "Query": "select count(*), shipping.`customer.c_nationkey` from (select customer.c_nationkey as `customer.c_nationkey` from customer where c_custkey = :o_custkey) as shipping group by shipping.`customer.c_nationkey`",
+                            "FieldQuery": "select count(*), c_nationkey from customer where 1 != 1 group by c_nationkey",
+                            "Query": "select count(*), c_nationkey from customer where c_custkey = :o_custkey group by c_nationkey",
                             "Table": "customer",
                             "Values": [
                               ":o_custkey"

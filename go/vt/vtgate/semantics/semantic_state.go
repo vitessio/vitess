@@ -418,6 +418,30 @@ func RewriteDerivedTableExpression(expr sqlparser.Expr, vt TableInfo) sqlparser.
 	}, nil).(sqlparser.Expr)
 }
 
+// RewriteDerivedTableExpression rewrites all the ColName instances in the supplied expression with
+// the expressions behind the column definition of the derived table
+// SELECT foo FROM (SELECT id+42 as foo FROM user) as t
+// We need `foo` to be translated to `id+42` on the inside of the derived table
+func ExposeExpressionThroughDerived(expr sqlparser.Expr, vt TableInfo) sqlparser.Expr {
+	return sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		node, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return
+		}
+		exp, err := vt.getExprFor(node.Name.String())
+		if err == nil {
+			cursor.Replace(exp)
+			return
+		}
+
+		// cloning the expression and removing the qualifier
+		col := *node
+		col.Qualifier = sqlparser.TableName{}
+		cursor.Replace(&col)
+
+	}, nil).(sqlparser.Expr)
+}
+
 // CopyExprInfo lookups src in the ExprTypes map and, if a key is found, assign
 // the corresponding Type value of src to dest.
 func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {

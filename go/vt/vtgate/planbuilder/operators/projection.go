@@ -66,6 +66,16 @@ func (dt *DerivedTable) RewriteExpression(ctx *plancontext.PlanningContext, expr
 	}
 	return semantics.RewriteDerivedTableExpression(expr, tableInfo)
 }
+func (dt *DerivedTable) RewriteExpression2(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (sqlparser.Expr, error) {
+	if dt == nil {
+		return expr, nil
+	}
+	tableInfo, err := ctx.SemTable.TableInfoFor(dt.TableID)
+	if err != nil {
+		return nil, err
+	}
+	return semantics.ExposeExpressionThroughDerived(expr, tableInfo), nil
+}
 
 func (dt *DerivedTable) introducesTableID() semantics.TableSet {
 	if dt == nil {

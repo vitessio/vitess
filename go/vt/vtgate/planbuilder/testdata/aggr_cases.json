@@ -3531,8 +3531,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `user`.id from `user` where 1 != 1",
-                    "Query": "select `user`.id from `user`",
+                    "FieldQuery": "select id from `user` where 1 != 1",
+                    "Query": "select id from `user`",
                     "Table": "`user`"
                   },
                   {
@@ -3542,8 +3542,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-                    "Query": "select user_extra.col from user_extra where user_extra.id = :user_id",
+                    "FieldQuery": "select user_extra.col from (select user_extra.col as col from user_extra where 1 != 1) as x where 1 != 1",
+                    "Query": "select user_extra.col from (select user_extra.col as col from user_extra where user_extra.id = :user_id) as x",
                     "Table": "user_extra"
                   }
                 ]
@@ -5507,64 +5507,46 @@
         "GroupBy": "0",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "JoinVars": {
-              "d_id": 1
-            },
-            "TableName": "`user`_music",
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "0 ASC",
             "Inputs": [
               {
-                "OperatorType": "Aggregate",
-                "Variant": "Ordered",
-                "GroupBy": "0, (1|2)",
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "R:0",
+                "JoinVars": {
+                  "music_user_id": 0
+                },
+                "TableName": "music_`user`",
                 "Inputs": [
                   {
-                    "OperatorType": "SimpleProjection",
-                    "Columns": [
-                      1,
-                      0,
-                      2
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select music.user_id from music where 1 != 1 group by music.user_id",
+                    "Query": "select music.user_id from music group by music.user_id",
+                    "Table": "music"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select d.a from (select id, count(*) as a from `user` where 1 != 1) as d where 1 != 1 group by d.a",
+                    "Query": "select d.a from (select id, count(*) as a from `user` where id = :music_user_id) as d group by d.a",
+                    "Table": "`user`",
+                    "Values": [
+                      ":music_user_id"
                     ],
-                    "Inputs": [
-                      {
-                        "OperatorType": "Aggregate",
-                        "Variant": "Scalar",
-                        "Aggregates": "any_value(0) AS id, sum_count_star(1) AS a, any_value(2)",
-                        "Inputs": [
-                          {
-                            "OperatorType": "Route",
-                            "Variant": "Scatter",
-                            "Keyspace": {
-                              "Name": "user",
-                              "Sharded": true
-                            },
-                            "FieldQuery": "select id, count(*) as a, weight_string(id) from `user` where 1 != 1",
-                            "OrderBy": "1 ASC, (0|2) ASC",
-                            "Query": "select id, count(*) as a, weight_string(id) from `user` order by count(*) asc, id asc",
-                            "Table": "`user`"
-                          }
-                        ]
-                      }
-                    ]
+                    "Vindex": "user_index"
                   }
                 ]
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "EqualUnique",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from music where 1 != 1 group by .0",
-                "Query": "select 1 from music where music.user_id = :d_id group by .0",
-                "Table": "music",
-                "Values": [
-                  ":d_id"
-                ],
-                "Vindex": "user_index"
               }
             ]
           }

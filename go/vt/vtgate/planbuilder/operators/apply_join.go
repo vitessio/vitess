@@ -382,6 +382,30 @@ func (jc JoinColumn) IsPureRight() bool {
 	return len(jc.LHSExprs) == 0
 }
 
+func (jc JoinColumn) Map(f func(sqlparser.Expr) (sqlparser.Expr, error)) (JoinColumn, error) {
+	var err error
+	if jc.Original != nil {
+		jc.Original.Expr, err = f(jc.Original.Expr)
+		if err != nil {
+			return JoinColumn{}, err
+		}
+	}
+
+	jc.RHSExpr, err = f(jc.RHSExpr)
+	if err != nil {
+		return JoinColumn{}, err
+	}
+
+	for i, expr := range jc.LHSExprs {
+		jc.LHSExprs[i].Expr, err = f(expr.Expr)
+		if err != nil {
+			return JoinColumn{}, err
+		}
+	}
+
+	return jc, nil
+}
+
 func (jc JoinColumn) IsMixedLeftAndRight() bool {
 	return len(jc.LHSExprs) > 0 && jc.RHSExpr != nil
 }

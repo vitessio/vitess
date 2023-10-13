@@ -342,23 +342,19 @@ func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs ops.Op
 	return join, nil
 }
 
-// requiresSwitchingSides will return true if any of the operators with the root from the given operator tree
-// is of the type that should not be on the RHS of a join
-func requiresSwitchingSides(ctx *plancontext.PlanningContext, op ops.Operator) bool {
-	required := false
-
+// needsLimit will return true this op tree requires LIMIT
+func needsLimit(op ops.Operator) (required bool) {
 	_ = rewrite.Visit(op, func(current ops.Operator) error {
 		horizon, isHorizon := current.(*Horizon)
 
-		if isHorizon && horizon.IsDerived() && !horizon.IsMergeable(ctx) {
+		if isHorizon && horizon.Query.GetLimit() != nil {
 			required = true
 			return io.EOF
 		}
 
 		return nil
 	})
-
-	return required
+	return
 }
 
 func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, inner bool) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -367,21 +363,13 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 		return newPlan, rewrite.NewTree("merge routes into single operator", newPlan), nil
 	}
 
-	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
-		if !inner {
-			return nil, nil, vterrors.VT12001("LEFT JOIN with derived tables")
+	message := "logical join to applyJoin"
+	if needsLimit(rhs) {
+		if needsLimit(lhs) || !inner {
+			return nil, nil, vterrors.VT12001("can't handle join with limit on the RHS")
 		}
-
-		if requiresSwitchingSides(ctx, lhs) {
-			return nil, nil, vterrors.VT12001("JOIN between derived tables")
-		}
-
-		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)
-		newOp, err := pushJoinPredicates(ctx, joinPredicates, join)
-		if err != nil {
-			return nil, nil, err
-		}
-		return newOp, rewrite.NewTree("logical join to applyJoin, switching side because derived table", newOp), nil
+		lhs, rhs = rhs, lhs
+		message += ", switch sides because limit"
 	}
 
 	join := NewApplyJoin(Clone(lhs), Clone(rhs), nil, !inner)
@@ -389,7 +377,7 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 	if err != nil {
 		return nil, nil, err
 	}
-	return newOp, rewrite.NewTree("logical join to applyJoin ", newOp), nil
+	return newOp, rewrite.NewTree(message, newOp), nil
 }
 
 func operatorsToRoutes(a, b ops.Operator) (*Route, *Route) {

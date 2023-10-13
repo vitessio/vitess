@@ -4261,17 +4261,27 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "R:0,L:0",
+        "JoinColumnIndexes": "L:0,R:0",
         "JoinVars": {
-          "t_id": 1
+          "user_id": 1
         },
-        "TableName": "user_extra_`user`",
+        "TableName": "`user`_user_extra",
         "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.a, `user`.id from `user` where 1 != 1",
+            "Query": "select `user`.a, `user`.id from `user`",
+            "Table": "`user`"
+          },
           {
             "OperatorType": "SimpleProjection",
             "Columns": [
-              1,
-              0
+              1
             ],
             "Inputs": [
               {
@@ -4289,27 +4299,12 @@
                     },
                     "FieldQuery": "select id, count(*) as b, req, weight_string(req), weight_string(id) from user_extra where 1 != 1 group by req, id, weight_string(req), weight_string(id)",
                     "OrderBy": "(2|3) ASC, (0|4) ASC",
-                    "Query": "select id, count(*) as b, req, weight_string(req), weight_string(id) from user_extra group by req, id, weight_string(req), weight_string(id) order by req asc, id asc",
+                    "Query": "select id, count(*) as b, req, weight_string(req), weight_string(id) from user_extra where id = :user_id group by req, id, weight_string(req), weight_string(id) order by req asc, id asc",
                     "Table": "user_extra"
                   }
                 ]
               }
             ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.a from `user` where 1 != 1",
-            "Query": "select `user`.a from `user` where `user`.id = :t_id",
-            "Table": "`user`",
-            "Values": [
-              ":t_id"
-            ],
-            "Vindex": "user_index"
           }
         ]
       },

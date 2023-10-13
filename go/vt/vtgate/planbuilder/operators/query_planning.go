@@ -19,7 +19,10 @@ package operators
 import (
 	"fmt"
 	"io"
-
+	"math/rand"
+	"time"
+	"unsafe"
+	"vitess.io/vitess/go/test/dbg"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
@@ -291,30 +294,25 @@ func pushProjectionInApplyJoin(
 	src *ApplyJoin,
 ) (ops.Operator, *rewrite.ApplyResult, error) {
 	ap, err := p.GetAliasedProjections()
-	if src.LeftJoin || err != nil {
+	if err != nil {
 		// we can't push down expression evaluation to the rhs if we are not sure if it will even be executed
 		return p, rewrite.SameTree, nil
 	}
-	lhs, rhs := &projector{}, &projector{}
-	if p.DT != nil && len(p.DT.Columns) > 0 {
-		lhs.explicitColumnAliases = true
-		rhs.explicitColumnAliases = true
-	}
+
+	explicitColumnAlias := p.DT != nil && len(p.DT.Columns) > 0
+	lhs := &projector{explicitColumnAliases: explicitColumnAlias}
+	rhs := &projector{explicitColumnAliases: explicitColumnAlias}
 
 	src.JoinColumns = nil
 	for idx, pe := range ap {
-		var col *sqlparser.IdentifierCI
-		if p.DT != nil && idx < len(p.DT.Columns) {
-			col = &p.DT.Columns[idx]
-		}
-		err := splitProjectionAcrossJoin(ctx, src, lhs, rhs, pe, col)
+		err := splitProjectionAcrossJoin(ctx, src, lhs, rhs, pe, p.aliasFor(idx))
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
 	if p.isDerived() {
-		err := exposeColumnsThroughDerivedTable(ctx, p, src, lhs)
+		err := exposeColumnsThroughDerivedTable(ctx, p, src, lhs, rhs)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -332,6 +330,14 @@ func pushProjectionInApplyJoin(
 	}
 
 	return src, rewrite.NewTree("split projection to either side of join", src), nil
+}
+
+func (p *Projection) aliasFor(idx int) *sqlparser.IdentifierCI {
+	if p.DT == nil || idx >= len(p.DT.Columns) {
+		return nil
+	}
+
+	return &p.DT.Columns[idx]
 }
 
 // splitProjectionAcrossJoin creates JoinPredicates for all projections,
@@ -408,43 +414,97 @@ func splitUnexploredExpression(
 // The function iterates through each join predicate, rewriting the expressions in the predicate's
 // LHS expressions to include the derived table. This allows the expressions to be accessed outside
 // the derived table.
-func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Projection, src *ApplyJoin, lhs *projector) error {
-	derivedTbl, err := ctx.SemTable.TableInfoFor(p.DT.TableID)
-	if err != nil {
-		return err
+func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Projection, src *ApplyJoin, lhs *projector, rhs *projector) error {
+	if p.DT == nil {
+		return nil
 	}
-	derivedTblName, err := derivedTbl.Name()
-	if err != nil {
-		return err
-	}
-	for _, predicate := range src.JoinPredicates {
-		for idx, bve := range predicate.LHSExprs {
-			expr := bve.Expr
-			tbl, err := ctx.SemTable.TableInfoForExpr(expr)
-			if err != nil {
-				return err
-			}
-			tblExpr := tbl.GetExpr()
-			tblName, err := tblExpr.TableName()
-			if err != nil {
-				return err
+
+	cols := p.Columns.GetColumns()
+	f := func(expr sqlparser.Expr) (e sqlparser.Expr, err error) {
+		rewriter := func(cursor *sqlparser.CopyOnWriteCursor) {
+			this, ok := cursor.Node().(sqlparser.Expr)
+			if !ok {
+				return
 			}
 
-			expr = semantics.RewriteDerivedTableExpression(expr, derivedTbl)
-			out := prefixColNames(tblName, expr)
-
-			alias := sqlparser.UnescapedString(out)
-			predicate.LHSExprs[idx].Expr = sqlparser.NewColNameWithQualifier(alias, derivedTblName)
-			identifierCI := sqlparser.NewIdentifierCI(alias)
-			projExpr := newProjExprWithInner(&sqlparser.AliasedExpr{Expr: out, As: identifierCI}, out)
-			var colAlias *sqlparser.IdentifierCI
-			if lhs.explicitColumnAliases {
-				colAlias = &identifierCI
+			// First we check if this expression is already being returned
+			for _, column := range cols {
+				if ctx.SemTable.EqualsExprWithDeps(column.Expr, this) {
+					col := sqlparser.NewColName(column.As.String())
+					cursor.Replace(col)
+					return
+				}
 			}
-			lhs.add(projExpr, colAlias)
+
+			// If we didn't find it, and we are dealing with a ColName, we have to add it to the derived table
+			colExpr, ok := this.(*sqlparser.ColName)
+			if !ok {
+				return
+			}
+
+			colAlias := fmt.Sprintf("%s_vt_%s_%s", p.DT.Alias, sqlparser.String(colExpr), RandString(2))
+
+			newCol := sqlparser.NewColName(colAlias)
+			inner := newProjExprWithInner(aeWrap(newCol), colExpr)
+			_, thisErr := p.addProjExpr(inner)
+			if thisErr != nil {
+				err = thisErr
+				cursor.StopTreeWalk()
+				return
+			}
+			cursor.Replace(newCol)
 		}
+
+		e = sqlparser.CopyOnRewrite(expr, nil, rewriter, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
+		if expr == e {
+			panic(dbg.S())
+		}
+
+		return e, nil
 	}
+
+	for i, pred := range src.JoinPredicates {
+		x, err := pred.Map(f)
+		if err != nil {
+			return err
+		}
+		src.JoinPredicates[i] = x
+	}
+
+	// for i, col := range src.JoinColumns {
+	// 	src.JoinColumns[i], err = col.Map(f)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
 	return nil
+}
+
+var src = rand.NewSource(time.Now().UnixNano())
+
+const letterBytes = "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+const (
+	letterIdxBits = len(letterBytes) / 8 //  bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+)
+
+func RandString(n int) string {
+	b := make([]byte, n)
+	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
+	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = src.Int63(), letterIdxMax
+		}
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			b[i] = letterBytes[idx]
+			i--
+		}
+		cache >>= letterIdxBits
+		remain--
+	}
+
+	return *(*string)(unsafe.Pointer(&b))
 }
 
 // prefixColNames adds qualifier prefixes to all ColName:s.
