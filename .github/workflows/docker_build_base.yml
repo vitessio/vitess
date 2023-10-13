@@ -55,16 +55,14 @@ jobs:
         run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
       - name: Set Docker tag name
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && matrix.branch == "latest"
         run: |
           if [[ "${{ matrix.branch }}" == "latest" ]]; then
             echo "DOCKER_TAG=frouioui/base:${TAG_NAME}" >> $GITHUB_ENV
-          else
-            echo "DOCKER_TAG=frouioui/base:${TAG_NAME}-${{ matrix.branch }}" >> $GITHUB_ENV
           fi
 
-      - name: Build and push on main
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Build and push on tags
+        if: startsWith(github.ref, 'refs/tags/') && matrix.branch == "latest"
         uses: docker/build-push-action@v5
         with:
           context: .
