@@ -17,6 +17,8 @@ limitations under the License.
 package vttablet
 
 import (
+	"time"
+
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -31,10 +33,13 @@ var (
 	VReplicationExperimentalFlags = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
 	VReplicationNetReadTimeout    = 300
 	VReplicationNetWriteTimeout   = 600
+	CopyPhaseDuration             = 1 * time.Hour
 )
 
 func init() {
 	servenv.OnParseFor("vttablet", registerFlags)
+	servenv.OnParseFor("vtcombo", registerFlags)
+
 }
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -42,4 +47,5 @@ func registerFlags(fs *pflag.FlagSet) {
 		"(Bitmask) of experimental features in vreplication to enable")
 	fs.IntVar(&VReplicationNetReadTimeout, "vreplication_net_read_timeout", VReplicationNetReadTimeout, "Session value of net_read_timeout for vreplication, in seconds")
 	fs.IntVar(&VReplicationNetWriteTimeout, "vreplication_net_write_timeout", VReplicationNetWriteTimeout, "Session value of net_write_timeout for vreplication, in seconds")
+	fs.DurationVar(&CopyPhaseDuration, "vreplication_copy_phase_duration", CopyPhaseDuration, "Duration for each copy phase loop (before running the next catchup: default 1h)")
 }
