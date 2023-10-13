@@ -258,7 +258,12 @@ func TestAnalyze(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	utils.Exec(t, mcmp.VtConn, "analyze table t1")
-	utils.Exec(t, mcmp.VtConn, "analyze table uks.unsharded")
-	utils.Exec(t, mcmp.VtConn, "analyze table mysql.user")
+	for _, workload := range []string{"olap", "oltp"} {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
+			utils.Exec(t, mcmp.VtConn, "analyze table t1")
+			utils.Exec(t, mcmp.VtConn, "analyze table uks.unsharded")
+			utils.Exec(t, mcmp.VtConn, "analyze table mysql.user")
+		})
+	}
 }

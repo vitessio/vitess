@@ -84,3 +84,17 @@
 # set statement unsafe with pooling
 "set @udv = 10"
 "SET not allowed for streaming"
+
+# analyze statement
+"analyze table a"
+{
+  "PlanID": "OtherRead",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "analyze table a"
+}
