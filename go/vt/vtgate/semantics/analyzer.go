@@ -127,8 +127,8 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		columns:                   columns,
 		StatementIDs:              a.scoper.statementIDs,
 		QuerySignature:            a.sig,
-		ChildForeignKeysInvolved:  childFks,
-		ParentForeignKeysInvolved: parentFks,
+		childForeignKeysInvolved:  childFks,
+		parentForeignKeysInvolved: parentFks,
 	}, nil
 }
 
@@ -347,24 +347,25 @@ func (a *analyzer) getInvolvedForeignKeys(statement sqlparser.Statement) (map[Ta
 		}
 		// If only a certain set of columns are being updated, then there might be some child foreign keys that don't need any consideration since their columns aren't being updated.
 		// So, we filter these child foreign keys out. We can't filter any parent foreign keys because the statement will INSERT a row too, which requires validating all the parent foreign keys.
-		updatedChildFks, _, err := a.filterForeignKeysUsingUpdateExpressions(allChildFks, nil, sqlparser.UpdateExprs(stmt.OnDup))
-		return updatedChildFks, allParentFKs, err
+		updatedChildFks, _ := a.filterForeignKeysUsingUpdateExpressions(allChildFks, nil, sqlparser.UpdateExprs(stmt.OnDup))
+		return updatedChildFks, allParentFKs, nil
 	case *sqlparser.Update:
 		// For UPDATE queries we get all the parent and child foreign keys, but we can filter some of them out if the columns that they consist off aren't being updated or are set to NULLs.
 		allChildFks, allParentFks, err := a.getAllManagedForeignKeys()
 		if err != nil {
 			return nil, nil, err
 		}
-		return a.filterForeignKeysUsingUpdateExpressions(allChildFks, allParentFks, stmt.Exprs)
+		childFks, parentFks := a.filterForeignKeysUsingUpdateExpressions(allChildFks, allParentFks, stmt.Exprs)
+		return childFks, parentFks, nil
 	default:
 		return nil, nil, nil
 	}
 }
 
 // filterForeignKeysUsingUpdateExpressions filters the child and parent foreign key constraints that don't require any validations/cascades given the updated expressions.
-func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[TableSet][]vindexes.ChildFKInfo, allParentFks map[TableSet][]vindexes.ParentFKInfo, updExprs sqlparser.UpdateExprs) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, error) {
+func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[TableSet][]vindexes.ChildFKInfo, allParentFks map[TableSet][]vindexes.ParentFKInfo, updExprs sqlparser.UpdateExprs) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo) {
 	if len(allChildFks) == 0 && len(allParentFks) == 0 {
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	pFksRequired := make(map[TableSet][]bool, len(allParentFks))
@@ -448,7 +449,7 @@ func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[Table
 		cFksNeedsHandling[ts] = cFKNeeded
 
 	}
-	return cFksNeedsHandling, pFksNeedsHandling, nil
+	return cFksNeedsHandling, pFksNeedsHandling
 }
 
 // getAllManagedForeignKeys gets all the foreign keys for the query we are analyzing that Vitess is reposible for managing.

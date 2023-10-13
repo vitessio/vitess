@@ -127,9 +127,10 @@ type (
 		// QuerySignature is used to identify shortcuts in the planning process
 		QuerySignature QuerySignature
 
-		// TODO - comments
-		ChildForeignKeysInvolved  map[TableSet][]vindexes.ChildFKInfo
-		ParentForeignKeysInvolved map[TableSet][]vindexes.ParentFKInfo
+		// We store the child and parent foreign keys that are involved in the given query.
+		// The map is keyed by the tableset of the table that each of the foreign key belongs to.
+		childForeignKeysInvolved  map[TableSet][]vindexes.ChildFKInfo
+		parentForeignKeysInvolved map[TableSet][]vindexes.ParentFKInfo
 	}
 
 	columnName struct {
@@ -163,7 +164,7 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 // GetChildForeignKeysList gets the child foreign keys as a list.
 func (st *SemTable) GetChildForeignKeysList() []vindexes.ChildFKInfo {
 	var childFkInfos []vindexes.ChildFKInfo
-	for _, infos := range st.ChildForeignKeysInvolved {
+	for _, infos := range st.childForeignKeysInvolved {
 		childFkInfos = append(childFkInfos, infos...)
 	}
 	return childFkInfos
@@ -172,7 +173,7 @@ func (st *SemTable) GetChildForeignKeysList() []vindexes.ChildFKInfo {
 // GetParentForeignKeysList gets the parent foreign keys as a list.
 func (st *SemTable) GetParentForeignKeysList() []vindexes.ParentFKInfo {
 	var parentFkInfos []vindexes.ParentFKInfo
-	for _, infos := range st.ParentForeignKeysInvolved {
+	for _, infos := range st.parentForeignKeysInvolved {
 		parentFkInfos = append(parentFkInfos, infos...)
 	}
 	return parentFkInfos
@@ -180,7 +181,7 @@ func (st *SemTable) GetParentForeignKeysList() []vindexes.ParentFKInfo {
 
 // RemoveParentForeignKey removes the given foreign key from the parent foreign keys that sem table stores.
 func (st *SemTable) RemoveParentForeignKey(fkToIgnore string) error {
-	for ts, fkInfos := range st.ParentForeignKeysInvolved {
+	for ts, fkInfos := range st.parentForeignKeysInvolved {
 		ti, err := st.TableInfoFor(ts)
 		if err != nil {
 			return err
@@ -189,7 +190,7 @@ func (st *SemTable) RemoveParentForeignKey(fkToIgnore string) error {
 		for idx, info := range fkInfos {
 			x := info.String(vt)
 			if x == fkToIgnore {
-				st.ParentForeignKeysInvolved[ts] = append(fkInfos[0:idx], fkInfos[idx+1:]...)
+				st.parentForeignKeysInvolved[ts] = append(fkInfos[0:idx], fkInfos[idx+1:]...)
 				return nil
 			}
 		}
@@ -206,7 +207,7 @@ func (st *SemTable) RemoveNonRequiredForeignKeys(verifyAllFks bool, getAction fu
 		return nil
 	}
 	// Go over all the parent foreign keys.
-	for ts, parentFKs := range st.ParentForeignKeysInvolved {
+	for ts, parentFKs := range st.parentForeignKeysInvolved {
 		ti, err := st.TableInfoFor(ts)
 		if err != nil {
 			return err
@@ -224,11 +225,11 @@ func (st *SemTable) RemoveNonRequiredForeignKeys(verifyAllFks bool, getAction fu
 				updatedParentFks = append(updatedParentFks, fk)
 			}
 		}
-		st.ParentForeignKeysInvolved[ts] = updatedParentFks
+		st.parentForeignKeysInvolved[ts] = updatedParentFks
 	}
 
 	// Go over all the child foreign keys.
-	for ts, childFks := range st.ChildForeignKeysInvolved {
+	for ts, childFks := range st.childForeignKeysInvolved {
 		ti, err := st.TableInfoFor(ts)
 		if err != nil {
 			return err
@@ -254,7 +255,7 @@ func (st *SemTable) RemoveNonRequiredForeignKeys(verifyAllFks bool, getAction fu
 				updatedChildFks = append(updatedChildFks, fk)
 			}
 		}
-		st.ChildForeignKeysInvolved[ts] = updatedChildFks
+		st.childForeignKeysInvolved[ts] = updatedChildFks
 	}
 
 	return nil
@@ -305,12 +306,12 @@ func isShardScoped(pTable *vindexes.Table, cTable *vindexes.Table, pCols sqlpars
 
 // ForeignKeysPresent returns whether there are any foreign key constraints left in the semantic table that require handling.
 func (st *SemTable) ForeignKeysPresent() bool {
-	for _, fkInfos := range st.ChildForeignKeysInvolved {
+	for _, fkInfos := range st.childForeignKeysInvolved {
 		if len(fkInfos) > 0 {
 			return true
 		}
 	}
-	for _, fkInfos := range st.ParentForeignKeysInvolved {
+	for _, fkInfos := range st.parentForeignKeysInvolved {
 		if len(fkInfos) > 0 {
 			return true
 		}

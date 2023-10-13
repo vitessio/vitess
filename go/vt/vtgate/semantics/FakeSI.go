@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -29,8 +31,9 @@ var _ SchemaInformation = (*FakeSI)(nil)
 
 // FakeSI is a fake SchemaInformation for testing
 type FakeSI struct {
-	Tables       map[string]*vindexes.Table
-	VindexTables map[string]vindexes.Vindex
+	Tables           map[string]*vindexes.Table
+	VindexTables     map[string]vindexes.Vindex
+	KsForeignKeyMode map[string]vschemapb.Keyspace_ForeignKeyMode
 }
 
 // FindTableOrVindex implements the SchemaInformation interface
@@ -47,5 +50,12 @@ func (*FakeSI) ConnCollation() collations.ID {
 }
 
 func (s *FakeSI) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
+	if s.KsForeignKeyMode != nil {
+		fkMode, isPresent := s.KsForeignKeyMode[keyspace]
+		if !isPresent {
+			return vschemapb.Keyspace_FK_DEFAULT, fmt.Errorf("%v keyspace not found", keyspace)
+		}
+		return fkMode, nil
+	}
 	return vschemapb.Keyspace_FK_UNMANAGED, nil
 }

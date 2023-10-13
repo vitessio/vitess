@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -1518,4 +1519,642 @@ func fakeSchemaInfo() *FakeSI {
 		},
 	}
 	return si
+}
+
+// TestGetAllManagedForeignKeys tests the functionality of getAllManagedForeignKeys.
+func TestGetAllManagedForeignKeys(t *testing.T) {
+	tests := []struct {
+		name           string
+		analyzer       *analyzer
+		childFkWanted  map[TableSet][]vindexes.ChildFKInfo
+		parentFkWanted map[TableSet][]vindexes.ParentFKInfo
+		expectedErr    string
+	}{
+		{
+			name: "Collect all foreign key constraints",
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						&RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks"},
+								ChildForeignKeys: []vindexes.ChildFKInfo{
+									ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+								},
+								ParentForeignKeys: []vindexes.ParentFKInfo{
+									pkInfo(nil, []string{"colb"}, []string{"colb"}),
+									pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
+								},
+							},
+						}, &RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks_unmanaged", Sharded: true},
+								ChildForeignKeys: []vindexes.ChildFKInfo{
+									ckInfo(nil, []string{"cola"}, []string{"cola"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"cola1", "cola2"}, []string{"ccola1", "ccola2"}, sqlparser.SetNull),
+								},
+							},
+						},
+						&DerivedTable{},
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks":           vschemapb.Keyspace_FK_MANAGED,
+							"ks_unmanaged": vschemapb.Keyspace_FK_UNMANAGED,
+						},
+					},
+				},
+			},
+			childFkWanted: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+				},
+			},
+			parentFkWanted: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(nil, []string{"colb"}, []string{"colb"}),
+					pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
+				},
+			},
+		},
+		{
+			name: "keyspace not found in schema information",
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						&RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks"},
+							},
+						}, &RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "undefined_ks", Sharded: true},
+							},
+						},
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks": vschemapb.Keyspace_FK_MANAGED,
+						},
+					},
+				},
+			},
+			expectedErr: "undefined_ks keyspace not found",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			childFk, parentFk, err := tt.analyzer.getAllManagedForeignKeys()
+			if tt.expectedErr != "" {
+				require.EqualError(t, err, tt.expectedErr)
+				return
+			}
+			require.EqualValues(t, tt.childFkWanted, childFk)
+			require.EqualValues(t, tt.parentFkWanted, parentFk)
+		})
+	}
+}
+
+// TestFilterForeignKeysUsingUpdateExpressions tests the functionality of filterForeignKeysUsingUpdateExpressions.
+func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
+	cola := sqlparser.NewColName("cola")
+	colb := sqlparser.NewColName("colb")
+	colc := sqlparser.NewColName("colc")
+	cold := sqlparser.NewColName("cold")
+	tests := []struct {
+		name            string
+		analyzer        *analyzer
+		allChildFks     map[TableSet][]vindexes.ChildFKInfo
+		allParentFks    map[TableSet][]vindexes.ParentFKInfo
+		updExprs        sqlparser.UpdateExprs
+		childFksWanted  map[TableSet][]vindexes.ChildFKInfo
+		parentFksWanted map[TableSet][]vindexes.ParentFKInfo
+	}{
+		{
+			name: "Child Foreign Keys Filtering",
+			analyzer: &analyzer{
+				binder: &binder{
+					direct: map[sqlparser.Expr]TableSet{
+						cola: SingleTableSet(0),
+						colb: SingleTableSet(0),
+						colc: SingleTableSet(1),
+						cold: SingleTableSet(1),
+					},
+				},
+			},
+			allParentFks: nil,
+			allChildFks: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+				},
+				SingleTableSet(1): {
+					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
+					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+				},
+			},
+			updExprs: sqlparser.UpdateExprs{
+				&sqlparser.UpdateExpr{
+					Name: cola,
+					Expr: sqlparser.NewIntLiteral("1"),
+				},
+				&sqlparser.UpdateExpr{
+					Name: colb,
+					Expr: &sqlparser.NullVal{},
+				},
+				&sqlparser.UpdateExpr{
+					Name: colc,
+					Expr: sqlparser.NewIntLiteral("1"),
+				},
+				&sqlparser.UpdateExpr{
+					Name: cold,
+					Expr: &sqlparser.NullVal{},
+				},
+			},
+			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+				},
+				SingleTableSet(1): {
+					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
+				},
+			},
+			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{},
+		}, {
+			name: "Parent Foreign Keys Filtering",
+			analyzer: &analyzer{
+				binder: &binder{
+					direct: map[sqlparser.Expr]TableSet{
+						cola: SingleTableSet(0),
+						colb: SingleTableSet(0),
+						colc: SingleTableSet(1),
+						cold: SingleTableSet(1),
+					},
+				},
+			},
+			allParentFks: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(nil, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
+					pkInfo(nil, []string{"pcolc"}, []string{"colc"}),
+					pkInfo(nil, []string{"pcolb", "pcola"}, []string{"colb", "cola"}),
+					pkInfo(nil, []string{"pcolb"}, []string{"colb"}),
+					pkInfo(nil, []string{"pcola"}, []string{"cola"}),
+					pkInfo(nil, []string{"pcolb", "pcolx"}, []string{"colb", "colx"}),
+				},
+				SingleTableSet(1): {
+					pkInfo(nil, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
+					pkInfo(nil, []string{"pcola"}, []string{"cola"}),
+					pkInfo(nil, []string{"pcold", "pcolc"}, []string{"cold", "colc"}),
+					pkInfo(nil, []string{"pcold"}, []string{"cold"}),
+					pkInfo(nil, []string{"pcold", "pcolx"}, []string{"cold", "colx"}),
+				},
+			},
+			allChildFks: nil,
+			updExprs: sqlparser.UpdateExprs{
+				&sqlparser.UpdateExpr{
+					Name: cola,
+					Expr: sqlparser.NewIntLiteral("1"),
+				},
+				&sqlparser.UpdateExpr{
+					Name: colb,
+					Expr: &sqlparser.NullVal{},
+				},
+				&sqlparser.UpdateExpr{
+					Name: colc,
+					Expr: sqlparser.NewIntLiteral("1"),
+				},
+				&sqlparser.UpdateExpr{
+					Name: cold,
+					Expr: &sqlparser.NullVal{},
+				},
+			},
+			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{},
+			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(nil, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
+					pkInfo(nil, []string{"pcola"}, []string{"cola"}),
+				},
+				SingleTableSet(1): {
+					pkInfo(nil, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			childFks, parentFks := tt.analyzer.filterForeignKeysUsingUpdateExpressions(tt.allChildFks, tt.allParentFks, tt.updExprs)
+			require.EqualValues(t, tt.childFksWanted, childFks)
+			require.EqualValues(t, tt.parentFksWanted, parentFks)
+		})
+	}
+}
+
+// TestGetInvolvedForeignKeys tests the functionality of getInvolvedForeignKeys.
+func TestGetInvolvedForeignKeys(t *testing.T) {
+	cola := sqlparser.NewColName("cola")
+	colb := sqlparser.NewColName("colb")
+	colc := sqlparser.NewColName("colc")
+	cold := sqlparser.NewColName("cold")
+	tests := []struct {
+		name            string
+		stmt            sqlparser.Statement
+		analyzer        *analyzer
+		childFksWanted  map[TableSet][]vindexes.ChildFKInfo
+		parentFksWanted map[TableSet][]vindexes.ParentFKInfo
+		expectedErr     string
+	}{
+		{
+			name: "Delete Query",
+			stmt: &sqlparser.Delete{},
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						&RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks"},
+								ChildForeignKeys: []vindexes.ChildFKInfo{
+									ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+								},
+								ParentForeignKeys: []vindexes.ParentFKInfo{
+									pkInfo(nil, []string{"colb"}, []string{"colb"}),
+									pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
+								},
+							},
+						}, &RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks_unmanaged", Sharded: true},
+								ChildForeignKeys: []vindexes.ChildFKInfo{
+									ckInfo(nil, []string{"cola"}, []string{"cola"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"cola1", "cola2"}, []string{"ccola1", "ccola2"}, sqlparser.SetNull),
+								},
+							},
+						},
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks":           vschemapb.Keyspace_FK_MANAGED,
+							"ks_unmanaged": vschemapb.Keyspace_FK_UNMANAGED,
+						},
+					},
+				},
+			},
+			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+				},
+			},
+		},
+		{
+			name: "Update statement",
+			stmt: &sqlparser.Update{
+				Exprs: sqlparser.UpdateExprs{
+					&sqlparser.UpdateExpr{
+						Name: cola,
+						Expr: sqlparser.NewIntLiteral("1"),
+					},
+					&sqlparser.UpdateExpr{
+						Name: colb,
+						Expr: &sqlparser.NullVal{},
+					},
+					&sqlparser.UpdateExpr{
+						Name: colc,
+						Expr: sqlparser.NewIntLiteral("1"),
+					},
+					&sqlparser.UpdateExpr{
+						Name: cold,
+						Expr: &sqlparser.NullVal{},
+					},
+				},
+			},
+			analyzer: &analyzer{
+				binder: &binder{
+					direct: map[sqlparser.Expr]TableSet{
+						cola: SingleTableSet(0),
+						colb: SingleTableSet(0),
+						colc: SingleTableSet(1),
+						cold: SingleTableSet(1),
+					},
+				},
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						&RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks"},
+								ChildForeignKeys: []vindexes.ChildFKInfo{
+									ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+									ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+									ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+								},
+								ParentForeignKeys: []vindexes.ParentFKInfo{
+									pkInfo(nil, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
+									pkInfo(nil, []string{"pcolc"}, []string{"colc"}),
+									pkInfo(nil, []string{"pcolb", "pcola"}, []string{"colb", "cola"}),
+									pkInfo(nil, []string{"pcolb"}, []string{"colb"}),
+									pkInfo(nil, []string{"pcola"}, []string{"cola"}),
+									pkInfo(nil, []string{"pcolb", "pcolx"}, []string{"colb", "colx"}),
+								},
+							},
+						},
+						&RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks"},
+								ChildForeignKeys: []vindexes.ChildFKInfo{
+									ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
+									ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+								},
+								ParentForeignKeys: []vindexes.ParentFKInfo{
+									pkInfo(nil, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
+									pkInfo(nil, []string{"pcola"}, []string{"cola"}),
+									pkInfo(nil, []string{"pcold", "pcolc"}, []string{"cold", "colc"}),
+									pkInfo(nil, []string{"pcold"}, []string{"cold"}),
+									pkInfo(nil, []string{"pcold", "pcolx"}, []string{"cold", "colx"}),
+								},
+							},
+						},
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks": vschemapb.Keyspace_FK_MANAGED,
+						},
+					},
+				},
+			},
+			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+				},
+				SingleTableSet(1): {
+					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
+				},
+			},
+			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(nil, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
+					pkInfo(nil, []string{"pcola"}, []string{"cola"}),
+				},
+				SingleTableSet(1): {
+					pkInfo(nil, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
+				},
+			},
+		},
+		{
+			name: "Replace Query",
+			stmt: &sqlparser.Insert{
+				Action: sqlparser.ReplaceAct,
+			},
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						&RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks"},
+								ChildForeignKeys: []vindexes.ChildFKInfo{
+									ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+								},
+								ParentForeignKeys: []vindexes.ParentFKInfo{
+									pkInfo(nil, []string{"colb"}, []string{"colb"}),
+									pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
+								},
+							},
+						}, &RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks_unmanaged", Sharded: true},
+								ChildForeignKeys: []vindexes.ChildFKInfo{
+									ckInfo(nil, []string{"cola"}, []string{"cola"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"cola1", "cola2"}, []string{"ccola1", "ccola2"}, sqlparser.SetNull),
+								},
+							},
+						},
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks":           vschemapb.Keyspace_FK_MANAGED,
+							"ks_unmanaged": vschemapb.Keyspace_FK_UNMANAGED,
+						},
+					},
+				},
+			},
+			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+				},
+			},
+			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(nil, []string{"colb"}, []string{"colb"}),
+					pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
+				},
+			},
+		},
+		{
+			name: "Insert Query",
+			stmt: &sqlparser.Insert{
+				Action: sqlparser.InsertAct,
+			},
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						&RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks"},
+								ChildForeignKeys: []vindexes.ChildFKInfo{
+									ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+								},
+								ParentForeignKeys: []vindexes.ParentFKInfo{
+									pkInfo(nil, []string{"colb"}, []string{"colb"}),
+									pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
+								},
+							},
+						}, &RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks_unmanaged", Sharded: true},
+								ChildForeignKeys: []vindexes.ChildFKInfo{
+									ckInfo(nil, []string{"cola"}, []string{"cola"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"cola1", "cola2"}, []string{"ccola1", "ccola2"}, sqlparser.SetNull),
+								},
+							},
+						},
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks":           vschemapb.Keyspace_FK_MANAGED,
+							"ks_unmanaged": vschemapb.Keyspace_FK_UNMANAGED,
+						},
+					},
+				},
+			},
+			childFksWanted: nil,
+			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(nil, []string{"colb"}, []string{"colb"}),
+					pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
+				},
+			},
+		},
+		{
+			name: "Insert Query with On Duplicate",
+			stmt: &sqlparser.Insert{
+				Action: sqlparser.InsertAct,
+				OnDup: sqlparser.OnDup{
+					&sqlparser.UpdateExpr{
+						Name: cola,
+						Expr: sqlparser.NewIntLiteral("1"),
+					},
+					&sqlparser.UpdateExpr{
+						Name: colb,
+						Expr: &sqlparser.NullVal{},
+					},
+				},
+			},
+			analyzer: &analyzer{
+				binder: &binder{
+					direct: map[sqlparser.Expr]TableSet{
+						cola: SingleTableSet(0),
+						colb: SingleTableSet(0),
+					},
+				},
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						&RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks"},
+								ChildForeignKeys: []vindexes.ChildFKInfo{
+									ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+									ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+									ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+									ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+								},
+								ParentForeignKeys: []vindexes.ParentFKInfo{
+									pkInfo(nil, []string{"colb"}, []string{"colb"}),
+									pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
+								},
+							},
+						}, &RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks_unmanaged", Sharded: true},
+								ChildForeignKeys: []vindexes.ChildFKInfo{
+									ckInfo(nil, []string{"cola"}, []string{"cola"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"cola1", "cola2"}, []string{"ccola1", "ccola2"}, sqlparser.SetNull),
+								},
+							},
+						},
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks":           vschemapb.Keyspace_FK_MANAGED,
+							"ks_unmanaged": vschemapb.Keyspace_FK_UNMANAGED,
+						},
+					},
+				},
+			},
+			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+				},
+			},
+			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(nil, []string{"colb"}, []string{"colb"}),
+					pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
+				},
+			},
+		},
+		{
+			name: "Insert error",
+			stmt: &sqlparser.Insert{},
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						&RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks"},
+							},
+						}, &RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "undefined_ks", Sharded: true},
+							},
+						},
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks": vschemapb.Keyspace_FK_MANAGED,
+						},
+					},
+				},
+			},
+			expectedErr: "undefined_ks keyspace not found",
+		},
+		{
+			name: "Update error",
+			stmt: &sqlparser.Update{},
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						&RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks"},
+							},
+						}, &RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "undefined_ks", Sharded: true},
+							},
+						},
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks": vschemapb.Keyspace_FK_MANAGED,
+						},
+					},
+				},
+			},
+			expectedErr: "undefined_ks keyspace not found",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			childFks, parentFks, err := tt.analyzer.getInvolvedForeignKeys(tt.stmt)
+			if tt.expectedErr != "" {
+				require.EqualError(t, err, tt.expectedErr)
+				return
+			}
+			require.EqualValues(t, tt.childFksWanted, childFks)
+			require.EqualValues(t, tt.parentFksWanted, parentFks)
+		})
+	}
+}
+
+func ckInfo(cTable *vindexes.Table, pCols []string, cCols []string, refAction sqlparser.ReferenceAction) vindexes.ChildFKInfo {
+	return vindexes.ChildFKInfo{
+		Table:         cTable,
+		ParentColumns: sqlparser.MakeColumns(pCols...),
+		ChildColumns:  sqlparser.MakeColumns(cCols...),
+		OnDelete:      refAction,
+	}
+}
+
+func pkInfo(parentTable *vindexes.Table, pCols []string, cCols []string) vindexes.ParentFKInfo {
+	return vindexes.ParentFKInfo{
+		Table:         parentTable,
+		ParentColumns: sqlparser.MakeColumns(pCols...),
+		ChildColumns:  sqlparser.MakeColumns(cCols...),
+	}
 }

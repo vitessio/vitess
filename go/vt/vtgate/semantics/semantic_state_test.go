@@ -75,3 +75,60 @@ func fakeSchemaInfoTest() *FakeSI {
 	}
 	return si
 }
+
+// TestForeignKeysPresent tests the functionality of ForeignKeysPresent.
+func TestForeignKeysPresent(t *testing.T) {
+	tests := []struct {
+		name string
+		st   *SemTable
+		want bool
+	}{
+		{
+			name: "Nil maps",
+			st:   &SemTable{},
+			want: false,
+		}, {
+			name: "Empty lists in the maps",
+			st: &SemTable{
+				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
+					SingleTableSet(1): {},
+				},
+				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{
+					SingleTableSet(1): {},
+				},
+			},
+			want: false,
+		}, {
+			name: "Parent foriegn key exists",
+			st: &SemTable{
+				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
+					SingleTableSet(1): {},
+				},
+				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{
+					SingleTableSet(1): {
+						vindexes.ParentFKInfo{},
+					},
+				},
+			},
+			want: true,
+		}, {
+			name: "Child foriegn key exists",
+			st: &SemTable{
+				childForeignKeysInvolved: map[TableSet][]vindexes.ChildFKInfo{
+					SingleTableSet(1): {
+						vindexes.ChildFKInfo{},
+					},
+				},
+				parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{
+					SingleTableSet(1): {},
+				},
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, tt.st.ForeignKeysPresent())
+		})
+	}
+}
