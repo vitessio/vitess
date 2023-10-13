@@ -388,42 +388,48 @@ func TestVStreamsCreatedAndLagMetrics(t *testing.T) {
 
 func TestVStreamRetriableErrors(t *testing.T) {
 	type testCase struct {
-		name        string
-		code        vtrpcpb.Code
-		msg         string
-		shouldRetry bool
+		name         string
+		code         vtrpcpb.Code
+		msg          string
+		shouldRetry  bool
+		ignoreTablet bool
 	}
 
 	tcases := []testCase{
 		{
-			name:        "failed precondition",
-			code:        vtrpcpb.Code_FAILED_PRECONDITION,
-			msg:         "",
-			shouldRetry: true,
+			name:         "failed precondition",
+			code:         vtrpcpb.Code_FAILED_PRECONDITION,
+			msg:          "",
+			shouldRetry:  true,
+			ignoreTablet: false,
 		},
 		{
-			name:        "gtid mismatch",
-			code:        vtrpcpb.Code_INVALID_ARGUMENT,
-			msg:         "GTIDSet Mismatch aa",
-			shouldRetry: true,
+			name:         "gtid mismatch",
+			code:         vtrpcpb.Code_INVALID_ARGUMENT,
+			msg:          "GTIDSet Mismatch aa",
+			shouldRetry:  true,
+			ignoreTablet: true,
 		},
 		{
-			name:        "not found",
-			code:        vtrpcpb.Code_NOT_FOUND,
-			msg:         "",
-			shouldRetry: true,
+			name:         "not found",
+			code:         vtrpcpb.Code_NOT_FOUND,
+			msg:          "",
+			shouldRetry:  true,
+			ignoreTablet: true,
 		},
 		{
-			name:        "unavailable",
-			code:        vtrpcpb.Code_UNAVAILABLE,
-			msg:         "",
-			shouldRetry: true,
+			name:         "unavailable",
+			code:         vtrpcpb.Code_UNAVAILABLE,
+			msg:          "",
+			shouldRetry:  true,
+			ignoreTablet: false,
 		},
 		{
-			name:        "should not retry",
-			code:        vtrpcpb.Code_INVALID_ARGUMENT,
-			msg:         "final error",
-			shouldRetry: false,
+			name:         "should not retry",
+			code:         vtrpcpb.Code_INVALID_ARGUMENT,
+			msg:          "final error",
+			shouldRetry:  false,
+			ignoreTablet: false,
 		},
 	}
 
@@ -454,9 +460,16 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc1.Tablet())
 
 			vsm := newTestVStreamManager(ctx, hc, st, cells[0])
+
 			// always have the local cell tablet error so it's ignored on retry and we pick the other one
+			// if the error requires ignoring the tablet on retry
 			sbc0.AddVStreamEvents(nil, vterrors.Errorf(tcase.code, tcase.msg))
-			sbc1.AddVStreamEvents(commit, nil)
+
+			if tcase.ignoreTablet {
+				sbc1.AddVStreamEvents(commit, nil)
+			} else {
+				sbc0.AddVStreamEvents(commit, nil)
+			}
 
 			vgtid := &binlogdatapb.VGtid{
 				ShardGtids: []*binlogdatapb.ShardGtid{{

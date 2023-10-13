@@ -672,11 +672,16 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			// Unreachable.
 			err = vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "vstream ended unexpectedly")
 		}
-		if !vs.isRetriableError(err) {
+
+		retry, ignoreTablet := vs.isRetriableError(err)
+		if !retry {
 			log.Errorf("vstream for %s/%s error: %v", sgtid.Keyspace, sgtid.Shard, err)
 			return err
 		}
-		ignoreTablets[tablet.Alias.String()] = tablet.GetAlias()
+		if ignoreTablet {
+			ignoreTablets[tablet.Alias.String()] = tablet.GetAlias()
+		}
+
 		errCount++
 		if errCount >= 3 {
 			log.Errorf("vstream for %s/%s had three consecutive failures: %v", sgtid.Keyspace, sgtid.Shard, err)
@@ -686,18 +691,18 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 	}
 }
 
-func (vs *vstream) isRetriableError(err error) bool {
+func (vs *vstream) isRetriableError(err error) (bool, bool) {
 	errCode := vterrors.Code(err)
 
-	if errCode == vtrpcpb.Code_FAILED_PRECONDITION || errCode == vtrpcpb.Code_UNAVAILABLE || errCode == vtrpcpb.Code_NOT_FOUND {
-		return true
+	if errCode == vtrpcpb.Code_FAILED_PRECONDITION || errCode == vtrpcpb.Code_UNAVAILABLE {
+		return true, false
 	}
 
-	if errCode == vtrpcpb.Code_INVALID_ARGUMENT && strings.Contains(err.Error(), "GTIDSet Mismatch") {
-		return true
+	if (errCode == vtrpcpb.Code_INVALID_ARGUMENT && strings.Contains(err.Error(), "GTIDSet Mismatch")) || errCode == vtrpcpb.Code_NOT_FOUND {
+		return true, true
 	}
 
-	return false
+	return false, false
 }
 
 // sendAll sends a group of events together while holding the lock.
