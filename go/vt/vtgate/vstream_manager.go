@@ -124,6 +124,7 @@ type journalEvent struct {
 
 func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string) *vstreamManager {
 	exporter := servenv.NewExporter(cell, "VStreamManager")
+
 	return &vstreamManager{
 		resolver: resolver,
 		toposerv: serv,
@@ -473,7 +474,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 	// journalDone is assigned a channel when a journal event is encountered.
 	// It will be closed when all journal events converge.
 	var journalDone chan struct{}
-	var ignoreTablets map[string]topodatapb.TabletAlias
+	ignoreTablets := make(map[string]*topodatapb.TabletAlias)
 
 	errCount := 0
 	for {
@@ -675,7 +676,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			log.Errorf("vstream for %s/%s error: %v", sgtid.Keyspace, sgtid.Shard, err)
 			return err
 		}
-		ignoreTablets[tablet.Alias.String()] = *tablet.GetAlias()
+		ignoreTablets[tablet.Alias.String()] = tablet.GetAlias()
 		errCount++
 		if errCount >= 3 {
 			log.Errorf("vstream for %s/%s had three consecutive failures: %v", sgtid.Keyspace, sgtid.Shard, err)
@@ -692,7 +693,7 @@ func (vs *vstream) isRetriableError(err error) bool {
 		return true
 	}
 
-	if errCode == vtrpcpb.Code_INVALID_ARGUMENT && strings.HasPrefix(err.Error(), "GTIDSet Mismatch") {
+	if errCode == vtrpcpb.Code_INVALID_ARGUMENT && strings.Contains(err.Error(), "GTIDSet Mismatch") {
 		return true
 	}
 

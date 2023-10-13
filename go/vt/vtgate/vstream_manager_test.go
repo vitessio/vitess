@@ -386,46 +386,127 @@ func TestVStreamsCreatedAndLagMetrics(t *testing.T) {
 	assert.Equal(t, wantVStreamsLag, vsm.vstreamsLag.Counts(), "vstreamsLag matches")
 }
 
-func TestVStreamRetry(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+func TestVStreamRetriableErrors(t *testing.T) {
+	type testCase struct {
+		name        string
+		code        vtrpcpb.Code
+		msg         string
+		shouldRetry bool
+	}
 
-	cell := "aa"
-	ks := "TestVStream"
-	_ = createSandbox(ks)
-	hc := discovery.NewFakeHealthCheck(nil)
+	tcases := []testCase{
+		{
+			name:        "failed precondition",
+			code:        vtrpcpb.Code_FAILED_PRECONDITION,
+			msg:         "",
+			shouldRetry: true,
+		},
+		{
+			name:        "gtid mismatch",
+			code:        vtrpcpb.Code_INVALID_ARGUMENT,
+			msg:         "GTIDSet Mismatch aa",
+			shouldRetry: true,
+		},
+		{
+			name:        "not found",
+			code:        vtrpcpb.Code_NOT_FOUND,
+			msg:         "",
+			shouldRetry: true,
+		},
+		{
+			name:        "unavailable",
+			code:        vtrpcpb.Code_UNAVAILABLE,
+			msg:         "",
+			shouldRetry: true,
+		},
+		{
+			name:        "should not retry",
+			code:        vtrpcpb.Code_INVALID_ARGUMENT,
+			msg:         "final error",
+			shouldRetry: false,
+		},
+	}
 
-	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
-	vsm := newTestVStreamManager(ctx, hc, st, "aa")
-	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	commit := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_COMMIT},
 	}
-	sbc0.AddVStreamEvents(commit, nil)
-	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "aa"))
-	sbc0.AddVStreamEvents(commit, nil)
-	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "bb"))
-	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cc"))
-	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "final error"))
-	var count atomic.Int32
-	vgtid := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Keyspace: ks,
-			Shard:    "-20",
-			Gtid:     "pos",
-		}},
+
+	want := &binlogdatapb.VStreamResponse{Events: commit}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// aa will be the local cell for this test, but that tablet will have a vstream error.
+			cells := []string{"aa", "ab"}
+
+			ks := "TestVStream"
+			_ = createSandbox(ks)
+			hc := discovery.NewFakeHealthCheck(nil)
+
+			st := getSandboxTopoMultiCell(ctx, cells, ks, []string{"-20"})
+
+			sbc0 := hc.AddTestTablet(cells[0], "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_REPLICA, true, 1, nil)
+			sbc1 := hc.AddTestTablet(cells[1], "1.1.1.1", 1002, ks, "-20", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+			addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
+			addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc1.Tablet())
+
+			vsm := newTestVStreamManager(ctx, hc, st, cells[0])
+			// always have the local cell tablet error so it's ignored on retry and we pick the other one
+			sbc0.AddVStreamEvents(nil, vterrors.Errorf(tcase.code, tcase.msg))
+			sbc1.AddVStreamEvents(commit, nil)
+
+			vgtid := &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{{
+					Keyspace: ks,
+					Shard:    "-20",
+					Gtid:     "pos",
+				}},
+			}
+
+			ch := make(chan *binlogdatapb.VStreamResponse)
+			done := make(chan struct{})
+			go func() {
+				err := vsm.VStream(ctx, topodatapb.TabletType_REPLICA, vgtid, nil, &vtgatepb.VStreamFlags{Cells: strings.Join(cells, ",")}, func(events []*binlogdatapb.VEvent) error {
+					ch <- &binlogdatapb.VStreamResponse{Events: events}
+					return nil
+				})
+				wantErr := "context canceled"
+
+				if !tcase.shouldRetry {
+					wantErr = tcase.msg
+				}
+
+				if err == nil || !strings.Contains(err.Error(), wantErr) {
+					t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
+				}
+				close(done)
+			}()
+
+		Loop:
+			for {
+				if tcase.shouldRetry {
+					select {
+					case event := <-ch:
+						got := event.CloneVT()
+						if !proto.Equal(got, want) {
+							t.Errorf("got different vstream event than expected")
+						}
+						cancel()
+					case <-done:
+						// The goroutine has completed, so break out of the loop
+						break Loop
+					}
+				} else {
+					<-done
+					break Loop
+				}
+			}
+		})
 	}
-	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
-		count.Add(1)
-		return nil
-	})
-	wantErr := "final error"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
-	}
-	time.Sleep(100 * time.Millisecond) // wait for goroutine within VStream to finish
-	assert.Equal(t, int32(2), count.Load())
+
 }
 
 func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
@@ -1260,6 +1341,22 @@ func getSandboxTopo(ctx context.Context, cell string, keyspace string, shards []
 	ts := st.topoServer
 	ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{})
 	ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{})
+	for _, shard := range shards {
+		ts.CreateShard(ctx, keyspace, shard)
+	}
+	return st
+}
+
+func getSandboxTopoMultiCell(ctx context.Context, cells []string, keyspace string, shards []string) *sandboxTopo {
+	st := newSandboxForCells(ctx, cells)
+	ts := st.topoServer
+
+	for _, cell := range cells {
+		ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{})
+	}
+
+	ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{})
+
 	for _, shard := range shards {
 		ts.CreateShard(ctx, keyspace, shard)
 	}
