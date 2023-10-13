@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -82,9 +81,4 @@ func (ps *uncorrelatedSubquery) ContainsTables() semantics.TableSet {
 // Inputs implements the logicalPlan interface
 func (ps *uncorrelatedSubquery) Inputs() []logicalPlan {
 	return []logicalPlan{ps.outer, ps.subquery}
-}
-
-// OutputColumns implements the logicalPlan interface
-func (ps *uncorrelatedSubquery) OutputColumns() []sqlparser.SelectExpr {
-	return ps.outer.OutputColumns()
 }

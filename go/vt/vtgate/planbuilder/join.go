@@ -90,11 +90,6 @@ func (j *join) ContainsTables() semantics.TableSet {
 	return j.Left.ContainsTables().Merge(j.Right.ContainsTables())
 }
 
-// OutputColumns implements the logicalPlan interface
-func (j *join) OutputColumns() []sqlparser.SelectExpr {
-	return getOutputColumnsFromJoin(j.Cols, j.Left.OutputColumns(), j.Right.OutputColumns())
-}
-
 func getOutputColumnsFromJoin(ints []int, lhs []sqlparser.SelectExpr, rhs []sqlparser.SelectExpr) (cols []sqlparser.SelectExpr) {
 	for _, col := range ints {
 		if col < 0 {

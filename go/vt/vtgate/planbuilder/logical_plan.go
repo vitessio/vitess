@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -46,9 +45,6 @@ type logicalPlan interface {
 	// ContainsTables keeps track which query tables are being solved by this logical plan
 	// This is only applicable for plans that have been built with the Gen4 planner
 	ContainsTables() semantics.TableSet
-
-	// OutputColumns shows the columns that this plan will produce
-	OutputColumns() []sqlparser.SelectExpr
 }
 
 type planVisitor func(logicalPlan) (bool, logicalPlan, error)
@@ -124,11 +120,6 @@ func (bc *logicalPlanCommon) Inputs() []logicalPlan {
 // ContainsTables implements the logicalPlan interface
 func (bc *logicalPlanCommon) ContainsTables() semantics.TableSet {
 	return bc.input.ContainsTables()
-}
-
-// OutputColumns implements the logicalPlan interface
-func (bc *logicalPlanCommon) OutputColumns() []sqlparser.SelectExpr {
-	return bc.input.OutputColumns()
 }
 
 // -------------------------------------------------------------------------

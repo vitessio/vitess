@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -76,9 +75,4 @@ func (c *concatenate) ContainsTables() semantics.TableSet {
 // Inputs implements the logicalPlan interface
 func (c *concatenate) Inputs() []logicalPlan {
 	return c.sources
-}
-
-// OutputColumns implements the logicalPlan interface
-func (c *concatenate) OutputColumns() []sqlparser.SelectExpr {
-	return c.sources[0].OutputColumns()
 }

@@ -149,7 +149,3 @@ func (i *insert) Rewrite(inputs ...logicalPlan) error {
 func (i *insert) ContainsTables() semantics.TableSet {
 	panic("does not expect insert to get contains tables call")
 }
-
-func (i *insert) OutputColumns() []sqlparser.SelectExpr {
-	panic("does not expect insert to get output columns call")
-}

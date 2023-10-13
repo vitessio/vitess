@@ -115,11 +115,6 @@ func (rb *route) ContainsTables() semantics.TableSet {
 	return rb.tables
 }
 
-// OutputColumns implements the logicalPlan interface
-func (rb *route) OutputColumns() []sqlparser.SelectExpr {
-	return sqlparser.GetFirstSelect(rb.Select).SelectExprs
-}
-
 // prepareTheAST does minor fixups of the SELECT struct before producing the query string
 func (rb *route) prepareTheAST() {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {

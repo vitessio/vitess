@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -47,10 +46,6 @@ func (p *primitiveWrapper) Rewrite(...logicalPlan) error {
 
 func (p *primitiveWrapper) ContainsTables() semantics.TableSet {
 	return semantics.EmptyTableSet()
-}
-
-func (p *primitiveWrapper) OutputColumns() []sqlparser.SelectExpr {
-	return nil
 }
 
 var _ logicalPlan = (*primitiveWrapper)(nil)

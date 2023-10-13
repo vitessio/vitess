@@ -141,12 +141,3 @@ func vindexColumnToIndex(column *sqlparser.ColName) int {
 		return -1
 	}
 }
-
-// OutputColumns implements the logicalPlan interface
-func (vf *vindexFunc) OutputColumns() []sqlparser.SelectExpr {
-	exprs := make([]sqlparser.SelectExpr, 0, len(colnames))
-	for _, field := range vf.eVindexFunc.Fields {
-		exprs = append(exprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewColName(field.Name)})
-	}
-	return exprs
-}

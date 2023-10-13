@@ -88,8 +88,3 @@ func (ps *semiJoin) ContainsTables() semantics.TableSet {
 func (ps *semiJoin) Inputs() []logicalPlan {
 	return []logicalPlan{ps.lhs, ps.rhs}
 }
-
-// OutputColumns implements the logicalPlan interface
-func (ps *semiJoin) OutputColumns() []sqlparser.SelectExpr {
-	return ps.lhs.OutputColumns()
-}

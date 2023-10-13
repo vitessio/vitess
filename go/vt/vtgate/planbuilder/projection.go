@@ -66,18 +66,6 @@ func (p *projection) ContainsTables() semantics.TableSet {
 	return p.source.ContainsTables()
 }
 
-// OutputColumns implements the logicalPlan interface
-func (p *projection) OutputColumns() []sqlparser.SelectExpr {
-	columns := make([]sqlparser.SelectExpr, 0, len(p.columns))
-	for i, expr := range p.columns {
-		columns = append(columns, &sqlparser.AliasedExpr{
-			Expr: expr,
-			As:   sqlparser.NewIdentifierCI(p.columnNames[i]),
-		})
-	}
-	return columns
-}
-
 // Primitive implements the logicalPlan interface
 func (p *projection) Primitive() engine.Primitive {
 	if p.primitive == nil {

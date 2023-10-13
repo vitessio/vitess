@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -95,9 +94,4 @@ func (fkc *fkVerify) Inputs() []logicalPlan {
 		inputs = append(inputs, v.verify)
 	}
 	return inputs
-}
-
-// OutputColumns implements the logicalPlan interface
-func (fkc *fkVerify) OutputColumns() []sqlparser.SelectExpr {
-	return nil
 }

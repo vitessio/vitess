@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -73,9 +72,4 @@ func (s *sqlCalcFoundRows) Rewrite(inputs ...logicalPlan) error {
 // Inputs implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Inputs() []logicalPlan {
 	return []logicalPlan{s.LimitQuery, s.CountQuery}
-}
-
-// OutputColumns implements the logicalPlan interface
-func (s *sqlCalcFoundRows) OutputColumns() []sqlparser.SelectExpr {
-	return s.LimitQuery.OutputColumns()
 }
