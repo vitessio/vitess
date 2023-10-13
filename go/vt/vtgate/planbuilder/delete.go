@@ -89,8 +89,6 @@ func gen4DeleteStmtPlanner(
 
 	plan = pushCommentDirectivesOnPlan(plan, deleteStmt)
 
-	setLockOnAllSelect(plan)
-
 	if err := plan.Wireup(ctx); err != nil {
 		return nil, err
 	}
