@@ -128,7 +128,7 @@ var (
 	create = &cobra.Command{
 		Use:   "create",
 		Short: "Create and run a VDiff to compare the tables involved in a VReplication workflow between the source and target.",
-		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer
+		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer create
 vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer create b3f59678-5241-11ee-be56-0242ac120002`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,

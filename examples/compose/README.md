@@ -222,17 +222,7 @@ The vreplication container included performs the following actions;
 4. Prints out helpful debug information for you.
 ```
 vitess/examples/compose$ docker-compose logs -f vreplication
-vreplication_1      | + /vt/bin/vtctlclient --server vtctld:15999 VReplicationExec local-0000000101 'insert into _vt.vreplication (db_name, source, pos, max_tps, max_replication_lag, tablet_types, time_updated, transaction_timestamp, state) values('\''commerce'\'', '\''keyspace:\"ext_commerce\" shard:\"0\" filter:<rules:<match:\"/.*\" > > on_ddl:EXEC_IGNORE '\'', '\'''\'', 9999, 9999, '\''primary'\'', 0, 0, '\''Running'\'')'
-vreplication_1      | + /vt/bin/vtctlclient --server vtctld:15999 VReplicationExec local-0000000101 'select * from _vt.vreplication'
-vreplication_1      | +----+----------+--------------------------------+-----+----------+---------+---------------------+------+--------------+--------------+-----------------------+---------+---------+----------+
-vreplication_1      | | id | workflow |             source             | pos | stop_pos | max_tps | max_replication_lag | cell | tablet_types | time_updated | transaction_timestamp |  state  | message | db_name  |
-vreplication_1      | +----+----------+--------------------------------+-----+----------+---------+---------------------+------+--------------+--------------+-----------------------+---------+---------+----------+
-vreplication_1      | |  1 |          | keyspace:"ext_commerce"        |     |          |    9999 |                9999 |      | primary       |            0 |                     0 | Running |         | commerce |
-vreplication_1      | |    |          | shard:"0"                      |     |          |         |                     |      |              |              |                       |         |         |         |
-vreplication_1      | |    |          | filter:<rules:<match:"/.*" > > |     |          |         |                     |      |              |              |                       |         |         |         |
-vreplication_1      | |    |          | on_ddl:EXEC_IGNORE             |     |          |         |                     |      |              |              |                       |         |         |         |
-vreplication_1      | +----+----------+--------------------------------+-----+----------+---------+---------------------+------+--------------+--------------+-----------------------+---------+---------+----------+
-compose_vreplication_1 exited with code 0
+...
 ```
 
 ### Connect to vgate and run queries

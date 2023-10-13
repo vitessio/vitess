@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -225,6 +227,12 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		// Tables may have varying character sets. To ship the bits without interpreting them
 		// we set the character set to be binary.
 		if _, err := dbClient.ExecuteFetch("set names 'binary'", 10000); err != nil {
+			return err
+		}
+		if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout), 10000); err != nil {
+			return err
+		}
+		if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout), 10000); err != nil {
 			return err
 		}
 		// We must apply AUTO_INCREMENT values precisely as we got them. This include the 0 value, which is not recommended in AUTO_INCREMENT, and yet is valid.

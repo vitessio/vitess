@@ -20,6 +20,7 @@ import (
 	"slices"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // FkChild is used to represent a foreign key child table operation
@@ -96,7 +97,7 @@ func (fkc *FkCascade) Clone(inputs []ops.Operator) ops.Operator {
 }
 
 // GetOrdering implements the Operator interface
-func (fkc *FkCascade) GetOrdering() []ops.OrderBy {
+func (fkc *FkCascade) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
 	return nil
 }
 

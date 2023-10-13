@@ -14,7 +14,7 @@ The structure of this directory and our Dockerfile files is guided by the follow
 * The configuration of each Vitess image is in the directory `docker/<image>/`.
 * Configurations for other images e.g. our internal tool Keytar (see below), can be in a different location.
 * Images with more complex build steps have a `build.sh` script e.g.
-  see [lite/build.sh](https://github.com/vitessio/vitess/blob/main/docker/lite/build.sh).
+  see [bootstrap/build.sh](https://github.com/vitessio/vitess/blob/main/docker/bootstrap/build.sh).
 * Tags are used to provide (stable) versions e.g. see tag `v2.0` for the
   image [vitess/lite](https://hub.docker.com/r/vitess/lite/tags).
 * Where applicable, we provide a `latest` tag to reference the latest build of an image.

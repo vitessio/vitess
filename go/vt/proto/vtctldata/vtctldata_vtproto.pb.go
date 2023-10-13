@@ -343,6 +343,25 @@ func (m *Workflow_Stream_Log) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
+func (m *Workflow_Stream_ThrottlerStatus) CloneVT() *Workflow_Stream_ThrottlerStatus {
+	if m == nil {
+		return (*Workflow_Stream_ThrottlerStatus)(nil)
+	}
+	r := &Workflow_Stream_ThrottlerStatus{
+		ComponentThrottled: m.ComponentThrottled,
+		TimeThrottled:      m.TimeThrottled.CloneVT(),
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *Workflow_Stream_ThrottlerStatus) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
 func (m *Workflow_Stream) CloneVT() *Workflow_Stream {
 	if m == nil {
 		return (*Workflow_Stream)(nil)
@@ -360,6 +379,8 @@ func (m *Workflow_Stream) CloneVT() *Workflow_Stream {
 		TimeUpdated:          m.TimeUpdated.CloneVT(),
 		Message:              m.Message,
 		LogFetchError:        m.LogFetchError,
+		RowsCopied:           m.RowsCopied,
+		ThrottlerStatus:      m.ThrottlerStatus.CloneVT(),
 	}
 	if rhs := m.CopyStates; rhs != nil {
 		tmpContainer := make([]*Workflow_Stream_CopyState, len(rhs))
@@ -396,12 +417,14 @@ func (m *Workflow) CloneVT() *Workflow {
 		return (*Workflow)(nil)
 	}
 	r := &Workflow{
-		Name:               m.Name,
-		Source:             m.Source.CloneVT(),
-		Target:             m.Target.CloneVT(),
-		MaxVReplicationLag: m.MaxVReplicationLag,
-		WorkflowType:       m.WorkflowType,
-		WorkflowSubType:    m.WorkflowSubType,
+		Name:                          m.Name,
+		Source:                        m.Source.CloneVT(),
+		Target:                        m.Target.CloneVT(),
+		MaxVReplicationLag:            m.MaxVReplicationLag,
+		WorkflowType:                  m.WorkflowType,
+		WorkflowSubType:               m.WorkflowSubType,
+		MaxVReplicationTransactionLag: m.MaxVReplicationTransactionLag,
+		DeferSecondaryKeys:            m.DeferSecondaryKeys,
 	}
 	if rhs := m.ShardStreams; rhs != nil {
 		tmpContainer := make(map[string]*Workflow_ShardStream, len(rhs))
@@ -6459,6 +6482,56 @@ func (m *Workflow_Stream_Log) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *Workflow_Stream_ThrottlerStatus) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *Workflow_Stream_ThrottlerStatus) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *Workflow_Stream_ThrottlerStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.TimeThrottled != nil {
+		size, err := m.TimeThrottled.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.ComponentThrottled) > 0 {
+		i -= len(m.ComponentThrottled)
+		copy(dAtA[i:], m.ComponentThrottled)
+		i = encodeVarint(dAtA, i, uint64(len(m.ComponentThrottled)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
 func (m *Workflow_Stream) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
@@ -6488,6 +6561,25 @@ func (m *Workflow_Stream) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.ThrottlerStatus != nil {
+		size, err := m.ThrottlerStatus.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x8a
+	}
+	if m.RowsCopied != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.RowsCopied))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x80
 	}
 	if len(m.Tags) > 0 {
 		for iNdEx := len(m.Tags) - 1; iNdEx >= 0; iNdEx-- {
@@ -6648,6 +6740,21 @@ func (m *Workflow) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.DeferSecondaryKeys {
+		i--
+		if m.DeferSecondaryKeys {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x48
+	}
+	if m.MaxVReplicationTransactionLag != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.MaxVReplicationTransactionLag))
+		i--
+		dAtA[i] = 0x40
 	}
 	if len(m.WorkflowSubType) > 0 {
 		i -= len(m.WorkflowSubType)
@@ -19688,6 +19795,24 @@ func (m *Workflow_Stream_Log) SizeVT() (n int) {
 	return n
 }
 
+func (m *Workflow_Stream_ThrottlerStatus) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ComponentThrottled)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	if m.TimeThrottled != nil {
+		l = m.TimeThrottled.SizeVT()
+		n += 1 + l + sov(uint64(l))
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
 func (m *Workflow_Stream) SizeVT() (n int) {
 	if m == nil {
 		return 0
@@ -19759,6 +19884,13 @@ func (m *Workflow_Stream) SizeVT() (n int) {
 			n += 1 + l + sov(uint64(l))
 		}
 	}
+	if m.RowsCopied != 0 {
+		n += 2 + sov(uint64(m.RowsCopied))
+	}
+	if m.ThrottlerStatus != nil {
+		l = m.ThrottlerStatus.SizeVT()
+		n += 2 + l + sov(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -19804,6 +19936,12 @@ func (m *Workflow) SizeVT() (n int) {
 	l = len(m.WorkflowSubType)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
+	}
+	if m.MaxVReplicationTransactionLag != 0 {
+		n += 1 + sov(uint64(m.MaxVReplicationTransactionLag))
+	}
+	if m.DeferSecondaryKeys {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -27736,6 +27874,125 @@ func (m *Workflow_Stream_Log) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+func (m *Workflow_Stream_ThrottlerStatus) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Workflow_Stream_ThrottlerStatus: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Workflow_Stream_ThrottlerStatus: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ComponentThrottled", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ComponentThrottled = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TimeThrottled", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TimeThrottled == nil {
+				m.TimeThrottled = &vttime.Time{}
+			}
+			if err := m.TimeThrottled.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
 func (m *Workflow_Stream) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -28252,6 +28509,61 @@ func (m *Workflow_Stream) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Tags = append(m.Tags, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 16:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RowsCopied", wireType)
+			}
+			m.RowsCopied = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.RowsCopied |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 17:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ThrottlerStatus", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.ThrottlerStatus == nil {
+				m.ThrottlerStatus = &Workflow_Stream_ThrottlerStatus{}
+			}
+			if err := m.ThrottlerStatus.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -28619,6 +28931,45 @@ func (m *Workflow) UnmarshalVT(dAtA []byte) error {
 			}
 			m.WorkflowSubType = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxVReplicationTransactionLag", wireType)
+			}
+			m.MaxVReplicationTransactionLag = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxVReplicationTransactionLag |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DeferSecondaryKeys", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.DeferSecondaryKeys = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

@@ -1362,6 +1362,42 @@ func TestInsertSharded(t *testing.T) {
 	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into `user`(id, v, `name`) values (:vtg1 /* INT64 */, :vtg2 /* INT64 */, _binary :vtg3 /* VARCHAR */)", 1)
 }
 
+func TestInsertNegativeValue(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
+	executor.normalize = true
+
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	_, err := executorExec(ctx, executor, session, "insert into user(id, v, name) values (1, -2, 'myname')", nil)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{{
+		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, -:vtg2 /* INT64 */, :_name_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"_Id_0":   sqltypes.Int64BindVariable(1),
+			"vtg2":    sqltypes.Int64BindVariable(2),
+			"_name_0": sqltypes.StringBindVariable("myname"),
+		},
+	}}
+	assertQueries(t, sbc1, wantQueries)
+	assertQueries(t, sbc2, nil)
+	wantQueries = []*querypb.BoundQuery{{
+		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"name_0":    sqltypes.StringBindVariable("myname"),
+			"user_id_0": sqltypes.Uint64BindVariable(1),
+		},
+	}}
+	assertQueries(t, sbclookup, wantQueries)
+
+	testQueryLog(t, executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
+	testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into `user`(id, v, `name`) values (:vtg1 /* INT64 */, -:vtg2 /* INT64 */, :vtg3 /* VARCHAR */)", 1)
+}
+
 func TestInsertShardedKeyrange(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 

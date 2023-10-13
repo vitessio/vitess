@@ -100,8 +100,9 @@ Available Commands:
   help                        Help about any command
 
 Flags:
-      --action_timeout duration                timeout for the total command (default 1h0m0s)
+      --action_timeout duration                timeout to use for the command (default 1h0m0s)
       --alsologtostderr                        log to standard error as well as files
+      --compact                                use compact format for otherwise verbose outputs
       --grpc_auth_static_client_creds string   When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_compression string                Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc_enable_tracing                    Enable gRPC tracing.
@@ -121,7 +122,7 @@ Flags:
       --mysql_server_version string            MySQL server version to advertise. (default "8.0.30-Vitess")
       --purge_logs_interval duration           how often try to remove old logs (default 1h0m0s)
       --security_policy string                 the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
-      --server string                          server to use for connection (required)
+      --server string                          server to use for the connection (required)
       --stderrthreshold severity               logs at or above this threshold go to stderr (default 1)
   -v, --v Level                                log level for V logs
       --version                                version for vtctldclient

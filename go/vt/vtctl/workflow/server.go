@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"slices"
 	"sort"
@@ -395,7 +396,12 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			message,
 			tags,
 			workflow_type,
-			workflow_sub_type
+			workflow_sub_type,
+			time_heartbeat,
+			defer_secondary_keys,
+			component_throttled,
+			time_throttled,
+			rows_copied
 		FROM
 			_vt.vreplication
 		%s`,
@@ -415,6 +421,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	targetKeyspaceByWorkflow := make(map[string]string, len(results))
 	targetShardsByWorkflow := make(map[string]sets.Set[string], len(results))
 	maxVReplicationLagByWorkflow := make(map[string]float64, len(results))
+	maxVReplicationTransactionLagByWorkflow := make(map[string]float64, len(results))
 
 	// We guarantee the following invariants when this function is called for a
 	// given workflow:
@@ -484,8 +491,31 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		if tags != "" {
 			tagArray = strings.Split(tags, ",")
 		}
+
 		workflowType, _ := row["workflow_type"].ToInt32()
 		workflowSubType, _ := row["workflow_sub_type"].ToInt32()
+
+		timeHeartbeat, err := row["time_heartbeat"].ToCastInt64()
+		if err != nil {
+			return err
+		}
+
+		componentThrottled := row["component_throttled"].ToString()
+		timeThrottled, err := row["time_throttled"].ToCastInt64()
+		if err != nil {
+			return err
+		}
+
+		deferSecondaryKeys, err := row["defer_secondary_keys"].ToBool()
+		if err != nil {
+			return err
+		}
+
+		rowsCopied, err := row["rows_copied"].ToCastInt64()
+		if err != nil {
+			return err
+		}
+
 		stream := &vtctldatapb.Workflow_Stream{
 			Id:           id,
 			Shard:        tablet.Shard,
@@ -501,8 +531,15 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			TimeUpdated: &vttimepb.Time{
 				Seconds: timeUpdatedSeconds,
 			},
-			Message: message,
-			Tags:    tagArray,
+			Message:    message,
+			Tags:       tagArray,
+			RowsCopied: rowsCopied,
+			ThrottlerStatus: &vtctldatapb.Workflow_Stream_ThrottlerStatus{
+				ComponentThrottled: componentThrottled,
+				TimeThrottled: &vttimepb.Time{
+					Seconds: timeThrottled,
+				},
+			},
 		}
 
 		stream.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
@@ -523,6 +560,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 
 		workflow.WorkflowType = binlogdatapb.VReplicationWorkflowType_name[workflowType]
 		workflow.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType_name[workflowSubType]
+		workflow.DeferSecondaryKeys = deferSecondaryKeys
 
 		switch {
 		case strings.Contains(strings.ToLower(stream.Message), "error"):
@@ -572,12 +610,42 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		timeUpdated := time.Unix(timeUpdatedSeconds, 0)
 		vreplicationLag := time.Since(timeUpdated)
 
+		// MaxVReplicationLag represents the time since we last processed any event
+		// in the workflow.
 		if currentMaxLag, ok := maxVReplicationLagByWorkflow[workflow.Name]; ok {
 			if vreplicationLag.Seconds() > currentMaxLag {
 				maxVReplicationLagByWorkflow[workflow.Name] = vreplicationLag.Seconds()
 			}
 		} else {
 			maxVReplicationLagByWorkflow[workflow.Name] = vreplicationLag.Seconds()
+		}
+
+		// MaxVReplicationTransactionLag estimates the actual statement processing lag
+		// between the source and the target. If we are still processing source events it
+		// is the difference b/w current time and the timestamp of the last event. If
+		// heartbeats are more recent than the last event, then the lag is the time since
+		// the last heartbeat as there can be an actual event immediately after the
+		// heartbeat, but which has not yet been processed on the target.
+		// We don't allow switching during the copy phase, so in that case we just return
+		// a large lag. All timestamps are in seconds since epoch.
+		if _, ok := maxVReplicationTransactionLagByWorkflow[workflow.Name]; !ok {
+			maxVReplicationTransactionLagByWorkflow[workflow.Name] = 0
+		}
+		lastTransactionTime := transactionTimeSeconds
+		lastHeartbeatTime := timeHeartbeat
+		if stream.State == binlogdatapb.VReplicationWorkflowState_Copying.String() {
+			maxVReplicationTransactionLagByWorkflow[workflow.Name] = math.MaxInt64
+		} else {
+			if lastTransactionTime == 0 /* no new events after copy */ ||
+				lastHeartbeatTime > lastTransactionTime /* no recent transactions, so all caught up */ {
+
+				lastTransactionTime = lastHeartbeatTime
+			}
+			now := time.Now().Unix() /* seconds since epoch */
+			transactionReplicationLag := float64(now - lastTransactionTime)
+			if transactionReplicationLag > maxVReplicationTransactionLagByWorkflow[workflow.Name] {
+				maxVReplicationTransactionLagByWorkflow[workflow.Name] = transactionReplicationLag
+			}
 		}
 
 		return nil
@@ -813,6 +881,11 @@ ORDER BY
 			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no tracked vreplication lag", name)
 		}
 
+		maxVReplicationTransactionLag, ok := maxVReplicationTransactionLagByWorkflow[name]
+		if !ok {
+			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no tracked vreplication transaction lag", name)
+		}
+
 		workflow.Source = &vtctldatapb.Workflow_ReplicationLocation{
 			Keyspace: sourceKeyspace,
 			Shards:   sets.List(sourceShards),
@@ -824,6 +897,7 @@ ORDER BY
 		}
 
 		workflow.MaxVReplicationLag = int64(maxVReplicationLag)
+		workflow.MaxVReplicationTransactionLag = int64(maxVReplicationTransactionLag)
 
 		// Sort shard streams by stream_id ASC, to support an optimization
 		// in fetchStreamLogs below.

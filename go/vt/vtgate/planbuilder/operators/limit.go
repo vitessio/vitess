@@ -68,8 +68,8 @@ func (l *Limit) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.Selec
 	return l.Source.GetSelectExprs(ctx)
 }
 
-func (l *Limit) GetOrdering() []ops.OrderBy {
-	return l.Source.GetOrdering()
+func (l *Limit) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+	return l.Source.GetOrdering(ctx)
 }
 
 func (l *Limit) ShortDescription() string {

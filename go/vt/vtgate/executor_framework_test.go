@@ -357,8 +357,8 @@ func assertQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*qu
 		}
 		got := query.Sql
 		expected := wantQueries[idx].Sql
-		assert.Equal(t, expected, got)
-		assert.Equal(t, wantQueries[idx].BindVariables, query.BindVariables)
+		utils.MustMatch(t, expected, got)
+		utils.MustMatch(t, wantQueries[idx].BindVariables, query.BindVariables)
 		idx++
 	}
 }

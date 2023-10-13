@@ -209,10 +209,18 @@ message Workflow {
   string name = 1;
   ReplicationLocation source = 2;
   ReplicationLocation target = 3;
+  // This represents how long it's been since we processed any event in the
+  // stream.
   int64 max_v_replication_lag = 4;
   map<string, ShardStream> shard_streams = 5;
   string workflow_type = 6;
   string workflow_sub_type = 7;
+  // This represents the lag across all shards, between the current time and
+  // the timestamp of the last transaction OR heartbeat timestamp (if there
+  // have been no writes to replicate from the source).
+  int64 max_v_replication_transaction_lag = 8;
+  // This specifies whether to defer the creation of secondary keys.
+  bool defer_secondary_keys = 9;
 
   message ReplicationLocation {
     string keyspace = 1;
@@ -249,6 +257,8 @@ message Workflow {
     // ith log, we will still return logs in [0, i) + (i, N].
     string log_fetch_error = 14;
     repeated string tags = 15;
+    int64 rows_copied = 16;
+    ThrottlerStatus throttler_status = 17;
 
     message CopyState {
       string table = 1;
@@ -264,6 +274,11 @@ message Workflow {
       vttime.Time updated_at = 6;
       string message = 7;
       int64 count = 8;
+    }
+
+    message ThrottlerStatus {
+      string component_throttled = 1;
+      vttime.Time time_throttled = 2;
     }
   }
 }

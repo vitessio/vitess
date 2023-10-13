@@ -58,7 +58,7 @@ func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
 	return &newOp
 }
 
-func (u *Union) GetOrdering() []ops.OrderBy {
+func (u *Union) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
 	return nil
 }
 

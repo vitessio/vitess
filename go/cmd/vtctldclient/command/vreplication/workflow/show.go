@@ -67,7 +67,7 @@ func commandShow(cmd *cobra.Command, args []string) error {
 
 	var data []byte
 	if strings.ToLower(cmd.Name()) == "list" {
-		// We only want the names
+		// We only want the names.
 		Names := make([]string, len(resp.Workflows))
 		for i, wf := range resp.Workflows {
 			Names[i] = wf.Name
@@ -79,7 +79,7 @@ func commandShow(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s\n", data)
+	fmt.Println(string(data))
 
 	return nil
 }

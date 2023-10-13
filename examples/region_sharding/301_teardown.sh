@@ -26,7 +26,7 @@ source ../common/env.sh
 ../common/scripts/vtgate-down.sh
 
 for tablet in 100 200 300 400 500; do
-	if vtctlclient --server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
+	if vtctldclient --server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
 		printf -v alias '%s-%010d' 'zone1' $tablet
 		echo "Shutting down tablet $alias"
 		CELL=zone1 TABLET_UID=$tablet ../common/scripts/vttablet-down.sh

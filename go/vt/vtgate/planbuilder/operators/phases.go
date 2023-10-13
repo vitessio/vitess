@@ -165,7 +165,7 @@ func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) (bool, erro
 	if len(requiredOrder) == 0 {
 		return false, nil
 	}
-	srcOrdering := in.Source.GetOrdering()
+	srcOrdering := in.Source.GetOrdering(ctx)
 	if len(srcOrdering) < len(requiredOrder) {
 		return true, nil
 	}

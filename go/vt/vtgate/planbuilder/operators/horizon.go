@@ -175,10 +175,12 @@ func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectE
 	return sqlparser.GetFirstSelect(h.Query).SelectExprs
 }
 
-func (h *Horizon) GetOrdering() []ops.OrderBy {
-	// DML queries don't have a QP.
+func (h *Horizon) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
 	if h.QP == nil {
-		return nil
+		_, err := h.getQP(ctx)
+		if err != nil {
+			panic(err)
+		}
 	}
 	return h.QP.OrderExprs
 }

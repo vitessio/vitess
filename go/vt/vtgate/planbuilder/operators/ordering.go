@@ -74,7 +74,7 @@ func (o *Ordering) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.Se
 	return o.Source.GetSelectExprs(ctx)
 }
 
-func (o *Ordering) GetOrdering() []ops.OrderBy {
+func (o *Ordering) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
 	return o.Order
 }
 

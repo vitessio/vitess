@@ -144,6 +144,9 @@ On the release day, there are several things to do:
 Once the release is over, we need to announce it on both Slack and Twitter. We also want to make sure the blog post was cross-posted, if applicable.
 We need to verify that _arewefastyet_ has finished the benchmark too.
 
+Moreover, once the roadmap discussions are over for the next release, we need to update the roadmap presented in the Vitess website (https://vitess.io/docs/resources/roadmap/).
+We must remove everything that is now done in this release and add new items based on the discussions.
+
 -----
 
 ## How to prepare the release of Vitess

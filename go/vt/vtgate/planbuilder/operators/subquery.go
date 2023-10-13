@@ -125,8 +125,8 @@ func (sq *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
 	return &klone
 }
 
-func (sq *SubQuery) GetOrdering() []ops.OrderBy {
-	return sq.Outer.GetOrdering()
+func (sq *SubQuery) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+	return sq.Outer.GetOrdering(ctx)
 }
 
 // Inputs implements the Operator interface
