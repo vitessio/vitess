@@ -370,11 +370,11 @@ func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string) (*TabletPla
 	plan := &TabletPlan{Plan: splan, Original: sql}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableNames()...)
 	plan.buildAuthorized()
-	if plan.PlanID == planbuilder.PlanDDL || plan.PlanID == planbuilder.PlanSet || sqlparser.SkipQueryPlanCacheDirective(statement) {
-		return plan, errNoCache
+	if sqlparser.CachePlan(statement) {
+		return plan, nil
 	}
 
-	return plan, nil
+	return plan, errNoCache
 }
 
 // GetPlan returns the TabletPlan that for the query. Plans are cached in a theine LRU cache.
@@ -417,11 +417,11 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.buildAuthorized()
 
-	if sqlparser.SkipQueryPlanCacheDirective(statement) {
-		return plan, errNoCache
+	if sqlparser.CachePlan(statement) {
+		return plan, nil
 	}
 
-	return plan, nil
+	return plan, errNoCache
 }
 
 // GetStreamPlan returns the TabletPlan that for the query. Plans are cached in a theine LRU cache.

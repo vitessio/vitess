@@ -325,11 +325,6 @@ func MultiShardAutocommitDirective(stmt Statement) bool {
 	return checkDirective(stmt, DirectiveMultiShardAutocommit)
 }
 
-// SkipQueryPlanCacheDirective returns true if skip query plan cache directive is set to true in query.
-func SkipQueryPlanCacheDirective(stmt Statement) bool {
-	return checkDirective(stmt, DirectiveSkipQueryPlanCache)
-}
-
 // IgnoreMaxPayloadSizeDirective returns true if the max payload size override
 // directive is set to true.
 func IgnoreMaxPayloadSizeDirective(stmt Statement) bool {
