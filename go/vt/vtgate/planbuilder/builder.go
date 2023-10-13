@@ -240,21 +240,33 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 }
 
 func buildAnalyzePlan(stmt *sqlparser.Analyze, vschema plancontext.VSchema) (*planResult, error) {
-	tbl, _, _, _, dest, err := vschema.FindTableOrVindex(stmt.Table)
-	if err != nil {
-		return nil, err
-	}
-	if tbl == nil {
-		return nil, vterrors.VT05004(sqlparser.String(stmt.Table))
-	}
-	if dest == nil {
-		dest = key.DestinationAllShards{}
+	var ks *vindexes.Keyspace
+	var err error
+	dest := key.Destination(key.DestinationAllShards{})
+	if !stmt.Table.Qualifier.IsEmpty() && sqlparser.SystemSchema(stmt.Table.Qualifier.String()) {
+		ks, err = vschema.AnyKeyspace()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		tbl, _, _, _, destKs, err := vschema.FindTableOrVindex(stmt.Table)
+		if err != nil {
+			return nil, err
+		}
+		if tbl == nil {
+			return nil, vterrors.VT05004(sqlparser.String(stmt.Table))
+		}
+
+		ks = tbl.Keyspace
+		if destKs != nil {
+			dest = destKs
+		}
+		stmt.Table.Name = tbl.Name
 	}
 	stmt.Table.Qualifier = sqlparser.NewIdentifierCS("")
-	stmt.Table.Name = tbl.Name
 
 	prim := &engine.Send{
-		Keyspace:          tbl.Keyspace,
+		Keyspace:          ks,
 		TargetDestination: dest,
 		Query:             sqlparser.String(stmt),
 	}
