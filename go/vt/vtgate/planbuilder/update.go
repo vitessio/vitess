@@ -80,8 +80,6 @@ func gen4UpdateStmtPlanner(
 
 	plan = pushCommentDirectivesOnPlan(plan, updStmt)
 
-	setLockOnAllSelect(plan)
-
 	if err := plan.Wireup(ctx); err != nil {
 		return nil, err
 	}

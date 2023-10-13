@@ -160,7 +160,7 @@ func createDeleteOperator(
 		return nil, vterrors.VT12001("multi shard DELETE with LIMIT")
 	}
 
-	return sqc.getRootOperator(route), nil
+	return sqc.getRootOperator(route, nil), nil
 }
 
 func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo) (ops.Operator, error) {
