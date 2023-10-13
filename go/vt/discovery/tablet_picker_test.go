@@ -402,7 +402,7 @@ func TestPickWithIgnoreList(t *testing.T) {
 	noWant := addTablet(ctx, te, 102, topodatapb.TabletType_REPLICA, "cell1", true, true)
 	defer deleteTablet(t, te, noWant)
 
-	var ignoreTablets map[string]*topodatapb.TabletAlias
+	ignoreTablets := make(map[string]*topodatapb.TabletAlias)
 	ignoreTablets[noWant.Alias.String()] = noWant.GetAlias()
 
 	// Specify the alias as the cell.
