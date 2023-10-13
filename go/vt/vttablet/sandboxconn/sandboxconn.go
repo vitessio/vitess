@@ -114,7 +114,7 @@ type SandboxConn struct {
 	// reserve id generator
 	ReserveID atomic.Int64
 
-	mapMu     sync.Mutex //protects the map txIDToRID
+	mapMu     sync.Mutex // protects the map txIDToRID
 	txIDToRID map[int64]int64
 
 	sExecMu sync.Mutex
@@ -645,7 +645,7 @@ func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result
 		*sqlparser.Union,
 		*sqlparser.Show,
 		sqlparser.Explain,
-		*sqlparser.OtherRead:
+		*sqlparser.Analyze:
 		return getSingleRowResult()
 	case *sqlparser.Set,
 		sqlparser.DDLStatement,

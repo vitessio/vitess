@@ -52,6 +52,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfAlterView(n, parent)
 	case *AlterVschema:
 		return c.copyOnRewriteRefOfAlterVschema(n, parent)
+	case *Analyze:
+		return c.copyOnRewriteRefOfAnalyze(n, parent)
 	case *AndExpr:
 		return c.copyOnRewriteRefOfAndExpr(n, parent)
 	case *AnyValue:
@@ -358,8 +360,6 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfOrderByOption(n, parent)
 	case *OtherAdmin:
 		return c.copyOnRewriteRefOfOtherAdmin(n, parent)
-	case *OtherRead:
-		return c.copyOnRewriteRefOfOtherRead(n, parent)
 	case *OverClause:
 		return c.copyOnRewriteRefOfOverClause(n, parent)
 	case *ParenTableExpr:
@@ -905,6 +905,28 @@ func (c *cow) copyOnRewriteRefOfAlterVschema(n *AlterVschema, parent SQLNode) (o
 			res.VindexSpec, _ = _VindexSpec.(*VindexSpec)
 			res.VindexCols = _VindexCols
 			res.AutoIncSpec, _ = _AutoIncSpec.(*AutoIncSpec)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfAnalyze(n *Analyze, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Table, changedTable := c.copyOnRewriteTableName(n.Table, n)
+		if changedTable {
+			res := *n
+			res.Table, _ = _Table.(TableName)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -4352,18 +4374,6 @@ func (c *cow) copyOnRewriteRefOfOtherAdmin(n *OtherAdmin, parent SQLNode) (out S
 	}
 	return
 }
-func (c *cow) copyOnRewriteRefOfOtherRead(n *OtherRead, parent SQLNode) (out SQLNode, changed bool) {
-	if n == nil || c.cursor.stop {
-		return n, false
-	}
-	out = n
-	if c.pre == nil || c.pre(n, parent) {
-	}
-	if c.post != nil {
-		out, changed = c.postVisit(out, parent, changed)
-	}
-	return
-}
 func (c *cow) copyOnRewriteRefOfOverClause(n *OverClause, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7291,6 +7301,8 @@ func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfAlterView(n, parent)
 	case *AlterVschema:
 		return c.copyOnRewriteRefOfAlterVschema(n, parent)
+	case *Analyze:
+		return c.copyOnRewriteRefOfAnalyze(n, parent)
 	case *Begin:
 		return c.copyOnRewriteRefOfBegin(n, parent)
 	case *CallProc:
@@ -7333,8 +7345,6 @@ func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfLockTables(n, parent)
 	case *OtherAdmin:
 		return c.copyOnRewriteRefOfOtherAdmin(n, parent)
-	case *OtherRead:
-		return c.copyOnRewriteRefOfOtherRead(n, parent)
 	case *PrepareStmt:
 		return c.copyOnRewriteRefOfPrepareStmt(n, parent)
 	case *PurgeBinaryLogs:

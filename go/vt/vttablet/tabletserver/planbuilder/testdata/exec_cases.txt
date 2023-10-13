@@ -764,7 +764,13 @@ options:PassthroughDMLs
 "analyze table a"
 {
   "PlanID": "OtherRead",
-  "TableName": ""
+  "TableName": "",
+  "Permissions": [
+      {
+        "TableName": "a",
+        "Role": 1
+      }
+  ]
 }
 
 # show

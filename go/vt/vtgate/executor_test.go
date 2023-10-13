@@ -1214,7 +1214,6 @@ func TestExecutorOther(t *testing.T) {
 	}
 
 	stmts := []string{
-		"analyze table t1",
 		"describe select * from t1",
 		"explain select * from t1",
 		"repair table t1",
@@ -2190,7 +2189,6 @@ func TestExecutorOtherRead(t *testing.T) {
 	}
 
 	stmts := []string{
-		"analyze table t1",
 		"describe select * from t1",
 		"explain select * from t1",
 		"do 1",
@@ -2219,6 +2217,55 @@ func TestExecutorOtherRead(t *testing.T) {
 				}, "count did not match")
 			})
 		}
+	}
+}
+
+func TestExecutorAnalyze(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup, _ := createExecutorEnv(t)
+
+	type cnts struct {
+		Sbc1Cnt      int64
+		Sbc2Cnt      int64
+		SbcLookupCnt int64
+	}
+
+	tcs := []struct {
+		targetStr string
+
+		wantCnts cnts
+	}{{
+		targetStr: "TestExecutor[-]",
+		wantCnts:  cnts{Sbc1Cnt: 1, Sbc2Cnt: 1},
+	}, {
+		targetStr: KsTestUnsharded,
+		wantCnts:  cnts{SbcLookupCnt: 1},
+	}, {
+		targetStr: "TestExecutor",
+		wantCnts:  cnts{Sbc1Cnt: 1, Sbc2Cnt: 1},
+	}, {
+		targetStr: "TestExecutor/-20",
+		wantCnts:  cnts{Sbc1Cnt: 1},
+	}, {
+		targetStr: "TestExecutor[00]",
+		wantCnts:  cnts{Sbc1Cnt: 1},
+	}}
+
+	stmt := "analyze table t1"
+	for _, tc := range tcs {
+		t.Run(tc.targetStr, func(t *testing.T) {
+			sbc1.ExecCount.Store(0)
+			sbc2.ExecCount.Store(0)
+			sbclookup.ExecCount.Store(0)
+
+			_, err := executor.Execute(context.Background(), nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+			require.NoError(t, err)
+
+			utils.MustMatch(t, tc.wantCnts, cnts{
+				Sbc1Cnt:      sbc1.ExecCount.Load(),
+				Sbc2Cnt:      sbc2.ExecCount.Load(),
+				SbcLookupCnt: sbclookup.ExecCount.Load(),
+			}, "count did not match")
+		})
 	}
 }
 

@@ -2111,8 +2111,12 @@ var (
 		input:  "drop index `PRIMARY` on a lock none",
 		output: "alter table a drop primary key, lock none",
 	}, {
-		input:  "analyze table a",
-		output: "otherread",
+		input: "analyze table a",
+	}, {
+		input:  "analyze NO_WRITE_TO_BINLOG table a",
+		output: "analyze local table a",
+	}, {
+		input: "analyze local table a",
 	}, {
 		input: "flush tables",
 	}, {
