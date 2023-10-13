@@ -3964,9 +3964,9 @@ truncate_statement:
   }
 
 analyze_statement:
-  ANALYZE TABLE table_name
+  ANALYZE local_opt TABLE table_name
   {
-    $$ = &OtherRead{}
+    $$ = &Analyze{IsLocal: $2, Table: $4}
   }
 
 purge_statement:
