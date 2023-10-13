@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -37,6 +38,13 @@ import (
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+// counters for Planned Reparent Shard
+var (
+	prsCounter = stats.NewCountersWithMultiLabels("planned_reparent_counts", "Number of times Planned Reparent Shard has been run",
+		[]string{"Keyspace", "Shard", "Result"},
+	)
 )
 
 // PlannedReparenter performs PlannedReparentShard operations.
@@ -88,11 +96,14 @@ func NewPlannedReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, log
 // both the current and desired primary are reachable and in a good state.
 func (pr *PlannedReparenter) ReparentShard(ctx context.Context, keyspace string, shard string, opts PlannedReparentOptions) (*events.Reparent, error) {
 	var err error
+	statsLabels := []string{keyspace, shard}
+
 	if err = topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		var unlock func(*error)
 		opts.lockAction = pr.getLockAction(opts)
 		ctx, unlock, err = pr.ts.LockShard(ctx, keyspace, shard, opts.lockAction)
 		if err != nil {
+			prsCounter.Add(append(statsLabels, failureResult), 1)
 			return nil, err
 		}
 		defer unlock(&err)
@@ -101,18 +112,23 @@ func (pr *PlannedReparenter) ReparentShard(ctx context.Context, keyspace string,
 	if opts.NewPrimaryAlias == nil && opts.AvoidPrimaryAlias == nil {
 		shardInfo, err := pr.ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
+			prsCounter.Add(append(statsLabels, failureResult), 1)
 			return nil, err
 		}
 
 		opts.AvoidPrimaryAlias = shardInfo.PrimaryAlias
 	}
 
+	startTime := time.Now()
 	ev := &events.Reparent{}
 	defer func() {
+		reparentShardOpTimings.Add("PlannedReparentShard", time.Since(startTime))
 		switch err {
 		case nil:
+			prsCounter.Add(append(statsLabels, successResult), 1)
 			event.DispatchUpdate(ev, "finished PlannedReparentShard")
 		default:
+			prsCounter.Add(append(statsLabels, failureResult), 1)
 			event.DispatchUpdate(ev, "failed PlannedReparentShard: "+err.Error())
 		}
 	}()
