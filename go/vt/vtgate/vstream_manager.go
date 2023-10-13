@@ -691,6 +691,10 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 	}
 }
 
+// isRetriable determines whether we should exit immediately or retry the vstream.
+// The first return value determines if the error is retriable, the second indicates whether
+// the tablet on which the error occurred should be ommitted from the candidate list of tablets
+// to choose from on the retry.
 func (vs *vstream) isRetriableError(err error) (bool, bool) {
 	errCode := vterrors.Code(err)
 
@@ -698,6 +702,8 @@ func (vs *vstream) isRetriableError(err error) (bool, bool) {
 		return true, false
 	}
 
+	// If there is a GTIDSet Mismatch on the tablet or if the tablet cannot be found,
+	// omit it from the candidate list in the TabletPicker on retry.
 	if (errCode == vtrpcpb.Code_INVALID_ARGUMENT && strings.Contains(err.Error(), "GTIDSet Mismatch")) || errCode == vtrpcpb.Code_NOT_FOUND {
 		return true, true
 	}
