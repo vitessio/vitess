@@ -131,6 +131,7 @@ type (
 		// The map is keyed by the tableset of the table that each of the foreign key belongs to.
 		childForeignKeysInvolved  map[TableSet][]vindexes.ChildFKInfo
 		parentForeignKeysInvolved map[TableSet][]vindexes.ParentFKInfo
+		ChildFkToUpdExprs         map[string]sqlparser.UpdateExprs
 	}
 
 	columnName struct {
