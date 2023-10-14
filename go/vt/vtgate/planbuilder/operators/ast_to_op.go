@@ -410,14 +410,3 @@ func createSelectionOp(
 	// There are no foreign keys to check for a select query, so we can pass anything for verifyAllFKs and fkToIgnore.
 	return createOpFromStmt(ctx, selectionStmt, false /* verifyAllFKs */, "" /* fkToIgnore */)
 }
-
-func selectParentColumns(fk vindexes.ChildFKInfo, lastOffset int) ([]int, []sqlparser.SelectExpr) {
-	var cols []int
-	var exprs []sqlparser.SelectExpr
-	for _, column := range fk.ParentColumns {
-		cols = append(cols, lastOffset)
-		exprs = append(exprs, aeWrap(sqlparser.NewColName(column.String())))
-		lastOffset++
-	}
-	return cols, exprs
-}

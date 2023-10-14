@@ -656,8 +656,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col1, col1 from u_tbl1 where 1 != 1",
-            "Query": "select col1, col1 from u_tbl1 for update",
+            "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
+            "Query": "select col1 from u_tbl1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -715,7 +715,7 @@
             "OperatorType": "FkCascade",
             "BvName": "fkc_vals2",
             "Cols": [
-              1
+              0
             ],
             "Inputs": [
               {
@@ -872,8 +872,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col1, col1 from u_tbl1 where 1 != 1",
-            "Query": "select col1, col1 from u_tbl1 where id = 1 for update",
+            "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
+            "Query": "select col1 from u_tbl1 where id = 1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -931,7 +931,7 @@
             "OperatorType": "FkCascade",
             "BvName": "fkc_vals2",
             "Cols": [
-              1
+              0
             ],
             "Inputs": [
               {

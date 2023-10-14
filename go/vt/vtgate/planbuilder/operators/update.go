@@ -264,10 +264,10 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 		}
 
 		// We need to select all the parent columns for the foreign key constraint, to use in the update of the child table.
-		cols, exprs := selectParentColumns(fk, len(selectExprs))
-		selectExprs = append(selectExprs, exprs...)
+		var offsets []int
+		offsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs)
 
-		fkChild, err := createFkChildForUpdate(ctx, fk, updStmt, cols, updatedTable)
+		fkChild, err := createFkChildForUpdate(ctx, fk, updStmt, offsets, updatedTable)
 		if err != nil {
 			return nil, err
 		}
@@ -284,6 +284,28 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 		Children:  fkChildren,
 		Parent:    parentOp,
 	}, nil
+}
+
+func addColumns(ctx *plancontext.PlanningContext, columns sqlparser.Columns, exprs []sqlparser.SelectExpr) ([]int, []sqlparser.SelectExpr) {
+	var offsets []int
+	selectExprs := exprs
+	for _, column := range columns {
+		ae := aeWrap(sqlparser.NewColName(column.String()))
+		exists := false
+		for idx, expr := range exprs {
+			if ctx.SemTable.EqualsExpr(expr.(*sqlparser.AliasedExpr).Expr, ae.Expr) {
+				offsets = append(offsets, idx)
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			offsets = append(offsets, len(selectExprs))
+			selectExprs = append(selectExprs, ae)
+
+		}
+	}
+	return offsets, selectExprs
 }
 
 // createFkChildForUpdate creates the update query operator for the child table based on the foreign key constraints.
