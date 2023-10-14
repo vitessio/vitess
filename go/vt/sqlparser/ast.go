@@ -1388,6 +1388,14 @@ func (node *ExplainStmt) GetParsedComments() *ParsedComments {
 
 // GetParsedComments implements Commented interface.
 func (node *VExplainStmt) GetParsedComments() *ParsedComments {
+	if node.Comments == nil {
+		cmt, ok := node.Statement.(Commented)
+		if !ok {
+			return nil
+		}
+		return cmt.GetParsedComments()
+	}
+
 	return node.Comments
 }
 

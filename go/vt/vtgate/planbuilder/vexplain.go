@@ -118,10 +118,9 @@ func buildVExplainLoggingPlan(ctx context.Context, explain *sqlparser.VExplainSt
 	switch input.primitive.(type) {
 	case *engine.Insert, *engine.Delete, *engine.Update:
 		directives := explain.GetParsedComments().Directives()
-		if directives.IsSet(sqlparser.DirectiveVExplainRunDMLQueries) {
-			break
+		if !directives.IsSet(sqlparser.DirectiveVExplainRunDMLQueries) {
+			return nil, vterrors.VT09008()
 		}
-		return nil, vterrors.VT09008()
 	}
 
 	return &planResult{primitive: &engine.VExplain{Input: input.primitive, Type: explain.Type}, tables: input.tables}, nil
