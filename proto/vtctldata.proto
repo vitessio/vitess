@@ -1817,6 +1817,7 @@ message WorkflowStatusResponse {
   // The key is keyspace/shard.
   map<string, TableCopyState> table_copy_state = 1;
   map<string, ShardStreams> shard_streams = 2;
+  string traffic_state = 3;
 }
 
 message WorkflowSwitchTrafficRequest {
