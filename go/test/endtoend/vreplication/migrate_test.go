@@ -221,8 +221,13 @@ func TestVtctldMigrate(t *testing.T) {
 	var output, expected string
 
 	t.Run("mount external cluster", func(t *testing.T) {
+<<<<<<< HEAD
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Mount", "Register", "--topo-type=etcd2",
 			fmt.Sprintf("--topo-server=localhost:%d", extVc.ClusterConfig.topoPort), "--topo-root=/vitess/global", "ext1")
+=======
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Mount", "register", "--name=ext1", "--topo-type=etcd2",
+			fmt.Sprintf("--topo-server=localhost:%d", extVc.ClusterConfig.topoPort), "--topo-root=/vitess/global")
+>>>>>>> 0f751fbb7c (Make vtctldclient mount command more standard (#14281))
 		require.NoError(t, err, "Mount Register command failed with %s", output)
 
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "List")
@@ -231,7 +236,11 @@ func TestVtctldMigrate(t *testing.T) {
 		names := gjson.Get(output, "names")
 		require.Equal(t, 1, len(names.Array()))
 		require.Equal(t, "ext1", names.Array()[0].String())
+<<<<<<< HEAD
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "Show", "ext1")
+=======
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "show", "--name=ext1")
+>>>>>>> 0f751fbb7c (Make vtctldclient mount command more standard (#14281))
 		require.NoError(t, err, "Mount command failed with %s\n", output)
 
 		require.Equal(t, "etcd2", gjson.Get(output, "topo_type").String())
@@ -302,7 +311,11 @@ func TestVtctldMigrate(t *testing.T) {
 	})
 
 	t.Run("unmount external cluster", func(t *testing.T) {
+<<<<<<< HEAD
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "Unregister", "ext1")
+=======
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "unregister", "--name=ext1")
+>>>>>>> 0f751fbb7c (Make vtctldclient mount command more standard (#14281))
 		require.NoError(t, err, "Mount command failed with %s\n", output)
 
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "List")
@@ -310,7 +323,11 @@ func TestVtctldMigrate(t *testing.T) {
 		expected = "{}\n"
 		require.Equal(t, expected, output)
 
+<<<<<<< HEAD
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "Show", "ext1")
+=======
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "show", "--name=ext1")
+>>>>>>> 0f751fbb7c (Make vtctldclient mount command more standard (#14281))
 		require.Errorf(t, err, "there is no vitess cluster named ext1")
 	})
 }
