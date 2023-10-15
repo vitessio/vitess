@@ -52,7 +52,7 @@ var register = &cobra.Command{
 	Example:               `vtctldclient --server localhost:15999 mount register --name ext1 --topo-type etcd2 --topo-server localhost:12379 --topo-root /vitess/global`,
 	DisableFlagsInUseLine: true,
 	Aliases:               []string{"Register"},
-	Args:                  cobra.ExactArgs(1),
+	Args:                  cobra.NoArgs,
 	RunE:                  commandRegister,
 }
 
@@ -79,7 +79,7 @@ var unregister = &cobra.Command{
 	Example:               `vtctldclient --server localhost:15999 mount unregister --name ext1`,
 	DisableFlagsInUseLine: true,
 	Aliases:               []string{"Unregister"},
-	Args:                  cobra.ExactArgs(1),
+	Args:                  cobra.NoArgs,
 	RunE:                  commandUnregister,
 }
 
@@ -87,7 +87,7 @@ func commandUnregister(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.MountUnregisterRequest{
-		Name: args[0],
+		Name: mountOptions.Name,
 	}
 	_, err := common.GetClient().MountUnregister(common.GetCommandCtx(), req)
 	if err != nil {
@@ -103,7 +103,7 @@ var show = &cobra.Command{
 	Example:               `vtctldclient --server localhost:15999 mount show --name ext1`,
 	DisableFlagsInUseLine: true,
 	Aliases:               []string{"Show"},
-	Args:                  cobra.ExactArgs(1),
+	Args:                  cobra.NoArgs,
 	RunE:                  commandShow,
 }
 
@@ -111,7 +111,7 @@ func commandShow(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.MountShowRequest{
-		Name: args[0],
+		Name: mountOptions.Name,
 	}
 	resp, err := common.GetClient().MountShow(common.GetCommandCtx(), req)
 	if err != nil {
