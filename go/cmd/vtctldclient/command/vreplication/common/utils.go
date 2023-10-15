@@ -165,7 +165,7 @@ func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format strin
 					shardstream.Id, BaseOptions.TargetKeyspace, tablet, shardstream.Status, shardstream.Info))
 			}
 		}
-		tout.WriteString("\nTraffic state:\n")
+		tout.WriteString("\nTraffic State: ")
 		tout.WriteString(resp.TrafficState)
 		output = tout.Bytes()
 	}
