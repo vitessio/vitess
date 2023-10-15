@@ -1885,7 +1885,7 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 		return nil, err
 	}
 	resp := &vtctldatapb.WorkflowStatusResponse{
-		Traffic: state.String(),
+		TrafficState: state.String(),
 	}
 	if copyProgress != nil {
 		resp.TableCopyState = make(map[string]*vtctldatapb.WorkflowStatusResponse_TableCopyState, len(*copyProgress))

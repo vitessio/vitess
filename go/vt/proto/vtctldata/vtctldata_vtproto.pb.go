@@ -5154,7 +5154,7 @@ func (m *WorkflowStatusResponse) CloneVT() *WorkflowStatusResponse {
 		return (*WorkflowStatusResponse)(nil)
 	}
 	r := &WorkflowStatusResponse{
-		Traffic: m.Traffic,
+		TrafficState: m.TrafficState,
 	}
 	if rhs := m.TableCopyState; rhs != nil {
 		tmpContainer := make(map[string]*WorkflowStatusResponse_TableCopyState, len(rhs))
@@ -18916,10 +18916,10 @@ func (m *WorkflowStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Traffic) > 0 {
-		i -= len(m.Traffic)
-		copy(dAtA[i:], m.Traffic)
-		i = encodeVarint(dAtA, i, uint64(len(m.Traffic)))
+	if len(m.TrafficState) > 0 {
+		i -= len(m.TrafficState)
+		copy(dAtA[i:], m.TrafficState)
+		i = encodeVarint(dAtA, i, uint64(len(m.TrafficState)))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -24442,7 +24442,7 @@ func (m *WorkflowStatusResponse) SizeVT() (n int) {
 			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
 		}
 	}
-	l = len(m.Traffic)
+	l = len(m.TrafficState)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -57802,7 +57802,7 @@ func (m *WorkflowStatusResponse) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Traffic", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field TrafficState", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -57830,7 +57830,7 @@ func (m *WorkflowStatusResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Traffic = string(dAtA[iNdEx:postIndex])
+			m.TrafficState = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
