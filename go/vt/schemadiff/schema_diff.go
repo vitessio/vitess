@@ -112,6 +112,15 @@ func permDiff(ctx context.Context, a []EntityDiff, callback func([]EntityDiff) (
 		return true, err
 	}
 	for j := i + 1; j < len(a); j++ {
+		// An optimization: we don't really need all possible permutations. We can skip some of the recursive search.
+		// We know we begin with a heuristic order where DROP VIEW comes first, then DROP TABLE, then ALTER TABLE & VIEW,
+		// then CREATE TABLE, then CREATE VIEW. And the entities in that initial order are sorted by dependency. That's
+		// thank's to Schema's UnorderedDiffs() existing heuristic.
+		// Now, some pairs of statements should be permutated, but some others will have absolutely no advantage to permutate.
+		// For example, a DROP VIEW and CREATE VIEW: there's no advantage to permutate the two. If the initial order is
+		// inapplicable, then so will be the permutated order.
+		// The next section identifies some no-brainers conditions for skipping swapping of elements.
+		// There could be even more fine grained scenarios, which we can deal with in the future.
 		iIsCreateDropView := false
 		iIsTable := false
 		switch a[i].(type) {
@@ -139,7 +148,7 @@ func permDiff(ctx context.Context, a []EntityDiff, callback func([]EntityDiff) (
 		if iIsTable && jIsCreateDropView {
 			continue
 		}
-
+		// End of optimization
 		a[i], a[j] = a[j], a[i]
 		if brk, err := permDiff(ctx, a, callback, i+1); brk {
 			return true, err
