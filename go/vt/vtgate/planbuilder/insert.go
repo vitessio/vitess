@@ -107,7 +107,7 @@ func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vin
 // TODO: Handle all this in semantic analysis.
 func fkManagementRequiredForInsert(ctx *plancontext.PlanningContext, vTbl *vindexes.Table, updateExprs sqlparser.UpdateExprs, replace bool) bool {
 	ksMode, err := ctx.VSchema.ForeignKeyMode(vTbl.Keyspace.Name)
-	if err != nil || ksMode != vschemapb.Keyspace_FK_MANAGED {
+	if err != nil || ksMode != vschemapb.Keyspace_managed {
 		return false
 	}
 

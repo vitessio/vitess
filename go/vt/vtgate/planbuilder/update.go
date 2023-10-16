@@ -95,7 +95,7 @@ func fkManagementNotRequiredForUpdate(ctx *plancontext.PlanningContext, vTables 
 		if err != nil {
 			return false
 		}
-		if ksMode != vschemapb.Keyspace_FK_MANAGED {
+		if ksMode != vschemapb.Keyspace_managed {
 			continue
 		}
 		childFks := vTable.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.UpdateAction)
