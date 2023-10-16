@@ -21,6 +21,8 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 
@@ -179,9 +181,8 @@ func TestMergeSortCollation(t *testing.T) {
 
 	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
 	orderBy := []OrderByParams{{
-		Col:         0,
-		Type:        sqltypes.VarChar,
-		CollationID: collationID,
+		Col:  0,
+		Type: evalengine.Type{Type: sqltypes.VarChar, Coll: collationID},
 	}}
 
 	var results []*sqltypes.Result

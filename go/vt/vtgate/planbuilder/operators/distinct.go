@@ -51,7 +51,7 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) {
 	for idx, col := range columns {
 		e := d.QP.GetSimplifiedExpr(col.Expr)
 		var wsCol *int
-		typ, coll, _ := ctx.SemTable.TypeForExpr(e)
+		typ, _ := ctx.SemTable.TypeForExpr(e)
 
 		if ctx.SemTable.NeedsWeightString(e) {
 			offset := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(e)))
@@ -59,10 +59,9 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) {
 		}
 
 		d.Columns = append(d.Columns, engine.CheckCol{
-			Col:       idx,
-			WsCol:     wsCol,
-			Type:      typ,
-			Collation: coll,
+			Col:   idx,
+			WsCol: wsCol,
+			Type:  typ,
 		})
 	}
 }

@@ -1076,9 +1076,8 @@ func TestRouteSortCollation(t *testing.T) {
 	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
 
 	sel.OrderBy = []OrderByParams{{
-		Col:         0,
-		Type:        sqltypes.VarChar,
-		CollationID: collationID,
+		Col:  0,
+		Type: evalengine.Type{Type: sqltypes.VarChar, Coll: collationID},
 	}}
 
 	vc := &loggingVCursor{
@@ -1143,9 +1142,8 @@ func TestRouteSortCollation(t *testing.T) {
 
 	t.Run("Error when Unknown Collation", func(t *testing.T) {
 		sel.OrderBy = []OrderByParams{{
-			Col:         0,
-			Type:        sqltypes.Unknown,
-			CollationID: collations.Unknown,
+			Col:  0,
+			Type: evalengine.UnknownType(),
 		}}
 
 		vc := &loggingVCursor{
@@ -1170,8 +1168,8 @@ func TestRouteSortCollation(t *testing.T) {
 
 	t.Run("Error when Unsupported Collation", func(t *testing.T) {
 		sel.OrderBy = []OrderByParams{{
-			Col:         0,
-			CollationID: 1111,
+			Col:  0,
+			Type: evalengine.Type{Coll: 1111},
 		}}
 
 		vc := &loggingVCursor{
