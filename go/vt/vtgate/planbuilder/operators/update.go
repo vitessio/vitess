@@ -22,7 +22,6 @@ import (
 	"slices"
 	"strings"
 
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -115,16 +114,8 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		return nil, err
 	}
 
-	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
-	if err != nil {
-		return nil, err
-	}
-	// Unmanaged foreign-key-mode, we don't need to do anything.
-	if ksMode != vschemapb.Keyspace_FK_MANAGED {
-		return updOp, nil
-	}
-
-	parentFks, childFks := getFKRequirementsForUpdate(ctx, updStmt.Exprs, vindexTable)
+	parentFks := ctx.SemTable.GetParentForeignKeysList()
+	childFks := ctx.SemTable.GetChildForeignKeysList()
 	if len(childFks) == 0 && len(parentFks) == 0 {
 		return updOp, nil
 	}
@@ -202,67 +193,6 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	}
 
 	return sqc.getRootOperator(route), nil
-}
-
-// getFKRequirementsForUpdate analyzes update expressions to determine which foreign key constraints needs management at the VTGate.
-// It identifies parent and child foreign keys that require verification or cascade operations due to column updates.
-func getFKRequirementsForUpdate(ctx *plancontext.PlanningContext, updateExprs sqlparser.UpdateExprs, vindexTable *vindexes.Table) ([]vindexes.ParentFKInfo, []vindexes.ChildFKInfo) {
-	parentFks := vindexTable.ParentFKsNeedsHandling(ctx.VerifyAllFKs, ctx.ParentFKToIgnore)
-	childFks := vindexTable.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.UpdateAction)
-	if len(childFks) == 0 && len(parentFks) == 0 {
-		return nil, nil
-	}
-
-	pFksRequired := make([]bool, len(parentFks))
-	cFksRequired := make([]bool, len(childFks))
-	// Go over all the update expressions
-	for _, updateExpr := range updateExprs {
-		// Any foreign key to a child table for a column that has been updated
-		// will require the cascade operations or restrict verification to happen, so we include all such foreign keys.
-		for idx, childFk := range childFks {
-			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				cFksRequired[idx] = true
-			}
-		}
-		// If we are setting a column to NULL, then we don't need to verify the existance of an
-		// equivalent row in the parent table, even if this column was part of a foreign key to a parent table.
-		if sqlparser.IsNull(updateExpr.Expr) {
-			continue
-		}
-		// We add all the possible parent foreign key constraints that need verification that an equivalent row
-		// exists, given that this column has changed.
-		for idx, parentFk := range parentFks {
-			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				pFksRequired[idx] = true
-			}
-		}
-	}
-	// For the parent foreign keys, if any of the columns part of the fk is set to NULL,
-	// then, we don't care for the existance of an equivalent row in the parent table.
-	for idx, parentFk := range parentFks {
-		for _, updateExpr := range updateExprs {
-			if !sqlparser.IsNull(updateExpr.Expr) {
-				continue
-			}
-			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				pFksRequired[idx] = false
-			}
-		}
-	}
-	// Get the filtered lists and return them.
-	var pFksNeedsHandling []vindexes.ParentFKInfo
-	var cFksNeedsHandling []vindexes.ChildFKInfo
-	for idx, parentFk := range parentFks {
-		if pFksRequired[idx] {
-			pFksNeedsHandling = append(pFksNeedsHandling, parentFk)
-		}
-	}
-	for idx, childFk := range childFks {
-		if cFksRequired[idx] {
-			cFksNeedsHandling = append(cFksNeedsHandling, childFk)
-		}
-	}
-	return pFksNeedsHandling, cFksNeedsHandling
 }
 
 func buildFkOperator(ctx *plancontext.PlanningContext, updOp ops.Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) (ops.Operator, error) {
