@@ -1060,8 +1060,12 @@ func (node *CallProc) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *OtherRead) Format(buf *TrackedBuffer) {
-	buf.literal("otherread")
+func (node *Analyze) Format(buf *TrackedBuffer) {
+	buf.literal("analyze ")
+	if node.IsLocal {
+		buf.literal("local ")
+	}
+	buf.astPrintf(node, "table %v", node.Table)
 }
 
 // Format formats the node.

@@ -62,7 +62,7 @@ func TestPreview(t *testing.T) {
 		{"set", StmtSet},
 		{"show", StmtShow},
 		{"use", StmtUse},
-		{"analyze", StmtOther},
+		{"analyze", StmtAnalyze},
 		{"describe", StmtExplain},
 		{"desc", StmtExplain},
 		{"explain", StmtExplain},
