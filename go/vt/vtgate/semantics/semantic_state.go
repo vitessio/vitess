@@ -197,10 +197,12 @@ func (st *SemTable) RemoveParentForeignKey(fkToIgnore string) error {
 	return nil
 }
 
-// RemoveNonRequiredForeignKeys filters the foreign keys involved in the query. It takes into account whether VTGate needs to verify all the foreign keys
-// or not. If it does not and can push some of the work to MySQL, we can remove some of the foreign keys from our list of foreign keys to take care off -
-// 1. Shard scoped parent foreign keys: MySQL will fail the DML if the foreign key relationship is not being adhered to.
-// 2. Shard scoped RESTRICT foreign keys: These too will fail if the foreign key constraint is being violated.
+// RemoveNonRequiredForeignKeys prunes the list of foreign keys that the query involves.
+// This function considers whether VTGate needs to validate all foreign keys
+// or can delegate some of the responsibility to MySQL.
+// In the latter case, the following types of foreign keys can be safely removed from our list:
+// 1. Shard-scoped parent foreign keys: MySQL itself will reject a DML operation that violates these constraints.
+// 2. Shard-scoped RESTRICT foreign keys: MySQL will also fail the operation if these foreign key constraints are breached.
 func (st *SemTable) RemoveNonRequiredForeignKeys(verifyAllFks bool, getAction func(fk vindexes.ChildFKInfo) sqlparser.ReferenceAction) error {
 	if verifyAllFks {
 		return nil
