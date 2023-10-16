@@ -221,8 +221,8 @@ func TestVtctldMigrate(t *testing.T) {
 	var output, expected string
 
 	t.Run("mount external cluster", func(t *testing.T) {
-		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Mount", "register", "--topo-type=etcd2",
-			fmt.Sprintf("--topo-server=localhost:%d", extVc.ClusterConfig.topoPort), "--topo-root=/vitess/global", "ext1")
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Mount", "register", "--name=ext1", "--topo-type=etcd2",
+			fmt.Sprintf("--topo-server=localhost:%d", extVc.ClusterConfig.topoPort), "--topo-root=/vitess/global")
 		require.NoError(t, err, "Mount Register command failed with %s", output)
 
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "list")
@@ -231,7 +231,7 @@ func TestVtctldMigrate(t *testing.T) {
 		names := gjson.Get(output, "names")
 		require.Equal(t, 1, len(names.Array()))
 		require.Equal(t, "ext1", names.Array()[0].String())
-		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "show", "ext1")
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "show", "--name=ext1")
 		require.NoError(t, err, "Mount command failed with %s\n", output)
 
 		require.Equal(t, "etcd2", gjson.Get(output, "topo_type").String())
@@ -302,7 +302,7 @@ func TestVtctldMigrate(t *testing.T) {
 	})
 
 	t.Run("unmount external cluster", func(t *testing.T) {
-		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "unregister", "ext1")
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "unregister", "--name=ext1")
 		require.NoError(t, err, "Mount command failed with %s\n", output)
 
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "list")
@@ -310,7 +310,7 @@ func TestVtctldMigrate(t *testing.T) {
 		expected = "{}\n"
 		require.Equal(t, expected, output)
 
-		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "show", "ext1")
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "show", "--name=ext1")
 		require.Errorf(t, err, "there is no vitess cluster named ext1")
 	})
 }
