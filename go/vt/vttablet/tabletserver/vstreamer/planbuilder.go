@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -865,5 +866,5 @@ func findColumn(ti *Table, name sqlparser.IdentifierCI) (int, error) {
 			return i, nil
 		}
 	}
-	return 0, fmt.Errorf("column %s not found in table %s", sqlparser.String(name), ti.Name)
+	return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "column %s not found in table %s", sqlparser.String(name), ti.Name)
 }

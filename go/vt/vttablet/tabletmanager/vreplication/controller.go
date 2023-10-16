@@ -261,10 +261,11 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 
 		// If this is a mysql error that we know needs manual intervention OR
 		// we cannot identify this as non-recoverable, but it has persisted
-		// beyond the retry limit (maxTimeToRetryError).
+		// beyond the retry limit (maxTimeToRetryError), or is an INTERNAL error
 		// In addition, we cannot restart a workflow started with AtomicCopy which has _any_ error.
 		if (err != nil && vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy)) ||
-			isUnrecoverableError(err) || !ct.lastWorkflowError.ShouldRetry() {
+			isUnrecoverableError(err) ||
+			!ct.lastWorkflowError.ShouldRetry() {
 
 			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)
 			if errSetState := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); errSetState != nil {
