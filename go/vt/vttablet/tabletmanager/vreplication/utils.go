@@ -125,7 +125,7 @@ func isUnrecoverableError(err error) bool {
 	if err == nil {
 		return false
 	}
-	if vterrors.Code(err) == vtrpc.Code_INTERNAL {
+	if vterrors.Code(err) == vtrpc.Code_FAILED_PRECONDITION {
 		return true
 	}
 	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)

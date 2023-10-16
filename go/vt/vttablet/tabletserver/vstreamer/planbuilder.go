@@ -866,5 +866,5 @@ func findColumn(ti *Table, name sqlparser.IdentifierCI) (int, error) {
 			return i, nil
 		}
 	}
-	return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "column %s not found in table %s", sqlparser.String(name), ti.Name)
+	return 0, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "column %s not found in table %s", sqlparser.String(name), ti.Name)
 }

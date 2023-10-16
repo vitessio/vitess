@@ -631,7 +631,7 @@ func (tpb *tablePlanBuilder) analyzeExtraSourcePkCols(colInfos []*ColumnInfo, so
 			if !col.IsGenerated {
 				// We shouldn't get here in any normal scenario. If a column is part of colInfos,
 				// then it must also exist in tpb.colExprs.
-				return vterrors.Errorf(vtrpc.Code_INTERNAL, "column %s not found in table expressions", col.Name)
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "column %s not found in table expressions", col.Name)
 			}
 		}
 	}
