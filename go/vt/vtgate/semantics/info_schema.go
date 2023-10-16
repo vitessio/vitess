@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -1711,4 +1712,8 @@ func (i *infoSchemaWithColumns) FindTableOrVindex(tbl sqlparser.TableName) (*vin
 // ConnCollation implements the SchemaInformation interface
 func (i *infoSchemaWithColumns) ConnCollation() collations.ID {
 	return i.inner.ConnCollation()
+}
+
+func (i *infoSchemaWithColumns) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
+	return i.inner.ForeignKeyMode(keyspace)
 }

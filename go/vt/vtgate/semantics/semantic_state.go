@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -125,6 +126,11 @@ type (
 
 		// QuerySignature is used to identify shortcuts in the planning process
 		QuerySignature QuerySignature
+
+		// We store the child and parent foreign keys that are involved in the given query.
+		// The map is keyed by the tableset of the table that each of the foreign key belongs to.
+		childForeignKeysInvolved  map[TableSet][]vindexes.ChildFKInfo
+		parentForeignKeysInvolved map[TableSet][]vindexes.ParentFKInfo
 	}
 
 	columnName struct {
@@ -136,6 +142,8 @@ type (
 	SchemaInformation interface {
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 		ConnCollation() collations.ID
+		// ForeignKeyMode returns the foreign_key flag value
+		ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
 	}
 )
 
@@ -151,6 +159,165 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 		st.Direct[to] = st.DirectDeps(from)
 		st.ExprTypes[to] = st.ExprTypes[from]
 	}
+}
+
+// GetChildForeignKeysList gets the child foreign keys as a list.
+func (st *SemTable) GetChildForeignKeysList() []vindexes.ChildFKInfo {
+	var childFkInfos []vindexes.ChildFKInfo
+	for _, infos := range st.childForeignKeysInvolved {
+		childFkInfos = append(childFkInfos, infos...)
+	}
+	return childFkInfos
+}
+
+// GetParentForeignKeysList gets the parent foreign keys as a list.
+func (st *SemTable) GetParentForeignKeysList() []vindexes.ParentFKInfo {
+	var parentFkInfos []vindexes.ParentFKInfo
+	for _, infos := range st.parentForeignKeysInvolved {
+		parentFkInfos = append(parentFkInfos, infos...)
+	}
+	return parentFkInfos
+}
+
+// RemoveParentForeignKey removes the given foreign key from the parent foreign keys that sem table stores.
+func (st *SemTable) RemoveParentForeignKey(fkToIgnore string) error {
+	for ts, fkInfos := range st.parentForeignKeysInvolved {
+		ti, err := st.TableInfoFor(ts)
+		if err != nil {
+			return err
+		}
+		vt := ti.GetVindexTable()
+		for idx, info := range fkInfos {
+			if info.String(vt) == fkToIgnore {
+				st.parentForeignKeysInvolved[ts] = append(fkInfos[0:idx], fkInfos[idx+1:]...)
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
+// RemoveNonRequiredForeignKeys prunes the list of foreign keys that the query involves.
+// This function considers whether VTGate needs to validate all foreign keys
+// or can delegate some of the responsibility to MySQL.
+// In the latter case, the following types of foreign keys can be safely removed from our list:
+// 1. Shard-scoped parent foreign keys: MySQL itself will reject a DML operation that violates these constraints.
+// 2. Shard-scoped RESTRICT foreign keys: MySQL will also fail the operation if these foreign key constraints are breached.
+func (st *SemTable) RemoveNonRequiredForeignKeys(verifyAllFks bool, getAction func(fk vindexes.ChildFKInfo) sqlparser.ReferenceAction) error {
+	if verifyAllFks {
+		return nil
+	}
+	// Go over all the parent foreign keys.
+	for ts, parentFKs := range st.parentForeignKeysInvolved {
+		ti, err := st.TableInfoFor(ts)
+		if err != nil {
+			return err
+		}
+		vt := ti.GetVindexTable()
+		var updatedParentFks []vindexes.ParentFKInfo
+		for _, fk := range parentFKs {
+			// Cross-keyspace foreign keys require verification.
+			if vt.Keyspace.Name != fk.Table.Keyspace.Name {
+				updatedParentFks = append(updatedParentFks, fk)
+				continue
+			}
+			// Non shard-scoped foreign keys require verification.
+			if !isShardScoped(fk.Table, vt, fk.ParentColumns, fk.ChildColumns) {
+				updatedParentFks = append(updatedParentFks, fk)
+			}
+		}
+		st.parentForeignKeysInvolved[ts] = updatedParentFks
+	}
+
+	// Go over all the child foreign keys.
+	for ts, childFks := range st.childForeignKeysInvolved {
+		ti, err := st.TableInfoFor(ts)
+		if err != nil {
+			return err
+		}
+		vt := ti.GetVindexTable()
+		var updatedChildFks []vindexes.ChildFKInfo
+		for _, fk := range childFks {
+			// Cross-keyspace foreign keys require verification.
+			if vt.Keyspace.Name != fk.Table.Keyspace.Name {
+				updatedChildFks = append(updatedChildFks, fk)
+				continue
+			}
+			switch getAction(fk) {
+			case sqlparser.Cascade, sqlparser.SetNull, sqlparser.SetDefault:
+				updatedChildFks = append(updatedChildFks, fk)
+				continue
+			}
+			// sqlparser.Restrict, sqlparser.NoAction, sqlparser.DefaultAction
+			// all the actions means the same thing i.e. Restrict
+			// do not allow modification if there is a child row.
+			// Check if the restrict is shard scoped.
+			if !isShardScoped(vt, fk.Table, fk.ParentColumns, fk.ChildColumns) {
+				updatedChildFks = append(updatedChildFks, fk)
+			}
+		}
+		st.childForeignKeysInvolved[ts] = updatedChildFks
+	}
+
+	return nil
+}
+
+// isShardScoped checks if the foreign key constraint is shard-scoped or not. It uses the vindex information to make this call.
+func isShardScoped(pTable *vindexes.Table, cTable *vindexes.Table, pCols sqlparser.Columns, cCols sqlparser.Columns) bool {
+	if !pTable.Keyspace.Sharded {
+		return true
+	}
+
+	pPrimaryVdx := pTable.ColumnVindexes[0]
+	cPrimaryVdx := cTable.ColumnVindexes[0]
+
+	// If the primary vindexes don't match between the parent and child table,
+	// we cannot infer that the fk constraint in shard scoped.
+	if cPrimaryVdx.Vindex != pPrimaryVdx.Vindex {
+		return false
+	}
+
+	childFkContatined, childFkIndexes := cCols.Indexes(cPrimaryVdx.Columns)
+	if !childFkContatined {
+		// PrimaryVindex is not part of the foreign key constraint on the children side.
+		// So it is a cross-shard foreign key.
+		return false
+	}
+
+	// We need to run the same check for the parent columns.
+	parentFkContatined, parentFkIndexes := pCols.Indexes(pPrimaryVdx.Columns)
+	if !parentFkContatined {
+		return false
+	}
+
+	// Both the child and parent table contain the foreign key and that the vindexes are the same,
+	// now we need to make sure, that the indexes of both match.
+	// For example, consider the following tables,
+	//	t1 (primary vindex (x,y))
+	//	t2 (primary vindex (a,b))
+	//	If we have a foreign key constraint from t1(x,y) to t2(b,a), then they are not shard scoped.
+	//	Let's say in t1, (1,3) will be in -80 and (3,1) will be in 80-, then in t2 (1,3) will end up in 80-.
+	for i := range parentFkIndexes {
+		if parentFkIndexes[i] != childFkIndexes[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// ForeignKeysPresent returns whether there are any foreign key constraints left in the semantic table that require handling.
+func (st *SemTable) ForeignKeysPresent() bool {
+	for _, fkInfos := range st.childForeignKeysInvolved {
+		if len(fkInfos) > 0 {
+			return true
+		}
+	}
+	for _, fkInfos := range st.parentForeignKeysInvolved {
+		if len(fkInfos) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func (st *SemTable) SelectExprs(sel sqlparser.SelectStatement) sqlparser.SelectExprs {
