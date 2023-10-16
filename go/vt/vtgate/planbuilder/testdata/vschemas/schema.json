@@ -605,7 +605,7 @@
     },
     "sharded_fk_allow": {
       "sharded": true,
-      "foreignKeyMode": "FK_MANAGED",
+      "foreignKeyMode": "managed",
       "vindexes": {
         "hash_vin": {
           "type": "hash_test"
@@ -746,7 +746,7 @@
       }
     },
     "unsharded_fk_allow": {
-      "foreignKeyMode": "FK_MANAGED",
+      "foreignKeyMode": "managed",
       "tables": {
         "u_tbl1": {},
         "u_tbl2": {},

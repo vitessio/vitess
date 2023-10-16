@@ -365,7 +365,7 @@ func TestVSchemaViews(t *testing.T) {
 	got := string(out)
 	want := `
 {
-  "foreignKeyMode":"FK_UNMANAGED",
+  "foreignKeyMode":"unmanaged",
   "tables": {
     "t1": {
       "name": "t1",
@@ -423,7 +423,7 @@ func TestVSchemaForeignKeys(t *testing.T) {
 	require.NoError(t, err)
 	want := `
 {
-  "foreignKeyMode": "FK_UNMANAGED",
+  "foreignKeyMode": "unmanaged",
   "tables": {
     "t1": {
       "name": "t1",
@@ -2725,7 +2725,7 @@ func TestVSchemaJSON(t *testing.T) {
 	want := `{
   "sharded": {
     "sharded": true,
-    "foreignKeyMode": "FK_DISALLOW",
+    "foreignKeyMode": "disallow",
     "tables": {
       "t3": {
         "name": "n3",
@@ -2750,7 +2750,7 @@ func TestVSchemaJSON(t *testing.T) {
     }
   },
   "unsharded": {
-    "foreignKeyMode": "FK_MANAGED",
+    "foreignKeyMode": "managed",
     "tables": {
       "t1": {
         "name": "n1",
