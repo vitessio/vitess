@@ -67273,6 +67273,9 @@ export namespace vtctldata {
 
         /** WorkflowStatusResponse shard_streams */
         shard_streams?: ({ [k: string]: vtctldata.WorkflowStatusResponse.IShardStreams }|null);
+
+        /** WorkflowStatusResponse traffic_state */
+        traffic_state?: (string|null);
     }
 
     /** Represents a WorkflowStatusResponse. */
@@ -67289,6 +67292,9 @@ export namespace vtctldata {
 
         /** WorkflowStatusResponse shard_streams. */
         public shard_streams: { [k: string]: vtctldata.WorkflowStatusResponse.IShardStreams };
+
+        /** WorkflowStatusResponse traffic_state. */
+        public traffic_state: string;
 
         /**
          * Creates a new WorkflowStatusResponse instance using the specified properties.

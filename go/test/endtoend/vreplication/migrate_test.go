@@ -225,7 +225,7 @@ func TestVtctldMigrate(t *testing.T) {
 			fmt.Sprintf("--topo-server=localhost:%d", extVc.ClusterConfig.topoPort), "--topo-root=/vitess/global")
 		require.NoError(t, err, "Mount Register command failed with %s", output)
 
-		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "List")
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "list")
 		require.NoError(t, err, "Mount List command failed with %s", output)
 
 		names := gjson.Get(output, "names")
@@ -244,7 +244,7 @@ func TestVtctldMigrate(t *testing.T) {
 	t.Run("migrate from external cluster", func(t *testing.T) {
 		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
 			"--target-keyspace", "product", "--workflow", "e1",
-			"Create", "--source-keyspace", "rating", "--mount-name", "ext1", "--all-tables", "--cells=extcell1", "--tablet-types=primary,replica"); err != nil {
+			"create", "--source-keyspace", "rating", "--mount-name", "ext1", "--all-tables", "--cells=extcell1", "--tablet-types=primary,replica"); err != nil {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
 		}
 		waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
@@ -258,7 +258,7 @@ func TestVtctldMigrate(t *testing.T) {
 		vdiffSideBySide(t, ksWorkflow, "extcell1")
 
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
-			"--target-keyspace", "product", "--workflow", "e1", "Show")
+			"--target-keyspace", "product", "--workflow", "e1", "show")
 		require.NoError(t, err, "Migrate command failed with %s", output)
 
 		wf := gjson.Get(output, "workflows").Array()[0]
@@ -266,13 +266,13 @@ func TestVtctldMigrate(t *testing.T) {
 		require.Equal(t, "Migrate", wf.Get("workflow_type").String())
 
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
-			"--target-keyspace", "product", "--workflow", "e1", "Progress")
+			"--target-keyspace", "product", "--workflow", "e1", "status", "--format=json")
 		require.NoError(t, err, "Migrate command failed with %s", output)
 
 		require.Equal(t, "Running", gjson.Get(output, "shard_streams.product/0.streams.0.status").String())
 
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
-			"--target-keyspace", "product", "--workflow", "e1", "Complete")
+			"--target-keyspace", "product", "--workflow", "e1", "complete")
 		require.NoError(t, err, "Migrate command failed with %s", output)
 
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 0)
@@ -288,7 +288,7 @@ func TestVtctldMigrate(t *testing.T) {
 		waitForRowCount(t, vtgateConn, "product:0", "rating", 0)
 		waitForRowCount(t, vtgateConn, "product:0", "review", 0)
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
-			"--target-keyspace", "product", "--workflow", "e1", "Cancel")
+			"--target-keyspace", "product", "--workflow", "e1", "cancel")
 		require.NoError(t, err, "Migrate command failed with %s", output)
 
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 0)
@@ -305,7 +305,7 @@ func TestVtctldMigrate(t *testing.T) {
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "unregister", "--name=ext1")
 		require.NoError(t, err, "Mount command failed with %s\n", output)
 
-		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "List")
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "list")
 		require.NoError(t, err, "Mount command failed with %+v : %s\n", output)
 		expected = "{}\n"
 		require.Equal(t, expected, output)

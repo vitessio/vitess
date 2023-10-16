@@ -40,6 +40,10 @@ func GetStatusCommand(opts *SubCommandsOpts) *cobra.Command {
 }
 
 func commandStatus(cmd *cobra.Command, args []string) error {
+	format, err := GetOutputFormat(cmd)
+	if err != nil {
+		return err
+	}
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.WorkflowStatusRequest{
@@ -51,7 +55,7 @@ func commandStatus(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err = OutputStatusResponse(resp, "json"); err != nil {
+	if err = OutputStatusResponse(resp, format); err != nil {
 		return err
 	}
 
