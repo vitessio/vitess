@@ -19,7 +19,6 @@ package operators
 import (
 	"fmt"
 
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -92,18 +91,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return nil, err
 	}
 
-	// Now we check for the foreign key mode and make changes if required.
-	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	// Unmanaged foreign-key-mode, we don't need to do anything.
-	if ksMode != vschemapb.Keyspace_FK_MANAGED {
-		return delOp, nil
-	}
-
-	childFks := vindexTable.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.DeleteAction)
+	childFks := ctx.SemTable.GetChildForeignKeysList()
 	// If there are no foreign key constraints, then we don't need to do anything.
 	if len(childFks) == 0 {
 		return delOp, nil
