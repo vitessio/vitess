@@ -67,7 +67,7 @@ const (
 type RetryDoneFunc context.CancelFunc
 
 const (
-	ClusterEventReshardingInProgress = "current keyspace is being resharded"
+	ClusterEventReshardingInProgress = "current keyspace is potentially being resharded"
 	ClusterEventReparentInProgress   = "primary is not serving, there may be a reparent operation in progress"
 	ClusterEventMoveTables           = "disallowed due to rule"
 )
