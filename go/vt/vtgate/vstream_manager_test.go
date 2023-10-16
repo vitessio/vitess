@@ -411,13 +411,6 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			ignoreTablet: true,
 		},
 		{
-			name:         "not found",
-			code:         vtrpcpb.Code_NOT_FOUND,
-			msg:          "",
-			shouldRetry:  true,
-			ignoreTablet: true,
-		},
-		{
 			name:         "unavailable",
 			code:         vtrpcpb.Code_UNAVAILABLE,
 			msg:          "",

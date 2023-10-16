@@ -30,6 +30,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -474,7 +475,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 	// journalDone is assigned a channel when a journal event is encountered.
 	// It will be closed when all journal events converge.
 	var journalDone chan struct{}
-	ignoreTablets := make(map[string]*topodatapb.TabletAlias)
+	ignoreTablets := []string{}
 
 	errCount := 0
 	for {
@@ -492,12 +493,17 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		var eventss [][]*binlogdatapb.VEvent
 		var err error
 		cells := vs.getCells()
-		tp, err := discovery.NewTabletPicker(ctx, vs.ts, cells, vs.vsm.cell, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String(), vs.tabletPickerOptions, ignoreTablets)
+
+		// Create a child context with a stricter timeout.
+		tpCtx, tpCancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer tpCancel()
+
+		tp, err := discovery.NewTabletPicker(tpCtx, vs.ts, cells, vs.vsm.cell, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String(), vs.tabletPickerOptions, ignoreTablets...)
 		if err != nil {
 			log.Errorf(err.Error())
 			return err
 		}
-		tablet, err := tp.PickForStreaming(ctx)
+		tablet, err := tp.PickForStreaming(tpCtx)
 		if err != nil {
 			log.Errorf(err.Error())
 			return err
@@ -673,16 +679,17 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			err = vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "vstream ended unexpectedly")
 		}
 
-		retry, ignoreTablet := vs.isRetriableError(err)
+		retry, ignoreTablet := vs.shouldRetry(err)
 		if !retry {
 			log.Errorf("vstream for %s/%s error: %v", sgtid.Keyspace, sgtid.Shard, err)
 			return err
 		}
 		if ignoreTablet {
-			ignoreTablets[tablet.Alias.String()] = tablet.GetAlias()
+			ignoreTablets = append(ignoreTablets, topoproto.TabletAliasString(tablet.GetAlias()))
 		}
 
 		errCount++
+		// Retry, at most, 3 times if the error can be retried.
 		if errCount >= 3 {
 			log.Errorf("vstream for %s/%s had three consecutive failures: %v", sgtid.Keyspace, sgtid.Shard, err)
 			return err
@@ -691,20 +698,23 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 	}
 }
 
-// isRetriable determines whether we should exit immediately or retry the vstream.
-// The first return value determines if the error is retriable, the second indicates whether
+// shouldRetry determines whether we should exit immediately or retry the vstream.
+// The first return value determines if the error can be retried, the second indicates whether
 // the tablet on which the error occurred should be ommitted from the candidate list of tablets
 // to choose from on the retry.
-func (vs *vstream) isRetriableError(err error) (bool, bool) {
+//
+// An error should be retried if it is expected to be transient.
+// A tablet should be ignored upon retry if it's likely another tablet will succeed without the same error.
+func (vs *vstream) shouldRetry(err error) (bool, bool) {
 	errCode := vterrors.Code(err)
 
 	if errCode == vtrpcpb.Code_FAILED_PRECONDITION || errCode == vtrpcpb.Code_UNAVAILABLE {
 		return true, false
 	}
 
-	// If there is a GTIDSet Mismatch on the tablet or if the tablet cannot be found,
+	// If there is a GTIDSet Mismatch on the tablet,
 	// omit it from the candidate list in the TabletPicker on retry.
-	if (errCode == vtrpcpb.Code_INVALID_ARGUMENT && strings.Contains(err.Error(), "GTIDSet Mismatch")) || errCode == vtrpcpb.Code_NOT_FOUND {
+	if errCode == vtrpcpb.Code_INVALID_ARGUMENT && strings.Contains(err.Error(), "GTIDSet Mismatch") {
 		return true, true
 	}
 
