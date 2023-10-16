@@ -61,6 +61,7 @@ type materializer struct {
 	targetShards          []*topo.ShardInfo
 	isPartial             bool
 	primaryVindexesDiffer bool
+	workflowType          binlogdatapb.VReplicationWorkflowType
 }
 
 func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowSubType, error) {
@@ -112,7 +113,7 @@ func (mz *materializer) createMoveTablesStreams(req *vtctldatapb.MoveTablesCreat
 			Cells:                     req.Cells,
 			TabletTypes:               req.TabletTypes,
 			TabletSelectionPreference: req.TabletSelectionPreference,
-			WorkflowType:              binlogdatapb.VReplicationWorkflowType_MoveTables,
+			WorkflowType:              mz.workflowType,
 			WorkflowSubType:           workflowSubType,
 			DeferSecondaryKeys:        req.DeferSecondaryKeys,
 			AutoStart:                 req.AutoStart,

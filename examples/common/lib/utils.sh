@@ -108,13 +108,13 @@ function wait_for_shard_vreplication_engine() {
         local wait_secs=90
 
         for _ in $(seq 1 ${wait_secs}); do
-                if vtctlclient --server=localhost:15999 Workflow -- "${keyspace}" listall &>/dev/null; then
+                if vtctldclient --server=localhost:15999 workflow --keyspace "${keyspace}" list &>/dev/null; then
                         break
                 fi
                 sleep 1
         done;
 
-        if ! vtctlclient --server=localhost:15999 Workflow -- "${keyspace}" listall &>/dev/null; then
+        if ! vtctldclient --server=localhost:15999 workflow --keyspace "${keyspace}" list &>/dev/null; then
                 fail "Timed out after ${wait_secs} seconds waiting for the primary tablet's VReplication engine to open in ${keyspace}/${shard}"
         fi
 }

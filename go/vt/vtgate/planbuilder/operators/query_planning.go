@@ -269,10 +269,7 @@ func pushProjectionInVindex(
 		return nil, nil, err
 	}
 	for _, pe := range ap {
-		_, err = src.AddColumn(ctx, true, false, aeWrap(pe.EvalExpr))
-		if err != nil {
-			return nil, nil, err
-		}
+		src.AddColumn(ctx, true, false, aeWrap(pe.EvalExpr))
 	}
 	return src, rewrite.NewTree("push projection into vindex", p), nil
 }
@@ -861,11 +858,7 @@ func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, o
 		return output, nil
 	}
 
-	cols, err := output.GetSelectExprs(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+	cols := output.GetSelectExprs(ctx)
 	sel := sqlparser.GetFirstSelect(horizon.Query)
 	if len(sel.SelectExprs) == len(cols) {
 		return output, nil

@@ -578,7 +578,7 @@ func tryMergeJoinShardedRouting(
 	routeA, routeB *Route,
 	m merger,
 	joinPredicates []sqlparser.Expr,
-) (*Route, error) {
+) *Route {
 	sameKeyspace := routeA.Routing.Keyspace() == routeB.Routing.Keyspace()
 	tblA := routeA.Routing.(*ShardedRouting)
 	tblB := routeB.Routing.(*ShardedRouting)
@@ -605,20 +605,20 @@ func tryMergeJoinShardedRouting(
 			// If we are doing two Scatters, we have to make sure that the
 			// joins are on the correct vindex to allow them to be merged
 			// no join predicates - no vindex
-			return nil, nil
+			return nil
 		}
 
 		if !sameKeyspace {
-			return nil, vterrors.VT12001("cross-shard correlated subquery")
+			panic(vterrors.VT12001("cross-shard correlated subquery"))
 		}
 
 		canMerge := canMergeOnFilters(ctx, routeA, routeB, joinPredicates)
 		if !canMerge {
-			return nil, nil
+			return nil
 		}
 		return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB)
 	}
-	return nil, nil
+	return nil
 }
 
 // makeEvalEngineExpr transforms the given sqlparser.Expr into an evalengine expression

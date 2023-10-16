@@ -381,6 +381,36 @@ func (client *localVtctldClient) LookupVindexExternalize(ctx context.Context, in
 	return client.s.LookupVindexExternalize(ctx, in)
 }
 
+// MaterializeCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) MaterializeCreate(ctx context.Context, in *vtctldatapb.MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.MaterializeCreateResponse, error) {
+	return client.s.MaterializeCreate(ctx, in)
+}
+
+// MigrateCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) MigrateCreate(ctx context.Context, in *vtctldatapb.MigrateCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowStatusResponse, error) {
+	return client.s.MigrateCreate(ctx, in)
+}
+
+// MountList is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) MountList(ctx context.Context, in *vtctldatapb.MountListRequest, opts ...grpc.CallOption) (*vtctldatapb.MountListResponse, error) {
+	return client.s.MountList(ctx, in)
+}
+
+// MountRegister is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) MountRegister(ctx context.Context, in *vtctldatapb.MountRegisterRequest, opts ...grpc.CallOption) (*vtctldatapb.MountRegisterResponse, error) {
+	return client.s.MountRegister(ctx, in)
+}
+
+// MountShow is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) MountShow(ctx context.Context, in *vtctldatapb.MountShowRequest, opts ...grpc.CallOption) (*vtctldatapb.MountShowResponse, error) {
+	return client.s.MountShow(ctx, in)
+}
+
+// MountUnregister is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) MountUnregister(ctx context.Context, in *vtctldatapb.MountUnregisterRequest, opts ...grpc.CallOption) (*vtctldatapb.MountUnregisterResponse, error) {
+	return client.s.MountUnregister(ctx, in)
+}
+
 // MoveTablesComplete is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) MoveTablesComplete(ctx context.Context, in *vtctldatapb.MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldatapb.MoveTablesCompleteResponse, error) {
 	return client.s.MoveTablesComplete(ctx, in)

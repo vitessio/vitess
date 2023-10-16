@@ -422,5 +422,50 @@
     "comment": "select none from user_index where id = :id",
     "query": "select none from user_index where id = :id",
     "plan": "column '`none`' not found in table 'user_index'"
+  },
+  {
+    "comment": "select keyspace_id from user_index where id = 1 and id = 2",
+    "query": "select keyspace_id from user_index where id = 1 and id = 2",
+    "plan": "VT09017: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (multiple filters)"
+  },
+  {
+    "comment": "select keyspace_id from user_index where func(id)",
+    "query": "select keyspace_id from user_index where func(id)",
+    "plan": "VT09017: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (not a comparison)"
+  },
+  {
+    "comment": "select keyspace_id from user_index where id > 1",
+    "query": "select keyspace_id from user_index where id > 1",
+    "plan": "VT09017: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (not equality)"
+  },
+  {
+    "comment": "select keyspace_id from user_index where 1 = id",
+    "query": "select keyspace_id from user_index where 1 = id",
+    "plan": "VT09017: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not a column)"
+  },
+  {
+    "comment": "select keyspace_id from user_index where keyspace_id = 1",
+    "query": "select keyspace_id from user_index where keyspace_id = 1",
+    "plan": "VT09017: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not id)"
+  },
+  {
+    "comment": "select keyspace_id from user_index where id = id+1",
+    "query": "select keyspace_id from user_index where id = id+1",
+    "plan": "VT09017: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (rhs is not a value)"
+  },
+  {
+    "comment": "vindex func without where condition",
+    "query": "select keyspace_id from user_index",
+    "plan": "VT09017: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
+  },
+  {
+    "comment": "vindex func in subquery without where",
+    "query": "select id from user where exists(select keyspace_id from user_index)",
+    "plan": "VT09017: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
+  },
+  {
+    "comment": "select func(keyspace_id) from user_index where id = :id",
+    "query": "select func(keyspace_id) from user_index where id = :id",
+    "plan": "VT09017: cannot add 'func(keyspace_id)' expression to a table/vindex"
   }
 ]

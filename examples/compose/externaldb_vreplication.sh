@@ -19,19 +19,19 @@ set -ex
 VTCTLD_SERVER=${VTCTLD_SERVER:-'vtctld:15999'}
 
 # Wait until source and destination primaries are available
-until (/vt/bin/vtctlclient --server $VTCTLD_SERVER ListAllTablets | grep "ext_" | grep "primary" ); do
+until (/vt/bin/vtctldclient --server $VTCTLD_SERVER GetTablets | grep "ext_" | grep "primary" ); do
   echo 'waiting for external primary..';
   sleep 1;
 done
 
-until (/vt/bin/vtctlclient --server $VTCTLD_SERVER ListAllTablets | grep -v "ext_" | grep "primary" ); do
+until (/vt/bin/vtctldclient --server $VTCTLD_SERVER GetTablets | grep -v "ext_" | grep "primary" ); do
   echo 'waiting for managed primary..';
   sleep 1;
 done
 
 
 # Get source and destination tablet and shard information
-TABLET_INFO=$(/vt/bin/vtctlclient --server $VTCTLD_SERVER ListAllTablets)
+TABLET_INFO=$(/vt/bin/vtctldclient --server $VTCTLD_SERVER GetTablets)
 source_alias=$(echo "$TABLET_INFO "| grep "ext_" | grep "primary" | awk '{ print $1 }')
 dest_alias=$(echo "$TABLET_INFO "| grep -v "ext_" | grep "primary" | awk '{ print $1 }')
 source_keyspace=$(echo "$TABLET_INFO "| grep "ext_" | grep "primary" | awk '{ print $2 }')
@@ -43,33 +43,27 @@ dest_tablet=$(echo "$TABLET_INFO "| grep -v "ext_" | grep "primary" | awk '{ pri
 
 
 # Disable foreign_key checks on destination
-/vt/bin/vtctlclient --server $VTCTLD_SERVER ExecuteFetchAsDba $dest_alias 'SET GLOBAL FOREIGN_KEY_CHECKS=0;'
+/vt/bin/vtctldclient --server $VTCTLD_SERVER ExecuteFetchAsDBA $dest_alias 'SET GLOBAL FOREIGN_KEY_CHECKS=0;'
 
 # Get source_sql mode
-source_sql_mode=$(/vt/bin/vtctlclient --server $VTCTLD_SERVER ExecuteFetchAsDba $source_alias 'SELECT @@GLOBAL.sql_mode' | awk 'NR==4 {print $2}')
+source_sql_mode=$(/vt/bin/vtctldclient --server $VTCTLD_SERVER ExecuteFetchAsDBA $source_alias 'SELECT @@GLOBAL.sql_mode' | awk 'NR==4 {print $2}')
 
 # Apply source sql_mode to destination
 # The intention is to avoid replication errors
-/vt/bin/vtctlclient --server $VTCTLD_SERVER ExecuteFetchAsDba $dest_alias "SET GLOBAL sql_mode='$source_sql_mode';"
+/vt/bin/vtctldclient --server $VTCTLD_SERVER ExecuteFetchAsDBA $dest_alias "SET GLOBAL sql_mode='$source_sql_mode';"
 
 # Verify sql_mode matches
-[ $source_sql_mode == $(/vt/bin/vtctlclient --server $VTCTLD_SERVER ExecuteFetchAsDba $dest_alias 'SELECT @@GLOBAL.sql_mode' | awk 'NR==4 {print $2}') ] && \
+[ $source_sql_mode == $(/vt/bin/vtctldclient --server $VTCTLD_SERVER ExecuteFetchAsDBA $dest_alias 'SELECT @@GLOBAL.sql_mode' | awk 'NR==4 {print $2}') ] && \
 echo "Source and Destination sql_mode Match." || echo "sql_mode MisMatch"
 
-until /vt/bin/vtctlclient --server $VTCTLD_SERVER GetSchema $dest_alias; do
+until /vt/bin/vtctldclient --server $VTCTLD_SERVER GetSchema $dest_alias; do
   echo "Waiting for destination schema to be ready..";
   sleep 3;
 done
 
-# Copy schema from source to destination shard
-/vt/bin/vtctlclient --server $VTCTLD_SERVER CopySchemaShard $source_tablet $dest_tablet || true
-
-# Verify schema
-/vt/bin/vtctlclient --server $VTCTLD_SERVER GetSchema $dest_alias
-
-# Start vreplication
-/vt/bin/vtctlclient --server $VTCTLD_SERVER VReplicationExec $dest_alias 'insert into _vt.vreplication (db_name, source, pos, max_tps, max_replication_lag, tablet_types, time_updated, transaction_timestamp, state) values('"'"''"$dest_keyspace"''"'"', '"'"'keyspace:\"'"$source_keyspace"'\" shard:\"'"$source_shard"'\" filter:<rules:<match:\"/.*\" > > on_ddl:EXEC_IGNORE '"'"', '"'"''"'"', 9999, 9999, '"'"'primary'"'"', 0, 0, '"'"'Running'"'"')'
+# Start vreplication workflow
+/vt/bin/vtctldclient --server $VTCTLD_SERVER MoveTables --workflow ext_commerce2commerce --target-keyspace $dest_keyspace create --source-keyspace $source_keyspace --all-tables
 
 # Check vreplication status
-/vt/bin/vtctlclient --server $VTCTLD_SERVER VReplicationExec $dest_alias 'select * from _vt.vreplication'
+/vt/bin/vtctldclient --server $VTCTLD_SERVER MoveTables --workflow ext_commerce2commerce --target-keyspace $dest_keyspace show
 

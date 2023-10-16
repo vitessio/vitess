@@ -127,14 +127,14 @@ func commandUpdateState(cmd *cobra.Command, args []string) error {
 	var state binlogdatapb.VReplicationWorkflowState
 	switch strings.ToLower(cmd.Name()) {
 	case "start":
-		if err := CanRestartWorkflow(workflowUpdateOptions.Workflow, workflowOptions.Keyspace); err != nil {
+		if err := CanRestartWorkflow(workflowOptions.Keyspace, workflowUpdateOptions.Workflow); err != nil {
 			return err
 		}
 		state = binlogdatapb.VReplicationWorkflowState_Running
 	case "stop":
 		state = binlogdatapb.VReplicationWorkflowState_Stopped
 	default:
-		return fmt.Errorf("invalid workstate: %s", args[0])
+		return fmt.Errorf("invalid workflow state: %s", args[0])
 	}
 
 	// The only thing we're updating is the state.

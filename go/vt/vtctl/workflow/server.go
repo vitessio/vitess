@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"slices"
 	"sort"
@@ -40,6 +41,7 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -336,10 +338,11 @@ func (s *Server) GetCellsWithTableReadsSwitched(
 	return cellsSwitched, cellsNotSwitched, nil
 }
 
-func (s *Server) GetWorkflow(ctx context.Context, keyspace, workflow string) (*vtctldatapb.Workflow, error) {
+func (s *Server) GetWorkflow(ctx context.Context, keyspace, workflow string, includeLogs bool) (*vtctldatapb.Workflow, error) {
 	res, err := s.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
-		Keyspace: keyspace,
-		Workflow: workflow,
+		Keyspace:    keyspace,
+		Workflow:    workflow,
+		IncludeLogs: includeLogs,
 	})
 	if err != nil {
 		return nil, err
@@ -364,6 +367,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("active_only", req.ActiveOnly)
+	span.Annotate("include_logs", req.IncludeLogs)
 
 	where := ""
 	predicates := []string{}
@@ -392,7 +396,12 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			message,
 			tags,
 			workflow_type,
-			workflow_sub_type
+			workflow_sub_type,
+			time_heartbeat,
+			defer_secondary_keys,
+			component_throttled,
+			time_throttled,
+			rows_copied
 		FROM
 			_vt.vreplication
 		%s`,
@@ -412,6 +421,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	targetKeyspaceByWorkflow := make(map[string]string, len(results))
 	targetShardsByWorkflow := make(map[string]sets.Set[string], len(results))
 	maxVReplicationLagByWorkflow := make(map[string]float64, len(results))
+	maxVReplicationTransactionLagByWorkflow := make(map[string]float64, len(results))
 
 	// We guarantee the following invariants when this function is called for a
 	// given workflow:
@@ -444,7 +454,22 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			return err
 		}
 
-		pos := row["pos"].ToString()
+		// The value in the pos column can be compressed and thus not
+		// have a valid GTID consisting of valid UTF-8 characters so we
+		// have to decode it so that it's properly decompressed first
+		// when needed.
+		pos, err := row.ToString("pos")
+		if err != nil {
+			return err
+		}
+		if pos != "" {
+			mpos, err := binlogplayer.DecodePosition(pos)
+			if err != nil {
+				return err
+			}
+			pos = mpos.String()
+		}
+
 		stopPos := row["stop_pos"].ToString()
 		state := row["state"].ToString()
 		dbName := row["db_name"].ToString()
@@ -466,8 +491,31 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		if tags != "" {
 			tagArray = strings.Split(tags, ",")
 		}
+
 		workflowType, _ := row["workflow_type"].ToInt32()
 		workflowSubType, _ := row["workflow_sub_type"].ToInt32()
+
+		timeHeartbeat, err := row["time_heartbeat"].ToCastInt64()
+		if err != nil {
+			return err
+		}
+
+		componentThrottled := row["component_throttled"].ToString()
+		timeThrottled, err := row["time_throttled"].ToCastInt64()
+		if err != nil {
+			return err
+		}
+
+		deferSecondaryKeys, err := row["defer_secondary_keys"].ToBool()
+		if err != nil {
+			return err
+		}
+
+		rowsCopied, err := row["rows_copied"].ToCastInt64()
+		if err != nil {
+			return err
+		}
+
 		stream := &vtctldatapb.Workflow_Stream{
 			Id:           id,
 			Shard:        tablet.Shard,
@@ -483,8 +531,15 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			TimeUpdated: &vttimepb.Time{
 				Seconds: timeUpdatedSeconds,
 			},
-			Message: message,
-			Tags:    tagArray,
+			Message:    message,
+			Tags:       tagArray,
+			RowsCopied: rowsCopied,
+			ThrottlerStatus: &vtctldatapb.Workflow_Stream_ThrottlerStatus{
+				ComponentThrottled: componentThrottled,
+				TimeThrottled: &vttimepb.Time{
+					Seconds: timeThrottled,
+				},
+			},
 		}
 
 		stream.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
@@ -505,6 +560,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 
 		workflow.WorkflowType = binlogdatapb.VReplicationWorkflowType_name[workflowType]
 		workflow.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType_name[workflowSubType]
+		workflow.DeferSecondaryKeys = deferSecondaryKeys
 
 		switch {
 		case strings.Contains(strings.ToLower(stream.Message), "error"):
@@ -554,12 +610,42 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		timeUpdated := time.Unix(timeUpdatedSeconds, 0)
 		vreplicationLag := time.Since(timeUpdated)
 
+		// MaxVReplicationLag represents the time since we last processed any event
+		// in the workflow.
 		if currentMaxLag, ok := maxVReplicationLagByWorkflow[workflow.Name]; ok {
 			if vreplicationLag.Seconds() > currentMaxLag {
 				maxVReplicationLagByWorkflow[workflow.Name] = vreplicationLag.Seconds()
 			}
 		} else {
 			maxVReplicationLagByWorkflow[workflow.Name] = vreplicationLag.Seconds()
+		}
+
+		// MaxVReplicationTransactionLag estimates the actual statement processing lag
+		// between the source and the target. If we are still processing source events it
+		// is the difference b/w current time and the timestamp of the last event. If
+		// heartbeats are more recent than the last event, then the lag is the time since
+		// the last heartbeat as there can be an actual event immediately after the
+		// heartbeat, but which has not yet been processed on the target.
+		// We don't allow switching during the copy phase, so in that case we just return
+		// a large lag. All timestamps are in seconds since epoch.
+		if _, ok := maxVReplicationTransactionLagByWorkflow[workflow.Name]; !ok {
+			maxVReplicationTransactionLagByWorkflow[workflow.Name] = 0
+		}
+		lastTransactionTime := transactionTimeSeconds
+		lastHeartbeatTime := timeHeartbeat
+		if stream.State == binlogdatapb.VReplicationWorkflowState_Copying.String() {
+			maxVReplicationTransactionLagByWorkflow[workflow.Name] = math.MaxInt64
+		} else {
+			if lastTransactionTime == 0 /* no new events after copy */ ||
+				lastHeartbeatTime > lastTransactionTime /* no recent transactions, so all caught up */ {
+
+				lastTransactionTime = lastHeartbeatTime
+			}
+			now := time.Now().Unix() /* seconds since epoch */
+			transactionReplicationLag := float64(now - lastTransactionTime)
+			if transactionReplicationLag > maxVReplicationTransactionLagByWorkflow[workflow.Name] {
+				maxVReplicationTransactionLagByWorkflow[workflow.Name] = transactionReplicationLag
+			}
 		}
 
 		return nil
@@ -627,6 +713,7 @@ SELECT
 	count
 FROM
 	_vt.vreplication_log
+WHERE vrepl_id IN %a
 ORDER BY
 	vrepl_id ASC,
 	id ASC
@@ -634,13 +721,29 @@ ORDER BY
 	)
 
 	fetchStreamLogs := func(ctx context.Context, workflow *vtctldatapb.Workflow) {
-		span, ctx := trace.NewSpan(ctx, "workflow.Server.scanWorkflow")
+		span, ctx := trace.NewSpan(ctx, "workflow.Server.fetchStreamLogs")
 		defer span.Finish()
 
 		span.Annotate("keyspace", req.Keyspace)
 		span.Annotate("workflow", workflow.Name)
 
-		results, err := vx.WithWorkflow(workflow.Name).QueryContext(ctx, vrepLogQuery)
+		vreplIDs := make([]int64, 0, len(workflow.ShardStreams))
+		for _, shardStream := range maps.Values(workflow.ShardStreams) {
+			for _, stream := range shardStream.Streams {
+				vreplIDs = append(vreplIDs, stream.Id)
+			}
+		}
+		idsBV, err := sqltypes.BuildBindVariable(vreplIDs)
+		if err != nil {
+			return
+		}
+
+		query, err := sqlparser.ParseAndBind(vrepLogQuery, idsBV)
+		if err != nil {
+			return
+		}
+
+		results, err := vx.WithWorkflow(workflow.Name).QueryContext(ctx, query)
 		if err != nil {
 			// Note that we do not return here. If there are any query results
 			// in the map (i.e. some tablets returned successfully), we will
@@ -778,6 +881,11 @@ ORDER BY
 			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no tracked vreplication lag", name)
 		}
 
+		maxVReplicationTransactionLag, ok := maxVReplicationTransactionLagByWorkflow[name]
+		if !ok {
+			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no tracked vreplication transaction lag", name)
+		}
+
 		workflow.Source = &vtctldatapb.Workflow_ReplicationLocation{
 			Keyspace: sourceKeyspace,
 			Shards:   sets.List(sourceShards),
@@ -789,6 +897,7 @@ ORDER BY
 		}
 
 		workflow.MaxVReplicationLag = int64(maxVReplicationLag)
+		workflow.MaxVReplicationTransactionLag = int64(maxVReplicationTransactionLag)
 
 		// Sort shard streams by stream_id ASC, to support an optimization
 		// in fetchStreamLogs below.
@@ -800,12 +909,14 @@ ORDER BY
 
 		workflows = append(workflows, workflow)
 
-		// Fetch logs for all streams associated with this workflow in the background.
-		fetchLogsWG.Add(1)
-		go func(ctx context.Context, workflow *vtctldatapb.Workflow) {
-			defer fetchLogsWG.Done()
-			fetchStreamLogs(ctx, workflow)
-		}(ctx, workflow)
+		if req.IncludeLogs {
+			// Fetch logs for all streams associated with this workflow in the background.
+			fetchLogsWG.Add(1)
+			go func(ctx context.Context, workflow *vtctldatapb.Workflow) {
+				defer fetchLogsWG.Done()
+				fetchStreamLogs(ctx, workflow)
+			}(ctx, workflow)
+		}
 	}
 
 	// Wait for all the log fetchers to finish.
@@ -846,6 +957,7 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 	// target of the workflow initiated by the user for checking routing rules.
 	// Similarly we use a target shard of the reverse workflow as the original
 	// source to check if writes have been switched.
+
 	if strings.HasSuffix(workflowName, "_reverse") {
 		reverse = true
 		// Flip the source and target keyspaces.
@@ -930,6 +1042,9 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 		if !shard.IsPrimaryServing {
 			state.WritesSwitched = true
 		}
+	}
+	if ts.workflowType == binlogdatapb.VReplicationWorkflowType_Migrate {
+		state.WorkflowType = TypeMigrate
 	}
 
 	return ts, state, nil
@@ -1144,6 +1259,12 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 // It passes the embedded TabletRequest object to the given keyspace's
 // target primary tablets that will be executing the workflow.
 func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (res *vtctldatapb.WorkflowStatusResponse, err error) {
+	return s.moveTablesCreate(ctx, req, binlogdatapb.VReplicationWorkflowType_MoveTables)
+}
+
+func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest,
+	workflowType binlogdatapb.VReplicationWorkflowType) (res *vtctldatapb.WorkflowStatusResponse, err error) {
+
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.MoveTablesCreate")
 	defer span.Finish()
 
@@ -1258,11 +1379,12 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		})
 	}
 	mz := &materializer{
-		ctx:      ctx,
-		ts:       s.ts,
-		sourceTs: sourceTopo,
-		tmc:      s.tmc,
-		ms:       ms,
+		ctx:          ctx,
+		ts:           s.ts,
+		sourceTs:     sourceTopo,
+		tmc:          s.tmc,
+		ms:           ms,
+		workflowType: workflowType,
 	}
 	err = mz.createMoveTablesStreams(req)
 	if err != nil {
@@ -1762,7 +1884,9 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 	if err != nil {
 		return nil, err
 	}
-	resp := &vtctldatapb.WorkflowStatusResponse{}
+	resp := &vtctldatapb.WorkflowStatusResponse{
+		TrafficState: state.String(),
+	}
 	if copyProgress != nil {
 		resp.TableCopyState = make(map[string]*vtctldatapb.WorkflowStatusResponse_TableCopyState, len(*copyProgress))
 		// We sort the tables for intuitive and consistent output.
@@ -1791,7 +1915,7 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 		}
 	}
 
-	workflow, err := s.GetWorkflow(ctx, req.Keyspace, req.Workflow)
+	workflow, err := s.GetWorkflow(ctx, req.Keyspace, req.Workflow, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1991,6 +2115,7 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	span.Annotate("cells", req.TabletRequest.Cells)
 	span.Annotate("tablet_types", req.TabletRequest.TabletTypes)
 	span.Annotate("on_ddl", req.TabletRequest.OnDdl)
+	span.Annotate("state", req.TabletRequest.State)
 
 	vx := vexec.NewVExec(req.Keyspace, req.TabletRequest.Workflow, s.ts, s.tmc)
 	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
@@ -3105,7 +3230,7 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 		log.Infof("writes already switched no need to check lag")
 		return "", nil
 	}
-	wf, err := s.GetWorkflow(ctx, state.TargetKeyspace, state.Workflow)
+	wf, err := s.GetWorkflow(ctx, state.TargetKeyspace, state.Workflow, false)
 	if err != nil {
 		return "", err
 	}
@@ -3620,4 +3745,27 @@ func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (stri
 		}
 	}
 	return "", fmt.Errorf("column %s not found in schema %v", sourceVindexCol, lines)
+}
+
+func (s *Server) MigrateCreate(ctx context.Context, req *vtctldatapb.MigrateCreateRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
+	moveTablesCreateRequest := &vtctldatapb.MoveTablesCreateRequest{
+		Workflow:                  req.Workflow,
+		SourceKeyspace:            req.SourceKeyspace,
+		TargetKeyspace:            req.TargetKeyspace,
+		ExternalClusterName:       req.MountName,
+		Cells:                     req.Cells,
+		TabletTypes:               req.TabletTypes,
+		TabletSelectionPreference: req.TabletSelectionPreference,
+		AllTables:                 req.AllTables,
+		IncludeTables:             req.IncludeTables,
+		ExcludeTables:             req.ExcludeTables,
+		SourceTimeZone:            req.SourceTimeZone,
+		OnDdl:                     req.OnDdl,
+		StopAfterCopy:             req.StopAfterCopy,
+		DeferSecondaryKeys:        req.DeferSecondaryKeys,
+		DropForeignKeys:           req.DropForeignKeys,
+		AutoStart:                 req.AutoStart,
+		NoRoutingRules:            req.NoRoutingRules,
+	}
+	return s.moveTablesCreate(ctx, moveTablesCreateRequest, binlogdatapb.VReplicationWorkflowType_Migrate)
 }

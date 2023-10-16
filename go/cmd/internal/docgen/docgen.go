@@ -193,8 +193,8 @@ func anonymizeHomedir(file string) (err error) {
 
 	// We're replacing the stuff inside the square brackets in the example sed
 	// below:
-	// 	's:Paths to search for config files in. (default \[.*\])$:Paths to search for config files in. (default \[$WORKDIR\]):'
-	sed := exec.Command("sed", "-i", "", "-e", fmt.Sprintf("s:%s:$WORKDIR:i", wd), file)
+	// 	's:Paths to search for config files in. (default \[.*\])$:Paths to search for config files in. (default \[<WORKDIR>\]):'
+	sed := exec.Command("sed", "-i", "", "-e", fmt.Sprintf("s:%s:<WORKDIR>:i", wd), file)
 	if out, err := sed.CombinedOutput(); err != nil {
 		return fmt.Errorf("%w: %s", err, out)
 	}

@@ -28,10 +28,10 @@ import (
 // mergeJoinInputs checks whether two operators can be merged into a single one.
 // If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
-func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, m merger) (*Route, error) {
+func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, m merger) *Route {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
 	if lhsRoute == nil {
-		return nil, nil
+		return nil
 	}
 
 	switch {
@@ -62,7 +62,7 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, jo
 		return tryMergeJoinShardedRouting(ctx, lhsRoute, rhsRoute, m, joinPredicates)
 
 	default:
-		return nil, nil
+		return nil
 	}
 }
 
@@ -87,8 +87,8 @@ func prepareInputRoutes(lhs ops.Operator, rhs ops.Operator) (*Route, *Route, Rou
 
 type (
 	merger interface {
-		mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error)
-		merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) (*Route, error)
+		mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route) *Route
+		merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) *Route
 	}
 
 	joinMerger struct {
@@ -184,7 +184,7 @@ func newJoinMerge(predicates []sqlparser.Expr, innerJoin bool) merger {
 	}
 }
 
-func (jm *joinMerger) mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error) {
+func (jm *joinMerger) mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route) *Route {
 	return jm.merge(ctx, op1, op2, mergeShardedRouting(r1, r2))
 }
 
@@ -207,10 +207,10 @@ func (jm *joinMerger) getApplyJoin(ctx *plancontext.PlanningContext, op1, op2 *R
 	return NewApplyJoin(op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), !jm.innerJoin)
 }
 
-func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) (*Route, error) {
+func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) *Route {
 	return &Route{
 		Source:     jm.getApplyJoin(ctx, op1, op2),
 		MergedWith: []*Route{op2},
 		Routing:    r,
-	}, nil
+	}
 }

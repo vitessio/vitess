@@ -25,7 +25,7 @@ import (
 var (
 	// reshard is the base command for all actions related to reshard.
 	reshard = &cobra.Command{
-		Use:                   "Reshard --workflow <workflow> --keyspace <keyspace> [command] [command-flags]",
+		Use:                   "Reshard --workflow <workflow> --target-keyspace <keyspace> [command] [command-flags]",
 		Short:                 "Perform commands related to resharding a keyspace.",
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"reshard"},

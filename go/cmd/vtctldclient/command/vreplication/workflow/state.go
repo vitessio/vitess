@@ -34,50 +34,50 @@ import (
 )
 
 var (
-	// WorkflowStart makes a WorfklowUpdate gRPC call to a vtctld.
-	workflowStart = &cobra.Command{
+	// start makes a WorfklowUpdate gRPC call to a vtctld.
+	start = &cobra.Command{
 		Use:                   "start",
 		Short:                 "Start a VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer start --workflow commerce2customer`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Start"},
 		Args:                  cobra.NoArgs,
-		RunE:                  commandWorkflowUpdateState,
+		RunE:                  commandUpdateState,
 	}
 
-	// WorkflowStop makes a WorfklowUpdate gRPC call to a vtctld.
-	workflowStop = &cobra.Command{
+	// stop makes a WorfklowUpdate gRPC call to a vtctld.
+	stop = &cobra.Command{
 		Use:                   "stop",
 		Short:                 "Stop a VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 workflow --keyspace customer stop --workflow commerce2customer`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Stop"},
 		Args:                  cobra.NoArgs,
-		RunE:                  commandWorkflowUpdateState,
+		RunE:                  commandUpdateState,
 	}
 )
 
-func commandWorkflowUpdateState(cmd *cobra.Command, args []string) error {
+func commandUpdateState(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	var state binlogdatapb.VReplicationWorkflowState
 	switch strings.ToLower(cmd.Name()) {
 	case "start":
-		if err := common.CanRestartWorkflow(workflowUpdateOptions.Workflow, workflowOptions.Keyspace); err != nil {
+		if err := common.CanRestartWorkflow(baseOptions.Keyspace, baseOptions.Workflow); err != nil {
 			return err
 		}
 		state = binlogdatapb.VReplicationWorkflowState_Running
 	case "stop":
 		state = binlogdatapb.VReplicationWorkflowState_Stopped
 	default:
-		return fmt.Errorf("invalid workstate: %s", args[0])
+		return fmt.Errorf("invalid workflow state: %s", args[0])
 	}
 
 	// The only thing we're updating is the state.
 	req := &vtctldatapb.WorkflowUpdateRequest{
-		Keyspace: workflowOptions.Keyspace,
+		Keyspace: baseOptions.Keyspace,
 		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
-			Workflow:    workflowUpdateOptions.Workflow,
+			Workflow:    baseOptions.Workflow,
 			Cells:       textutil.SimulatedNullStringSlice,
 			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
 			OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),

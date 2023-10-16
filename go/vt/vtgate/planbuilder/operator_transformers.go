@@ -303,10 +303,7 @@ func getEvalEngingeExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr
 // useSimpleProjection uses nothing at all if the output is already correct,
 // or SimpleProjection when we have to reorder or truncate the columns
 func useSimpleProjection(ctx *plancontext.PlanningContext, op *operators.Projection, cols []int, src logicalPlan) (logicalPlan, error) {
-	columns, err := op.Source.GetColumns(ctx)
-	if err != nil {
-		return nil, err
-	}
+	columns := op.Source.GetColumns(ctx)
 	if len(columns) == len(cols) && elementsMatchIndices(cols) {
 		// the columns are already in the right order. we don't need anything at all here
 		return src, nil

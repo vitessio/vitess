@@ -4874,5 +4874,20 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Unsupported INSERT statement with a target destination",
+    "query": "insert into `user[-]`.user_metadata (a, b) values (1,2)",
+    "plan": "VT09017: INSERT with a target destination is not allowed"
+  },
+  {
+    "comment": "Unsupported delete statement with a replica target destination",
+    "query": "DELETE FROM `user[-]@replica`.user_metadata limit 1",
+    "plan": "VT09002: delete statement with a replica target"
+  },
+  {
+    "comment": "Unsupported update statement with a replica target destination",
+    "query": "update `user[-]@replica`.user_metadata set id=2",
+    "plan": "VT09002: update statement with a replica target"
   }
 ]

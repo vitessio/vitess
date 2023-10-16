@@ -58,7 +58,9 @@ type (
 )
 
 // PlanQuery creates a query plan for a given SQL statement
-func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.Operator, error) {
+func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (result ops.Operator, err error) {
+	defer PanicHandler(&err)
+
 	op, err := translateQueryToOp(ctx, stmt)
 	if err != nil {
 		return nil, err
@@ -90,6 +92,17 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.
 	return op, err
 }
 
+func PanicHandler(err *error) {
+	if r := recover(); r != nil {
+		badness, ok := r.(error)
+		if !ok {
+			panic(r)
+		}
+
+		*err = badness
+	}
+}
+
 // Inputs implements the Operator interface
 func (noInputs) Inputs() []ops.Operator {
 	return nil
@@ -103,25 +116,25 @@ func (noInputs) SetInputs(ops []ops.Operator) {
 }
 
 // AddColumn implements the Operator interface
-func (noColumns) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) (int, error) {
-	return 0, vterrors.VT13001("noColumns operators have no column")
+func (noColumns) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) int {
+	panic(vterrors.VT13001("noColumns operators have no column"))
 }
 
-func (noColumns) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
-	return nil, vterrors.VT13001("noColumns operators have no column")
+func (noColumns) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	panic(vterrors.VT13001("noColumns operators have no column"))
 }
 
-func (noColumns) FindCol(*plancontext.PlanningContext, sqlparser.Expr, bool) (int, error) {
-	return 0, vterrors.VT13001("noColumns operators have no column")
+func (noColumns) FindCol(*plancontext.PlanningContext, sqlparser.Expr, bool) int {
+	panic(vterrors.VT13001("noColumns operators have no column"))
 }
 
-func (noColumns) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
-	return nil, vterrors.VT13001("noColumns operators have no column")
+func (noColumns) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectExprs {
+	panic(vterrors.VT13001("noColumns operators have no column"))
 }
 
 // AddPredicate implements the Operator interface
-func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (ops.Operator, error) {
-	return nil, vterrors.VT13001("the noColumns operator cannot accept predicates")
+func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) ops.Operator {
+	panic(vterrors.VT13001("the noColumns operator cannot accept predicates"))
 }
 
 // tryTruncateColumnsAt will see if we can truncate the columns by just asking the operator to do it for us
@@ -151,13 +164,10 @@ func tryTruncateColumnsAt(op ops.Operator, truncateAt int) bool {
 	}
 }
 
-func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op ops.Operator) (sqlparser.SelectExprs, error) {
-	columns, err := op.GetColumns(ctx)
-	if err != nil {
-		return nil, err
-	}
+func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op ops.Operator) sqlparser.SelectExprs {
+	columns := op.GetColumns(ctx)
 	selExprs := slice.Map(columns, func(from *sqlparser.AliasedExpr) sqlparser.SelectExpr {
 		return from
 	})
-	return selExprs, nil
+	return selExprs
 }

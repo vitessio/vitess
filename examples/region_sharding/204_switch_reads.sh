@@ -18,4 +18,4 @@
 
 source ../common/env.sh
 
-vtctlclient Reshard -- --tablet_types=rdonly,replica SwitchTraffic main.main2regions
+vtctldclient reshard --workflow main2regions --target-keyspace main SwitchTraffic --tablet-types=rdonly,replica

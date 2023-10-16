@@ -79,10 +79,7 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 }
 
 func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel *sqlparser.Select) (ops.Operator, *rewrite.ApplyResult, error) {
-	op, err := createProjectionFromSelect(ctx, horizon)
-	if err != nil {
-		return nil, nil, err
-	}
+	op := createProjectionFromSelect(ctx, horizon)
 
 	qp, err := horizon.getQP(ctx)
 	if err != nil {
@@ -132,10 +129,10 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	return op, rewrite.NewTree(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", ")), op), nil
 }
 
-func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out ops.Operator, err error) {
+func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out ops.Operator) {
 	qp, err := horizon.getQP(ctx)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	var dt *DerivedTable
@@ -148,19 +145,16 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 	}
 
 	if !qp.NeedsAggregation() {
-		projX, err := createProjectionWithoutAggr(ctx, qp, horizon.src())
-		if err != nil {
-			return nil, err
-		}
+		projX := createProjectionWithoutAggr(ctx, qp, horizon.src())
 		projX.DT = dt
 		out = projX
 
-		return out, nil
+		return out
 	}
 
 	aggregations, complexAggr, err := qp.AggregationExpressions(ctx, true)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	a := &Aggregator{
@@ -178,12 +172,12 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 	return createProjectionForSimpleAggregation(ctx, a, qp)
 }
 
-func createProjectionForSimpleAggregation(ctx *plancontext.PlanningContext, a *Aggregator, qp *QueryProjection) (ops.Operator, error) {
+func createProjectionForSimpleAggregation(ctx *plancontext.PlanningContext, a *Aggregator, qp *QueryProjection) ops.Operator {
 outer:
 	for colIdx, expr := range qp.SelectExprs {
 		ae, err := expr.GetAliasedExpr()
 		if err != nil {
-			return nil, err
+			panic(err)
 		}
 		addedToCol := false
 		for idx, groupBy := range a.Grouping {
@@ -207,23 +201,23 @@ outer:
 				continue outer
 			}
 		}
-		return nil, vterrors.VT13001(fmt.Sprintf("Could not find the %s in aggregation in the original query", sqlparser.String(ae)))
+		panic(vterrors.VT13001(fmt.Sprintf("Could not find the %s in aggregation in the original query", sqlparser.String(ae))))
 	}
-	return a, nil
+	return a
 }
 
-func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) (ops.Operator, error) {
+func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) ops.Operator {
 	p := newAliasedProjection(a)
 	p.DT = a.DT
 	for _, expr := range qp.SelectExprs {
 		ae, err := expr.GetAliasedExpr()
 		if err != nil {
-			return nil, err
+			panic(err)
 		}
 
 		_, err = p.addProjExpr(newProjExpr(ae))
 		if err != nil {
-			return nil, err
+			panic(err)
 		}
 	}
 	for i, by := range a.Grouping {
@@ -234,10 +228,10 @@ func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) (
 		a.Aggregations[i].ColOffset = len(a.Columns)
 		a.Columns = append(a.Columns, aggregation.Original)
 	}
-	return p, nil
+	return p
 }
 
-func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator) (*Projection, error) {
+func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator) *Projection {
 	// first we need to check if we have all columns or there are still unexpanded stars
 	aes, err := slice.MapWithError(qp.SelectExprs, func(from SelectExpr) (*sqlparser.AliasedExpr, error) {
 		ae, ok := from.Col.(*sqlparser.AliasedExpr)
@@ -260,26 +254,26 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 		expr := ae.Expr
 		newExpr, subqs, err := sqc.pullOutValueSubqueries(ctx, expr, outerID, false)
 		if err != nil {
-			return nil, err
+			panic(err)
 		}
 		if newExpr == nil {
 			// there was no subquery in this expression
 			_, err := proj.addUnexploredExpr(org, expr)
 			if err != nil {
-				return nil, err
+				panic(err)
 			}
 		} else {
 			err := proj.addSubqueryExpr(org, newExpr, subqs...)
 			if err != nil {
-				return nil, err
+				panic(err)
 			}
 		}
 	}
 	proj.Source = sqc.getRootOperator(src)
-	return proj, nil
+	return proj
 }
 
-func newStarProjection(src ops.Operator, qp *QueryProjection) (*Projection, error) {
+func newStarProjection(src ops.Operator, qp *QueryProjection) *Projection {
 	cols := sqlparser.SelectExprs{}
 
 	for _, expr := range qp.SelectExprs {
@@ -291,7 +285,7 @@ func newStarProjection(src ops.Operator, qp *QueryProjection) (*Projection, erro
 			return false, vterrors.VT09015()
 		}, expr.Col)
 		if err != nil {
-			return nil, err
+			panic(err)
 		}
 		cols = append(cols, expr.Col)
 	}
@@ -299,5 +293,5 @@ func newStarProjection(src ops.Operator, qp *QueryProjection) (*Projection, erro
 	return &Projection{
 		Source:  src,
 		Columns: StarProjections(cols),
-	}, nil
+	}
 }

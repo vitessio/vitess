@@ -563,6 +563,15 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
+		"vtgate_queries_no_scatter": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/no_scatter"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_queries_orderby": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/orderby", "-timeout", "20m"],
@@ -1013,6 +1022,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vreplication_vtctldclient_materialize": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMaterializeVtctldClient"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_multicell",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vreplication_cellalias": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "CellAlias"],
@@ -1211,9 +1229,18 @@
                         "RetryMax": 1,
                         "Tags": []
                 },
-		"vreplication_migrate": {
+		"vreplication_vtctl_migrate": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMigrate", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctlMigrate", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_vtctld_migrate": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctldMigrate", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_migrate_vdiff2_convert_tz",

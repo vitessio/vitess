@@ -62,7 +62,7 @@ const smMaterializeSpec = `{"workflow": "wf1", "source_keyspace": "ks1", "target
 const initDataQuery = `insert into ks1.tx(id, typ, val) values (1, 1, 'abc'), (2, 1, 'def'), (3, 2, 'def'), (4, 2, 'abc'), (5, 3, 'def'), (6, 3, 'abc')`
 
 // testShardedMaterialize tests a materialize workflow for a sharded cluster (single shard) using comparison filters
-func testShardedMaterialize(t *testing.T) {
+func testShardedMaterialize(t *testing.T, useVtctldClient bool) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
 	allCellNames = "zone1"
@@ -92,7 +92,7 @@ func testShardedMaterialize(t *testing.T) {
 	verifyClusterHealth(t, vc)
 	_, err = vtgateConn.ExecuteFetch(initDataQuery, 0, false)
 	require.NoError(t, err)
-	materialize(t, smMaterializeSpec)
+	materialize(t, smMaterializeSpec, useVtctldClient)
 	tab := vc.getPrimaryTablet(t, ks2, "0")
 	catchup(t, tab, "wf1", "Materialize")
 
@@ -181,7 +181,7 @@ DETERMINISTIC
 RETURN id * length(val);
 `
 
-func testMaterialize(t *testing.T) {
+func testMaterialize(t *testing.T, useVtctldClient bool) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
 	allCellNames = "zone1"
@@ -217,7 +217,7 @@ func testMaterialize(t *testing.T) {
 	_, err = ks2Primary.QueryTablet(customFunc, targetKs, true)
 	require.NoError(t, err)
 
-	materialize(t, smMaterializeSpec2)
+	materialize(t, smMaterializeSpec2, useVtctldClient)
 	catchup(t, ks2Primary, "wf1", "Materialize")
 
 	// validate data after the copy phase
@@ -234,12 +234,23 @@ func testMaterialize(t *testing.T) {
 	waitForQueryResult(t, vtgateConn, targetKs, "select id, val, ts, day, month, x from mat2", want)
 }
 
-// TestMaterialize runs all the individual materialize tests defined above
+// TestMaterialize runs all the individual materialize tests defined above.
 func TestMaterialize(t *testing.T) {
 	t.Run("Materialize", func(t *testing.T) {
-		testMaterialize(t)
+		testMaterialize(t, false)
 	})
 	t.Run("ShardedMaterialize", func(t *testing.T) {
-		testShardedMaterialize(t)
+		testShardedMaterialize(t, false)
+	})
+}
+
+// TestMaterializeVtctldClient runs all the individual materialize tests
+// defined above using vtctldclient instead of vtctlclient.
+func TestMaterializeVtctldClient(t *testing.T) {
+	t.Run("Materialize", func(t *testing.T) {
+		testMaterialize(t, true)
+	})
+	t.Run("ShardedMaterialize", func(t *testing.T) {
+		testShardedMaterialize(t, true)
 	})
 }

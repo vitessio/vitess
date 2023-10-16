@@ -91,10 +91,7 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 		if subq != nil {
 			continue
 		}
-		op, err = op.AddPredicate(ctx, expr)
-		if err != nil {
-			return nil, err
-		}
+		op = op.AddPredicate(ctx, expr)
 		addColumnEquality(ctx, expr)
 	}
 	return sqc.getRootOperator(op), nil
