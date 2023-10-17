@@ -26,9 +26,9 @@ import (
 
 var (
 	retryDelay          = 5 * time.Second
-	maxTimeToRetryError time.Duration // default behavior is to keep retrying, for backward compatibility
+	maxTimeToRetryError time.Duration // Default behavior is to keep retrying, for backward compatibility
 
-	tabletTypesStr = "in_order:REPLICA,PRIMARY"
+	tabletTypesStr = "in_order:REPLICA,PRIMARY" // Default value
 
 	relayLogMaxSize  = 250000
 	relayLogMaxItems = 5000
