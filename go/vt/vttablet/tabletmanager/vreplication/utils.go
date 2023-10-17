@@ -26,6 +26,9 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -122,6 +125,9 @@ func insertLogWithParams(dbClient *vdbClient, action string, vreplID int32, para
 func isUnrecoverableError(err error) bool {
 	if err == nil {
 		return false
+	}
+	if vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION {
+		return true
 	}
 	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 	if !isSQLErr {
