@@ -455,7 +455,7 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			vsm := newTestVStreamManager(ctx, hc, st, cells[0])
 
 			// Always have the local cell tablet error so it's ignored on retry and we pick the other one
-			// if the error requires ignoring the tablet on retry
+			// if the error requires ignoring the tablet on retry.
 			sbc0.AddVStreamEvents(nil, vterrors.Errorf(tcase.code, tcase.msg))
 
 			if tcase.ignoreTablet {

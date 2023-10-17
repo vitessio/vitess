@@ -53,6 +53,10 @@ type vstreamManager struct {
 // maxSkewTimeoutSeconds is the maximum allowed skew between two streams when the MinimizeSkew flag is set
 const maxSkewTimeoutSeconds = 10 * 60
 
+// tabletPickerContextTimeout is the timeout for the child context used to select candidate tablets
+// for a vstream
+const tabletPickerContextTimeout = 90 * time.Second
+
 // vstream contains the metadata for one VStream request.
 type vstream struct {
 	// mu protects parts of vgtid, the semantics of a send, and journaler.
@@ -500,8 +504,8 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		}
 
 		// Create a child context with a stricter timeout when picking a tablet.
-		// This will prevent hanging in the case no tablets are found
-		tpCtx, tpCancel := context.WithTimeout(context.Background(), 90*time.Second)
+		// This will prevent hanging in the case no tablets are found.
+		tpCtx, tpCancel := context.WithTimeout(ctx, tabletPickerContextTimeout)
 		defer tpCancel()
 
 		tablet, err := tp.PickForStreaming(tpCtx)
