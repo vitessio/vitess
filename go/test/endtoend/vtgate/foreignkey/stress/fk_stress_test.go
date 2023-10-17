@@ -323,7 +323,7 @@ func TestMain(m *testing.M) {
 			Name: keyspaceName,
 			VSchema: `{
 				"sharded": false,
-				"foreignKeyMode": "FK_MANAGED"
+				"foreignKeyMode": "managed"
 			}`,
 		}
 

@@ -155,7 +155,7 @@ func checkFKError(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStateme
 	if err != nil {
 		return err
 	}
-	if fkMode == vschemapb.Keyspace_FK_DISALLOW {
+	if fkMode == vschemapb.Keyspace_disallow {
 		fk := &fkContraint{}
 		_ = sqlparser.Walk(fk.FkWalk, ddlStatement)
 		if fk.found {
