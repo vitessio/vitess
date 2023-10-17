@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -46,8 +44,4 @@ func (ms *memorySort) Primitive() engine.Primitive {
 // SetLimit implements the logicalPlan interface
 func (ms *memorySort) SetLimit(limit *sqlparser.Limit) error {
 	return vterrors.VT13001("memorySort.Limit: unreachable")
-}
-
-func (ms *memorySort) Wireup(ctx *plancontext.PlanningContext) error {
-	return ms.input.Wireup(ctx)
 }

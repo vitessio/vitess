@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -52,14 +51,6 @@ func (ps *uncorrelatedSubquery) Primitive() engine.Primitive {
 	ps.eSubquery.Subquery = ps.subquery.Primitive()
 	ps.eSubquery.Outer = ps.outer.Primitive()
 	return ps.eSubquery
-}
-
-// Wireup implements the logicalPlan interface
-func (ps *uncorrelatedSubquery) Wireup(ctx *plancontext.PlanningContext) error {
-	if err := ps.outer.Wireup(ctx); err != nil {
-		return err
-	}
-	return ps.subquery.Wireup(ctx)
 }
 
 // ContainsTables implements the logicalPlan interface

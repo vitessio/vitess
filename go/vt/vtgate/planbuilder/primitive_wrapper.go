@@ -18,17 +18,12 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // primitiveWrapper is used when only need a logical plan that supports plan.Primitive() and nothing else
 type primitiveWrapper struct {
 	prim engine.Primitive
-}
-
-func (p *primitiveWrapper) Wireup(*plancontext.PlanningContext) error {
-	return nil
 }
 
 func (p *primitiveWrapper) Primitive() engine.Primitive {

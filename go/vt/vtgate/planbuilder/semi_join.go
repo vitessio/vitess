@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -58,14 +57,6 @@ func (ps *semiJoin) Primitive() engine.Primitive {
 		Vars:  ps.vars,
 		Cols:  ps.cols,
 	}
-}
-
-// Wireup implements the logicalPlan interface
-func (ps *semiJoin) Wireup(ctx *plancontext.PlanningContext) error {
-	if err := ps.lhs.Wireup(ctx); err != nil {
-		return err
-	}
-	return ps.rhs.Wireup(ctx)
 }
 
 // ContainsTables implements the logicalPlan interface

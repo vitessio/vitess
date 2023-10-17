@@ -20,8 +20,6 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -56,11 +54,6 @@ var colnames = []string{
 // Primitive implements the logicalPlan interface
 func (vf *vindexFunc) Primitive() engine.Primitive {
 	return vf.eVindexFunc
-}
-
-// Wireup implements the logicalPlan interface
-func (vf *vindexFunc) Wireup(*plancontext.PlanningContext) error {
-	return nil
 }
 
 // SupplyProjection pushes the given aliased expression into the fields and cols slices of the

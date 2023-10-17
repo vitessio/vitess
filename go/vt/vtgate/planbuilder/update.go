@@ -78,10 +78,6 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	if err := plan.Wireup(ctx); err != nil {
-		return nil, err
-	}
-
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
 }
 

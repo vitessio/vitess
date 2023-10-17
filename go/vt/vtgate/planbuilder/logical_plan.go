@@ -18,17 +18,12 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // logicalPlan defines the interface that a primitive must
 // satisfy.
 type logicalPlan interface {
-
-	// Wireup does the wire up of primitive with the source.
-	Wireup(*plancontext.PlanningContext) error
-
 	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.
 	Primitive() engine.Primitive
@@ -56,10 +51,6 @@ func newBuilderCommon(input logicalPlan) logicalPlanCommon {
 
 func (bc *logicalPlanCommon) Order() int {
 	return bc.order
-}
-
-func (bc *logicalPlanCommon) Wireup(ctx *plancontext.PlanningContext) error {
-	return bc.input.Wireup(ctx)
 }
 
 // Inputs implements the logicalPlan interface

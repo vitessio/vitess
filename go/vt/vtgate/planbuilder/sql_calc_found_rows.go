@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -26,15 +25,6 @@ var _ logicalPlan = (*sqlCalcFoundRows)(nil)
 
 type sqlCalcFoundRows struct {
 	LimitQuery, CountQuery logicalPlan
-}
-
-// Wireup implements the logicalPlan interface
-func (s *sqlCalcFoundRows) Wireup(ctx *plancontext.PlanningContext) error {
-	err := s.LimitQuery.Wireup(ctx)
-	if err != nil {
-		return err
-	}
-	return s.CountQuery.Wireup(ctx)
 }
 
 // ContainsTables implements the logicalPlan interface

@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -31,17 +30,6 @@ type concatenate struct {
 }
 
 var _ logicalPlan = (*concatenate)(nil)
-
-// Wireup implements the logicalPlan interface
-func (c *concatenate) Wireup(ctx *plancontext.PlanningContext) error {
-	for _, source := range c.sources {
-		err := source.Wireup(ctx)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
 // Primitive implements the logicalPlan interface
 func (c *concatenate) Primitive() engine.Primitive {

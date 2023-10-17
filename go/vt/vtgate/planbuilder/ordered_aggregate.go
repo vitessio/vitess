@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 var _ logicalPlan = (*orderedAggregate)(nil)
@@ -80,10 +79,6 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 		TruncateColumnCount: oa.truncateColumnCount,
 		Input:               input,
 	}
-}
-
-func (oa *orderedAggregate) Wireup(ctx *plancontext.PlanningContext) error {
-	return oa.input.Wireup(ctx)
 }
 
 // SetTruncateColumnCount sets the truncate column count.

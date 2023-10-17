@@ -233,9 +233,6 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	if err = plan.Wireup(ctx); err != nil {
-		return nil, nil, err
-	}
 	return plan, operators.TablesUsed(op), nil
 }
 

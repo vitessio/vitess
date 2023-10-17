@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -47,14 +46,6 @@ func (fkc *fkCascade) Primitive() engine.Primitive {
 		Selection: fkc.selection.Primitive(),
 		Children:  fkc.children,
 	}
-}
-
-// Wireup implements the logicalPlan interface
-func (fkc *fkCascade) Wireup(ctx *plancontext.PlanningContext) error {
-	if err := fkc.parent.Wireup(ctx); err != nil {
-		return err
-	}
-	return fkc.selection.Wireup(ctx)
 }
 
 // ContainsTables implements the logicalPlan interface

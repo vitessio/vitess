@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 var _ logicalPlan = (*mergeSort)(nil)
@@ -45,8 +44,4 @@ func (ms *mergeSort) SetTruncateColumnCount(count int) {
 // Primitive implements the logicalPlan interface
 func (ms *mergeSort) Primitive() engine.Primitive {
 	return ms.input.Primitive()
-}
-
-func (ms *mergeSort) Wireup(ctx *plancontext.PlanningContext) error {
-	return ms.input.Wireup(ctx)
 }

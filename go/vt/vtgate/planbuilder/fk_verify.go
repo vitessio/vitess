@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -56,17 +55,6 @@ func (fkc *fkVerify) Primitive() engine.Primitive {
 		Exec:   fkc.input.Primitive(),
 		Verify: verify,
 	}
-}
-
-// Wireup implements the logicalPlan interface
-func (fkc *fkVerify) Wireup(ctx *plancontext.PlanningContext) error {
-	for _, v := range fkc.verify {
-		err := v.verify.Wireup(ctx)
-		if err != nil {
-			return err
-		}
-	}
-	return fkc.input.Wireup(ctx)
 }
 
 // ContainsTables implements the logicalPlan interface

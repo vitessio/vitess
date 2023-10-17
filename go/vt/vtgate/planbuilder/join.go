@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -45,15 +44,6 @@ type join struct {
 	// LHSColumns are the columns from the LHS used for the join.
 	// These are the same columns pushed on the LHS that are now used in the Vars field
 	LHSColumns []*sqlparser.ColName
-}
-
-// Wireup implements the logicalPlan interface
-func (j *join) Wireup(ctx *plancontext.PlanningContext) error {
-	err := j.Left.Wireup(ctx)
-	if err != nil {
-		return err
-	}
-	return j.Right.Wireup(ctx)
 }
 
 // Primitive implements the logicalPlan interface

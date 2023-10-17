@@ -136,10 +136,7 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 		if err != nil {
 			return nil, err
 		}
-		err = childLP.Wireup(ctx)
-		if err != nil {
-			return nil, err
-		}
+
 		childEngine := childLP.Primitive()
 		children = append(children, &engine.FkChild{
 			BVName: child.BVName,
@@ -519,12 +516,17 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 	if err != nil {
 		return nil, err
 	}
-	return &route{
+	r := &route{
 		eroute:    eroute,
 		Select:    stmt,
 		tables:    operators.TableID(op),
 		condition: condition,
-	}, nil
+	}
+
+	if err = r.Wireup(ctx); err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
 func buildInsertLogicalPlan(
