@@ -1,6 +1,6 @@
 {
   "sharded": true,
-  "foreignKeyMode": "FK_MANAGED",
+  "foreignKeyMode": "managed",
   "vindexes": {
     "xxhash": {
       "type": "xxhash"

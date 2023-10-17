@@ -49,10 +49,10 @@ message Keyspace {
   ForeignKeyMode foreign_key_mode = 5;
 
   enum ForeignKeyMode {
-    FK_DEFAULT = 0;
-    FK_DISALLOW = 1;
-    FK_UNMANAGED = 2;
-    FK_MANAGED = 3;
+    unspecified = 0;
+    disallow = 1;
+    unmanaged = 2;
+    managed = 3;
   }
 }
 

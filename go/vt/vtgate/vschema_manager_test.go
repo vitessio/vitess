@@ -189,7 +189,7 @@ func TestVSchemaUpdate(t *testing.T) {
 			Keyspaces: map[string]*vschemapb.Keyspace{
 				"ks": {
 					Sharded:        false,
-					ForeignKeyMode: vschemapb.Keyspace_FK_MANAGED,
+					ForeignKeyMode: vschemapb.Keyspace_managed,
 					Tables: map[string]*vschemapb.Table{
 						"t1": {
 							Columns: []*vschemapb.Column{
@@ -237,7 +237,7 @@ func TestVSchemaUpdate(t *testing.T) {
 			Keyspaces: map[string]*vindexes.KeyspaceSchema{
 				"ks": {
 					Keyspace:       ks,
-					ForeignKeyMode: vschemapb.Keyspace_FK_MANAGED,
+					ForeignKeyMode: vschemapb.Keyspace_managed,
 					Vindexes:       map[string]vindexes.Vindex{},
 					Tables: map[string]*vindexes.Table{
 						"t1":          vindexTable_t1,
@@ -379,7 +379,7 @@ func makeTestVSchema(ks string, sharded bool, tbls map[string]*vindexes.Table) *
 			Sharded: sharded,
 		},
 		// Default foreign key mode
-		ForeignKeyMode: vschemapb.Keyspace_FK_UNMANAGED,
+		ForeignKeyMode: vschemapb.Keyspace_unmanaged,
 		Tables:         tbls,
 		Vindexes:       map[string]vindexes.Vindex{},
 	}
@@ -401,7 +401,7 @@ func makeTestSrvVSchema(ks string, sharded bool, tbls map[string]*vschemapb.Tabl
 		Sharded: sharded,
 		Tables:  tbls,
 		// Default foreign key mode
-		ForeignKeyMode: vschemapb.Keyspace_FK_UNMANAGED,
+		ForeignKeyMode: vschemapb.Keyspace_unmanaged,
 	}
 	return &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{ks: keyspaceSchema},

@@ -57,7 +57,7 @@ func (si *declarativeSchemaInformation) ConnCollation() collations.ID {
 }
 
 func (si *declarativeSchemaInformation) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
-	return vschemapb.Keyspace_FK_UNMANAGED, nil
+	return vschemapb.Keyspace_unmanaged, nil
 }
 
 // addTable adds a fake table with an empty column list
