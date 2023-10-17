@@ -14301,7 +14301,7 @@ yydefault:
 		yyDollar = yyS[yypt-6 : yypt+1]
 //line sql.y:2989
 		{
-			opt := ColumnType{GeneratedExpr: yyDollar[4].expr, Stored: yyDollar[6].boolVal}
+			opt := ColumnType{GeneratedExpr: &ParenExpr{yyDollar[4].expr}, Stored: yyDollar[6].boolVal}
 			if err := yyDollar[1].columnType.merge(opt); err != nil {
 				yylex.Error(err.Error())
 				return 1
@@ -14312,7 +14312,7 @@ yydefault:
 		yyDollar = yyS[yypt-8 : yypt+1]
 //line sql.y:2998
 		{
-			opt := ColumnType{GeneratedExpr: yyDollar[6].expr, Stored: yyDollar[8].boolVal}
+			opt := ColumnType{GeneratedExpr: &ParenExpr{yyDollar[6].expr}, Stored: yyDollar[8].boolVal}
 			if err := yyDollar[1].columnType.merge(opt); err != nil {
 				yylex.Error(err.Error())
 				return 1

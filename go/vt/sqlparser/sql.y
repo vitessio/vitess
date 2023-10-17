@@ -2987,7 +2987,7 @@ column_type_options:
   }
 | column_type_options AS openb value_expression closeb stored_opt
   {
-    opt := ColumnType{GeneratedExpr: $4, Stored: $6}
+    opt := ColumnType{GeneratedExpr: &ParenExpr{$4}, Stored: $6}
     if err := $1.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
@@ -2996,7 +2996,7 @@ column_type_options:
   }
 | column_type_options GENERATED ALWAYS AS openb value_expression closeb stored_opt
   {
-    opt := ColumnType{GeneratedExpr: $6, Stored: $8}
+    opt := ColumnType{GeneratedExpr: &ParenExpr{$6}, Stored: $8}
     if err := $1.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
