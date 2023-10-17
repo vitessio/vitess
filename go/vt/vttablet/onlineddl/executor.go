@@ -2310,6 +2310,64 @@ func (e *Executor) reviewImmediateOperations(ctx context.Context, capableOf mysq
 	return false, nil
 }
 
+// reviewQueuedMigration investigates a single migration found in `queued` state.
+// It analyzes whether the migration can & should be fulfilled immediately (e.g. via INSTANT DDL or just because it's a CREATE or DROP),
+// or backfils necessary information if it's a REVERT.
+// If all goes well, it sets `reviewed_timestamp` which then allows the state machine to schedule the migration.
+func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capableOf mysql.CapableOf) error {
+	onlineDDL, row, err := e.readMigration(ctx, uuid)
+	if err != nil {
+		return err
+	}
+	// handle REVERT migrations: populate table name and update ddl action and is_view:
+	ddlAction := row["ddl_action"].ToString()
+	isRevert := false
+	if ddlAction == schema.RevertActionStr {
+		isRevert = true
+		rowModified, err := e.reviewEmptyTableRevertMigrations(ctx, onlineDDL)
+		if err != nil {
+			return err
+		}
+		if rowModified {
+			// re-read migration and entire row
+			onlineDDL, row, err = e.readMigration(ctx, uuid)
+			if err != nil {
+				return err
+			}
+			ddlAction = row["ddl_action"].ToString()
+		}
+	}
+	isView := row.AsBool("is_view", false)
+	isImmediate, err := e.reviewImmediateOperations(ctx, capableOf, onlineDDL, ddlAction, isRevert, isView)
+	if err != nil {
+		return err
+	}
+	if isImmediate {
+		if err := e.updateMigrationSetImmediateOperation(ctx, onlineDDL.UUID); err != nil {
+			return err
+		}
+	}
+	// Find conditions where the migration cannot take place:
+	switch onlineDDL.Strategy {
+	case schema.DDLStrategyMySQL:
+		strategySetting := onlineDDL.StrategySetting()
+		if strategySetting.IsPostponeCompletion() {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--postpone-completion not supported in 'mysql' strategy")
+		}
+		if strategySetting.IsAllowZeroInDateFlag() {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--allow-zero-in-date not supported in 'mysql' strategy")
+		}
+	}
+
+	// The review is complete. We've backfilled details on the migration row. We mark
+	// the migration as having been reviewed. The function scheduleNextMigration() will then
+	// have access to this row.
+	if err := e.updateMigrationTimestamp(ctx, "reviewed_timestamp", uuid); err != nil {
+		return err
+	}
+	return nil
+}
+
 // reviewQueuedMigrations iterates through queued migrations and sees if any information needs to be updated.
 // The function analyzes the queued migration and fills in some blanks:
 // - If this is a REVERT migration, what table is affected? What's the operation?
@@ -2332,57 +2390,9 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 
 	for _, uuidRow := range r.Named().Rows {
 		uuid := uuidRow["migration_uuid"].ToString()
-		onlineDDL, row, err := e.readMigration(ctx, uuid)
-		if err != nil {
-			return err
+		if err := e.reviewQueuedMigration(ctx, uuid, capableOf); err != nil {
+			e.failMigration(ctx, &schema.OnlineDDL{UUID: uuid}, err)
 		}
-		// handle REVERT migrations: populate table name and update ddl action and is_view:
-		ddlAction := row["ddl_action"].ToString()
-		isRevert := false
-		if ddlAction == schema.RevertActionStr {
-			isRevert = true
-			rowModified, err := e.reviewEmptyTableRevertMigrations(ctx, onlineDDL)
-			if err != nil {
-				return err
-			}
-			if rowModified {
-				// re-read migration and entire row
-				onlineDDL, row, err = e.readMigration(ctx, uuid)
-				if err != nil {
-					return err
-				}
-				ddlAction = row["ddl_action"].ToString()
-			}
-		}
-		isView := row.AsBool("is_view", false)
-		isImmediate, err := e.reviewImmediateOperations(ctx, capableOf, onlineDDL, ddlAction, isRevert, isView)
-		if err != nil {
-			return err
-		}
-		if isImmediate {
-			if err := e.updateMigrationSetImmediateOperation(ctx, onlineDDL.UUID); err != nil {
-				return err
-			}
-		}
-		// Find conditions where the migration cannot take place:
-		switch onlineDDL.Strategy {
-		case schema.DDLStrategyMySQL:
-			strategySetting := onlineDDL.StrategySetting()
-			if strategySetting.IsPostponeCompletion() {
-				e.failMigration(ctx, onlineDDL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--postpone-completion not supported in 'mysql' strategy"))
-			}
-			if strategySetting.IsAllowZeroInDateFlag() {
-				e.failMigration(ctx, onlineDDL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--allow-zero-in-date not supported in 'mysql' strategy"))
-			}
-		}
-
-		// The review is complete. We've backfilled details on the migration row. We mark
-		// the migration as having been reviewed. The function scheduleNextMigration() will then
-		// have access to this row.
-		if err := e.updateMigrationTimestamp(ctx, "reviewed_timestamp", uuid); err != nil {
-			return err
-		}
-
 	}
 	return nil
 }
