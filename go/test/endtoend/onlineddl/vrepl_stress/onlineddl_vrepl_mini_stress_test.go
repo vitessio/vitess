@@ -18,7 +18,6 @@ package vreplstress
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -518,9 +517,7 @@ func runSingleConnection(ctx context.Context, t *testing.T) {
 			return
 		case <-time.After(singleConnectionSleepInterval):
 		}
-		if !errors.Is(err, context.DeadlineExceeded) { // this is an acceptable error
-			assert.Nil(t, err)
-		}
+		assert.Nil(t, err)
 	}
 }
 
