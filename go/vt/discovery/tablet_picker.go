@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -136,7 +135,8 @@ type TabletPicker struct {
 	inOrder       bool
 	cellPref      TabletPickerCellPreference
 	localCellInfo localCellInfo
-	ignoreTablets []string
+	// This map is keyed on the results of TabletAlias.String().
+	ignoreTablets map[string]struct{}
 }
 
 // NewTabletPicker returns a TabletPicker.
@@ -146,7 +146,7 @@ func NewTabletPicker(
 	cells []string,
 	localCell, keyspace, shard, tabletTypesStr string,
 	options TabletPickerOptions,
-	ignoreTablets ...string,
+	ignoreTablets ...*topodatapb.TabletAlias,
 ) (*TabletPicker, error) {
 	// Keep inOrder parsing here for backward compatability until TabletPickerTabletOrder is fully adopted.
 	if tabletTypesStr == "" {
@@ -222,7 +222,7 @@ func NewTabletPicker(
 		}
 	}
 
-	return &TabletPicker{
+	tp := &TabletPicker{
 		ts:            ts,
 		cells:         dedupeCells(cells),
 		localCellInfo: localCellInfo{localCell: localCell, cellsInAlias: aliasCellMap},
@@ -231,8 +231,15 @@ func NewTabletPicker(
 		tabletTypes:   tabletTypes,
 		inOrder:       inOrder,
 		cellPref:      cellPref,
-		ignoreTablets: ignoreTablets,
-	}, nil
+		ignoreTablets: make(map[string]struct{}, len(ignoreTablets)),
+	}
+
+	for _, ignoreTablet := range ignoreTablets {
+		tp.ignoreTablets[ignoreTablet.String()] = struct{}{}
+	}
+
+	return tp, nil
+
 }
 
 // dedupeCells is used to remove duplicates in the cell list in case it is passed in
@@ -420,8 +427,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 
 	tablets := make([]*topo.TabletInfo, 0, len(aliases))
 	for _, tabletAlias := range aliases {
-		tabletAliasString := topoproto.TabletAliasString(tabletAlias)
-		tabletInfo, ok := tabletMap[tabletAliasString]
+		tabletInfo, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
 		if !ok {
 			// Either tablet disappeared on us, or we got a partial result
 			// (GetTabletMap ignores topo.ErrNoNode); just log a warning.
@@ -438,8 +444,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 					}
 					return vterrors.New(vtrpcpb.Code_INTERNAL, "tablet is not healthy and serving")
 				}); err == nil || err == io.EOF {
-					// If this tablet is not in the ignore list, then add it as a candidate.
-					if !slices.Contains(tp.ignoreTablets, tabletAliasString) {
+					if _, ignore := tp.ignoreTablets[tabletAlias.String()]; !ignore {
 						tablets = append(tablets, tabletInfo)
 					}
 				}

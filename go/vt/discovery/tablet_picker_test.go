@@ -26,7 +26,6 @@ import (
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -404,14 +403,14 @@ func TestPickWithIgnoreList(t *testing.T) {
 	defer deleteTablet(t, te, dontWant)
 
 	// Specify the alias as the cell.
-	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"cella"}, "cell1", te.keyspace, te.shard, "replica", TabletPickerOptions{}, topoproto.TabletAliasString(dontWant.GetAlias()))
+	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"cella"}, "cell1", te.keyspace, te.shard, "replica", TabletPickerOptions{}, dontWant.GetAlias())
 	require.NoError(t, err)
 
-	// Try it many times to be sure we don't ever pick from the ignore list
+	// Try it many times to be sure we don't ever pick from the ignore list.
 	for i := 0; i < 100; i++ {
 		tablet, err := tp.PickForStreaming(ctx)
 		require.NoError(t, err)
-		assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
+		require.False(t, proto.Equal(dontWant, tablet), "Picked the tablet we shouldn't have: %v", dontWant)
 	}
 }
 
