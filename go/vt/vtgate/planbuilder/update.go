@@ -54,7 +54,7 @@ func gen4UpdateStmtPlanner(
 	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
 		if !ctx.SemTable.ForeignKeysPresent() {
 			plan := updateUnshardedShortcut(updStmt, ks, tables)
-			plan = pushCommentDirectivesOnPlan(plan, updStmt)
+			setCommentDirectivesOnPlan(plan, updStmt)
 			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
 		}
 	}

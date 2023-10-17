@@ -214,7 +214,7 @@ func newBuildSelectPlan(
 		if err != nil {
 			return nil, nil, err
 		}
-		plan = pushCommentDirectivesOnPlan(plan, selStmt)
+		setCommentDirectivesOnPlan(plan, selStmt)
 		return plan, tablesUsed, err
 	}
 

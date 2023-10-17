@@ -105,14 +105,6 @@ func (err UnsupportedSupplyWeightString) Error() string {
 	return fmt.Sprintf("cannot do collation on %s", err.Type)
 }
 
-// Rewrite implements the logicalPlan interface
-func (vf *vindexFunc) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 0 {
-		return vterrors.VT13001("vindexFunc: wrong number of inputs")
-	}
-	return nil
-}
-
 // ContainsTables implements the logicalPlan interface
 func (vf *vindexFunc) ContainsTables() semantics.TableSet {
 	return vf.tableID

@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -56,16 +55,6 @@ func (fkc *fkCascade) Wireup(ctx *plancontext.PlanningContext) error {
 		return err
 	}
 	return fkc.selection.Wireup(ctx)
-}
-
-// Rewrite implements the logicalPlan interface
-func (fkc *fkCascade) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 2 {
-		return vterrors.VT13001("fkCascade: wrong number of inputs")
-	}
-	fkc.parent = inputs[0]
-	fkc.selection = inputs[1]
-	return nil
 }
 
 // ContainsTables implements the logicalPlan interface

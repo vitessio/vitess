@@ -142,14 +142,6 @@ func (rb *route) prepareTheAST() {
 	}, rb.Select)
 }
 
-// Rewrite implements the logicalPlan interface
-func (rb *route) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 0 {
-		return vterrors.VT13001("route: wrong number of inputs")
-	}
-	return nil
-}
-
 // Inputs implements the logicalPlan interface
 func (rb *route) Inputs() []logicalPlan {
 	return []logicalPlan{}

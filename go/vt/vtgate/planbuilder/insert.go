@@ -52,7 +52,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	if ks != nil {
 		if tables[0].AutoIncrement == nil && !ctx.SemTable.ForeignKeysPresent() {
 			plan := insertUnshardedShortcut(insStmt, ks, tables)
-			plan = pushCommentDirectivesOnPlan(plan, insStmt)
+			setCommentDirectivesOnPlan(plan, insStmt)
 			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
 		}
 	}
@@ -136,10 +136,6 @@ func (i *insert) Inputs() []logicalPlan {
 		return nil
 	}
 	return []logicalPlan{i.source}
-}
-
-func (i *insert) Rewrite(inputs ...logicalPlan) error {
-	panic("does not expect insert to get rewrite call")
 }
 
 func (i *insert) ContainsTables() semantics.TableSet {

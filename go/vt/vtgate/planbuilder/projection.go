@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -50,15 +48,6 @@ func (p *projection) Wireup(ctx *plancontext.PlanningContext) error {
 // Inputs implements the logicalPlan interface
 func (p *projection) Inputs() []logicalPlan {
 	return []logicalPlan{p.source}
-}
-
-// Rewrite implements the logicalPlan interface
-func (p *projection) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 1 {
-		return vterrors.VT13001(fmt.Sprintf("wrong number of inputs, got: %d; expected: %d", len(inputs), 1))
-	}
-	p.source = inputs[0]
-	return nil
 }
 
 // ContainsTables implements the logicalPlan interface

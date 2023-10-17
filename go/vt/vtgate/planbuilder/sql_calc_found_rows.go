@@ -17,9 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
-
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -57,16 +54,6 @@ func (s *sqlCalcFoundRows) Primitive() engine.Primitive {
 		LimitPrimitive: s.LimitQuery.Primitive(),
 		CountPrimitive: countPrim,
 	}
-}
-
-// Rewrite implements the logicalPlan interface
-func (s *sqlCalcFoundRows) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 2 {
-		return vterrors.VT13001(fmt.Sprintf("wrong number of inputs for SQL_CALC_FOUND_ROWS: %d", len(inputs)))
-	}
-	s.LimitQuery = inputs[0]
-	s.CountQuery = inputs[1]
-	return nil
 }
 
 // Inputs implements the logicalPlan interface

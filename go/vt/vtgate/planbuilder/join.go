@@ -17,10 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -73,16 +70,6 @@ func (j *join) Primitive() engine.Primitive {
 // Inputs implements the logicalPlan interface
 func (j *join) Inputs() []logicalPlan {
 	return []logicalPlan{j.Left, j.Right}
-}
-
-// Rewrite implements the logicalPlan interface
-func (j *join) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 2 {
-		return vterrors.VT13001(fmt.Sprintf("wrong number of children in join rewrite, got: %d, expect: 2", len(inputs)))
-	}
-	j.Left = inputs[0]
-	j.Right = inputs[1]
-	return nil
 }
 
 // ContainsTables implements the logicalPlan interface

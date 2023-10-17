@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -52,15 +51,6 @@ func (c *concatenate) Primitive() engine.Primitive {
 	}
 
 	return engine.NewConcatenate(sources, c.noNeedToTypeCheck)
-}
-
-// Rewrite implements the logicalPlan interface
-func (c *concatenate) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != len(c.sources) {
-		return vterrors.VT13001("concatenate: wrong number of inputs")
-	}
-	c.sources = inputs
-	return nil
 }
 
 // ContainsTables implements the logicalPlan interface

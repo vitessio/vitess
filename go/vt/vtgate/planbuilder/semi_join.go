@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -67,16 +66,6 @@ func (ps *semiJoin) Wireup(ctx *plancontext.PlanningContext) error {
 		return err
 	}
 	return ps.rhs.Wireup(ctx)
-}
-
-// Rewrite implements the logicalPlan interface
-func (ps *semiJoin) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 2 {
-		return vterrors.VT13001("semiJoin: wrong number of inputs")
-	}
-	ps.lhs = inputs[0]
-	ps.rhs = inputs[1]
-	return nil
 }
 
 // ContainsTables implements the logicalPlan interface

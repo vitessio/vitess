@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -61,16 +60,6 @@ func (ps *uncorrelatedSubquery) Wireup(ctx *plancontext.PlanningContext) error {
 		return err
 	}
 	return ps.subquery.Wireup(ctx)
-}
-
-// Rewrite implements the logicalPlan interface
-func (ps *uncorrelatedSubquery) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 2 {
-		return vterrors.VT13001("uncorrelatedSubquery: wrong number of inputs")
-	}
-	ps.outer = inputs[0]
-	ps.subquery = inputs[1]
-	return nil
 }
 
 // ContainsTables implements the logicalPlan interface
