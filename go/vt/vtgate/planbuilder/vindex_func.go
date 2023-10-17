@@ -98,11 +98,6 @@ func (err UnsupportedSupplyWeightString) Error() string {
 	return fmt.Sprintf("cannot do collation on %s", err.Type)
 }
 
-// ContainsTables implements the logicalPlan interface
-func (vf *vindexFunc) ContainsTables() semantics.TableSet {
-	return vf.tableID
-}
-
 func vindexColumnToIndex(column *sqlparser.ColName) int {
 	switch column.Name.String() {
 	case "id":

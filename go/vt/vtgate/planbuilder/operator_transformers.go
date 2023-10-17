@@ -300,7 +300,6 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		return nil, err
 	}
 
-	var exprs []sqlparser.Expr
 	var evalengineExprs []evalengine.Expr
 	var columnNames []string
 	for _, pe := range ap {
@@ -309,7 +308,6 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 			return nil, err
 		}
 		evalengineExprs = append(evalengineExprs, ee)
-		exprs = append(exprs, pe.EvalExpr)
 		columnNames = append(columnNames, pe.Original.ColumnName())
 	}
 
@@ -319,10 +317,8 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 	}
 
 	return &projection{
-		source:      src,
-		columnNames: columnNames,
-		columns:     exprs,
-		primitive:   primitive,
+		source:    src,
+		primitive: primitive,
 	}, nil
 }
 
@@ -780,4 +776,23 @@ func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logi
 	}
 
 	return createLimit(plan, op.AST)
+}
+
+func createLimit(input logicalPlan, limit *sqlparser.Limit) (logicalPlan, error) {
+	plan := newLimit(input)
+	pv, err := evalengine.Translate(limit.Rowcount, nil)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "unexpected expression in LIMIT")
+	}
+	plan.elimit.Count = pv
+
+	if limit.Offset != nil {
+		pv, err = evalengine.Translate(limit.Offset, nil)
+		if err != nil {
+			return nil, vterrors.Wrap(err, "unexpected expression in OFFSET")
+		}
+		plan.elimit.Offset = pv
+	}
+
+	return plan, nil
 }

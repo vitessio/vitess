@@ -17,18 +17,12 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 type projection struct {
-	source      logicalPlan
-	columnNames []string
-	columns     []sqlparser.Expr
-	primitive   *engine.Projection
-	// unorderedColumnIdx is used to find the index at which we should add any column output from projection
-	// we don't care for the ordering of. It should also be updated when such a column is added
-	unorderedColumnIdx int
+	source    logicalPlan
+	primitive *engine.Projection
 }
 
 var _ logicalPlan = (*projection)(nil)

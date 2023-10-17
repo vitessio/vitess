@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // primitiveWrapper is used when only need a logical plan that supports plan.Primitive() and nothing else
@@ -28,10 +27,6 @@ type primitiveWrapper struct {
 
 func (p *primitiveWrapper) Primitive() engine.Primitive {
 	return p.prim
-}
-
-func (p *primitiveWrapper) ContainsTables() semantics.TableSet {
-	return semantics.EmptyTableSet()
 }
 
 var _ logicalPlan = (*primitiveWrapper)(nil)

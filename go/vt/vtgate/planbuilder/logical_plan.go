@@ -24,7 +24,6 @@ import (
 // satisfy.
 type logicalPlan interface {
 	// Primitive returns the underlying primitive.
-	// This function should only be called after Wireup is finished.
 	Primitive() engine.Primitive
 }
 

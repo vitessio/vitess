@@ -54,11 +54,6 @@ func (rb *route) Primitive() engine.Primitive {
 	return rb.enginePrimitive
 }
 
-// SetLimit adds a LIMIT clause to the route.
-func (rb *route) SetLimit(limit *sqlparser.Limit) {
-	rb.Select.SetLimit(limit)
-}
-
 // Wireup implements the logicalPlan interface
 func (rb *route) Wireup(ctx *plancontext.PlanningContext) error {
 	rb.prepareTheAST()
@@ -104,11 +99,6 @@ func (rb *route) Wireup(ctx *plancontext.PlanningContext) error {
 	rb.eroute.RoutingParameters.Vindex = nil
 
 	return nil
-}
-
-// ContainsTables implements the logicalPlan interface
-func (rb *route) ContainsTables() semantics.TableSet {
-	return rb.tables
 }
 
 // prepareTheAST does minor fixups of the SELECT struct before producing the query string
