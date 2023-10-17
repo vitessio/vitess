@@ -106,10 +106,17 @@ func ParseCells(cmd *cobra.Command) {
 	}
 }
 
-func ParseTabletTypes(cmd *cobra.Command) {
-	if !cmd.Flags().Lookup("tablet-types").Changed {
-		CreateOptions.TabletTypes = tabletTypesDefault
+func ParseTabletTypes(cmd *cobra.Command) error {
+	ttf := cmd.Flags().Lookup("tablet-types")
+	if ttf == nil {
+		return fmt.Errorf("no tablet-types flag found")
 	}
+	if !ttf.Changed {
+		CreateOptions.TabletTypes = tabletTypesDefault
+	} else if strings.TrimSpace(ttf.Value.String()) == "" {
+		return fmt.Errorf("invalid table-types value, at least one valid tablet type must be specified")
+	}
+	return nil
 }
 
 func validateOnDDL(cmd *cobra.Command) error {
@@ -124,7 +131,9 @@ func ParseAndValidateCreateOptions(cmd *cobra.Command) error {
 		return err
 	}
 	ParseCells(cmd)
-	ParseTabletTypes(cmd)
+	if err := ParseTabletTypes(cmd); err != nil {
+		return err
+	}
 	return nil
 }
 
