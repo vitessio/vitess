@@ -83,8 +83,6 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 
 	plan = pushCommentDirectivesOnPlan(plan, insStmt)
 
-	setLockOnAllSelect(plan)
-
 	if err := plan.Wireup(ctx); err != nil {
 		return nil, err
 	}

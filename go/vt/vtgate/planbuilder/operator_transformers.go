@@ -74,9 +74,9 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator) (
 }
 
 func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators.InsertSelection) (logicalPlan, error) {
-	rb, isRoute := op.InsertionOp.(*operators.Route)
+	rb, isRoute := op.Insert.(*operators.Route)
 	if !isRoute {
-		return nil, vterrors.VT13001(fmt.Sprintf("Incorrect type encountered: %T (transformInsertionSelection)", op.InsertionOp))
+		return nil, vterrors.VT13001(fmt.Sprintf("Incorrect type encountered: %T (transformInsertionSelection)", op.Insert))
 	}
 
 	stmt, dmlOp, err := operators.ToSQL(ctx, rb.Source)
@@ -104,7 +104,7 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 
 	eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
 
-	selectionPlan, err := transformToLogicalPlan(ctx, op.SelectionOp)
+	selectionPlan, err := transformToLogicalPlan(ctx, op.Select)
 	if err != nil {
 		return nil, err
 	}

@@ -201,8 +201,11 @@ func insertSelectPlan(ctx *plancontext.PlanningContext, insOp *Insert, routeOp *
 
 	// output of the select plan will be used to insert rows into the table.
 	insertSelect := &InsertSelection{
-		SelectionOp: selOp,
-		InsertionOp: routeOp,
+		Select: &LockAndComment{
+			Source: selOp,
+			Lock:   sqlparser.ShareModeLock,
+		},
+		Insert: routeOp,
 	}
 
 	// When the table you are streaming data from and table you are inserting from are same.
