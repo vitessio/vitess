@@ -60,8 +60,3 @@ func (d *distinct) Primitive() engine.Primitive {
 		Truncate:  truncate,
 	}
 }
-
-// Inputs implements the logicalPlan interface
-func (d *distinct) Inputs() []logicalPlan {
-	return []logicalPlan{d.input}
-}

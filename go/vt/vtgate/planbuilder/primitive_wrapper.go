@@ -30,10 +30,6 @@ func (p *primitiveWrapper) Primitive() engine.Primitive {
 	return p.prim
 }
 
-func (p *primitiveWrapper) Inputs() []logicalPlan {
-	return nil
-}
-
 func (p *primitiveWrapper) ContainsTables() semantics.TableSet {
 	return semantics.EmptyTableSet()
 }

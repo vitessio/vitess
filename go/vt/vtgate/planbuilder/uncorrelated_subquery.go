@@ -57,8 +57,3 @@ func (ps *uncorrelatedSubquery) Primitive() engine.Primitive {
 func (ps *uncorrelatedSubquery) ContainsTables() semantics.TableSet {
 	return ps.outer.ContainsTables().Merge(ps.subquery.ContainsTables())
 }
-
-// Inputs implements the logicalPlan interface
-func (ps *uncorrelatedSubquery) Inputs() []logicalPlan {
-	return []logicalPlan{ps.outer, ps.subquery}
-}

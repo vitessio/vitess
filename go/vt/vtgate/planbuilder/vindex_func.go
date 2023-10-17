@@ -103,11 +103,6 @@ func (vf *vindexFunc) ContainsTables() semantics.TableSet {
 	return vf.tableID
 }
 
-// Inputs implements the logicalPlan interface
-func (vf *vindexFunc) Inputs() []logicalPlan {
-	return []logicalPlan{}
-}
-
 func vindexColumnToIndex(column *sqlparser.ColName) int {
 	switch column.Name.String() {
 	case "id":

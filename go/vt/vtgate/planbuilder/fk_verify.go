@@ -61,12 +61,3 @@ func (fkc *fkVerify) Primitive() engine.Primitive {
 func (fkc *fkVerify) ContainsTables() semantics.TableSet {
 	return fkc.input.ContainsTables()
 }
-
-// Inputs implements the logicalPlan interface
-func (fkc *fkVerify) Inputs() []logicalPlan {
-	inputs := []logicalPlan{fkc.input}
-	for _, v := range fkc.verify {
-		inputs = append(inputs, v.verify)
-	}
-	return inputs
-}

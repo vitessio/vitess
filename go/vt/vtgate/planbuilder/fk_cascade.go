@@ -52,8 +52,3 @@ func (fkc *fkCascade) Primitive() engine.Primitive {
 func (fkc *fkCascade) ContainsTables() semantics.TableSet {
 	return fkc.parent.ContainsTables()
 }
-
-// Inputs implements the logicalPlan interface
-func (fkc *fkCascade) Inputs() []logicalPlan {
-	return []logicalPlan{fkc.parent, fkc.selection}
-}

@@ -494,14 +494,15 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	case *sqlparser.Delete:
 		return buildDeleteLogicalPlan(ctx, op, dmlOp, hints)
 	case *sqlparser.Insert:
-		return buildInsertLogicalPlan(ctx, op, dmlOp, stmt, hints)
+		return buildInsertLogicalPlan(op, dmlOp, stmt, hints)
 	default:
 		return nil, vterrors.VT13001(fmt.Sprintf("dont know how to %T", stmt))
 	}
 }
 
 func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route, stmt sqlparser.SelectStatement, hints *queryHints) (logicalPlan, error) {
-	condition := getVindexPredicate(op)
+	_ = updateSelectedVindexPredicate(op)
+
 	eroute, err := routeToEngineRoute(ctx, op, hints)
 	for _, order := range op.Ordering {
 		typ, collation, _ := ctx.SemTable.TypeForExpr(order.AST)
@@ -517,10 +518,9 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 		return nil, err
 	}
 	r := &route{
-		eroute:    eroute,
-		Select:    stmt,
-		tables:    operators.TableID(op),
-		condition: condition,
+		eroute: eroute,
+		Select: stmt,
+		tables: operators.TableID(op),
 	}
 
 	if err = r.Wireup(ctx); err != nil {
@@ -530,7 +530,6 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 }
 
 func buildInsertLogicalPlan(
-	ctx *plancontext.PlanningContext,
 	rb *operators.Route,
 	op ops.Operator,
 	stmt *sqlparser.Insert,
@@ -697,15 +696,12 @@ func transformDMLPlan(vtable *vindexes.Table, edml *engine.DML, routing operator
 	}
 }
 
-func getVindexPredicate(op *operators.Route) sqlparser.Expr {
+func updateSelectedVindexPredicate(op *operators.Route) sqlparser.Expr {
 	tr, ok := op.Routing.(*operators.ShardedRouting)
 	if !ok || tr.Selected == nil {
 		return nil
 	}
-	var condition sqlparser.Expr
-	if len(tr.Selected.ValueExprs) > 0 {
-		condition = tr.Selected.ValueExprs[0]
-	}
+
 	_, isMultiColumn := tr.Selected.FoundVindex.(vindexes.MultiColumn)
 	for idx, expr := range tr.Selected.Predicates {
 		cmp, ok := expr.(*sqlparser.ComparisonExpr)
@@ -726,7 +722,7 @@ func getVindexPredicate(op *operators.Route) sqlparser.Expr {
 
 		cmp.Right = sqlparser.ListArg(argName)
 	}
-	return condition
+	return nil
 }
 
 func getAllTableNames(op *operators.Route) ([]string, error) {

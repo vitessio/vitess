@@ -49,8 +49,3 @@ func (c *concatenate) ContainsTables() semantics.TableSet {
 	}
 	return tableSet
 }
-
-// Inputs implements the logicalPlan interface
-func (c *concatenate) Inputs() []logicalPlan {
-	return c.sources
-}

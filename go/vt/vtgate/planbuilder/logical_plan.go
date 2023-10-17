@@ -28,9 +28,6 @@ type logicalPlan interface {
 	// This function should only be called after Wireup is finished.
 	Primitive() engine.Primitive
 
-	// Inputs are the children of this plan
-	Inputs() []logicalPlan
-
 	// ContainsTables keeps track which query tables are being solved by this logical plan
 	// This is only applicable for plans that have been built with the Gen4 planner
 	ContainsTables() semantics.TableSet
@@ -51,11 +48,6 @@ func newBuilderCommon(input logicalPlan) logicalPlanCommon {
 
 func (bc *logicalPlanCommon) Order() int {
 	return bc.order
-}
-
-// Inputs implements the logicalPlan interface
-func (bc *logicalPlanCommon) Inputs() []logicalPlan {
-	return []logicalPlan{bc.input}
 }
 
 // ContainsTables implements the logicalPlan interface

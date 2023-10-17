@@ -63,8 +63,3 @@ func (ps *semiJoin) Primitive() engine.Primitive {
 func (ps *semiJoin) ContainsTables() semantics.TableSet {
 	return ps.lhs.ContainsTables().Merge(ps.rhs.ContainsTables())
 }
-
-// Inputs implements the logicalPlan interface
-func (ps *semiJoin) Inputs() []logicalPlan {
-	return []logicalPlan{ps.lhs, ps.rhs}
-}

@@ -39,10 +39,6 @@ type route struct {
 	// executed by this route.
 	Select sqlparser.SelectStatement
 
-	// condition stores the AST condition that will be used
-	// to resolve the ERoute Values field.
-	condition sqlparser.Expr
-
 	// eroute is the primitive being built.
 	eroute *engine.Route
 
@@ -140,11 +136,6 @@ func (rb *route) prepareTheAST() {
 		}
 		return true, nil
 	}, rb.Select)
-}
-
-// Inputs implements the logicalPlan interface
-func (rb *route) Inputs() []logicalPlan {
-	return []logicalPlan{}
 }
 
 func (rb *route) isSingleShard() bool {

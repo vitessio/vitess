@@ -34,11 +34,6 @@ type projection struct {
 
 var _ logicalPlan = (*projection)(nil)
 
-// Inputs implements the logicalPlan interface
-func (p *projection) Inputs() []logicalPlan {
-	return []logicalPlan{p.source}
-}
-
 // ContainsTables implements the logicalPlan interface
 func (p *projection) ContainsTables() semantics.TableSet {
 	return p.source.ContainsTables()

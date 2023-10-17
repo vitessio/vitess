@@ -57,11 +57,6 @@ func (j *join) Primitive() engine.Primitive {
 	}
 }
 
-// Inputs implements the logicalPlan interface
-func (j *join) Inputs() []logicalPlan {
-	return []logicalPlan{j.Left, j.Right}
-}
-
 // ContainsTables implements the logicalPlan interface
 func (j *join) ContainsTables() semantics.TableSet {
 	return j.Left.ContainsTables().Merge(j.Right.ContainsTables())

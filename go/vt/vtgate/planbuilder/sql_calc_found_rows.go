@@ -45,8 +45,3 @@ func (s *sqlCalcFoundRows) Primitive() engine.Primitive {
 		CountPrimitive: countPrim,
 	}
 }
-
-// Inputs implements the logicalPlan interface
-func (s *sqlCalcFoundRows) Inputs() []logicalPlan {
-	return []logicalPlan{s.LimitQuery, s.CountQuery}
-}

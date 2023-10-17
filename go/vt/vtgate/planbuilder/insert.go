@@ -120,13 +120,6 @@ func (i *insert) Primitive() engine.Primitive {
 	return i.eInsert
 }
 
-func (i *insert) Inputs() []logicalPlan {
-	if i.source == nil {
-		return nil
-	}
-	return []logicalPlan{i.source}
-}
-
 func (i *insert) ContainsTables() semantics.TableSet {
 	panic("does not expect insert to get contains tables call")
 }
