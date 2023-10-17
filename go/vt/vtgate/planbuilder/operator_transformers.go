@@ -66,9 +66,51 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator) (
 		return transformFkCascade(ctx, op)
 	case *operators.FkVerify:
 		return transformFkVerify(ctx, op)
+	case *operators.InsertSelection:
+		return transformInsertionSelection(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators.InsertSelection) (logicalPlan, error) {
+	rb, isRoute := op.InsertionOp.(*operators.Route)
+	if !isRoute {
+		return nil, vterrors.VT13001(fmt.Sprintf("Incorrect type encountered: %T (transformInsertionSelection)", op.InsertionOp))
+	}
+
+	stmt, dmlOp, err := operators.ToSQL(ctx, rb.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	if stmtWithComments, ok := stmt.(sqlparser.Commented); ok && rb.Comments != nil {
+		stmtWithComments.SetComments(rb.Comments.GetComments())
+	}
+
+	ins := dmlOp.(*operators.Insert)
+	eins := &engine.Insert{
+		Opcode:            mapToInsertOpCode(rb.Routing.OpCode(), true),
+		Keyspace:          rb.Routing.Keyspace(),
+		TableName:         ins.VTable.Name.String(),
+		Ignore:            ins.Ignore,
+		ForceNonStreaming: op.ForceNonStreaming,
+		Generate:          autoIncGenerate(ins.AutoIncrement),
+		ColVindexes:       ins.ColVindexes,
+		VindexValues:      ins.VindexValues,
+		VindexValueOffset: ins.VindexValueOffset,
+	}
+	lp := &insert{eInsert: eins}
+
+	eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
+
+	selectionPlan, err := transformToLogicalPlan(ctx, op.SelectionOp)
+	if err != nil {
+		return nil, err
+	}
+	lp.source = selectionPlan
+
+	return lp, nil
 }
 
 // transformFkCascade transforms a FkCascade operator into a logical plan.
@@ -460,11 +502,10 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 func buildInsertLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Route, op ops.Operator, stmt *sqlparser.Insert) (logicalPlan, error) {
 	ins := op.(*operators.Insert)
 	eins := &engine.Insert{
-		Opcode:            mapToInsertOpCode(rb.Routing.OpCode(), ins.Input != nil),
+		Opcode:            mapToInsertOpCode(rb.Routing.OpCode(), false),
 		Keyspace:          rb.Routing.Keyspace(),
 		TableName:         ins.VTable.Name.String(),
 		Ignore:            ins.Ignore,
-		ForceNonStreaming: ins.ForceNonStreaming,
 		Generate:          autoIncGenerate(ins.AutoIncrement),
 		ColVindexes:       ins.ColVindexes,
 		VindexValues:      ins.VindexValues,
@@ -474,20 +515,11 @@ func buildInsertLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Rout
 
 	// we would need to generate the query on the fly. The only exception here is
 	// when unsharded query with autoincrement for that there is no input operator.
-	if eins.Opcode != engine.InsertUnsharded || ins.Input != nil {
+	if eins.Opcode != engine.InsertUnsharded {
 		eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
 	}
 
-	if ins.Input == nil {
-		eins.Query = generateQuery(stmt)
-	} else {
-		newSrc, err := transformToLogicalPlan(ctx, ins.Input)
-		if err != nil {
-			return nil, err
-		}
-		lp.source = newSrc
-	}
-
+	eins.Query = generateQuery(stmt)
 	return lp, nil
 }
 
