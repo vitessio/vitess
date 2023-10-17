@@ -369,7 +369,9 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 			log.Errorf("Error getting shard %s/%s: %v", tp.keyspace, tp.shard, err)
 			return nil
 		}
-		aliases = append(aliases, si.PrimaryAlias)
+		if _, ignore := tp.ignoreTablets[si.PrimaryAlias.String()]; !ignore {
+			aliases = append(aliases, si.PrimaryAlias)
+		}
 	} else {
 		actualCells := make([]string, 0)
 		for _, cell := range tp.cells {
@@ -405,7 +407,9 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 				continue
 			}
 			for _, node := range sri.Nodes {
-				aliases = append(aliases, node.TabletAlias)
+				if _, ignore := tp.ignoreTablets[node.TabletAlias.String()]; !ignore {
+					aliases = append(aliases, node.TabletAlias)
+				}
 			}
 		}
 	}
@@ -444,9 +448,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 					}
 					return vterrors.New(vtrpcpb.Code_INTERNAL, "tablet is not healthy and serving")
 				}); err == nil || err == io.EOF {
-					if _, ignore := tp.ignoreTablets[tabletAlias.String()]; !ignore {
-						tablets = append(tablets, tabletInfo)
-					}
+					tablets = append(tablets, tabletInfo)
 				}
 				_ = conn.Close(ctx)
 			}
