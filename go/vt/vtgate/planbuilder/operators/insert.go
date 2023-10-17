@@ -121,6 +121,13 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 		return nil, err
 	}
 
+	if ins.Comments != nil {
+		insOp = &LockAndComment{
+			Source:   insOp,
+			Comments: ins.Comments,
+		}
+	}
+
 	// Find the foreign key mode and for unmanaged foreign-key-mode, we don't need to do anything.
 	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
 	if err != nil {

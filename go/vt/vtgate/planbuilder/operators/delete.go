@@ -91,6 +91,13 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return nil, err
 	}
 
+	if deleteStmt.Comments != nil {
+		delOp = &LockAndComment{
+			Source:   delOp,
+			Comments: deleteStmt.Comments,
+		}
+	}
+
 	childFks := ctx.SemTable.GetChildForeignKeysList()
 	// If there are no foreign key constraints, then we don't need to do anything.
 	if len(childFks) == 0 {

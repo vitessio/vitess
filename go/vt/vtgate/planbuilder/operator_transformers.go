@@ -416,7 +416,7 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.Apply
 	}, nil
 }
 
-func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route) (*engine.Route, error) {
+func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, hints *queryHints) (*engine.Route, error) {
 	tableNames, err := getAllTableNames(op)
 	if err != nil {
 		return nil, err
@@ -428,11 +428,16 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route) (
 		return nil, err
 	}
 
-	return &engine.Route{
+	e := &engine.Route{
 		TableName:           strings.Join(tableNames, ", "),
 		RoutingParameters:   rp,
 		TruncateColumnCount: op.ResultColumns,
-	}, nil
+	}
+	if hints != nil {
+		e.ScatterErrorsAsWarnings = hints.scatterErrorsAsWarnings
+		e.QueryTimeout = hints.queryTimeout
+	}
+	return e, nil
 }
 
 func newRoutingParams(ctx *plancontext.PlanningContext, opCode engine.Opcode) *engine.RoutingParameters {
@@ -448,6 +453,27 @@ func newRoutingParams(ctx *plancontext.PlanningContext, opCode engine.Opcode) *e
 	}
 }
 
+type queryHints struct {
+	scatterErrorsAsWarnings,
+	multiShardAutocommit bool
+	queryTimeout int
+}
+
+func getHints(cmt *sqlparser.ParsedComments) *queryHints {
+	if cmt == nil {
+		return nil
+	}
+	directives := cmt.Directives()
+	scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
+	timeout := queryTimeout(directives)
+	multiShardAutoCommit := directives.IsSet(sqlparser.DirectiveMultiShardAutocommit)
+	return &queryHints{
+		scatterErrorsAsWarnings: scatterAsWarns,
+		multiShardAutocommit:    multiShardAutoCommit,
+		queryTimeout:            timeout,
+	}
+}
+
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (logicalPlan, error) {
 	stmt, dmlOp, err := operators.ToSQL(ctx, op.Source)
 	if err != nil {
@@ -455,29 +481,31 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	}
 
 	if stmtWithComments, ok := stmt.(sqlparser.Commented); ok && op.Comments != nil {
-		stmtWithComments.SetComments(op.Comments.GetComments())
+		comments := op.Comments.GetComments()
+		stmtWithComments.SetComments(comments)
 	}
 
+	hints := getHints(op.Comments)
 	switch stmt := stmt.(type) {
 	case sqlparser.SelectStatement:
 		if op.Lock != sqlparser.NoLock {
 			stmt.SetLock(op.Lock)
 		}
-		return buildRouteLogicalPlan(ctx, op, stmt)
+		return buildRouteLogicalPlan(ctx, op, stmt, hints)
 	case *sqlparser.Update:
-		return buildUpdateLogicalPlan(ctx, op, dmlOp, stmt)
+		return buildUpdateLogicalPlan(ctx, op, dmlOp, stmt, hints)
 	case *sqlparser.Delete:
-		return buildDeleteLogicalPlan(ctx, op, dmlOp)
+		return buildDeleteLogicalPlan(ctx, op, dmlOp, hints)
 	case *sqlparser.Insert:
-		return buildInsertLogicalPlan(ctx, op, dmlOp, stmt)
+		return buildInsertLogicalPlan(ctx, op, dmlOp, stmt, hints)
 	default:
 		return nil, vterrors.VT13001(fmt.Sprintf("dont know how to %T", stmt))
 	}
 }
 
-func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route, stmt sqlparser.SelectStatement) (logicalPlan, error) {
+func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route, stmt sqlparser.SelectStatement, hints *queryHints) (logicalPlan, error) {
 	condition := getVindexPredicate(op)
-	eroute, err := routeToEngineRoute(ctx, op)
+	eroute, err := routeToEngineRoute(ctx, op, hints)
 	for _, order := range op.Ordering {
 		typ, collation, _ := ctx.SemTable.TypeForExpr(order.AST)
 		eroute.OrderBy = append(eroute.OrderBy, engine.OrderByParams{
@@ -499,7 +527,13 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 	}, nil
 }
 
-func buildInsertLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Route, op ops.Operator, stmt *sqlparser.Insert) (logicalPlan, error) {
+func buildInsertLogicalPlan(
+	ctx *plancontext.PlanningContext,
+	rb *operators.Route,
+	op ops.Operator,
+	stmt *sqlparser.Insert,
+	hints *queryHints,
+) (logicalPlan, error) {
 	ins := op.(*operators.Insert)
 	eins := &engine.Insert{
 		Opcode:            mapToInsertOpCode(rb.Routing.OpCode(), false),
@@ -517,6 +551,11 @@ func buildInsertLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Rout
 	// when unsharded query with autoincrement for that there is no input operator.
 	if eins.Opcode != engine.InsertUnsharded {
 		eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
+	}
+
+	if hints != nil {
+		eins.MultiShardAutocommit = hints.multiShardAutocommit
+		eins.QueryTimeout = hints.queryTimeout
 	}
 
 	eins.Query = generateQuery(stmt)
@@ -585,6 +624,7 @@ func buildUpdateLogicalPlan(
 	rb *operators.Route,
 	dmlOp ops.Operator,
 	stmt *sqlparser.Update,
+	hints *queryHints,
 ) (logicalPlan, error) {
 	upd := dmlOp.(*operators.Update)
 	rp := newRoutingParams(ctx, rb.Routing.OpCode())
@@ -606,6 +646,10 @@ func buildUpdateLogicalPlan(
 		ChangedVindexValues: upd.ChangedVindexValues,
 		DML:                 edml,
 	}
+	if hints != nil {
+		e.MultiShardAutocommit = hints.multiShardAutocommit
+		e.QueryTimeout = hints.queryTimeout
+	}
 
 	return &primitiveWrapper{prim: e}, nil
 }
@@ -614,6 +658,7 @@ func buildDeleteLogicalPlan(
 	ctx *plancontext.PlanningContext,
 	rb *operators.Route,
 	dmlOp ops.Operator,
+	hints *queryHints,
 ) (logicalPlan, error) {
 	del := dmlOp.(*operators.Delete)
 	rp := newRoutingParams(ctx, rb.Routing.OpCode())
@@ -633,6 +678,10 @@ func buildDeleteLogicalPlan(
 
 	e := &engine.Delete{
 		DML: edml,
+	}
+	if hints != nil {
+		e.MultiShardAutocommit = hints.multiShardAutocommit
+		e.QueryTimeout = hints.queryTimeout
 	}
 
 	return &primitiveWrapper{prim: e}, nil

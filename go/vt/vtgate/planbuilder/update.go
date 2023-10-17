@@ -78,8 +78,6 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	plan = pushCommentDirectivesOnPlan(plan, updStmt)
-
 	if err := plan.Wireup(ctx); err != nil {
 		return nil, err
 	}

@@ -87,8 +87,6 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	plan = pushCommentDirectivesOnPlan(plan, deleteStmt)
-
 	if err := plan.Wireup(ctx); err != nil {
 		return nil, err
 	}

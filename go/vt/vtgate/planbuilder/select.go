@@ -236,7 +236,7 @@ func newBuildSelectPlan(
 	if err = plan.Wireup(ctx); err != nil {
 		return nil, nil, err
 	}
-	return pushCommentDirectivesOnPlan(plan, selStmt), operators.TablesUsed(op), nil
+	return plan, operators.TablesUsed(op), nil
 }
 
 func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars) (ops.Operator, error) {
