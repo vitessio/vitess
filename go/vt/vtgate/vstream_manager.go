@@ -501,7 +501,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		// Create a child context with a stricter timeout when picking a tablet.
 		// This will prevent hanging in the case no tablets are found
-		tpCtx, tpCancel := context.WithTimeout(context.Background(), 60*time.Second)
+		tpCtx, tpCancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer tpCancel()
 
 		tablet, err := tp.PickForStreaming(tpCtx)
