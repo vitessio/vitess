@@ -100,7 +100,7 @@ func fkManagementNotRequired(ctx *plancontext.PlanningContext, vschema planconte
 		if err != nil {
 			return false
 		}
-		if ksMode != vschemapb.Keyspace_FK_MANAGED {
+		if ksMode != vschemapb.Keyspace_managed {
 			continue
 		}
 		childFks := vTable.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.DeleteAction)

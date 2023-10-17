@@ -1027,7 +1027,7 @@ func (vc *vcursorImpl) PlannerWarning(message string) {
 // ForeignKeyMode implements the VCursor interface
 func (vc *vcursorImpl) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
 	if strings.ToLower(foreignKeyMode) == "disallow" {
-		return vschemapb.Keyspace_FK_DISALLOW, nil
+		return vschemapb.Keyspace_disallow, nil
 	}
 	ks := vc.vschema.Keyspaces[keyspace]
 	if ks == nil {

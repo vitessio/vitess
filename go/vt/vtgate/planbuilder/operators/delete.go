@@ -99,7 +99,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	}
 
 	// Unmanaged foreign-key-mode, we don't need to do anything.
-	if ksMode != vschemapb.Keyspace_FK_MANAGED {
+	if ksMode != vschemapb.Keyspace_managed {
 		return delOp, nil
 	}
 

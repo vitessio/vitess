@@ -120,7 +120,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		return nil, err
 	}
 	// Unmanaged foreign-key-mode, we don't need to do anything.
-	if ksMode != vschemapb.Keyspace_FK_MANAGED {
+	if ksMode != vschemapb.Keyspace_managed {
 		return updOp, nil
 	}
 

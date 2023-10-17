@@ -326,7 +326,7 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 				Name:    ksname,
 				Sharded: ks.Sharded,
 			},
-			ForeignKeyMode: replaceDefaultForeignKeyMode(ks.ForeignKeyMode),
+			ForeignKeyMode: replaceUnspecifiedForeignKeyMode(ks.ForeignKeyMode),
 			Tables:         make(map[string]*Table),
 			Vindexes:       make(map[string]Vindex),
 		}
@@ -335,10 +335,10 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	}
 }
 
-// replaceDefaultForeignKeyMode replaces the default value of the foreign key mode enum with the default we want to keep.
-func replaceDefaultForeignKeyMode(fkMode vschemapb.Keyspace_ForeignKeyMode) vschemapb.Keyspace_ForeignKeyMode {
-	if fkMode == vschemapb.Keyspace_FK_DEFAULT {
-		return vschemapb.Keyspace_FK_UNMANAGED
+// replaceUnspecifiedForeignKeyMode replaces the default value of the foreign key mode enum with the default we want to keep.
+func replaceUnspecifiedForeignKeyMode(fkMode vschemapb.Keyspace_ForeignKeyMode) vschemapb.Keyspace_ForeignKeyMode {
+	if fkMode == vschemapb.Keyspace_unspecified {
+		return vschemapb.Keyspace_unmanaged
 	}
 	return fkMode
 }
