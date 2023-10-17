@@ -72,6 +72,7 @@ jobs:
 
 
   build_and_push_components:
+    needs: build_and_push_base
     name: Build and push vitess components Docker images
     runs-on: ubuntu-latest # TODO: use larger runner when testing is done
     #    if: github.repository == 'vitessio/vitess'
@@ -92,12 +93,20 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Set Docker context path
+        run: |
+          if [[ "${{ matrix.component }}" == "k8s" ]]; then
+            echo "DOCKER_CTX=./docker/k8s" >> $GITHUB_ENV
+          else
+            echo "DOCKER_CTX=./docker/k8s/${{ matrix.component }}" >> $GITHUB_ENV
+          fi
+
       # Build and Push component image to tag "latest" if branch=main and debian=bookworm
       - name: Build and push on main Bookworm (default)
         if: github.ref == 'refs/heads/main' && matrix.debian == 'bookworm'
         uses: docker/build-push-action@v5
         with:
-          context: docker/${{ matrix.component }}
+          context: ${{ env.DOCKER_CTX }}
           push: true
           tags: frouioui/${{ matrix.component }}:latest
 
@@ -106,7 +115,7 @@ jobs:
         if: github.ref == 'refs/heads/main' && matrix.debian == 'bullseye'
         uses: docker/build-push-action@v5
         with:
-          context: docker/${{ matrix.component }}
+          context: ${{ env.DOCKER_CTX }}
           push: true
           tags: frouioui/${{ matrix.component }}:latest-bullseye
 
@@ -133,7 +142,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: docker/build-push-action@v5
         with:
-          context: docker/${{ matrix.component }}
+          context: ${{ env.DOCKER_CTX }}
           push: true
           tags: ${{ env.DOCKER_TAG }}
 
@@ -143,6 +152,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') && matrix.debian == 'bookworm'
         uses: docker/build-push-action@v5
         with:
-          context: docker/${{ matrix.component }}
+          context: ${{ env.DOCKER_CTX }}
           push: true
           tags: ${{ env.DOCKER_TAG_DEFAULT_DEBIAN }}
