@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*semiJoin)(nil)
@@ -57,9 +56,4 @@ func (ps *semiJoin) Primitive() engine.Primitive {
 		Vars:  ps.vars,
 		Cols:  ps.cols,
 	}
-}
-
-// ContainsTables implements the logicalPlan interface
-func (ps *semiJoin) ContainsTables() semantics.TableSet {
-	return ps.lhs.ContainsTables().Merge(ps.rhs.ContainsTables())
 }

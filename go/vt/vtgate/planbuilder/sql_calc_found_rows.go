@@ -18,18 +18,12 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*sqlCalcFoundRows)(nil)
 
 type sqlCalcFoundRows struct {
 	LimitQuery, CountQuery logicalPlan
-}
-
-// ContainsTables implements the logicalPlan interface
-func (s *sqlCalcFoundRows) ContainsTables() semantics.TableSet {
-	return s.LimitQuery.ContainsTables()
 }
 
 // Primitive implements the logicalPlan interface

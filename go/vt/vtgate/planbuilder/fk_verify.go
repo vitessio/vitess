@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*fkVerify)(nil)
@@ -55,9 +54,4 @@ func (fkc *fkVerify) Primitive() engine.Primitive {
 		Exec:   fkc.input.Primitive(),
 		Verify: verify,
 	}
-}
-
-// ContainsTables implements the logicalPlan interface
-func (fkc *fkVerify) ContainsTables() semantics.TableSet {
-	return fkc.input.ContainsTables()
 }

@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*join)(nil)
@@ -55,21 +54,4 @@ func (j *join) Primitive() engine.Primitive {
 		Vars:   j.Vars,
 		Opcode: j.Opcode,
 	}
-}
-
-// ContainsTables implements the logicalPlan interface
-func (j *join) ContainsTables() semantics.TableSet {
-	return j.Left.ContainsTables().Merge(j.Right.ContainsTables())
-}
-
-func getOutputColumnsFromJoin(ints []int, lhs []sqlparser.SelectExpr, rhs []sqlparser.SelectExpr) (cols []sqlparser.SelectExpr) {
-	for _, col := range ints {
-		if col < 0 {
-			col *= -1
-			cols = append(cols, lhs[col-1])
-		} else {
-			cols = append(cols, rhs[col-1])
-		}
-	}
-	return
 }

@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type projection struct {
@@ -33,11 +32,6 @@ type projection struct {
 }
 
 var _ logicalPlan = (*projection)(nil)
-
-// ContainsTables implements the logicalPlan interface
-func (p *projection) ContainsTables() semantics.TableSet {
-	return p.source.ContainsTables()
-}
 
 // Primitive implements the logicalPlan interface
 func (p *projection) Primitive() engine.Primitive {

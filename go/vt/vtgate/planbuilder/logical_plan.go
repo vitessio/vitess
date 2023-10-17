@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // logicalPlan defines the interface that a primitive must
@@ -27,10 +26,6 @@ type logicalPlan interface {
 	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.
 	Primitive() engine.Primitive
-
-	// ContainsTables keeps track which query tables are being solved by this logical plan
-	// This is only applicable for plans that have been built with the Gen4 planner
-	ContainsTables() semantics.TableSet
 }
 
 // -------------------------------------------------------------------------
@@ -48,11 +43,6 @@ func newBuilderCommon(input logicalPlan) logicalPlanCommon {
 
 func (bc *logicalPlanCommon) Order() int {
 	return bc.order
-}
-
-// ContainsTables implements the logicalPlan interface
-func (bc *logicalPlanCommon) ContainsTables() semantics.TableSet {
-	return bc.input.ContainsTables()
 }
 
 // -------------------------------------------------------------------------

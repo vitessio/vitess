@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*fkCascade)(nil)
@@ -46,9 +45,4 @@ func (fkc *fkCascade) Primitive() engine.Primitive {
 		Selection: fkc.selection.Primitive(),
 		Children:  fkc.children,
 	}
-}
-
-// ContainsTables implements the logicalPlan interface
-func (fkc *fkCascade) ContainsTables() semantics.TableSet {
-	return fkc.parent.ContainsTables()
 }

@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type concatenate struct {
@@ -39,13 +38,4 @@ func (c *concatenate) Primitive() engine.Primitive {
 	}
 
 	return engine.NewConcatenate(sources, c.noNeedToTypeCheck)
-}
-
-// ContainsTables implements the logicalPlan interface
-func (c *concatenate) ContainsTables() semantics.TableSet {
-	var tableSet semantics.TableSet
-	for _, source := range c.sources {
-		tableSet = tableSet.Merge(source.ContainsTables())
-	}
-	return tableSet
 }

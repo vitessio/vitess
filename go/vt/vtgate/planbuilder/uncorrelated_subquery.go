@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*uncorrelatedSubquery)(nil)
@@ -51,9 +50,4 @@ func (ps *uncorrelatedSubquery) Primitive() engine.Primitive {
 	ps.eSubquery.Subquery = ps.subquery.Primitive()
 	ps.eSubquery.Outer = ps.outer.Primitive()
 	return ps.eSubquery
-}
-
-// ContainsTables implements the logicalPlan interface
-func (ps *uncorrelatedSubquery) ContainsTables() semantics.TableSet {
-	return ps.outer.ContainsTables().Merge(ps.subquery.ContainsTables())
 }
