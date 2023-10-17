@@ -53,7 +53,7 @@ func (s *FakeSI) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyM
 	if s.KsForeignKeyMode != nil {
 		fkMode, isPresent := s.KsForeignKeyMode[keyspace]
 		if !isPresent {
-			return vschemapb.Keyspace_default, fmt.Errorf("%v keyspace not found", keyspace)
+			return vschemapb.Keyspace_unspecified, fmt.Errorf("%v keyspace not found", keyspace)
 		}
 		return fkMode, nil
 	}

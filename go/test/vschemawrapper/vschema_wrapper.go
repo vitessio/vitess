@@ -130,7 +130,7 @@ func (vw *VSchemaWrapper) PlannerWarning(_ string) {
 
 func (vw *VSchemaWrapper) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
 	defaultFkMode := vschemapb.Keyspace_unmanaged
-	if vw.V.Keyspaces[keyspace] != nil && vw.V.Keyspaces[keyspace].ForeignKeyMode != vschemapb.Keyspace_default {
+	if vw.V.Keyspaces[keyspace] != nil && vw.V.Keyspaces[keyspace].ForeignKeyMode != vschemapb.Keyspace_unspecified {
 		return vw.V.Keyspaces[keyspace].ForeignKeyMode, nil
 	}
 	return defaultFkMode, nil
