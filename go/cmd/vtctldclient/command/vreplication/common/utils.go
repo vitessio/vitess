@@ -114,7 +114,7 @@ func ParseTabletTypes(cmd *cobra.Command) error {
 	if !ttf.Changed {
 		CreateOptions.TabletTypes = tabletTypesDefault
 	} else if strings.TrimSpace(ttf.Value.String()) == "" {
-		return fmt.Errorf("invalid table-types value, at least one valid tablet type must be specified")
+		return fmt.Errorf("invalid tablet-types value, at least one valid tablet type must be specified")
 	}
 	return nil
 }
