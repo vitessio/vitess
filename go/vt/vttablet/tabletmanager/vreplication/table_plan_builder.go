@@ -26,12 +26,13 @@ import (
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // This file contains just the builders for ReplicatorPlan and TablePlan.
@@ -631,7 +632,7 @@ func (tpb *tablePlanBuilder) analyzeExtraSourcePkCols(colInfos []*ColumnInfo, so
 			if !col.IsGenerated {
 				// We shouldn't get here in any normal scenario. If a column is part of colInfos,
 				// then it must also exist in tpb.colExprs.
-				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "column %s not found in table expressions", col.Name)
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "column %s not found in table expressions", col.Name)
 			}
 		}
 	}
