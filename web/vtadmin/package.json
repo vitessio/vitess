@@ -7,6 +7,7 @@
     "npm": ">=8.1.0"
   },
   "dependencies": {
+    "@babel/traverse": "^7.23.2",
     "@bugsnag/js": "^7.10.1",
     "@headlessui/react": "^1.4.2",
     "@types/classnames": "^2.2.11",
