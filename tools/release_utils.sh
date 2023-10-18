@@ -24,11 +24,6 @@ function checkGitState() {
   fi
 }
 
-function updateDockerReleaseScript () {
-  sed -i.bak -E "s/vt_base_version=.*/vt_base_version='v$1'/g" $ROOT/docker/release.sh
-  rm -f $ROOT/docker/release.sh.bak
-}
-
 function checkoutNewBranch () {
   branch_name=$1
 
