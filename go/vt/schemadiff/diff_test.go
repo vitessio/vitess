@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -403,6 +404,7 @@ func TestDiffViews(t *testing.T) {
 }
 
 func TestDiffSchemas(t *testing.T) {
+	ctx := context.Background()
 	tt := []struct {
 		name        string
 		from        string
@@ -806,7 +808,7 @@ func TestDiffSchemas(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 
-				diffs, err := diff.OrderedDiffs()
+				diffs, err := diff.OrderedDiffs(ctx)
 				assert.NoError(t, err)
 				statements := []string{}
 				cstatements := []string{}
@@ -858,6 +860,7 @@ func TestDiffSchemas(t *testing.T) {
 }
 
 func TestSchemaApplyError(t *testing.T) {
+	ctx := context.Background()
 	tt := []struct {
 		name string
 		from string
@@ -900,7 +903,7 @@ func TestSchemaApplyError(t *testing.T) {
 			{
 				diff, err := schema1.SchemaDiff(schema2, hints)
 				require.NoError(t, err)
-				diffs, err := diff.OrderedDiffs()
+				diffs, err := diff.OrderedDiffs(ctx)
 				assert.NoError(t, err)
 				assert.NotEmpty(t, diffs)
 				_, err = schema1.Apply(diffs)
@@ -911,7 +914,7 @@ func TestSchemaApplyError(t *testing.T) {
 			{
 				diff, err := schema2.SchemaDiff(schema1, hints)
 				require.NoError(t, err)
-				diffs, err := diff.OrderedDiffs()
+				diffs, err := diff.OrderedDiffs(ctx)
 				assert.NoError(t, err)
 				assert.NotEmpty(t, diffs, "schema1: %v, schema2: %v", schema1.ToSQL(), schema2.ToSQL())
 				_, err = schema2.Apply(diffs)
