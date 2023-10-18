@@ -19,6 +19,7 @@ package foreignkey
 import (
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"strings"
 	"testing"
 
@@ -27,6 +28,8 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
+
+var supportedOpps = []string{"*", "+", "-"}
 
 // getTestName prepends whether the test is for a sharded keyspace or not to the test name.
 func getTestName(testName string, testSharded bool) string {
@@ -39,6 +42,32 @@ func getTestName(testName string, testSharded bool) string {
 // isMultiColFkTable tells if the table is a multicol table or not.
 func isMultiColFkTable(tableName string) bool {
 	return strings.Contains(tableName, "multicol")
+}
+
+func (fz *fuzzer) generateExpression(length int, cols ...string) string {
+	expr := fz.getColOrInt(cols...)
+	if length == 1 {
+		return expr
+	}
+	rhsExpr := fz.generateExpression(length-1, cols...)
+	op := supportedOpps[rand.Intn(len(supportedOpps))]
+	return fmt.Sprintf("%v %s (%v)", expr, op, rhsExpr)
+}
+
+// getColOrInt gets a column or an integer/NULL literal with equal probability.
+func (fz *fuzzer) getColOrInt(cols ...string) string {
+	if len(cols) == 0 || rand.Intn(2) == 0 {
+		return convertIntValueToString(rand.Intn(1 + fz.maxValForCol))
+	}
+	return cols[rand.Intn(len(cols))]
+}
+
+// convertIntValueToString converts the given value to a string
+func convertIntValueToString(value int) string {
+	if value == 0 {
+		return "NULL"
+	}
+	return fmt.Sprintf("%d", value)
 }
 
 // waitForSchemaTrackingForFkTables waits for schema tracking to have run and seen the tables used

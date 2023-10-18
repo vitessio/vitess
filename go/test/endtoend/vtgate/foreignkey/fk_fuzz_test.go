@@ -131,23 +131,15 @@ func (fz *fuzzer) generateInsertDMLQuery() string {
 	if tableName == "fk_t20" {
 		colValue := rand.Intn(1 + fz.maxValForCol)
 		col2Value := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, col, col2) values (%v, %v, %v)", tableName, idValue, convertColValueToString(colValue), convertColValueToString(col2Value))
+		return fmt.Sprintf("insert into %v (id, col, col2) values (%v, %v, %v)", tableName, idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value))
 	} else if isMultiColFkTable(tableName) {
 		colaValue := rand.Intn(1 + fz.maxValForCol)
 		colbValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, cola, colb) values (%v, %v, %v)", tableName, idValue, convertColValueToString(colaValue), convertColValueToString(colbValue))
+		return fmt.Sprintf("insert into %v (id, cola, colb) values (%v, %v, %v)", tableName, idValue, convertIntValueToString(colaValue), convertIntValueToString(colbValue))
 	} else {
 		colValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, col) values (%v, %v)", tableName, idValue, convertColValueToString(colValue))
+		return fmt.Sprintf("insert into %v (id, col) values (%v, %v)", tableName, idValue, convertIntValueToString(colValue))
 	}
-}
-
-// convertColValueToString converts the given value to a string
-func convertColValueToString(value int) string {
-	if value == 0 {
-		return "NULL"
-	}
-	return fmt.Sprintf("%d", value)
 }
 
 // generateUpdateDMLQuery generates an UPDATE query from the parameters for the fuzzer.
@@ -156,16 +148,16 @@ func (fz *fuzzer) generateUpdateDMLQuery() string {
 	idValue := 1 + rand.Intn(fz.maxValForId)
 	tableName := fkTables[tableId]
 	if tableName == "fk_t20" {
-		colValue := rand.Intn(1 + fz.maxValForCol)
-		col2Value := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("update %v set col = %v, col2 = %v where id = %v", tableName, convertColValueToString(colValue), convertColValueToString(col2Value), idValue)
+		colValue := fz.generateExpression(rand.Intn(4)+1, "col", "col2")
+		col2Value := fz.generateExpression(rand.Intn(4)+1, "col", "col2")
+		return fmt.Sprintf("update %v set col = %v, col2 = %v where id = %v", tableName, colValue, col2Value, idValue)
 	} else if isMultiColFkTable(tableName) {
-		colaValue := rand.Intn(1 + fz.maxValForCol)
-		colbValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("update %v set cola = %v, colb = %v where id = %v", tableName, convertColValueToString(colaValue), convertColValueToString(colbValue), idValue)
+		colaValue := fz.generateExpression(rand.Intn(4)+1, "cola", "colb")
+		colbValue := fz.generateExpression(rand.Intn(4)+1, "cola", "colb")
+		return fmt.Sprintf("update %v set cola = %v, colb = %v where id = %v", tableName, colaValue, colbValue, idValue)
 	} else {
 		colValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("update %v set col = %v where id = %v", tableName, convertColValueToString(colValue), idValue)
+		return fmt.Sprintf("update %v set col = %v where id = %v", tableName, convertIntValueToString(colValue), idValue)
 	}
 }
 
@@ -338,8 +330,8 @@ func (fz *fuzzer) getPreparedInsertQueries() []string {
 		return []string{
 			"prepare stmt_insert from 'insert into fk_t20 (id, col, col2) values (?, ?, ?)'",
 			fmt.Sprintf("SET @id = %v", idValue),
-			fmt.Sprintf("SET @col = %v", convertColValueToString(colValue)),
-			fmt.Sprintf("SET @col2 = %v", convertColValueToString(col2Value)),
+			fmt.Sprintf("SET @col = %v", convertIntValueToString(colValue)),
+			fmt.Sprintf("SET @col2 = %v", convertIntValueToString(col2Value)),
 			"execute stmt_insert using @id, @col, @col2",
 		}
 	} else if isMultiColFkTable(tableName) {
@@ -348,8 +340,8 @@ func (fz *fuzzer) getPreparedInsertQueries() []string {
 		return []string{
 			fmt.Sprintf("prepare stmt_insert from 'insert into %v (id, cola, colb) values (?, ?, ?)'", tableName),
 			fmt.Sprintf("SET @id = %v", idValue),
-			fmt.Sprintf("SET @cola = %v", convertColValueToString(colaValue)),
-			fmt.Sprintf("SET @colb = %v", convertColValueToString(colbValue)),
+			fmt.Sprintf("SET @cola = %v", convertIntValueToString(colaValue)),
+			fmt.Sprintf("SET @colb = %v", convertIntValueToString(colbValue)),
 			"execute stmt_insert using @id, @cola, @colb",
 		}
 	} else {
@@ -357,7 +349,7 @@ func (fz *fuzzer) getPreparedInsertQueries() []string {
 		return []string{
 			fmt.Sprintf("prepare stmt_insert from 'insert into %v (id, col) values (?, ?)'", tableName),
 			fmt.Sprintf("SET @id = %v", idValue),
-			fmt.Sprintf("SET @col = %v", convertColValueToString(colValue)),
+			fmt.Sprintf("SET @col = %v", convertIntValueToString(colValue)),
 			"execute stmt_insert using @id, @col",
 		}
 	}
@@ -374,8 +366,8 @@ func (fz *fuzzer) getPreparedUpdateQueries() []string {
 		return []string{
 			"prepare stmt_update from 'update fk_t20 set col = ?, col2 = ? where id = ?'",
 			fmt.Sprintf("SET @id = %v", idValue),
-			fmt.Sprintf("SET @col = %v", convertColValueToString(colValue)),
-			fmt.Sprintf("SET @col2 = %v", convertColValueToString(col2Value)),
+			fmt.Sprintf("SET @col = %v", convertIntValueToString(colValue)),
+			fmt.Sprintf("SET @col2 = %v", convertIntValueToString(col2Value)),
 			"execute stmt_update using @col, @col2, @id",
 		}
 	} else if isMultiColFkTable(tableName) {
@@ -384,8 +376,8 @@ func (fz *fuzzer) getPreparedUpdateQueries() []string {
 		return []string{
 			fmt.Sprintf("prepare stmt_update from 'update %v set cola = ?, colb = ? where id = ?'", tableName),
 			fmt.Sprintf("SET @id = %v", idValue),
-			fmt.Sprintf("SET @cola = %v", convertColValueToString(colaValue)),
-			fmt.Sprintf("SET @colb = %v", convertColValueToString(colbValue)),
+			fmt.Sprintf("SET @cola = %v", convertIntValueToString(colaValue)),
+			fmt.Sprintf("SET @colb = %v", convertIntValueToString(colbValue)),
 			"execute stmt_update using @cola, @colb, @id",
 		}
 	} else {
@@ -393,7 +385,7 @@ func (fz *fuzzer) getPreparedUpdateQueries() []string {
 		return []string{
 			fmt.Sprintf("prepare stmt_update from 'update %v set col = ? where id = ?'", tableName),
 			fmt.Sprintf("SET @id = %v", idValue),
-			fmt.Sprintf("SET @col = %v", convertColValueToString(colValue)),
+			fmt.Sprintf("SET @col = %v", convertIntValueToString(colValue)),
 			"execute stmt_update using @col, @id",
 		}
 	}
@@ -419,14 +411,14 @@ func (fz *fuzzer) generateParameterizedInsertQuery() (query string, params []any
 	if tableName == "fk_t20" {
 		colValue := rand.Intn(1 + fz.maxValForCol)
 		col2Value := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, col, col2) values (?, ?, ?)", tableName), []any{idValue, convertColValueToString(colValue), convertColValueToString(col2Value)}
+		return fmt.Sprintf("insert into %v (id, col, col2) values (?, ?, ?)", tableName), []any{idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value)}
 	} else if isMultiColFkTable(tableName) {
 		colaValue := rand.Intn(1 + fz.maxValForCol)
 		colbValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, cola, colb) values (?, ?, ?)", tableName), []any{idValue, convertColValueToString(colaValue), convertColValueToString(colbValue)}
+		return fmt.Sprintf("insert into %v (id, cola, colb) values (?, ?, ?)", tableName), []any{idValue, convertIntValueToString(colaValue), convertIntValueToString(colbValue)}
 	} else {
 		colValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, col) values (?, ?)", tableName), []any{idValue, convertColValueToString(colValue)}
+		return fmt.Sprintf("insert into %v (id, col) values (?, ?)", tableName), []any{idValue, convertIntValueToString(colValue)}
 	}
 }
 
@@ -438,14 +430,14 @@ func (fz *fuzzer) generateParameterizedUpdateQuery() (query string, params []any
 	if tableName == "fk_t20" {
 		colValue := rand.Intn(1 + fz.maxValForCol)
 		col2Value := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("update %v set col = ?, col2 = ? where id = ?", tableName), []any{convertColValueToString(colValue), convertColValueToString(col2Value), idValue}
+		return fmt.Sprintf("update %v set col = ?, col2 = ? where id = ?", tableName), []any{convertIntValueToString(colValue), convertIntValueToString(col2Value), idValue}
 	} else if isMultiColFkTable(tableName) {
 		colaValue := rand.Intn(1 + fz.maxValForCol)
 		colbValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("update %v set cola = ?, colb = ? where id = ?", tableName), []any{convertColValueToString(colaValue), convertColValueToString(colbValue), idValue}
+		return fmt.Sprintf("update %v set cola = ?, colb = ? where id = ?", tableName), []any{convertIntValueToString(colaValue), convertIntValueToString(colbValue), idValue}
 	} else {
 		colValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("update %v set col = ? where id = ?", tableName), []any{convertColValueToString(colValue), idValue}
+		return fmt.Sprintf("update %v set col = ? where id = ?", tableName), []any{convertIntValueToString(colValue), idValue}
 	}
 }
 
