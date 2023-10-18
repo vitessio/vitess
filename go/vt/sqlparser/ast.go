@@ -471,13 +471,59 @@ func (*SetOp) iSelectStatement()           {}
 func (*ParenSelect) iSelectStatement()     {}
 func (*ValuesStatement) iSelectStatement() {}
 
+type QueryOpts struct {
+	All              bool
+	Distinct         bool
+	StraightJoinHint bool
+	SQLCalcFoundRows bool
+	SQLCache         bool
+	SQLNoCache       bool
+}
+
+func (q *QueryOpts) merge(other QueryOpts) error {
+	q.All = q.All || other.All
+	q.Distinct = q.Distinct || other.Distinct
+	q.StraightJoinHint = q.StraightJoinHint || other.StraightJoinHint
+	q.SQLCalcFoundRows = q.SQLCalcFoundRows || other.SQLCalcFoundRows
+	q.SQLCache = q.SQLCache || other.SQLCache
+	q.SQLNoCache = q.SQLNoCache || other.SQLNoCache
+
+	if q.Distinct && q.All {
+		return errors.New("incorrect usage of DISTINCT and ALL")
+	}
+
+	if q.SQLCache && q.SQLNoCache {
+		return errors.New("incorrect usage of SQL_CACHE and SQL_NO_CACHE")
+	}
+
+	return nil
+}
+
+func (q QueryOpts) Format(buf *TrackedBuffer) {
+	if q.All {
+		buf.Myprintf("%s", AllStr)
+	}
+	if q.Distinct {
+		buf.Myprintf("%s", DistinctStr)
+	}
+	if q.StraightJoinHint {
+		buf.Myprintf("%s", StraightJoinHintStr)
+	}
+	if q.SQLCalcFoundRows {
+		buf.Myprintf("%s", SQLCalcFoundRowsStr)
+	}
+	if q.SQLCache {
+		buf.Myprintf("%s", SQLCacheStr)
+	}
+	if q.SQLNoCache {
+		buf.Myprintf("%s", SQLNoCacheStr)
+	}
+}
+
 // Select represents a SELECT statement.
 type Select struct {
-	Cache         string
-	CalcFoundRows bool
 	Comments      Comments
-	Distinct      string
-	Hints         string
+	QueryOpts     QueryOpts
 	With          *With
 	SelectExprs   SelectExprs
 	From          TableExprs
@@ -491,10 +537,14 @@ type Select struct {
 	Into          *Into
 }
 
-// Select.Distinct
+// Select.QueryOpts
 const (
-	DistinctStr      = "distinct "
-	StraightJoinHint = "straight_join "
+	DistinctStr         = "distinct "
+	AllStr              = "all "
+	StraightJoinHintStr = "straight_join "
+	SQLCalcFoundRowsStr = "sql_calc_found_rows "
+	SQLCacheStr         = "sql_cache "
+	SQLNoCacheStr       = "sql_no_cache "
 )
 
 // Select.Lock
@@ -502,12 +552,6 @@ const (
 	ForUpdateStr           = " for update"
 	ShareModeStr           = " lock in share mode"
 	ForUpdateSkipLockedStr = " for update skip locked"
-)
-
-// Select.Cache
-const (
-	SQLCacheStr   = "sql_cache "
-	SQLNoCacheStr = "sql_no_cache "
 )
 
 // AddOrder adds an order by element
@@ -549,14 +593,9 @@ func (node *Select) SetLimit(limit *Limit) {
 
 // Format formats the node.
 func (node *Select) Format(buf *TrackedBuffer) {
-	calcFoundRows := ""
-	if node.CalcFoundRows {
-		calcFoundRows = "sql_calc_found_rows "
-	}
-
-	buf.Myprintf("%vselect %v%s%s%s%s%v",
+	buf.Myprintf("%vselect %v%v%v",
 		node.With,
-		node.Comments, node.Cache, calcFoundRows, node.Distinct, node.Hints, node.SelectExprs,
+		node.Comments, &node.QueryOpts, node.SelectExprs,
 	)
 
 	if node.From != nil {

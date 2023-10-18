@@ -380,14 +380,42 @@ var (
 			output: "select * from t1 where col in (select 1 union select 2)",
 		}, {
 			input: "select * from t1 where exists (select a from t2 union select b from t3)",
-		}, {
+		},
+		{
 			input: "select /* distinct */ distinct 1 from t",
-		}, {
+		},
+		{
 			input:  "select all col from t",
-			output: "select col from t",
-		}, {
+			output: "select all col from t",
+		},
+		{
 			input: "select /* straight_join */ straight_join 1 from t",
-		}, {
+		},
+		{
+			input: "select sql_calc_found_rows distinct * from t",
+			output: "select distinct sql_calc_found_rows * from t",
+		},
+		{
+			input: "select distinct sql_calc_found_rows * from t",
+			output: "select distinct sql_calc_found_rows * from t",
+		},
+		{
+			input: "select distinct sql_calc_found_rows distinct * from t",
+			output: "select distinct sql_calc_found_rows * from t",
+		},
+		{
+			input: "select sql_cache distinct sql_calc_found_rows straight_join * from t",
+			output: "select distinct straight_join sql_calc_found_rows sql_cache * from t",
+		},
+		{
+			input: "select straight_join sql_calc_found_rows all sql_no_cache * from t",
+			output: "select all straight_join sql_calc_found_rows sql_no_cache * from t",
+		},
+		{
+			input: "select sql_cache distinct sql_calc_found_rows straight_join straight_join sql_calc_found_rows distinct sql_cache * from t",
+			output: "select distinct straight_join sql_calc_found_rows sql_cache * from t",
+		},
+		{
 			input: "select /* for update */ 1 from t for update",
 		}, {
 			input: "select /* skip locked */ 1 from t for update skip locked",
@@ -2125,7 +2153,7 @@ var (
 			useSelectExpressionLiteral: true,
 		}, {
 			input:                      "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows 'foo' from t",
-			output:                     "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows 'foo' from t",
+			output:                     "select /* cache and sql_calc_rows directive */ sql_calc_found_rows sql_no_cache 'foo' from t",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select binary 'a' = 'A' from t",
@@ -4418,6 +4446,14 @@ func TestInvalid(t *testing.T) {
 			input: "select * from t join lateral (select * from t2)",
 			err:   "Every derived table must have its own alias",
 		},
+		{
+			input: "select distinct all * from t",
+			err:   "incorrect usage of DISTINCT and ALL",
+		},
+		{
+			input: "select sql_cache sql_no_cache * from t",
+			err:   "incorrect usage of SQL_CACHE and SQL_NO_CACHE",
+		},
 	}
 
 	for _, tcase := range invalidSQL {
@@ -4753,6 +4789,9 @@ func runParseTestCaseWithParserOptions(t *testing.T, tcase parseTest, options Pa
 			tcase.output = tcase.input
 		}
 		tree, err := ParseWithOptions(tcase.input, options)
+		if err != nil {
+			panic(tcase.input)
+		}
 		require.NoError(t, err)
 
 		assertTestcaseOutput(t, tcase, tree)
