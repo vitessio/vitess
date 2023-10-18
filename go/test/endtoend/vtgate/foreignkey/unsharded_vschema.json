@@ -1,6 +1,6 @@
 {
   "sharded": false,
-  "foreignKeyMode": "FK_MANAGED",
+  "foreignKeyMode": "managed",
   "tables": {
     "u_t1": {},
     "u_t2": {},

@@ -85,14 +85,14 @@ It is disabled by default.
 A new field `foreignKeyMode` has been added to the VSchema. This field can be provided for each keyspace. The VTGate flag `--foreign_key_mode` has been deprecated in favour of this field.
 
 There are 3 foreign key modes now supported in Vitess -
-1. `FK_UNMANAGED` -
+1. `unmanaged` -
    This mode represents the default behaviour in Vitess, where it does not manage foreign keys column references. Users are responsible for configuring foreign keys in MySQL in such a way that related rows, as determined by foreign keys, reside within the same shard.
-2. `FK_MANAGED` [EXPERIMENTAL] -
+2. `managed` [EXPERIMENTAL] -
    In this experimental mode, Vitess is fully aware of foreign key relationships and actively tracks foreign key constraints using the schema tracker. Vitess takes charge of handling DML operations with foreign keys cascading updates, deletes and verifying restrict. It will also validate parent row existence.
    This ensures that all the operations are logged in binary logs, unlike MySQL implementation of foreign keys.
    This enables seamless integration of VReplication with foreign keys.
    For more details on what operations Vitess takes please refer to the [design document for foreign keys](https://github.com/vitessio/vitess/issues/12967).
-3. `FK_DISALLOW` -
+3. `disallow` -
    In this mode Vitess explicitly disallows any DDL statements that try to create a foreign key constraint. This mode is equivalent to running VTGate with the flag `--foreign_key_mode=disallow`.
 
 #### Upgrade process

@@ -149,7 +149,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	if err != nil {
 		return nil, err
 	}
-	if ksMode != vschemapb.Keyspace_FK_MANAGED {
+	if ksMode != vschemapb.Keyspace_managed {
 		return insOp, nil
 	}
 
