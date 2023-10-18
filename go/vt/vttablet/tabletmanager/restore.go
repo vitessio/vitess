@@ -59,8 +59,8 @@ var (
 	restoreConcurrency     = 4
 	waitForBackupInterval  time.Duration
 
-	statsRestoreBackupTime     *stats.String
-	statsRestoreBackupPosition *stats.String
+	statsRestoreBackupTime     *stats.StringValue
+	statsRestoreBackupPosition *stats.StringValue
 )
 
 func registerRestoreFlags(fs *pflag.FlagSet) {
@@ -116,8 +116,8 @@ func init() {
 	servenv.OnParseFor("vtcombo", registerPointInTimeRestoreFlags)
 	servenv.OnParseFor("vttablet", registerPointInTimeRestoreFlags)
 
-	statsRestoreBackupTime = stats.NewString("RestoredBackupTime")
-	statsRestoreBackupPosition = stats.NewString("RestorePosition")
+	statsRestoreBackupTime = stats.NewStringValue("RestoredBackupTime")
+	statsRestoreBackupPosition = stats.NewStringValue("RestorePosition")
 }
 
 // RestoreData is the main entry point for backup restore.

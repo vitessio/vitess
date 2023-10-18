@@ -103,7 +103,7 @@ func registerInitFlags(fs *pflag.FlagSet) {
 
 var (
 	// statsTabletType is set to expose the current tablet type.
-	statsTabletType *stats.String
+	statsTabletType *stats.StringValueWithLabel
 
 	// statsTabletTypeCount exposes the current tablet type as a label,
 	// with the value counting the occurrences of the respective tablet type.
@@ -116,11 +116,11 @@ var (
 	// statsIsInSrvKeyspace is set to 1 (true), 0 (false) whether the tablet is in the serving keyspace
 	statsIsInSrvKeyspace *stats.Gauge
 
-	statsKeyspace      = stats.NewString("TabletKeyspace")
-	statsShard         = stats.NewString("TabletShard")
-	statsKeyRangeStart = stats.NewString("TabletKeyRangeStart")
-	statsKeyRangeEnd   = stats.NewString("TabletKeyRangeEnd")
-	statsAlias         = stats.NewString("TabletAlias")
+	statsKeyspace      = stats.NewStringValue("TabletKeyspace")
+	statsShard         = stats.NewStringValue("TabletShard")
+	statsKeyRangeStart = stats.NewStringValue("TabletKeyRangeStart")
+	statsKeyRangeEnd   = stats.NewStringValue("TabletKeyRangeEnd")
+	statsAlias         = stats.NewStringValue("TabletAlias")
 
 	// The following variables can be changed to speed up tests.
 	mysqlPortRetryInterval       = 1 * time.Second
@@ -131,7 +131,7 @@ func init() {
 	servenv.OnParseFor("vtcombo", registerInitFlags)
 	servenv.OnParseFor("vttablet", registerInitFlags)
 
-	statsTabletType = stats.NewString("TabletType")
+	statsTabletType = stats.NewStringValueWithLabel("TabletType", "Current tablet type", "TabletType", "")
 	statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
 	statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
 	statsIsInSrvKeyspace = stats.NewGauge("IsInSrvKeyspace", "Whether the vttablet is in the serving keyspace (1 = true / 0 = false)")

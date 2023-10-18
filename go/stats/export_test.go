@@ -44,13 +44,13 @@ func TestNoHook(t *testing.T) {
 
 func TestString(t *testing.T) {
 	var gotname string
-	var gotv *String
+	var gotv *StringValue
 	clearStats()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
-		gotv = v.(*String)
+		gotv = v.(*StringValue)
 	})
-	v := NewString("String")
+	v := NewStringValue("String")
 	if gotname != "String" {
 		t.Errorf("want String, got %s", gotname)
 	}
@@ -188,4 +188,19 @@ func TestStringMapWithMultiLabels(t *testing.T) {
 	require.Equal(t, keyLabels[1], "bbb")
 
 	require.Equal(t, c.ValueLabel(), "ccc")
+}
+
+func TestStringValueWithLabel(t *testing.T) {
+	clearStats()
+	c := NewStringValueWithLabel("stringValue1", "help", "aaa", "ccc")
+
+	s := c.String()
+	require.Equal(t, "\"ccc\"", s)
+
+	label := c.Label()
+	require.Equal(t, "aaa", label)
+
+	c.Set("ddd")
+	s = c.String()
+	require.Equal(t, "\"ddd\"", s)
 }

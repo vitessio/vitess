@@ -202,7 +202,7 @@ func (sb StatsBackend) addExpVar(kv expvar.KeyValue) {
 				}
 			}
 		}
-	case *stats.String:
+	case *stats.StringValue:
 		if k == "BuildGitRev" {
 			buildGitRecOnce.Do(func() {
 				checksum := crc32.ChecksumIEEE([]byte(v.Get()))

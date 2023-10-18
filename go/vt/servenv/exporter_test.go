@@ -624,7 +624,7 @@ func TestHistogram(t *testing.T) {
 
 func TestPublish(t *testing.T) {
 	ebd := NewExporter("", "")
-	s := stats.NewString("")
+	s := stats.NewStringValue("")
 	ebd.Publish("gpub", s)
 	s.Set("1")
 	assert.Equal(t, `"1"`, expvar.Get("gpub").String())

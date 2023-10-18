@@ -258,6 +258,16 @@ func TestPrometheusStringMapFuncWithMultiLabels(t *testing.T) {
 	checkHandlerForMetricWithMultiLabels(t, name, allLabels, []string{"bar", "baz", "world"}, 1)
 }
 
+func TestPrometheusStringValueWithLabel(t *testing.T) {
+	name := "blah_stringvaluewithlabel"
+	label := "label"
+	value := "value"
+
+	stats.NewStringValueWithLabel(name, "help", label, value)
+
+	checkHandlerForMetricWithMultiLabels(t, name, []string{label}, []string{value}, 1)
+}
+
 func checkHandlerForMetricWithMultiLabels(t *testing.T, metric string, labels []string, labelValues []string, value int64) {
 	response := testMetricsHandler(t)
 

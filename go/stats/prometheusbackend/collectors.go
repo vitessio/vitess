@@ -431,3 +431,36 @@ func (c *stringMapFuncWithMultiLabelsCollector) Collect(ch chan<- prometheus.Met
 		}
 	}
 }
+
+type stringValueWithLabelCollector struct {
+	svl  *stats.StringValueWithLabel
+	desc *prometheus.Desc
+}
+
+func newStringValueWithLabelCollector(svl *stats.StringValueWithLabel, name string) {
+	c := &stringValueWithLabelCollector{
+		svl: svl,
+		desc: prometheus.NewDesc(
+			name,
+			svl.Help(),
+			labelsToSnake([]string{svl.Label()}),
+			nil),
+	}
+
+	prometheus.MustRegister(c)
+}
+
+// Describe implements Collector.
+func (c *stringValueWithLabelCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.desc
+}
+
+// Collect implements Collector.
+func (c *stringValueWithLabelCollector) Collect(ch chan<- prometheus.Metric) {
+	metric, err := prometheus.NewConstMetric(c.desc, prometheus.GaugeValue, 1.0, c.svl.Get())
+	if err != nil {
+		log.Errorf("Error adding metric: %s", c.desc)
+	} else {
+		ch <- metric
+	}
+}

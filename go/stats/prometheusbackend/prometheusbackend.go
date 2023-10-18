@@ -87,7 +87,9 @@ func (be PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 		newHistogramCollector(st, be.buildPromName(name))
 	case *stats.StringMapFuncWithMultiLabels:
 		newStringMapFuncWithMultiLabelsCollector(st, be.buildPromName(name))
-	case *stats.String, stats.StringFunc, stats.StringMapFunc, *stats.Rates, *stats.RatesFunc:
+	case *stats.StringValueWithLabel:
+		newStringValueWithLabelCollector(st, be.buildPromName(name))
+	case *stats.StringValue, stats.StringFunc, stats.StringMapFunc, *stats.Rates, *stats.RatesFunc:
 		// Silently ignore these types since they don't make sense to
 		// export to Prometheus' data model.
 	default:

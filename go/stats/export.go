@@ -139,6 +139,47 @@ func pushOne(name string, v Variable) error {
 	return backend.PushOne(name, v)
 }
 
+// StringValueWithLabel is string publisher.
+//
+// The valueLabel is intended for use by backends which must export a stats in
+// numeric form, and is not used by expvars.
+//
+// Backends which need to provide a numeric value can set a constant value of 1
+// (or whatever is appropriate for the backend).
+type StringValueWithLabel struct {
+	*StringValue
+	help  string
+	label string
+}
+
+// Help returns the descriptive help message.
+func (s StringValueWithLabel) Help() string {
+	return s.help
+}
+
+// Label returns the value label.
+func (s StringValueWithLabel) Label() string {
+	return s.label
+}
+
+// NewStringValueWithLabel creates a new StringFuncWithValueLabel.
+func NewStringValueWithLabel(name, help string, label, initialValue string) *StringValueWithLabel {
+	s := NewStringValue("" /* omit name to avoid publish conflicts */)
+	s.Set(initialValue)
+
+	t := &StringValueWithLabel{
+		StringValue: s,
+		help:        help,
+		label:       label,
+	}
+
+	if name != "" {
+		publish(name, t)
+	}
+
+	return t
+}
+
 // StringMapFuncWithMultiLabels is a multidimensional string map publisher.
 //
 // Map keys are compound names made with joining multiple strings with '.',
@@ -270,28 +311,28 @@ func (f FloatFunc) String() string {
 	return strconv.FormatFloat(f(), 'g', -1, 64)
 }
 
-// String is expvar.String+Get+hook
-type String struct {
+// StringValue is expvar.StringValue+Get+hook
+type StringValue struct {
 	mu sync.Mutex
 	s  string
 }
 
-// NewString returns a new String
-func NewString(name string) *String {
-	v := new(String)
+// NewStringValue returns a new String
+func NewStringValue(name string) *StringValue {
+	v := new(StringValue)
 	publish(name, v)
 	return v
 }
 
 // Set sets the value
-func (v *String) Set(value string) {
+func (v *StringValue) Set(value string) {
 	v.mu.Lock()
 	v.s = value
 	v.mu.Unlock()
 }
 
 // Get returns the value
-func (v *String) Get() string {
+func (v *StringValue) Get() string {
 	v.mu.Lock()
 	s := v.s
 	v.mu.Unlock()
@@ -299,7 +340,7 @@ func (v *String) Get() string {
 }
 
 // String is the implementation of expvar.var
-func (v *String) String() string {
+func (v *StringValue) String() string {
 	return strconv.Quote(v.Get())
 }
 

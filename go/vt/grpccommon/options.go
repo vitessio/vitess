@@ -54,5 +54,5 @@ func MaxMessageSize() int {
 }
 
 func init() {
-	stats.NewString("GrpcVersion").Set(grpc.Version)
+	stats.NewStringValue("GrpcVersion").Set(grpc.Version)
 }

@@ -118,15 +118,15 @@ func init() {
 		goArch:             runtime.GOARCH,
 		version:            versionName,
 	}
-	stats.NewString("BuildHost").Set(AppVersion.buildHost)
-	stats.NewString("BuildUser").Set(AppVersion.buildUser)
+	stats.NewStringValue("BuildHost").Set(AppVersion.buildHost)
+	stats.NewStringValue("BuildUser").Set(AppVersion.buildUser)
 	stats.NewGauge("BuildTimestamp", "build timestamp").Set(AppVersion.buildTime)
-	stats.NewString("BuildGitRev").Set(AppVersion.buildGitRev)
-	stats.NewString("BuildGitBranch").Set(AppVersion.buildGitBranch)
+	stats.NewStringValue("BuildGitRev").Set(AppVersion.buildGitRev)
+	stats.NewStringValue("BuildGitBranch").Set(AppVersion.buildGitBranch)
 	stats.NewGauge("BuildNumber", "build number").Set(AppVersion.jenkinsBuildNumber)
-	stats.NewString("GoVersion").Set(AppVersion.goVersion)
-	stats.NewString("GoOS").Set(AppVersion.goOS)
-	stats.NewString("GoArch").Set(AppVersion.goArch)
+	stats.NewStringValue("GoVersion").Set(AppVersion.goVersion)
+	stats.NewStringValue("GoOS").Set(AppVersion.goOS)
+	stats.NewStringValue("GoArch").Set(AppVersion.goArch)
 
 	buildLabels := []string{"BuildHost", "BuildUser", "BuildTimestamp", "BuildGitRev", "BuildGitBranch", "BuildNumber"}
 	buildValues := []string{
