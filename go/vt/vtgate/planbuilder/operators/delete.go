@@ -91,6 +91,13 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return nil, err
 	}
 
+	if deleteStmt.Comments != nil {
+		delOp = &LockAndComment{
+			Source:   delOp,
+			Comments: deleteStmt.Comments,
+		}
+	}
+
 	childFks := ctx.SemTable.GetChildForeignKeysList()
 	// If there are no foreign key constraints, then we don't need to do anything.
 	if len(childFks) == 0 {
@@ -160,7 +167,7 @@ func createDeleteOperator(
 		return nil, vterrors.VT12001("multi shard DELETE with LIMIT")
 	}
 
-	return sqc.getRootOperator(route), nil
+	return sqc.getRootOperator(route, nil), nil
 }
 
 func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo) (ops.Operator, error) {
