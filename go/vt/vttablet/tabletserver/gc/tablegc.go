@@ -388,7 +388,7 @@ func (collector *TableGC) readTables(ctx context.Context) (gcTables []*gcTable, 
 	}
 	defer conn.Recycle()
 
-	res, err := conn.Exec(ctx, sqlShowVtTables, math.MaxInt32, true)
+	res, err := conn.Conn.Exec(ctx, sqlShowVtTables, math.MaxInt32, true)
 	if err != nil {
 		return nil, err
 	}
@@ -556,7 +556,7 @@ func (collector *TableGC) dropTable(ctx context.Context, tableName string, isBas
 	parsed := sqlparser.BuildParsedQuery(sqlDrop, tableName)
 
 	log.Infof("TableGC: dropping table: %s", tableName)
-	_, err = conn.ExecuteFetch(parsed.Query, 1, false)
+	_, err = conn.Conn.ExecuteFetch(parsed.Query, 1, false)
 	if err != nil {
 		return err
 	}
@@ -593,7 +593,7 @@ func (collector *TableGC) transitionTable(ctx context.Context, transition *trans
 	}
 
 	log.Infof("TableGC: renaming table: %s to %s", transition.fromTableName, toTableName)
-	_, err = conn.Exec(ctx, renameStatement, 1, true)
+	_, err = conn.Conn.Exec(ctx, renameStatement, 1, true)
 	if err != nil {
 		return err
 	}

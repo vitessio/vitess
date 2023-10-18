@@ -19,10 +19,6 @@ package pools
 import (
 	"context"
 	"time"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // RPCPool is a specialized version of the ResourcePool, for bounding concurrent
@@ -36,7 +32,7 @@ import (
 // one method of acquisition, Acquire(context.Context), which always uses the
 // lower of the pool-global timeout or the context deadline.
 type RPCPool struct {
-	rp          IResourcePool
+	rp          *ResourcePool
 	waitTimeout time.Duration
 }
 
@@ -71,7 +67,7 @@ func (pool *RPCPool) Acquire(ctx context.Context) error {
 		defer cancel()
 	}
 
-	_, err := pool.rp.Get(ctx, nil)
+	_, err := pool.rp.Get(ctx)
 	return err
 }
 
@@ -91,25 +87,6 @@ var rpc = &_rpc{}
 
 // Close implements Resource for _rpc.
 func (*_rpc) Close() {}
-
-// ApplySetting implements Resource for _rpc.
-func (r *_rpc) ApplySetting(context.Context, *Setting) error {
-	// should be unreachable
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: _rpc does not support ApplySetting")
-}
-
-func (r *_rpc) IsSettingApplied() bool {
-	return false
-}
-
-func (r *_rpc) IsSameSetting(string) bool {
-	return true
-}
-
-func (r *_rpc) ResetSetting(context.Context) error {
-	// should be unreachable
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: _rpc does not support ResetSetting")
-}
 
 func (r *_rpc) Expired(time.Duration) bool {
 	return false

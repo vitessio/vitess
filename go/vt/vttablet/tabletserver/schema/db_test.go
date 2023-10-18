@@ -96,7 +96,7 @@ func TestGenerateFullQuery(t *testing.T) {
 
 func TestGetCreateStatement(t *testing.T) {
 	db := fakesqldb.New(t)
-	conn, err := connpool.NewDBConnNoPool(context.Background(), db.ConnParams(), nil, nil)
+	conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
 	require.NoError(t, err)
 
 	// Success view
@@ -131,7 +131,7 @@ func TestGetCreateStatement(t *testing.T) {
 
 func TestGetChangedViewNames(t *testing.T) {
 	db := fakesqldb.New(t)
-	conn, err := connpool.NewDBConnNoPool(context.Background(), db.ConnParams(), nil, nil)
+	conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
 	require.NoError(t, err)
 
 	// Success
@@ -164,7 +164,7 @@ func TestGetChangedViewNames(t *testing.T) {
 
 func TestGetViewDefinition(t *testing.T) {
 	db := fakesqldb.New(t)
-	conn, err := connpool.NewDBConnNoPool(context.Background(), db.ConnParams(), nil, nil)
+	conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
 	require.NoError(t, err)
 
 	viewsBV, err := sqltypes.BuildBindVariable([]string{"v1", "lead"})
@@ -200,7 +200,7 @@ func TestGetViewDefinition(t *testing.T) {
 	require.Len(t, got, 0)
 }
 
-func collectGetViewDefinitions(conn *connpool.DBConn, bv map[string]*querypb.BindVariable) (map[string]string, error) {
+func collectGetViewDefinitions(conn *connpool.Conn, bv map[string]*querypb.BindVariable) (map[string]string, error) {
 	viewDefinitions := make(map[string]string)
 	err := getViewDefinition(context.Background(), conn, bv, func(qr *sqltypes.Result) error {
 		for _, row := range qr.Rows {
@@ -336,7 +336,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewDBConnNoPool(context.Background(), db.ConnParams(), nil, nil)
+			conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
 			require.NoError(t, err)
 
 			if tc.dbError != "" {
@@ -456,7 +456,7 @@ func TestReloadTablesInDB(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewDBConnNoPool(context.Background(), db.ConnParams(), nil, nil)
+			conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
 			require.NoError(t, err)
 
 			// Add queries with the expected results and errors.
@@ -588,7 +588,7 @@ func TestReloadViewsInDB(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewDBConnNoPool(context.Background(), db.ConnParams(), nil, nil)
+			conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
 			require.NoError(t, err)
 
 			// Add queries with the expected results and errors.
@@ -878,7 +878,7 @@ func TestReloadDataInDB(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewDBConnNoPool(context.Background(), db.ConnParams(), nil, nil)
+			conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
 			require.NoError(t, err)
 
 			// Add queries with the expected results and errors.

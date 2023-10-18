@@ -87,8 +87,8 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 		errorLog:         logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
 		// We make this pool size 2; to prevent pool exhausted
 		// stats from incrementing continually, and causing concern
-		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
-		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
+		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", env.Exporter(), 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
+		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", env.Exporter(), 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
 	}
 	if w.onDemandDuration > 0 {
 		// see RequestHeartbeats() for use of onDemandRequestTicks
@@ -207,7 +207,7 @@ func (w *heartbeatWriter) write() error {
 		return err
 	}
 	defer appConn.Recycle()
-	_, err = appConn.ExecuteFetch(upsert, 1, false)
+	_, err = appConn.Conn.ExecuteFetch(upsert, 1, false)
 	if err != nil {
 		return err
 	}
