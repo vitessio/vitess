@@ -15,7 +15,7 @@
 ARG VT_BASE_VER=latest
 ARG DEBIAN_VER=bullseye-slim
 
-FROM frouioui/k8s:${VT_BASE_VER} AS k8s
+FROM vitess/k8s:${VT_BASE_VER} AS k8s
 
 FROM node:18-${DEBIAN_VER} as node
 

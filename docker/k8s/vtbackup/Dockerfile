@@ -16,7 +16,7 @@ ARG VT_BASE_VER=latest
 ARG DEBIAN_VER=stable-slim
 
 
-FROM frouioui/k8s:${VT_BASE_VER} AS k8s
+FROM vitess/k8s:${VT_BASE_VER} AS k8s
 
 FROM debian:${DEBIAN_VER}
 
