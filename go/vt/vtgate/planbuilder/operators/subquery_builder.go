@@ -32,9 +32,15 @@ type SubQueryBuilder struct {
 	outerID semantics.TableSet
 }
 
-func (sqb *SubQueryBuilder) getRootOperator(op ops.Operator) ops.Operator {
+func (sqb *SubQueryBuilder) getRootOperator(op ops.Operator, decorator func(operator ops.Operator) ops.Operator) ops.Operator {
 	if len(sqb.Inner) == 0 {
 		return op
+	}
+
+	if decorator != nil {
+		for _, sq := range sqb.Inner {
+			sq.Subquery = decorator(sq.Subquery)
+		}
 	}
 
 	return &SubQueryContainer{
@@ -198,7 +204,7 @@ func createSubquery(
 		return nil, err
 	}
 
-	opInner = sqc.getRootOperator(opInner)
+	opInner = sqc.getRootOperator(opInner, nil)
 	return &SubQuery{
 		FilterType:       filterType,
 		Subquery:         opInner,

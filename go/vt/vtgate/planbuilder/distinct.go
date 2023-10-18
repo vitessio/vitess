@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -60,18 +59,4 @@ func (d *distinct) Primitive() engine.Primitive {
 		CheckCols: d.checkCols,
 		Truncate:  truncate,
 	}
-}
-
-// Rewrite implements the logicalPlan interface
-func (d *distinct) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 1 {
-		return vterrors.VT13001("distinct: wrong number of inputs")
-	}
-	d.input = inputs[0]
-	return nil
-}
-
-// Inputs implements the logicalPlan interface
-func (d *distinct) Inputs() []logicalPlan {
-	return []logicalPlan{d.input}
 }

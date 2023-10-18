@@ -129,7 +129,7 @@ func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.Join
 		}
 		op = op.AddPredicate(ctx, pred)
 	}
-	return sqc.getRootOperator(op), nil
+	return sqc.getRootOperator(op, nil), nil
 }
 
 func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {

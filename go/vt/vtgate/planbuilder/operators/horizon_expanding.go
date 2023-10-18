@@ -269,7 +269,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 			}
 		}
 	}
-	proj.Source = sqc.getRootOperator(src)
+	proj.Source = sqc.getRootOperator(src, nil)
 	return proj
 }
 

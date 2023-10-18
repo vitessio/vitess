@@ -17,12 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*uncorrelatedSubquery)(nil)
@@ -54,37 +50,4 @@ func (ps *uncorrelatedSubquery) Primitive() engine.Primitive {
 	ps.eSubquery.Subquery = ps.subquery.Primitive()
 	ps.eSubquery.Outer = ps.outer.Primitive()
 	return ps.eSubquery
-}
-
-// Wireup implements the logicalPlan interface
-func (ps *uncorrelatedSubquery) Wireup(ctx *plancontext.PlanningContext) error {
-	if err := ps.outer.Wireup(ctx); err != nil {
-		return err
-	}
-	return ps.subquery.Wireup(ctx)
-}
-
-// Rewrite implements the logicalPlan interface
-func (ps *uncorrelatedSubquery) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 2 {
-		return vterrors.VT13001("uncorrelatedSubquery: wrong number of inputs")
-	}
-	ps.outer = inputs[0]
-	ps.subquery = inputs[1]
-	return nil
-}
-
-// ContainsTables implements the logicalPlan interface
-func (ps *uncorrelatedSubquery) ContainsTables() semantics.TableSet {
-	return ps.outer.ContainsTables().Merge(ps.subquery.ContainsTables())
-}
-
-// Inputs implements the logicalPlan interface
-func (ps *uncorrelatedSubquery) Inputs() []logicalPlan {
-	return []logicalPlan{ps.outer, ps.subquery}
-}
-
-// OutputColumns implements the logicalPlan interface
-func (ps *uncorrelatedSubquery) OutputColumns() []sqlparser.SelectExpr {
-	return ps.outer.OutputColumns()
 }

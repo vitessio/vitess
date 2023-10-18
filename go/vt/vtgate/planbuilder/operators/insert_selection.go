@@ -24,8 +24,8 @@ import (
 // InsertSelection operator represents an INSERT into SELECT FROM query.
 // It holds the operators for running the selection and insertion.
 type InsertSelection struct {
-	SelectionOp ops.Operator
-	InsertionOp ops.Operator
+	Select ops.Operator
+	Insert ops.Operator
 
 	// ForceNonStreaming when true, select first then insert, this is to avoid locking rows by select for insert.
 	ForceNonStreaming bool
@@ -36,21 +36,25 @@ type InsertSelection struct {
 
 func (is *InsertSelection) Clone(inputs []ops.Operator) ops.Operator {
 	return &InsertSelection{
-		SelectionOp: inputs[0],
-		InsertionOp: inputs[1],
+		Select:            inputs[0],
+		Insert:            inputs[1],
+		ForceNonStreaming: is.ForceNonStreaming,
 	}
 }
 
 func (is *InsertSelection) Inputs() []ops.Operator {
-	return []ops.Operator{is.SelectionOp, is.InsertionOp}
+	return []ops.Operator{is.Select, is.Insert}
 }
 
 func (is *InsertSelection) SetInputs(inputs []ops.Operator) {
-	is.SelectionOp = inputs[0]
-	is.InsertionOp = inputs[1]
+	is.Select = inputs[0]
+	is.Insert = inputs[1]
 }
 
 func (is *InsertSelection) ShortDescription() string {
+	if is.ForceNonStreaming {
+		return "NonStreaming"
+	}
 	return ""
 }
 
