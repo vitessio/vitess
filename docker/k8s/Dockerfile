@@ -15,7 +15,7 @@
 ARG VT_BASE_VER=latest
 ARG DEBIAN_VER=stable-slim
 
-FROM vitess/base:${VT_BASE_VER} AS base
+FROM frouioui/base:${VT_BASE_VER} AS base
 
 FROM debian:${DEBIAN_VER}
 
