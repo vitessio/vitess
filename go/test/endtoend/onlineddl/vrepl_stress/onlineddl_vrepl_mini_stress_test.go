@@ -135,13 +135,16 @@ var (
 	writeMetrics WriteMetrics
 )
 
-const (
-	maxTableRows                  = 4096
-	workloadDuration              = 5 * time.Second
+var (
 	maxConcurrency                = 20
 	singleConnectionSleepInterval = 2 * time.Millisecond
 	countIterations               = 5
-	migrationWaitTimeout          = 60 * time.Second
+)
+
+const (
+	maxTableRows         = 4096
+	workloadDuration     = 5 * time.Second
+	migrationWaitTimeout = 60 * time.Second
 )
 
 func resetOpOrder() {
@@ -155,6 +158,18 @@ func nextOpOrder() int64 {
 	defer opOrderMutex.Unlock()
 	opOrder++
 	return opOrder
+}
+
+func TestInitialSetup(t *testing.T) {
+	repo, _ := os.LookupEnv("GITHUB_REPOSITORY")
+	t.Logf("==== repo=%v", repo)
+	if repo != "vitessio/vitess" {
+		// `vitessio/vitess` repository enjoys faster runners. Otherwise, GitHub CI has much slower runners
+		// and we have to reduce the workload
+		maxConcurrency = maxConcurrency / 2
+		singleConnectionSleepInterval = singleConnectionSleepInterval * 2
+	}
+	t.Logf("==== test setup: maxConcurrency=%v, singleConnectionSleepInterval=%v", maxConcurrency, singleConnectionSleepInterval)
 }
 
 func TestMain(m *testing.M) {
@@ -377,6 +392,9 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
 	rowcount := 0
 
 	for {
@@ -388,7 +406,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 		}
 
 		select {
-		case <-time.After(time.Second):
+		case <-ticker.C:
 			continue // Keep looping
 		case <-ctx.Done():
 			// Break below to the assertion
@@ -502,6 +520,9 @@ func runSingleConnection(ctx context.Context, t *testing.T) {
 	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
 	require.Nil(t, err)
 
+	ticker := time.NewTicker(singleConnectionSleepInterval)
+	defer ticker.Stop()
+
 	for {
 		switch rand.Int31n(3) {
 		case 0:
@@ -515,7 +536,7 @@ func runSingleConnection(ctx context.Context, t *testing.T) {
 		case <-ctx.Done():
 			log.Infof("Terminating single connection")
 			return
-		case <-time.After(singleConnectionSleepInterval):
+		case <-ticker.C:
 		}
 		assert.Nil(t, err)
 	}
