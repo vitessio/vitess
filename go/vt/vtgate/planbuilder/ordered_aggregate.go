@@ -17,9 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 var _ logicalPlan = (*orderedAggregate)(nil)
@@ -81,22 +79,6 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 		TruncateColumnCount: oa.truncateColumnCount,
 		Input:               input,
 	}
-}
-
-func (oa *orderedAggregate) Wireup(ctx *plancontext.PlanningContext) error {
-	return oa.input.Wireup(ctx)
-}
-
-// OutputColumns implements the logicalPlan interface
-func (oa *orderedAggregate) OutputColumns() []sqlparser.SelectExpr {
-	outputCols := sqlparser.CloneSelectExprs(oa.input.OutputColumns())
-	for _, aggr := range oa.aggregates {
-		outputCols[aggr.Col] = &sqlparser.AliasedExpr{Expr: aggr.Expr, As: sqlparser.NewIdentifierCI(aggr.Alias)}
-	}
-	if oa.truncateColumnCount > 0 {
-		return outputCols[:oa.truncateColumnCount]
-	}
-	return outputCols
 }
 
 // SetTruncateColumnCount sets the truncate column count.

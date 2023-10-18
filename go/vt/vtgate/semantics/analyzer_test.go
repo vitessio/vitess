@@ -1629,8 +1629,8 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 					},
 					si: &FakeSI{
 						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_FK_MANAGED,
-							"ks_unmanaged": vschemapb.Keyspace_FK_UNMANAGED,
+							"ks":           vschemapb.Keyspace_managed,
+							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
 						},
 					},
 				},
@@ -1658,7 +1658,7 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 					},
 					si: &FakeSI{
 						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks": vschemapb.Keyspace_FK_MANAGED,
+							"ks": vschemapb.Keyspace_managed,
 						},
 					},
 				},
@@ -1796,8 +1796,8 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 					},
 					si: &FakeSI{
 						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_FK_MANAGED,
-							"ks_unmanaged": vschemapb.Keyspace_FK_UNMANAGED,
+							"ks":           vschemapb.Keyspace_managed,
+							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
 						},
 					},
 				},
@@ -1835,7 +1835,7 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 					},
 					si: &FakeSI{
 						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks": vschemapb.Keyspace_FK_MANAGED,
+							"ks": vschemapb.Keyspace_managed,
 						},
 					},
 				},
@@ -1873,8 +1873,8 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 					},
 					si: &FakeSI{
 						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_FK_MANAGED,
-							"ks_unmanaged": vschemapb.Keyspace_FK_UNMANAGED,
+							"ks":           vschemapb.Keyspace_managed,
+							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
 						},
 					},
 				},
@@ -1905,8 +1905,8 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 					},
 					si: &FakeSI{
 						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_FK_MANAGED,
-							"ks_unmanaged": vschemapb.Keyspace_FK_UNMANAGED,
+							"ks":           vschemapb.Keyspace_managed,
+							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
 						},
 					},
 				},
@@ -1942,8 +1942,8 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 					},
 					si: &FakeSI{
 						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_FK_MANAGED,
-							"ks_unmanaged": vschemapb.Keyspace_FK_UNMANAGED,
+							"ks":           vschemapb.Keyspace_managed,
+							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
 						},
 					},
 				},
@@ -1972,7 +1972,7 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 					},
 					si: &FakeSI{
 						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks": vschemapb.Keyspace_FK_MANAGED,
+							"ks": vschemapb.Keyspace_managed,
 						},
 					},
 				},
@@ -1990,7 +1990,7 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 					},
 					si: &FakeSI{
 						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks": vschemapb.Keyspace_FK_MANAGED,
+							"ks": vschemapb.Keyspace_managed,
 						},
 					},
 				},

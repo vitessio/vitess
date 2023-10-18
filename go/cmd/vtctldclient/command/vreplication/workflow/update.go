@@ -60,6 +60,9 @@ var (
 				updateOptions.Cells = textutil.SimulatedNullStringSlice
 			}
 			if cmd.Flags().Lookup("tablet-types").Changed {
+				if err := common.ParseTabletTypes(cmd); err != nil {
+					return err
+				}
 				changes = true
 			} else {
 				updateOptions.TabletTypes = []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}

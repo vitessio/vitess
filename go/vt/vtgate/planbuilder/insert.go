@@ -52,7 +52,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	if ks != nil {
 		if tables[0].AutoIncrement == nil && !ctx.SemTable.ForeignKeysPresent() {
 			plan := insertUnshardedShortcut(insStmt, ks, tables)
-			plan = pushCommentDirectivesOnPlan(plan, insStmt)
+			setCommentDirectivesOnPlan(plan, insStmt)
 			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
 		}
 	}
@@ -78,14 +78,6 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 
 	plan, err := transformToLogicalPlan(ctx, op)
 	if err != nil {
-		return nil, err
-	}
-
-	plan = pushCommentDirectivesOnPlan(plan, insStmt)
-
-	setLockOnAllSelect(plan)
-
-	if err := plan.Wireup(ctx); err != nil {
 		return nil, err
 	}
 
@@ -121,13 +113,6 @@ type insert struct {
 
 var _ logicalPlan = (*insert)(nil)
 
-func (i *insert) Wireup(ctx *plancontext.PlanningContext) error {
-	if i.source == nil {
-		return nil
-	}
-	return i.source.Wireup(ctx)
-}
-
 func (i *insert) Primitive() engine.Primitive {
 	if i.source != nil {
 		i.eInsert.Input = i.source.Primitive()
@@ -135,21 +120,6 @@ func (i *insert) Primitive() engine.Primitive {
 	return i.eInsert
 }
 
-func (i *insert) Inputs() []logicalPlan {
-	if i.source == nil {
-		return nil
-	}
-	return []logicalPlan{i.source}
-}
-
-func (i *insert) Rewrite(inputs ...logicalPlan) error {
-	panic("does not expect insert to get rewrite call")
-}
-
 func (i *insert) ContainsTables() semantics.TableSet {
 	panic("does not expect insert to get contains tables call")
-}
-
-func (i *insert) OutputColumns() []sqlparser.SelectExpr {
-	panic("does not expect insert to get output columns call")
 }

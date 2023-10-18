@@ -94,7 +94,7 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 		op = op.AddPredicate(ctx, expr)
 		addColumnEquality(ctx, expr)
 	}
-	return sqc.getRootOperator(op), nil
+	return sqc.getRootOperator(op, nil), nil
 }
 
 // cloneASTAndSemState clones the AST and the semantic state of the input node.

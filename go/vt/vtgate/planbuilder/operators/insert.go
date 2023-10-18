@@ -121,12 +121,19 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 		return nil, err
 	}
 
+	if ins.Comments != nil {
+		insOp = &LockAndComment{
+			Source:   insOp,
+			Comments: ins.Comments,
+		}
+	}
+
 	// Find the foreign key mode and for unmanaged foreign-key-mode, we don't need to do anything.
 	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
 	if err != nil {
 		return nil, err
 	}
-	if ksMode != vschemapb.Keyspace_FK_MANAGED {
+	if ksMode != vschemapb.Keyspace_managed {
 		return insOp, nil
 	}
 
@@ -201,8 +208,11 @@ func insertSelectPlan(ctx *plancontext.PlanningContext, insOp *Insert, routeOp *
 
 	// output of the select plan will be used to insert rows into the table.
 	insertSelect := &InsertSelection{
-		SelectionOp: selOp,
-		InsertionOp: routeOp,
+		Select: &LockAndComment{
+			Source: selOp,
+			Lock:   sqlparser.ShareModeLock,
+		},
+		Insert: routeOp,
 	}
 
 	// When the table you are streaming data from and table you are inserting from are same.

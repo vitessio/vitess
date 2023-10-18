@@ -475,7 +475,7 @@ func (a *analyzer) getAllManagedForeignKeys() (map[TableSet][]vindexes.ChildFKIn
 		if err != nil {
 			return nil, nil, err
 		}
-		if fkMode != vschemapb.Keyspace_FK_MANAGED {
+		if fkMode != vschemapb.Keyspace_managed {
 			continue
 		}
 
