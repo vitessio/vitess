@@ -73,6 +73,8 @@ type testHandler struct {
 	warnings uint16
 }
 
+var _ Handler = (*testHandler)(nil)
+
 func (th *testHandler) LastConn() *Conn {
 	th.mu.Lock()
 	defer th.mu.Unlock()
@@ -217,6 +219,10 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(res *sqltyp
 		callback(&sqltypes.Result{}, false)
 	}
 	return nil
+}
+
+func (th *testHandler) ComParsedQuery(c *Conn, query string, parsed sqlparser.Statement, callback func(res *sqltypes.Result, more bool) error) error {
+	return th.ComQuery(c, query, callback)
 }
 
 func (th *testHandler) ComPrepare(c *Conn, query string) ([]*querypb.Field, error) {
