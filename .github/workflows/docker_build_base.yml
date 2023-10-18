@@ -107,8 +107,8 @@ jobs:
           push: true
           tags: frouioui/k8s:latest
           build-args:
-            VT_BASE_VER: latest
-            DEBIAN_VER: ${{ matrix.debian }}-slim
+            - VT_BASE_VER=latest
+            - DEBIAN_VER=${{ matrix.debian }}-slim
 
       - name: Build and push on main debian specific tag
         if: github.ref == 'refs/heads/main'
@@ -118,8 +118,8 @@ jobs:
           push: true
           tags: frouioui/k8s:latest-${{ matrix.debian }}
           build-args:
-            VT_BASE_VER: latest
-            DEBIAN_VER: ${{ matrix.debian }}-slim
+            - VT_BASE_VER=latest
+            - DEBIAN_VER=${{ matrix.debian }}-slim
 
       ######
       # All code below only applies to new tags
@@ -150,8 +150,8 @@ jobs:
           push: true
           tags: ${{ env.DOCKER_TAG }}
           build-args:
-            VT_BASE_VER: ${TAG_NAME}
-            DEBIAN_VER: ${{ matrix.debian }}-slim
+            - VT_BASE_VER=${TAG_NAME}
+            - DEBIAN_VER=${{ matrix.debian }}-slim
 
       # Build and Push component image to DOCKER_TAG_DEFAULT_DEBIAN, only applies when building the default Debian version (bookworm)
       # It is fine to build a second time here when "matrix.debian == 'bookworm'" as we have cached the first build already
@@ -163,8 +163,8 @@ jobs:
           push: true
           tags: ${{ env.DOCKER_TAG_DEFAULT_DEBIAN }}
           build-args:
-            VT_BASE_VER: ${TAG_NAME}
-            DEBIAN_VER: ${{ matrix.debian }}-slim
+            - VT_BASE_VER=${TAG_NAME}
+            - DEBIAN_VER=${{ matrix.debian }}-slim
 
 
   build_and_push_components:
@@ -201,8 +201,8 @@ jobs:
           push: true
           tags: frouioui/${{ matrix.component }}:latest
           build-args:
-            VT_BASE_VER: latest
-            DEBIAN_VER: ${{ matrix.debian }}-slim
+            - VT_BASE_VER=latest
+            - DEBIAN_VER=${{ matrix.debian }}-slim
 
       - name: Build and push on main debian specific tag
         if: github.ref == 'refs/heads/main'
@@ -212,8 +212,8 @@ jobs:
           push: true
           tags: frouioui/${{ matrix.component }}:latest-${{ matrix.debian }}
           build-args:
-            VT_BASE_VER: latest
-            DEBIAN_VER: ${{ matrix.debian }}-slim
+            - VT_BASE_VER=latest
+            - DEBIAN_VER=${{ matrix.debian }}-slim
 
       ######
       # All code below only applies to new tags
@@ -244,8 +244,8 @@ jobs:
           push: true
           tags: ${{ env.DOCKER_TAG }}
           build-args:
-            VT_BASE_VER: ${TAG_NAME}
-            DEBIAN_VER: ${{ matrix.debian }}-slim
+            - VT_BASE_VER=${TAG_NAME}
+            - DEBIAN_VER=${{ matrix.debian }}-slim
 
       # Build and Push component image to DOCKER_TAG_DEFAULT_DEBIAN, only applies when building the default Debian version (bookworm)
       # It is fine to build a second time here when "matrix.debian == 'bookworm'" as we have cached the first build already
@@ -257,5 +257,5 @@ jobs:
           push: true
           tags: ${{ env.DOCKER_TAG_DEFAULT_DEBIAN }}
           build-args:
-            VT_BASE_VER: ${TAG_NAME}
-            DEBIAN_VER: ${{ matrix.debian }}-slim
+            - VT_BASE_VER=${TAG_NAME}
+            - DEBIAN_VER=${{ matrix.debian }}-slim
