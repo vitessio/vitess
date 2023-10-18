@@ -150,7 +150,7 @@ jobs:
           push: true
           tags: ${{ env.DOCKER_TAG }}
           build-args: |
-            VT_BASE_VER=${TAG_NAME}
+            VT_BASE_VER=${{ env.TAG_NAME }}
             DEBIAN_VER=${{ matrix.debian }}-slim
 
       # Build and Push component image to DOCKER_TAG_DEFAULT_DEBIAN, only applies when building the default Debian version (bookworm)
@@ -163,7 +163,7 @@ jobs:
           push: true
           tags: ${{ env.DOCKER_TAG_DEFAULT_DEBIAN }}
           build-args: |
-            VT_BASE_VER=${TAG_NAME}
+            VT_BASE_VER=${{ env.TAG_NAME }}
             DEBIAN_VER=${{ matrix.debian }}-slim
 
 
@@ -244,7 +244,7 @@ jobs:
           push: true
           tags: ${{ env.DOCKER_TAG }}
           build-args: |
-            VT_BASE_VER=${TAG_NAME}
+            VT_BASE_VER=${{ env.TAG_NAME }}
             DEBIAN_VER=${{ matrix.debian }}-slim
 
       # Build and Push component image to DOCKER_TAG_DEFAULT_DEBIAN, only applies when building the default Debian version (bookworm)
@@ -257,5 +257,5 @@ jobs:
           push: true
           tags: ${{ env.DOCKER_TAG_DEFAULT_DEBIAN }}
           build-args: |
-            VT_BASE_VER=${TAG_NAME}
+            VT_BASE_VER=${{ env.TAG_NAME }}
             DEBIAN_VER=${{ matrix.debian }}-slim
