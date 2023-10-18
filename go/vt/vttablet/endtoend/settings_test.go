@@ -103,28 +103,15 @@ func TestSetttingsReuseConnWithSettings(t *testing.T) {
 	require.NoError(t, err)
 
 	// We iterate in a loop and try to get a connection with the same settings as before
-	// but only 1 at a time. So we expect the two connections to be reused, and we should be seeing both of them.
-	reusedConnection1 := false
-	reusedConnection2 := false
-	for i := 0; i < 100; i++ {
+	// but only 1 at a time. We're only going to see connection 2 here because the pool is LIFO
+	for i := 0; i < 8; i++ {
 		res, err = client.ReserveBeginExecute(connectionIDQuery, []string{setting}, nil, nil)
 		require.NoError(t, err)
-		if connectionIDRes.Equal(res) {
-			reusedConnection1 = true
-		} else if connectionIDRes2.Equal(res) {
-			reusedConnection2 = true
-		} else {
-			t.Fatalf("The connection should be either of the already created connections")
-		}
+		require.Truef(t, connectionIDRes2.Equal(res), "connection pool was not LIFO")
 
 		err = client.Rollback()
 		require.NoError(t, err)
-		if reusedConnection2 && reusedConnection1 {
-			break
-		}
 	}
-	require.True(t, reusedConnection1)
-	require.True(t, reusedConnection2)
 }
 
 // resetTxConnPool resets the settings pool by fetching all the connections from the pool with no settings.

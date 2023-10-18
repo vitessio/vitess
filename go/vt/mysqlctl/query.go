@@ -36,10 +36,10 @@ func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*db
 		return conn, err
 	}
 	// Run a test query to see if this connection is still good.
-	if _, err := conn.ExecuteFetch("SELECT 1", 1, false); err != nil {
+	if _, err := conn.Conn.ExecuteFetch("SELECT 1", 1, false); err != nil {
 		// If we get a connection error, try to reconnect.
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && (sqlErr.Number() == sqlerror.CRServerGone || sqlErr.Number() == sqlerror.CRServerLost) {
-			if err := conn.Reconnect(ctx); err != nil {
+			if err := conn.Conn.Reconnect(ctx); err != nil {
 				conn.Recycle()
 				return nil, err
 			}
@@ -117,7 +117,7 @@ func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn *dbconnpool.
 	go func() {
 		defer close(done)
 
-		qr, executeErr = conn.ExecuteFetch(query, maxrows, wantfields)
+		qr, executeErr = conn.Conn.ExecuteFetch(query, maxrows, wantfields)
 	}()
 
 	// Wait for either the query or the context to be done.
@@ -136,7 +136,7 @@ func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn *dbconnpool.
 
 		// The context expired or was canceled.
 		// Try to kill the connection to effectively cancel the ExecuteFetch().
-		connID := conn.ID()
+		connID := conn.Conn.ID()
 		log.Infof("Mysqld.executeFetchContext(): killing connID %v due to timeout of query: %v", connID, query)
 		if killErr := mysqld.killConnection(connID); killErr != nil {
 			// Log it, but go ahead and wait for the query anyway.
@@ -172,7 +172,7 @@ func (mysqld *Mysqld) killConnection(connID int64) error {
 	if poolConn, connErr := getPoolReconnect(ctx, mysqld.dbaPool); connErr == nil {
 		// We got a pool connection.
 		defer poolConn.Recycle()
-		killConn = poolConn
+		killConn = poolConn.Conn
 	} else {
 		// We couldn't get a connection from the pool.
 		// It might be because the connection pool is exhausted,
