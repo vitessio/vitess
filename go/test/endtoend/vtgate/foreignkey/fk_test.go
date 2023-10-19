@@ -362,18 +362,7 @@ func drainEvents(t *testing.T, ch chan *binlogdatapb.VEvent, count int) []string
 */
 func TestFkScenarios(t *testing.T) {
 	// Wait for schema-tracking to be complete.
-	err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, shardedKs, "fk_t1", "col")
-	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, shardedKs, "fk_t18", "col")
-	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, shardedKs, "fk_t11", "col")
-	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedKs, "fk_t1", "col")
-	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedKs, "fk_t18", "col")
-	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedKs, "fk_t11", "col")
-	require.NoError(t, err)
+	waitForSchemaTrackingForFkTables(t)
 
 	testcases := []struct {
 		name             string
@@ -745,7 +734,7 @@ func TestFkScenarios(t *testing.T) {
 			mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
 
 			// Update that fails
-			_, err = mcmp.ExecAllowAndCompareError("UPDATE fk_t10 SET col = 15 WHERE id = 1")
+			_, err := mcmp.ExecAllowAndCompareError("UPDATE fk_t10 SET col = 15 WHERE id = 1")
 			require.Error(t, err)
 
 			// Verify the results
@@ -784,12 +773,4 @@ func TestFkScenarios(t *testing.T) {
 			mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
 		})
 	}
-}
-
-// getTestName prepends whether the test is for a sharded keyspace or not to the test name.
-func getTestName(testName string, testSharded bool) string {
-	if testSharded {
-		return "Sharded - " + testName
-	}
-	return "Unsharded - " + testName
 }

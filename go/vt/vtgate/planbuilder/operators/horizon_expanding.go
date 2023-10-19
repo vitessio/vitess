@@ -18,7 +18,9 @@ package operators
 
 import (
 	"fmt"
+	"strings"
 
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -60,11 +62,13 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 	}
 
 	if horizon.TableId != nil {
-		op = &Projection{
-			Source:  op,
-			TableID: horizon.TableId,
+		proj := newAliasedProjection(op)
+		proj.DT = &DerivedTable{
+			TableID: *horizon.TableId,
 			Alias:   horizon.Alias,
+			Columns: horizon.ColumnAliases,
 		}
+		op = proj
 	}
 
 	if op == horizon.Source {
@@ -75,14 +79,18 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 }
 
 func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel *sqlparser.Select) (ops.Operator, *rewrite.ApplyResult, error) {
-	op, err := createProjectionFromSelect(ctx, horizon)
-	if err != nil {
-		return nil, nil, err
-	}
+	op := createProjectionFromSelect(ctx, horizon)
 
 	qp, err := horizon.getQP(ctx)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	var extracted []string
+	if qp.HasAggr {
+		extracted = append(extracted, "Aggregation")
+	} else {
+		extracted = append(extracted, "Projection")
 	}
 
 	if qp.NeedsDistinct() {
@@ -91,14 +99,15 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 			Source:   op,
 			QP:       qp,
 		}
+		extracted = append(extracted, "Distinct")
 	}
 
 	if sel.Having != nil {
-		op = &Filter{
-			Source:         op,
-			Predicates:     sqlparser.SplitAndExpression(nil, sel.Having.Expr),
-			FinalPredicate: nil,
+		op, err = addWherePredicates(ctx, sel.Having.Expr, op)
+		if err != nil {
+			return nil, nil, err
 		}
+		extracted = append(extracted, "Filter")
 	}
 
 	if len(qp.OrderExprs) > 0 {
@@ -106,6 +115,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 			Source: op,
 			Order:  qp.OrderExprs,
 		}
+		extracted = append(extracted, "Ordering")
 	}
 
 	if sel.Limit != nil {
@@ -113,32 +123,38 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 			Source: op,
 			AST:    sel.Limit,
 		}
+		extracted = append(extracted, "Limit")
 	}
 
-	return op, rewrite.NewTree("expand SELECT horizon into smaller components", op), nil
+	return op, rewrite.NewTree(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", ")), op), nil
 }
 
-func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out ops.Operator, err error) {
+func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out ops.Operator) {
 	qp, err := horizon.getQP(ctx)
 	if err != nil {
-		return nil, err
+		panic(err)
+	}
+
+	var dt *DerivedTable
+	if horizon.TableId != nil {
+		dt = &DerivedTable{
+			TableID: *horizon.TableId,
+			Alias:   horizon.Alias,
+			Columns: horizon.ColumnAliases,
+		}
 	}
 
 	if !qp.NeedsAggregation() {
-		projX, err := createProjectionWithoutAggr(qp, horizon.src())
-		if err != nil {
-			return nil, err
-		}
-		projX.TableID = horizon.TableId
-		projX.Alias = horizon.Alias
+		projX := createProjectionWithoutAggr(ctx, qp, horizon.src())
+		projX.DT = dt
 		out = projX
 
-		return out, nil
+		return out
 	}
 
 	aggregations, complexAggr, err := qp.AggregationExpressions(ctx, true)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	a := &Aggregator{
@@ -147,8 +163,7 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 		QP:           qp,
 		Grouping:     qp.GetGrouping(),
 		Aggregations: aggregations,
-		TableID:      horizon.TableId,
-		Alias:        horizon.Alias,
+		DT:           dt,
 	}
 
 	if complexAggr {
@@ -157,12 +172,12 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 	return createProjectionForSimpleAggregation(ctx, a, qp)
 }
 
-func createProjectionForSimpleAggregation(ctx *plancontext.PlanningContext, a *Aggregator, qp *QueryProjection) (ops.Operator, error) {
+func createProjectionForSimpleAggregation(ctx *plancontext.PlanningContext, a *Aggregator, qp *QueryProjection) ops.Operator {
 outer:
 	for colIdx, expr := range qp.SelectExprs {
 		ae, err := expr.GetAliasedExpr()
 		if err != nil {
-			return nil, err
+			panic(err)
 		}
 		addedToCol := false
 		for idx, groupBy := range a.Grouping {
@@ -186,25 +201,24 @@ outer:
 				continue outer
 			}
 		}
-		return nil, vterrors.VT13001(fmt.Sprintf("Could not find the %s in aggregation in the original query", sqlparser.String(ae)))
+		panic(vterrors.VT13001(fmt.Sprintf("Could not find the %s in aggregation in the original query", sqlparser.String(ae))))
 	}
-	return a, nil
+	return a
 }
 
-func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) (ops.Operator, error) {
-	p := &Projection{
-		Source:  a,
-		Alias:   a.Alias,
-		TableID: a.TableID,
-	}
-
+func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) ops.Operator {
+	p := newAliasedProjection(a)
+	p.DT = a.DT
 	for _, expr := range qp.SelectExprs {
 		ae, err := expr.GetAliasedExpr()
 		if err != nil {
-			return nil, err
+			panic(err)
 		}
-		p.Columns = append(p.Columns, ae)
-		p.Projections = append(p.Projections, UnexploredExpression{E: ae.Expr})
+
+		_, err = p.addProjExpr(newProjExpr(ae))
+		if err != nil {
+			panic(err)
+		}
 	}
 	for i, by := range a.Grouping {
 		a.Grouping[i].ColOffset = len(a.Columns)
@@ -214,37 +228,70 @@ func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) (
 		a.Aggregations[i].ColOffset = len(a.Columns)
 		a.Columns = append(a.Columns, aggregation.Original)
 	}
-	return p, nil
+	return p
 }
 
-func createProjectionWithoutAggr(qp *QueryProjection, src ops.Operator) (*Projection, error) {
-	proj := &Projection{
-		Source: src,
+func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator) *Projection {
+	// first we need to check if we have all columns or there are still unexpanded stars
+	aes, err := slice.MapWithError(qp.SelectExprs, func(from SelectExpr) (*sqlparser.AliasedExpr, error) {
+		ae, ok := from.Col.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil, fmt.Errorf("star found")
+		}
+		return ae, nil
+	})
+
+	if err != nil {
+		// if we have unexpanded expressions, we take this shortcut and hope we don't need any offsets from this plan
+		return newStarProjection(src, qp)
 	}
 
-	for _, e := range qp.SelectExprs {
-		if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
-			return nil, errHorizonNotPlanned()
-		}
-		ae, err := e.GetAliasedExpr()
-
-		if err != nil {
-			return nil, err
-		}
+	proj := newAliasedProjection(nil)
+	sqc := &SubQueryBuilder{}
+	outerID := TableID(src)
+	for _, ae := range aes {
+		org := sqlparser.CloneRefOfAliasedExpr(ae)
 		expr := ae.Expr
-		if sqlparser.ContainsAggregation(expr) {
-			aggr, ok := expr.(sqlparser.AggrFunc)
-			if !ok {
-				// need to add logic to extract aggregations and pushed them to the top level
-				return nil, vterrors.VT12001(fmt.Sprintf("unsupported aggregation expression: %s", sqlparser.String(expr)))
+		newExpr, subqs, err := sqc.pullOutValueSubqueries(ctx, expr, outerID, false)
+		if err != nil {
+			panic(err)
+		}
+		if newExpr == nil {
+			// there was no subquery in this expression
+			_, err := proj.addUnexploredExpr(org, expr)
+			if err != nil {
+				panic(err)
 			}
-			expr = aggr.GetArg()
-			if expr == nil {
-				expr = sqlparser.NewIntLiteral("1")
+		} else {
+			err := proj.addSubqueryExpr(org, newExpr, subqs...)
+			if err != nil {
+				panic(err)
 			}
 		}
-
-		proj.addUnexploredExpr(ae, expr)
 	}
-	return proj, nil
+	proj.Source = sqc.getRootOperator(src, nil)
+	return proj
+}
+
+func newStarProjection(src ops.Operator, qp *QueryProjection) *Projection {
+	cols := sqlparser.SelectExprs{}
+
+	for _, expr := range qp.SelectExprs {
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			_, isSubQ := node.(*sqlparser.Subquery)
+			if !isSubQ {
+				return true, nil
+			}
+			return false, vterrors.VT09015()
+		}, expr.Col)
+		if err != nil {
+			panic(err)
+		}
+		cols = append(cols, expr.Col)
+	}
+
+	return &Projection{
+		Source:  src,
+		Columns: StarProjections(cols),
+	}
 }

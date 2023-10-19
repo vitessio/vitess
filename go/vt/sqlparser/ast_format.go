@@ -243,8 +243,12 @@ func (node *AlterVschema) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "alter vschema on %v drop vindex %v", node.Table, node.VindexSpec.Name)
 	case AddSequenceDDLAction:
 		buf.astPrintf(node, "alter vschema add sequence %v", node.Table)
+	case DropSequenceDDLAction:
+		buf.astPrintf(node, "alter vschema drop sequence %v", node.Table)
 	case AddAutoIncDDLAction:
 		buf.astPrintf(node, "alter vschema on %v add auto_increment %v", node.Table, node.AutoIncSpec)
+	case DropAutoIncDDLAction:
+		buf.astPrintf(node, "alter vschema on %v drop auto_increment %v", node.Table, node.AutoIncSpec)
 	default:
 		buf.astPrintf(node, "%s table %v", node.Action.ToString(), node.Table)
 	}
@@ -827,13 +831,21 @@ func (ii *IndexInfo) Format(buf *TrackedBuffer) {
 	if !ii.ConstraintName.IsEmpty() {
 		buf.astPrintf(ii, "constraint %v ", ii.ConstraintName)
 	}
-	if ii.Primary {
-		buf.astPrintf(ii, "%s", ii.Type)
-	} else {
-		buf.astPrintf(ii, "%s", ii.Type)
-		if !ii.Name.IsEmpty() {
-			buf.astPrintf(ii, " %v", ii.Name)
-		}
+	switch ii.Type {
+	case IndexTypePrimary:
+		buf.astPrintf(ii, "%s %s", keywordStrings[PRIMARY], keywordStrings[KEY])
+		return
+	case IndexTypeDefault:
+		buf.astPrintf(ii, "%s", keywordStrings[INDEX])
+	case IndexTypeUnique:
+		buf.astPrintf(ii, "%s %s", keywordStrings[UNIQUE], keywordStrings[INDEX])
+	case IndexTypeSpatial:
+		buf.astPrintf(ii, "%s %s", keywordStrings[SPATIAL], keywordStrings[INDEX])
+	case IndexTypeFullText:
+		buf.astPrintf(ii, "%s %s", keywordStrings[FULLTEXT], keywordStrings[INDEX])
+	}
+	if !ii.Name.IsEmpty() {
+		buf.astPrintf(ii, " %v", ii.Name)
 	}
 }
 
@@ -1056,8 +1068,12 @@ func (node *CallProc) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *OtherRead) Format(buf *TrackedBuffer) {
-	buf.literal("otherread")
+func (node *Analyze) Format(buf *TrackedBuffer) {
+	buf.literal("analyze ")
+	if node.IsLocal {
+		buf.literal("local ")
+	}
+	buf.astPrintf(node, "table %v", node.Table)
 }
 
 // Format formats the node.
@@ -2416,14 +2432,6 @@ func (node *RenameTable) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "%s%v to %v", prefix, pair.FromTable, pair.ToTable)
 		prefix = ", "
 	}
-}
-
-// Format formats the node.
-// If an extracted subquery is still in the AST when we print it,
-// it will be formatted as if the subquery has been extracted, and instead
-// show up like argument comparisons
-func (node *ExtractedSubquery) Format(buf *TrackedBuffer) {
-	node.alternative.Format(buf)
 }
 
 func (node *JSONTableExpr) Format(buf *TrackedBuffer) {

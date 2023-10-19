@@ -359,10 +359,18 @@ func (node *AlterVschema) formatFast(buf *TrackedBuffer) {
 	case AddSequenceDDLAction:
 		buf.WriteString("alter vschema add sequence ")
 		node.Table.formatFast(buf)
+	case DropSequenceDDLAction:
+		buf.WriteString("alter vschema drop sequence ")
+		node.Table.formatFast(buf)
 	case AddAutoIncDDLAction:
 		buf.WriteString("alter vschema on ")
 		node.Table.formatFast(buf)
 		buf.WriteString(" add auto_increment ")
+		node.AutoIncSpec.formatFast(buf)
+	case DropAutoIncDDLAction:
+		buf.WriteString("alter vschema on ")
+		node.Table.formatFast(buf)
+		buf.WriteString(" drop auto_increment ")
 		node.AutoIncSpec.formatFast(buf)
 	default:
 		buf.WriteString(node.Action.ToString())
@@ -1122,14 +1130,30 @@ func (ii *IndexInfo) formatFast(buf *TrackedBuffer) {
 		ii.ConstraintName.formatFast(buf)
 		buf.WriteByte(' ')
 	}
-	if ii.Primary {
-		buf.WriteString(ii.Type)
-	} else {
-		buf.WriteString(ii.Type)
-		if !ii.Name.IsEmpty() {
-			buf.WriteByte(' ')
-			ii.Name.formatFast(buf)
-		}
+	switch ii.Type {
+	case IndexTypePrimary:
+		buf.WriteString(keywordStrings[PRIMARY])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[KEY])
+		return
+	case IndexTypeDefault:
+		buf.WriteString(keywordStrings[INDEX])
+	case IndexTypeUnique:
+		buf.WriteString(keywordStrings[UNIQUE])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[INDEX])
+	case IndexTypeSpatial:
+		buf.WriteString(keywordStrings[SPATIAL])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[INDEX])
+	case IndexTypeFullText:
+		buf.WriteString(keywordStrings[FULLTEXT])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[INDEX])
+	}
+	if !ii.Name.IsEmpty() {
+		buf.WriteByte(' ')
+		ii.Name.formatFast(buf)
 	}
 }
 
@@ -1400,8 +1424,13 @@ func (node *CallProc) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *OtherRead) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("otherread")
+func (node *Analyze) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("analyze ")
+	if node.IsLocal {
+		buf.WriteString("local ")
+	}
+	buf.WriteString("table ")
+	node.Table.formatFast(buf)
 }
 
 // formatFast formats the node.
@@ -3185,14 +3214,6 @@ func (node *RenameTable) formatFast(buf *TrackedBuffer) {
 		pair.ToTable.formatFast(buf)
 		prefix = ", "
 	}
-}
-
-// formatFast formats the node.
-// If an extracted subquery is still in the AST when we print it,
-// it will be formatted as if the subquery has been extracted, and instead
-// show up like argument comparisons
-func (node *ExtractedSubquery) formatFast(buf *TrackedBuffer) {
-	node.alternative.Format(buf)
 }
 
 func (node *JSONTableExpr) formatFast(buf *TrackedBuffer) {

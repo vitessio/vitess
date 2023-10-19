@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -113,7 +114,7 @@ func NewTestVtctldServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *Vtc
 
 func panicHandler(err *error) {
 	if x := recover(); x != nil {
-		*err = fmt.Errorf("uncaught panic: %v", x)
+		*err = fmt.Errorf("uncaught panic: %v from: %v", x, string(debug.Stack()))
 	}
 }
 
@@ -2195,6 +2196,7 @@ func (s *VtctldServer) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWor
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("active_only", req.ActiveOnly)
+	span.Annotate("include_logs", req.IncludeLogs)
 
 	resp, err = s.ws.GetWorkflows(ctx, req)
 	return resp, err
@@ -2507,6 +2509,126 @@ func (s *VtctldServer) LaunchSchemaMigration(ctx context.Context, req *vtctldata
 		RowsAffectedByShard: qr.RowsAffectedByShard,
 	}
 	return resp, nil
+}
+
+// LookupVindexCreate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) LookupVindexCreate(ctx context.Context, req *vtctldatapb.LookupVindexCreateRequest) (resp *vtctldatapb.LookupVindexCreateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.LookupVindexCreate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("continue_after_copy_with_owner", req.ContinueAfterCopyWithOwner)
+	span.Annotate("cells", req.Cells)
+	span.Annotate("tablet_types", req.TabletTypes)
+
+	resp, err = s.ws.LookupVindexCreate(ctx, req)
+	return resp, err
+}
+
+// LookupVindexExternalize is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.LookupVindexExternalizeRequest) (resp *vtctldatapb.LookupVindexExternalizeResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.LookupVindexExternalize")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("name", req.Name)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("table_keyspace", req.TableKeyspace)
+
+	resp, err = s.ws.LookupVindexExternalize(ctx, req)
+	return resp, err
+}
+
+// MaterializeCreate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MaterializeCreate(ctx context.Context, req *vtctldatapb.MaterializeCreateRequest) (resp *vtctldatapb.MaterializeCreateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MaterializeCreate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("workflow", req.Settings.Workflow)
+	span.Annotate("source_keyspace", req.Settings.SourceKeyspace)
+	span.Annotate("target_keyspace", req.Settings.TargetKeyspace)
+	span.Annotate("cells", req.Settings.Cell)
+	span.Annotate("tablet_types", req.Settings.TabletTypes)
+	span.Annotate("table_settings", fmt.Sprintf("%+v", req.Settings.TableSettings))
+
+	err = s.ws.Materialize(ctx, req.Settings)
+	return resp, err
+}
+
+// MigrateCreate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MigrateCreate(ctx context.Context, req *vtctldatapb.MigrateCreateRequest) (resp *vtctldatapb.WorkflowStatusResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MigrateCreate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("target_keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("cells", req.Cells)
+	span.Annotate("tablet_types", req.TabletTypes)
+	span.Annotate("on_ddl", req.OnDdl)
+
+	resp, err = s.ws.MigrateCreate(ctx, req)
+	return resp, err
+}
+
+// MountRegister is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MountRegister(ctx context.Context, req *vtctldatapb.MountRegisterRequest) (resp *vtctldatapb.MountRegisterResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MountRegister")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("topo_type", req.TopoType)
+	span.Annotate("topo_server", req.TopoServer)
+	span.Annotate("topo_root", req.TopoRoot)
+	span.Annotate("mount_name", req.Name)
+
+	resp, err = s.ws.MountRegister(ctx, req)
+	return resp, err
+}
+
+// MountUnregister is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MountUnregister(ctx context.Context, req *vtctldatapb.MountUnregisterRequest) (resp *vtctldatapb.MountUnregisterResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MountUnregister")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("mount_name", req.Name)
+
+	resp, err = s.ws.MountUnregister(ctx, req)
+	return resp, err
+}
+
+// MountList is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MountList(ctx context.Context, req *vtctldatapb.MountListRequest) (resp *vtctldatapb.MountListResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MountList")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	resp, err = s.ws.MountList(ctx, req)
+	return resp, err
+}
+
+// MountShow is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MountShow(ctx context.Context, req *vtctldatapb.MountShowRequest) (resp *vtctldatapb.MountShowResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MountShow")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("mount_name", req.Name)
+
+	resp, err = s.ws.MountShow(ctx, req)
+	return resp, err
 }
 
 // MoveTablesCreate is part of the vtctlservicepb.VtctldServer interface.
@@ -3286,7 +3408,7 @@ func (s *VtctldServer) SetShardTabletControl(ctx context.Context, req *vtctldata
 	defer unlock(&err)
 
 	si, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
-		return si.UpdateSourceDeniedTables(ctx, req.TabletType, req.Cells, req.Remove, req.DeniedTables)
+		return si.UpdateDeniedTables(ctx, req.TabletType, req.Cells, req.Remove, req.DeniedTables)
 	})
 
 	switch {
@@ -4688,6 +4810,86 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 	return resp, err
 }
 
+// VDiffCreate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRequest) (resp *vtctldatapb.VDiffCreateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffCreate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("uuid", req.Uuid)
+	span.Annotate("source_cells", req.SourceCells)
+	span.Annotate("target_cells", req.TargetCells)
+	span.Annotate("tablet_types", req.TabletTypes)
+	span.Annotate("tables", req.Tables)
+	span.Annotate("auto_retry", req.AutoRetry)
+
+	resp, err = s.ws.VDiffCreate(ctx, req)
+	return resp, err
+}
+
+// VDiffDelete is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VDiffDelete(ctx context.Context, req *vtctldatapb.VDiffDeleteRequest) (resp *vtctldatapb.VDiffDeleteResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffDelete")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("argument", req.Arg)
+
+	resp, err = s.ws.VDiffDelete(ctx, req)
+	return resp, err
+}
+
+// VDiffResume is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VDiffResume(ctx context.Context, req *vtctldatapb.VDiffResumeRequest) (resp *vtctldatapb.VDiffResumeResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffResume")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("uuid", req.Uuid)
+
+	resp, err = s.ws.VDiffResume(ctx, req)
+	return resp, err
+}
+
+// VDiffShow is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowRequest) (resp *vtctldatapb.VDiffShowResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffShow")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("argument", req.Arg)
+
+	resp, err = s.ws.VDiffShow(ctx, req)
+	return resp, err
+}
+
+// VDiffStop is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopRequest) (resp *vtctldatapb.VDiffStopResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffStop")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("uuid", req.Uuid)
+
+	resp, err = s.ws.VDiffStop(ctx, req)
+	return resp, err
+}
+
 // WorkflowDelete is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDeleteRequest) (resp *vtctldatapb.WorkflowDeleteResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowDelete")
@@ -4745,6 +4947,7 @@ func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.Work
 	span.Annotate("cells", req.TabletRequest.Cells)
 	span.Annotate("tablet_types", req.TabletRequest.TabletTypes)
 	span.Annotate("on_ddl", req.TabletRequest.OnDdl)
+	span.Annotate("state", req.TabletRequest.State)
 
 	resp, err = s.ws.WorkflowUpdate(ctx, req)
 	return resp, err

@@ -48,7 +48,7 @@ var (
 	}
 	OnlineDDLCancel = &cobra.Command{
 		Use:                   "cancel <keyspace> <uuid|all>",
-		Short:                 "cancel one or all migrations, terminating any running ones as needed.",
+		Short:                 "Cancel one or all migrations, terminating any running ones as needed.",
 		Example:               "OnlineDDL cancel test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
@@ -64,7 +64,7 @@ var (
 	}
 	OnlineDDLComplete = &cobra.Command{
 		Use:                   "complete <keyspace> <uuid|all>",
-		Short:                 "complete one or all migrations executed with --postpone-completion",
+		Short:                 "Complete one or all migrations executed with --postpone-completion",
 		Example:               "OnlineDDL complete test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
@@ -72,7 +72,7 @@ var (
 	}
 	OnlineDDLLaunch = &cobra.Command{
 		Use:                   "launch <keyspace> <uuid|all>",
-		Short:                 "launch one or all migrations executed with --postpone-launch",
+		Short:                 "Launch one or all migrations executed with --postpone-launch",
 		Example:               "OnlineDDL launch test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),

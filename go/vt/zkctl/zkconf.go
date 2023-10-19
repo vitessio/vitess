@@ -49,6 +49,7 @@ type ZkConfig struct {
 	ServerId   uint32 // nolint:revive
 	ClientPort int
 	Servers    []zkServerAddr
+	Extra      []string
 	Global     bool
 }
 
@@ -115,6 +116,11 @@ func MakeZooCfg(cnfFiles []string, cnf *ZkConfig, header string) (string, error)
 	}
 	if dataErr != nil {
 		return "", dataErr
+	}
+
+	myTemplateSource.WriteString("\n") // in case `data` did not end with a newline
+	for _, extra := range cnf.Extra {
+		myTemplateSource.WriteString(fmt.Sprintf("%s\n", extra))
 	}
 
 	myTemplate, err := template.New("foo").Parse(myTemplateSource.String())

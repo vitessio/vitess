@@ -168,8 +168,8 @@ func TestCreateTableDiff(t *testing.T) {
 			from:      "create table t1 (id int primary key, i1 int not null, c char(3) default '')",
 			to:        "create table t2 (id int primary key, i2 int not null, c char(3) default '', key i2_idx(i2))",
 			colrename: ColumnRenameHeuristicStatement,
-			diff:      "alter table t1 rename column i1 to i2, add key i2_idx (i2)",
-			cdiff:     "ALTER TABLE `t1` RENAME COLUMN `i1` TO `i2`, ADD KEY `i2_idx` (`i2`)",
+			diff:      "alter table t1 rename column i1 to i2, add index i2_idx (i2)",
+			cdiff:     "ALTER TABLE `t1` RENAME COLUMN `i1` TO `i2`, ADD INDEX `i2_idx` (`i2`)",
 		},
 		{
 			// in a future iteration, this will generate a RENAME for both column, like in the previous test. Until then, we do not RENAME two successive columns
@@ -305,36 +305,36 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "added key",
 			from:  "create table t1 (`id` int primary key, i int)",
 			to:    "create table t2 (id int primary key, `i` int, key `i_idx` (i))",
-			diff:  "alter table t1 add key i_idx (i)",
-			cdiff: "ALTER TABLE `t1` ADD KEY `i_idx` (`i`)",
+			diff:  "alter table t1 add index i_idx (i)",
+			cdiff: "ALTER TABLE `t1` ADD INDEX `i_idx` (`i`)",
 		},
 		{
 			name:  "added key without name",
 			from:  "create table t1 (`id` int primary key, i int)",
 			to:    "create table t2 (id int primary key, `i` int, key (i))",
-			diff:  "alter table t1 add key i (i)",
-			cdiff: "ALTER TABLE `t1` ADD KEY `i` (`i`)",
+			diff:  "alter table t1 add index i (i)",
+			cdiff: "ALTER TABLE `t1` ADD INDEX `i` (`i`)",
 		},
 		{
 			name:  "added key without name, conflicting name",
 			from:  "create table t1 (`id` int primary key, i int, key i(i))",
 			to:    "create table t2 (id int primary key, `i` int, key i(i), key (i))",
-			diff:  "alter table t1 add key i_2 (i)",
-			cdiff: "ALTER TABLE `t1` ADD KEY `i_2` (`i`)",
+			diff:  "alter table t1 add index i_2 (i)",
+			cdiff: "ALTER TABLE `t1` ADD INDEX `i_2` (`i`)",
 		},
 		{
 			name:  "added key without name, conflicting name 2",
 			from:  "create table t1 (`id` int primary key, i int, key i(i), key i_2(i))",
 			to:    "create table t2 (id int primary key, `i` int, key i(i), key i_2(i), key (i))",
-			diff:  "alter table t1 add key i_3 (i)",
-			cdiff: "ALTER TABLE `t1` ADD KEY `i_3` (`i`)",
+			diff:  "alter table t1 add index i_3 (i)",
+			cdiff: "ALTER TABLE `t1` ADD INDEX `i_3` (`i`)",
 		},
 		{
 			name:  "added column and key",
 			from:  "create table t1 (`id` int primary key)",
 			to:    "create table t2 (id int primary key, `i` int, key `i_idx` (i))",
-			diff:  "alter table t1 add column i int, add key i_idx (i)",
-			cdiff: "ALTER TABLE `t1` ADD COLUMN `i` int, ADD KEY `i_idx` (`i`)",
+			diff:  "alter table t1 add column i int, add index i_idx (i)",
+			cdiff: "ALTER TABLE `t1` ADD COLUMN `i` int, ADD INDEX `i_idx` (`i`)",
 		},
 		{
 			name:  "modify column primary key",
@@ -375,8 +375,8 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "modified key",
 			from:  "create table t1 (`id` int primary key, i int, key i_idx(i))",
 			to:    "create table t2 (`id` int primary key, i int, key i_idx(i, id))",
-			diff:  "alter table t1 drop key i_idx, add key i_idx (i, id)",
-			cdiff: "ALTER TABLE `t1` DROP KEY `i_idx`, ADD KEY `i_idx` (`i`, `id`)",
+			diff:  "alter table t1 drop key i_idx, add index i_idx (i, id)",
+			cdiff: "ALTER TABLE `t1` DROP KEY `i_idx`, ADD INDEX `i_idx` (`i`, `id`)",
 		},
 		{
 			name:  "modified primary key",
@@ -420,11 +420,11 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "CREATE TABLE `pets` (`id` int, `name` VARCHAR(255), `login` VARCHAR(255), PRIMARY KEY (`id`), KEY (`name`), KEY (`login`), KEY login (login, name) )",
 		},
 		{
-			name:  "reordered key, add key",
+			name:  "reordered key, add index",
 			from:  "create table t1 (`id` int primary key, i int, key i_idx(i), key i2_idx(i, `id`))",
 			to:    "create table t2 (`id` int primary key, i int, key i2_idx (`i`, id), key i_idx3(id), key i_idx ( i ) )",
-			diff:  "alter table t1 add key i_idx3 (id)",
-			cdiff: "ALTER TABLE `t1` ADD KEY `i_idx3` (`id`)",
+			diff:  "alter table t1 add index i_idx3 (id)",
+			cdiff: "ALTER TABLE `t1` ADD INDEX `i_idx3` (`id`)",
 		},
 		{
 			name:  "key made visible",
@@ -452,37 +452,37 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "add one fulltext key",
 			from:  "create table t1 (id int primary key, name tinytext not null)",
 			to:    "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name))",
-			diff:  "alter table t1 add fulltext key name_ft (`name`)",
-			cdiff: "ALTER TABLE `t1` ADD FULLTEXT KEY `name_ft` (`name`)",
+			diff:  "alter table t1 add fulltext index name_ft (`name`)",
+			cdiff: "ALTER TABLE `t1` ADD FULLTEXT INDEX `name_ft` (`name`)",
 		},
 		{
 			name:  "add one fulltext key with explicit parser",
 			from:  "create table t1 (id int primary key, name tinytext not null)",
 			to:    "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
-			diff:  "alter table t1 add fulltext key name_ft (`name`) with parser ngram",
-			cdiff: "ALTER TABLE `t1` ADD FULLTEXT KEY `name_ft` (`name`) WITH PARSER ngram",
+			diff:  "alter table t1 add fulltext index name_ft (`name`) with parser ngram",
+			cdiff: "ALTER TABLE `t1` ADD FULLTEXT INDEX `name_ft` (`name`) WITH PARSER ngram",
 		},
 		{
 			name:  "add one fulltext key and one normal key",
 			from:  "create table t1 (id int primary key, name tinytext not null)",
 			to:    "create table t1 (id int primary key, name tinytext not null, key name_idx(name(32)), fulltext key name_ft(name))",
-			diff:  "alter table t1 add key name_idx (`name`(32)), add fulltext key name_ft (`name`)",
-			cdiff: "ALTER TABLE `t1` ADD KEY `name_idx` (`name`(32)), ADD FULLTEXT KEY `name_ft` (`name`)",
+			diff:  "alter table t1 add index name_idx (`name`(32)), add fulltext index name_ft (`name`)",
+			cdiff: "ALTER TABLE `t1` ADD INDEX `name_idx` (`name`(32)), ADD FULLTEXT INDEX `name_ft` (`name`)",
 		},
 		{
 			name:   "add two fulltext keys, distinct statements",
 			from:   "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null)",
 			to:     "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null, fulltext key name1_ft(name1), fulltext key name2_ft(name2))",
-			diffs:  []string{"alter table t1 add fulltext key name1_ft (name1)", "alter table t1 add fulltext key name2_ft (name2)"},
-			cdiffs: []string{"ALTER TABLE `t1` ADD FULLTEXT KEY `name1_ft` (`name1`)", "ALTER TABLE `t1` ADD FULLTEXT KEY `name2_ft` (`name2`)"},
+			diffs:  []string{"alter table t1 add fulltext index name1_ft (name1)", "alter table t1 add fulltext index name2_ft (name2)"},
+			cdiffs: []string{"ALTER TABLE `t1` ADD FULLTEXT INDEX `name1_ft` (`name1`)", "ALTER TABLE `t1` ADD FULLTEXT INDEX `name2_ft` (`name2`)"},
 		},
 		{
 			name:     "add two fulltext keys, unify statements",
 			from:     "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null)",
 			to:       "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null, fulltext key name1_ft(name1), fulltext key name2_ft(name2))",
 			fulltext: FullTextKeyUnifyStatements,
-			diff:     "alter table t1 add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
-			cdiff:    "ALTER TABLE `t1` ADD FULLTEXT KEY `name1_ft` (`name1`), ADD FULLTEXT KEY `name2_ft` (`name2`)",
+			diff:     "alter table t1 add fulltext index name1_ft (name1), add fulltext index name2_ft (name2)",
+			cdiff:    "ALTER TABLE `t1` ADD FULLTEXT INDEX `name1_ft` (`name1`), ADD FULLTEXT INDEX `name2_ft` (`name2`)",
 		},
 		{
 			name: "no fulltext diff",
@@ -650,8 +650,8 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "add foreign key and index",
 			from:  "create table t1 (id int primary key, i int)",
 			to:    "create table t2 (id int primary key, i int, key ix(i), constraint f foreign key (i) references parent(id))",
-			diff:  "alter table t1 add key ix (i), add constraint f foreign key (i) references parent (id)",
-			cdiff: "ALTER TABLE `t1` ADD KEY `ix` (`i`), ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+			diff:  "alter table t1 add index ix (i), add constraint f foreign key (i) references parent (id)",
+			cdiff: "ALTER TABLE `t1` ADD INDEX `ix` (`i`), ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
 		},
 		{
 			name: "identical foreign key",
@@ -1168,8 +1168,8 @@ func TestCreateTableDiff(t *testing.T) {
 					properties json NOT NULL,
 					KEY index_on_company_id ((cast(json_unquote(json_extract(properties,_utf8mb4'$.company_id')) as signed)))
 				)`,
-			diff:  "alter table t4 add key index_on_company_id ((cast(json_unquote(json_extract(properties, _utf8mb4 '$.company_id')) as signed)))",
-			cdiff: "ALTER TABLE `t4` ADD KEY `index_on_company_id` ((CAST(JSON_UNQUOTE(JSON_EXTRACT(`properties`, _utf8mb4 '$.company_id')) AS signed)))",
+			diff:  "alter table t4 add index index_on_company_id ((cast(json_unquote(json_extract(properties, _utf8mb4 '$.company_id')) as signed)))",
+			cdiff: "ALTER TABLE `t4` ADD INDEX `index_on_company_id` ((CAST(JSON_UNQUOTE(JSON_EXTRACT(`properties`, _utf8mb4 '$.company_id')) AS signed)))",
 		},
 		{
 			// validates that CanonicalString prints 'interval 30 minute' and not ' INTERVAL 30 MINUTE', as MySQL's `SHOW CREATE TABLE` outputs lower case 'interval 30 minute'
@@ -1342,9 +1342,9 @@ func TestValidate(t *testing.T) {
 		},
 		// keys
 		{
-			name:  "add key",
+			name:  "add index",
 			from:  "create table t (id int primary key, i int)",
-			alter: "alter table t add key i_idx(i)",
+			alter: "alter table t add index i_idx(i)",
 			to:    "create table t (id int primary key, i int, key i_idx(i))",
 		},
 		{
@@ -1408,27 +1408,27 @@ func TestValidate(t *testing.T) {
 			expectErr: &DuplicateKeyNameError{Table: "t", Key: "PRIMARY"},
 		},
 		{
-			name:  "add key, column case",
+			name:  "add index, column case",
 			from:  "create table t (id int primary key, i int)",
-			alter: "alter table t add key i_idx(I)",
+			alter: "alter table t add index i_idx(I)",
 			to:    "create table t (id int primary key, i int, key i_idx(I))",
 		},
 		{
 			name:  "add column and key",
 			from:  "create table t (id int primary key)",
-			alter: "alter table t add column i int, add key i_idx(i)",
+			alter: "alter table t add column i int, add index i_idx(i)",
 			to:    "create table t (id int primary key, i int, key i_idx(i))",
 		},
 		{
-			name:      "add key, missing column",
+			name:      "add index, missing column",
 			from:      "create table t (id int primary key, i int)",
-			alter:     "alter table t add key j_idx(j)",
+			alter:     "alter table t add index j_idx(j)",
 			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "j", Key: "j_idx"},
 		},
 		{
-			name:      "add key, missing column 2",
+			name:      "add index, missing column 2",
 			from:      "create table t (id int primary key, i int)",
-			alter:     "alter table t add key j_idx(j, i)",
+			alter:     "alter table t add index j_idx(j, i)",
 			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "j", Key: "j_idx"},
 		},
 		{
@@ -1488,13 +1488,13 @@ func TestValidate(t *testing.T) {
 		{
 			name:  "add multiple keys, multi columns, ok",
 			from:  "create table t (id int primary key, i1 int, i2 int, i3 int)",
-			alter: "alter table t add key i12_idx(i1, i2), add key i32_idx(i3, i2), add key i21_idx(i2, i1)",
+			alter: "alter table t add index i12_idx(i1, i2), add index i32_idx(i3, i2), add index i21_idx(i2, i1)",
 			to:    "create table t (id int primary key, i1 int, i2 int, i3 int, key i12_idx(i1, i2), key i32_idx(i3, i2), key i21_idx(i2, i1))",
 		},
 		{
 			name:      "add multiple keys, multi columns, missing column",
 			from:      "create table t (id int primary key, i1 int, i2 int, i4 int)",
-			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx(i3, i2), add key i21_idx(i2, i1)",
+			alter:     "alter table t add index i12_idx(i1, i2), add index i32_idx(i3, i2), add index i21_idx(i2, i1)",
 			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "i3", Key: "i32_idx"},
 		},
 		{
@@ -1543,7 +1543,7 @@ func TestValidate(t *testing.T) {
 		{
 			name:      "add multiple keys, multi columns, missing column",
 			from:      "create table t (id int primary key, i1 int, i2 int, i4 int)",
-			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx((IF(i3 IS NULL, i2, i3)), i2), add key i21_idx(i2, i1)",
+			alter:     "alter table t add index i12_idx(i1, i2), add index i32_idx((IF(i3 IS NULL, i2, i3)), i2), add index i21_idx(i2, i1)",
 			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "i3", Key: "i32_idx"},
 		},
 		// data types
@@ -1764,13 +1764,13 @@ func TestValidate(t *testing.T) {
 		{
 			name:  "add foreign key and index, no implicit index",
 			from:  "create table t (id int primary key, i int)",
-			alter: "alter table t add key i_idx (i), add constraint f foreign key (i) references parent(id)",
+			alter: "alter table t add index i_idx (i), add constraint f foreign key (i) references parent(id)",
 			to:    "create table t (id int primary key, i int, key i_idx (i), constraint f foreign key (i) references parent(id))",
 		},
 		{
 			name:  "add foreign key and extended index, no implicit index",
 			from:  "create table t (id int primary key, i int)",
-			alter: "alter table t add key i_id_idx (i, id), add constraint f foreign key (i) references parent(id)",
+			alter: "alter table t add index i_id_idx (i, id), add constraint f foreign key (i) references parent(id)",
 			to:    "create table t (id int primary key, i int, key i_id_idx (i, id), constraint f foreign key (i) references parent(id))",
 		},
 		{
@@ -2035,7 +2035,7 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "generates a name for a key with proper casing",
 			from: "create table t (id int, I int, index i (i), index(I))",
-			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`I` int,\n\tKEY `i` (`i`),\n\tKEY `I_2` (`I`)\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`I` int,\n\tINDEX `i` (`i`),\n\tINDEX `I_2` (`I`)\n)",
 		},
 		{
 			name: "generates a name for checks",
@@ -2050,47 +2050,47 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "generates a name for foreign key constraints",
 			from: "create table t1 (id int primary key, i int, key i_idx (i), foreign key (i) references parent(id))",
-			to:   "CREATE TABLE `t1` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `i_idx` (`i`),\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
+			to:   "CREATE TABLE `t1` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tINDEX `i_idx` (`i`),\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
 		},
 		{
 			name: "creates an index for foreign key constraints",
 			from: "create table t1 (id int primary key, i int, constraint f foreign key (i) references parent(id))",
-			to:   "CREATE TABLE `t1` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f` (`i`),\n\tCONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
+			to:   "CREATE TABLE `t1` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tINDEX `f` (`i`),\n\tCONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
 		},
 		{
 			name: "creates an index for unnamed foreign key constraints",
 			from: "create table t1 (id int primary key, i int, foreign key (i) references parent(id))",
-			to:   "CREATE TABLE `t1` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `i` (`i`),\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
+			to:   "CREATE TABLE `t1` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tINDEX `i` (`i`),\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
 		},
 		{
 			name: "does not add index since one already defined for foreign key constraint",
 			from: "create table t1 (id int primary key, i int, key i_idx (i), foreign key (i) references parent(id))",
-			to:   "CREATE TABLE `t1` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `i_idx` (`i`),\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
+			to:   "CREATE TABLE `t1` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tINDEX `i_idx` (`i`),\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
 		},
 		{
 			name: "uses KEY for indexes",
 			from: "create table t (id int primary key, i1 int, index i1_idx(i1))",
-			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`),\n\tKEY `i1_idx` (`i1`)\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`),\n\tINDEX `i1_idx` (`i1`)\n)",
 		},
 		{
 			name: "drops default index type",
 			from: "create table t (id int primary key, i1 int, key i1_idx(i1) using btree)",
-			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`),\n\tKEY `i1_idx` (`i1`)\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`),\n\tINDEX `i1_idx` (`i1`)\n)",
 		},
 		{
 			name: "does not drop non-default index type",
 			from: "create table t (id int primary key, i1 int, key i1_idx(i1) using hash)",
-			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`),\n\tKEY `i1_idx` (`i1`) USING hash\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`),\n\tINDEX `i1_idx` (`i1`) USING hash\n)",
 		},
 		{
 			name: "drops default index visibility",
 			from: "create table t (id int primary key, i1 int, key i1_idx(i1) visible)",
-			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`),\n\tKEY `i1_idx` (`i1`)\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`),\n\tINDEX `i1_idx` (`i1`)\n)",
 		},
 		{
 			name: "drops non-default index visibility",
 			from: "create table t (id int primary key, i1 int, key i1_idx(i1) invisible)",
-			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`),\n\tKEY `i1_idx` (`i1`) INVISIBLE\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`),\n\tINDEX `i1_idx` (`i1`) INVISIBLE\n)",
 		},
 		{
 			name: "drops default column visibility",

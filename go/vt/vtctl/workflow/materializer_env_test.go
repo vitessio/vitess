@@ -26,6 +26,7 @@ import (
 	"sync"
 	"testing"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -33,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
-	_flag "vitess.io/vitess/go/internal/flag"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -123,7 +123,6 @@ func (env *testMaterializerEnv) expectValidation() {
 		if tabletID < 200 {
 			continue
 		}
-		// wr.validateNewWorkflow
 		env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.ms.TargetKeyspace, env.ms.Workflow), &sqltypes.Result{})
 	}
 }
@@ -180,6 +179,9 @@ type testMaterializerTMClient struct {
 	vrQueries       map[int][]*queryResult
 	getSchemaCounts map[string]int
 	muSchemaCount   sync.Mutex
+
+	// Used to confirm the number of times WorkflowDelete was called.
+	workflowDeleteCalls int
 }
 
 func newTestMaterializerTMClient() *testMaterializerTMClient {
@@ -208,8 +210,13 @@ func (tmc *testMaterializerTMClient) CreateVReplicationWorkflow(ctx context.Cont
 }
 
 func (tmc *testMaterializerTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
+	if strings.Contains(request.Workflow, "lookup") {
+		workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
+	}
 	return &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
-		Workflow: "workflow",
+		Workflow:     request.Workflow,
+		WorkflowType: workflowType,
 		Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
 			{
 				Id: 1,
@@ -227,6 +234,24 @@ func (tmc *testMaterializerTMClient) ReadVReplicationWorkflow(ctx context.Contex
 			},
 		},
 	}, nil
+}
+
+func (tmc *testMaterializerTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	tmc.workflowDeleteCalls++
+	return &tabletmanagerdatapb.DeleteVReplicationWorkflowResponse{
+		Result: &querypb.QueryResult{
+			RowsAffected: 1,
+		},
+	}, nil
+}
+
+func (tmc *testMaterializerTMClient) getSchemaRequestCount(uid uint32) int {
+	tmc.muSchemaCount.Lock()
+	defer tmc.muSchemaCount.Unlock()
+	key := strconv.Itoa(int(uid))
+	return tmc.getSchemaCounts[key]
 }
 
 func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
@@ -263,6 +288,22 @@ func (tmc *testMaterializerTMClient) expectVRQuery(tabletID int, query string, r
 	})
 }
 
+func (tmc *testMaterializerTMClient) verifyQueries(t *testing.T) {
+	t.Helper()
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	for tabletID, qrs := range tmc.vrQueries {
+		if len(qrs) != 0 {
+			var list []string
+			for _, qr := range qrs {
+				list = append(list, qr.query)
+			}
+			t.Errorf("tablet %v: found queries that were expected but never got executed by the test: %v", tabletID, list)
+		}
+	}
+}
+
 func (tmc *testMaterializerTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
@@ -289,6 +330,10 @@ func (tmc *testMaterializerTMClient) ExecuteFetchAsDba(ctx context.Context, tabl
 	return tmc.VReplicationExec(ctx, tablet, string(req.Query))
 }
 
+func (tmc *testMaterializerTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
+	return nil, nil
+}
+
 // Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
 func (tmc *testMaterializerTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	stmts := strings.Split(change.SQL, ";")
@@ -305,4 +350,14 @@ func (tmc *testMaterializerTMClient) ApplySchema(ctx context.Context, tablet *to
 	}
 
 	return nil, nil
+}
+
+func (tmc *testMaterializerTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+	return &tabletmanagerdatapb.VDiffResponse{
+		Id:        1,
+		VdiffUuid: req.VdiffUuid,
+		Output: &querypb.QueryResult{
+			RowsAffected: 1,
+		},
+	}, nil
 }

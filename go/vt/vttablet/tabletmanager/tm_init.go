@@ -98,8 +98,6 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&initDbNameOverride, "init_db_name_override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
 	fs.StringVar(&skipBuildInfoTags, "vttablet_skip_buildinfo_tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	fs.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
-	fs.BoolVar(&initPopulateMetadata, "init_populate_metadata", initPopulateMetadata, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
-	fs.MarkDeprecated("init_populate_metadata", "this flag is no longer being used and will be removed in future versions")
 	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
 }
 
@@ -769,6 +767,9 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	if tm.Cnf == nil && restoreFromBackup {
 		return false, fmt.Errorf("you cannot enable --restore_from_backup without a my.cnf file")
 	}
+	if restoreToTimestampStr != "" && restoreToPos != "" {
+		return false, fmt.Errorf("--restore-to-timestamp and --restore-to-pos are mutually exclusive")
+	}
 
 	// Restore in the background
 	if restoreFromBackup {
@@ -778,7 +779,6 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 
 			// Zero date will cause us to use the latest, which is the default
 			backupTime := time.Time{}
-
 			// Or if a backup timestamp was specified then we use the last backup taken at or before that time
 			if restoreFromBackupTsStr != "" {
 				var err error
@@ -788,9 +788,17 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 				}
 			}
 
+			restoreToTimestamp := time.Time{}
+			if restoreToTimestampStr != "" {
+				var err error
+				restoreToTimestamp, err = mysqlctl.ParseRFC3339(restoreToTimestampStr)
+				if err != nil {
+					log.Exitf(fmt.Sprintf("RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err))
+				}
+			}
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime); err != nil {
+			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 		}()

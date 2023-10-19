@@ -329,6 +329,18 @@ func (dr *switcherDryRun) dropSourceDeniedTables(ctx context.Context) error {
 	return nil
 }
 
+func (dr *switcherDryRun) dropTargetDeniedTables(ctx context.Context) error {
+	logs := make([]string, 0)
+	for _, si := range dr.ts.TargetShards() {
+		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Tablet %d", si.Keyspace(), si.ShardName(), si.PrimaryAlias.Uid))
+	}
+	if len(logs) > 0 {
+		dr.drLog.Log(fmt.Sprintf("Denied tables [%s] will be removed from:", strings.Join(dr.ts.Tables(), ",")))
+		dr.drLog.LogSlice(logs)
+	}
+	return nil
+}
+
 func (dr *switcherDryRun) logs() *[]string {
 	return &dr.drLog.logs
 }

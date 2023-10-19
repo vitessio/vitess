@@ -42,9 +42,9 @@ func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
 			if i != 0 {
 				dst = append(dst, ", "...)
 			}
-			dst = append(dst, "_utf8mb4'"...)
-			dst = append(dst, vv.k...)
-			dst = append(dst, "', "...)
+			dst = append(dst, "_utf8mb4"...)
+			dst = append(dst, sqltypes.EncodeStringSQL(vv.k)...)
+			dst = append(dst, ", "...)
 			dst = vv.v.marshalSQLInternal(false, dst)
 		}
 		dst = append(dst, ')')

@@ -40,7 +40,7 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 	)
 	switch node := astExpr.(type) {
 	case *sqlparser.Literal:
-		//set autocommit = 'on'
+		// set autocommit = 'on'
 		if node.Type == sqlparser.StrVal {
 			switch strings.ToLower(node.Val) {
 			case "on":
@@ -50,7 +50,7 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 			}
 		}
 	case *sqlparser.ColName:
-		//set autocommit = on
+		// set autocommit = on
 		switch node.Name.Lowered() {
 		case "on":
 			return ON

@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -67,6 +68,14 @@ type (
 	// ExprDependencies stores the tables that an expression depends on as a map
 	ExprDependencies map[sqlparser.Expr]TableSet
 
+	// QuerySignature is used to identify shortcuts in the planning process
+	QuerySignature struct {
+		Union       bool
+		Aggregation bool
+		Distinct    bool
+		SubQueries  bool
+	}
+
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
 		// Tables stores information about the tables in the query, including derived tables
@@ -101,11 +110,6 @@ type (
 		// It doesn't recurse inside derived tables to find the original dependencies.
 		Direct ExprDependencies
 
-		// SubqueryMap holds extracted subqueries for each statement.
-		SubqueryMap map[sqlparser.Statement][]*sqlparser.ExtractedSubquery
-		// SubqueryRef maps subquery pointers to their extracted subquery.
-		SubqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
-
 		// ColumnEqualities is used for transitive closures (e.g., if a == b and b == c, then a == c).
 		ColumnEqualities map[columnName][]sqlparser.Expr
 
@@ -116,6 +120,17 @@ type (
 		columns map[*sqlparser.Union]sqlparser.SelectExprs
 
 		comparator *sqlparser.Comparator
+
+		// StatementIDs is a map of statements and all the table IDs that are contained within
+		StatementIDs map[sqlparser.Statement]TableSet
+
+		// QuerySignature is used to identify shortcuts in the planning process
+		QuerySignature QuerySignature
+
+		// We store the child and parent foreign keys that are involved in the given query.
+		// The map is keyed by the tableset of the table that each of the foreign key belongs to.
+		childForeignKeysInvolved  map[TableSet][]vindexes.ChildFKInfo
+		parentForeignKeysInvolved map[TableSet][]vindexes.ParentFKInfo
 	}
 
 	columnName struct {
@@ -127,6 +142,8 @@ type (
 	SchemaInformation interface {
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 		ConnCollation() collations.ID
+		// ForeignKeyMode returns the foreign_key flag value
+		ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
 	}
 )
 
@@ -137,8 +154,170 @@ var (
 
 // CopyDependencies copies the dependencies from one expression into the other
 func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
-	st.Recursive[to] = st.RecursiveDeps(from)
-	st.Direct[to] = st.DirectDeps(from)
+	if ValidAsMapKey(to) {
+		st.Recursive[to] = st.RecursiveDeps(from)
+		st.Direct[to] = st.DirectDeps(from)
+		st.ExprTypes[to] = st.ExprTypes[from]
+	}
+}
+
+// GetChildForeignKeysList gets the child foreign keys as a list.
+func (st *SemTable) GetChildForeignKeysList() []vindexes.ChildFKInfo {
+	var childFkInfos []vindexes.ChildFKInfo
+	for _, infos := range st.childForeignKeysInvolved {
+		childFkInfos = append(childFkInfos, infos...)
+	}
+	return childFkInfos
+}
+
+// GetParentForeignKeysList gets the parent foreign keys as a list.
+func (st *SemTable) GetParentForeignKeysList() []vindexes.ParentFKInfo {
+	var parentFkInfos []vindexes.ParentFKInfo
+	for _, infos := range st.parentForeignKeysInvolved {
+		parentFkInfos = append(parentFkInfos, infos...)
+	}
+	return parentFkInfos
+}
+
+// RemoveParentForeignKey removes the given foreign key from the parent foreign keys that sem table stores.
+func (st *SemTable) RemoveParentForeignKey(fkToIgnore string) error {
+	for ts, fkInfos := range st.parentForeignKeysInvolved {
+		ti, err := st.TableInfoFor(ts)
+		if err != nil {
+			return err
+		}
+		vt := ti.GetVindexTable()
+		for idx, info := range fkInfos {
+			if info.String(vt) == fkToIgnore {
+				st.parentForeignKeysInvolved[ts] = append(fkInfos[0:idx], fkInfos[idx+1:]...)
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
+// RemoveNonRequiredForeignKeys prunes the list of foreign keys that the query involves.
+// This function considers whether VTGate needs to validate all foreign keys
+// or can delegate some of the responsibility to MySQL.
+// In the latter case, the following types of foreign keys can be safely removed from our list:
+// 1. Shard-scoped parent foreign keys: MySQL itself will reject a DML operation that violates these constraints.
+// 2. Shard-scoped RESTRICT foreign keys: MySQL will also fail the operation if these foreign key constraints are breached.
+func (st *SemTable) RemoveNonRequiredForeignKeys(verifyAllFks bool, getAction func(fk vindexes.ChildFKInfo) sqlparser.ReferenceAction) error {
+	if verifyAllFks {
+		return nil
+	}
+	// Go over all the parent foreign keys.
+	for ts, parentFKs := range st.parentForeignKeysInvolved {
+		ti, err := st.TableInfoFor(ts)
+		if err != nil {
+			return err
+		}
+		vt := ti.GetVindexTable()
+		var updatedParentFks []vindexes.ParentFKInfo
+		for _, fk := range parentFKs {
+			// Cross-keyspace foreign keys require verification.
+			if vt.Keyspace.Name != fk.Table.Keyspace.Name {
+				updatedParentFks = append(updatedParentFks, fk)
+				continue
+			}
+			// Non shard-scoped foreign keys require verification.
+			if !isShardScoped(fk.Table, vt, fk.ParentColumns, fk.ChildColumns) {
+				updatedParentFks = append(updatedParentFks, fk)
+			}
+		}
+		st.parentForeignKeysInvolved[ts] = updatedParentFks
+	}
+
+	// Go over all the child foreign keys.
+	for ts, childFks := range st.childForeignKeysInvolved {
+		ti, err := st.TableInfoFor(ts)
+		if err != nil {
+			return err
+		}
+		vt := ti.GetVindexTable()
+		var updatedChildFks []vindexes.ChildFKInfo
+		for _, fk := range childFks {
+			// Cross-keyspace foreign keys require verification.
+			if vt.Keyspace.Name != fk.Table.Keyspace.Name {
+				updatedChildFks = append(updatedChildFks, fk)
+				continue
+			}
+			switch getAction(fk) {
+			case sqlparser.Cascade, sqlparser.SetNull, sqlparser.SetDefault:
+				updatedChildFks = append(updatedChildFks, fk)
+				continue
+			}
+			// sqlparser.Restrict, sqlparser.NoAction, sqlparser.DefaultAction
+			// all the actions means the same thing i.e. Restrict
+			// do not allow modification if there is a child row.
+			// Check if the restrict is shard scoped.
+			if !isShardScoped(vt, fk.Table, fk.ParentColumns, fk.ChildColumns) {
+				updatedChildFks = append(updatedChildFks, fk)
+			}
+		}
+		st.childForeignKeysInvolved[ts] = updatedChildFks
+	}
+
+	return nil
+}
+
+// isShardScoped checks if the foreign key constraint is shard-scoped or not. It uses the vindex information to make this call.
+func isShardScoped(pTable *vindexes.Table, cTable *vindexes.Table, pCols sqlparser.Columns, cCols sqlparser.Columns) bool {
+	if !pTable.Keyspace.Sharded {
+		return true
+	}
+
+	pPrimaryVdx := pTable.ColumnVindexes[0]
+	cPrimaryVdx := cTable.ColumnVindexes[0]
+
+	// If the primary vindexes don't match between the parent and child table,
+	// we cannot infer that the fk constraint in shard scoped.
+	if cPrimaryVdx.Vindex != pPrimaryVdx.Vindex {
+		return false
+	}
+
+	childFkContatined, childFkIndexes := cCols.Indexes(cPrimaryVdx.Columns)
+	if !childFkContatined {
+		// PrimaryVindex is not part of the foreign key constraint on the children side.
+		// So it is a cross-shard foreign key.
+		return false
+	}
+
+	// We need to run the same check for the parent columns.
+	parentFkContatined, parentFkIndexes := pCols.Indexes(pPrimaryVdx.Columns)
+	if !parentFkContatined {
+		return false
+	}
+
+	// Both the child and parent table contain the foreign key and that the vindexes are the same,
+	// now we need to make sure, that the indexes of both match.
+	// For example, consider the following tables,
+	//	t1 (primary vindex (x,y))
+	//	t2 (primary vindex (a,b))
+	//	If we have a foreign key constraint from t1(x,y) to t2(b,a), then they are not shard scoped.
+	//	Let's say in t1, (1,3) will be in -80 and (3,1) will be in 80-, then in t2 (1,3) will end up in 80-.
+	for i := range parentFkIndexes {
+		if parentFkIndexes[i] != childFkIndexes[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// ForeignKeysPresent returns whether there are any foreign key constraints left in the semantic table that require handling.
+func (st *SemTable) ForeignKeysPresent() bool {
+	for _, fkInfos := range st.childForeignKeysInvolved {
+		if len(fkInfos) > 0 {
+			return true
+		}
+	}
+	for _, fkInfos := range st.parentForeignKeysInvolved {
+		if len(fkInfos) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func (st *SemTable) SelectExprs(sel sqlparser.SelectStatement) sqlparser.SelectExprs {
@@ -149,6 +328,11 @@ func (st *SemTable) SelectExprs(sel sqlparser.SelectStatement) sqlparser.SelectE
 		exprs, found := st.columns[sel]
 		if found {
 			return exprs
+		}
+		for stmt, exprs := range st.columns {
+			if sqlparser.Equals.SelectStatement(stmt, sel) {
+				return exprs
+			}
 		}
 		panic("BUG: union not found in semantic table for select expressions")
 	}
@@ -170,17 +354,32 @@ func getColumnNames(exprs sqlparser.SelectExprs) (expanded bool, selectExprs sql
 	return
 }
 
-// CopyDependenciesOnSQLNodes copies the dependencies from one expression into the other
-func (st *SemTable) CopyDependenciesOnSQLNodes(from, to sqlparser.SQLNode) {
-	f, ok := from.(sqlparser.Expr)
-	if !ok {
+// CopySemanticInfo copies all semantic information we have about this SQLNode so that it also applies to the `to` node
+func (st *SemTable) CopySemanticInfo(from, to sqlparser.SQLNode) {
+	if f, ok := from.(sqlparser.Statement); ok {
+		t, ok := to.(sqlparser.Statement)
+		if ok {
+			st.StatementIDs[t] = st.StatementIDs[f]
+		}
+	}
+
+	switch f := from.(type) {
+	case sqlparser.Expr:
+		t, ok := to.(sqlparser.Expr)
+		if !ok {
+			return
+		}
+		st.CopyDependencies(f, t)
+	case *sqlparser.Union:
+		t, ok := to.(*sqlparser.Union)
+		if !ok {
+			return
+		}
+		exprs := st.columns[f]
+		st.columns[t] = exprs
+	default:
 		return
 	}
-	t, ok := to.(sqlparser.Expr)
-	if !ok {
-		return
-	}
-	st.CopyDependencies(f, t)
 }
 
 // Cloned copies the dependencies from one expression into the other
@@ -352,13 +551,6 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 			return true, nil
 		}
 
-		if extracted, ok := expr.(*sqlparser.ExtractedSubquery); ok {
-			if extracted.OtherSide != nil {
-				set := d.dependencies(extracted.OtherSide)
-				deps = deps.Merge(set)
-			}
-			return false, nil
-		}
 		set, found := d[expr]
 		deps = deps.Merge(set)
 
@@ -391,30 +583,6 @@ func RewriteDerivedTableExpression(expr sqlparser.Expr, vt TableInfo) sqlparser.
 		cursor.Replace(&col)
 
 	}, nil).(sqlparser.Expr)
-}
-
-// FindSubqueryReference goes over the sub queries and searches for it by value equality instead of reference equality
-func (st *SemTable) FindSubqueryReference(subquery *sqlparser.Subquery) *sqlparser.ExtractedSubquery {
-	for foundSubq, extractedSubquery := range st.SubqueryRef {
-		if sqlparser.Equals.RefOfSubquery(subquery, foundSubq) {
-			return extractedSubquery
-		}
-	}
-	return nil
-}
-
-// GetSubqueryNeedingRewrite returns a list of sub-queries that need to be rewritten
-func (st *SemTable) GetSubqueryNeedingRewrite() []*sqlparser.ExtractedSubquery {
-	if st == nil {
-		return nil
-	}
-	var res []*sqlparser.ExtractedSubquery
-	for _, extractedSubquery := range st.SubqueryRef {
-		if extractedSubquery.Merged {
-			res = append(res, extractedSubquery)
-		}
-	}
-	return res
 }
 
 // CopyExprInfo lookups src in the ExprTypes map and, if a key is found, assign
@@ -488,6 +656,10 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 // The expression in the select list is not equal to the one in the ORDER BY,
 // but they point to the same column and would be considered equal by this method
 func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
+	// If there is no SemTable, then we cannot compare the expressions.
+	if st == nil {
+		return false
+	}
 	return st.ASTEquals().Expr(a, b)
 }
 
@@ -516,6 +688,23 @@ func (st *SemTable) ContainsExpr(e sqlparser.Expr, expres []sqlparser.Expr) bool
 		}
 	}
 	return false
+}
+
+// Uniquify takes a slice of expressions and removes any duplicates
+func (st *SemTable) Uniquify(in []sqlparser.Expr) []sqlparser.Expr {
+	result := make([]sqlparser.Expr, 0, len(in))
+	idx := 0
+outer:
+	for _, expr := range in {
+		for i := 0; i < idx; i++ {
+			if st.EqualsExprWithDeps(result[i], expr) {
+				continue outer
+			}
+			result = append(result, expr)
+			idx++
+		}
+	}
+	return result
 }
 
 // AndExpressions ands together two or more expressions, minimising the expr when possible
@@ -552,6 +741,9 @@ func (st *SemTable) AndExpressions(exprs ...sqlparser.Expr) sqlparser.Expr {
 // ASTEquals returns a sqlparser.Comparator that uses the semantic information in this SemTable to
 // explicitly compare column names for equality.
 func (st *SemTable) ASTEquals() *sqlparser.Comparator {
+	if st == nil {
+		return sqlparser.Equals
+	}
 	if st.comparator == nil {
 		st.comparator = &sqlparser.Comparator{
 			RefOfColName_: func(a, b *sqlparser.ColName) bool {

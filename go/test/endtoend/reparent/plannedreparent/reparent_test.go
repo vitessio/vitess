@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -557,7 +558,16 @@ func waitForFilePosition(t *testing.T, clusterInstance *cluster.LocalProcessClus
 
 // fileNameFromPosition gets the file name from the position
 func fileNameFromPosition(pos string) string {
-	return pos[0 : len(pos)-4]
+	s := strings.SplitN(pos, ":", 2)
+	if len(s) != 2 {
+		return ""
+	}
+	return s[0]
+}
+
+func TestFileNameFromPosition(t *testing.T) {
+	assert.Equal(t, "", fileNameFromPosition("shouldfail"))
+	assert.Equal(t, "FilePos/vt-0000000101-bin.000001", fileNameFromPosition("FilePos/vt-0000000101-bin.000001:123456789"))
 }
 
 // rowNumberFromPosition gets the row number from the position

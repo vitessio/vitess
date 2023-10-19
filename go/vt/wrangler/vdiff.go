@@ -1082,7 +1082,7 @@ func newPrimitiveExecutor(ctx context.Context, prim engine.Primitive) *primitive
 			select {
 			case pe.resultch <- qr:
 			case <-ctx.Done():
-				return vterrors.Wrap(ctx.Err(), "Outer Stream")
+				return vterrors.Wrap(ctx.Err(), "LHS Stream")
 			}
 			return nil
 		})

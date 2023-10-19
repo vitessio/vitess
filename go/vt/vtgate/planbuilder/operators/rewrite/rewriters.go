@@ -219,7 +219,7 @@ func bottomUp(
 	shouldVisit ShouldVisit,
 	isRoot bool,
 ) (ops.Operator, *ApplyResult, error) {
-	if !shouldVisit(root) {
+	if shouldVisit != nil && !shouldVisit(root) {
 		return root, SameTree, nil
 	}
 

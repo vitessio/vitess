@@ -27,7 +27,7 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-var cancelOptions = struct {
+var CancelOptions = struct {
 	KeepData         bool
 	KeepRoutingRules bool
 }{}
@@ -56,8 +56,8 @@ func commandCancel(cmd *cobra.Command, args []string) error {
 	req := &vtctldatapb.WorkflowDeleteRequest{
 		Keyspace:         BaseOptions.TargetKeyspace,
 		Workflow:         BaseOptions.Workflow,
-		KeepData:         cancelOptions.KeepData,
-		KeepRoutingRules: cancelOptions.KeepRoutingRules,
+		KeepData:         CancelOptions.KeepData,
+		KeepRoutingRules: CancelOptions.KeepRoutingRules,
 	}
 	resp, err := GetClient().WorkflowDelete(GetCommandCtx(), req)
 	if err != nil {
@@ -70,7 +70,7 @@ func commandCancel(cmd *cobra.Command, args []string) error {
 		sort.Slice(resp.Details, func(i, j int) bool {
 			return resp.Details[i].Tablet.String() < resp.Details[j].Tablet.String()
 		})
-		output, err = cli.MarshalJSONCompact(resp)
+		output, err = cli.MarshalJSONPretty(resp)
 		if err != nil {
 			return err
 		}

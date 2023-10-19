@@ -1527,7 +1527,7 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 
 func newTestQueryExecutorStreaming(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutorStreaming")
-	plan, err := tsv.qe.GetStreamPlan(sql)
+	plan, err := tsv.qe.GetStreamPlan(ctx, logStats, sql, false)
 	if err != nil {
 		panic(err)
 	}

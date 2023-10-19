@@ -884,8 +884,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.id from `user` where 1 != 1",
-            "Query": "select `user`.id from `user`",
+            "FieldQuery": "select `user`.id, `user`.id from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.id from `user`",
             "Table": "`user`"
           },
           {
@@ -895,8 +895,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select (select :user_id + outm.m + unsharded.m from unsharded where 1 != 1) from unsharded as outm where 1 != 1",
-            "Query": "select (select :user_id + outm.m + unsharded.m from unsharded) from unsharded as outm",
+            "FieldQuery": "select (select :user_id + outm.m + unsharded.m from unsharded where 1 != 1) as `(select ``user``.id + outm.m + unsharded.m from unsharded)` from unsharded as outm where 1 != 1",
+            "Query": "select (select :user_id + outm.m + unsharded.m from unsharded) as `(select ``user``.id + outm.m + unsharded.m from unsharded)` from unsharded as outm",
             "Table": "unsharded"
           }
         ]
@@ -1226,7 +1226,7 @@
       "QueryType": "SELECT",
       "Original": "select a, (select col from user) from unsharded",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq1"
@@ -1252,8 +1252,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select a, :__sq1 from unsharded where 1 != 1",
-            "Query": "select a, :__sq1 from unsharded",
+            "FieldQuery": "select a, :__sq1 as `(select col from ``user``)` from unsharded where 1 != 1",
+            "Query": "select a, :__sq1 as `(select col from ``user``)` from unsharded",
             "Table": "unsharded"
           }
         ]
@@ -1271,7 +1271,7 @@
       "QueryType": "SELECT",
       "Original": "select a, 1+(select col from user) from unsharded",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq1"
@@ -1297,8 +1297,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select a, 1 + :__sq1 from unsharded where 1 != 1",
-            "Query": "select a, 1 + :__sq1 from unsharded",
+            "FieldQuery": "select a, 1 + :__sq1 as `1 + (select col from ``user``)` from unsharded where 1 != 1",
+            "Query": "select a, 1 + :__sq1 as `1 + (select col from ``user``)` from unsharded",
             "Table": "unsharded"
           }
         ]
@@ -2027,84 +2027,13 @@
       "QueryType": "SELECT",
       "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
       "Instructions": {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutValue",
-        "PulloutVars": [
-          "__sq1"
-        ],
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "InputName": "SubQuery",
-            "OperatorType": "Limit",
-            "Count": "INT64(1)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select col from `user` where 1 != 1",
-                "Query": "select col from `user` limit :__upper_limit",
-                "Table": "`user`"
-              }
-            ]
-          },
-          {
-            "InputName": "Outer",
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select :__sq1 as a, weight_string(:__sq1) from `user` where 1 != 1",
-                "OrderBy": "(0|1) ASC",
-                "Query": "select :__sq1 as a, weight_string(:__sq1) from `user` order by a asc",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user",
-        "user.user_extra"
-      ]
-    }
-  },
-  {
-    "comment": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
-    "query": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
-      "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Subquery",
+            "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutValue",
             "PulloutVars": [
               "__sq1"
@@ -2130,10 +2059,61 @@
               },
               {
                 "InputName": "Outer",
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0",
-                "TableName": "`user`_user_extra",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select :__sq1 as a, weight_string(:__sq1) from `user` where 1 != 1",
+                "OrderBy": "(0|1) ASC",
+                "Query": "select :__sq1 as a, weight_string(:__sq1) from `user` order by a asc",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
+    "query": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "INT64(1)",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -2142,24 +2122,36 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select :__sq1 as a from `user` where 1 != 1",
-                    "Query": "select :__sq1 as a from `user`",
+                    "FieldQuery": "select col from `user` where 1 != 1",
+                    "Query": "select col from `user` limit :__upper_limit",
                     "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra",
-                    "Table": "user_extra"
                   }
                 ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select t.a from (select :__sq1 as a from `user` where 1 != 1) as t where 1 != 1",
+                "Query": "select t.a from (select :__sq1 as a from `user`) as t",
+                "Table": "`user`"
               }
             ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
           }
         ]
       },
@@ -2243,40 +2235,47 @@
       "QueryType": "SELECT",
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
       "Instructions": {
-        "OperatorType": "SemiJoin",
-        "JoinVars": {
-          "user_id": 0
-        },
-        "ProjectedIndexes": "-2",
-        "TableName": "`user`_user_extra",
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
-            "InputName": "Outer",
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "user_id": 1
             },
-            "FieldQuery": "select `user`.id, col from `user` where 1 != 1",
-            "Query": "select `user`.id, col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "InputName": "SubQuery",
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
-            "Table": "user_extra",
-            "Values": [
-              "INT64(3)"
-            ],
-            "Vindex": "user_index"
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col, `user`.id from `user` where 1 != 1",
+                "Query": "select col, `user`.id from `user`",
+                "Table": "`user`"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
+                "Table": "user_extra",
+                "Values": [
+                  "INT64(3)"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
           }
         ]
       },
@@ -2293,41 +2292,48 @@
       "QueryType": "SELECT",
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col",
       "Instructions": {
-        "OperatorType": "SemiJoin",
-        "JoinVars": {
-          "user_id": 0
-        },
-        "ProjectedIndexes": "-2",
-        "TableName": "`user`_user_extra",
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
-            "InputName": "Outer",
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "user_id": 1
             },
-            "FieldQuery": "select `user`.id, col from `user` where 1 != 1",
-            "OrderBy": "1 ASC",
-            "Query": "select `user`.id, col from `user` order by col asc",
-            "Table": "`user`"
-          },
-          {
-            "InputName": "SubQuery",
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
-            "Table": "user_extra",
-            "Values": [
-              "INT64(3)"
-            ],
-            "Vindex": "user_index"
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col, `user`.id from `user` where 1 != 1",
+                "OrderBy": "0 ASC",
+                "Query": "select col, `user`.id from `user` order by col asc",
+                "Table": "`user`"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
+                "Table": "user_extra",
+                "Values": [
+                  "INT64(3)"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
           }
         ]
       },
@@ -2344,33 +2350,34 @@
       "QueryType": "SELECT",
       "Original": "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)",
       "Instructions": {
-        "OperatorType": "SemiJoin",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "u1_col": 0,
-          "u2_col": 1
+          "u1_col": 1
         },
-        "ProjectedIndexes": "-3",
         "TableName": "`user`_`user`_user_extra",
         "Inputs": [
           {
-            "InputName": "Outer",
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,R:0,L:1",
-            "TableName": "`user`_`user`",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1, u1.col from `user` as u1 where 1 != 1",
+            "Query": "select 1, u1.col from `user` as u1",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "u2_col": 0
+            },
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u1.col, 1 from `user` as u1 where 1 != 1",
-                "Query": "select u1.col, 1 from `user` as u1",
-                "Table": "`user`"
-              },
-              {
+                "InputName": "Outer",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -2380,20 +2387,20 @@
                 "FieldQuery": "select u2.col from `user` as u2 where 1 != 1",
                 "Query": "select u2.col from `user` as u2",
                 "Table": "`user`"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                "Query": "select 1 from user_extra as ue where ue.col = :u1_col and ue.col = :u2_col",
+                "Table": "user_extra"
               }
             ]
-          },
-          {
-            "InputName": "SubQuery",
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-            "Query": "select 1 from user_extra as ue where ue.col = :u1_col /* INT16 */ and ue.col = :u2_col /* INT16 */",
-            "Table": "user_extra"
           }
         ]
       },
@@ -2410,36 +2417,43 @@
       "QueryType": "SELECT",
       "Original": "select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
       "Instructions": {
-        "OperatorType": "SemiJoin",
-        "JoinVars": {
-          "u_col": 0
-        },
-        "ProjectedIndexes": "-2",
-        "TableName": "`user`_user_extra",
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
-            "InputName": "Outer",
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "u_col": 1
             },
-            "FieldQuery": "select u.col, 1 from `user` as u where 1 != 1",
-            "Query": "select u.col, 1 from `user` as u",
-            "Table": "`user`"
-          },
-          {
-            "InputName": "SubQuery",
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-            "Query": "select 1 from user_extra as ue where ue.col = :u_col /* INT16 */ and ue.col2 = :u_col",
-            "Table": "user_extra"
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1, u.col from `user` as u where 1 != 1",
+                "Query": "select 1, u.col from `user` as u",
+                "Table": "`user`"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                "Query": "select 1 from user_extra as ue where ue.col = :u_col and ue.col2 = :u_col",
+                "Table": "user_extra"
+              }
+            ]
           }
         ]
       },
@@ -2463,7 +2477,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music, `user` where 1 != 1",
-        "Query": "select music.id from music, `user` where music.user_id = 5 and music.id = (select max(m2.id) from music as m2 where m2.user_id = `user`.id) and music.user_id = `user`.id",
+        "Query": "select music.id from music, `user` where music.user_id = 5 and music.user_id = `user`.id and music.id = (select max(m2.id) from music as m2 where m2.user_id = `user`.id)",
         "Table": "`user`, music",
         "Values": [
           "INT64(5)"
@@ -2549,8 +2563,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :user_extra_col + `user`.col from `user` where 1 != 1",
-            "Query": "select :user_extra_col + `user`.col from `user` where `user`.id = :user_extra_id",
+            "FieldQuery": "select :user_extra_col + `user`.col as `user_extra.col + ``user``.col` from `user` where 1 != 1",
+            "Query": "select :user_extra_col + `user`.col as `user_extra.col + ``user``.col` from `user` where `user`.id = :user_extra_id",
             "Table": "`user`",
             "Values": [
               ":user_extra_id"
@@ -2667,7 +2681,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 1 from dual where 1 != 1",
-        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME /* VARCHAR */ and `TABLES`.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */ limit 1)",
+        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME /* VARCHAR */ and `TABLES`.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */)",
         "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
         "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
         "Table": "dual"
@@ -2706,7 +2720,7 @@
       "QueryType": "SELECT",
       "Original": "select (select id from user order by id limit 1) from user_extra",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq1"
@@ -2727,7 +2741,6 @@
                 "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                 "OrderBy": "(0|1) ASC",
                 "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
-                "ResultColumns": 1,
                 "Table": "`user`"
               }
             ]
@@ -2740,8 +2753,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :__sq1 from user_extra where 1 != 1",
-            "Query": "select :__sq1 from user_extra",
+            "FieldQuery": "select :__sq1 as `(select id from ``user`` order by id asc limit 1)` from user_extra where 1 != 1",
+            "Query": "select :__sq1 as `(select id from ``user`` order by id asc limit 1)` from user_extra",
             "Table": "user_extra"
           }
         ]
@@ -2766,7 +2779,7 @@
           "Sharded": true
         },
         "FieldQuery": "select exists (select 1 from dual where 1 != 1) from `user` where 1 != 1",
-        "Query": "select exists (select 1 from dual limit 1) from `user` where id = 5",
+        "Query": "select exists (select 1 from dual) from `user` where id = 5",
         "Table": "`user`",
         "Values": [
           "INT64(5)"
@@ -2969,7 +2982,7 @@
           "Sharded": true
         },
         "FieldQuery": "select exists (select 1 from `user` where 1 != 1) from dual where 1 != 1",
-        "Query": "select exists (select 1 from `user` where id = 4 limit 1) from dual",
+        "Query": "select exists (select 1 from `user` where id = 4) from dual",
         "Table": "dual",
         "Values": [
           "INT64(4)"
@@ -2989,29 +3002,24 @@
       "QueryType": "SELECT",
       "Original": "select exists(select * from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutExists",
         "PulloutVars": [
-          "__sq_has_values1"
+          "__sq_has_values2",
+          "__sq1"
         ],
         "Inputs": [
           {
             "InputName": "SubQuery",
-            "OperatorType": "Limit",
-            "Count": "INT64(1)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from `user` where 1 != 1",
-                "Query": "select 1 from `user` limit :__upper_limit",
-                "Table": "`user`"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user`",
+            "Table": "`user`"
           },
           {
             "InputName": "Outer",
@@ -3021,8 +3029,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select :__sq_has_values1 from dual where 1 != 1",
-            "Query": "select :__sq_has_values1 from dual",
+            "FieldQuery": "select :__sq_has_values2 as `exists (select 1 from ``user``)` from dual where 1 != 1",
+            "Query": "select :__sq_has_values2 as `exists (select 1 from ``user``)` from dual",
             "Table": "dual"
           }
         ]
@@ -3321,7 +3329,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (5)) and music.user_id = 5",
+        "Query": "select music.id from music where music.user_id = 5 and music.id in (select music.id from music where music.user_id in (5))",
         "Table": "music",
         "Values": [
           "INT64(5)"
@@ -3347,7 +3355,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in ::__vals)",
+        "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (1, 2, 3))",
         "Table": "music",
         "Values": [
           "(INT64(1), INT64(2), INT64(3))"
@@ -3373,7 +3381,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select _inner.id from (select music.id from music where music.user_id in ::__vals) as _inner)",
+        "Query": "select music.id from music where music.id in (select _inner.id from (select music.id from music where music.user_id in (1, 2, 3)) as _inner)",
         "Table": "music",
         "Values": [
           "(INT64(1), INT64(2), INT64(3))"
@@ -3399,7 +3407,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select music.id from music where music.foo = 'bar') and music.user_id in ::__vals",
+        "Query": "select music.id from music where music.user_id in ::__vals and music.id in (select music.id from music where music.foo = 'bar')",
         "Table": "music",
         "Values": [
           "(INT64(3), INT64(4), INT64(5))"
@@ -3425,7 +3433,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (1, 2, 3)) and music.user_id = 5",
+        "Query": "select music.id from music where music.user_id = 5 and music.id in (select music.id from music where music.user_id in (1, 2, 3))",
         "Table": "music",
         "Values": [
           "INT64(5)"
@@ -3473,7 +3481,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (null)) and music.user_id = 5",
+        "Query": "select music.id from music where music.user_id = 5 and music.id in (select music.id from music where music.user_id in (null))",
         "Table": "music"
       },
       "TablesUsed": [
@@ -3554,10 +3562,10 @@
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.genre)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
@@ -3567,7 +3575,6 @@
             "Variant": "Ordered",
             "Aggregates": "any_value(0) AS id",
             "GroupBy": "(1|2)",
-            "ResultColumns": 1,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -3592,7 +3599,7 @@
               "Sharded": true
             },
             "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
             "Table": "music",
             "Values": [
               "::__sq1"
@@ -3613,10 +3620,10 @@
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' LIMIT 10)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
@@ -3647,7 +3654,7 @@
               "Sharded": true
             },
             "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
             "Table": "music",
             "Values": [
               "::__sq1"
@@ -3668,19 +3675,46 @@
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6) GROUP BY music.user_id)",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "IN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select max(music.id) from music where music.user_id in ::__vals group by music.user_id)",
-        "Table": "music",
-        "Values": [
-          "(INT64(5), INT64(6))"
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values",
+          "__sq1"
         ],
-        "Vindex": "user_index"
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select max(music.id) from music where 1 != 1 group by music.user_id",
+            "Query": "select max(music.id) from music where music.user_id in ::__vals group by music.user_id",
+            "Table": "music",
+            "Values": [
+              "(INT64(5), INT64(6))"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select music.id from music where 1 != 1",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
+            "Table": "music",
+            "Values": [
+              "::__sq1"
+            ],
+            "Vindex": "music_user_map"
+          }
+        ]
       },
       "TablesUsed": [
         "user.music"
@@ -3694,10 +3728,10 @@
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6))",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
@@ -3705,7 +3739,7 @@
             "InputName": "SubQuery",
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "max(0) AS max(music.id)",
+            "Aggregates": "max(0|1) AS max(music.id)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -3714,8 +3748,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(music.id) from music where 1 != 1",
-                "Query": "select max(music.id) from music where music.user_id in ::__vals",
+                "FieldQuery": "select max(music.id), weight_string(music.id) from music where 1 != 1 group by weight_string(music.id)",
+                "Query": "select max(music.id), weight_string(music.id) from music where music.user_id in ::__vals group by weight_string(music.id)",
                 "Table": "music",
                 "Values": [
                   "(INT64(5), INT64(6))"
@@ -3733,7 +3767,7 @@
               "Sharded": true
             },
             "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
             "Table": "music",
             "Values": [
               "::__sq1"
@@ -3754,10 +3788,10 @@
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
@@ -3786,7 +3820,7 @@
               "Sharded": true
             },
             "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
             "Table": "music",
             "Values": [
               "::__sq1"
@@ -3807,10 +3841,10 @@
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5 LIMIT 10)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
@@ -3839,7 +3873,7 @@
               "Sharded": true
             },
             "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
             "Table": "music",
             "Values": [
               "::__sq1"
@@ -3912,40 +3946,32 @@
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5, 6) LIMIT 10) subquery_for_limit) subquery_for_limit)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
           {
             "InputName": "SubQuery",
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0
-            ],
+            "OperatorType": "Limit",
+            "Count": "INT64(10)",
             "Inputs": [
               {
-                "OperatorType": "Limit",
-                "Count": "INT64(10)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "IN",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select music.id from music where 1 != 1",
-                    "Query": "select music.id from music where music.user_id in ::__vals limit :__upper_limit",
-                    "Table": "music",
-                    "Values": [
-                      "(INT64(5), INT64(6))"
-                    ],
-                    "Vindex": "user_index"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
+                "Query": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where music.user_id in ::__vals) as subquery_for_limit limit :__upper_limit) as subquery_for_limit limit :__upper_limit",
+                "Table": "music",
+                "Values": [
+                  "(INT64(5), INT64(6))"
+                ],
+                "Vindex": "user_index"
               }
             ]
           },
@@ -3958,7 +3984,7 @@
               "Sharded": true
             },
             "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
             "Table": "music",
             "Values": [
               "::__sq1"
@@ -3979,36 +4005,28 @@
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music LIMIT 10) subquery_for_limit) subquery_for_limit)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
           {
             "InputName": "SubQuery",
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0
-            ],
+            "OperatorType": "Limit",
+            "Count": "INT64(10)",
             "Inputs": [
               {
-                "OperatorType": "Limit",
-                "Count": "INT64(10)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select music.id from music where 1 != 1",
-                    "Query": "select music.id from music limit :__upper_limit",
-                    "Table": "music"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
+                "Query": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music) as subquery_for_limit limit :__upper_limit) as subquery_for_limit limit :__upper_limit",
+                "Table": "music"
               }
             ]
           },
@@ -4021,7 +4039,7 @@
               "Sharded": true
             },
             "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
+            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
             "Table": "music",
             "Values": [
               "::__sq1"
@@ -4071,7 +4089,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (null)) and music.user_id = 5",
+        "Query": "select music.id from music where music.user_id = 5 and music.id in (select music.id from music where music.user_id in (null))",
         "Table": "music"
       },
       "TablesUsed": [
@@ -4486,7 +4504,7 @@
           "Sharded": true
         },
         "FieldQuery": "select 1 from `user`, music_extra where 1 != 1",
-        "Query": "select 1 from `user`, music_extra where music_extra.music_id = (select max(music_id) from music_extra where user_id = `user`.id) and `user`.id = music_extra.user_id",
+        "Query": "select 1 from `user`, music_extra where `user`.id = music_extra.user_id and music_extra.music_id = (select max(music_id) from music_extra where user_id = `user`.id)",
         "Table": "`user`, music_extra"
       },
       "TablesUsed": [

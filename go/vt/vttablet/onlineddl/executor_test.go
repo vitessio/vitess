@@ -166,15 +166,15 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 		},
 		{
 			alter:  "alter table t add column i int, add fulltext key name1_ft (name1)",
-			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1), algorithm = copy"},
+			expect: []string{"alter table t add column i int, add fulltext index name1_ft (name1), algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add column i int, add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
-			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1), algorithm = copy", "alter table t add fulltext key name2_ft (name2), algorithm = copy"},
+			expect: []string{"alter table t add column i int, add fulltext index name1_ft (name1), algorithm = copy", "alter table t add fulltext index name2_ft (name2), algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add fulltext key name0_ft (name0), add column i int, add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
-			expect: []string{"alter table t add fulltext key name0_ft (name0), add column i int, algorithm = copy", "alter table t add fulltext key name1_ft (name1), algorithm = copy", "alter table t add fulltext key name2_ft (name2), algorithm = copy"},
+			expect: []string{"alter table t add fulltext index name0_ft (name0), add column i int, algorithm = copy", "alter table t add fulltext index name1_ft (name1), algorithm = copy", "alter table t add fulltext index name2_ft (name2), algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add constraint check (id != 1)",

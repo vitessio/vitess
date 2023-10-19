@@ -87,6 +87,11 @@ That includes:
   >  - There are two scripts in the website repository in `./tools/{ga|rc}_release.sh`, use them to update the website documentation. The scripts automate:
   >  - For an RC, we need to create a new entry in the sidebar which represents the next version on `main` and mark the version we are releasing as RC.
   >  - For a GA, we need to mark the version we are releasing as "Stable" and the next one as "Development".
+- **Create a new GitHub Milestone**
+  > - Our GitHub Milestones is a good representation of all our ongoing development cycles. We have a Milestone for `main` and for all release branches. 
+  > - After doing Code Freeze, we can create a new GitHub Milestone that matches the next development cycle.
+  >  - **If we release a major version (v18.0.0-rc1):** we must create a `v19.0.0` Milestone.
+  >  - **If we release a patch release (v17.0.3):** we must create a `v17.0.4` Milestone.
 
 -----
 
@@ -122,10 +127,12 @@ On the release day, there are several things to do:
   > - The benchmarks need to complete before announcing the blog posts or before they get cross-posted.
 - **Go back to dev mode on the release branch.**
   > - The version constants across the codebase must be updated to `SNAPSHOT`.
-- **Build k8s Docker images and publish them.**
-  > - The docker image for `base`, `lite`, etc are built automatically by DockerHub. The k8s images however are dependent on these images and are required to be built manually.
-  > - These images should be built after the `base` image has been built and available on DockerHub.
-  > - To build and publish these images, checkout the new release tag that was just created and run `./release.sh` from the directory `./docker`.
+- **Ensure the k8s images are available on DockerHub.**
+- **Close the current GitHub Milestone**
+  > - Once we are done releasing the current version, we must close its corresponding GitHub Milestone as the development cycle for it is over.
+  > - **This does not apply if we are releasing an RC release.** For instance, if we are releasing `v18.0.0-rc1` we want to keep the `v18.0.0` milestone opened as development is not fully done for `v18.0.0`. 
+  > - For instance, if we release `v18.0.1`, we must close the `v18.0.1` Milestone as the development cycle for `v18.0.1` is over.
+  > - When closing a Milestone, we need to look through all the PRs/Issues in that Milestone and re-assign a newer Milestone to them.
 
 -----
 
@@ -133,6 +140,9 @@ On the release day, there are several things to do:
 
 Once the release is over, we need to announce it on both Slack and Twitter. We also want to make sure the blog post was cross-posted, if applicable.
 We need to verify that _arewefastyet_ has finished the benchmark too.
+
+Moreover, once the roadmap discussions are over for the next release, we need to update the roadmap presented in the Vitess website (https://vitess.io/docs/resources/roadmap/).
+We must remove everything that is now done in this release and add new items based on the discussions.
 
 -----
 

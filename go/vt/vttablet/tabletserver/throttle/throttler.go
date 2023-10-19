@@ -544,7 +544,7 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, pro
 	}
 	defer conn.Recycle()
 
-	tm, err := conn.Exec(ctx, probe.MetricQuery, 1, true)
+	tm, err := conn.Conn.Exec(ctx, probe.MetricQuery, 1, true)
 	if err != nil {
 		metric.Err = err
 		return metric
@@ -682,7 +682,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 				{
 					// sparse
 					if throttler.IsOpen() {
-						go throttler.refreshMySQLInventory(ctx)
+						throttler.refreshMySQLInventory(ctx)
 					}
 				}
 			case probes := <-throttler.mysqlClusterProbesChan:
@@ -714,6 +714,10 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 
 func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context, tmClient tmclient.TabletManagerClient, clusterName string, probe *mysql.Probe) (probeFunc func() *mysql.MySQLThrottleMetric) {
 	return func() *mysql.MySQLThrottleMetric {
+		// Some reasonable timeout, to ensure we release connections even if they're hanging (otherwise grpc-go keeps polling those connections forever)
+		ctx, cancel := context.WithTimeout(ctx, 4*mysqlCollectInterval)
+		defer cancel()
+
 		// Hit a tablet's `check-self` via HTTP, and convert its CheckResult JSON output into a MySQLThrottleMetric
 		mySQLThrottleMetric := mysql.NewMySQLThrottleMetric()
 		mySQLThrottleMetric.ClusterName = clusterName
@@ -872,6 +876,9 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			}
 			// The primary tablet is also in charge of collecting the shard's metrics
 			err := func() error {
+				ctx, cancel := context.WithTimeout(ctx, mysqlRefreshInterval)
+				defer cancel()
+
 				tabletAliases, err := throttler.ts.FindAllTabletAliasesInShard(ctx, throttler.keyspace, throttler.shard)
 				if err != nil {
 					return err

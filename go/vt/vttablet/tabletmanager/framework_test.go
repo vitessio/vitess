@@ -480,3 +480,13 @@ func (tmc *fakeTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *top
 		RowsAffected: 1,
 	}, nil
 }
+
+func (tmc *fakeTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+	return &tabletmanagerdatapb.VDiffResponse{
+		Id:        1,
+		VdiffUuid: req.VdiffUuid,
+		Output: &querypb.QueryResult{
+			RowsAffected: 1,
+		},
+	}, nil
+}

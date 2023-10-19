@@ -301,6 +301,18 @@ func (cached *AlterVschema) CachedSize(alloc bool) int64 {
 	size += cached.AutoIncSpec.CachedSize(true)
 	return size
 }
+func (cached *Analyze) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
+	size += cached.Table.CachedSize(false)
+	return size
+}
 func (cached *AndExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1315,34 +1327,6 @@ func (cached *ExtractValueExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *ExtractedSubquery) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(112)
-	}
-	// field Original vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Original.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field Subquery *vitess.io/vitess/go/vt/sqlparser.Subquery
-	size += cached.Subquery.CachedSize(true)
-	// field OtherSide vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.OtherSide.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field hasValuesArg string
-	size += hack.RuntimeAllocSize(int64(len(cached.hasValuesArg)))
-	// field argName string
-	size += hack.RuntimeAllocSize(int64(len(cached.argName)))
-	// field alternative vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.alternative.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	return size
-}
 func (cached *FirstOrLastValueExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1804,10 +1788,8 @@ func (cached *IndexInfo) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(80)
 	}
-	// field Type string
-	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
 	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
 	size += cached.Name.CachedSize(false)
 	// field ConstraintName vitess.io/vitess/go/vt/sqlparser.IdentifierCI

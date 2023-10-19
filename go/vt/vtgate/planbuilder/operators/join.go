@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -47,8 +48,8 @@ func (j *Join) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
-func (j *Join) GetOrdering() ([]ops.OrderBy, error) {
-	return nil, nil
+func (j *Join) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+	return nil
 }
 
 // Inputs implements the Operator interface
@@ -88,6 +89,10 @@ func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) 
 	if tableExpr.Join == sqlparser.RightJoinType {
 		lhs, rhs = rhs, lhs
 	}
+	subq, _ := getSubQuery(tableExpr.Condition.On)
+	if subq != nil {
+		return nil, vterrors.VT12001("subquery in outer join predicate")
+	}
 	predicate := tableExpr.Condition.On
 	sqlparser.RemoveKeyspaceFromColName(predicate)
 	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: predicate}, nil
@@ -109,19 +114,25 @@ func createJoin(ctx *plancontext.PlanningContext, LHS, RHS ops.Operator) ops.Ope
 
 func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) (ops.Operator, error) {
 	op := createJoin(ctx, lhs, rhs)
-	pred := tableExpr.Condition.On
-	if pred != nil {
-		var err error
-		sqlparser.RemoveKeyspaceFromColName(pred)
-		op, err = op.AddPredicate(ctx, pred)
+	sqc := &SubQueryBuilder{}
+	outerID := TableID(op)
+	joinPredicate := tableExpr.Condition.On
+	sqlparser.RemoveKeyspaceFromColName(joinPredicate)
+	exprs := sqlparser.SplitAndExpression(nil, joinPredicate)
+	for _, pred := range exprs {
+		subq, err := sqc.handleSubquery(ctx, pred, outerID)
 		if err != nil {
 			return nil, err
 		}
+		if subq != nil {
+			continue
+		}
+		op = op.AddPredicate(ctx, pred)
 	}
-	return op, nil
+	return sqc.getRootOperator(op, nil), nil
 }
 
-func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
 	return AddPredicate(ctx, j, expr, false, newFilter)
 }
 

@@ -61,6 +61,7 @@ type materializer struct {
 	targetShards          []*topo.ShardInfo
 	isPartial             bool
 	primaryVindexesDiffer bool
+	workflowType          binlogdatapb.VReplicationWorkflowType
 }
 
 func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowSubType, error) {
@@ -77,7 +78,7 @@ func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowS
 	}
 }
 
-func (mz *materializer) prepareMaterializerStreams(req *vtctldatapb.MoveTablesCreateRequest) error {
+func (mz *materializer) createMoveTablesStreams(req *vtctldatapb.MoveTablesCreateRequest) error {
 	if err := validateNewWorkflow(mz.ctx, mz.ts, mz.tmc, mz.ms.TargetKeyspace, mz.ms.Workflow); err != nil {
 		return err
 	}
@@ -112,7 +113,7 @@ func (mz *materializer) prepareMaterializerStreams(req *vtctldatapb.MoveTablesCr
 			Cells:                     req.Cells,
 			TabletTypes:               req.TabletTypes,
 			TabletSelectionPreference: req.TabletSelectionPreference,
-			WorkflowType:              binlogdatapb.VReplicationWorkflowType_MoveTables,
+			WorkflowType:              mz.workflowType,
 			WorkflowSubType:           workflowSubType,
 			DeferSecondaryKeys:        req.DeferSecondaryKeys,
 			AutoStart:                 req.AutoStart,
@@ -122,6 +123,8 @@ func (mz *materializer) prepareMaterializerStreams(req *vtctldatapb.MoveTablesCr
 	})
 }
 
+// createMaterializerStreams creates the vreplication streams for Materialize
+// and LookupVindex workflows.
 func (mz *materializer) createMaterializerStreams() error {
 	if err := validateNewWorkflow(mz.ctx, mz.ts, mz.tmc, mz.ms.TargetKeyspace, mz.ms.Workflow); err != nil {
 		return err
@@ -129,11 +132,6 @@ func (mz *materializer) createMaterializerStreams() error {
 	err := mz.buildMaterializer()
 	if err != nil {
 		return err
-	}
-	if mz.isPartial {
-		if err := createDefaultShardRoutingRules(mz.ctx, mz.ms, mz.ts); err != nil {
-			return err
-		}
 	}
 	if err := mz.deploySchema(); err != nil {
 		return err

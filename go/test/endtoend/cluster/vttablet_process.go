@@ -58,6 +58,7 @@ type VttabletProcess struct {
 	Shard                       string
 	CommonArg                   VtctlProcess
 	LogDir                      string
+	ErrorLog                    string
 	TabletHostname              string
 	Keyspace                    string
 	TabletType                  string
@@ -108,11 +109,16 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--backup_storage_implementation", vttablet.BackupStorageImplementation,
 		"--file_backup_storage_root", vttablet.FileBackupStorageRoot,
 		"--service_map", vttablet.ServiceMap,
-		"--vtctld_addr", vttablet.VtctldAddress,
-		"--vtctld_addr", vttablet.VtctldAddress,
 		"--vreplication_tablet_type", vttablet.VreplicationTabletType,
 		"--db_charset", vttablet.Charset,
 	)
+	if v, err := GetMajorVersion("vttablet"); err != nil {
+		return err
+	} else if v >= 18 {
+		vttablet.proc.Args = append(vttablet.proc.Args, "--bind-address", "127.0.0.1")
+		vttablet.proc.Args = append(vttablet.proc.Args, "--grpc_bind_address", "127.0.0.1")
+	}
+
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--test.coverprofile="+getCoveragePath("vttablet.out"))
 	}
@@ -131,6 +137,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	fname := path.Join(vttablet.LogDir, vttablet.TabletPath+"-vttablet-stderr.txt")
 	errFile, _ := os.Create(fname)
 	vttablet.proc.Stderr = errFile
+	vttablet.ErrorLog = errFile.Name()
 
 	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
 	vttablet.proc.Env = append(vttablet.proc.Env, DefaultVttestEnv)
@@ -307,6 +314,12 @@ func (vttablet *VttabletProcess) WaitForTabletStatusesForTimeout(expectedStatuse
 		}
 		select {
 		case err := <-vttablet.exit:
+			errBytes, ferr := os.ReadFile(vttablet.ErrorLog)
+			if ferr == nil {
+				log.Errorf("vttablet error log contents:\n%s", string(errBytes))
+			} else {
+				log.Errorf("Failed to read the vttablet error log file %q: %v", vttablet.ErrorLog, ferr)
+			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
 		default:
 			time.Sleep(300 * time.Millisecond)

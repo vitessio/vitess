@@ -16,4 +16,4 @@
 
 source ../common/env.sh
 
-vtctlclient Reshard -- --source_shards '0' --target_shards '-40,40-80,80-c0,c0-' --tablet_types=PRIMARY Create main.main2regions
+vtctldclient reshard --workflow main2regions --target-keyspace main create --source-shards '0' --target-shards '-40,40-80,80-c0,c0-' --tablet-types=PRIMARY

@@ -463,7 +463,7 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 			continue
 		}
 		for _, idx := range ddl.GetTableSpec().Indexes {
-			if !idx.Info.Primary {
+			if idx.Info.Type != sqlparser.IndexTypePrimary {
 				continue
 			}
 			for _, col := range idx.Columns {

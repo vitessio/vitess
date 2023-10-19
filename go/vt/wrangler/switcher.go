@@ -48,6 +48,10 @@ func (r *switcher) dropSourceDeniedTables(ctx context.Context) error {
 	return r.ts.dropSourceDeniedTables(ctx)
 }
 
+func (r *switcher) dropTargetDeniedTables(ctx context.Context) error {
+	return r.ts.dropTargetDeniedTables(ctx)
+}
+
 func (r *switcher) validateWorkflowHasCompleted(ctx context.Context) error {
 	return r.ts.validateWorkflowHasCompleted(ctx)
 }

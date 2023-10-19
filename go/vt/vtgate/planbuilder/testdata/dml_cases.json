@@ -2961,7 +2961,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1 limit 1)",
+        "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1)",
         "TableName": "user_privacy_consents"
       },
       "TablesUsed": [
@@ -4153,7 +4153,7 @@
       "QueryType": "UPDATE",
       "Original": "update user set col = (select id from unsharded)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq1"
@@ -4198,7 +4198,7 @@
       "QueryType": "UPDATE",
       "Original": "update unsharded set col = (select id from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq1"
@@ -4243,7 +4243,7 @@
       "QueryType": "UPDATE",
       "Original": "update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq1"
@@ -4874,5 +4874,20 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Unsupported INSERT statement with a target destination",
+    "query": "insert into `user[-]`.user_metadata (a, b) values (1,2)",
+    "plan": "VT09017: INSERT with a target destination is not allowed"
+  },
+  {
+    "comment": "Unsupported delete statement with a replica target destination",
+    "query": "DELETE FROM `user[-]@replica`.user_metadata limit 1",
+    "plan": "VT09002: delete statement with a replica target"
+  },
+  {
+    "comment": "Unsupported update statement with a replica target destination",
+    "query": "update `user[-]@replica`.user_metadata set id=2",
+    "plan": "VT09002: update statement with a replica target"
   }
 ]

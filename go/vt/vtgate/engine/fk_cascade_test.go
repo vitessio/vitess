@@ -148,3 +148,13 @@ func TestUpdateCascade(t *testing.T) {
 		`ExecuteMultiShard ks.0: update parent set cola = 1 where foo = 48 {} true true`,
 	})
 }
+
+// TestNeedsTransactionInExecPrepared tests that if we have a foreign key cascade inside an ExecStmt plan, then we do mark the plan to require a transaction.
+func TestNeedsTransactionInExecPrepared(t *testing.T) {
+	// Even if FkCascade is wrapped in ExecStmt, the plan should be marked such that it requires a transaction.
+	// This is necessary because if we don't run the cascades for DMLs in a transaction, we might end up committing partial writes that should eventually be rolled back.
+	execPrepared := &ExecStmt{
+		Input: &FkCascade{},
+	}
+	require.True(t, execPrepared.NeedsTransaction())
+}

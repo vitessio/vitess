@@ -66,7 +66,7 @@ func (ctl *Mysqlctl) Setup() error {
 		"--alsologtostderr",
 		"--tablet_uid", fmt.Sprintf("%d", ctl.UID),
 		"--mysql_port", fmt.Sprintf("%d", ctl.Port),
-		"init", "--",
+		"init",
 		"--init_db_sql_file", ctl.InitFile,
 	)
 

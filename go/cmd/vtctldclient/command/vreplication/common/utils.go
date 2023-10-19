@@ -79,7 +79,7 @@ func RegisterCommands(root *cobra.Command) {
 
 type SubCommandsOpts struct {
 	SubCommand string
-	Workflow   string // used to specify an example workflow name for the Examples section of the help output.
+	Workflow   string // Used to specify an example workflow name for the Examples section of the help output.
 }
 
 func SetClient(c vtctldclient.VtctldClient) {
@@ -106,10 +106,17 @@ func ParseCells(cmd *cobra.Command) {
 	}
 }
 
-func ParseTabletTypes(cmd *cobra.Command) {
-	if !cmd.Flags().Lookup("tablet-types").Changed {
-		CreateOptions.TabletTypes = tabletTypesDefault
+func ParseTabletTypes(cmd *cobra.Command) error {
+	ttf := cmd.Flags().Lookup("tablet-types")
+	if ttf == nil {
+		return fmt.Errorf("no tablet-types flag found")
 	}
+	if !ttf.Changed {
+		CreateOptions.TabletTypes = tabletTypesDefault
+	} else if strings.TrimSpace(ttf.Value.String()) == "" {
+		return fmt.Errorf("invalid tablet-types value, at least one valid tablet type must be specified")
+	}
+	return nil
 }
 
 func validateOnDDL(cmd *cobra.Command) error {
@@ -124,7 +131,9 @@ func ParseAndValidateCreateOptions(cmd *cobra.Command) error {
 		return err
 	}
 	ParseCells(cmd)
-	ParseTabletTypes(cmd)
+	if err := ParseTabletTypes(cmd); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -150,7 +159,7 @@ func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format strin
 	var output []byte
 	var err error
 	if format == "json" {
-		output, err = cli.MarshalJSON(resp)
+		output, err = cli.MarshalJSONPretty(resp)
 		if err != nil {
 			return err
 		}
@@ -165,18 +174,20 @@ func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format strin
 					shardstream.Id, BaseOptions.TargetKeyspace, tablet, shardstream.Status, shardstream.Info))
 			}
 		}
+		tout.WriteString("\nTraffic State: ")
+		tout.WriteString(resp.TrafficState)
 		output = tout.Bytes()
 	}
-	fmt.Printf("%s\n", output)
+	fmt.Println(string(output))
 	return nil
 }
 
 func AddCommonFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&BaseOptions.TargetKeyspace, "target-keyspace", "", "Target keyspace for this workflow exists (required).")
-	cmd.MarkFlagRequired("target-keyspace")
-	cmd.Flags().StringVarP(&BaseOptions.Workflow, "workflow", "w", "", "The workflow you want to perform the command on (required).")
-	cmd.MarkFlagRequired("workflow")
-	cmd.Flags().StringVar(&BaseOptions.Format, "format", "text", "The format of the output; supported formats are: text,json.")
+	cmd.PersistentFlags().StringVar(&BaseOptions.TargetKeyspace, "target-keyspace", "", "Target keyspace for this workflow.")
+	cmd.MarkPersistentFlagRequired("target-keyspace")
+	cmd.PersistentFlags().StringVarP(&BaseOptions.Workflow, "workflow", "w", "", "The workflow you want to perform the command on.")
+	cmd.MarkPersistentFlagRequired("workflow")
+	cmd.PersistentFlags().StringVar(&BaseOptions.Format, "format", "text", "The format of the output; supported formats are: text,json.")
 }
 
 func AddCommonCreateFlags(cmd *cobra.Command) {
@@ -185,8 +196,8 @@ func AddCommonCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&CreateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-preference-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
 	cmd.Flags().StringVar(&CreateOptions.OnDDL, "on-ddl", onDDLDefault, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
 	cmd.Flags().BoolVar(&CreateOptions.DeferSecondaryKeys, "defer-secondary-keys", false, "Defer secondary index creation for a table until after it has been copied.")
-	cmd.Flags().BoolVar(&CreateOptions.AutoStart, "auto-start", true, "Start the MoveTables workflow after creating it.")
-	cmd.Flags().BoolVar(&CreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the MoveTables workflow after it's finished copying the existing rows and before it starts replicating changes.")
+	cmd.Flags().BoolVar(&CreateOptions.AutoStart, "auto-start", true, "Start the workflow after creating it.")
+	cmd.Flags().BoolVar(&CreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the workflow after it's finished copying the existing rows and before it starts replicating changes.")
 }
 
 var SwitchTrafficOptions = struct {

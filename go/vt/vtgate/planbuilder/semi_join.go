@@ -18,10 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*semiJoin)(nil)
@@ -59,37 +56,4 @@ func (ps *semiJoin) Primitive() engine.Primitive {
 		Vars:  ps.vars,
 		Cols:  ps.cols,
 	}
-}
-
-// WireupGen4 implements the logicalPlan interface
-func (ps *semiJoin) Wireup(ctx *plancontext.PlanningContext) error {
-	if err := ps.lhs.Wireup(ctx); err != nil {
-		return err
-	}
-	return ps.rhs.Wireup(ctx)
-}
-
-// Rewrite implements the logicalPlan interface
-func (ps *semiJoin) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 2 {
-		return vterrors.VT13001("semiJoin: wrong number of inputs")
-	}
-	ps.lhs = inputs[0]
-	ps.rhs = inputs[1]
-	return nil
-}
-
-// ContainsTables implements the logicalPlan interface
-func (ps *semiJoin) ContainsTables() semantics.TableSet {
-	return ps.lhs.ContainsTables().Merge(ps.rhs.ContainsTables())
-}
-
-// Inputs implements the logicalPlan interface
-func (ps *semiJoin) Inputs() []logicalPlan {
-	return []logicalPlan{ps.lhs, ps.rhs}
-}
-
-// OutputColumns implements the logicalPlan interface
-func (ps *semiJoin) OutputColumns() []sqlparser.SelectExpr {
-	return ps.lhs.OutputColumns()
 }

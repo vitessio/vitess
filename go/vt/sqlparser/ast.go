@@ -682,10 +682,11 @@ type (
 		Name     IdentifierCI
 	}
 
-	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
-	// It should be used only as an indicator. It does not contain
-	// the full AST for the statement.
-	OtherRead struct{}
+	// Analyze represents the Analyze statement.
+	Analyze struct {
+		IsLocal bool
+		Table   TableName
+	}
 
 	// OtherAdmin represents a misc statement that relies on ADMIN privileges,
 	// such as REPAIR, OPTIMIZE, or TRUNCATE statement.
@@ -706,6 +707,9 @@ type (
 		Type          KillType
 		ProcesslistID uint64
 	}
+
+	// IndexType is the type of index in a DDL statement
+	IndexType int8
 )
 
 func (*Union) iStatement()               {}
@@ -726,7 +730,7 @@ func (*Rollback) iStatement()            {}
 func (*SRollback) iStatement()           {}
 func (*Savepoint) iStatement()           {}
 func (*Release) iStatement()             {}
-func (*OtherRead) iStatement()           {}
+func (*Analyze) iStatement()             {}
 func (*OtherAdmin) iStatement()          {}
 func (*CommentOnly) iStatement()         {}
 func (*Select) iSelectStatement()        {}
@@ -1384,6 +1388,14 @@ func (node *ExplainStmt) GetParsedComments() *ParsedComments {
 
 // GetParsedComments implements Commented interface.
 func (node *VExplainStmt) GetParsedComments() *ParsedComments {
+	if node.Comments == nil {
+		cmt, ok := node.Statement.(Commented)
+		if !ok {
+			return nil
+		}
+		return cmt.GetParsedComments()
+	}
+
 	return node.Comments
 }
 
@@ -1885,13 +1897,18 @@ type IndexDefinition struct {
 
 // IndexInfo describes the name and type of an index in a CREATE TABLE statement
 type IndexInfo struct {
-	Type           string
+	Type           IndexType
 	Name           IdentifierCI
 	ConstraintName IdentifierCI
-	Primary        bool
-	Spatial        bool
-	Fulltext       bool
-	Unique         bool
+}
+
+func (ii *IndexInfo) IsUnique() bool {
+	switch ii.Type {
+	case IndexTypePrimary, IndexTypeUnique:
+		return true
+	default:
+		return false
+	}
 }
 
 // VindexSpec defines a vindex for a CREATE VINDEX or DROP VINDEX statement
@@ -2482,21 +2499,6 @@ type (
 	CurTimeFuncExpr struct {
 		Name IdentifierCI
 		Fsp  int // fractional seconds precision, integer from 0 to 6 or an Argument
-	}
-
-	// ExtractedSubquery is a subquery that has been extracted from the original AST
-	// This is a struct that the parser will never produce - it's written and read by the gen4 planner
-	// CAUTION: you should only change argName and hasValuesArg through the setter methods
-	ExtractedSubquery struct {
-		Original  Expr // original expression that was replaced by this ExtractedSubquery
-		OpCode    int  // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
-		Subquery  *Subquery
-		OtherSide Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
-		Merged    bool // tells whether we need to rewrite this subquery to Original or not
-
-		hasValuesArg string
-		argName      string
-		alternative  Expr // this is what will be used to Format this struct
 	}
 
 	// JSONPrettyExpr represents the function and argument for JSON_PRETTY()
@@ -3176,7 +3178,6 @@ func (*CharExpr) iExpr()                           {}
 func (*ConvertUsingExpr) iExpr()                   {}
 func (*MatchExpr) iExpr()                          {}
 func (*Default) iExpr()                            {}
-func (*ExtractedSubquery) iExpr()                  {}
 func (*TrimFuncExpr) iExpr()                       {}
 func (*JSONSchemaValidFuncExpr) iExpr()            {}
 func (*JSONSchemaValidationReportFuncExpr) iExpr() {}

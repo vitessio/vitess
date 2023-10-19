@@ -117,10 +117,10 @@
       "QueryType": "SELECT",
       "Original": "select id from user having id in (select col from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
@@ -145,7 +145,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+            "Query": "select id from `user` where :__sq_has_values and id in ::__vals",
             "Table": "`user`",
             "Values": [
               "::__sq1"
@@ -411,10 +411,10 @@
       "QueryType": "SELECT",
       "Original": "select col from user where col in (select col2 from user) order by col",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
@@ -440,7 +440,7 @@
             },
             "FieldQuery": "select col from `user` where 1 != 1",
             "OrderBy": "0 ASC",
-            "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by col asc",
+            "Query": "select col from `user` where :__sq_has_values and col in ::__sq1 order by col asc",
             "Table": "`user`"
           }
         ]
@@ -616,10 +616,10 @@
       "QueryType": "SELECT",
       "Original": "select col from user where col in (select col2 from user) order by null",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
@@ -644,7 +644,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1",
+            "Query": "select col from `user` where :__sq_has_values and col in ::__sq1",
             "Table": "`user`"
           }
         ]
@@ -736,10 +736,10 @@
       "QueryType": "SELECT",
       "Original": "select col from user where col in (select col2 from user) order by rand()",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
@@ -764,7 +764,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by rand()",
+            "Query": "select col from `user` where :__sq_has_values and col in ::__sq1 order by rand()",
             "Table": "`user`"
           }
         ]
@@ -861,9 +861,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1,R:0",
+        "JoinColumnIndexes": "L:0,R:0",
         "JoinVars": {
-          "u_col": 0
+          "u_col": 1
         },
         "TableName": "`user`_user_extra",
         "Inputs": [
@@ -874,8 +874,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select u.col, u.id from `user` as u where 1 != 1",
-            "Query": "select u.col, u.id from `user` as u where u.col in (select * from `user` where `user`.id = u.id order by col asc)",
+            "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
+            "Query": "select u.id, u.col from `user` as u where u.col in (select * from `user` where `user`.id = u.id order by col asc)",
             "Table": "`user`"
           },
           {
@@ -1260,10 +1260,10 @@
         "Count": "INT64(1)",
         "Inputs": [
           {
-            "OperatorType": "Subquery",
+            "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutIn",
             "PulloutVars": [
-              "__sq_has_values1",
+              "__sq_has_values",
               "__sq1"
             ],
             "Inputs": [
@@ -1288,7 +1288,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select col from `user` where 1 != 1",
-                "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 limit :__upper_limit",
+                "Query": "select col from `user` where :__sq_has_values and col in ::__sq1",
                 "Table": "`user`"
               }
             ]

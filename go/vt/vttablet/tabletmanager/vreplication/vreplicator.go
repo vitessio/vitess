@@ -348,14 +348,14 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 
 		var pks []string
 		if len(td.PrimaryKeyColumns) != 0 {
-			// Use the PK
+			// Use the PK.
 			pks = td.PrimaryKeyColumns
 		} else {
-			// Use a PK equivalent if one exists
-			if pks, err = vr.mysqld.GetPrimaryKeyEquivalentColumns(ctx, vr.dbClient.DBName(), td.Name); err != nil {
+			// Use a PK equivalent if one exists.
+			if pks, _, err = vr.mysqld.GetPrimaryKeyEquivalentColumns(ctx, vr.dbClient.DBName(), td.Name); err != nil {
 				return nil, err
 			}
-			// Fall back to using every column in the table if there's no PK or PKE
+			// Fall back to using every column in the table if there's no PK or PKE.
 			if len(pks) == 0 {
 				pks = td.Columns
 			}
@@ -657,7 +657,7 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 			//   to each record.
 			// - You can not add/remove multiple fulltext keys
 			//   in a single ALTER statement.
-			if secondaryKey.Info.Primary || secondaryKey.Info.Fulltext {
+			if secondaryKey.Info.Type == sqlparser.IndexTypePrimary || secondaryKey.Info.Type == sqlparser.IndexTypeFullText {
 				continue
 			}
 			alterDrop.AlterOptions = append(alterDrop.AlterOptions,
@@ -740,7 +740,7 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 	}
 
 	for _, index := range createTable.GetTableSpec().Indexes {
-		if !index.Info.Primary {
+		if index.Info.Type != sqlparser.IndexTypePrimary {
 			secondaryKeys = append(secondaryKeys, index)
 		}
 	}

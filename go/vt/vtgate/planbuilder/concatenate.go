@@ -17,11 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type concatenate struct {
@@ -34,17 +30,6 @@ type concatenate struct {
 
 var _ logicalPlan = (*concatenate)(nil)
 
-// WireupGen4 implements the logicalPlan interface
-func (c *concatenate) Wireup(ctx *plancontext.PlanningContext) error {
-	for _, source := range c.sources {
-		err := source.Wireup(ctx)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // Primitive implements the logicalPlan interface
 func (c *concatenate) Primitive() engine.Primitive {
 	var sources []engine.Primitive
@@ -53,32 +38,4 @@ func (c *concatenate) Primitive() engine.Primitive {
 	}
 
 	return engine.NewConcatenate(sources, c.noNeedToTypeCheck)
-}
-
-// Rewrite implements the logicalPlan interface
-func (c *concatenate) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != len(c.sources) {
-		return vterrors.VT13001("concatenate: wrong number of inputs")
-	}
-	c.sources = inputs
-	return nil
-}
-
-// ContainsTables implements the logicalPlan interface
-func (c *concatenate) ContainsTables() semantics.TableSet {
-	var tableSet semantics.TableSet
-	for _, source := range c.sources {
-		tableSet = tableSet.Merge(source.ContainsTables())
-	}
-	return tableSet
-}
-
-// Inputs implements the logicalPlan interface
-func (c *concatenate) Inputs() []logicalPlan {
-	return c.sources
-}
-
-// OutputColumns implements the logicalPlan interface
-func (c *concatenate) OutputColumns() []sqlparser.SelectExpr {
-	return c.sources[0].OutputColumns()
 }

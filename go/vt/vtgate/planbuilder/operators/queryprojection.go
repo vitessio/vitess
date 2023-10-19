@@ -19,6 +19,7 @@ package operators
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"slices"
 	"sort"
 	"strings"
@@ -56,7 +57,7 @@ type (
 		hasCheckedAlignment bool
 
 		// TODO Remove once all horizon planning is done on the operators
-		CanPushDownSorting bool
+		CanPushSorting bool
 	}
 
 	// GroupBy contains the expression to used in group by and also if grouping is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
@@ -195,7 +196,7 @@ func (s SelectExpr) GetAliasedExpr() (*sqlparser.AliasedExpr, error) {
 	case *sqlparser.AliasedExpr:
 		return expr, nil
 	case *sqlparser.StarExpr:
-		return nil, vterrors.VT12001("'*' expression in cross-shard query")
+		return nil, vterrors.VT09015()
 	default:
 		return nil, vterrors.VT12001(fmt.Sprintf("not an aliased expression: %T", expr))
 	}
@@ -217,7 +218,7 @@ func createQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 		return nil, err
 	}
 	if !qp.HasAggr && sel.Having != nil {
-		qp.HasAggr = sqlparser.ContainsAggregation(sel.Having.Expr)
+		qp.HasAggr = containsAggr(sel.Having.Expr)
 	}
 	qp.calculateDistinct(ctx)
 
@@ -290,7 +291,7 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 			col := SelectExpr{
 				Col: selExp,
 			}
-			if sqlparser.ContainsAggregation(selExp.Expr) {
+			if containsAggr(selExp.Expr) {
 				col.Aggr = true
 				qp.HasAggr = true
 			}
@@ -307,6 +308,25 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 		}
 	}
 	return nil
+}
+
+func containsAggr(e sqlparser.SQLNode) (hasAggr bool) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node.(type) {
+		case *sqlparser.Offset:
+			// offsets here indicate that a possible aggregation has already been handled by an input
+			// so we don't need to worry about aggregation in the original
+			return false, nil
+		case sqlparser.AggrFunc:
+			hasAggr = true
+			return false, io.EOF
+		case *sqlparser.Subquery:
+			return false, nil
+		}
+
+		return true, nil
+	}, e)
+	return
 }
 
 // createQPFromUnion creates the QueryProjection for the input *sqlparser.Union
@@ -345,7 +365,7 @@ func (es *expressionSet) add(ctx *plancontext.PlanningContext, e sqlparser.Expr)
 }
 
 func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy sqlparser.OrderBy) error {
-	canPushDownSorting := true
+	canPushSorting := true
 	es := &expressionSet{}
 	for _, order := range orderBy {
 		simpleExpr := qp.GetSimplifiedExpr(order.Expr)
@@ -360,9 +380,9 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 			Inner:          sqlparser.CloneRefOfOrder(order),
 			SimplifiedExpr: simpleExpr,
 		})
-		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(simpleExpr)
+		canPushSorting = canPushSorting && !containsAggr(simpleExpr)
 	}
-	qp.CanPushDownSorting = canPushDownSorting
+	qp.CanPushSorting = canPushSorting
 	return nil
 }
 
@@ -562,7 +582,7 @@ func (qp *QueryProjection) NeedsProjecting(
 			}
 
 			rewritten := semantics.RewriteDerivedTableExpression(col, dt)
-			if sqlparser.ContainsAggregation(rewritten) {
+			if containsAggr(rewritten) {
 				offset, tErr := pusher(&sqlparser.AliasedExpr{Expr: col})
 				if tErr != nil {
 					err = tErr
@@ -633,7 +653,7 @@ orderBy:
 		}
 		qp.SelectExprs = append(qp.SelectExprs, SelectExpr{
 			Col:  &sqlparser.AliasedExpr{Expr: orderExpr},
-			Aggr: sqlparser.ContainsAggregation(orderExpr),
+			Aggr: containsAggr(orderExpr),
 		})
 		qp.AddedColumn++
 	}
@@ -649,7 +669,7 @@ orderBy:
 
 		idxCopy := idx
 
-		if !sqlparser.ContainsAggregation(expr.Col) {
+		if !containsAggr(expr.Col) {
 			getExpr, err := expr.GetExpr()
 			if err != nil {
 				return nil, false, err
@@ -681,7 +701,7 @@ orderBy:
 				out = append(out, aggrFunc)
 				return false
 			}
-			if sqlparser.ContainsAggregation(node) {
+			if containsAggr(node) {
 				complex = true
 				return true
 			}

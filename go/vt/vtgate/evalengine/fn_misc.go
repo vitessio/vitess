@@ -586,6 +586,10 @@ func (call *builtinUUID) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Flag: 0, Col: collationUtf8mb3}, nil
 }
 
+func (call *builtinUUID) constant() bool {
+	return false
+}
+
 func (call *builtinUUIDToBin) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if arg == nil || err != nil {

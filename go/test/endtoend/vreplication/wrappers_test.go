@@ -45,6 +45,7 @@ type moveTables struct {
 	sourceKeyspace string
 	tables         string
 	atomicCopy     bool
+	sourceShards   string
 }
 
 type iMoveTables interface {
@@ -53,6 +54,7 @@ type iMoveTables interface {
 	SwitchReads()
 	SwitchWrites()
 	SwitchReadsAndWrites()
+	ReverseReadsAndWrites()
 	Cancel()
 	Complete()
 	Flavor() string
@@ -91,13 +93,19 @@ func newVtctlMoveTables(mt *moveTables) *VtctlMoveTables {
 func (vmt *VtctlMoveTables) Create() {
 	log.Infof("vmt is %+v", vmt.vc, vmt.tables)
 	err := tstWorkflowExec(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
-		vmt.tables, workflowActionCreate, "", "", "", vmt.atomicCopy)
+		vmt.tables, workflowActionCreate, "", vmt.sourceShards, "", vmt.atomicCopy)
 	require.NoError(vmt.vc.t, err)
 }
 
 func (vmt *VtctlMoveTables) SwitchReadsAndWrites() {
 	err := tstWorkflowExec(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
 		vmt.tables, workflowActionSwitchTraffic, "", "", "", vmt.atomicCopy)
+	require.NoError(vmt.vc.t, err)
+}
+
+func (vmt *VtctlMoveTables) ReverseReadsAndWrites() {
+	err := tstWorkflowExec(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
+		vmt.tables, workflowActionReverseTraffic, "", "", "", vmt.atomicCopy)
 	require.NoError(vmt.vc.t, err)
 }
 
@@ -117,8 +125,9 @@ func (vmt *VtctlMoveTables) SwitchWrites() {
 }
 
 func (vmt *VtctlMoveTables) Cancel() {
-	//TODO implement me
-	panic("implement me")
+	err := tstWorkflowExec(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
+		vmt.tables, workflowActionCancel, "", "", "", vmt.atomicCopy)
+	require.NoError(vmt.vc.t, err)
 }
 
 func (vmt *VtctlMoveTables) Complete() {
@@ -158,11 +167,18 @@ func (v VtctldMoveTables) Create() {
 	if v.atomicCopy {
 		args = append(args, "--atomic-copy="+strconv.FormatBool(v.atomicCopy))
 	}
+	if v.sourceShards != "" {
+		args = append(args, "--source-shards="+v.sourceShards)
+	}
 	v.exec(args...)
 }
 
 func (v VtctldMoveTables) SwitchReadsAndWrites() {
 	v.exec("SwitchTraffic")
+}
+
+func (v VtctldMoveTables) ReverseReadsAndWrites() {
+	v.exec("ReverseTraffic")
 }
 
 func (v VtctldMoveTables) Show() {
@@ -181,8 +197,7 @@ func (v VtctldMoveTables) SwitchWrites() {
 }
 
 func (v VtctldMoveTables) Cancel() {
-	//TODO implement me
-	panic("implement me")
+	v.exec("Cancel")
 }
 
 func (v VtctldMoveTables) Complete() {

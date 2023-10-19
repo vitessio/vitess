@@ -36,7 +36,8 @@ type AlterTableEntityDiff struct {
 	to         *CreateTableEntity
 	alterTable *sqlparser.AlterTable
 
-	subsequentDiff *AlterTableEntityDiff
+	canonicalStatementString string
+	subsequentDiff           *AlterTableEntityDiff
 }
 
 // IsEmpty implements EntityDiff
@@ -79,11 +80,16 @@ func (d *AlterTableEntityDiff) StatementString() (s string) {
 }
 
 // CanonicalStatementString implements EntityDiff
-func (d *AlterTableEntityDiff) CanonicalStatementString() (s string) {
-	if stmt := d.Statement(); stmt != nil {
-		s = sqlparser.CanonicalString(stmt)
+func (d *AlterTableEntityDiff) CanonicalStatementString() string {
+	if d == nil {
+		return ""
 	}
-	return s
+	if d.canonicalStatementString == "" {
+		if stmt := d.Statement(); stmt != nil {
+			d.canonicalStatementString = sqlparser.CanonicalString(stmt)
+		}
+	}
+	return d.canonicalStatementString
 }
 
 // SubsequentDiff implements EntityDiff
@@ -118,6 +124,8 @@ func (d *AlterTableEntityDiff) addSubsequentDiff(diff *AlterTableEntityDiff) {
 type CreateTableEntityDiff struct {
 	to          *CreateTableEntity
 	createTable *sqlparser.CreateTable
+
+	canonicalStatementString string
 }
 
 // IsEmpty implements EntityDiff
@@ -160,11 +168,16 @@ func (d *CreateTableEntityDiff) StatementString() (s string) {
 }
 
 // CanonicalStatementString implements EntityDiff
-func (d *CreateTableEntityDiff) CanonicalStatementString() (s string) {
-	if stmt := d.Statement(); stmt != nil {
-		s = sqlparser.CanonicalString(stmt)
+func (d *CreateTableEntityDiff) CanonicalStatementString() string {
+	if d == nil {
+		return ""
 	}
-	return s
+	if d.canonicalStatementString == "" {
+		if stmt := d.Statement(); stmt != nil {
+			d.canonicalStatementString = sqlparser.CanonicalString(stmt)
+		}
+	}
+	return d.canonicalStatementString
 }
 
 // SubsequentDiff implements EntityDiff
@@ -179,6 +192,8 @@ func (d *CreateTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 type DropTableEntityDiff struct {
 	from      *CreateTableEntity
 	dropTable *sqlparser.DropTable
+
+	canonicalStatementString string
 }
 
 // IsEmpty implements EntityDiff
@@ -221,11 +236,16 @@ func (d *DropTableEntityDiff) StatementString() (s string) {
 }
 
 // CanonicalStatementString implements EntityDiff
-func (d *DropTableEntityDiff) CanonicalStatementString() (s string) {
-	if stmt := d.Statement(); stmt != nil {
-		s = sqlparser.CanonicalString(stmt)
+func (d *DropTableEntityDiff) CanonicalStatementString() string {
+	if d == nil {
+		return ""
 	}
-	return s
+	if d.canonicalStatementString == "" {
+		if stmt := d.Statement(); stmt != nil {
+			d.canonicalStatementString = sqlparser.CanonicalString(stmt)
+		}
+	}
+	return d.canonicalStatementString
 }
 
 // SubsequentDiff implements EntityDiff
@@ -241,6 +261,8 @@ type RenameTableEntityDiff struct {
 	from        *CreateTableEntity
 	to          *CreateTableEntity
 	renameTable *sqlparser.RenameTable
+
+	canonicalStatementString string
 }
 
 // IsEmpty implements EntityDiff
@@ -283,11 +305,16 @@ func (d *RenameTableEntityDiff) StatementString() (s string) {
 }
 
 // CanonicalStatementString implements EntityDiff
-func (d *RenameTableEntityDiff) CanonicalStatementString() (s string) {
-	if stmt := d.Statement(); stmt != nil {
-		s = sqlparser.CanonicalString(stmt)
+func (d *RenameTableEntityDiff) CanonicalStatementString() string {
+	if d == nil {
+		return ""
 	}
-	return s
+	if d.canonicalStatementString == "" {
+		if stmt := d.Statement(); stmt != nil {
+			d.canonicalStatementString = sqlparser.CanonicalString(stmt)
+		}
+	}
+	return d.canonicalStatementString
 }
 
 // SubsequentDiff implements EntityDiff
@@ -583,9 +610,6 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 
 func (c *CreateTableEntity) normalizeIndexOptions() {
 	for _, idx := range c.CreateTable.TableSpec.Indexes {
-		// This name is taking straight from the input string
-		// so we want to normalize this to always lowercase.
-		idx.Info.Type = strings.ToLower(idx.Info.Type)
 		for _, opt := range idx.Options {
 			opt.Name = strings.ToLower(opt.Name)
 			opt.String = strings.ToLower(opt.String)
@@ -617,10 +641,8 @@ func (c *CreateTableEntity) normalizePartitionOptions() {
 func newPrimaryKeyIndexDefinitionSingleColumn(name sqlparser.IdentifierCI) *sqlparser.IndexDefinition {
 	index := &sqlparser.IndexDefinition{
 		Info: &sqlparser.IndexInfo{
-			Name:    sqlparser.NewIdentifierCI("PRIMARY"),
-			Type:    "PRIMARY KEY",
-			Primary: true,
-			Unique:  true,
+			Name: sqlparser.NewIdentifierCI("PRIMARY"),
+			Type: sqlparser.IndexTypePrimary,
 		},
 		Columns: []*sqlparser.IndexColumn{{Column: name}},
 	}
@@ -653,10 +675,6 @@ func (c *CreateTableEntity) normalizeKeys() {
 		}
 	}
 	for _, key := range c.CreateTable.TableSpec.Indexes {
-		// Normalize to KEY which matches MySQL behavior for the type.
-		if key.Info.Type == sqlparser.KeywordString(sqlparser.INDEX) {
-			key.Info.Type = sqlparser.KeywordString(sqlparser.KEY)
-		}
 		// now, let's look at keys that do not have names, and assign them new names
 		if name := key.Info.Name.String(); name == "" {
 			// we know there must be at least one column covered by this key
@@ -747,7 +765,6 @@ func (c *CreateTableEntity) normalizeForeignKeyIndexes() {
 			// - or, a standard auto-generated index name, if the constraint name is not provided
 			indexDefinition := &sqlparser.IndexDefinition{
 				Info: &sqlparser.IndexInfo{
-					Type: "key",
 					Name: constraint.Name, // if name is empty, then the name is later auto populated
 				},
 			}
@@ -1366,7 +1383,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 
 	dropKeyStatement := func(info *sqlparser.IndexInfo) *sqlparser.DropKey {
 		dropKey := &sqlparser.DropKey{}
-		if strings.EqualFold(info.Type, sqlparser.PrimaryKeyTypeStr) {
+		if info.Type == sqlparser.IndexTypePrimary {
 			dropKey.Type = sqlparser.PrimaryKeyType
 		} else {
 			dropKey.Type = sqlparser.NormalKeyType
@@ -1417,7 +1434,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 				IndexDefinition: t2Key,
 			}
 			addedAsSuperfluousStatement := false
-			if t2Key.Info.Fulltext {
+			if t2Key.Info.Type == sqlparser.IndexTypeFullText {
 				if addedFulltextKeys > 0 && hints.FullTextKeyStrategy == FullTextKeyDistinctStatements {
 					// Special case: MySQL does not support multiple ADD FULLTEXT KEY statements in a single ALTER
 					superfluousFulltextKeys = append(superfluousFulltextKeys, addKey)
@@ -1703,7 +1720,7 @@ func heuristicallyDetectColumnRenames(
 // a PRIMARY KEY
 func (c *CreateTableEntity) primaryKeyColumns() []*sqlparser.IndexColumn {
 	for _, existingIndex := range c.CreateTable.TableSpec.Indexes {
-		if existingIndex.Info.Primary {
+		if existingIndex.Info.Type == sqlparser.IndexTypePrimary {
 			return existingIndex.Columns
 		}
 	}
@@ -1874,7 +1891,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			switch opt.Type {
 			case sqlparser.PrimaryKeyType:
 				for i, idx := range c.TableSpec.Indexes {
-					if strings.EqualFold(idx.Info.Type, sqlparser.PrimaryKeyTypeStr) {
+					if idx.Info.Type == sqlparser.IndexTypePrimary {
 						found = true
 						c.TableSpec.Indexes = append(c.TableSpec.Indexes[0:i], c.TableSpec.Indexes[i+1:]...)
 						break
@@ -2435,7 +2452,7 @@ func (c *CreateTableEntity) validate() error {
 
 			// Validate all unique keys include this column:
 			for _, key := range c.CreateTable.TableSpec.Indexes {
-				if !key.Info.Unique {
+				if !key.Info.IsUnique() {
 					continue
 				}
 				colFound := false

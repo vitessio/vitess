@@ -17,33 +17,13 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
-
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*sqlCalcFoundRows)(nil)
 
 type sqlCalcFoundRows struct {
 	LimitQuery, CountQuery logicalPlan
-}
-
-// WireupGen4 implements the logicalPlan interface
-func (s *sqlCalcFoundRows) Wireup(ctx *plancontext.PlanningContext) error {
-	err := s.LimitQuery.Wireup(ctx)
-	if err != nil {
-		return err
-	}
-	return s.CountQuery.Wireup(ctx)
-}
-
-// ContainsTables implements the logicalPlan interface
-func (s *sqlCalcFoundRows) ContainsTables() semantics.TableSet {
-	return s.LimitQuery.ContainsTables()
 }
 
 // Primitive implements the logicalPlan interface
@@ -58,24 +38,4 @@ func (s *sqlCalcFoundRows) Primitive() engine.Primitive {
 		LimitPrimitive: s.LimitQuery.Primitive(),
 		CountPrimitive: countPrim,
 	}
-}
-
-// Rewrite implements the logicalPlan interface
-func (s *sqlCalcFoundRows) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 2 {
-		return vterrors.VT13001(fmt.Sprintf("wrong number of inputs for SQL_CALC_FOUND_ROWS: %d", len(inputs)))
-	}
-	s.LimitQuery = inputs[0]
-	s.CountQuery = inputs[1]
-	return nil
-}
-
-// Inputs implements the logicalPlan interface
-func (s *sqlCalcFoundRows) Inputs() []logicalPlan {
-	return []logicalPlan{s.LimitQuery, s.CountQuery}
-}
-
-// OutputColumns implements the logicalPlan interface
-func (s *sqlCalcFoundRows) OutputColumns() []sqlparser.SelectExpr {
-	return s.LimitQuery.OutputColumns()
 }

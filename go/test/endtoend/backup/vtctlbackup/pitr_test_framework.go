@@ -34,6 +34,7 @@ import (
 
 var (
 	gracefulPostBackupDuration = 10 * time.Millisecond
+	backupTimeoutDuration      = 3 * time.Minute
 )
 
 const (
@@ -225,6 +226,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 			})
 		}
 
+		sampleTestedBackupPos := ""
 		testRestores := func(t *testing.T) {
 			for _, r := range rand.Perm(len(backupPositions)) {
 				pos := backupPositions[r]
@@ -237,6 +239,9 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 					count, ok := rowsPerPosition[pos]
 					require.True(t, ok)
 					assert.Equalf(t, count, len(msgs), "messages: %v", msgs)
+					if sampleTestedBackupPos == "" {
+						sampleTestedBackupPos = pos
+					}
 				})
 			}
 		}
@@ -251,6 +256,27 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 		})
 		t.Run("PITR-2", func(t *testing.T) {
 			testRestores(t)
+		})
+		// Test that we can create a new tablet with --restore_from_backup --restore-to-pos and that it bootstraps
+		// via PITR and ends up in DRAINED type.
+		t.Run("init tablet PITR", func(t *testing.T) {
+			require.NotEmpty(t, sampleTestedBackupPos)
+
+			var tablet *cluster.Vttablet
+
+			t.Run(fmt.Sprintf("init from backup pos %s", sampleTestedBackupPos), func(t *testing.T) {
+				tablet, err = SetupReplica3Tablet([]string{"--restore-to-pos", sampleTestedBackupPos})
+				assert.NoError(t, err)
+			})
+			t.Run("wait for drained", func(t *testing.T) {
+				err = tablet.VttabletProcess.WaitForTabletTypesForTimeout([]string{"drained"}, backupTimeoutDuration)
+				assert.NoError(t, err)
+			})
+			t.Run(fmt.Sprintf("validate %d rows", rowsPerPosition[sampleTestedBackupPos]), func(t *testing.T) {
+				require.NotZero(t, rowsPerPosition[sampleTestedBackupPos])
+				msgs := ReadRowsFromReplica(t, 2)
+				assert.Equal(t, rowsPerPosition[sampleTestedBackupPos], len(msgs))
+			})
 		})
 	})
 }
@@ -415,6 +441,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 			})
 		}
 
+		sampleTestedBackupIndex := -1
 		testRestores := func(t *testing.T) {
 			numFailedRestores := 0
 			numSuccessfulRestores := 0
@@ -433,6 +460,9 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 						msgs := ReadRowsFromReplica(t, 0)
 						assert.Equalf(t, testedBackup.rows, len(msgs), "messages: %v", msgs)
 						numSuccessfulRestores++
+						if sampleTestedBackupIndex < 0 {
+							sampleTestedBackupIndex = backupIndex
+						}
 					} else {
 						numFailedRestores++
 					}
@@ -453,6 +483,29 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 		})
 		t.Run("PITR-2", func(t *testing.T) {
 			testRestores(t)
+		})
+		// Test that we can create a new tablet with --restore_from_backup --restore-to-timestamp and that it bootstraps
+		// via PITR and ends up in DRAINED type.
+		t.Run("init tablet PITR", func(t *testing.T) {
+			require.GreaterOrEqual(t, sampleTestedBackupIndex, 0)
+			sampleTestedBackup := testedBackups[sampleTestedBackupIndex]
+			restoreToTimestampArg := mysqlctl.FormatRFC3339(sampleTestedBackup.postTimestamp)
+
+			var tablet *cluster.Vttablet
+
+			t.Run(fmt.Sprintf("init from backup num %d", sampleTestedBackupIndex), func(t *testing.T) {
+				tablet, err = SetupReplica3Tablet([]string{"--restore-to-timestamp", restoreToTimestampArg})
+				assert.NoError(t, err)
+			})
+			t.Run("wait for drained", func(t *testing.T) {
+				err = tablet.VttabletProcess.WaitForTabletTypesForTimeout([]string{"drained"}, backupTimeoutDuration)
+				assert.NoError(t, err)
+			})
+			t.Run(fmt.Sprintf("validate %d rows", sampleTestedBackup.rows), func(t *testing.T) {
+				require.NotZero(t, sampleTestedBackup.rows)
+				msgs := ReadRowsFromReplica(t, 2)
+				assert.Equal(t, sampleTestedBackup.rows, len(msgs))
+			})
 		})
 	})
 }

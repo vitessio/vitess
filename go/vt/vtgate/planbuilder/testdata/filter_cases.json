@@ -1591,7 +1591,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.m from `user` as u where 1 != 1",
-            "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col /* INT16 */) and u.id in ::__vals",
+            "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col)",
             "Table": "`user`",
             "Values": [
               "(:user_extra_col, INT64(1))"
@@ -1640,7 +1640,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.m from `user` as u where 1 != 1",
-            "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id) and u.id in ::__vals",
+            "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id)",
             "Table": "`user`",
             "Values": [
               "(:user_extra_col, INT64(1))"
@@ -1686,7 +1686,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.m from `user` as u where 1 != 1",
-            "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = 5) and u.id = 5",
+            "Query": "select u.m from `user` as u where u.id = 5 and u.id in (select m2 from `user` where `user`.id = 5)",
             "Table": "`user`",
             "Values": [
               "INT64(5)"
@@ -1735,7 +1735,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.m from `user` as u where 1 != 1",
-            "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col /* INT16 */ and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id)) and u.id in ::__vals",
+            "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id))",
             "Table": "`user`",
             "Values": [
               "(:user_extra_col, INT64(1))"
@@ -1889,10 +1889,10 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id in (select col from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
@@ -1917,7 +1917,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+            "Query": "select id from `user` where :__sq_has_values and id in ::__vals",
             "Table": "`user`",
             "Values": [
               "::__sq1"
@@ -1938,10 +1938,10 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id not in (select col from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutNotIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
@@ -1966,7 +1966,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where :__sq_has_values1 = 0 or id not in ::__sq1",
+            "Query": "select id from `user` where not :__sq_has_values and id not in ::__sq1",
             "Table": "`user`"
           }
         ]
@@ -1983,29 +1983,23 @@
       "QueryType": "SELECT",
       "Original": "select id from user where exists (select col from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutExists",
         "PulloutVars": [
-          "__sq_has_values1"
+          "__sq_has_values"
         ],
         "Inputs": [
           {
             "InputName": "SubQuery",
-            "OperatorType": "Limit",
-            "Count": "INT64(1)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from `user` where 1 != 1",
-                "Query": "select 1 from `user` limit :__upper_limit",
-                "Table": "`user`"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user`",
+            "Table": "`user`"
           },
           {
             "InputName": "Outer",
@@ -2016,7 +2010,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where :__sq_has_values1",
+            "Query": "select id from `user` where :__sq_has_values",
             "Table": "`user`"
           }
         ]
@@ -2033,10 +2027,9 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id = (select col from user)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
-          "__sq_has_values1",
           "__sq1"
         ],
         "Inputs": [
@@ -2082,19 +2075,18 @@
       "QueryType": "SELECT",
       "Original": "select id1 from user where id = (select id2 from user where id2 in (select id3 from user))",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
-          "__sq_has_values1",
           "__sq1"
         ],
         "Inputs": [
           {
             "InputName": "SubQuery",
-            "OperatorType": "Subquery",
+            "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutIn",
             "PulloutVars": [
-              "__sq_has_values2",
+              "__sq_has_values",
               "__sq2"
             ],
             "Inputs": [
@@ -2119,7 +2111,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id2 from `user` where 1 != 1",
-                "Query": "select id2 from `user` where :__sq_has_values2 = 1 and id2 in ::__sq2",
+                "Query": "select id2 from `user` where :__sq_has_values and id2 in ::__sq2",
                 "Table": "`user`"
               }
             ]
@@ -2176,10 +2168,9 @@
       "QueryType": "SELECT",
       "Original": "select col from user where id = (select id from route2)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
-          "__sq_has_values1",
           "__sq1"
         ],
         "Inputs": [
@@ -2455,10 +2446,10 @@
       "QueryType": "SELECT",
       "Original": "select id from user where not id in (select user_extra.col from user_extra where user_extra.user_id = 42) and id in (select user_extra.col from user_extra where user_extra.user_id = 411)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values2",
+          "__sq_has_values1",
           "__sq2"
         ],
         "Inputs": [
@@ -2480,10 +2471,10 @@
           },
           {
             "InputName": "Outer",
-            "OperatorType": "Subquery",
+            "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutNotIn",
             "PulloutVars": [
-              "__sq_has_values1",
+              "__sq_has_values",
               "__sq1"
             ],
             "Inputs": [
@@ -2512,7 +2503,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from `user` where 1 != 1",
-                "Query": "select id from `user` where (:__sq_has_values1 = 0 or id not in ::__sq1) and (:__sq_has_values2 = 1 and id in ::__vals)",
+                "Query": "select id from `user` where not :__sq_has_values and id not in ::__sq1 and :__sq_has_values1 and id in ::__vals",
                 "Table": "`user`",
                 "Values": [
                   "::__sq2"
@@ -2633,10 +2624,10 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id in (select col from unsharded where col = id)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
@@ -2661,7 +2652,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+            "Query": "select id from `user` where :__sq_has_values and id in ::__vals",
             "Table": "`user`",
             "Values": [
               "::__sq1"
@@ -2780,7 +2771,7 @@
           "Sharded": true
         },
         "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
-        "Query": "select u1.col from `user` as u1 where u1.id = 5 and exists (select 1 from `user` as u2 where u2.id = 5 limit 1)",
+        "Query": "select u1.col from `user` as u1 where u1.id = 5 and exists (select 1 from `user` as u2 where u2.id = 5)",
         "Table": "`user`",
         "Values": [
           "INT64(5)"
@@ -2806,7 +2797,7 @@
           "Sharded": true
         },
         "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
-        "Query": "select u1.col from `user` as u1 where u1.id = 5 and not exists (select 1 from `user` as u2 where u2.id = 5 limit 1)",
+        "Query": "select u1.col from `user` as u1 where u1.id = 5 and not exists (select 1 from `user` as u2 where u2.id = 5)",
         "Table": "`user`",
         "Values": [
           "INT64(5)"
@@ -2825,10 +2816,10 @@
       "QueryType": "SELECT",
       "Original": "select u1.col from user as u1 where not exists (select u2.name from user u2 where u2.id = 5)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutExists",
         "PulloutVars": [
-          "__sq_has_values1"
+          "__sq_has_values"
         ],
         "Inputs": [
           {
@@ -2840,7 +2831,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-            "Query": "select 1 from `user` as u2 where u2.id = 5 limit 1",
+            "Query": "select 1 from `user` as u2 where u2.id = 5",
             "Table": "`user`",
             "Values": [
               "INT64(5)"
@@ -2856,7 +2847,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
-            "Query": "select u1.col from `user` as u1 where not :__sq_has_values1",
+            "Query": "select u1.col from `user` as u1 where not :__sq_has_values",
             "Table": "`user`"
           }
         ]
@@ -2873,10 +2864,10 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 5) and id in (select user_extra.col from user_extra where user_extra.user_id = 4)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
         "PulloutVars": [
-          "__sq_has_values2",
+          "__sq_has_values",
           "__sq2"
         ],
         "Inputs": [
@@ -2905,7 +2896,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where id = 5 and id not in (select user_extra.col from user_extra where user_extra.user_id = 5) and (:__sq_has_values2 = 1 and id in ::__sq2)",
+            "Query": "select id from `user` where id = 5 and id not in (select user_extra.col from user_extra where user_extra.user_id = 5) and :__sq_has_values and id in ::__sq2",
             "Table": "`user`",
             "Values": [
               "INT64(5)"
@@ -2927,10 +2918,10 @@
       "QueryType": "SELECT",
       "Original": "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 4) and id in (select user_extra.col from user_extra where user_extra.user_id = 5)",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutNotIn",
         "PulloutVars": [
-          "__sq_has_values1",
+          "__sq_has_values",
           "__sq1"
         ],
         "Inputs": [
@@ -2959,7 +2950,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where id = 5 and (:__sq_has_values1 = 0 or id not in ::__sq1) and id in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+            "Query": "select id from `user` where id = 5 and id in (select user_extra.col from user_extra where user_extra.user_id = 5) and not :__sq_has_values and id not in ::__sq1",
             "Table": "`user`",
             "Values": [
               "INT64(5)"
@@ -3226,16 +3217,18 @@
       "QueryType": "SELECT",
       "Original": "select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "(0|2), 1",
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:2)",
+          "1"
+        ],
         "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Subquery",
+            "OperatorType": "UncorrelatedSubquery",
             "Variant": "PulloutIn",
             "PulloutVars": [
-              "__sq_has_values1",
+              "__sq_has_values",
               "__sq1"
             ],
             "Inputs": [
@@ -3260,8 +3253,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where 1 != 1",
-                "OrderBy": "(0|2) ASC, 1 ASC",
-                "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1 order by `user`.id asc, `user`.col asc",
+                "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where :__sq_has_values and `user`.col in ::__sq1",
                 "Table": "`user`"
               }
             ]
@@ -4228,32 +4220,31 @@
       "QueryType": "SELECT",
       "Original": "select 1 from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
       "Instructions": {
-        "OperatorType": "SemiJoin",
-        "JoinVars": {
-          "u1_bar": 0
-        },
-        "ProjectedIndexes": "-2",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
         "TableName": "unsharded_`user`_unsharded",
         "Inputs": [
           {
-            "InputName": "Outer",
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "R:0,L:0",
-            "TableName": "unsharded_`user`",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from unsharded where 1 != 1",
+            "Query": "select 1 from unsharded",
+            "Table": "unsharded"
+          },
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "u1_bar": 0
+            },
+            "TableName": "`user`_unsharded",
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select 1 from unsharded where 1 != 1",
-                "Query": "select 1 from unsharded",
-                "Table": "unsharded"
-              },
-              {
+                "InputName": "Outer",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -4263,20 +4254,20 @@
                 "FieldQuery": "select u1.bar from `user` as u1 where 1 != 1",
                 "Query": "select u1.bar from `user` as u1",
                 "Table": "`user`"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from unsharded as u2 where 1 != 1",
+                "Query": "select 1 from unsharded as u2 where u2.baz = :u1_bar",
+                "Table": "unsharded"
               }
             ]
-          },
-          {
-            "InputName": "SubQuery",
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 from unsharded as u2 where 1 != 1",
-            "Query": "select 1 from unsharded as u2 where u2.baz = :u1_bar",
-            "Table": "unsharded"
           }
         ]
       },
@@ -4381,6 +4372,34 @@
       },
       "TablesUsed": [
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "union inside subquery. all routes can be merged by literal value",
+    "query": "select 1 from user where id = 12 and exists(select 1 from music where user_id = 12 union select 1 from user_extra where user_id = 12)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user where id = 12 and exists(select 1 from music where user_id = 12 union select 1 from user_extra where user_id = 12)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where id = 12 and exists (select 1 from music where user_id = 12 union select 1 from user_extra where user_id = 12)",
+        "Table": "`user`",
+        "Values": [
+          "INT64(12)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
       ]
     }
   }

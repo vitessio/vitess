@@ -111,11 +111,11 @@ func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 				msg   string
 			}{{
 				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and workflow=%s", encodeString(primary.DbName()), encodeString(workflow)),
-				fmt.Sprintf("workflow %s already exists in keyspace %s on tablet %d", workflow, keyspace, primary.Alias.Uid),
+				fmt.Sprintf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias),
 			}, {
 				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and message='FROZEN' and workflow_sub_type != %d", encodeString(primary.DbName()), binlogdatapb.VReplicationWorkflowSubType_Partial),
-				fmt.Sprintf("found previous frozen workflow on tablet %d, please review and delete it first before creating a new workflow",
-					primary.Alias.Uid),
+				fmt.Sprintf("found previous frozen workflow on tablet %v, please review and delete it first before creating a new workflow",
+					primary.Alias),
 			}}
 			for _, validation := range validations {
 				p3qr, err := tmc.VReplicationExec(ctx, primary.Tablet, validation.query)

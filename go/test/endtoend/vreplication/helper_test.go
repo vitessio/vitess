@@ -52,7 +52,7 @@ import (
 
 const (
 	defaultTick          = 1 * time.Second
-	defaultTimeout       = 30 * time.Second
+	defaultTimeout       = 60 * time.Second
 	workflowStateTimeout = 90 * time.Second
 )
 
@@ -158,10 +158,13 @@ func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow st
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", "--", ksWorkflow, "show")
+		// We don't need log records for this so pass --include-logs=false.
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", keyspace, "show", "--workflow", worfklow, "--include-logs=false")
 		require.NoError(t, err)
-		lag, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
-		require.NoError(t, err)
+		// Confirm that we got no log records back.
+		require.NotEmpty(t, len(gjson.Get(output, "workflows.0.shard_streams.*.streams.0").String()), "workflow %q had no streams listed in the output: %s", ksWorkflow, output)
+		require.Equal(t, 0, len(gjson.Get(output, "workflows.0.shard_streams.*.streams.0.logs").Array()), "workflow %q returned log records when we expected none", ksWorkflow)
+		lag = gjson.Get(output, "workflows.0.max_v_replication_lag").Int()
 		if lag == 0 {
 			return
 		}
@@ -224,6 +227,35 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 		case <-timer.C:
 			require.FailNow(t, fmt.Sprintf("table %q did not reach the expected number of rows (%d) on tablet %q before the timeout of %s; last seen result: %v",
 				table, want, vttablet.Name, defaultTimeout, qr.Rows))
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
+}
+
+// waitForSequenceValue queries the provided sequence name in the
+// provided database using the provided vtgate connection until
+// we get a next value from it. This allows us to move forward
+// with queries that rely on the sequence working as expected.
+// The read next value is also returned so that the caller can
+// use it if they want.
+// Note: you specify the number of values that you want to reserve
+// and you get back the max value reserved.
+func waitForSequenceValue(t *testing.T, conn *mysql.Conn, database, sequence string, numVals int) int64 {
+	query := fmt.Sprintf("select next %d values from %s.%s", numVals, database, sequence)
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	for {
+		qr, err := conn.ExecuteFetch(query, 1, false)
+		if err == nil && qr != nil && len(qr.Rows) == 1 { // We got a value back
+			val, err := qr.Rows[0][0].ToInt64()
+			require.NoError(t, err, "invalid sequence value: %v", qr.Rows[0][0])
+			return val
+		}
+		select {
+		case <-timer.C:
+			require.FailNow(t, fmt.Sprintf("sequence %q did not provide a next value before the timeout of %s; last seen result: %+v, error: %v",
+				sequence, defaultTimeout, qr, err))
 		default:
 			time.Sleep(defaultTick)
 		}
@@ -357,7 +389,7 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 			require.NotNil(t, createTable)
 			require.NotNil(t, createTable.GetTableSpec())
 			for _, index := range createTable.GetTableSpec().Indexes {
-				if !index.Info.Primary {
+				if index.Info.Type != sqlparser.IndexTypePrimary {
 					secondaryKeys++
 				}
 			}
@@ -451,7 +483,17 @@ func checkIfTableExists(t *testing.T, vc *VitessCluster, tabletAlias string, tab
 	return found, nil
 }
 
-func checkIfDenyListExists(t *testing.T, vc *VitessCluster, ksShard string, table string) (bool, error) {
+func validateTableInDenyList(t *testing.T, vc *VitessCluster, ksShard string, table string, mustExist bool) {
+	found, err := isTableInDenyList(t, vc, ksShard, table)
+	require.NoError(t, err)
+	if mustExist {
+		require.True(t, found, "Table %s not found in deny list", table)
+	} else {
+		require.False(t, found, "Table %s found in deny list", table)
+	}
+}
+
+func isTableInDenyList(t *testing.T, vc *VitessCluster, ksShard string, table string) (bool, error) {
 	var output string
 	var err error
 	found := false

@@ -444,3 +444,101 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 		})
 	}
 }
+
+func TestRewriteNot(t *testing.T) {
+	ks := &vindexes.Keyspace{
+		Name:    "main",
+		Sharded: false,
+	}
+	schemaInfo := &FakeSI{
+		Tables: map[string]*vindexes.Table{
+			"t1": {
+				Keyspace: ks,
+				Name:     sqlparser.NewIdentifierCS("t1"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewIdentifierCI("a"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewIdentifierCI("b"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewIdentifierCI("c"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: true,
+			},
+		},
+	}
+	cDB := "db"
+	tcases := []struct {
+		sql      string
+		expected string
+	}{{
+		sql:      "select a,b,c from t1 where not a = 12",
+		expected: "select a, b, c from t1 where a != 12",
+	}, {
+		sql:      "select a from t1 where not a > 12",
+		expected: "select a from t1 where a <= 12",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.Parse(tcase.sql)
+			require.NoError(t, err)
+			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
+			require.True(t, isSelectStatement, "analyzer expects a select statement")
+			st, err := Analyze(selectStatement, cDB, schemaInfo)
+
+			require.NoError(t, err)
+			require.NoError(t, st.NotUnshardedErr)
+			require.NoError(t, st.NotSingleRouteErr)
+			assert.Equal(t, tcase.expected, sqlparser.String(selectStatement))
+		})
+	}
+}
+
+// TestConstantFolding tests that the rewriter is able to do various constant foldings properly.
+func TestConstantFolding(t *testing.T) {
+	ks := &vindexes.Keyspace{
+		Name:    "main",
+		Sharded: false,
+	}
+	schemaInfo := &FakeSI{
+		Tables: map[string]*vindexes.Table{
+			"t1": {
+				Keyspace: ks,
+				Name:     sqlparser.NewIdentifierCS("t1"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewIdentifierCI("a"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewIdentifierCI("b"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewIdentifierCI("c"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: true,
+			},
+		},
+	}
+	cDB := "db"
+	tcases := []struct {
+		sql    string
+		expSQL string
+	}{{
+		sql:    "select 1 from t1 where (a, b) in ::fkc_vals and (2 is null or (1 is null or a in (1)))",
+		expSQL: "select 1 from t1 where (a, b) in ::fkc_vals and a in (1)",
+	}, {
+		sql:    "select 1 from t1 where (false or (false or a in (1)))",
+		expSQL: "select 1 from t1 where a in (1)",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.Parse(tcase.sql)
+			require.NoError(t, err)
+			_, err = Analyze(ast, cDB, schemaInfo)
+			require.NoError(t, err)
+			require.Equal(t, tcase.expSQL, sqlparser.String(ast))
+		})
+	}
+}

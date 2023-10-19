@@ -17,11 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*fkVerify)(nil)
@@ -58,46 +54,4 @@ func (fkc *fkVerify) Primitive() engine.Primitive {
 		Exec:   fkc.input.Primitive(),
 		Verify: verify,
 	}
-}
-
-// Wireup implements the logicalPlan interface
-func (fkc *fkVerify) Wireup(ctx *plancontext.PlanningContext) error {
-	for _, v := range fkc.verify {
-		err := v.verify.Wireup(ctx)
-		if err != nil {
-			return err
-		}
-	}
-	return fkc.input.Wireup(ctx)
-}
-
-// Rewrite implements the logicalPlan interface
-func (fkc *fkVerify) Rewrite(inputs ...logicalPlan) error {
-	if len(fkc.verify) != len(inputs)-1 {
-		return vterrors.VT13001("fkVerify: wrong number of inputs")
-	}
-	fkc.input = inputs[0]
-	for i := 1; i < len(inputs); i++ {
-		fkc.verify[i-1].verify = inputs[i]
-	}
-	return nil
-}
-
-// ContainsTables implements the logicalPlan interface
-func (fkc *fkVerify) ContainsTables() semantics.TableSet {
-	return fkc.input.ContainsTables()
-}
-
-// Inputs implements the logicalPlan interface
-func (fkc *fkVerify) Inputs() []logicalPlan {
-	inputs := []logicalPlan{fkc.input}
-	for _, v := range fkc.verify {
-		inputs = append(inputs, v.verify)
-	}
-	return inputs
-}
-
-// OutputColumns implements the logicalPlan interface
-func (fkc *fkVerify) OutputColumns() []sqlparser.SelectExpr {
-	return nil
 }

@@ -34,9 +34,9 @@ type Filter struct {
 	Source     ops.Operator
 	Predicates []sqlparser.Expr
 
-	// FinalPredicate is the evalengine expression that will finally be used.
+	// PredicateWithOffsets is the evalengine expression that will finally be used.
 	// It contains the ANDed predicates in Predicates, with ColName:s replaced by Offset:s
-	FinalPredicate evalengine.Expr
+	PredicateWithOffsets evalengine.Expr
 
 	Truncate int
 }
@@ -50,10 +50,10 @@ func newFilter(op ops.Operator, expr sqlparser.Expr) ops.Operator {
 // Clone implements the Operator interface
 func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
 	return &Filter{
-		Source:         inputs[0],
-		Predicates:     slices.Clone(f.Predicates),
-		FinalPredicate: f.FinalPredicate,
-		Truncate:       f.Truncate,
+		Source:               inputs[0],
+		Predicates:           slices.Clone(f.Predicates),
+		PredicateWithOffsets: f.PredicateWithOffsets,
+		Truncate:             f.Truncate,
 	}
 }
 
@@ -80,33 +80,29 @@ func (f *Filter) UnsolvedPredicates(st *semantics.SemTable) []sqlparser.Expr {
 	return result
 }
 
-func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := f.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	f.Source = newSrc
-	return f, nil
+func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	f.Source = f.Source.AddPredicate(ctx, expr)
+	return f
 }
 
-func (f *Filter) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
-	return f.Source.AddColumns(ctx, reuse, addToGroupBy, exprs)
+func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
+	return f.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
-func (f *Filter) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (f *Filter) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return f.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (f *Filter) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (f *Filter) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return f.Source.GetColumns(ctx)
 }
 
-func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return f.Source.GetSelectExprs(ctx)
 }
 
-func (f *Filter) GetOrdering() ([]ops.OrderBy, error) {
-	return f.Source.GetOrdering()
+func (f *Filter) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+	return f.Source.GetOrdering(ctx)
 }
 
 func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -123,27 +119,23 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.A
 	return f, rewrite.NewTree("two filters merged into one", f), nil
 }
 
-func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
+func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) {
 	cfg := &evalengine.Config{
 		ResolveType: ctx.SemTable.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
 	}
 
 	predicate := sqlparser.AndExpressions(f.Predicates...)
-	rewritten, err := useOffsets(ctx, predicate, f)
-	if err != nil {
-		return err
-	}
+	rewritten := useOffsets(ctx, predicate, f)
 	eexpr, err := evalengine.Translate(rewritten, cfg)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), evalengine.ErrTranslateExprNotSupported) {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", evalengine.ErrTranslateExprNotSupported, sqlparser.String(predicate))
+			panic(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", evalengine.ErrTranslateExprNotSupported, sqlparser.String(predicate)))
 		}
-		return err
+		panic(err)
 	}
 
-	f.FinalPredicate = eexpr
-	return nil
+	f.PredicateWithOffsets = eexpr
 }
 
 func (f *Filter) ShortDescription() string {

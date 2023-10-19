@@ -40,8 +40,9 @@ type ImpossibleApplyDiffOrderError struct {
 
 func (e *ImpossibleApplyDiffOrderError) Error() string {
 	var b strings.Builder
-	b.WriteString("no valid applicable order for diffs. Diffs found conflicting:")
-	for _, s := range e.ConflictingStatements() {
+	conflictingStatements := e.ConflictingStatements()
+	b.WriteString(fmt.Sprintf("no valid applicable order for diffs. %d diffs found conflicting:", len(conflictingStatements)))
+	for _, s := range conflictingStatements {
 		b.WriteString("\n")
 		b.WriteString(s)
 	}

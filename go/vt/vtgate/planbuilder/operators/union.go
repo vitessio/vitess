@@ -58,8 +58,8 @@ func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
 	return &newOp
 }
 
-func (u *Union) GetOrdering() ([]ops.OrderBy, error) {
-	return nil, nil
+func (u *Union) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+	return nil
 }
 
 // Inputs implements the Operator interface
@@ -93,39 +93,36 @@ Notice how `X.col = 42` has been translated to `foo = 42` and `id = 42` on respe
 The first SELECT of the union dictates the column names, and the second is whatever expression
 can be found on the same offset. The names of the RHS are discarded.
 */
-func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
 	offsets := make(map[string]int)
 	sel, err := u.GetSelectFor(0)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	for i, selectExpr := range sel.SelectExprs {
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil, vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT")
+			panic(vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT"))
 		}
 		offsets[ae.ColumnName()] = i
 	}
 
 	needsFilter, exprPerSource, err := u.predicatePerSource(expr, offsets)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	if needsFilter {
 		return &Filter{
 			Source:     u,
 			Predicates: []sqlparser.Expr{expr},
-		}, nil
-	}
-
-	for i, src := range u.Sources {
-		u.Sources[i], err = src.AddPredicate(ctx, exprPerSource[i])
-		if err != nil {
-			return nil, err
 		}
 	}
 
-	return u, nil
+	for i, src := range u.Sources {
+		u.Sources[i] = src.AddPredicate(ctx, exprPerSource[i])
+	}
+
+	return u
 }
 
 func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) (bool, []sqlparser.Expr, error) {
@@ -183,57 +180,44 @@ func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
 	}
 }
 
-func (u *Union) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
-	offsets := make([]int, len(exprs))
-	cols, err := u.GetColumns(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for i, ae := range exprs {
-		if reuse {
-			offset, err := u.FindCol(ctx, ae.Expr, false)
-			if err != nil {
-				return nil, err
-			}
-
-			if offset >= 0 {
-				offsets[i] = offset
-				continue
-			}
-		}
-
-		switch e := ae.Expr.(type) {
-		case *sqlparser.ColName:
-			// here we deal with pure column access on top of the union
-			offset := slices.IndexFunc(cols, func(expr *sqlparser.AliasedExpr) bool {
-				return e.Name.EqualString(expr.ColumnName())
-			})
-			if offset == -1 {
-				return nil, vterrors.VT13001(fmt.Sprintf("could not find the column '%s' on the UNION", sqlparser.String(e)))
-			}
-			offsets[i] = offset
-		case *sqlparser.WeightStringFuncExpr:
-			wsArg := e.Expr
-			argIdx := slices.IndexFunc(cols, func(expr *sqlparser.AliasedExpr) bool {
-				return ctx.SemTable.EqualsExprWithDeps(wsArg, expr.Expr)
-			})
-
-			if argIdx == -1 {
-				return nil, vterrors.VT13001(fmt.Sprintf("could not find the argument to the weight_string function: %s", sqlparser.String(wsArg)))
-			}
-
-			outputOffset, err := u.addWeightStringToOffset(ctx, argIdx, addToGroupBy[i])
-			if err != nil {
-				return nil, err
-			}
-
-			offsets[i] = outputOffset
-		default:
-			return nil, vterrors.VT13001(fmt.Sprintf("only weight_string function is expected - got %s", sqlparser.String(ae)))
+func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
+	if reuse {
+		offset := u.FindCol(ctx, expr.Expr, false)
+		if offset >= 0 {
+			return offset
 		}
 	}
+	cols := u.GetColumns(ctx)
 
-	return offsets, nil
+	switch e := expr.Expr.(type) {
+	case *sqlparser.ColName:
+		// here we deal with pure column access on top of the union
+		offset := slices.IndexFunc(cols, func(expr *sqlparser.AliasedExpr) bool {
+			return e.Name.EqualString(expr.ColumnName())
+		})
+		if offset == -1 {
+			panic(vterrors.VT13001(fmt.Sprintf("could not find the column '%s' on the UNION", sqlparser.String(e))))
+		}
+		return offset
+	case *sqlparser.WeightStringFuncExpr:
+		wsArg := e.Expr
+		argIdx := slices.IndexFunc(cols, func(expr *sqlparser.AliasedExpr) bool {
+			return ctx.SemTable.EqualsExprWithDeps(wsArg, expr.Expr)
+		})
+
+		if argIdx == -1 {
+			panic(vterrors.VT13001(fmt.Sprintf("could not find the argument to the weight_string function: %s", sqlparser.String(wsArg))))
+		}
+
+		outputOffset, err := u.addWeightStringToOffset(ctx, argIdx, gb)
+		if err != nil {
+			panic(err)
+		}
+
+		return outputOffset
+	default:
+		panic(vterrors.VT13001(fmt.Sprintf("only weight_string function is expected - got %s", sqlparser.String(expr))))
+	}
 }
 
 func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx int, addToGroupBy bool) (outputOffset int, err error) {
@@ -244,11 +228,8 @@ func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx
 		if !ok {
 			return 0, vterrors.VT09015()
 		}
-		offsets, err := src.AddColumns(ctx, false, []bool{addToGroupBy}, []*sqlparser.AliasedExpr{aeWrap(weightStringFor(ae.Expr))})
-		if err != nil {
-			return 0, err
-		}
-		thisOffset := offsets[0]
+		thisOffset := src.AddColumn(ctx, false, addToGroupBy, aeWrap(weightStringFor(ae.Expr)))
+
 		// all offsets for the newly added ws need to line up
 		if i == 0 {
 			outputOffset = thisOffset
@@ -261,22 +242,19 @@ func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx
 	return
 }
 
-func (u *Union) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
-	columns, err := u.GetColumns(ctx)
-	if err != nil {
-		return 0, err
-	}
+func (u *Union) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+	columns := u.GetColumns(ctx)
 
 	for idx, col := range columns {
 		if ctx.SemTable.EqualsExprWithDeps(expr, col.Expr) {
-			return idx, nil
+			return idx
 		}
 	}
 
-	return -1, nil
+	return -1
 }
 
-func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparser.AliasedExpr, err error) {
+func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparser.AliasedExpr) {
 	if u.unionColumnsAsAlisedExprs == nil {
 		allOk := true
 		u.unionColumnsAsAlisedExprs = slice.Map(u.unionColumns, func(from sqlparser.SelectExpr) *sqlparser.AliasedExpr {
@@ -285,41 +263,33 @@ func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparse
 			return expr
 		})
 		if !allOk {
-			return nil, vterrors.VT09015()
+			panic(vterrors.VT09015())
 		}
 	}
 
 	// if any of the inputs has more columns that we expect, we want to show on top of UNION, so the results can
 	// be truncated to the expected result columns and nothing else
 	for _, src := range u.Sources {
-		columns, err := src.GetColumns(ctx)
-		if err != nil {
-			return nil, err
-		}
-
+		columns := src.GetColumns(ctx)
 		for len(columns) > len(u.unionColumnsAsAlisedExprs) {
 			u.unionColumnsAsAlisedExprs = append(u.unionColumnsAsAlisedExprs, aeWrap(sqlparser.NewIntLiteral("0")))
 		}
 	}
 
-	return u.unionColumnsAsAlisedExprs, nil
+	return u.unionColumnsAsAlisedExprs
 }
 
-func (u *Union) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (u *Union) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	// if any of the inputs has more columns that we expect, we want to show on top of UNION, so the results can
 	// be truncated to the expected result columns and nothing else
 	for _, src := range u.Sources {
-		columns, err := src.GetSelectExprs(ctx)
-		if err != nil {
-			return nil, err
-		}
-
+		columns := src.GetSelectExprs(ctx)
 		for len(columns) > len(u.unionColumns) {
 			u.unionColumns = append(u.unionColumns, aeWrap(sqlparser.NewIntLiteral("0")))
 		}
 	}
 
-	return u.unionColumns, nil
+	return u.unionColumns
 }
 
 func (u *Union) NoLHSTableSet() {}

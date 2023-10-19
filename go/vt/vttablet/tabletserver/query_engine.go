@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,7 +31,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/pools"
+	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/sync2"
@@ -44,7 +45,6 @@ import (
 	"vitess.io/vitess/go/vt/tableacl"
 	tacl "vitess.io/vitess/go/vt/tableacl/acl"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vthash"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -126,8 +126,8 @@ func isValid(planType planbuilder.PlanType, hasReservedCon bool, hasSysSettings 
 type PlanCacheKey = theine.StringKey
 type PlanCache = theine.Store[PlanCacheKey, *TabletPlan]
 
-type SettingsCacheKey = theine.HashKey256
-type SettingsCache = theine.Store[SettingsCacheKey, *pools.Setting]
+type SettingsCacheKey = theine.StringKey
+type SettingsCache = theine.Store[SettingsCacheKey, *smartconnpool.Setting]
 
 type currentSchema struct {
 	tables map[string]*schema.Table
@@ -217,7 +217,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	// not use a doorkeeper because custom connection settings are rarely one-off and we always
 	// want to cache them
 	var settingsCacheMemory = config.QueryCacheMemory / 4
-	qe.settings = theine.NewStore[SettingsCacheKey, *pools.Setting](settingsCacheMemory, false)
+	qe.settings = theine.NewStore[SettingsCacheKey, *smartconnpool.Setting](settingsCacheMemory, false)
 
 	qe.schema.Store(&currentSchema{
 		tables: make(map[string]*schema.Table),
@@ -320,7 +320,7 @@ func (qe *QueryEngine) Open() error {
 		qe.conns.Close()
 		return err
 	}
-	err = conn.VerifyMode(qe.strictTransTables)
+	err = conn.Conn.VerifyMode(qe.strictTransTables)
 	// Recycle needs to happen before error check.
 	// Otherwise, qe.conns.Close will hang.
 	conn.Recycle()
@@ -370,14 +370,14 @@ func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string) (*TabletPla
 	plan := &TabletPlan{Plan: splan, Original: sql}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableNames()...)
 	plan.buildAuthorized()
-	if plan.PlanID == planbuilder.PlanDDL || plan.PlanID == planbuilder.PlanSet || sqlparser.SkipQueryPlanCacheDirective(statement) {
-		return plan, errNoCache
+	if sqlparser.CachePlan(statement) {
+		return plan, nil
 	}
 
-	return plan, nil
+	return plan, errNoCache
 }
 
-// GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.
+// GetPlan returns the TabletPlan that for the query. Plans are cached in a theine LRU cache.
 func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetPlan")
 	defer span.Finish()
@@ -401,17 +401,56 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	return plan, err
 }
 
-// GetStreamPlan is similar to GetPlan, but doesn't use the cache
-// and doesn't enforce a limit. It just returns the parsed query.
-func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
-	splan, err := planbuilder.BuildStreaming(sql, qe.schema.Load().tables)
+func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*TabletPlan, error) {
+	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
+
+	splan, err := planbuilder.BuildStreaming(statement, curSchema.tables)
+
+	if err != nil {
+		return nil, err
+	}
+
 	plan := &TabletPlan{Plan: splan, Original: sql}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.buildAuthorized()
-	return plan, nil
+
+	if sqlparser.CachePlan(statement) {
+		return plan, nil
+	}
+
+	return plan, errNoCache
+}
+
+// GetStreamPlan returns the TabletPlan that for the query. Plans are cached in a theine LRU cache.
+func (qe *QueryEngine) GetStreamPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
+	span, _ := trace.NewSpan(ctx, "QueryEngine.GetStreamPlan")
+	defer span.Finish()
+
+	var plan *TabletPlan
+	var err error
+
+	curSchema := qe.schema.Load()
+
+	if skipQueryPlanCache {
+		plan, err = qe.getStreamPlan(curSchema, sql)
+	} else {
+		plan, logStats.CachedPlan, err = qe.plans.GetOrLoad(PlanCacheKey(qe.getStreamPlanCacheKey(sql)), curSchema.epoch, func() (*TabletPlan, error) {
+			return qe.getStreamPlan(curSchema, sql)
+		})
+	}
+
+	if errors.Is(err, errNoCache) {
+		err = nil
+	}
+	return plan, err
+}
+
+// gets key used to cache stream query plan
+func (qe *QueryEngine) getStreamPlanCacheKey(sql string) string {
+	return "__STREAM__" + sql
 }
 
 // GetMessageStreamPlan builds a plan for Message streaming.
@@ -427,25 +466,24 @@ func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
 }
 
 // GetConnSetting returns system settings for the connection.
-func (qe *QueryEngine) GetConnSetting(ctx context.Context, settings []string) (*pools.Setting, error) {
+func (qe *QueryEngine) GetConnSetting(ctx context.Context, settings []string) (*smartconnpool.Setting, error) {
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetConnSetting")
 	defer span.Finish()
 
-	hasher := vthash.New256()
+	var buf strings.Builder
 	for _, q := range settings {
-		_, _ = hasher.WriteString(q)
+		_, _ = buf.WriteString(q)
+		_ = buf.WriteByte(';')
 	}
 
-	var cacheKey SettingsCacheKey
-	hasher.Sum(cacheKey[:0])
-
-	connSetting, _, err := qe.settings.GetOrLoad(cacheKey, 0, func() (*pools.Setting, error) {
+	cacheKey := SettingsCacheKey(buf.String())
+	connSetting, _, err := qe.settings.GetOrLoad(cacheKey, 0, func() (*smartconnpool.Setting, error) {
 		// build the setting queries
 		query, resetQuery, err := planbuilder.BuildSettingQuery(settings)
 		if err != nil {
 			return nil, err
 		}
-		return pools.NewSetting(query, resetQuery), nil
+		return smartconnpool.NewSetting(query, resetQuery), nil
 	})
 	return connSetting, err
 }

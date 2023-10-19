@@ -749,22 +749,29 @@
       "QueryType": "SELECT",
       "Original": "select * from ((select id from user union select id+1 from user) union select user_id from user_extra) as t",
       "Instructions": {
-        "OperatorType": "Distinct",
-        "Collations": [
-          "(0:1)"
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
         ],
-        "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select id + 1 from `user` where 1 != 1 union select user_id from user_extra where 1 != 1) as dt where 1 != 1",
-            "Query": "select id, weight_string(id) from (select id from `user` union select id + 1 from `user` union select user_id from user_extra) as dt",
-            "Table": "`user`, user_extra"
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:1)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select id + 1 from `user` where 1 != 1 union select user_id from user_extra where 1 != 1) as dt where 1 != 1",
+                "Query": "select id, weight_string(id) from (select id from `user` union select id + 1 from `user` union select user_id from user_extra) as dt",
+                "Table": "`user`, user_extra"
+              }
+            ]
           }
         ]
       },
@@ -948,41 +955,49 @@
         "TableName": "`user`_`user`",
         "Inputs": [
           {
-            "OperatorType": "Concatenate",
+            "OperatorType": "SimpleProjection",
+            "Columns": [
+              0
+            ],
             "Inputs": [
               {
-                "OperatorType": "Limit",
-                "Count": "INT64(5)",
+                "OperatorType": "Concatenate",
                 "Inputs": [
                   {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-                    "OrderBy": "(0|1) ASC",
-                    "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
-                    "Table": "`user`"
-                  }
-                ]
-              },
-              {
-                "OperatorType": "Limit",
-                "Count": "INT64(5)",
-                "Inputs": [
+                    "OperatorType": "Limit",
+                    "Count": "INT64(5)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                        "OrderBy": "(0|1) ASC",
+                        "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+                        "Table": "`user`"
+                      }
+                    ]
+                  },
                   {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-                    "OrderBy": "(0|1) DESC",
-                    "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
-                    "Table": "`user`"
+                    "OperatorType": "Limit",
+                    "Count": "INT64(5)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                        "OrderBy": "(0|1) DESC",
+                        "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
+                        "Table": "`user`"
+                      }
+                    ]
                   }
                 ]
               }
@@ -1083,35 +1098,41 @@
         ],
         "Inputs": [
           {
-            "OperatorType": "Distinct",
-            "Collations": [
-              "(0:1)"
-            ],
+            "OperatorType": "Projection",
+            "Expressions": null,
             "Inputs": [
               {
-                "OperatorType": "Concatenate",
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "(0:1)"
+                ],
                 "Inputs": [
                   {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select id + 42 as foo, weight_string(id + 42) from `user` where 1 != 1",
-                    "Query": "select distinct id + 42 as foo, weight_string(id + 42) from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Unsharded",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select 1 + id as foo, weight_string(1 + id) from unsharded where 1 != 1",
-                    "Query": "select distinct 1 + id as foo, weight_string(1 + id) from unsharded",
-                    "Table": "unsharded"
+                    "OperatorType": "Concatenate",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select id + 42 as foo, weight_string(id + 42) from `user` where 1 != 1",
+                        "Query": "select distinct id + 42 as foo, weight_string(id + 42) from `user`",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Unsharded",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": false
+                        },
+                        "FieldQuery": "select 1 + id as foo, weight_string(1 + id) from unsharded where 1 != 1",
+                        "Query": "select distinct 1 + id as foo, weight_string(1 + id) from unsharded",
+                        "Table": "unsharded"
+                      }
+                    ]
                   }
                 ]
               }

@@ -20,7 +20,6 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
-	_ "vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/vtgate"
 )
 
