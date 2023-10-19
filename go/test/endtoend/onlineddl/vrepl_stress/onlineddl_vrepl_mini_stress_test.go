@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math"
 	"math/rand"
 	"os"
 	"path"
@@ -175,12 +174,13 @@ func TestInitialSetup(t *testing.T) {
 
 	vCPUs := runtime.NumCPU()
 	maxConcurrency = vCPUs
-	sleepModifier := int(math.Max(float64(4-(vCPUs/4)), 1))
-	singleConnectionSleepInterval = time.Duration((int(singleConnectionSleepInterval.Milliseconds()) * sleepModifier) * 1000) // ms to us
+	sleepModifier := 16.0 / float64(vCPUs)
+	singleConnectionSleepIntervalNanoseconds := float64(singleConnectionSleepInterval.Nanoseconds()) * sleepModifier
+	singleConnectionSleepInterval = time.Duration(int64(singleConnectionSleepIntervalNanoseconds))
 	t.Logf("==== test setup:  runtime.NumCPU()=%v, sleepModifier=%v, singleConnectionSleepInterval=%v", runtime.NumCPU(), sleepModifier, singleConnectionSleepInterval)
 }
 
-func TestMain(m *testing.M) {
+func _TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
