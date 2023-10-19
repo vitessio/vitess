@@ -78,6 +78,7 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		SkipPredicates:    map[sqlparser.Expr]any{},
 		PlannerVersion:    version,
 		ReservedArguments: map[sqlparser.Expr]string{},
+		VerifyAllFKs:      semTable.FKChecksOff,
 	}, nil
 }
 

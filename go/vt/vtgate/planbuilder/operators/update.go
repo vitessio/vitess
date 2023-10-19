@@ -176,6 +176,11 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		return nil, vterrors.VT12001("multi shard UPDATE with LIMIT")
 	}
 
+	if ctx.SemTable.FKChecksOff {
+		// We have to run the query with FKChecksOff.
+		updStmt.Comments = updStmt.Comments.Prepend("/*+ SET_VAR(foreign_key_checks=OFF) */").Parsed()
+	}
+
 	route := &Route{
 		Source: &Update{
 			QTable:                       qt,
@@ -213,25 +218,6 @@ func buildFkOperator(ctx *plancontext.PlanningContext, updOp ops.Operator, updCl
 	return createFKVerifyOp(ctx, op, updClone, parentFks, restrictChildFks)
 }
 
-func hasNonLiteral(updExprs sqlparser.UpdateExprs, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo) bool {
-	for _, updateExpr := range updExprs {
-		if sqlparser.IsLiteral(updateExpr.Expr) {
-			continue
-		}
-		for _, parentFk := range parentFks {
-			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				return true
-			}
-		}
-		for _, childFk := range childFks {
-			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // splitChildFks splits the child foreign keys into restrict and cascade list as restrict is handled through Verify operator and cascade is handled through Cascade operator.
 func splitChildFks(fks []vindexes.ChildFKInfo) (restrictChildFks, cascadeChildFks []vindexes.ChildFKInfo) {
 	for _, fk := range fks {
@@ -265,7 +251,7 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 			return nil, vterrors.VT13001("ON UPDATE RESTRICT foreign keys should already be filtered")
 		}
 
-		nonLiteralUpdate := hasNonLiteral(updStmt.Exprs, nil, []vindexes.ChildFKInfo{fk})
+		nonLiteralUpdate := semantics.HasNonLiteral(updStmt.Exprs, nil, []vindexes.ChildFKInfo{fk})
 
 		// We need to select all the parent columns for the foreign key constraint, to use in the update of the child table.
 		var selectOffsets []int
@@ -506,7 +492,7 @@ func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, up
 	}
 
 	// We only support simple expressions in update queries for foreign key verification.
-	if hasNonLiteral(updStmt.Exprs, parentFks, restrictChildFks) {
+	if semantics.HasNonLiteral(updStmt.Exprs, parentFks, restrictChildFks) {
 		return nil, vterrors.VT12001("update expression with non-literal values with foreign key constraints")
 	}
 

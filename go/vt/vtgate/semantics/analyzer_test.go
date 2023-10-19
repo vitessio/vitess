@@ -1701,7 +1701,7 @@ func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
 			},
 			si: &FakeSI{
 				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-					"ks": vschemapb.Keyspace_FK_MANAGED,
+					"ks": vschemapb.Keyspace_managed,
 				},
 			},
 		},
@@ -2000,7 +2000,7 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			childFks, parentFks, _, err := tt.analyzer.getInvolvedForeignKeys(tt.stmt)
+			childFks, parentFks, _, _, err := tt.analyzer.getInvolvedForeignKeys(tt.stmt)
 			if tt.expectedErr != "" {
 				require.EqualError(t, err, tt.expectedErr)
 				return

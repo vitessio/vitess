@@ -132,6 +132,7 @@ type (
 		childForeignKeysInvolved  map[TableSet][]vindexes.ChildFKInfo
 		parentForeignKeysInvolved map[TableSet][]vindexes.ParentFKInfo
 		ChildFkToUpdExprs         map[string]sqlparser.UpdateExprs
+		FKChecksOff               bool
 	}
 
 	columnName struct {

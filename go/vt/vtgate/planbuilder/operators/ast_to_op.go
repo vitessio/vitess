@@ -214,7 +214,10 @@ func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement
 	// we should augment the semantic analysis to also tell us whether the given query has any cross shard parent foreign keys to validate.
 	// If there are, then we have to run the query with FOREIGN_KEY_CHECKS off because we can't be sure if the DML will succeed on MySQL with the checks on.
 	// So, we should set VerifyAllFKs to true. i.e. we should add `|| ctx.SemTable.RequireForeignKeyChecksOff()` to the below condition.
-	ctx.VerifyAllFKs = verifyAllFKs
+	if verifyAllFKs {
+		// If ctx.VerifyAllFKs is already true we don't want to turn it off.
+		ctx.VerifyAllFKs = verifyAllFKs
+	}
 
 	// From all the parent foreign keys involved, we should remove the one that we need to ignore.
 	err = ctx.SemTable.RemoveParentForeignKey(fkToIgnore)
