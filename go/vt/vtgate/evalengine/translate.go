@@ -193,7 +193,7 @@ func (ast *astCompiler) translateBindVar(arg *sqlparser.Argument) (Expr, error) 
 }
 
 func (ast *astCompiler) translateColOffset(col *sqlparser.Offset) (Expr, error) {
-	var typ Type
+	typ := UnknownType()
 	if ast.cfg.ResolveType != nil {
 		typ, _ = ast.cfg.ResolveType(col.Original)
 	}
@@ -216,7 +216,7 @@ func (ast *astCompiler) translateColName(colname *sqlparser.ColName) (Expr, erro
 	if err != nil {
 		return nil, err
 	}
-	var typ Type
+	typ := UnknownType()
 	if ast.cfg.ResolveType != nil {
 		typ, _ = ast.cfg.ResolveType(colname)
 	}
