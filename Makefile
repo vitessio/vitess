@@ -392,6 +392,10 @@ tools:
 	echo $$(date): Installing dependencies
 	./bootstrap.sh
 
+clean_tools:
+	source build.env
+	./tools/remove_dependencies.sh
+
 minimaltools:
 	echo $$(date): Installing minimal dependencies
 	BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
