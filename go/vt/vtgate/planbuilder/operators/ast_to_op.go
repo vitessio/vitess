@@ -28,6 +28,7 @@ import (
 )
 
 const foreignKeyConstraintValues = "fkc_vals"
+const foreignKeyUpdateExpr = "fkc_upd"
 
 // translateQueryToOp creates an operator tree that represents the input SELECT or UNION query
 func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op ops.Operator, err error) {

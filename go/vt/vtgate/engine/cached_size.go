@@ -280,13 +280,28 @@ func (cached *FkChild) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(128)
 	}
 	// field BVName string
 	size += hack.RuntimeAllocSize(int64(len(cached.BVName)))
 	// field Cols []int
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(8))
+	}
+	// field UpdateExprBvNames []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.UpdateExprBvNames)) * int64(16))
+		for _, elem := range cached.UpdateExprBvNames {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	// field UpdateExprCols []int
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.UpdateExprCols)) * int64(8))
+	}
+	// field CompExprCols []int
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.CompExprCols)) * int64(8))
 	}
 	// field Exec vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Exec.(cachedObject); ok {

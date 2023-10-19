@@ -25,9 +25,12 @@ import (
 
 // FkChild is used to represent a foreign key child table operation
 type FkChild struct {
-	BVName string
-	Cols   []int // indexes
-	Op     ops.Operator
+	BVName            string
+	Cols              []int // indexes
+	UpdateExprBvNames []string
+	UpdateExprCols    []int
+	CompExprCols      []int
+	Op                ops.Operator
 
 	noColumns
 	noPredicates
@@ -88,9 +91,12 @@ func (fkc *FkCascade) Clone(inputs []ops.Operator) ops.Operator {
 		}
 
 		newFkc.Children = append(newFkc.Children, &FkChild{
-			BVName: fkc.Children[idx-2].BVName,
-			Cols:   slices.Clone(fkc.Children[idx-2].Cols),
-			Op:     operator,
+			BVName:            fkc.Children[idx-2].BVName,
+			Cols:              slices.Clone(fkc.Children[idx-2].Cols),
+			UpdateExprCols:    slices.Clone(fkc.Children[idx-2].UpdateExprCols),
+			UpdateExprBvNames: slices.Clone(fkc.Children[idx-2].UpdateExprBvNames),
+			CompExprCols:      slices.Clone(fkc.Children[idx-2].CompExprCols),
+			Op:                operator,
 		})
 	}
 	return newFkc

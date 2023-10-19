@@ -139,9 +139,12 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 
 		childEngine := childLP.Primitive()
 		children = append(children, &engine.FkChild{
-			BVName: child.BVName,
-			Cols:   child.Cols,
-			Exec:   childEngine,
+			BVName:            child.BVName,
+			Cols:              child.Cols,
+			UpdateExprBvNames: child.UpdateExprBvNames,
+			UpdateExprCols:    child.UpdateExprCols,
+			CompExprCols:      child.CompExprCols,
+			Exec:              childEngine,
 		})
 	}
 

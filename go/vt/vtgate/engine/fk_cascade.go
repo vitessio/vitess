@@ -29,9 +29,12 @@ import (
 // FkChild contains the Child Primitive to be executed collecting the values from the Selection Primitive using the column indexes.
 // BVName is used to pass the value as bind variable to the Child Primitive.
 type FkChild struct {
-	BVName string
-	Cols   []int // indexes
-	Exec   Primitive
+	BVName            string
+	Cols              []int // indexes
+	UpdateExprBvNames []string
+	UpdateExprCols    []int
+	CompExprCols      []int
+	Exec              Primitive
 }
 
 // FkCascade is a primitive that implements foreign key cascading using Selection as values required to execute the FkChild Primitives.
@@ -82,35 +85,97 @@ func (fkc *FkCascade) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	}
 
 	for _, child := range fkc.Children {
+		if len(child.UpdateExprBvNames) > 0 {
+			err = fkc.executeNonLiteralUpdateFkChild(ctx, vcursor, bindVars, wantfields, selectionRes, child)
+		} else {
+			err = fkc.executeLiteralUpdateFkChild(ctx, vcursor, bindVars, wantfields, selectionRes, child)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// All the children are modified successfully, we can now execute the Parent Primitive.
+	return vcursor.ExecutePrimitive(ctx, fkc.Parent, bindVars, wantfields)
+}
+
+func (fkc *FkCascade) executeLiteralUpdateFkChild(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, selectionRes *sqltypes.Result, child *FkChild) error {
+	// We create a bindVariable for each Child
+	// that stores the tuple of columns involved in the fk constraint.
+	bv := &querypb.BindVariable{
+		Type: querypb.Type_TUPLE,
+	}
+	for _, row := range selectionRes.Rows {
+		// Create a tuple from each Row.
+		tuple := &querypb.Value{
+			Type: querypb.Type_TUPLE,
+		}
+		for _, colIdx := range child.Cols {
+			tuple.Values = append(tuple.Values,
+				sqltypes.ValueToProto(row[colIdx]))
+		}
+		bv.Values = append(bv.Values, tuple)
+	}
+	// Execute the child primitive, and bail out incase of failure.
+	// Since this Primitive is always executed in a transaction, the changes should
+	// be rolled back incase of an error.
+	bindVars[child.BVName] = bv
+	_, err := vcursor.ExecutePrimitive(ctx, child.Exec, bindVars, wantfields)
+	if err != nil {
+		return err
+	}
+	delete(bindVars, child.BVName)
+	return nil
+}
+
+func (fkc *FkCascade) executeNonLiteralUpdateFkChild(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, selectionRes *sqltypes.Result, child *FkChild) error {
+	for _, row := range selectionRes.Rows {
+		skipRow := true
+		for _, colIdx := range child.CompExprCols {
+			hasChanged, err := row[colIdx].ToBool()
+			if err != nil {
+				return err
+			}
+			if hasChanged {
+				skipRow = false
+				break
+			}
+		}
+		if skipRow {
+			continue
+		}
 		// We create a bindVariable for each Child
 		// that stores the tuple of columns involved in the fk constraint.
 		bv := &querypb.BindVariable{
 			Type: querypb.Type_TUPLE,
 		}
-		for _, row := range selectionRes.Rows {
-			// Create a tuple from each Row.
-			tuple := &querypb.Value{
-				Type: querypb.Type_TUPLE,
-			}
-			for _, colIdx := range child.Cols {
-				tuple.Values = append(tuple.Values,
-					sqltypes.ValueToProto(row[colIdx]))
-			}
-			bv.Values = append(bv.Values, tuple)
+		// Create a tuple from each Row.
+		tuple := &querypb.Value{
+			Type: querypb.Type_TUPLE,
 		}
+		for _, colIdx := range child.Cols {
+			tuple.Values = append(tuple.Values,
+				sqltypes.ValueToProto(row[colIdx]))
+		}
+		bv.Values = append(bv.Values, tuple)
 		// Execute the child primitive, and bail out incase of failure.
 		// Since this Primitive is always executed in a transaction, the changes should
 		// be rolled back incase of an error.
 		bindVars[child.BVName] = bv
-		_, err = vcursor.ExecutePrimitive(ctx, child.Exec, bindVars, wantfields)
+
+		for idx, updateExprBvName := range child.UpdateExprBvNames {
+			bindVars[updateExprBvName] = sqltypes.ValueBindVariable(row[child.UpdateExprCols[idx]])
+		}
+		_, err := vcursor.ExecutePrimitive(ctx, child.Exec, bindVars, wantfields)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		delete(bindVars, child.BVName)
+		for _, updateExprBvName := range child.UpdateExprBvNames {
+			delete(bindVars, updateExprBvName)
+		}
 	}
-
-	// All the children are modified successfully, we can now execute the Parent Primitive.
-	return vcursor.ExecutePrimitive(ctx, fkc.Parent, bindVars, wantfields)
+	return nil
 }
 
 // TryStreamExecute implements the Primitive interface.
@@ -124,6 +189,7 @@ func (fkc *FkCascade) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		})
 	}
 
+	// TODO: add execution for non-literal updates.
 	// Execute the Selection primitive to find the rows that are going to modified.
 	// This will be used to find the rows that need modification on the children.
 	err := vcursor.StreamExecutePrimitive(ctx, fkc.Selection, bindVars, wantfields, func(result *sqltypes.Result) error {
@@ -177,9 +243,12 @@ func (fkc *FkCascade) Inputs() ([]Primitive, []map[string]any) {
 	})
 	for idx, child := range fkc.Children {
 		inputsMap = append(inputsMap, map[string]any{
-			inputName: fmt.Sprintf("CascadeChild-%d", idx+1),
-			"BvName":  child.BVName,
-			"Cols":    child.Cols,
+			inputName:           fmt.Sprintf("CascadeChild-%d", idx+1),
+			"BvName":            child.BVName,
+			"Cols":              child.Cols,
+			"UpdateExprBvNames": child.UpdateExprBvNames,
+			"UpdateExprCols":    child.UpdateExprCols,
+			"CompExprCols":      child.CompExprCols,
 		})
 		inputs = append(inputs, child.Exec)
 	}
