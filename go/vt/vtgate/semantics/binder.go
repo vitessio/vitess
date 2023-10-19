@@ -19,6 +19,7 @@ package semantics
 import (
 	"strings"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -87,8 +88,8 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		}
 		b.recursive[node] = deps.recursive
 		b.direct[node] = deps.direct
-		if deps.typ != nil {
-			b.typer.setTypeFor(node, *deps.typ)
+		if deps.typ.Type != sqltypes.Unknown {
+			b.typer.setTypeFor(node, deps.typ)
 		}
 	case *sqlparser.CountStar:
 		b.bindCountStar(node)
@@ -102,8 +103,8 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		for i, expr := range info.exprs {
 			ae := expr.(*sqlparser.AliasedExpr)
 			b.recursive[ae.Expr] = info.recursive[i]
-			if t := info.types[i]; t != nil {
-				b.typer.exprTypes[ae.Expr] = *t
+			if t := info.types[i]; t.Type != sqltypes.Unknown {
+				b.typer.m[ae.Expr] = t
 			}
 		}
 	}

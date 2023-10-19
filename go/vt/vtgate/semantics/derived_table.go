@@ -22,6 +22,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -35,13 +36,13 @@ type DerivedTable struct {
 	isAuthoritative bool
 
 	recursive []TableSet
-	types     []*Type
+	types     []evalengine.Type
 }
 
 type unionInfo struct {
 	isAuthoritative bool
 	recursive       []TableSet
-	types           []*Type
+	types           []evalengine.Type
 	exprs           sqlparser.SelectExprs
 }
 
@@ -54,7 +55,7 @@ func createDerivedTableForExpressions(
 	org originable,
 	expanded bool,
 	recursiveDeps []TableSet,
-	types []*Type,
+	types []evalengine.Type,
 ) *DerivedTable {
 	vTbl := &DerivedTable{isAuthoritative: expanded, recursive: recursiveDeps, types: types}
 	for i, selectExpr := range expressions {

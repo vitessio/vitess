@@ -119,10 +119,9 @@ type OrderByParams struct {
 	WeightStringCol   int
 	Desc              bool
 	StarColFixedIndex int
+
 	// Type for knowing if the collation is relevant
-	Type querypb.Type
-	// Collation ID for comparison using collation
-	CollationID collations.ID
+	Type evalengine.Type
 }
 
 // String returns a string. Used for plan descriptions
@@ -140,8 +139,8 @@ func (obp OrderByParams) String() string {
 		val += " ASC"
 	}
 
-	if sqltypes.IsText(obp.Type) && obp.CollationID != collations.Unknown {
-		val += " COLLATE " + collations.Local().LookupName(obp.CollationID)
+	if sqltypes.IsText(obp.Type.Type) && obp.Type.Coll != collations.Unknown {
+		val += " COLLATE " + collations.Local().LookupName(obp.Type.Coll)
 	}
 	return val
 }
