@@ -20,9 +20,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -161,15 +163,21 @@ func nextOpOrder() int64 {
 }
 
 func TestInitialSetup(t *testing.T) {
-	repo, ok := os.LookupEnv("GITHUB_REPOSITORY") // `ok` tells us the env variable exists, hence that we are running in GitHub CI.
-	t.Logf("==== repo=%v", repo)
-	if ok && repo != "vitessio/vitess" {
-		// `vitessio/vitess` repository enjoys faster runners. Otherwise, GitHub CI has much slower runners
-		// and we have to reduce the workload
-		maxConcurrency = maxConcurrency / 2
-		singleConnectionSleepInterval = singleConnectionSleepInterval * 2
-	}
-	t.Logf("==== test setup: maxConcurrency=%v, singleConnectionSleepInterval=%v", maxConcurrency, singleConnectionSleepInterval)
+	// repo, ok := os.LookupEnv("GITHUB_REPOSITORY") // `ok` tells us the env variable exists, hence that we are running in GitHub CI.
+	// t.Logf("==== repo=%v", repo)
+	// if ok && repo != "vitessio/vitess" {
+	// 	// `vitessio/vitess` repository enjoys faster runners. Otherwise, GitHub CI has much slower runners
+	// 	// and we have to reduce the workload
+	// 	maxConcurrency = maxConcurrency / 2
+	// 	singleConnectionSleepInterval = singleConnectionSleepInterval * 2
+	// }
+	// t.Logf("==== test setup: maxConcurrency=%v, singleConnectionSleepInterval=%v", maxConcurrency, singleConnectionSleepInterval)
+
+	vCPUs := runtime.NumCPU()
+	maxConcurrency = vCPUs
+	sleepModifier := int(math.Max(float64(4-(vCPUs/4)), 1))
+	singleConnectionSleepInterval = time.Duration((int(singleConnectionSleepInterval.Milliseconds()) * sleepModifier) * 1000) // ms to us
+	t.Logf("==== test setup:  runtime.NumCPU()=%v, sleepModifier=%v, singleConnectionSleepInterval=%v", runtime.NumCPU(), sleepModifier, singleConnectionSleepInterval)
 }
 
 func TestMain(m *testing.M) {
