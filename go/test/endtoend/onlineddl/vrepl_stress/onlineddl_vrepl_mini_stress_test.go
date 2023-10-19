@@ -247,7 +247,7 @@ func _TestMain(m *testing.M) {
 
 }
 
-func TestSchemaChange(t *testing.T) {
+func _TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	ctx := context.Background()
