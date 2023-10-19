@@ -835,6 +835,9 @@ func TestInvalidQueries(t *testing.T) {
 	}, {
 		sql:  "select 1 from t1 where (id, id) in (select 1, 2, 3)",
 		serr: "Operand should contain 2 column(s)",
+	}, {
+		sql:  "WITH RECURSIVE cte (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte",
+		serr: "VT12001: unsupported: recursive common table expression",
 	}}
 
 	for _, tc := range tcases {
