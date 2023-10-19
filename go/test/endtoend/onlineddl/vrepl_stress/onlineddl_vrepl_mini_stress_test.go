@@ -530,6 +530,11 @@ func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.D
 }
 
 func runMultipleConnections(ctx context.Context, t *testing.T) {
+	// The workload for a 16 vCPU machine is:
+	// - Concurrency of 16
+	// - 2ms interval between queries for each connection
+	// As the number of vCPUs decreases, so do we decrease concurrency, and increase intervals. For example, on a 8 vCPU machine
+	// we run concurrency of 8 and interval of 4ms. On a 4 vCPU machine we run concurrency of 4 and interval of 8ms.
 	maxConcurrency := runtime.NumCPU()
 	sleepModifier := 16.0 / float64(maxConcurrency)
 	baseSleepInterval := 2 * time.Millisecond
