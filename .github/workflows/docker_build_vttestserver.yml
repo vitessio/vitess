@@ -1,4 +1,4 @@
-name: Docker Build VtTestServer
+name: Docker Build vttestserver
 on:
   push:
     branches:
@@ -7,7 +7,7 @@ on:
       - '*'
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Docker Build VtTestServer')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Docker Build vttestserver')
   cancel-in-progress: true
 
 permissions: read-all
@@ -15,9 +15,8 @@ permissions: read-all
 jobs:
   build_and_push:
     name: Build and push vitess/vttestserver Docker images
-    runs-on: ubuntu-latest
-#    runs-on: gh-hosted-runners-16cores-1
-#    if: github.repository == 'vitessio/vitess'
+    runs-on: gh-hosted-runners-16cores-1
+    if: github.repository == 'vitessio/vitess'
 
     strategy:
       fail-fast: true
@@ -45,7 +44,7 @@ jobs:
           context: .
           file: ${{ env.DOCKERFILE }}
           push: true
-          tags: frouioui/vttestserver:${{ matrix.branch }}
+          tags: vitess/vttestserver:${{ matrix.branch }}
 
       - name: Get the Git tag
         if: startsWith(github.ref, 'refs/tags/')
@@ -54,7 +53,7 @@ jobs:
       - name: Set Docker tag name
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          echo "DOCKER_TAG=frouioui/vttestserver:${TAG_NAME}-${{ matrix.branch }}" >> $GITHUB_ENV
+          echo "DOCKER_TAG=vitess/vttestserver:${TAG_NAME}-${{ matrix.branch }}" >> $GITHUB_ENV
 
       - name: Build and push on tags
         if: startsWith(github.ref, 'refs/tags/')
