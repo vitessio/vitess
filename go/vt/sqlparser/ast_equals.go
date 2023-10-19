@@ -4901,7 +4901,7 @@ func (cmp *Comparator) RefOfWith(a, b *With) bool {
 		return false
 	}
 	return a.Recursive == b.Recursive &&
-		cmp.SliceOfRefOfCommonTableExpr(a.ctes, b.ctes)
+		cmp.SliceOfRefOfCommonTableExpr(a.CTEs, b.CTEs)
 }
 
 // RefOfXorExpr does deep equals between the two objects.

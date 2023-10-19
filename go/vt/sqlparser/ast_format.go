@@ -138,11 +138,11 @@ func (node *With) Format(buf *TrackedBuffer) {
 	if node.Recursive {
 		buf.astPrintf(node, "recursive ")
 	}
-	ctesLength := len(node.ctes)
+	ctesLength := len(node.CTEs)
 	for i := 0; i < ctesLength-1; i++ {
-		buf.astPrintf(node, "%v, ", node.ctes[i])
+		buf.astPrintf(node, "%v, ", node.CTEs[i])
 	}
-	buf.astPrintf(node, "%v", node.ctes[ctesLength-1])
+	buf.astPrintf(node, "%v", node.CTEs[ctesLength-1])
 }
 
 // Format formats the node.

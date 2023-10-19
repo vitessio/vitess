@@ -148,7 +148,7 @@ type (
 
 	// With contains the lists of common table expression and specifies if it is recursive or not
 	With struct {
-		ctes      []*CommonTableExpr
+		CTEs      []*CommonTableExpr
 		Recursive bool
 	}
 

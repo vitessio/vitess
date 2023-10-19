@@ -206,12 +206,12 @@ func (node *With) formatFast(buf *TrackedBuffer) {
 	if node.Recursive {
 		buf.WriteString("recursive ")
 	}
-	ctesLength := len(node.ctes)
+	ctesLength := len(node.CTEs)
 	for i := 0; i < ctesLength-1; i++ {
-		node.ctes[i].formatFast(buf)
+		node.CTEs[i].formatFast(buf)
 		buf.WriteString(", ")
 	}
-	node.ctes[ctesLength-1].formatFast(buf)
+	node.CTEs[ctesLength-1].formatFast(buf)
 }
 
 // formatFast formats the node.

@@ -6570,18 +6570,18 @@ func (c *cow) copyOnRewriteRefOfWith(n *With, parent SQLNode) (out SQLNode, chan
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		var changedctes bool
-		_ctes := make([]*CommonTableExpr, len(n.ctes))
-		for x, el := range n.ctes {
+		var changedCTEs bool
+		_CTEs := make([]*CommonTableExpr, len(n.CTEs))
+		for x, el := range n.CTEs {
 			this, changed := c.copyOnRewriteRefOfCommonTableExpr(el, n)
-			_ctes[x] = this.(*CommonTableExpr)
+			_CTEs[x] = this.(*CommonTableExpr)
 			if changed {
-				changedctes = true
+				changedCTEs = true
 			}
 		}
-		if changedctes {
+		if changedCTEs {
 			res := *n
-			res.ctes = _ctes
+			res.CTEs = _CTEs
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)

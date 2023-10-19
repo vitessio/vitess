@@ -9474,10 +9474,10 @@ func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer repl
 			return true
 		}
 	}
-	for x, el := range node.ctes {
+	for x, el := range node.CTEs {
 		if !a.rewriteRefOfCommonTableExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(*With).ctes[idx] = newNode.(*CommonTableExpr)
+				parent.(*With).CTEs[idx] = newNode.(*CommonTableExpr)
 			}
 		}(x)) {
 			return false
