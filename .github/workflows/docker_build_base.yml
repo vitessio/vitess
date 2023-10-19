@@ -15,8 +15,9 @@ permissions: read-all
 jobs:
   build_and_push_base:
     name: Build and push vitess/base Docker images
-    runs-on: gh-hosted-runners-16cores-1
-    if: github.repository == 'vitessio/vitess'
+    runs-on: ubuntu-latest
+#    runs-on: gh-hosted-runners-16cores-1
+#    if: github.repository == 'vitessio/vitess'
 
     strategy:
       fail-fast: true
@@ -48,7 +49,7 @@ jobs:
           context: .
           file: ${{ env.DOCKERFILE }}
           push: true
-          tags: vitess/base:${{ matrix.branch }}
+          tags: frouioui/base:${{ matrix.branch }}
 
       ######
       # All code below only applies to new tags
@@ -62,7 +63,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') && matrix.branch == 'latest'
         run: |
           if [[ "${{ matrix.branch }}" == "latest" ]]; then
-            echo "DOCKER_TAG=vitess/base:${TAG_NAME}" >> $GITHUB_ENV
+            echo "DOCKER_TAG=frouioui/base:${TAG_NAME}" >> $GITHUB_ENV
           fi
 
       - name: Build and push on tags
@@ -77,8 +78,9 @@ jobs:
   build_and_push_k8s:
     needs: build_and_push_base
     name: Build and push vitess/k8s image
-    runs-on: gh-hosted-runners-16cores-1
-    if: github.repository == 'vitessio/vitess'
+    runs-on: ubuntu-latest
+#    runs-on: gh-hosted-runners-16cores-1
+#    if: github.repository == 'vitessio/vitess'
 
     strategy:
       fail-fast: true
@@ -105,7 +107,7 @@ jobs:
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
-          tags: vitess/k8s:latest
+          tags: frouioui/k8s:latest
           build-args: |
             VT_BASE_VER=latest
             DEBIAN_VER=${{ matrix.debian }}-slim
@@ -116,7 +118,7 @@ jobs:
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
-          tags: vitess/k8s:latest-${{ matrix.debian }}
+          tags: frouioui/k8s:latest-${{ matrix.debian }}
           build-args: |
             VT_BASE_VER=latest
             DEBIAN_VER=${{ matrix.debian }}-slim
@@ -138,8 +140,8 @@ jobs:
       - name: Set Docker tag name
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          echo "DOCKER_TAG_DEFAULT_DEBIAN=vitess/k8s:${TAG_NAME}" >> $GITHUB_ENV
-          echo "DOCKER_TAG=vitess/k8s:${TAG_NAME}-${{ matrix.debian }}" >> $GITHUB_ENV
+          echo "DOCKER_TAG_DEFAULT_DEBIAN=frouioui/k8s:${TAG_NAME}" >> $GITHUB_ENV
+          echo "DOCKER_TAG=frouioui/k8s:${TAG_NAME}-${{ matrix.debian }}" >> $GITHUB_ENV
 
       # Build and Push component image to DOCKER_TAG, applies to both debian version
       - name: Build and push on tags using Debian extension
@@ -170,14 +172,16 @@ jobs:
   build_and_push_components:
     needs: build_and_push_k8s
     name: Build and push vitess components Docker images
-    runs-on: gh-hosted-runners-16cores-1
-    if: github.repository == 'vitessio/vitess'
+    runs-on: ubuntu-latest
+#    runs-on: gh-hosted-runners-16cores-1
+#    if: github.repository == 'vitessio/vitess'
 
     strategy:
       fail-fast: true
       matrix:
         debian: [ bullseye, bookworm ]
-        component: [ vtadmin, vtorc, vtgate, vttablet, mysqlctld, mysqlctl, vtctl, vtctlclient, vtctld, logrotate, logtail ]
+        component: [ vtbackup, vtexplain ]
+#        component: [ vtadmin, vtorc, vtgate, vttablet, mysqlctld, mysqlctl, vtctl, vtctlclient, vtctld, logrotate, logtail, vtbackup, vtexplain ]
 
     steps:
       - name: Check out code
@@ -199,7 +203,7 @@ jobs:
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
-          tags: vitess/${{ matrix.component }}:latest
+          tags: frouioui/${{ matrix.component }}:latest
           build-args: |
             VT_BASE_VER=latest
             DEBIAN_VER=${{ matrix.debian }}-slim
@@ -210,7 +214,7 @@ jobs:
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
-          tags: vitess/${{ matrix.component }}:latest-${{ matrix.debian }}
+          tags: frouioui/${{ matrix.component }}:latest-${{ matrix.debian }}
           build-args: |
             VT_BASE_VER=latest
             DEBIAN_VER=${{ matrix.debian }}-slim
@@ -232,8 +236,8 @@ jobs:
       - name: Set Docker tag name
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          echo "DOCKER_TAG_DEFAULT_DEBIAN=vitess/${{ matrix.component }}:${TAG_NAME}" >> $GITHUB_ENV
-          echo "DOCKER_TAG=vitess/${{ matrix.component }}:${TAG_NAME}-${{ matrix.debian }}" >> $GITHUB_ENV
+          echo "DOCKER_TAG_DEFAULT_DEBIAN=frouioui/${{ matrix.component }}:${TAG_NAME}" >> $GITHUB_ENV
+          echo "DOCKER_TAG=frouioui/${{ matrix.component }}:${TAG_NAME}-${{ matrix.debian }}" >> $GITHUB_ENV
 
       # Build and Push component image to DOCKER_TAG, applies to both debian version
       - name: Build and push on tags using Debian extension
