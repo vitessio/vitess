@@ -195,7 +195,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 		Version:         "8.0.32",
 	}
 	if db != nil {
-		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute, 0, 0)
+		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", nil, 5, time.Minute, 0, 0)
 		result.appPool.Open(db.ConnParams())
 	}
 	return result

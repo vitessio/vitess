@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/pools"
+	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -170,8 +171,8 @@ func (sf *StatefulConnectionPool) GetAndLock(id int64, reason string) (*Stateful
 
 // NewConn creates a new StatefulConnection. It will be created from either the normal pool or
 // the found_rows pool, depending on the options provided
-func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.ExecuteOptions, setting *pools.Setting) (*StatefulConnection, error) {
-	var conn *connpool.DBConn
+func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.ExecuteOptions, setting *smartconnpool.Setting) (*StatefulConnection, error) {
+	var conn *connpool.PooledConn
 	var err error
 
 	if options.GetClientFoundRows() {
@@ -180,6 +181,13 @@ func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.
 		conn, err = sf.conns.Get(ctx, setting)
 	}
 	if err != nil {
+		return nil, err
+	}
+
+	// A StatefulConnection is usually part of a transaction, so it does not support retries.
+	// Ensure that it's actually a valid connection before we return it or the transaction will fail.
+	if err = conn.Conn.ConnCheck(ctx); err != nil {
+		conn.Recycle()
 		return nil, err
 	}
 

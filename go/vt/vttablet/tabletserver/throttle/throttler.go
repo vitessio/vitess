@@ -544,7 +544,7 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, pro
 	}
 	defer conn.Recycle()
 
-	tm, err := conn.Exec(ctx, probe.MetricQuery, 1, true)
+	tm, err := conn.Conn.Exec(ctx, probe.MetricQuery, 1, true)
 	if err != nil {
 		metric.Err = err
 		return metric

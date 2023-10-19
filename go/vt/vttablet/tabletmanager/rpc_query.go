@@ -135,7 +135,7 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	if err != nil {
 		return nil, err
 	}
-	result, err := conn.ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
+	result, err := conn.Conn.ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
 	return sqltypes.ResultToProto3(result), err
 }
 

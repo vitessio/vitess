@@ -414,12 +414,12 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	defer conn.Recycle()
 
 	// curTime will be saved into lastChange after schema is loaded.
-	curTime, err := se.mysqlTime(ctx, conn)
+	curTime, err := se.mysqlTime(ctx, conn.Conn)
 	if err != nil {
 		return err
 	}
 
-	tableData, err := getTableData(ctx, conn, includeStats)
+	tableData, err := getTableData(ctx, conn.Conn, includeStats)
 	if err != nil {
 		return vterrors.Wrapf(err, "in Engine.reload(), reading tables")
 	}
@@ -428,19 +428,19 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 	// changedViews are the views that have changed. We can't use the same createTime logic for views because, MySQL
 	// doesn't update the create_time field for views when they are altered. This is annoying, but something we have to work around.
-	changedViews, err := getChangedViewNames(ctx, conn, shouldUseDatabase)
+	changedViews, err := getChangedViewNames(ctx, conn.Conn, shouldUseDatabase)
 	if err != nil {
 		return err
 	}
 	// mismatchTables stores the tables whose createTime in our cache doesn't match the createTime stored in the database.
 	// This can happen if a primary crashed right after a DML succeeded, before it could reload its state. If all the replicas
 	// are able to reload their cache before one of them is promoted, then the database information would be out of sync.
-	mismatchTables, err := se.getMismatchedTableNames(ctx, conn, shouldUseDatabase)
+	mismatchTables, err := se.getMismatchedTableNames(ctx, conn.Conn, shouldUseDatabase)
 	if err != nil {
 		return err
 	}
 
-	err = se.updateInnoDBRowsRead(ctx, conn)
+	err = se.updateInnoDBRowsRead(ctx, conn.Conn)
 	if err != nil {
 		return err
 	}
@@ -526,7 +526,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	dropped := se.getDroppedTables(curTables, changedViews, mismatchTables)
 
 	// Populate PKColumns for changed tables.
-	if err := se.populatePrimaryKeys(ctx, conn, changedTables); err != nil {
+	if err := se.populatePrimaryKeys(ctx, conn.Conn, changedTables); err != nil {
 		return err
 	}
 
@@ -534,7 +534,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	if shouldUseDatabase {
 		// If reloadDataInDB succeeds, then we don't want to prevent sending the broadcast notification.
 		// So, we do this step in the end when we can receive no more errors that fail the reload operation.
-		err = reloadDataInDB(ctx, conn, altered, created, dropped)
+		err = reloadDataInDB(ctx, conn.Conn, altered, created, dropped)
 		if err != nil {
 			log.Errorf("error in updating schema information in Engine.reload() - %v", err)
 		}
@@ -589,7 +589,7 @@ func (se *Engine) getDroppedTables(curTables map[string]bool, changedViews map[s
 	return maps2.Values(dropped)
 }
 
-func getTableData(ctx context.Context, conn *connpool.DBConn, includeStats bool) (*sqltypes.Result, error) {
+func getTableData(ctx context.Context, conn *connpool.Conn, includeStats bool) (*sqltypes.Result, error) {
 	var showTablesQuery string
 	if includeStats {
 		showTablesQuery = conn.BaseShowTablesWithSizes()
@@ -599,7 +599,7 @@ func getTableData(ctx context.Context, conn *connpool.DBConn, includeStats bool)
 	return conn.Exec(ctx, showTablesQuery, maxTableCount, false)
 }
 
-func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.DBConn) error {
+func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.Conn) error {
 	readRowsData, err := conn.Exec(ctx, mysql.ShowRowsRead, 10, false)
 	if err != nil {
 		return err
@@ -618,7 +618,7 @@ func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.DBCon
 	return nil
 }
 
-func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
+func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.Conn) (int64, error) {
 	// Keep `SELECT UNIX_TIMESTAMP` is in uppercase because binlog server queries are case sensitive and expect it to be so.
 	tm, err := conn.Exec(ctx, "SELECT UNIX_TIMESTAMP()", 1, false)
 	if err != nil {
@@ -635,7 +635,7 @@ func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, 
 }
 
 // populatePrimaryKeys populates the PKColumns for the specified tables.
-func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.DBConn, tables map[string]*Table) error {
+func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.Conn, tables map[string]*Table) error {
 	pkData, err := conn.Exec(ctx, mysql.BaseShowPrimary, maxTableCount, false)
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get table primary key info: %v", err)
@@ -789,7 +789,7 @@ func newMinimalTable(st *Table) *binlogdatapb.MinimalTable {
 }
 
 // GetConnection returns a connection from the pool
-func (se *Engine) GetConnection(ctx context.Context) (*connpool.DBConn, error) {
+func (se *Engine) GetConnection(ctx context.Context) (*connpool.PooledConn, error) {
 	return se.conns.Get(ctx, nil)
 }
 

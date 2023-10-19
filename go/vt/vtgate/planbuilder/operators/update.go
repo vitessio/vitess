@@ -192,7 +192,14 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		Comments: updStmt.Comments,
 	}
 
-	return sqc.getRootOperator(route), nil
+	decorator := func(op ops.Operator) ops.Operator {
+		return &LockAndComment{
+			Source: op,
+			Lock:   sqlparser.ShareModeLock,
+		}
+	}
+
+	return sqc.getRootOperator(route, decorator), nil
 }
 
 func buildFkOperator(ctx *plancontext.PlanningContext, updOp ops.Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) (ops.Operator, error) {
