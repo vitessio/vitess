@@ -298,7 +298,7 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 		fkChildren = append(fkChildren, fkChild)
 	}
 
-	selectionOp, err := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, nil, sqlparser.ForUpdateLock)
+	selectionOp, err := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, updStmt.OrderBy, nil, sqlparser.ForUpdateLock)
 	if err != nil {
 		return nil, err
 	}
@@ -616,6 +616,7 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 				sqlparser.NewJoinCondition(joinCond, nil)),
 		},
 		sqlparser.NewWhere(sqlparser.WhereClause, whereCond),
+		nil,
 		sqlparser.NewLimitWithoutOffset(1),
 		sqlparser.ShareModeLock)
 }
@@ -685,6 +686,7 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updSt
 				sqlparser.NewJoinCondition(joinCond, nil)),
 		},
 		sqlparser.NewWhere(sqlparser.WhereClause, whereCond),
+		nil,
 		sqlparser.NewLimitWithoutOffset(1),
 		sqlparser.ShareModeLock)
 }

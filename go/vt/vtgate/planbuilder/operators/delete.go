@@ -190,7 +190,7 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.O
 		}
 		fkChildren = append(fkChildren, fkChild)
 	}
-	selectionOp, err := createSelectionOp(ctx, selectExprs, delStmt.TableExprs, delStmt.Where, nil, sqlparser.ForUpdateLock)
+	selectionOp, err := createSelectionOp(ctx, selectExprs, delStmt.TableExprs, delStmt.Where, nil, nil, sqlparser.ForUpdateLock)
 	if err != nil {
 		return nil, err
 	}

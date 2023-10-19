@@ -398,6 +398,7 @@ func createSelectionOp(
 	selectExprs []sqlparser.SelectExpr,
 	tableExprs sqlparser.TableExprs,
 	where *sqlparser.Where,
+	orderBy sqlparser.OrderBy,
 	limit *sqlparser.Limit,
 	lock sqlparser.Lock,
 ) (ops.Operator, error) {
@@ -405,6 +406,7 @@ func createSelectionOp(
 		SelectExprs: selectExprs,
 		From:        tableExprs,
 		Where:       where,
+		OrderBy:     orderBy,
 		Limit:       limit,
 		Lock:        lock,
 	}
