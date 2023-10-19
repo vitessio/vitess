@@ -132,6 +132,9 @@ func (fkc *FkCascade) executeNonLiteralUpdateFkChild(ctx context.Context, vcurso
 	for _, row := range selectionRes.Rows {
 		skipRow := true
 		for _, colIdx := range child.CompExprCols {
+			if row[colIdx].IsNull() {
+				continue
+			}
 			hasChanged, err := row[colIdx].ToBool()
 			if err != nil {
 				return err
