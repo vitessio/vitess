@@ -116,7 +116,7 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 	return &SemTable{
 		Recursive:                 a.binder.recursive,
 		Direct:                    a.binder.direct,
-		ExprTypes:                 a.typer._exprTypes,
+		ExprTypes:                 a.typer.m,
 		Tables:                    a.tables.Tables,
 		NotSingleRouteErr:         a.projErr,
 		NotUnshardedErr:           a.unshardedErr,

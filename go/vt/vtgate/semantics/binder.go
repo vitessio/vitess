@@ -104,7 +104,7 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 			ae := expr.(*sqlparser.AliasedExpr)
 			b.recursive[ae.Expr] = info.recursive[i]
 			if t := info.types[i]; t.Type != sqltypes.Unknown {
-				b.typer._exprTypes[ae.Expr] = t
+				b.typer.m[ae.Expr] = t
 			}
 		}
 	}
