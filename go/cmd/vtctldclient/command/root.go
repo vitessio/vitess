@@ -44,6 +44,10 @@ import (
 	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/workflow"
 )
 
+// The --server value if you want to use a "local"
+// vtctld server.
+const useBundledVtctld = "bundled"
+
 var (
 	// VtctldClientProtocol is the protocol to use when creating the vtctldclient.VtctldClient.
 	VtctldClientProtocol = "grpc"
@@ -130,6 +134,9 @@ const skipClientCreationKey = "skip_client_creation"
 // getClientForCommand returns a vtctldclient.VtctldClient for a given command.
 // It validates that --server was passed to the CLI for commands that need it.
 func getClientForCommand(cmd *cobra.Command) (vtctldclient.VtctldClient, error) {
+	if server == useBundledVtctld {
+		return nil, nil // The command will need to later setup a local vtctld server and client.
+	}
 	if skipStr, ok := cmd.Annotations[skipClientCreationKey]; ok {
 		skipClientCreation, err := strconv.ParseBool(skipStr)
 		if err != nil {

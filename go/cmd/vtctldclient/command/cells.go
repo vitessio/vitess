@@ -17,12 +17,23 @@ limitations under the License.
 package command
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
+	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
+	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	_ "vitess.io/vitess/go/vt/topo/consultopo"
+	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
+	_ "vitess.io/vitess/go/vt/topo/zk2topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -33,13 +44,20 @@ var (
 	AddCellInfo = &cobra.Command{
 		Use:   "AddCellInfo --root <root> [--server-address <addr>] <cell>",
 		Short: "Registers a local topology service in a new cell by creating the CellInfo.",
-		Long: `Registers a local topology service in a new cell by creating the CellInfo
+		Long: fmt.Sprintf(`Registers a local topology service in a new cell by creating the CellInfo
 with the provided parameters.
 
 The address will be used to connect to the topology service, and Vitess data will
-be stored starting at the provided root.`,
+be stored starting at the provided root.
+
+If the --boostrap flag is specified then you must specify a value of '%s' for --server
+and also provide at least one topology server endpoint using --topology-servers so that
+we do not attempt to connect to a remote vtctld server and vtctldclient can instead
+connect directly to the topology server in order to create the cell that you can then
+start vtctld in.`, useBundledVtctld),
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
+		PreRunE:               validateAddCellInfoFlags,
 		RunE:                  commandAddCellInfo,
 	}
 	// AddCellsAlias makes an AddCellsAlias gRPC call to a vtctld.
@@ -119,21 +137,72 @@ If a value is empty, it is ignored.`,
 	}
 )
 
-var addCellInfoOptions topodatapb.CellInfo
+var addCellInfoOptions = struct {
+	cellInfo    topodatapb.CellInfo
+	bootstrap   bool
+	topoImpl    string
+	topoRoot    string
+	topoServers []string
+}{}
+
+func validateAddCellInfoFlags(cmd *cobra.Command, args []string) error {
+	if addCellInfoOptions.bootstrap {
+		// You must at least specify one topology server to bootstrap the cluster.
+		if len(addCellInfoOptions.topoServers) == 0 {
+			return fmt.Errorf("you must specify at least one topology server to bootstrap the cluster")
+		}
+		for _, topoServer := range addCellInfoOptions.topoServers {
+			if _, _, err := net.SplitHostPort(topoServer); err != nil {
+				return fmt.Errorf("invalid topology server address (%s): %v", topoServer, err)
+			}
+		}
+	}
+
+	return nil
+}
 
 func commandAddCellInfo(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
-	cell := cmd.Flags().Arg(0)
-	_, err := client.AddCellInfo(commandCtx, &vtctldatapb.AddCellInfoRequest{
+	var (
+		cell   = cmd.Flags().Arg(0)
+		ctx    = commandCtx
+		cancel context.CancelFunc
+	)
+
+	if addCellInfoOptions.bootstrap {
+		ts, err := topo.OpenServer(addCellInfoOptions.topoImpl, strings.Join(addCellInfoOptions.topoServers, ","), addCellInfoOptions.topoRoot)
+		if err != nil {
+			return fmt.Errorf("failed to connect to the topology server: %v", err)
+		}
+		defer ts.Close()
+
+		// Use internal vtcltd server implementation.
+		// Register a nil grpc handler -- we will not use tmclient at all.
+		tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
+			return nil
+		})
+		vtctld := grpcvtctldserver.NewVtctldServer(ts)
+		localvtctldclient.SetServer(vtctld)
+		VtctldClientProtocol = "local"
+		client, err = vtctldclient.New(VtctldClientProtocol, "")
+		if err != nil {
+			return fmt.Errorf("failed to setup internal vtctld server: %v", err)
+		}
+
+		ctx, cancel = context.WithTimeout(commandCtx, topo.RemoteOperationTimeout)
+		defer cancel()
+	}
+
+	_, err := client.AddCellInfo(ctx, &vtctldatapb.AddCellInfoRequest{
 		Name:     cell,
-		CellInfo: &addCellInfoOptions,
+		CellInfo: &addCellInfoOptions.cellInfo,
 	})
 	if err != nil {
 		return err
 	}
-
 	fmt.Printf("Created cell: %s\n", cell)
+
 	return nil
 }
 
@@ -288,8 +357,12 @@ func commandUpdateCellsAlias(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	AddCellInfo.Flags().StringVarP(&addCellInfoOptions.ServerAddress, "server-address", "a", "", "The address the topology server will connect to for this cell.")
-	AddCellInfo.Flags().StringVarP(&addCellInfoOptions.Root, "root", "r", "", "The root path the topology server will use for this cell.")
+	AddCellInfo.Flags().StringVarP(&addCellInfoOptions.cellInfo.ServerAddress, "server-address", "a", "", "The address the topology server will connect to for this cell.")
+	AddCellInfo.Flags().StringVarP(&addCellInfoOptions.cellInfo.Root, "root", "r", "", "The root path the topology server will use for this cell.")
+	AddCellInfo.Flags().BoolVar(&addCellInfoOptions.bootstrap, "bootstrap", false, fmt.Sprintf("Should we create the cell directly in the topology server(s) to bootstrap the cluster so that we can then start a vtctld process in this cell. Note: you will also need to specify a value of '%s' for --server when using this flag.", useBundledVtctld))
+	AddCellInfo.Flags().StringVar(&addCellInfoOptions.topoImpl, "topology-implementation", "etcd2", "The topology server implementation used.")
+	AddCellInfo.Flags().StringSliceVar(&addCellInfoOptions.topoServers, "topology-servers", nil, "The endpoints (host and port) to use when connecting directly to the topology server(s) when boostrapping a cluster.")
+	AddCellInfo.Flags().StringVar(&addCellInfoOptions.topoRoot, "topology-global-root", "/vitess/global", "The topology server root path to use.")
 	AddCellInfo.MarkFlagRequired("root")
 	Root.AddCommand(AddCellInfo)
 
