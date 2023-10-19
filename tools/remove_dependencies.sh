@@ -55,13 +55,13 @@ uninstall_etcd() {
     local version="$1"
     local dist="$2"
 
-    case uname in
+    case $uname in
         Linux)  local platform=linux; local ext=tar.gz;;
         Darwin) local platform=darwin; local ext=zip;;
         *)   echo "Etcd not installed. Ignoring.."; return;;
     esac
 
-    case get_arch in
+    case $get_arch in
         aarch64)  local target=arm64;;
         x86_64)  local target=amd64;;
         arm64)  local target=arm64;;
@@ -99,13 +99,13 @@ uninstall_toxiproxy() {
     echo "Removing toxiproxy..."
     local dist="$1"
 
-    case uname in
+    case $uname in
         Linux)  local platform=linux;;
         Darwin) local platform=darwin;;
         *)   echo "Toxiproxy not installed. Ignoring.."; return;;
     esac
 
-    case get_arch in
+    case $get_arch in
         aarch64)  local target=arm64;;
         x86_64)  local target=amd64;;
         arm64)  local target=arm64;;
