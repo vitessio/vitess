@@ -24,6 +24,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -42,7 +43,7 @@ func (r *RealTable) dependencies(colName string, org originable) (dependencies, 
 	ts := org.tableSetFor(r.ASTNode)
 	for _, info := range r.getColumns() {
 		if strings.EqualFold(info.Name, colName) {
-			return createCertain(ts, ts, &info.Type), nil
+			return createCertain(ts, ts, info.Type), nil
 		}
 	}
 
@@ -114,9 +115,9 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 
 		cols = append(cols, ColumnInfo{
 			Name: col.Name.String(),
-			Type: Type{
-				Type:      col.Type,
-				Collation: collation,
+			Type: evalengine.Type{
+				Type: col.Type,
+				Coll: collation,
 			},
 		})
 		nameMap[col.Name.String()] = nil

@@ -27,6 +27,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -62,7 +63,7 @@ type (
 	// ColumnInfo contains information about columns
 	ColumnInfo struct {
 		Name string
-		Type Type
+		Type evalengine.Type
 	}
 
 	// ExprDependencies stores the tables that an expression depends on as a map
@@ -88,7 +89,7 @@ type (
 		// from the connection's default collation.
 		Collation collations.ID
 		// ExprTypes maps expressions to their respective types in the query.
-		ExprTypes map[sqlparser.Expr]Type
+		ExprTypes map[sqlparser.Expr]evalengine.Type
 
 		// NotSingleRouteErr stores errors related to missing schema information.
 		// This typically occurs when a column's existence is uncertain.
@@ -492,9 +493,9 @@ func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.Sel
 }
 
 // TypeForExpr returns the type of expressions in the query
-func (st *SemTable) TypeForExpr(e sqlparser.Expr) (sqltypes.Type, collations.ID, bool) {
+func (st *SemTable) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
 	if typ, found := st.ExprTypes[e]; found {
-		return typ.Type, typ.Collation, true
+		return typ, true
 	}
 
 	// We add a lot of WeightString() expressions to queries at late stages of the planning,
@@ -502,10 +503,14 @@ func (st *SemTable) TypeForExpr(e sqlparser.Expr) (sqltypes.Type, collations.ID,
 	// are VarBinary, since that's the only type that WeightString() can return.
 	_, isWS := e.(*sqlparser.WeightStringFuncExpr)
 	if isWS {
-		return sqltypes.VarBinary, collations.CollationBinaryID, true
+		return evalengine.Type{
+			Type:     sqltypes.VarBinary,
+			Coll:     collations.CollationBinaryID,
+			Nullable: false, // TODO: we should check if the argument is nullable
+		}, true
 	}
 
-	return sqltypes.Unknown, collations.Unknown, false
+	return evalengine.UnknownType(), false
 }
 
 // NeedsWeightString returns true if the given expression needs weight_string to do safe comparisons
@@ -518,7 +523,7 @@ func (st *SemTable) NeedsWeightString(e sqlparser.Expr) bool {
 		if !found {
 			return true
 		}
-		return typ.Collation == collations.Unknown && !sqltypes.IsNumber(typ.Type)
+		return typ.Coll == collations.Unknown && !sqltypes.IsNumber(typ.Type)
 	}
 }
 
