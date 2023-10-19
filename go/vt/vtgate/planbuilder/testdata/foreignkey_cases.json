@@ -822,8 +822,17 @@
             "Cols": [
               0
             ],
+            "CompExprCols": [
+              2
+            ],
             "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (:fkc_upd is null or (u_tbl3.col3) not in ((:fkc_upd)))",
-            "Table": "u_tbl3"
+            "Table": "u_tbl3",
+            "UpdateExprBvNames": [
+              "fkc_upd"
+            ],
+            "UpdateExprCols": [
+              1
+            ]
           },
           {
             "InputName": "Parent",
@@ -872,6 +881,15 @@
             "BvName": "fkc_vals",
             "Cols": [
               0
+            ],
+            "CompExprCols": [
+              2
+            ],
+            "UpdateExprBvNames": [
+              "fkc_upd"
+            ],
+            "UpdateExprCols": [
+              1
             ],
             "Inputs": [
               {
@@ -922,6 +940,15 @@
             "BvName": "fkc_vals2",
             "Cols": [
               0
+            ],
+            "CompExprCols": [
+              2
+            ],
+            "UpdateExprBvNames": [
+              "fkc_upd1"
+            ],
+            "UpdateExprCols": [
+              1
             ],
             "Inputs": [
               {

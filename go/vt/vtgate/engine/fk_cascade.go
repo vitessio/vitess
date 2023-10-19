@@ -242,14 +242,17 @@ func (fkc *FkCascade) Inputs() ([]Primitive, []map[string]any) {
 		inputName: "Selection",
 	})
 	for idx, child := range fkc.Children {
-		inputsMap = append(inputsMap, map[string]any{
-			inputName:           fmt.Sprintf("CascadeChild-%d", idx+1),
-			"BvName":            child.BVName,
-			"Cols":              child.Cols,
-			"UpdateExprBvNames": child.UpdateExprBvNames,
-			"UpdateExprCols":    child.UpdateExprCols,
-			"CompExprCols":      child.CompExprCols,
-		})
+		childInfoMap := map[string]any{
+			inputName: fmt.Sprintf("CascadeChild-%d", idx+1),
+			"BvName":  child.BVName,
+			"Cols":    child.Cols,
+		}
+		if len(child.UpdateExprBvNames) > 0 {
+			childInfoMap["UpdateExprBvNames"] = child.UpdateExprBvNames
+			childInfoMap["UpdateExprCols"] = child.UpdateExprCols
+			childInfoMap["CompExprCols"] = child.CompExprCols
+		}
+		inputsMap = append(inputsMap, childInfoMap)
 		inputs = append(inputs, child.Exec)
 	}
 	inputs = append(inputs, fkc.Parent)
