@@ -137,9 +137,7 @@ var (
 )
 
 var (
-	maxConcurrency                = 20
-	singleConnectionSleepInterval = 2 * time.Millisecond
-	countIterations               = 5
+	countIterations = 5
 )
 
 const (
@@ -161,26 +159,7 @@ func nextOpOrder() int64 {
 	return opOrder
 }
 
-func TestInitialSetup(t *testing.T) {
-	// repo, ok := os.LookupEnv("GITHUB_REPOSITORY") // `ok` tells us the env variable exists, hence that we are running in GitHub CI.
-	// t.Logf("==== repo=%v", repo)
-	// if ok && repo != "vitessio/vitess" {
-	// 	// `vitessio/vitess` repository enjoys faster runners. Otherwise, GitHub CI has much slower runners
-	// 	// and we have to reduce the workload
-	// 	maxConcurrency = maxConcurrency / 2
-	// 	singleConnectionSleepInterval = singleConnectionSleepInterval * 2
-	// }
-	// t.Logf("==== test setup: maxConcurrency=%v, singleConnectionSleepInterval=%v", maxConcurrency, singleConnectionSleepInterval)
-
-	vCPUs := runtime.NumCPU()
-	maxConcurrency = vCPUs
-	sleepModifier := 16.0 / float64(vCPUs)
-	singleConnectionSleepIntervalNanoseconds := float64(singleConnectionSleepInterval.Nanoseconds()) * sleepModifier
-	singleConnectionSleepInterval = time.Duration(int64(singleConnectionSleepIntervalNanoseconds))
-	t.Logf("==== test setup:  runtime.NumCPU()=%v, sleepModifier=%v, singleConnectionSleepInterval=%v", runtime.NumCPU(), sleepModifier, singleConnectionSleepInterval)
-}
-
-func _TestMain(m *testing.M) {
+func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
@@ -247,7 +226,7 @@ func _TestMain(m *testing.M) {
 
 }
 
-func _TestSchemaChange(t *testing.T) {
+func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	ctx := context.Background()
@@ -517,7 +496,7 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 	return err
 }
 
-func runSingleConnection(ctx context.Context, t *testing.T) {
+func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.Duration) {
 	log.Infof("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -528,7 +507,7 @@ func runSingleConnection(ctx context.Context, t *testing.T) {
 	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
 	require.Nil(t, err)
 
-	ticker := time.NewTicker(singleConnectionSleepInterval)
+	ticker := time.NewTicker(sleepInterval)
 	defer ticker.Stop()
 
 	for {
@@ -551,13 +530,19 @@ func runSingleConnection(ctx context.Context, t *testing.T) {
 }
 
 func runMultipleConnections(ctx context.Context, t *testing.T) {
-	log.Infof("Running multiple connections")
+	maxConcurrency := runtime.NumCPU()
+	sleepModifier := 16.0 / float64(maxConcurrency)
+	baseSleepInterval := 2 * time.Millisecond
+	singleConnectionSleepIntervalNanoseconds := float64(baseSleepInterval.Nanoseconds()) * sleepModifier
+	sleepInterval := time.Duration(int64(singleConnectionSleepIntervalNanoseconds))
+
+	log.Infof("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval)
 	var wg sync.WaitGroup
 	for i := 0; i < maxConcurrency; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			runSingleConnection(ctx, t)
+			runSingleConnection(ctx, t, sleepInterval)
 		}()
 	}
 	wg.Wait()
