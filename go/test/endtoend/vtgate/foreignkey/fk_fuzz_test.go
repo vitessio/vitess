@@ -643,6 +643,54 @@ func TestFkFuzzTest(t *testing.T) {
 	}
 }
 
+// TestFkOneCase is for testing a specific set of queries. On the CI this test won't run since we'll keep the queries empty.
+func TestFkOneCase(t *testing.T) {
+	queries := []string{
+		"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+		"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+		"update fk_t10 set col = id + 3 order by id desc",
+	}
+	if len(queries) == 0 {
+		t.Skip("No queries to test")
+	}
+	// Wait for schema-tracking to be complete.
+	waitForSchemaTrackingForFkTables(t)
+	// Remove all the foreign key constraints for all the replicas.
+	// We can then verify that the replica, and the primary have the same data, to ensure
+	// that none of the queries ever lead to cascades/updates on MySQL level.
+	for _, ks := range []string{shardedKs, unshardedKs} {
+		replicas := getReplicaTablets(ks)
+		for _, replica := range replicas {
+			removeAllForeignKeyConstraints(t, replica, ks)
+		}
+	}
+
+	mcmp, closer := start(t)
+	defer closer()
+	_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
+
+	// Ensure that the Vitess database is originally empty
+	ensureDatabaseState(t, mcmp.VtConn, true)
+	ensureDatabaseState(t, mcmp.MySQLConn, true)
+
+	for _, query := range queries {
+		_, _ = mcmp.ExecAllowAndCompareError(query)
+		if t.Failed() {
+			log.Errorf("Query failed - %v", query)
+			break
+		}
+	}
+	vitessData := collectFkTablesState(mcmp.VtConn)
+	for idx, table := range fkTables {
+		log.Errorf("Vitess data for %v -\n%v", table, vitessData[idx].Rows)
+	}
+
+	// ensure Vitess database has some data. This ensures not all the commands failed.
+	ensureDatabaseState(t, mcmp.VtConn, false)
+	// Verify the consistency of the data.
+	verifyDataIsCorrect(t, mcmp, 1)
+}
+
 // ensureDatabaseState ensures that the database is either empty or not.
 func ensureDatabaseState(t *testing.T, vtconn *mysql.Conn, empty bool) {
 	results := collectFkTablesState(vtconn)
