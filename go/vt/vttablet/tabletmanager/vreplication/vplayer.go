@@ -154,6 +154,16 @@ func (vp *vplayer) play(ctx context.Context) error {
 // - If unset (0), foreign key checks are enabled.
 // updateFKCheck also updates the state for the first row event that this vplayer and hence the connection sees.
 func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
+	mustUpdate := false
+	if vp.vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) {
+		mustUpdate = true
+	} else if vp.vr.state == binlogdatapb.VReplicationWorkflowState_Running {
+		mustUpdate = true
+	}
+	if !mustUpdate {
+		log.Infof("Skipping foreign_key_checks update as the vreplication workflow is not in Running state or is not an atomic copy")
+		return nil
+	}
 	dbForeignKeyChecksEnabled := true
 	if flags2&NoForeignKeyCheckFlagBitmask == NoForeignKeyCheckFlagBitmask {
 		dbForeignKeyChecksEnabled = false

@@ -27,6 +27,7 @@ import (
 	"os/exec"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -56,6 +57,11 @@ const (
 	workflowStateTimeout = 90 * time.Second
 )
 
+func setSidecarDBName(dbName string) {
+	sidecarDBName = dbName
+	sidecarDBIdentifier = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
+}
+
 func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines string) {
 	queries := strings.Split(lines, "\n")
 	for _, query := range queries {
@@ -65,8 +71,31 @@ func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines 
 		execVtgateQuery(t, conn, database, string(query))
 	}
 }
+
+func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout time.Duration) *sqltypes.Result {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	for {
+		qr, err := conn.ExecuteFetch(query, 1000, false)
+		if err == nil {
+			return qr
+		}
+		select {
+		case <-timer.C:
+			require.FailNow(t, fmt.Sprintf("query %q did not succeed before the timeout of %s; last seen result: %v",
+				query, timeout, qr.Rows))
+		default:
+			log.Infof("query %q failed with error %v, retrying in %ds", query, err, defaultTick)
+			time.Sleep(defaultTick)
+		}
+	}
+}
+
 func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, false)
+	if err != nil {
+		log.Errorf("Error executing query: %s: %v", query, err)
+	}
 	require.NoError(t, err)
 	return qr
 }
@@ -79,7 +108,7 @@ func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 	}
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.NoErrorf(t, err, "error connecting to vtgate on %s:%d", hostname, port)
 	return conn
 }
 
@@ -92,6 +121,19 @@ func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query stri
 	}
 	execQuery(t, conn, "begin")
 	qr := execQuery(t, conn, query)
+	execQuery(t, conn, "commit")
+	return qr
+}
+
+func execVtgateQueryWithRetry(t *testing.T, conn *mysql.Conn, database string, query string, timeout time.Duration) *sqltypes.Result {
+	if strings.TrimSpace(query) == "" {
+		return nil
+	}
+	if database != "" {
+		execQuery(t, conn, "use `"+database+"`;")
+	}
+	execQuery(t, conn, "begin")
+	qr := execQueryWithRetry(t, conn, query, timeout)
 	execQuery(t, conn, "commit")
 	return qr
 }
@@ -701,6 +743,16 @@ func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool 
 	require.Equal(t, 1, len(rs.Rows))
 	mode := strings.ToLower(rs.Rows[0][0].ToString())
 	return mode == "noblob"
+}
+
+func getRowCount(t *testing.T, vtgateConn *mysql.Conn, table string) (int, error) {
+	query := fmt.Sprintf("select count(*) from %s", table)
+	qr := execVtgateQuery(t, vtgateConn, "", query)
+	if qr == nil {
+		return 0, fmt.Errorf("query failed %s", query)
+	}
+	numRows, err := strconv.Atoi(qr.Rows[0][0].ToString())
+	return numRows, err
 }
 
 const (

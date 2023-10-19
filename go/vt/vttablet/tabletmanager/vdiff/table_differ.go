@@ -133,6 +133,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	if err := td.selectTablets(ctx); err != nil {
 		return err
 	}
+
 	if err := td.syncSourceStreams(ctx); err != nil {
 		return err
 	}
@@ -377,7 +378,6 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 	log.Infof("streamOneShard Start on %s using query: %s", participant.tablet.Alias.String(), query)
 	td.wgShardStreamers.Add(1)
 	defer func() {
-		log.Infof("streamOneShard End on %s", participant.tablet.Alias.String())
 		close(participant.result)
 		close(gtidch)
 		td.wgShardStreamers.Done()

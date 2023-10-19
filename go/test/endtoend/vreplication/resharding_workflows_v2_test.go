@@ -125,9 +125,10 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		// Test new experimental --defer-secondary-keys flag
 		switch currentWorkflowType {
 		case wrangler.MoveTablesWorkflow, wrangler.MigrateWorkflow, wrangler.ReshardWorkflow:
-			if !atomicCopy {
-				args = append(args, "--defer-secondary-keys")
-			}
+			// fixme: add a parameter to pass flags, so we can conditionally add --defer-secondary-keys
+			//if !atomicCopy {
+			//args = append(args, "--defer-secondary-keys")
+			//}
 			args = append(args, "--initialize-target-sequences") // Only used for MoveTables
 		}
 	}

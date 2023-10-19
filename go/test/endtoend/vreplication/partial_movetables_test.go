@@ -44,13 +44,16 @@ func testCancel(t *testing.T) {
 	table := "customer2"
 	shard := "80-"
 	// start the partial movetables for 80-
-	mt := newMoveTables(vc, &moveTables{
-		workflowName:   workflowName,
-		targetKeyspace: targetKeyspace,
+	mt := newMoveTables(vc, &moveTablesWorkflow{
+		workflowInfo: &workflowInfo{
+			vc:             vc,
+			workflowName:   workflowName,
+			targetKeyspace: targetKeyspace,
+		},
 		sourceKeyspace: sourceKeyspace,
 		tables:         table,
 		sourceShards:   shard,
-	}, moveTablesFlavorRandom)
+	}, workflowFlavorRandom)
 	mt.Create()
 
 	checkDenyList := func(keyspace string, expected bool) {

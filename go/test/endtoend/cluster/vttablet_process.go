@@ -462,6 +462,27 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	return executeQuery(conn, query)
 }
 
+func (vttablet *VttabletProcess) QueryTabletMultiple(queries []string, keyspace string, useDb bool) error {
+	if !useDb {
+		keyspace = ""
+	}
+	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
+	conn, err := vttablet.conn(&dbParams)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	for _, query := range queries {
+		log.Infof("Executing query %s (on %s)", query, vttablet.Name)
+		_, err := executeQuery(conn, query)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (vttablet *VttabletProcess) defaultConn(dbname string) (*mysql.Conn, error) {
 	dbParams := mysql.ConnParams{
 		Uname:      "vt_dba",
