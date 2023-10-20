@@ -23,6 +23,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -69,6 +70,11 @@ var (
 
 	// Register functions to be called when the command completes.
 	onTerm = []func(){}
+
+	// Register our nil tmclient grpc handler only one time.
+	// This is primarily for tests where we execute the root
+	// command multiple times.
+	once = sync.Once{}
 
 	server        string
 	actionTimeout time.Duration
@@ -194,9 +200,12 @@ func getClientForCommand(cmd *cobra.Command) (vtctldclient.VtctldClient, error) 
 		onTerm = append(onTerm, ts.Close)
 
 		// Use internal vtcltd server implementation.
-		// Register a nil grpc handler -- we will not use tmclient at all.
-		tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
-			return nil
+		// Register a nil grpc handler -- we will not use tmclient at all but
+		// a factory still needs to be registered.
+		once.Do(func() {
+			tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
+				return nil
+			})
 		})
 		vtctld := grpcvtctldserver.NewVtctldServer(ts)
 		localvtctldclient.SetServer(vtctld)
