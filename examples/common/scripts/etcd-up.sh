@@ -35,7 +35,6 @@ sleep 5
 echo "add ${cell} CellInfo"
 set +e
 command vtctldclient --server bundled AddCellInfo \
-  --bootstrap --topology-servers "${ETCD_SERVER}" \
   --root "/vitess/${cell}" \
   --server-address "${ETCD_SERVER}" \
   "${cell}"
