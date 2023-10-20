@@ -18,19 +18,38 @@ package dbconnpool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 )
+
+type PooledDBConnection = smartconnpool.Pooled[*DBConnection]
 
 // DBConnection re-exposes mysql.Conn with some wrapping to implement
 // most of PoolConnection interface, except Recycle. That way it can be used
 // by itself. (Recycle needs to know about the Pool).
 type DBConnection struct {
 	*mysql.Conn
+	info dbconfigs.Connector
+}
+
+var errSettingNotSupported = errors.New("DBConnection does not support connection settings")
+
+func (dbc *DBConnection) ApplySetting(ctx context.Context, setting *smartconnpool.Setting) error {
+	return errSettingNotSupported
+}
+
+func (dbc *DBConnection) ResetSetting(ctx context.Context) error {
+	return errSettingNotSupported
+}
+
+func (dbc *DBConnection) Setting() *smartconnpool.Setting {
+	return nil
 }
 
 // NewDBConnection returns a new DBConnection based on the ConnParams
@@ -40,7 +59,19 @@ func NewDBConnection(ctx context.Context, info dbconfigs.Connector) (*DBConnecti
 	if err != nil {
 		return nil, err
 	}
-	return &DBConnection{Conn: c}, nil
+	return &DBConnection{Conn: c, info: info}, nil
+}
+
+// Reconnect replaces the existing underlying connection with a new one,
+// if possible. Recycle should still be called afterwards.
+func (dbc *DBConnection) Reconnect(ctx context.Context) error {
+	dbc.Conn.Close()
+	newConn, err := dbc.info.Connect(ctx)
+	if err != nil {
+		return err
+	}
+	dbc.Conn = newConn
+	return nil
 }
 
 // ExecuteFetch overwrites mysql.Conn.ExecuteFetch.

@@ -24,11 +24,10 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -114,17 +113,17 @@ func (aggr Aggr) NeedsWeightString(ctx *plancontext.PlanningContext) bool {
 	return aggr.OpCode.NeedsComparableValues() && ctx.SemTable.NeedsWeightString(aggr.Func.GetArg())
 }
 
-func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) (sqltypes.Type, collations.ID) {
+func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) evalengine.Type {
 	if aggr.Func == nil {
-		return sqltypes.Unknown, collations.Unknown
+		return evalengine.UnknownType()
 	}
 	switch aggr.OpCode {
 	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
-		typ, col, _ := ctx.SemTable.TypeForExpr(aggr.Func.GetArg())
-		return typ, col
+		typ, _ := ctx.SemTable.TypeForExpr(aggr.Func.GetArg())
+		return typ
 
 	}
-	return sqltypes.Unknown, collations.Unknown
+	return evalengine.UnknownType()
 }
 
 // NewGroupBy creates a new group by from the given fields.

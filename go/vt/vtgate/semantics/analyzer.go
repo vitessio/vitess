@@ -21,6 +21,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -115,7 +116,7 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 	return &SemTable{
 		Recursive:                 a.binder.recursive,
 		Direct:                    a.binder.direct,
-		ExprTypes:                 a.typer.exprTypes,
+		ExprTypes:                 a.typer.m,
 		Tables:                    a.tables.Tables,
 		NotSingleRouteErr:         a.projErr,
 		NotUnshardedErr:           a.unshardedErr,
@@ -273,17 +274,13 @@ func isParentSelectStatement(cursor *sqlparser.Cursor) bool {
 
 type originable interface {
 	tableSetFor(t *sqlparser.AliasedTableExpr) TableSet
-	depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *Type)
+	depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ evalengine.Type)
 }
 
-func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *Type) {
+func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ evalengine.Type) {
 	recursive = a.binder.recursive.dependencies(expr)
 	direct = a.binder.direct.dependencies(expr)
-	qt, isFound := a.typer.exprTypes[expr]
-	if !isFound {
-		return
-	}
-	typ = &qt
+	typ = a.typer.exprType(expr)
 	return
 }
 

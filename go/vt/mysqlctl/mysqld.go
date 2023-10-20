@@ -147,11 +147,11 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	}
 
 	// Create and open the connection pool for dba access.
-	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", dbaPoolSize, DbaIdleTimeout, 0, PoolDynamicHostnameResolution)
+	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", nil, dbaPoolSize, DbaIdleTimeout, 0, PoolDynamicHostnameResolution)
 	result.dbaPool.Open(dbcfgs.DbaWithDB())
 
 	// Create and open the connection pool for app access.
-	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", appPoolSize, appIdleTimeout, 0, PoolDynamicHostnameResolution)
+	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", nil, appPoolSize, appIdleTimeout, 0, PoolDynamicHostnameResolution)
 	result.appPool.Open(dbcfgs.AppWithDB())
 
 	/*

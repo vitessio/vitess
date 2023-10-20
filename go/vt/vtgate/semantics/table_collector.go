@@ -21,6 +21,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -62,7 +63,7 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 
 		size := len(firstSelect.SelectExprs)
 		info.recursive = make([]TableSet, size)
-		info.types = make([]*Type, size)
+		info.types = make([]evalengine.Type, size)
 
 		_ = sqlparser.VisitAllSelects(node, func(s *sqlparser.Select, idx int) error {
 			for i, expr := range s.SelectExprs {
@@ -126,7 +127,7 @@ func (tc *tableCollector) addSelectDerivedTable(sel *sqlparser.Select, node *sql
 	tables := tc.scoper.wScope[sel]
 	size := len(sel.SelectExprs)
 	deps := make([]TableSet, size)
-	types := make([]*Type, size)
+	types := make([]evalengine.Type, size)
 	expanded := true
 	for i, expr := range sel.SelectExprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)

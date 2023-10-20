@@ -224,17 +224,16 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		aggrParam.Original = aggr.Original
 		aggrParam.OrigOpcode = aggr.OriginalOpCode
 		aggrParam.WCol = aggr.WSOffset
-		aggrParam.Type, aggrParam.CollationID = aggr.GetTypeCollation(ctx)
+		aggrParam.Type = aggr.GetTypeCollation(ctx)
 		oa.aggregates = append(oa.aggregates, aggrParam)
 	}
 	for _, groupBy := range op.Grouping {
-		typ, col, _ := ctx.SemTable.TypeForExpr(groupBy.SimplifiedExpr)
+		typ, _ := ctx.SemTable.TypeForExpr(groupBy.SimplifiedExpr)
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
 			KeyCol:          groupBy.ColOffset,
 			WeightStringCol: groupBy.WSOffset,
 			Expr:            groupBy.AsAliasedExpr().Expr,
 			Type:            typ,
-			CollationID:     col,
 		})
 	}
 
@@ -272,14 +271,13 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 	}
 
 	for idx, order := range ordering.Order {
-		typ, collationID, _ := ctx.SemTable.TypeForExpr(order.SimplifiedExpr)
+		typ, _ := ctx.SemTable.TypeForExpr(order.SimplifiedExpr)
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               ordering.Offset[idx],
 			WeightStringCol:   ordering.WOffset[idx],
 			Desc:              order.Inner.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: ordering.Offset[idx],
 			Type:              typ,
-			CollationID:       collationID,
 		})
 	}
 
@@ -330,8 +328,8 @@ func getEvalEngingeExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr
 	case *operators.EvalEngine:
 		return e.EExpr, nil
 	case operators.Offset:
-		typ, col, _ := ctx.SemTable.TypeForExpr(pe.EvalExpr)
-		return evalengine.NewColumn(int(e), typ, col), nil
+		typ, _ := ctx.SemTable.TypeForExpr(pe.EvalExpr)
+		return evalengine.NewColumn(int(e), typ), nil
 	default:
 		return nil, vterrors.VT13001("project not planned for: %s", pe.String())
 	}
@@ -504,13 +502,12 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 
 	eroute, err := routeToEngineRoute(ctx, op, hints)
 	for _, order := range op.Ordering {
-		typ, collation, _ := ctx.SemTable.TypeForExpr(order.AST)
+		typ, _ := ctx.SemTable.TypeForExpr(order.AST)
 		eroute.OrderBy = append(eroute.OrderBy, engine.OrderByParams{
 			Col:             order.Offset,
 			WeightStringCol: order.WOffset,
 			Desc:            order.Direction == sqlparser.DescOrder,
 			Type:            typ,
-			CollationID:     collation,
 		})
 	}
 	if err != nil {
@@ -529,9 +526,7 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 }
 
 func buildInsertLogicalPlan(
-	rb *operators.Route,
-	op ops.Operator,
-	stmt *sqlparser.Insert,
+	rb *operators.Route, op ops.Operator, stmt *sqlparser.Insert,
 	hints *queryHints,
 ) (logicalPlan, error) {
 	ins := op.(*operators.Insert)

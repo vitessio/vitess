@@ -374,7 +374,7 @@ func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered
 	// Reload the tables and views.
 	// This stores the data that is used by VTGates upto v17. So, we can remove this reload of
 	// tables and views in v19.
-	err = hs.reloadTables(ctx, conn, tables)
+	err = hs.reloadTables(ctx, conn.Conn, tables)
 	if err != nil {
 		return err
 	}
@@ -394,7 +394,7 @@ func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered
 	return nil
 }
 
-func (hs *healthStreamer) reloadTables(ctx context.Context, conn *connpool.DBConn, tableNames []string) error {
+func (hs *healthStreamer) reloadTables(ctx context.Context, conn *connpool.Conn, tableNames []string) error {
 	if len(tableNames) == 0 {
 		return nil
 	}

@@ -71,7 +71,7 @@ func extractSlices(input []OrderByParams) []*comparer {
 			weightString:      order.WeightStringCol,
 			desc:              order.Desc,
 			starColFixedIndex: order.StarColFixedIndex,
-			collationID:       order.CollationID,
+			collationID:       order.Type.Coll,
 		})
 	}
 	return result

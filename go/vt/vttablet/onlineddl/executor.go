@@ -286,7 +286,7 @@ func (e *Executor) executeQuery(ctx context.Context, query string) (result *sqlt
 	}
 	defer conn.Recycle()
 
-	return conn.Exec(ctx, query, math.MaxInt32, true)
+	return conn.Conn.Exec(ctx, query, math.MaxInt32, true)
 }
 
 func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, query string) (result *sqltypes.Result, err error) {
@@ -303,7 +303,7 @@ func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, que
 	if err != nil {
 		return nil, err
 	}
-	return conn.Exec(ctx, uq, math.MaxInt32, true)
+	return conn.Conn.Exec(ctx, uq, math.MaxInt32, true)
 }
 
 // TabletAliasString returns tablet alias as string (duh)
@@ -506,7 +506,7 @@ func (e *Executor) readMySQLVariables(ctx context.Context) (variables *mysqlVari
 	}
 	defer conn.Recycle()
 
-	tm, err := conn.Exec(ctx, `select
+	tm, err := conn.Conn.Exec(ctx, `select
 			@@global.hostname as hostname,
 			@@global.port as port,
 			@@global.read_only as read_only,
@@ -861,7 +861,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return err
 	}
 	defer lockConn.Recycle()
-	defer lockConn.Exec(ctx, sqlUnlockTables, 1, false)
+	defer lockConn.Conn.Exec(ctx, sqlUnlockTables, 1, false)
 
 	renameCompleteChan := make(chan error)
 	renameWasSuccessful := false
@@ -872,7 +872,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	defer renameConn.Recycle()
 	defer func() {
 		if !renameWasSuccessful {
-			renameConn.Kill("premature exit while renaming tables", 0)
+			renameConn.Conn.Kill("premature exit while renaming tables", 0)
 		}
 	}()
 	renameQuery := sqlparser.BuildParsedQuery(sqlSwapTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
@@ -885,7 +885,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		defer cancel()
 
 		for {
-			renameProcessFound, err := e.doesConnectionInfoMatch(renameWaitCtx, renameConn.ID(), "rename")
+			renameProcessFound, err := e.doesConnectionInfoMatch(renameWaitCtx, renameConn.Conn.ID(), "rename")
 			if err != nil {
 				return err
 			}
@@ -968,14 +968,14 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		lockCtx, cancel := context.WithTimeout(ctx, migrationCutOverThreshold)
 		defer cancel()
 		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTwoTablesWrite, sentryTableName, onlineDDL.Table)
-		if _, err := lockConn.Exec(lockCtx, lockTableQuery.Query, 1, false); err != nil {
+		if _, err := lockConn.Conn.Exec(lockCtx, lockTableQuery.Query, 1, false); err != nil {
 			return err
 		}
 
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "renaming tables")
 		go func() {
 			defer close(renameCompleteChan)
-			_, err := renameConn.Exec(ctx, renameQuery.Query, 1, false)
+			_, err := renameConn.Conn.Exec(ctx, renameQuery.Query, 1, false)
 			renameCompleteChan <- err
 		}()
 		// the rename should block, because of the LOCK. Wait for it to show up.
@@ -1040,7 +1040,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				dropTableQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
 				lockCtx, cancel := context.WithTimeout(ctx, migrationCutOverThreshold)
 				defer cancel()
-				if _, err := lockConn.Exec(lockCtx, dropTableQuery.Query, 1, false); err != nil {
+				if _, err := lockConn.Conn.Exec(lockCtx, dropTableQuery.Query, 1, false); err != nil {
 					return err
 				}
 			}
@@ -1048,7 +1048,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				lockCtx, cancel := context.WithTimeout(ctx, migrationCutOverThreshold)
 				defer cancel()
 				e.updateMigrationStage(ctx, onlineDDL.UUID, "unlocking tables")
-				if _, err := lockConn.Exec(lockCtx, sqlUnlockTables, 1, false); err != nil {
+				if _, err := lockConn.Conn.Exec(lockCtx, sqlUnlockTables, 1, false); err != nil {
 					return err
 				}
 			}

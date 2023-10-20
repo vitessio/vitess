@@ -66,8 +66,7 @@ type GroupByParams struct {
 	WeightStringCol int
 	Expr            sqlparser.Expr
 	FromGroupBy     bool
-	Type            sqltypes.Type
-	CollationID     collations.ID
+	Type            evalengine.Type
 }
 
 // String returns a string. Used for plan descriptions
@@ -79,8 +78,8 @@ func (gbp GroupByParams) String() string {
 		out = fmt.Sprintf("(%d|%d)", gbp.KeyCol, gbp.WeightStringCol)
 	}
 
-	if sqltypes.IsText(gbp.Type) && gbp.CollationID != collations.Unknown {
-		out += " COLLATE " + collations.Local().LookupName(gbp.CollationID)
+	if sqltypes.IsText(gbp.Type.Type) && gbp.Type.Coll != collations.Unknown {
+		out += " COLLATE " + collations.Local().LookupName(gbp.Type.Coll)
 	}
 
 	return out
@@ -255,7 +254,7 @@ func (oa *OrderedAggregate) nextGroupBy(currentKey, nextRow []sqltypes.Value) (n
 	}
 
 	for _, gb := range oa.GroupByKeys {
-		cmp, err := evalengine.NullsafeCompare(currentKey[gb.KeyCol], nextRow[gb.KeyCol], gb.CollationID)
+		cmp, err := evalengine.NullsafeCompare(currentKey[gb.KeyCol], nextRow[gb.KeyCol], gb.Type.Coll)
 		if err != nil {
 			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
 			_, isCollationErr := err.(evalengine.UnsupportedCollationError)
@@ -263,7 +262,7 @@ func (oa *OrderedAggregate) nextGroupBy(currentKey, nextRow []sqltypes.Value) (n
 				return nil, false, err
 			}
 			gb.KeyCol = gb.WeightStringCol
-			cmp, err = evalengine.NullsafeCompare(currentKey[gb.WeightStringCol], nextRow[gb.WeightStringCol], gb.CollationID)
+			cmp, err = evalengine.NullsafeCompare(currentKey[gb.WeightStringCol], nextRow[gb.WeightStringCol], gb.Type.Coll)
 			if err != nil {
 				return nil, false, err
 			}

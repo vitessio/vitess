@@ -19,36 +19,39 @@ package semantics
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // typer is responsible for setting the type for expressions
 // it does it's work after visiting the children (up), since the children types is often needed to type a node.
 type typer struct {
-	exprTypes map[sqlparser.Expr]Type
-}
-
-// Type is the normal querypb.Type with collation
-type Type struct {
-	Type      querypb.Type
-	Collation collations.ID
+	m map[sqlparser.Expr]evalengine.Type
 }
 
 func newTyper() *typer {
 	return &typer{
-		exprTypes: map[sqlparser.Expr]Type{},
+		m: map[sqlparser.Expr]evalengine.Type{},
 	}
+}
+
+func (t *typer) exprType(expr sqlparser.Expr) evalengine.Type {
+	res, ok := t.m[expr]
+	if ok {
+		return res
+	}
+
+	return evalengine.UnknownType()
 }
 
 func (t *typer) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Literal:
-		t.exprTypes[node] = Type{Type: node.SQLType(), Collation: collations.DefaultCollationForType(node.SQLType())}
+		t.m[node] = evalengine.Type{Type: node.SQLType(), Coll: collations.DefaultCollationForType(node.SQLType())}
 	case *sqlparser.Argument:
 		if node.Type >= 0 {
-			t.exprTypes[node] = Type{Type: node.Type, Collation: collations.DefaultCollationForType(node.Type)}
+			t.m[node] = evalengine.Type{Type: node.Type, Coll: collations.DefaultCollationForType(node.Type)}
 		}
 	case sqlparser.AggrFunc:
 		code, ok := opcode.SupportedAggregates[node.AggrName()]
@@ -57,17 +60,17 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 		}
 		var inputType sqltypes.Type
 		if arg := node.GetArg(); arg != nil {
-			t, ok := t.exprTypes[arg]
+			t, ok := t.m[arg]
 			if ok {
 				inputType = t.Type
 			}
 		}
 		type_ := code.Type(inputType)
-		t.exprTypes[node] = Type{Type: type_, Collation: collations.DefaultCollationForType(type_)}
+		t.m[node] = evalengine.Type{Type: type_, Coll: collations.DefaultCollationForType(type_)}
 	}
 	return nil
 }
 
-func (t *typer) setTypeFor(node *sqlparser.ColName, typ Type) {
-	t.exprTypes[node] = typ
+func (t *typer) setTypeFor(node *sqlparser.ColName, typ evalengine.Type) {
+	t.m[node] = typ
 }

@@ -50,6 +50,16 @@ type ctype struct {
 	Col  collations.TypedCollation
 }
 
+type Type struct {
+	Type     sqltypes.Type
+	Coll     collations.ID
+	Nullable bool
+}
+
+func UnknownType() Type {
+	return Type{Type: sqltypes.Unknown, Coll: collations.Unknown}
+}
+
 func (ct ctype) nullable() bool {
 	return ct.Flag&flagNullable != 0
 }
