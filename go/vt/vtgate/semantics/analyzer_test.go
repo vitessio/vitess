@@ -838,6 +838,12 @@ func TestInvalidQueries(t *testing.T) {
 	}, {
 		sql:  "WITH RECURSIVE cte (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte",
 		serr: "VT12001: unsupported: recursive common table expression",
+	}, {
+		sql:  "with x as (select 1), x as (select 1) select * from x",
+		serr: "VT03013: not unique table/alias: 'x'",
+	}, {
+		// should not fail, same name is valid as long as it's not in the same scope
+		sql: "with x as (with x as (select 1) select * from x) select * from x",
 	}}
 
 	for _, tc := range tcases {

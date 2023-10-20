@@ -46,6 +46,7 @@ type (
 		isUnion   bool
 		joinUsing map[string]TableSet
 		stmtScope bool
+		ctes      map[string]*sqlparser.CommonTableExpr
 	}
 )
 
@@ -283,7 +284,18 @@ func newScope(parent *scope) *scope {
 	return &scope{
 		parent:    parent,
 		joinUsing: map[string]TableSet{},
+		ctes:      map[string]*sqlparser.CommonTableExpr{},
 	}
+}
+
+func (s *scope) addCTE(cte *sqlparser.CommonTableExpr) error {
+	name := cte.ID.String()
+	_, exists := s.ctes[name]
+	if exists {
+		return vterrors.VT03013(name)
+	}
+	s.ctes[name] = cte
+	return nil
 }
 
 func (s *scope) addTable(info TableInfo) error {

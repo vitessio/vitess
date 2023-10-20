@@ -51,6 +51,9 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 		return tc.visitAliasedTableExpr(node)
 	case *sqlparser.Union:
 		return tc.visitUnion(node)
+	case *sqlparser.CommonTableExpr:
+		scope := tc.scoper.currentScope()
+		return scope.addCTE(node)
 	default:
 		return nil
 	}
