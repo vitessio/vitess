@@ -94,7 +94,7 @@ var (
 	Root = &cobra.Command{
 		Use:   "vtctldclient",
 		Short: "Executes a cluster management command on the remote vtctld server.",
-		Long: fmt.Sprintf(`If there are no running vtctld servers -- for example when boostrapping
+		Long: fmt.Sprintf(`If there are no running vtctld servers -- for example when bootstrapping
 a new Vitess cluster -- you can specify a --server value of '%s'.
 When doing so, you would use the --topo* flags so that the client can
 connect directly to the topo server(s).`, useInternalVtctld),
@@ -199,7 +199,7 @@ func getClientForCommand(cmd *cobra.Command) (vtctldclient.VtctldClient, error) 
 		}
 		onTerm = append(onTerm, ts.Close)
 
-		// Use internal vtcltd server implementation.
+		// Use internal vtctld server implementation.
 		// Register a nil grpc handler -- we will not use tmclient at all but
 		// a factory still needs to be registered.
 		once.Do(func() {
