@@ -613,6 +613,7 @@ func (node *Select) walkSubtree(visit Visit) error {
 	}
 	return Walk(
 		visit,
+		node.With,
 		node.Comments,
 		node.SelectExprs,
 		node.From,
