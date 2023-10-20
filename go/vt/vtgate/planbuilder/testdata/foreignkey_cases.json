@@ -791,68 +791,7 @@
   {
     "comment": "update in a table with non-literal value - set null fail due to child update where condition",
     "query": "update u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
-    "plan": {
-      "QueryType": "UPDATE",
-      "Original": "update u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
-      "Instructions": {
-        "OperatorType": "FkCascade",
-        "Inputs": [
-          {
-            "InputName": "Selection",
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "FieldQuery": "select col2, col1 + 'bar', col2 != col1 + 'bar' from u_tbl2 where 1 != 1",
-            "Query": "select col2, col1 + 'bar', col2 != col1 + 'bar' from u_tbl2 where id = 1 for update",
-            "Table": "u_tbl2"
-          },
-          {
-            "InputName": "CascadeChild-1",
-            "OperatorType": "Update",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "TargetTabletType": "PRIMARY",
-            "BvName": "fkc_vals",
-            "Cols": [
-              0
-            ],
-            "CompExprCols": [
-              2
-            ],
-            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (:fkc_upd is null or (u_tbl3.col3) not in ((:fkc_upd)))",
-            "Table": "u_tbl3",
-            "UpdateExprBvNames": [
-              "fkc_upd"
-            ],
-            "UpdateExprCols": [
-              1
-            ]
-          },
-          {
-            "InputName": "Parent",
-            "OperatorType": "Update",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
-            "Table": "u_tbl2"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "unsharded_fk_allow.u_tbl2",
-        "unsharded_fk_allow.u_tbl3"
-      ]
-    }
+    "plan": "VT12001: unsupported: update expression with non-literal values with foreign key constraints"
   },
   {
     "comment": "update in a table with non-literal value - with cascade fail as the cascade value is not known",
@@ -1002,7 +941,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl1 set m = 2, col1 = x + 'bar' where id = 1",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1 set m = 2, col1 = x + 'bar' where id = 1",
             "Table": "u_tbl1"
           }
         ]
