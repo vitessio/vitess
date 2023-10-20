@@ -791,7 +791,87 @@
   {
     "comment": "update in a table with non-literal value - set null fail due to child update where condition",
     "query": "update u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
-    "plan": "VT12001: unsupported: update expression with non-literal values with foreign key constraints"
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
+      "Instructions": {
+        "OperatorType": "FKVerify",
+        "Inputs": [
+          {
+            "InputName": "VerifyParent-1",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = u_tbl2.col1 + 'bar' where 1 != 1",
+            "Query": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = u_tbl2.col1 + 'bar' where u_tbl2.col1 + 'bar' is not null and u_tbl2.id = 1 and u_tbl1.col1 is null limit 1 lock in share mode",
+            "Table": "u_tbl1, u_tbl2"
+          },
+          {
+            "InputName": "PostVerify",
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select col2, u_tbl2.col1 + 'bar', col2 != u_tbl2.col1 + 'bar' from u_tbl2 where 1 != 1",
+                "Query": "select col2, u_tbl2.col1 + 'bar', col2 != u_tbl2.col1 + 'bar' from u_tbl2 where u_tbl2.id = 1 for update",
+                "Table": "u_tbl2"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "CompExprCols": [
+                  2
+                ],
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (:fkc_upd is null or (u_tbl3.col3) not in ((:fkc_upd)))",
+                "Table": "u_tbl3",
+                "UpdateExprBvNames": [
+                  "fkc_upd"
+                ],
+                "UpdateExprCols": [
+                  1
+                ]
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set m = 2, col2 = u_tbl2.col1 + 'bar' where u_tbl2.id = 1",
+                "Table": "u_tbl2"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl1",
+        "unsharded_fk_allow.u_tbl2",
+        "unsharded_fk_allow.u_tbl3"
+      ]
+    }
   },
   {
     "comment": "update in a table with non-literal value - with cascade fail as the cascade value is not known",
@@ -810,8 +890,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col1, x + 'bar', col1 != x + 'bar' from u_tbl1 where 1 != 1",
-            "Query": "select col1, x + 'bar', col1 != x + 'bar' from u_tbl1 where id = 1 for update",
+            "FieldQuery": "select col1, u_tbl1.x + 'bar', col1 != u_tbl1.x + 'bar' from u_tbl1 where 1 != 1",
+            "Query": "select col1, u_tbl1.x + 'bar', col1 != u_tbl1.x + 'bar' from u_tbl1 where id = 1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -941,7 +1021,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1 set m = 2, col1 = x + 'bar' where id = 1",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1 set m = 2, col1 = u_tbl1.x + 'bar' where id = 1",
             "Table": "u_tbl1"
           }
         ]
@@ -1169,7 +1249,85 @@
   {
     "comment": "update with fk on cross-shard with a where condition on non-literal value - disallowed",
     "query": "update tbl3 set coly = colx + 10 where coly = 10",
-    "plan": "VT12001: unsupported: update expression with non-literal values with foreign key constraints"
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update tbl3 set coly = colx + 10 where coly = 10",
+      "Instructions": {
+        "OperatorType": "FKVerify",
+        "Inputs": [
+          {
+            "InputName": "VerifyParent-1",
+            "OperatorType": "Limit",
+            "Count": "INT64(1)",
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "INT64(1) as 1"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Filter",
+                    "Predicate": "tbl1.t1col1 is null",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "LeftJoin",
+                        "JoinColumnIndexes": "R:0,R:0",
+                        "JoinVars": {
+                          "tbl3_colx": 0
+                        },
+                        "TableName": "tbl3_tbl1",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "sharded_fk_allow",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select tbl3.colx from tbl3 where 1 != 1",
+                            "Query": "select tbl3.colx from tbl3 where tbl3.colx + 10 is not null and tbl3.coly = 10 lock in share mode",
+                            "Table": "tbl3"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "sharded_fk_allow",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select tbl1.t1col1 from tbl1 where 1 != 1",
+                            "Query": "select tbl1.t1col1 from tbl1 where tbl1.t1col1 = :tbl3_colx + 10 lock in share mode",
+                            "Table": "tbl1"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "InputName": "PostVerify",
+            "OperatorType": "Update",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ tbl3 set coly = tbl3.colx + 10 where tbl3.coly = 10",
+            "Table": "tbl3"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl1",
+        "sharded_fk_allow.tbl3"
+      ]
+    }
   },
   {
     "comment": "update with fk on cross-shard with a where condition",
@@ -1454,7 +1612,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :v1 where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :v1 where (u_tbl4.col4) in ::fkc_vals and u_tbl3.col3 is null limit 1 lock in share mode",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :v1 where (u_tbl4.col4) in ::fkc_vals and :v1 is not null and u_tbl3.col3 is null limit 1 lock in share mode",
                 "Table": "u_tbl3, u_tbl4"
               },
               {

@@ -470,7 +470,7 @@ func buildChildUpdOpForSetNull(ctx *plancontext.PlanningContext, fk vindexes.Chi
 	// For example, if we are setting `update parent cola = :v1 and colb = :v2`, then on the child, the where condition would look something like this -
 	// `:v1 IS NULL OR :v2 IS NULL OR (child_cola, child_colb) NOT IN ((:v1,:v2))`
 	// So, if either of :v1 or :v2 is NULL, then the entire condition is true (which is the same as not having the condition when :v1 or :v2 is NULL).
-	compExpr := nullSafeNotInComparison(ctx.SemTable.ChildFkToUpdExprs[fk.String(updatedTable)], fk, updateExprBvNames)
+	compExpr := nullSafeNotInComparison(ctx.SemTable.ChildFkToUpdExprs[fk.String(updatedTable)], fk, updatedTable.GetTableName(), updateExprBvNames)
 	if compExpr != nil {
 		childWhereExpr = &sqlparser.AndExpr{
 			Left:  childWhereExpr,
@@ -489,11 +489,6 @@ func buildChildUpdOpForSetNull(ctx *plancontext.PlanningContext, fk vindexes.Chi
 func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, updStmt *sqlparser.Update, parentFks []vindexes.ParentFKInfo, restrictChildFks []vindexes.ChildFKInfo) (ops.Operator, error) {
 	if len(parentFks) == 0 && len(restrictChildFks) == 0 {
 		return childOp, nil
-	}
-
-	// We only support simple expressions in update queries for foreign key verification.
-	if semantics.HasNonLiteral(updStmt.Exprs, nil, restrictChildFks) {
-		return nil, vterrors.VT12001("update expression with non-literal values with foreign key constraints")
 	}
 
 	var Verify []*VerifyOp
@@ -619,10 +614,10 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 // select 1 from child_tbl join parent_tbl on <columns in fk> where <clause same as original update> [AND ({<bind variables in the SET clause of the original update> IS NULL OR}... <child_columns_in_fk> NOT IN (<bind variables in the SET clause of the original update>))] limit 1
 // E.g:
 // Child (c1, c2) references Parent (p1, p2)
-// update Parent set p1 = 1 where id = 1
+// update Parent set p1 = col + 1 where id = 1
 // verify query:
 // select 1 from Child join Parent on Parent.p1 = Child.c1 and Parent.p2 = Child.c2
-// where Parent.id = 1 and (1 IS NULL OR (child.c1) NOT IN ((1))) limit 1
+// where Parent.id = 1 and ((Parent.col + 1) IS NULL OR (child.c1) NOT IN ((Parent.col + 1))) limit 1
 func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, cFk vindexes.ChildFKInfo) (ops.Operator, error) {
 	// ON UPDATE RESTRICT foreign keys that require validation, should only be allowed in the case where we
 	// are verifying all the FKs on vtgate level.
@@ -665,7 +660,7 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updSt
 	// For example, if we are setting `update child cola = :v1 and colb = :v2`, then on the parent, the where condition would look something like this -
 	// `:v1 IS NULL OR :v2 IS NULL OR (cola, colb) NOT IN ((:v1,:v2))`
 	// So, if either of :v1 or :v2 is NULL, then the entire condition is true (which is the same as not having the condition when :v1 or :v2 is NULL).
-	compExpr := nullSafeNotInComparison(updStmt.Exprs, cFk, nil)
+	compExpr := nullSafeNotInComparison(updStmt.Exprs, cFk, parentTbl, nil)
 	if compExpr != nil {
 		whereCond = sqlparser.AndExpressions(whereCond, compExpr)
 	}
@@ -690,7 +685,7 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updSt
 // `:v1 IS NULL OR :v2 IS NULL OR (cola, colb) NOT IN ((:v1,:v2))`
 // So, if either of :v1 or :v2 is NULL, then the entire condition is true (which is the same as not having the condition when :v1 or :v2 is NULL)
 // This expression is used in cascading SET NULLs and in verifying whether an update should be restricted.
-func nullSafeNotInComparison(updateExprs sqlparser.UpdateExprs, cFk vindexes.ChildFKInfo, updatedExprBvNames []string) sqlparser.Expr {
+func nullSafeNotInComparison(updateExprs sqlparser.UpdateExprs, cFk vindexes.ChildFKInfo, parentTbl sqlparser.TableName, updatedExprBvNames []string) sqlparser.Expr {
 	var updateValues sqlparser.ValTuple
 	for idx, updateExpr := range updateExprs {
 		colIdx := cFk.ParentColumns.FindColumn(updateExpr.Name.Name)
@@ -698,7 +693,7 @@ func nullSafeNotInComparison(updateExprs sqlparser.UpdateExprs, cFk vindexes.Chi
 			if sqlparser.IsNull(updateExpr.Expr) {
 				return nil
 			}
-			childUpdateExpr := updateExpr.Expr
+			childUpdateExpr := prefixColNames(parentTbl, updateExpr.Expr)
 			if len(updatedExprBvNames) > 0 && updatedExprBvNames[idx] != "" {
 				childUpdateExpr = sqlparser.NewArgument(updatedExprBvNames[idx])
 			}

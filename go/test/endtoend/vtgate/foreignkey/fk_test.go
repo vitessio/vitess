@@ -808,6 +808,32 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t10 set col = id + 3 order by id desc",
 			},
+		}, {
+			name: "Non-literal update with order by that require parent and child foreign keys verification - success",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t13 (id, col) values (1,1),(2,2)",
+				"update fk_t11 set col = id + 3 where id >= 3",
+			},
+		}, {
+			name: "Non-literal update with order by that require parent and child foreign keys verification - parent fails",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t11 set col = id + 3",
+			},
+		}, {
+			name: "Non-literal update with order by that require parent and child foreign keys verification - child fails",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t13 (id, col) values (1,1),(2,2)",
+				"update fk_t11 set col = id + 3",
+			},
 		},
 	}
 
