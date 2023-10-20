@@ -177,7 +177,7 @@ jobs:
       fail-fast: true
       matrix:
         debian: [ bullseye, bookworm ]
-        component: [ vtadmin, vtorc, vtgate, vttablet, mysqlctld, mysqlctl, vtctl, vtctlclient, vtctld, logrotate, logtail ]
+        component: [ vtadmin, vtorc, vtgate, vttablet, mysqlctld, mysqlctl, vtctl, vtctlclient, vtctld, logrotate, logtail, vtbackup, vtexplain ]
 
     steps:
       - name: Check out code
