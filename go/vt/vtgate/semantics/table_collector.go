@@ -91,10 +91,10 @@ func (tc *tableCollector) visitAliasedTableExpr(node *sqlparser.AliasedTableExpr
 	case *sqlparser.DerivedTable:
 		switch sel := t.Select.(type) {
 		case *sqlparser.Select:
-			return tc.addSelectDerivedTable(sel, node)
+			return tc.addSelectDerivedTable(sel, node, node.Columns, node.As)
 
 		case *sqlparser.Union:
-			return tc.addUnionDerivedTable(sel, node)
+			return tc.addUnionDerivedTable(sel, node, node.Columns, node.As)
 
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %T in a derived table", sel)
@@ -123,7 +123,12 @@ func (tc *tableCollector) visitAliasedTableExpr(node *sqlparser.AliasedTableExpr
 	return nil
 }
 
-func (tc *tableCollector) addSelectDerivedTable(sel *sqlparser.Select, node *sqlparser.AliasedTableExpr) error {
+func (tc *tableCollector) addSelectDerivedTable(
+	sel *sqlparser.Select,
+	tableExpr *sqlparser.AliasedTableExpr,
+	columns sqlparser.Columns,
+	alias sqlparser.IdentifierCS,
+) error {
 	tables := tc.scoper.wScope[sel]
 	size := len(sel.SelectExprs)
 	deps := make([]TableSet, size)
@@ -138,20 +143,20 @@ func (tc *tableCollector) addSelectDerivedTable(sel *sqlparser.Select, node *sql
 		_, deps[i], types[i] = tc.org.depsForExpr(ae.Expr)
 	}
 
-	tableInfo := createDerivedTableForExpressions(sel.SelectExprs, node.Columns, tables.tables, tc.org, expanded, deps, types)
+	tableInfo := createDerivedTableForExpressions(sel.SelectExprs, columns, tables.tables, tc.org, expanded, deps, types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}
 
-	tableInfo.ASTNode = node
-	tableInfo.tableName = node.As.String()
+	tableInfo.ASTNode = tableExpr
+	tableInfo.tableName = alias.String()
 
 	tc.Tables = append(tc.Tables, tableInfo)
 	scope := tc.scoper.currentScope()
 	return scope.addTable(tableInfo)
 }
 
-func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sqlparser.AliasedTableExpr) error {
+func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sqlparser.AliasedTableExpr, columns sqlparser.Columns, alias sqlparser.IdentifierCS) error {
 	firstSelect := sqlparser.GetFirstSelect(union)
 	tables := tc.scoper.wScope[firstSelect]
 	info, found := tc.unionInfo[union]
@@ -159,12 +164,12 @@ func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sql
 		return vterrors.VT13001("information about union is not available")
 	}
 
-	tableInfo := createDerivedTableForExpressions(info.exprs, node.Columns, tables.tables, tc.org, info.isAuthoritative, info.recursive, info.types)
+	tableInfo := createDerivedTableForExpressions(info.exprs, columns, tables.tables, tc.org, info.isAuthoritative, info.recursive, info.types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}
 	tableInfo.ASTNode = node
-	tableInfo.tableName = node.As.String()
+	tableInfo.tableName = alias.String()
 
 	tc.Tables = append(tc.Tables, tableInfo)
 	scope := tc.scoper.currentScope()
