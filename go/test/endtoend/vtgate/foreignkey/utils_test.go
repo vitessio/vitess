@@ -25,6 +25,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
@@ -170,4 +172,86 @@ func compareVitessAndMySQLErrors(t *testing.T, vtErr, mysqlErr error) {
 	}
 	out := fmt.Sprintf("Vitess and MySQL are not erroring the same way.\nVitess error: %v\nMySQL error: %v", vtErr, mysqlErr)
 	t.Error(out)
+}
+
+// ensureDatabaseState ensures that the database is either empty or not.
+func ensureDatabaseState(t *testing.T, vtconn *mysql.Conn, empty bool) {
+	results := collectFkTablesState(vtconn)
+	isEmpty := true
+	for _, res := range results {
+		if len(res.Rows) > 0 {
+			isEmpty = false
+		}
+	}
+	require.Equal(t, isEmpty, empty)
+}
+
+// verifyDataIsCorrect verifies that the data in MySQL database matches the data in the Vitess database.
+func verifyDataIsCorrect(t *testing.T, mcmp utils.MySQLCompare, concurrency int) {
+	// For single concurrent thread, we run all the queries on both MySQL and Vitess, so we can verify correctness
+	// by just checking if the data in MySQL and Vitess match.
+	if concurrency == 1 {
+		for _, table := range fkTables {
+			query := fmt.Sprintf("SELECT * FROM %v ORDER BY id", table)
+			mcmp.Exec(query)
+		}
+	} else {
+		// For higher concurrency, we don't have MySQL data to verify everything is fine,
+		// so we'll have to do something different.
+		// We run LEFT JOIN queries on all the parent and child tables linked by foreign keys
+		// to make sure that nothing is broken in the database.
+		for _, reference := range fkReferences {
+			query := fmt.Sprintf("select %v.id from %v left join %v on (%v.col = %v.col) where %v.col is null and %v.col is not null", reference.childTable, reference.childTable, reference.parentTable, reference.parentTable, reference.childTable, reference.parentTable, reference.childTable)
+			if isMultiColFkTable(reference.childTable) {
+				query = fmt.Sprintf("select %v.id from %v left join %v on (%v.cola = %v.cola and %v.colb = %v.colb) where %v.cola is null and %v.cola is not null and %v.colb is not null", reference.childTable, reference.childTable, reference.parentTable, reference.parentTable, reference.childTable, reference.parentTable, reference.childTable, reference.parentTable, reference.childTable, reference.childTable)
+			}
+			res, err := mcmp.VtConn.ExecuteFetch(query, 1000, false)
+			require.NoError(t, err)
+			require.Zerof(t, len(res.Rows), "Query %v gave non-empty results", query)
+		}
+	}
+	// We also verify that the results in Primary and Replica table match as is.
+	for _, keyspace := range clusterInstance.Keyspaces {
+		for _, shard := range keyspace.Shards {
+			var primaryTab, replicaTab *cluster.Vttablet
+			for _, vttablet := range shard.Vttablets {
+				if vttablet.Type == "primary" {
+					primaryTab = vttablet
+				} else {
+					replicaTab = vttablet
+				}
+			}
+			require.NotNil(t, primaryTab)
+			require.NotNil(t, replicaTab)
+			checkReplicationHealthy(t, replicaTab)
+			cluster.WaitForReplicationPos(t, primaryTab, replicaTab, true, 60.0)
+			primaryConn, err := utils.GetMySQLConn(primaryTab, fmt.Sprintf("vt_%v", keyspace.Name))
+			require.NoError(t, err)
+			replicaConn, err := utils.GetMySQLConn(replicaTab, fmt.Sprintf("vt_%v", keyspace.Name))
+			require.NoError(t, err)
+			primaryRes := collectFkTablesState(primaryConn)
+			replicaRes := collectFkTablesState(replicaConn)
+			verifyDataMatches(t, primaryRes, replicaRes)
+		}
+	}
+}
+
+// verifyDataMatches verifies that the two list of results are the same.
+func verifyDataMatches(t *testing.T, resOne []*sqltypes.Result, resTwo []*sqltypes.Result) {
+	require.EqualValues(t, len(resTwo), len(resOne), "Res 1 - %v, Res 2 - %v", resOne, resTwo)
+	for idx, resultOne := range resOne {
+		resultTwo := resTwo[idx]
+		require.True(t, resultOne.Equal(resultTwo), "Data for %v doesn't match\nRows 1\n%v\nRows 2\n%v", fkTables[idx], resultOne.Rows, resultTwo.Rows)
+	}
+}
+
+// collectFkTablesState collects the data stored in the foreign key tables for the given connection.
+func collectFkTablesState(conn *mysql.Conn) []*sqltypes.Result {
+	var tablesData []*sqltypes.Result
+	for _, table := range fkTables {
+		query := fmt.Sprintf("SELECT * FROM %v ORDER BY id", table)
+		res, _ := conn.ExecuteFetch(query, 10000, true)
+		tablesData = append(tablesData, res)
+	}
+	return tablesData
 }
