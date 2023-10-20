@@ -49,8 +49,12 @@ type (
 		// authoritative is true if we have exhaustive column information
 		authoritative() bool
 
-		// GetExpr returns the AST struct behind this table
-		GetExpr() *sqlparser.AliasedTableExpr
+		// getAliasedTableExpr returns the AST struct behind this table
+		getAliasedTableExpr() *sqlparser.AliasedTableExpr
+
+		// canShortCut will return nil when the keyspace needs to be checked,
+		// and a true/false if the decision has been made already
+		canShortCut() *bool
 
 		// getColumns returns the known column information for this table
 		getColumns() []ColumnInfo
@@ -406,7 +410,7 @@ func EmptySemTable() *SemTable {
 // TableSetFor returns the bitmask for this particular table
 func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
-		if t == t2.GetExpr() {
+		if t == t2.getAliasedTableExpr() {
 			return SingleTableSet(idx)
 		}
 	}
@@ -607,49 +611,48 @@ func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
 }
 
 // SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same, unsharded keyspace
-func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.Table) {
-	var ks *vindexes.Keyspace
-	var tables []*vindexes.Table
-	for _, table := range st.Tables {
-		vindexTable := table.GetVindexTable()
-
-		if vindexTable == nil {
-			_, isDT := table.GetExpr().Expr.(*sqlparser.DerivedTable)
-			if isDT {
-				// derived tables are ok, as long as all real tables are from the same unsharded keyspace
-				// we check the real tables inside the derived table as well for same unsharded keyspace.
-				continue
-			}
-			return nil, nil
-		}
-		if vindexTable.Type != "" {
-			// A reference table is not an issue when seeing if a query is going to an unsharded keyspace
-			if vindexTable.Type == vindexes.TypeReference {
-				tables = append(tables, vindexTable)
-				continue
-			}
-			return nil, nil
-		}
-		name, ok := table.GetExpr().Expr.(sqlparser.TableName)
-		if !ok {
-			return nil, nil
-		}
-		if name.Name.String() != vindexTable.Name.String() {
-			// this points to a table alias. safer to not shortcut
-			return nil, nil
-		}
-		this := vindexTable.Keyspace
+func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*vindexes.Table) {
+	validKS := func(this *vindexes.Keyspace) bool {
 		if this == nil || this.Sharded {
-			return nil, nil
+			return false
 		}
 		if ks == nil {
+			// first keyspace we see
 			ks = this
-		} else {
-			if ks != this {
+		} else if ks != this {
+			// even if both are unsharded, we only allow a single keyspace for these queries
+			return false
+		}
+		return true
+	}
+
+	for _, table := range st.Tables {
+		if _, isDT := table.(*DerivedTable); isDT {
+			continue
+		}
+
+		sc := table.canShortCut()
+		var vtbl *vindexes.Table
+
+		switch {
+		case sc == nil:
+			// we have to check the KS if the table doesn't know if it can be shortcut or not
+			vtbl = table.GetVindexTable()
+			if !validKS(vtbl.Keyspace) {
 				return nil, nil
 			}
+		case *sc:
+			// the table knows that it's safe to shortcut
+			vtbl = table.GetVindexTable()
+			if vtbl == nil {
+				continue
+			}
+		case !*sc:
+			// the table knows that we can't shortcut
+			return nil, nil
 		}
-		tables = append(tables, vindexTable)
+
+		tables = append(tables, vtbl)
 	}
 	return ks, tables
 }

@@ -192,7 +192,7 @@ func newVindexTable(t sqlparser.IdentifierCS) *vindexes.Table {
 // The code lives in this file since it is only touching tableCollector data
 func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for i, t2 := range tc.Tables {
-		if t == t2.GetExpr() {
+		if t == t2.getAliasedTableExpr() {
 			return SingleTableSet(i)
 		}
 	}

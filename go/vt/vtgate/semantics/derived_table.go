@@ -137,8 +137,12 @@ func (dt *DerivedTable) Name() (sqlparser.TableName, error) {
 	return dt.ASTNode.TableName()
 }
 
-func (dt *DerivedTable) GetExpr() *sqlparser.AliasedTableExpr {
+func (dt *DerivedTable) getAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return dt.ASTNode
+}
+
+func (dt *DerivedTable) canShortCut() *bool {
+	panic(vterrors.VT12001("should not be called"))
 }
 
 // GetVindexTable implements the TableInfo interface
