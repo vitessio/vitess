@@ -492,7 +492,7 @@ func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, up
 	}
 
 	// We only support simple expressions in update queries for foreign key verification.
-	if semantics.HasNonLiteral(updStmt.Exprs, parentFks, restrictChildFks) {
+	if semantics.HasNonLiteral(updStmt.Exprs, nil, restrictChildFks) {
 		return nil, vterrors.VT12001("update expression with non-literal values with foreign key constraints")
 	}
 
@@ -528,13 +528,13 @@ func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, up
 
 // Each parent foreign key constraint is verified by an anti join query of the form:
 // select 1 from child_tbl left join parent_tbl on <parent_child_columns with new value expressions, remaining fk columns join>
-// where <parent columns are null> and <unchanged child columns not null> and <clause same as original update> limit 1
+// where <parent columns are null> and <unchanged child columns not null> and <updated expressions not null> and <clause same as original update> limit 1
 // E.g:
 // Child (c1, c2) references Parent (p1, p2)
-// update Child set c1 = 1 where id = 1
+// update Child set c1 = c2 + 1 where id = 1
 // verify query:
-// select 1 from Child left join Parent on Parent.p1 = 1 and Parent.p2 = Child.c2
-// where Parent.p1 is null and Parent.p2 is null and Child.id = 1
+// select 1 from Child left join Parent on Parent.p1 = Child.c2 + 1 and Parent.p2 = Child.c2
+// where Parent.p1 is null and Parent.p2 is null and Child.id = 1 and Child.c2 + 1 is not null
 // and Child.c2 is not null
 // limit 1
 func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, pFK vindexes.ParentFKInfo) (ops.Operator, error) {
@@ -562,7 +562,7 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 		var joinExpr sqlparser.Expr
 		if matchedExpr == nil {
 			predicate = &sqlparser.AndExpr{
-				Left: parentIsNullExpr,
+				Left: predicate,
 				Right: &sqlparser.IsExpr{
 					Left:  sqlparser.NewColNameWithQualifier(pFK.ChildColumns[idx].String(), childTbl),
 					Right: sqlparser.IsNotNullOp,
@@ -574,10 +574,18 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 				Right:    sqlparser.NewColNameWithQualifier(pFK.ChildColumns[idx].String(), childTbl),
 			}
 		} else {
+			prefixedMatchExpr := prefixColNames(childTbl, matchedExpr.Expr)
 			joinExpr = &sqlparser.ComparisonExpr{
 				Operator: sqlparser.EqualOp,
 				Left:     sqlparser.NewColNameWithQualifier(pFK.ParentColumns[idx].String(), parentTbl),
-				Right:    prefixColNames(childTbl, matchedExpr.Expr),
+				Right:    prefixedMatchExpr,
+			}
+			predicate = &sqlparser.AndExpr{
+				Left: predicate,
+				Right: &sqlparser.IsExpr{
+					Left:  prefixedMatchExpr,
+					Right: sqlparser.IsNotNullOp,
+				},
 			}
 		}
 
