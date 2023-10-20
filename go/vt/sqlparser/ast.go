@@ -259,12 +259,12 @@ type (
 		Distinct         bool
 		StraightJoinHint bool
 		SQLCalcFoundRows bool
-		// The From field must be the first AST element of this struct so the rewriter sees it first
+		// The With field needs to come before the FROM clause, so any CTEs have been handled before we analyze it
+		With        *With
 		From        []TableExpr
 		Comments    *ParsedComments
 		SelectExprs SelectExprs
 		Where       *Where
-		With        *With
 		GroupBy     GroupBy
 		Having      *Where
 		Windows     NamedWindows

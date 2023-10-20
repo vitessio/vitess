@@ -3595,6 +3595,8 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	}
 	// field Cache *bool
 	size += hack.RuntimeAllocSize(int64(1))
+	// field With *vitess.io/vitess/go/vt/sqlparser.With
+	size += cached.With.CachedSize(true)
 	// field From []vitess.io/vitess/go/vt/sqlparser.TableExpr
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.From)) * int64(16))
@@ -3617,8 +3619,6 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	}
 	// field Where *vitess.io/vitess/go/vt/sqlparser.Where
 	size += cached.Where.CachedSize(true)
-	// field With *vitess.io/vitess/go/vt/sqlparser.With
-	size += cached.With.CachedSize(true)
 	// field GroupBy vitess.io/vitess/go/vt/sqlparser.GroupBy
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.GroupBy)) * int64(16))

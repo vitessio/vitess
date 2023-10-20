@@ -4122,11 +4122,11 @@ func (cmp *Comparator) RefOfSelect(a, b *Select) bool {
 		a.StraightJoinHint == b.StraightJoinHint &&
 		a.SQLCalcFoundRows == b.SQLCalcFoundRows &&
 		cmp.RefOfBool(a.Cache, b.Cache) &&
+		cmp.RefOfWith(a.With, b.With) &&
 		cmp.SliceOfTableExpr(a.From, b.From) &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.SelectExprs(a.SelectExprs, b.SelectExprs) &&
 		cmp.RefOfWhere(a.Where, b.Where) &&
-		cmp.RefOfWith(a.With, b.With) &&
 		cmp.GroupBy(a.GroupBy, b.GroupBy) &&
 		cmp.RefOfWhere(a.Having, b.Having) &&
 		cmp.NamedWindows(a.Windows, b.Windows) &&

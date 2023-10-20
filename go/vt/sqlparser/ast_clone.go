@@ -2711,11 +2711,11 @@ func CloneRefOfSelect(n *Select) *Select {
 	}
 	out := *n
 	out.Cache = CloneRefOfBool(n.Cache)
+	out.With = CloneRefOfWith(n.With)
 	out.From = CloneSliceOfTableExpr(n.From)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
 	out.Where = CloneRefOfWhere(n.Where)
-	out.With = CloneRefOfWith(n.With)
 	out.GroupBy = CloneGroupBy(n.GroupBy)
 	out.Having = CloneRefOfWhere(n.Having)
 	out.Windows = CloneNamedWindows(n.Windows)

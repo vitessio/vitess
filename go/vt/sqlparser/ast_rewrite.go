@@ -7344,6 +7344,11 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 			return true
 		}
 	}
+	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
+		parent.(*Select).With = newNode.(*With)
+	}) {
+		return false
+	}
 	for x, el := range node.From {
 		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -7365,11 +7370,6 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}
 	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
 		parent.(*Select).Where = newNode.(*Where)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
-		parent.(*Select).With = newNode.(*With)
 	}) {
 		return false
 	}
