@@ -34,7 +34,7 @@ sleep 5
 # If the node already exists, it's fine, means we used existing data.
 echo "add ${cell} CellInfo"
 set +e
-command vtctldclient --server bundled AddCellInfo \
+command vtctldclient --server internal AddCellInfo \
   --root "/vitess/${cell}" \
   --server-address "${ETCD_SERVER}" \
   "${cell}"

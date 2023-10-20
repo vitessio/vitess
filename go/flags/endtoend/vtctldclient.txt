@@ -1,5 +1,5 @@
 If there are no running vtctld servers -- for example when boostrapping
-a new Vitess cluster -- you can specify a --server value of 'bundled'.
+a new Vitess cluster -- you can specify a --server value of 'internal'.
 When doing so, you would use the --topo* flags so that the client can
 connect directly to the topo server(s).
 

@@ -48,15 +48,14 @@ import (
 	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/vdiff"
 	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/workflow"
 
-	// These imports register the topo factories to use when --server=bundled.
+	// These imports register the topo factories to use when --server=internal.
 	_ "vitess.io/vitess/go/vt/topo/consultopo"
 	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
 	_ "vitess.io/vitess/go/vt/topo/zk2topo"
 )
 
-// The --server value if you want to use a "local"
-// vtctld server.
-const useBundledVtctld = "bundled"
+// The --server value if you want to use a "local" vtctld server.
+const useInternalVtctld = "internal"
 
 var (
 	// VtctldClientProtocol is the protocol to use when creating the vtctldclient.VtctldClient.
@@ -92,7 +91,7 @@ var (
 		Long: fmt.Sprintf(`If there are no running vtctld servers -- for example when boostrapping
 a new Vitess cluster -- you can specify a --server value of '%s'.
 When doing so, you would use the --topo* flags so that the client can
-connect directly to the topo server(s).`, useBundledVtctld),
+connect directly to the topo server(s).`, useInternalVtctld),
 		// We use PersistentPreRun to set up the tracer, grpc client, and
 		// command context for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
@@ -187,7 +186,7 @@ func getClientForCommand(cmd *cobra.Command) (vtctldclient.VtctldClient, error) 
 		return nil, errNoServer
 	}
 
-	if server == useBundledVtctld {
+	if server == useInternalVtctld {
 		ts, err := topo.OpenServer(topoOptions.implementation, strings.Join(topoOptions.globalServerAddresses, ","), topoOptions.globalRoot)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to the topology server: %v", err)
