@@ -33,6 +33,12 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: actions/checkout@v3
 
+      - name: Run FOSSA scan and upload build data
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
+        uses: fossa-contrib/fossa-action@v2
+        with:
+          fossa-api-key: ${{secrets.fossaApiKey}}
+
       - name: Check for changes in Go files
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: frouioui/paths-filter@main
@@ -214,3 +220,10 @@ jobs:
           echo "$output"
           echo ""
           exit 1
+
+      - name: Upload coverage reports to Codecov
+        timeout-minutes: 30
+        uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
