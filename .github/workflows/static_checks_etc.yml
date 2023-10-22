@@ -222,7 +222,6 @@ jobs:
           exit 1
 
       - name: Upload coverage reports to Codecov
-        if: github.ref == 'refs/heads/main'
         timeout-minutes: 30
         uses: codecov/codecov-action@v3
         env:
