@@ -6,6 +6,8 @@
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
   - **[Docker](#docker)**
     - [New MySQL Image](#mysql-image)
+  - **[New Stats](#new-stats)**
+    - [Stream Consolidations](#stream-consolidations)
 
 ## <a id="major-changes"/>Major Changes
 
@@ -21,3 +23,9 @@ In `v19.0` the Vitess team is shipping a new image: `vitess/mysql`.
 This lightweight image is a replacement of `vitess/lite` to only run `mysqld`.
 
 Several tags are available to let you choose what version of MySQL you want to use: `vitess/mysql:8.0.30`, `vitess/mysql:8.0.34`.
+
+### <a id="new-stats"/>new stats
+
+#### <a id="stream-consolidations"/>Stream Consolidations
+
+Prior to 19.0 VTTablet reported how much time non-streaming executions spend waiting for consolidations to occur. In 19.0, VTTablet reports a similar stat for streaming executions in `/debug/vars` stat `Waits.Histograms.StreamConsolidations`.
