@@ -34,7 +34,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Run FOSSA scan and upload build data
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
+        if: github.ref == 'refs/heads/main'
         uses: fossa-contrib/fossa-action@v2
         with:
           fossa-api-key: ${{secrets.fossaApiKey}}
@@ -222,6 +222,7 @@ jobs:
           exit 1
 
       - name: Upload coverage reports to Codecov
+        if: github.ref == 'refs/heads/main'
         timeout-minutes: 30
         uses: codecov/codecov-action@v3
         env:
