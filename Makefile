@@ -214,10 +214,9 @@ e2e_test: build
 	go test $(VT_GO_PARALLEL) ./go/.../endtoend/...
 
 # Run the code coverage tools, compute aggregate.
-# If you want to improve in a directory, run:
-#   go test -coverprofile=coverage.out && go tool cover -html=coverage.out
 unit_test_cover: build
-	go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
+	go test -coverprofile=coverage.out ./go/... || true
+	go tool cover -html=coverage.out || true
 
 unit_test_race: build dependency_check
 	tools/unit_test_race.sh

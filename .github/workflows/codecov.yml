@@ -1,0 +1,132 @@
+name: Code Coverage
+on: [push] # only on merges to main
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Code Coverage')
+  cancel-in-progress: true
+
+permissions: read-all
+
+env:
+  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+
+jobs:
+  test:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Skip workflow if it's not a merge to main
+      id: skip-workflow
+      run: |
+        skip='true'
+        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" == "refs/heads/main" ]]; then
+          skip='false'
+        fi
+        echo Skip ${skip}
+        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
+
+    - name: Check out code
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      uses: actions/checkout@v3
+
+    - name: Check for changes in relevant files
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      uses: frouioui/paths-filter@main
+      id: changes
+      with:
+        token: ''
+        filters: |
+          unit_tests:
+            - 'go/**'
+            - 'test.go'
+            - 'Makefile'
+            - 'build.env'
+            - 'go.sum'
+            - 'go.mod'
+            - 'proto/*.proto'
+            - 'tools/**'
+            - 'config/**'
+            - 'bootstrap.sh'
+            - '.github/workflows/unit_test_mysql80.yml'
+
+    - name: Set up Go
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.21.3
+
+    - name: Set up python
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      uses: actions/setup-python@v4
+
+    - name: Tune the OS
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      run: |
+        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+        # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
+        echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
+        sudo sysctl -p /etc/sysctl.conf
+
+    - name: Get dependencies
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      run: |
+        export DEBIAN_FRONTEND="noninteractive"
+        sudo apt-get update
+
+        # Uninstall any previously installed MySQL first
+        sudo systemctl stop apparmor
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
+        sudo deluser mysql
+        sudo rm -rf /var/lib/mysql
+        sudo rm -rf /etc/mysql
+
+        # Get key to latest MySQL repo
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+
+        # mysql80
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.24-1_all.deb
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
+
+        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
+        sudo service mysql stop
+        sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
+
+        mkdir -p dist bin
+        curl -L https://github.com/coreos/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz | tar -zxC dist
+        mv dist/etcd-v3.3.10-linux-amd64/{etcd,etcdctl} bin/
+
+        go mod download
+        go install golang.org/x/tools/cmd/goimports@latest
+        
+        # install JUnit report formatter
+        go install github.com/vitessio/go-junit-report@HEAD
+
+    - name: Run make tools
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      run: |
+        make tools
+
+    - name: Run unit tests and generate code coverage reports
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      timeout-minutes: 60
+      run: |
+        set -exo pipefail
+        # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+        # which musn't be more than 107 characters long.
+        export VTDATAROOT="/tmp/"
+
+        export NOVTADMINBUILD=1
+        eatmydata -- make unit_test_cover
+
+    - name: Upload coverage reports to codecov.io
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      uses: codecov/codecov-action@v3
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
