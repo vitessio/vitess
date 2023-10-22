@@ -105,9 +105,6 @@ jobs:
         go mod download
         go install golang.org/x/tools/cmd/goimports@latest
         
-        # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@HEAD
-
     - name: Run make tools
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       run: |

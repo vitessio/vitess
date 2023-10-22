@@ -214,7 +214,8 @@ e2e_test: build
 	go test $(VT_GO_PARALLEL) ./go/.../endtoend/...
 
 # Run the code coverage tools, compute aggregate.
-unit_test_cover: build
+unit_test_cover: build dependency_check demo
+	source build.env
 	go test -coverprofile=coverage.out ./go/... || true
 	go tool cover -html=coverage.out || true
 
