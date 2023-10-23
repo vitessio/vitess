@@ -68,9 +68,25 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator) (
 		return transformFkVerify(ctx, op)
 	case *operators.InsertSelection:
 		return transformInsertionSelection(ctx, op)
+	case *operators.Sequential:
+		return transformSequential(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequential) (logicalPlan, error) {
+	var lps []logicalPlan
+	for _, source := range op.Sources {
+		lp, err := transformToLogicalPlan(ctx, source)
+		if err != nil {
+			return nil, err
+		}
+		lps = append(lps, lp)
+	}
+	return &sequential{
+		sources: lps,
+	}, nil
 }
 
 func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators.InsertSelection) (logicalPlan, error) {
