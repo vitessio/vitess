@@ -310,8 +310,15 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 				return callback(resultChunk, currIndex)
 			})
 			if err != nil {
+				muFields.Lock()
+				if rest[currIndex] == nil {
+					// In case we haven't received any fields yet, we need to set it
+					// empty, or otherwise we will keep waiting forever.
+					rest[currIndex] = &sqltypes.Result{}
+				}
 				cancel()
 				condFields.Broadcast()
+				muFields.Unlock()
 			}
 			return err
 		})
