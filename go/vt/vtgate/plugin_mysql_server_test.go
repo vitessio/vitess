@@ -342,3 +342,80 @@ func TestKillMethods(t *testing.T) {
 	require.EqualError(t, cancelCtx.Err(), "context canceled")
 	require.True(t, mysqlConn.IsMarkedForClose())
 }
+
+func TestGracefulShutdown(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+
+	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected})
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	// add a connection
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+	vh.connections[1] = mysqlConn
+
+	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	assert.NoError(t, err)
+
+	listener.Shutdown()
+
+	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
+
+	require.True(t, mysqlConn.IsMarkedForClose())
+}
+
+func TestGracefulShutdownWithTransaction(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+
+	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected})
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	// add a connection
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+	vh.connections[1] = mysqlConn
+
+	err = vh.ComQuery(mysqlConn, "BEGIN", func(result *sqltypes.Result) error {
+		return nil
+	})
+	assert.NoError(t, err)
+
+	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	assert.NoError(t, err)
+
+	listener.Shutdown()
+
+	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	assert.NoError(t, err)
+
+	err = vh.ComQuery(mysqlConn, "COMMIT", func(result *sqltypes.Result) error {
+		return nil
+	})
+	assert.NoError(t, err)
+
+	require.False(t, mysqlConn.IsMarkedForClose())
+
+	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
+
+	require.True(t, mysqlConn.IsMarkedForClose())
+}
