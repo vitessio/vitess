@@ -142,7 +142,6 @@ func TestParseAndValidateCreateOptions(t *testing.T) {
 func SetupLocalVtctldClient(t *testing.T, ctx context.Context, cells ...string) {
 	ts, factory := memorytopo.NewServerAndFactory(ctx, cells...)
 	topo.RegisterFactory("test", factory)
-	// Setup a local vtctld server and client.
 	tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
 		return nil
 	})
@@ -150,6 +149,6 @@ func SetupLocalVtctldClient(t *testing.T, ctx context.Context, cells ...string) 
 	localvtctldclient.SetServer(vtctld)
 	command.VtctldClientProtocol = "local"
 	client, err := vtctldclient.New(command.VtctldClientProtocol, "")
-	require.NoError(t, err, "failed to create vtctld client")
+	require.NoError(t, err, "failed to create local vtctld client which uses an internal vtctld server")
 	common.SetClient(client)
 }
