@@ -234,15 +234,15 @@ install_all() {
   fi
 
   # etcd
-  install_dep "etcd" $ETCD_VER "$VTROOT/dist/etcd" install_etcd
+  install_dep "etcd" "$ETCD_VER" "$VTROOT/dist/etcd" install_etcd
 
   # consul
   if [ "$BUILD_CONSUL" == 1 ] ; then
-    install_dep "Consul" $CONSUL_VER "$VTROOT/dist/consul" install_consul
+    install_dep "Consul" "$CONSUL_VER" "$VTROOT/dist/consul" install_consul
   fi
 
   # toxiproxy
-  install_dep "toxiproxy" $TOXIPROXY_VER "$VTROOT/dist/toxiproxy" install_toxiproxy
+  install_dep "toxiproxy" "$TOXIPROXY_VER" "$VTROOT/dist/toxiproxy" install_toxiproxy
 
   echo
   echo "bootstrap finished - run 'make build' to compile"
