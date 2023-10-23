@@ -72,6 +72,12 @@ type tableDiffer struct {
 	sourceQuery string
 	table       *tabletmanagerdatapb.TableDefinition
 	lastPK      *querypb.QueryResult
+
+	// wgShardStreamers is used, with a cancellable context, to wait for all shard streamers
+	// to finish after each diff is complete.
+	wgShardStreamers   sync.WaitGroup
+	shardStreamsCtx    context.Context
+	shardStreamsCancel context.CancelFunc
 }
 
 func newTableDiffer(wd *workflowDiffer, table *tabletmanagerdatapb.TableDefinition, sourceQuery string) *tableDiffer {
@@ -121,19 +127,23 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		}
 	}()
 
+	shardStreamsCtx, shardStreamsCancel := context.WithCancel(ctx)
+	td.shardStreamsCtx = shardStreamsCtx
+	td.shardStreamsCancel = shardStreamsCancel
+
 	if err := td.selectTablets(ctx); err != nil {
 		return err
 	}
 	if err := td.syncSourceStreams(ctx); err != nil {
 		return err
 	}
-	if err := td.startSourceDataStreams(ctx); err != nil {
+	if err := td.startSourceDataStreams(shardStreamsCtx); err != nil {
 		return err
 	}
 	if err := td.syncTargetStreams(ctx); err != nil {
 		return err
 	}
-	if err := td.startTargetDataStream(ctx); err != nil {
+	if err := td.startTargetDataStream(shardStreamsCtx); err != nil {
 		return err
 	}
 	td.setupRowSorters()
@@ -353,11 +363,13 @@ func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) err
 }
 
 func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStreamer, query string, lastPK *querypb.QueryResult, gtidch chan string) {
+	td.wgShardStreamers.Add(1)
 	log.Infof("streamOneShard Start on %s using query: %s", participant.tablet.Alias.String(), query)
 	defer func() {
 		log.Infof("streamOneShard End on %s", participant.tablet.Alias.String())
 		close(participant.result)
 		close(gtidch)
+		td.wgShardStreamers.Done()
 	}()
 	participant.err = func() error {
 		conn, err := tabletconn.GetDialer()(participant.tablet, false)
