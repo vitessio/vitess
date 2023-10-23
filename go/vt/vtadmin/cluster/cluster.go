@@ -1248,6 +1248,16 @@ func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 }
 
 func (c *Cluster) getTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
+	res, err := c.Vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
+	tablets := make([]*vtadminpb.Tablet, len(res.Tablets))
+	for i, t := range res.Tablets {
+		tablets[i] = &vtadminpb.Tablet{
+			Cluster: c.ToProto(),
+			Tablet:  t,
+			// TODO: Add serving state, return these results
+		}
+	}
+
 	rows, err := c.DB.ShowTablets(ctx)
 	if err != nil {
 		return nil, err
