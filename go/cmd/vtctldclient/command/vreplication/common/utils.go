@@ -212,7 +212,7 @@ func AddCommonFlags(cmd *cobra.Command) {
 
 func AddCommonCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().StringSliceVarP(&CreateOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to copy table data from.")
-	cmd.Flags().BoolVar(&CreateOptions.AllCells, "all-cells", false, "Copy table data from any existing cell.")
+	cmd.Flags().BoolVarP(&CreateOptions.AllCells, "all-cells", "a", false, "Copy table data from any existing cell.")
 	cmd.Flags().Var((*topoproto.TabletTypeListFlag)(&CreateOptions.TabletTypes), "tablet-types", "Source tablet types to replicate table data from (e.g. PRIMARY,REPLICA,RDONLY).")
 	cmd.Flags().BoolVar(&CreateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-preference-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
 	cmd.Flags().StringVar(&CreateOptions.OnDDL, "on-ddl", onDDLDefault, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
