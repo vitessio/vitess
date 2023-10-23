@@ -18,7 +18,6 @@ package common_test
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -83,7 +82,7 @@ func TestParseAndValidateCreateOptions(t *testing.T) {
 			setFunc: func(cmd *cobra.Command) error {
 				cellsFlag := cmd.Flags().Lookup("cells")
 				allCellsFlag := cmd.Flags().Lookup("all-cells")
-				if err := cellsFlag.Value.Set(strings.Join(cells, ",")); err != nil {
+				if err := cellsFlag.Value.Set("cella"); err != nil {
 					return err
 				}
 				cellsFlag.Changed = true
