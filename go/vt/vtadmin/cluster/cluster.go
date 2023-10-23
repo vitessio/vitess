@@ -604,6 +604,7 @@ func (c *Cluster) findTablets(ctx context.Context, filter func(*vtadminpb.Tablet
 	span, _ := trace.FromContext(ctx)
 
 	tablets, err := c.GetTablets(ctx)
+
 	if err != nil {
 		return nil, err
 	}
@@ -1264,13 +1265,12 @@ func (c *Cluster) getTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 
 		go func(tablet *topodatapb.Tablet) {
 			defer wg.Done()
-
 			var state vtadminpb.Tablet_ServingState
 			_, err := c.Vtctld.RunHealthCheck(ctx, &vtctldatapb.RunHealthCheckRequest{
 				TabletAlias: tablet.Alias,
 			})
 			if err != nil {
-				state = vtadminpb.Tablet_NOT_SERVING
+				state = vtadminpb.Tablet_UNKNOWN
 			} else {
 				state = vtadminpb.Tablet_SERVING
 			}
@@ -1280,7 +1280,7 @@ func (c *Cluster) getTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 
 			tablets = append(tablets, &vtadminpb.Tablet{
 				Cluster: c.ToProto(),
-				Tablet:  t,
+				Tablet:  tablet,
 				State:   state,
 			})
 		}(t)
