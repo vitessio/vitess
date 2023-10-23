@@ -20,6 +20,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/dominikbraun/graph"
+
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -188,6 +190,10 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 	vschema := vindexes.BuildVSchema(v)
 	if vm.schema != nil {
 		vm.updateFromSchema(vschema)
+		if hasCyclesInFks(vschema) {
+			// TODO: Discuss how to handle this.
+			log.Errorf("There is a cycle in foreign keys.")
+		}
 	}
 	return vschema
 }
@@ -229,6 +235,46 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 			}
 		}
 	}
+}
+
+type tableCol struct {
+	tableName string
+	colNames  sqlparser.Columns
+}
+
+var tableColHash = func(tc tableCol) string {
+	res := tc.tableName
+	for _, colName := range tc.colNames {
+		res += "|" + colName.Lowered()
+	}
+	return res
+}
+
+func hasCyclesInFks(vschema *vindexes.VSchema) bool {
+	g := graph.New(tableColHash, graph.PreventCycles())
+	for _, ks := range vschema.Keyspaces {
+		for tableName, table := range ks.Tables {
+			for _, cfk := range table.ChildForeignKeys {
+				childTable := cfk.Table
+				parentVertex := tableCol{
+					tableName: tableName,
+					colNames:  cfk.ParentColumns,
+				}
+				childVertex := tableCol{
+					tableName: childTable.Name.String(),
+					colNames:  cfk.ChildColumns,
+				}
+				_ = g.AddVertex(parentVertex)
+				_ = g.AddVertex(childVertex)
+				err := g.AddEdge(tableColHash(parentVertex), tableColHash(childVertex))
+				if err != nil {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }
 
 func setColumns(ks *vindexes.KeyspaceSchema, tblName string, columns []vindexes.Column) *vindexes.Table {

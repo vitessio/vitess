@@ -3,11 +3,12 @@ package vtgate
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -421,3 +422,84 @@ func (f *fakeSchema) Views(string) map[string]sqlparser.SelectStatement {
 }
 
 var _ SchemaInfo = (*fakeSchema)(nil)
+
+func TestHasCyclesInFks(t *testing.T) {
+	tests := []struct {
+		name       string
+		getVschema func() *vindexes.VSchema
+		want       bool
+	}{
+		{
+			name: "Has a cycle",
+			getVschema: func() *vindexes.VSchema {
+				vschema := &vindexes.VSchema{
+					Keyspaces: map[string]*vindexes.KeyspaceSchema{
+						"ks": {
+							Tables: map[string]*vindexes.Table{
+								"t1": {
+									Name: sqlparser.NewIdentifierCS("t1"),
+								},
+								"t2": {
+									Name: sqlparser.NewIdentifierCS("t2"),
+								},
+								"t3": {
+									Name: sqlparser.NewIdentifierCS("t3"),
+								},
+							},
+						},
+					},
+				}
+				_ = vschema.AddForeignKey("ks", "t2", createFkDefinition([]string{"col"}, "t1", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
+				_ = vschema.AddForeignKey("ks", "t3", createFkDefinition([]string{"col"}, "t2", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
+				_ = vschema.AddForeignKey("ks", "t1", createFkDefinition([]string{"col"}, "t3", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
+				return vschema
+			},
+			want: true,
+		},
+		{
+			name: "No cycle",
+			getVschema: func() *vindexes.VSchema {
+				vschema := &vindexes.VSchema{
+					Keyspaces: map[string]*vindexes.KeyspaceSchema{
+						"ks": {
+							Tables: map[string]*vindexes.Table{
+								"t1": {
+									Name: sqlparser.NewIdentifierCS("t1"),
+								},
+								"t2": {
+									Name: sqlparser.NewIdentifierCS("t2"),
+								},
+								"t3": {
+									Name: sqlparser.NewIdentifierCS("t3"),
+								},
+							},
+						},
+					},
+				}
+				_ = vschema.AddForeignKey("ks", "t2", createFkDefinition([]string{"col"}, "t1", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
+				_ = vschema.AddForeignKey("ks", "t3", createFkDefinition([]string{"col"}, "t2", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
+				return vschema
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, hasCyclesInFks(tt.getVschema()))
+		})
+	}
+}
+
+// createFkDefinition is a helper function to create a Foreign key definition struct from the columns used in it provided as list of strings.
+func createFkDefinition(childCols []string, parentTableName string, parentCols []string, onUpdate, onDelete sqlparser.ReferenceAction) *sqlparser.ForeignKeyDefinition {
+	pKs, pTbl, _ := sqlparser.ParseTable(parentTableName)
+	return &sqlparser.ForeignKeyDefinition{
+		Source: sqlparser.MakeColumns(childCols...),
+		ReferenceDefinition: &sqlparser.ReferenceDefinition{
+			ReferencedTable:   sqlparser.NewTableNameWithQualifier(pTbl, pKs),
+			ReferencedColumns: sqlparser.MakeColumns(parentCols...),
+			OnUpdate:          onUpdate,
+			OnDelete:          onDelete,
+		},
+	}
+}
