@@ -542,3 +542,30 @@ func TestConstantFolding(t *testing.T) {
 		})
 	}
 }
+
+// TestCTEToDerivedTableRewrite checks that CTEs are correctly rewritten to derived tables
+func TestCTEToDerivedTableRewrite(t *testing.T) {
+	cDB := "db"
+	tcases := []struct {
+		sql    string
+		expSQL string
+	}{{
+		sql:    "with x as (select 1 as id) select * from x",
+		expSQL: "select id from (select 1 as id from dual) as x",
+	}, {
+		sql:    "with x as (select 1 as id), z as (select id + 1 from x) select * from z",
+		expSQL: "select `id + 1` from (select id + 1 from (select 1 as id from dual) as x) as z",
+	}, {
+		sql:    "with x(id) as (select 1) select * from x",
+		expSQL: "select id from (select 1 as id from dual) as x(id``)",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.Parse(tcase.sql)
+			require.NoError(t, err)
+			_, err = Analyze(ast, cDB, fakeSchemaInfo())
+			require.NoError(t, err)
+			require.Equal(t, tcase.expSQL, sqlparser.String(ast))
+		})
+	}
+}

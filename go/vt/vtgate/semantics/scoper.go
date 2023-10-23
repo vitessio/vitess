@@ -134,7 +134,13 @@ func (s *scoper) enterJoinScope(cursor *sqlparser.Cursor) {
 		// can only see the two tables involved in the JOIN, and no other tables of that select statement.
 		// They are allowed to see the tables of the outer select query.
 		// To create this special context, we will find the parent scope of the select statement involved.
-		nScope := newScope(s.currentScope().findParentScopeOfStatement())
+		currScope := s.currentScope()
+		stmtScope := currScope.findParentScopeOfStatement()
+		nScope := newScope(stmtScope)
+		if stmtScope == nil {
+			// TODO: this feels hacky. revisit with a better plan
+			nScope.ctes = currScope.ctes
+		}
 		nScope.stmt = cursor.Parent().(*sqlparser.Select)
 		s.push(nScope)
 	}
@@ -342,4 +348,15 @@ func (s *scope) findParentScopeOfStatement() *scope {
 		return nil
 	}
 	return s.parent.findParentScopeOfStatement()
+}
+
+// findCTE will search in this scope, and then recursively search the parents
+func (s *scope) findCTE(name string) *sqlparser.CommonTableExpr {
+	cte, found := s.ctes[name]
+	if found || s.parent == nil {
+		// if we don't have a parent, we'll return
+		// whatever we have, even if it happens to be nil
+		return cte
+	}
+	return s.parent.findCTE(name)
 }

@@ -57,7 +57,40 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		return handleCollateExpr(r, node)
 	case *sqlparser.ComparisonExpr:
 		return handleComparisonExpr(cursor, node)
+	case *sqlparser.With:
+		return r.handleWith(node)
+	case *sqlparser.AliasedTableExpr:
+		tbl, ok := node.Expr.(sqlparser.TableName)
+		if !ok || !tbl.Qualifier.IsEmpty() {
+			return nil
+		}
+		scope := r.scoper.currentScope()
+		cte := scope.findCTE(tbl.Name.String())
+		if cte == nil {
+			return nil
+		}
+		if node.As.IsEmpty() {
+			node.As = tbl.Name
+		}
+		node.Expr = &sqlparser.DerivedTable{
+			Select: cte.Subquery.Select,
+		}
+		if len(cte.Columns) > 0 {
+			node.Columns = cte.Columns
+		}
 	}
+	return nil
+}
+
+func (r *earlyRewriter) handleWith(node *sqlparser.With) error {
+	scope := r.scoper.currentScope()
+	for _, cte := range node.CTEs {
+		err := scope.addCTE(cte)
+		if err != nil {
+			return err
+		}
+	}
+	node.CTEs = nil
 	return nil
 }
 
@@ -84,7 +117,7 @@ func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
 		return err
 	}
 
-	// since the binder has already been over the join, we need to invoke it again so it
+	// since the binder has already been over the join, we need to invoke it again, so it
 	// can bind columns to the right tables
 	sqlparser.Rewrite(node.Condition.On, nil, func(cursor *sqlparser.Cursor) bool {
 		innerErr := r.binder.up(cursor)

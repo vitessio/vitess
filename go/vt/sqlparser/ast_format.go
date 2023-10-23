@@ -133,6 +133,9 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *With) Format(buf *TrackedBuffer) {
+	if len(node.CTEs) == 0 {
+		return
+	}
 	buf.astPrintf(node, "with ")
 
 	if node.Recursive {
