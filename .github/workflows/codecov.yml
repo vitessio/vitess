@@ -1,69 +1,45 @@
 name: Code Coverage
-on: # only on merges to main
+on:
   push:
     branches:
       - main
+  pull_request:
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Code Coverage')
   cancel-in-progress: true
 
 permissions: read-all
 
-env:
-  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
-
 jobs:
   test:
     name: Code Coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
-    - name: Skip workflow if it's not a merge to main
-      id: skip-workflow
-      run: |
-        skip='true'
-        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" == "refs/heads/main" ]]; then
-          skip='false'
-        fi
-        echo Skip ${skip}
-        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
-
     - name: Check out code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@v3
 
-    - name: Check for changes in relevant files
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+    - name: Check for changes in files relevant to code coverage
       uses: frouioui/paths-filter@main
       id: changes
       with:
         token: ''
         filters: |
-          unit_tests:
+          go_files:
             - 'go/**'
-            - 'test.go'
-            - 'Makefile'
-            - 'build.env'
-            - 'go.sum'
-            - 'go.mod'
-            - 'proto/*.proto'
-            - 'tools/**'
-            - 'config/**'
-            - 'bootstrap.sh'
-            - '.github/workflows/unit_test_mysql80.yml'
 
     - name: Set up Go
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      if: steps.changes.outputs.go_files == 'true'
       uses: actions/setup-go@v4
       with:
         go-version: 1.21.3
 
     - name: Set up python
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      if: steps.changes.outputs.go_files == 'true'
       uses: actions/setup-python@v4
 
     - name: Tune the OS
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      if: steps.changes.outputs.go_files == 'true'
       run: |
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
@@ -71,7 +47,7 @@ jobs:
         sudo sysctl -p /etc/sysctl.conf
 
     - name: Get dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      if: steps.changes.outputs.go_files == 'true'
       run: |
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
@@ -109,12 +85,12 @@ jobs:
         go install golang.org/x/tools/cmd/goimports@latest
         
     - name: Run make tools
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      if: steps.changes.outputs.go_files == 'true'
       run: |
         make tools
 
     - name: Run unit tests and generate code coverage reports
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      if: steps.changes.outputs.go_files == 'true'
       timeout-minutes: 45
       run: |
         set -exo pipefail
@@ -128,7 +104,7 @@ jobs:
         eatmydata -- make unit_test_cover
 
     - name: Upload coverage reports to codecov.io
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      if: steps.changes.outputs.go_files == 'true'
       uses: codecov/codecov-action@v3
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
