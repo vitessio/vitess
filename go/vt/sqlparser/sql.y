@@ -1126,11 +1126,12 @@ create_statement:
     ddl := &DDL{Action: AlterStr, Table: $7, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $4, Using: $5, Type: $2, Columns: $9, Options: $11}}
     $$ = &AlterTable{Table: $7, Statements: []*DDL{ddl}}
   }
-| CREATE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position
+| CREATE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position
   {
     $2.ViewName = $4.ToViewName()
-    $2.ViewExpr = $8
-    $$ = &DDL{Action: CreateStr, ViewSpec: $2, SpecialCommentMode: $7, SubStatementPositionStart: $6, SubStatementPositionEnd: $9 - 1}
+    $2.ViewExpr = $9
+    $2.Columns = $5
+    $$ = &DDL{Action: CreateStr, ViewSpec: $2, SpecialCommentMode: $8, SubStatementPositionStart: $7, SubStatementPositionEnd: $10 - 1}
   }
 | CREATE OR REPLACE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position
   {
