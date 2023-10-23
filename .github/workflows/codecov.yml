@@ -1,5 +1,8 @@
 name: Code Coverage
-on: [push] # only on merges to main
+on: # only on merges to main
+  push:
+    branches:
+      - main
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Code Coverage')
   cancel-in-progress: true
@@ -112,7 +115,7 @@ jobs:
 
     - name: Run unit tests and generate code coverage reports
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      timeout-minutes: 60
+      timeout-minutes: 45
       run: |
         set -exo pipefail
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
