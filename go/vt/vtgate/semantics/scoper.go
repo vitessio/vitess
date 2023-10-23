@@ -300,8 +300,27 @@ func (s *scope) addCTE(cte *sqlparser.CommonTableExpr) error {
 	if exists {
 		return vterrors.VT03013(name)
 	}
+	if err := checkForInvalidAliasUse(cte, name); err != nil {
+		return err
+	}
 	s.ctes[name] = cte
 	return nil
+}
+
+func checkForInvalidAliasUse(cte *sqlparser.CommonTableExpr, name string) (err error) {
+	// TODO I'm sure there is a better. way, but we need to do this to stop infinite loops from occurring
+	down := func(node sqlparser.SQLNode, parent sqlparser.SQLNode) bool {
+		tbl, ok := node.(sqlparser.TableName)
+		if !ok || !tbl.Qualifier.IsEmpty() {
+			return err == nil
+		}
+		if tbl.Name.String() == name {
+			err = vterrors.VT12001("do not support CTE that use the CTE alias inside the CTE query")
+		}
+		return err == nil
+	}
+	_ = sqlparser.CopyOnRewrite(cte.Subquery.Select, down, nil, nil)
+	return err
 }
 
 func (s *scope) addTable(info TableInfo) error {

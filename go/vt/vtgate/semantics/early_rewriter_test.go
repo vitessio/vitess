@@ -557,7 +557,7 @@ func TestCTEToDerivedTableRewrite(t *testing.T) {
 		expSQL: "select `id + 1` from (select id + 1 from (select 1 as id from dual) as x) as z",
 	}, {
 		sql:    "with x(id) as (select 1) select * from x",
-		expSQL: "select id from (select 1 as id from dual) as x(id``)",
+		expSQL: "select id from (select 1 from dual) as x(id)",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
