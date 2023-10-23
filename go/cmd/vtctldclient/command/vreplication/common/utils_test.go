@@ -40,9 +40,7 @@ func TestParseAndValidateCreateOptions(t *testing.T) {
 	ctx, cancel := context.WithTimeout(common.GetCommandCtx(), 60*time.Second)
 	defer cancel()
 	cells := []string{"zone1", "zone2", "zone3"}
-	ts, factory := memorytopo.NewServerAndFactory(ctx, cells...)
-	topo.RegisterFactory("test", factory)
-	setupLocalVtctldClient(t, ts)
+	SetupLocalVtctldClient(t, ctx, cells...)
 
 	tests := []struct {
 		name      string
@@ -138,7 +136,12 @@ func TestParseAndValidateCreateOptions(t *testing.T) {
 	}
 }
 
-func setupLocalVtctldClient(t *testing.T, ts *topo.Server) {
+// SetupLocalVtctldClient sets up a local or internal VtctldServer and
+// VtctldClient for tests. It uses a memorytopo instance which contains
+// the cells provided.
+func SetupLocalVtctldClient(t *testing.T, ctx context.Context, cells ...string) {
+	ts, factory := memorytopo.NewServerAndFactory(ctx, cells...)
+	topo.RegisterFactory("test", factory)
 	// Setup a local vtctld server and client.
 	tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
 		return nil

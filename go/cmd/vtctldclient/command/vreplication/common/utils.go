@@ -111,12 +111,12 @@ func ParseCells(cmd *cobra.Command) error {
 			CreateOptions.Cells[i] = strings.TrimSpace(cell)
 		}
 	}
-	if CreateOptions.AllCells {
+	if CreateOptions.AllCells { // Use all current cells
 		ctx, cancel := context.WithTimeout(commandCtx, topo.RemoteOperationTimeout)
 		defer cancel()
 		resp, err := client.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get current cells: %v", err)
 		}
 		CreateOptions.Cells = make([]string, len(resp.Names))
 		copy(CreateOptions.Cells, resp.Names)
