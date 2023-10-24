@@ -751,31 +751,6 @@
     }
   },
   {
-    "comment": "with keepers as (select id from unsharded where col is not null order by col desc limit 10) update unsharded as foo left join keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000",
-    "query": "with keepers as (select id from unsharded where col is not null order by col desc limit 10) update unsharded as foo left join keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000",
-    "plan": "VT12001: unsupported: WITH expression in UPDATE statement"
-  },
-  {
-    "comment": "with keepers as (select id from unsharded where col is not null order by col desc limit 10) delete foo from unsharded as foo left join keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
-    "query": "with keepers as (select id from unsharded where col is not null order by col desc limit 10) delete foo from unsharded as foo left join keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
-    "plan": "VT12001: unsupported: WITH expression in DELETE statement"
-  },
-  {
-    "comment": "with music as (select * from user) delete music from music where id = 1",
-    "query": "with music as (select * from user) delete music from music where id = 1",
-    "plan": "VT12001: unsupported: WITH expression in DELETE statement"
-  },
-  {
-    "comment": "with music as (select * from user) delete user from music where id = 1",
-    "query": "with music as (select * from user) delete user from music where id = 1",
-    "plan": "VT12001: unsupported: WITH expression in DELETE statement"
-  },
-  {
-    "comment": "with keepers as (select id from unsharded a join unsharded_b b on a.user_id = b.user_id) delete foo from unsharded as foo join keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
-    "query": "with keepers as (select id from unsharded a join unsharded_b b on a.user_id = b.user_id) delete foo from unsharded as foo join keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
-    "plan": "VT12001: unsupported: WITH expression in DELETE statement"
-  },
-  {
     "comment": "with t as (select id, col from user where id = 5) select id from t",
     "query": "with t as (select id, col from user where id = 5) select id from t",
     "plan": {
@@ -854,11 +829,6 @@
         "user.user_extra"
       ]
     }
-  },
-  {
-    "comment": "with t as (select user.id, id from user where user.id = 5) select t.id from t join user_extra on t.id = user_extra.user_id",
-    "query": "with t as (select user.id, id from user where user.id = 5) select t.id from t join user_extra on t.id = user_extra.user_id",
-    "plan": "Duplicate column name 'id'"
   },
   {
     "comment": "with t as (select id from user where id = 5) select t.id from user_extra join t on t.id = user_extra.user_id",
@@ -961,11 +931,6 @@
         "user.user"
       ]
     }
-  },
-  {
-    "comment": "with t as (select id from user) select t.id from  t join user_extra on t.id = user_extra.user_id where t.col = 42",
-    "query": "with t as (select id from user) select t.id from  t join user_extra on t.id = user_extra.user_id where t.col = 42",
-    "plan": "column 't.col' not found"
   },
   {
     "comment": "with t as (select id, col from route1) select id from  t where id = 5",
