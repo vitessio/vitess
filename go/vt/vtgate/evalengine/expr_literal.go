@@ -43,12 +43,7 @@ func (l *Literal) typeof(*ExpressionEnv, []*querypb.Field) (sqltypes.Type, typeF
 	case nil:
 		return sqltypes.Null, flagNull | flagNullable
 	case *evalBytes:
-		if e.isBitLiteral {
-			f |= flagBit
-		}
-		if e.isHexLiteral {
-			f |= flagHex
-		}
+		f = e.flag
 	case *evalInt64:
 		if e.i == math.MinInt64 {
 			f |= flagIntegerUdf

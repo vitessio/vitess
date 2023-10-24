@@ -29,11 +29,10 @@ import (
 )
 
 type evalBytes struct {
-	tt           int16
-	isHexLiteral bool
-	isBitLiteral bool
-	col          collations.TypedCollation
-	bytes        []byte
+	tt    int16
+	flag  typeFlag
+	col   collations.TypedCollation
+	bytes []byte
 }
 
 var _ eval = (*evalBytes)(nil)
@@ -44,14 +43,14 @@ func newEvalRaw(typ sqltypes.Type, raw []byte, col collations.TypedCollation) *e
 }
 
 func newEvalBytesHex(raw []byte) eval {
-	return &evalBytes{tt: int16(sqltypes.VarBinary), isHexLiteral: true, col: collationBinary, bytes: raw}
+	return &evalBytes{tt: int16(sqltypes.VarBinary), flag: flagHex, col: collationBinary, bytes: raw}
 }
 
 // newEvalBytesBit creates a new evalBytes for a bit literal.
 // Turns out that a bit literal is not actually typed with
 // sqltypes.Bit, but with sqltypes.VarBinary.
 func newEvalBytesBit(raw []byte) eval {
-	return &evalBytes{tt: int16(sqltypes.VarBinary), isBitLiteral: true, col: collationBinary, bytes: raw}
+	return &evalBytes{tt: int16(sqltypes.VarBinary), flag: flagBit, col: collationBinary, bytes: raw}
 }
 
 func newEvalBinary(raw []byte) *evalBytes {
@@ -119,8 +118,16 @@ func (e *evalBytes) isBinary() bool {
 	return e.SQLType() == sqltypes.VarBinary || e.SQLType() == sqltypes.Binary || e.SQLType() == sqltypes.Blob
 }
 
+func (e *evalBytes) isHexLiteral() bool {
+	return e.flag&flagHex != 0
+}
+
+func (e *evalBytes) isBitLiteral() bool {
+	return e.flag&flagBit != 0
+}
+
 func (e *evalBytes) isHexOrBitLiteral() bool {
-	return e.isHexLiteral || e.isBitLiteral
+	return e.isHexLiteral() || e.isBitLiteral()
 }
 
 func (e *evalBytes) isVarChar() bool {

@@ -133,7 +133,7 @@ func integerDivideConvert(arg eval) evalNumeric {
 		return dec
 	}
 
-	if b1, ok := arg.(*evalBytes); ok && b1.isHexLiteral {
+	if b1, ok := arg.(*evalBytes); ok && b1.isHexLiteral() {
 		hex, ok := b1.toNumericHex()
 		if !ok {
 			return newEvalDecimal(decimal.Zero, 0, 0)

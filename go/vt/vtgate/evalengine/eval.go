@@ -33,7 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vthash"
 )
 
-type typeFlag uint32
+type typeFlag uint16
 
 const (
 	// flagNull marks that this value is null; implies flagNullable
@@ -149,7 +149,7 @@ func evalIsTruthy(e eval) boolean {
 	case *evalDecimal:
 		return makeboolean(!e.dec.IsZero())
 	case *evalBytes:
-		if e.isHexLiteral {
+		if e.isHexLiteral() {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow

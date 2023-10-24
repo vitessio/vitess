@@ -102,7 +102,7 @@ func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 	case evalNumeric:
 		return e
 	case *evalBytes:
-		if e.isHexLiteral {
+		if e.isHexLiteral() {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
@@ -148,7 +148,7 @@ func evalToFloat(e eval) (*evalFloat, bool) {
 	case evalNumeric:
 		return e.toFloat()
 	case *evalBytes:
-		if e.isHexLiteral {
+		if e.isHexLiteral() {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
@@ -190,7 +190,7 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 	case evalNumeric:
 		return e.toDecimal(m, d)
 	case *evalBytes:
-		if e.isHexLiteral {
+		if e.isHexLiteral() {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
@@ -248,7 +248,7 @@ func evalToInt64(e eval) *evalInt64 {
 	case evalNumeric:
 		return e.toInt64()
 	case *evalBytes:
-		if e.isHexLiteral {
+		if e.isHexLiteral() {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
