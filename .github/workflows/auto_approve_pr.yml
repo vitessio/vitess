@@ -12,8 +12,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Approve Pull Request
-        if: github.event.pull_request.user.login == 'bot-vitess[bot]' && github.event.pull_request.draft == 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr review ${{ github.event.pull_request.number }} --approve
+          if [[ "${{github.event.pull_request.user.login}}" ==  "bot-vitess[bot]" ]] && [[ "${{github.event.pull_request.draft}}" == "false" ]]; then
+            gh pr review ${{ github.event.pull_request.number }} --approve
+          fi
