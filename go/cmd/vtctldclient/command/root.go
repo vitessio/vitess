@@ -94,7 +94,8 @@ var (
 	Root = &cobra.Command{
 		Use:   "vtctldclient",
 		Short: "Executes a cluster management command on the remote vtctld server.",
-		Long: fmt.Sprintf(`If there are no running vtctld servers -- for example when bootstrapping
+		Long: fmt.Sprintf(`Executes a cluster management command on the remote vtctld server.
+If there are no running vtctld servers -- for example when bootstrapping
 a new Vitess cluster -- you can specify a --server value of '%s'.
 When doing so, you would use the --topo* flags so that the client can
 connect directly to the topo server(s).`, useInternalVtctld),
