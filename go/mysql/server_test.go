@@ -225,7 +225,7 @@ func (th *testHandler) ComParsedQuery(c *Conn, query string, parsed sqlparser.St
 	return th.ComQuery(c, query, callback)
 }
 
-func (th *testHandler) ComPrepare(c *Conn, query string) ([]*querypb.Field, error) {
+func (th *testHandler) ComPrepare(c *Conn, query string, prepare *PrepareData) ([]*querypb.Field, error) {
 	return nil, nil
 }
 
