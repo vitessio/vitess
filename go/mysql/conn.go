@@ -1088,6 +1088,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		parserOptions, err := handler.ParserOptionsForConnection(c)
 		if err != nil {
+			log.Errorf("unable to determine parser options for current connection: %s", err.Error())
 			return err
 		}
 
@@ -1139,8 +1140,9 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		c.PrepareData[c.StatementID] = prepare
 
-		fld, err := handler.ComPrepare(c, query)
+		fld, err := handler.ComPrepare(c, query, prepare)
 		if err != nil {
+			log.Errorf("unable to prepare query: %s", err.Error())
 			if werr := c.writeErrorPacketFromError(err); werr != nil {
 				// If we can't even write the error, we're done.
 				log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
