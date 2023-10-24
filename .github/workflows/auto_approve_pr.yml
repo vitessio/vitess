@@ -1,0 +1,19 @@
+name: Auto Approval of Bot Pull Requests
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  auto_approve:
+    name: Approve Pull Request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Approve Pull Request
+        if: ${{ github.event.pull_request.user.login == 'vitess-bot[bot]' }} && ${{ github.event.pull_request.draft == 'false' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr review ${{ github.event.pull_request.number }} --approve
