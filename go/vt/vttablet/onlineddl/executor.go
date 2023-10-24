@@ -94,6 +94,10 @@ var (
 	retainOnlineDDLTables   = 24 * time.Hour
 	defaultCutOverThreshold = 10 * time.Second
 	maxConcurrentOnlineDDLs = 256
+
+	migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
+	maxConstraintNameLength     = 64
+	cutoverIntervals            = []time.Duration{0, 1 * time.Minute, 5 * time.Minute, 10 * time.Minute, 30 * time.Minute}
 )
 
 func init() {
@@ -108,9 +112,6 @@ func registerOnlineDDLFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&retainOnlineDDLTables, "retain_online_ddl_tables", retainOnlineDDLTables, "How long should vttablet keep an old migrated table before purging it")
 	fs.IntVar(&maxConcurrentOnlineDDLs, "max_concurrent_online_ddl", maxConcurrentOnlineDDLs, "Maximum number of online DDL changes that may run concurrently")
 }
-
-var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
-var maxConstraintNameLength = 64
 
 const (
 	maxPasswordLength                        = 32 // MySQL's *replication* password may not exceed 32 characters
@@ -3461,6 +3462,8 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	uuidsFoundRunning := map[string]bool{}
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
+		cutoverAttempts := row.AsInt64("cutover_attempts", 0)
+		sinceLastCutoverAttempt := time.Second * time.Duration(row.AsInt64("seconds_since_last_cutover_attempt", 0))
 		onlineDDL, migrationRow, err := e.readMigration(ctx, uuid)
 		if err != nil {
 			return countRunnning, cancellable, err
@@ -3540,6 +3543,15 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 						// override. Even if migration is ready, we do not complete it.
 						isReady = false
 					}
+					// Check how much time passed since last cut-over attempt
+					desiredTimeSinceLastCutover := cutoverIntervals[len(cutoverIntervals)-1]
+					if int(cutoverAttempts) < len(cutoverIntervals) {
+						desiredTimeSinceLastCutover = cutoverIntervals[cutoverAttempts]
+					}
+					if sinceLastCutoverAttempt < desiredTimeSinceLastCutover {
+						isReady = false
+					}
+					fmt.Printf("======= cutoverAttempts=%v, desiredTimeSinceLastCutover=%v, sinceLastCutoverAttempt=%v, isReady=%v\n", cutoverAttempts, desiredTimeSinceLastCutover, sinceLastCutoverAttempt, isReady)
 					if isReady && onlineDDL.StrategySetting().IsInOrderCompletion() {
 						if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
 							// wait for earlier pending migrations to complete
@@ -4392,7 +4404,7 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	query, err := sqlparser.ParseAndBind(sqlUpdateCompleteMigration,
+	query, err := sqlparser.ParseAndBind(sqlClearPostponeCompletion,
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {

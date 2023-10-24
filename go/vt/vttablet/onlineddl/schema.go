@@ -159,7 +159,8 @@ const (
 			migration_uuid=%a
 	`
 	sqlIncrementCutoverAttempts = `UPDATE _vt.schema_migrations
-			SET cutover_attempts=cutover_attempts+1
+			SET cutover_attempts=cutover_attempts+1,
+			last_cutover_attempt_timestamp=NOW()
 		WHERE
 			migration_uuid=%a
 	`
@@ -174,7 +175,7 @@ const (
 			migration_uuid=%a
 			AND postpone_launch != 0
 	`
-	sqlUpdateCompleteMigration = `UPDATE _vt.schema_migrations
+	sqlClearPostponeCompletion = `UPDATE _vt.schema_migrations
 			SET postpone_completion=0
 		WHERE
 			migration_uuid=%a
@@ -253,6 +254,7 @@ const (
 			liveness_timestamp=NULL,
 			cancelled_timestamp=NULL,
 			completed_timestamp=NULL,
+			last_cutover_attempt_timestamp=NULL,
 			cleanup_timestamp=NULL
 		WHERE
 			migration_status IN ('failed', 'cancelled')
@@ -273,6 +275,7 @@ const (
 			liveness_timestamp=NULL,
 			cancelled_timestamp=NULL,
 			completed_timestamp=NULL,
+			last_cutover_attempt_timestamp=NULL,
 			cleanup_timestamp=NULL
 		WHERE
 			migration_status IN ('failed', 'cancelled')
@@ -286,6 +289,8 @@ const (
 	sqlSelectRunningMigrations = `SELECT
 			migration_uuid,
 			postpone_completion,
+			cutover_attempts,
+			ifnull(timestampdiff(second, last_cutover_attempt_timestamp, now()), 0) as seconds_since_last_cutover_attempt,
 			timestampdiff(second, started_timestamp, now()) as elapsed_seconds
 		FROM _vt.schema_migrations
 		WHERE
