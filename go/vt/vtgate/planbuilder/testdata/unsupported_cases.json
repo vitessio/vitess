@@ -255,16 +255,6 @@
     "plan": "VT12001: unsupported: WITH expression in UPDATE statement"
   },
   {
-    "comment": "unsupported with clause in select statement",
-    "query": "with x as (select * from user) select * from x",
-    "plan": "VT12001: unsupported: WITH expression in SELECT statement"
-  },
-  {
-    "comment": "unsupported with clause in union statement",
-    "query": "with x as (select * from user) select * from x union select * from x",
-    "plan": "VT12001: unsupported: WITH expression in UNION statement"
-  },
-  {
     "comment": "insert having subquery in row values",
     "query": "insert into user(id, name) values ((select 1 from user where id = 1), 'A')",
     "plan": "expr cannot be translated, not supported: (select 1 from `user` where id = 1)"

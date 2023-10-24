@@ -4590,10 +4590,10 @@ func (cmp *Comparator) RefOfUnion(a, b *Union) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
+		cmp.RefOfWith(a.With, b.With) &&
 		cmp.SelectStatement(a.Left, b.Left) &&
 		cmp.SelectStatement(a.Right, b.Right) &&
 		cmp.OrderBy(a.OrderBy, b.OrderBy) &&
-		cmp.RefOfWith(a.With, b.With) &&
 		cmp.RefOfLimit(a.Limit, b.Limit) &&
 		a.Lock == b.Lock &&
 		cmp.RefOfSelectInto(a.Into, b.Into)

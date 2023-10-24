@@ -5977,18 +5977,18 @@ func (c *cow) copyOnRewriteRefOfUnion(n *Union, parent SQLNode) (out SQLNode, ch
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
+		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
 		_Left, changedLeft := c.copyOnRewriteSelectStatement(n.Left, n)
 		_Right, changedRight := c.copyOnRewriteSelectStatement(n.Right, n)
 		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
-		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
 		_Into, changedInto := c.copyOnRewriteRefOfSelectInto(n.Into, n)
-		if changedLeft || changedRight || changedOrderBy || changedWith || changedLimit || changedInto {
+		if changedWith || changedLeft || changedRight || changedOrderBy || changedLimit || changedInto {
 			res := *n
+			res.With, _ = _With.(*With)
 			res.Left, _ = _Left.(SelectStatement)
 			res.Right, _ = _Right.(SelectStatement)
 			res.OrderBy, _ = _OrderBy.(OrderBy)
-			res.With, _ = _With.(*With)
 			res.Limit, _ = _Limit.(*Limit)
 			res.Into, _ = _Into.(*SelectInto)
 			out = &res

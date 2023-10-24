@@ -60,24 +60,29 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	case *sqlparser.With:
 		return r.handleWith(node)
 	case *sqlparser.AliasedTableExpr:
-		tbl, ok := node.Expr.(sqlparser.TableName)
-		if !ok || !tbl.Qualifier.IsEmpty() {
-			return nil
-		}
-		scope := r.scoper.currentScope()
-		cte := scope.findCTE(tbl.Name.String())
-		if cte == nil {
-			return nil
-		}
-		if node.As.IsEmpty() {
-			node.As = tbl.Name
-		}
-		node.Expr = &sqlparser.DerivedTable{
-			Select: cte.Subquery.Select,
-		}
-		if len(cte.Columns) > 0 {
-			node.Columns = cte.Columns
-		}
+		return r.handleAliasedTable(node)
+	}
+	return nil
+}
+
+func (r *earlyRewriter) handleAliasedTable(node *sqlparser.AliasedTableExpr) error {
+	tbl, ok := node.Expr.(sqlparser.TableName)
+	if !ok || !tbl.Qualifier.IsEmpty() {
+		return nil
+	}
+	scope := r.scoper.currentScope()
+	cte := scope.findCTE(tbl.Name.String())
+	if cte == nil {
+		return nil
+	}
+	if node.As.IsEmpty() {
+		node.As = tbl.Name
+	}
+	node.Expr = &sqlparser.DerivedTable{
+		Select: cte.Subquery.Select,
+	}
+	if len(cte.Columns) > 0 {
+		node.Columns = cte.Columns
 	}
 	return nil
 }

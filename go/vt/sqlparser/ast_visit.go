@@ -3972,6 +3972,9 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfWith(in.With, f); err != nil {
+		return err
+	}
 	if err := VisitSelectStatement(in.Left, f); err != nil {
 		return err
 	}
@@ -3979,9 +3982,6 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 		return err
 	}
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfWith(in.With, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {

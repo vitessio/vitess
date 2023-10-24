@@ -293,11 +293,11 @@ type (
 
 	// Union represents a UNION statement.
 	Union struct {
+		With     *With
 		Left     SelectStatement
 		Right    SelectStatement
 		Distinct bool
 		OrderBy  OrderBy
-		With     *With
 		Limit    *Limit
 		Lock     Lock
 		Into     *SelectInto

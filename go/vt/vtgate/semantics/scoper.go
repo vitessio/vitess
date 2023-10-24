@@ -66,6 +66,8 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 		s.pushDMLScope(node)
 	case *sqlparser.Select:
 		s.pushSelectScope(node)
+	case *sqlparser.Union:
+		s.pushUnionScope(node)
 	case sqlparser.TableExpr:
 		s.enterJoinScope(cursor)
 	case sqlparser.SelectExprs:
@@ -75,12 +77,19 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 	case sqlparser.GroupBy:
 		return s.addColumnInfoForGroupBy(cursor, node)
 	case *sqlparser.Where:
-		if node.Type != sqlparser.HavingClause {
-			break
+		if node.Type == sqlparser.HavingClause {
+			return s.createSpecialScopePostProjection(cursor.Parent())
 		}
-		return s.createSpecialScopePostProjection(cursor.Parent())
 	}
 	return nil
+}
+
+func (s *scoper) pushUnionScope(union *sqlparser.Union) {
+	currentScope := s.currentScope()
+	currScope := newScope(currentScope)
+	currScope.stmtScope = true
+	currScope.stmt = union
+	s.push(currScope)
 }
 
 func (s *scoper) addColumnInfoForGroupBy(cursor *sqlparser.Cursor, node sqlparser.GroupBy) error {

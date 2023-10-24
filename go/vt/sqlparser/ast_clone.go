@@ -3117,10 +3117,10 @@ func CloneRefOfUnion(n *Union) *Union {
 		return nil
 	}
 	out := *n
+	out.With = CloneRefOfWith(n.With)
 	out.Left = CloneSelectStatement(n.Left)
 	out.Right = CloneSelectStatement(n.Right)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
-	out.With = CloneRefOfWith(n.With)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	out.Into = CloneRefOfSelectInto(n.Into)
 	return &out

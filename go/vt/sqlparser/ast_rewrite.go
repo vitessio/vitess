@@ -8594,6 +8594,11 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 			return true
 		}
 	}
+	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
+		parent.(*Union).With = newNode.(*With)
+	}) {
+		return false
+	}
 	if !a.rewriteSelectStatement(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*Union).Left = newNode.(SelectStatement)
 	}) {
@@ -8606,11 +8611,6 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 	}
 	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Union).OrderBy = newNode.(OrderBy)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
-		parent.(*Union).With = newNode.(*With)
 	}) {
 		return false
 	}
