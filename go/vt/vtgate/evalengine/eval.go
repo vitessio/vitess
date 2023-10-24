@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"strconv"
+	"time"
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/hack"
@@ -167,7 +168,7 @@ func evalIsTruthy(e eval) boolean {
 	}
 }
 
-func evalCoerce(e eval, typ sqltypes.Type, col collations.ID) (eval, error) {
+func evalCoerce(e eval, typ sqltypes.Type, col collations.ID, now time.Time) (eval, error) {
 	if e == nil {
 		return nil, nil
 	}
@@ -199,9 +200,9 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID) (eval, error) {
 	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
 		return evalToInt64(e).toUint64(), nil
 	case sqltypes.Date:
-		return evalToDate(e), nil
+		return evalToDate(e, now), nil
 	case sqltypes.Datetime, sqltypes.Timestamp:
-		return evalToDateTime(e, -1), nil
+		return evalToDateTime(e, -1, now), nil
 	case sqltypes.Time:
 		return evalToTime(e, -1), nil
 	default:
@@ -329,7 +330,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			return nil, err
 		}
 		// Separate return here to avoid nil wrapped in interface type
-		d := evalToDate(e)
+		d := evalToDate(e, time.Now())
 		if d == nil {
 			return nil, nil
 		}
@@ -340,7 +341,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			return nil, err
 		}
 		// Separate return here to avoid nil wrapped in interface type
-		dt := evalToDateTime(e, -1)
+		dt := evalToDateTime(e, -1, time.Now())
 		if dt == nil {
 			return nil, nil
 		}
