@@ -1549,7 +1549,7 @@ func (expr *builtinConv) compile(c *compiler) (ctype, error) {
 		c.asm.Fn_CONV_bu(3, 2)
 	}
 
-	col := defaultCoercionCollation(n.Col.Collation)
+	col := defaultCoercionCollation(expr.collate)
 	c.asm.Fn_CONV_uc(t, col)
 	c.asm.jumpDestination(skip)
 

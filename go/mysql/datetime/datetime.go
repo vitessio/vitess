@@ -244,12 +244,12 @@ func (d Date) Hash(h *vthash.Hasher) {
 	h.Write8(d.day)
 }
 
-func (dt Date) Weekday() time.Weekday {
-	return dt.ToStdTime(time.Local).Weekday()
+func (d Date) Weekday() time.Weekday {
+	return d.ToStdTime(time.Local).Weekday()
 }
 
-func (dt Date) Yearday() int {
-	return dt.ToStdTime(time.Local).YearDay()
+func (d Date) Yearday() int {
+	return d.ToStdTime(time.Local).YearDay()
 }
 
 func (d Date) ISOWeek() (int, int) {
@@ -406,7 +406,19 @@ func (t Time) ToDuration() time.Duration {
 }
 
 func (t Time) toStdTime(year int, month time.Month, day int, loc *time.Location) (out time.Time) {
-	return time.Date(year, month, day, 0, 0, 0, 0, loc).Add(t.ToDuration())
+	hours := t.Hour()
+	minutes := t.Minute()
+	secs := t.Second()
+	nsecs := t.Nanosecond()
+
+	if t.Neg() {
+		hours = -hours
+		minutes = -minutes
+		secs = -secs
+		nsecs = -nsecs
+	}
+
+	return time.Date(year, month, day, hours, minutes, secs, nsecs, loc)
 }
 
 func (t Time) ToStdTime(loc *time.Location) (out time.Time) {
