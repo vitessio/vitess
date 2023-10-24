@@ -362,8 +362,8 @@ func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) err
 }
 
 func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStreamer, query string, lastPK *querypb.QueryResult, gtidch chan string) {
-	td.wgShardStreamers.Add(1)
 	log.Infof("streamOneShard Start on %s using query: %s", participant.tablet.Alias.String(), query)
+	td.wgShardStreamers.Add(1)
 	defer func() {
 		log.Infof("streamOneShard End on %s", participant.tablet.Alias.String())
 		close(participant.result)
