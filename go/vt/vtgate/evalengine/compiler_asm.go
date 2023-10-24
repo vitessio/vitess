@@ -2040,6 +2040,7 @@ func (asm *assembler) Fn_FROM_BASE64(t sqltypes.Type) {
 		}
 		str.tt = int16(t)
 		str.bytes = decoded
+		str.col = collationBinary
 		return 1
 	}, "FN FROM_BASE64 VARCHAR(SP-1)")
 }
