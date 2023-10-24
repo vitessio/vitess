@@ -18,6 +18,7 @@ package vdiff
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -161,21 +162,13 @@ func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffSta
 		extraCols = ", completed_at = utc_timestamp()"
 	default:
 	}
-	var errorString string
 	if err == nil {
 		// Clear out any previous error for the vdiff on this shard
-		errorString = ""
-	} else {
-		// limit the error string to be within column length of `last_error`
-		const MaxErrorLength = 500
-		errorString = err.Error()
-		if len(errorString) > MaxErrorLength {
-			errorString = errorString[:MaxErrorLength]
-		}
+		err = errors.New("")
 	}
 	query := sqlparser.BuildParsedQuery(sqlUpdateVDiffState,
 		encodeString(string(state)),
-		encodeString(errorString),
+		encodeString(err.Error()),
 		extraCols,
 		ct.id,
 	)

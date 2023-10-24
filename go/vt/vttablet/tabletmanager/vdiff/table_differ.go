@@ -34,11 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -46,6 +41,12 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // how long to wait for background operations to complete
@@ -127,9 +128,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		}
 	}()
 
-	shardStreamsCtx, shardStreamsCancel := context.WithCancel(ctx)
-	td.shardStreamsCtx = shardStreamsCtx
-	td.shardStreamsCancel = shardStreamsCancel
+	td.shardStreamsCtx, td.shardStreamsCancel = context.WithCancel(ctx)
 
 	if err := td.selectTablets(ctx); err != nil {
 		return err
@@ -137,13 +136,13 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	if err := td.syncSourceStreams(ctx); err != nil {
 		return err
 	}
-	if err := td.startSourceDataStreams(shardStreamsCtx); err != nil {
+	if err := td.startSourceDataStreams(td.shardStreamsCtx); err != nil {
 		return err
 	}
 	if err := td.syncTargetStreams(ctx); err != nil {
 		return err
 	}
-	if err := td.startTargetDataStream(shardStreamsCtx); err != nil {
+	if err := td.startTargetDataStream(td.shardStreamsCtx); err != nil {
 		return err
 	}
 	td.setupRowSorters()
@@ -213,7 +212,7 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 	var (
 		wg                   sync.WaitGroup
 		sourceErr, targetErr error
-		targetTablet         *topodata.Tablet
+		targetTablet         *topodatapb.Tablet
 	)
 
 	// The cells from the vdiff record are a comma separated list.
@@ -264,7 +263,7 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 	return targetErr
 }
 
-func pickTablet(ctx context.Context, ts *topo.Server, cells []string, localCell, keyspace, shard, tabletTypes string) (*topodata.Tablet, error) {
+func pickTablet(ctx context.Context, ts *topo.Server, cells []string, localCell, keyspace, shard, tabletTypes string) (*topodatapb.Tablet, error) {
 	tp, err := discovery.NewTabletPicker(ctx, ts, cells, localCell, keyspace, shard, tabletTypes, discovery.TabletPickerOptions{})
 	if err != nil {
 		return nil, err

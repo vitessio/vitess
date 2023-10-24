@@ -39,7 +39,7 @@ const (
 						from _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 						where vd.id = %a`
 	// sqlUpdateVDiffState has a penultimate placeholder for any additional columns you want to update, e.g. `, foo = 1`
-	sqlUpdateVDiffState   = "update _vt.vdiff set state = %s, last_error = %s %s where id = %d"
+	sqlUpdateVDiffState   = "update _vt.vdiff set state = %s, last_error = left(%s, 1024) %s where id = %d"
 	sqlUpdateVDiffStopped = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.state = 'stopped', vdt.state = 'stopped', vd.last_error = ''
 							where vd.id = vdt.vdiff_id and vd.id = %a and vd.state != 'completed'`
 	sqlGetVReplicationEntry          = "select * from _vt.vreplication %s"
