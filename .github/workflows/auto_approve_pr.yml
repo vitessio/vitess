@@ -15,6 +15,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [[ "${{github.event.pull_request.user.login}}" ==  "bot-vitess[bot]" ]] && [[ "${{github.event.pull_request.draft}}" == "false" ]]; then
+          if [[ "${{github.event.pull_request.user.login}}" ==  "vitess-bot[bot]" ]] && [[ "${{github.event.pull_request.draft}}" == "false" ]]; then
             gh pr review ${{ github.event.pull_request.number }} --approve
           fi
