@@ -3020,6 +3020,9 @@ var (
 			input:  "CREATE VIEW myview AS SELECT concat(a.first_name, _utf8mb4 ' ', a.last_name) AS name, if(a.active, _utf8mb4 'active', _utf8mb4 '') AS notes FROM a",
 			output: "create view myview as select concat(a.first_name, _utf8mb4 ' ', a.last_name) as `name`, if(a.active, _utf8mb4 'active', _utf8mb4 '') as notes from a",
 		}, {
+			input:  "create view v_today(today) as select CURRENT_DATE()",
+			output: "create view v_today(today) as select CURRENT_DATE()",
+		}, {
 			input: "select 1 into @aaa",
 		}, {
 			input:  "select now() into @late where now() > '2019-04-04 13:25:44'",

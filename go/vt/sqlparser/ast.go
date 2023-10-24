@@ -1814,6 +1814,7 @@ func (node *DBDDL) Format(buf *TrackedBuffer) {
 
 type ViewSpec struct {
 	ViewName  TableName
+	Columns   Columns
 	Algorithm string
 	Definer   string
 	Security  string
@@ -2124,7 +2125,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			if view.Security != "" {
 				afterCreate = fmt.Sprintf("%ssql security %s ", afterCreate, strings.ToLower(view.Security))
 			}
-			buf.Myprintf("%s %sview %v as %v", node.Action, afterCreate, view.ViewName, view.ViewExpr)
+			buf.Myprintf("%s %sview %v%v as %v", node.Action, afterCreate, view.ViewName, view.Columns, view.ViewExpr)
 		} else if node.TriggerSpec != nil {
 			trigger := node.TriggerSpec
 			triggerDef := ""
