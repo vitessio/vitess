@@ -3017,10 +3017,16 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	}
 	defer unlock(&err)
 
+	var tabletTypes []topodatapb.TabletType
+	for _, tabletType := range req.TabletTypes {
+		if tabletType != topodatapb.TabletType_PRIMARY {
+			tabletTypes = append(tabletTypes, tabletType)
+		}
+	}
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		if ts.isPartialMigration {
 			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overridden for reads AND writes in the ShardRoutingRule created when switching writes.")
-		} else if err := sw.switchTableReads(ctx, cells, req.TabletTypes, direction); err != nil {
+		} else if err := sw.switchTableReads(ctx, cells, tabletTypes, direction); err != nil {
 			return handleError("failed to switch read traffic for the tables", err)
 		}
 		return sw.logs(), nil

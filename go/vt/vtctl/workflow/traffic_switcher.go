@@ -587,6 +587,10 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 	// For forward migration, we add tablet type specific rules to redirect traffic to the target.
 	// For backward, we redirect to source.
 	for _, servedType := range servedTypes {
+		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
+			return fmt.Errorf("invalid tablet type specified for switchTableReads: %v", servedType)
+		}
+
 		tt := strings.ToLower(servedType.String())
 		for _, table := range ts.Tables() {
 			if direction == DirectionForward {
