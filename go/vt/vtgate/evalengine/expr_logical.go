@@ -520,7 +520,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 	t, _ := c.typeof(env, nil)
-	return evalCoerce(result, t, ca.result().Collation)
+	return evalCoerce(result, t, ca.result().Collation, env.now)
 }
 
 func (c *CaseExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {

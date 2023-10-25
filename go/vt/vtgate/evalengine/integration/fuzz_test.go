@@ -352,7 +352,7 @@ func compareResult(local, remote Result, cmp *testcases.Comparison) error {
 		remoteCollationName = env.LookupName(coll)
 	}
 
-	equals, err := cmp.Equals(local.Value, remote.Value)
+	equals, err := cmp.Equals(local.Value, remote.Value, time.Now())
 	if err != nil {
 		return err
 	}
