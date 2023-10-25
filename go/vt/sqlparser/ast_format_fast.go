@@ -1733,10 +1733,9 @@ func (node *Literal) FormatFast(buf *TrackedBuffer) {
 		buf.WriteString("X'")
 		buf.WriteString(node.Val)
 		buf.WriteByte('\'')
-	case BitVal:
-		buf.WriteString("B'")
+	case BitNum:
+		buf.WriteString("0b")
 		buf.WriteString(node.Val)
-		buf.WriteByte('\'')
 	case DateVal:
 		buf.WriteString("date'")
 		buf.WriteString(node.Val)

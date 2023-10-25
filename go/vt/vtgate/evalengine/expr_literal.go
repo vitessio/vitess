@@ -51,6 +51,9 @@ func (l *Literal) typeof(*ExpressionEnv, []*querypb.Field) (sqltypes.Type, typeF
 		if e == evalBoolTrue || e == evalBoolFalse {
 			f |= flagIsBoolean
 		}
+		if e.bitLiteral {
+			f |= flagBit
+		}
 	case *evalUint64:
 		if e.hexLiteral {
 			f |= flagHex

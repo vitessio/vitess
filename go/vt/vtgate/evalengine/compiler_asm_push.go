@@ -141,6 +141,26 @@ func (asm *assembler) PushBVar_f(key string) {
 	}, "PUSH FLOAT64(:%q)", key)
 }
 
+func push_bitnum(env *ExpressionEnv, raw []byte) int {
+	raw, env.vm.err = parseBitNum(raw)
+	env.vm.stack[env.vm.sp] = newEvalBytesBit(raw)
+	env.vm.sp++
+	return 1
+}
+
+func (asm *assembler) PushBVar_bitnum(key string) {
+	asm.adjustStack(1)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		var bvar *querypb.BindVariable
+		bvar, env.vm.err = env.lookupBindVar(key)
+		if env.vm.err != nil {
+			return 0
+		}
+		return push_bitnum(env, bvar.Value)
+	}, "PUSH BITNUM(:%q)", key)
+}
+
 func push_hexnum(env *ExpressionEnv, raw []byte) int {
 	raw, env.vm.err = parseHexNumber(raw)
 	env.vm.stack[env.vm.sp] = newEvalBytesHex(raw)

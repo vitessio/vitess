@@ -28,6 +28,8 @@ import (
 	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/mysql/hex"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // NullExpr is just what you are lead to believe
@@ -156,11 +158,18 @@ func parseHexNumber(val []byte) ([]byte, error) {
 	return parseHexLiteral(val[1:])
 }
 
+func parseBitNum(val []byte) ([]byte, error) {
+	if val[0] != '0' || val[1] != 'b' {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "malformed Bit literal: %q (missing 0b prefix)", val)
+	}
+	return parseBitLiteral(val[2:])
+}
+
 func parseBitLiteral(val []byte) ([]byte, error) {
 	var i big.Int
-	_, ok := i.SetString(string(val), 2)
+	_, ok := i.SetString(hack.String(val), 2)
 	if !ok {
-		panic("malformed bit literal from parser")
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "malformed Bit literal: %q (not base 2)", val)
 	}
 	return i.Bytes(), nil
 }

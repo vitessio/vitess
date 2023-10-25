@@ -178,22 +178,39 @@ func (e *evalBytes) toDateBestEffort() datetime.DateTime {
 	return datetime.DateTime{}
 }
 
-func (e *evalBytes) toNumericHex() (*evalUint64, bool) {
+func (e *evalBytes) parseNumericBytes(number *[8]byte) bool {
 	raw := e.bytes
 	if l := len(raw); l > 8 {
 		for _, b := range raw[:l-8] {
 			if b != 0 {
-				return nil, false // overflow
+				return false // overflow
 			}
 		}
 		raw = raw[l-8:]
 	}
-
-	var number [8]byte
 	for i, b := range raw {
 		number[8-len(raw)+i] = b
 	}
+	return true
+}
+
+func (e *evalBytes) toNumericHex() (*evalUint64, bool) {
+	var number [8]byte
+	if !e.parseNumericBytes(&number) {
+		return nil, false
+	}
+
 	hex := newEvalUint64(binary.BigEndian.Uint64(number[:]))
 	hex.hexLiteral = true
 	return hex, true
+}
+
+func (e *evalBytes) toNumericBit() (*evalInt64, bool) {
+	var number [8]byte
+	if !e.parseNumericBytes(&number) {
+		return nil, false
+	}
+	bit := newEvalInt64(int64(binary.BigEndian.Uint64(number[:])))
+	bit.bitLiteral = true
+	return bit, true
 }

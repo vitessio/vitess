@@ -1699,7 +1699,7 @@ func (cached *evalInt64) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(8)
+		size += int64(16)
 	}
 	return size
 }

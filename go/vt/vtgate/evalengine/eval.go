@@ -157,6 +157,14 @@ func evalIsTruthy(e eval) boolean {
 			}
 			return makeboolean(hex.u != 0)
 		}
+		if e.isBitLiteral() {
+			bit, ok := e.toNumericBit()
+			if !ok {
+				// overflow
+				return makeboolean(true)
+			}
+			return makeboolean(bit.i != 0)
+		}
 		f, _ := fastparse.ParseFloat64(e.string())
 		return makeboolean(f != 0.0)
 	case *evalJSON:
@@ -368,7 +376,7 @@ func valueToEvalNumeric(v sqltypes.Value) (eval, error) {
 		if err != nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		return &evalInt64{ival}, nil
+		return &evalInt64{i: ival}, nil
 	case v.IsUnsigned():
 		var uval uint64
 		uval, err := v.ToUint64()
@@ -383,7 +391,7 @@ func valueToEvalNumeric(v sqltypes.Value) (eval, error) {
 		}
 		ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
 		if err == nil {
-			return &evalInt64{ival}, nil
+			return &evalInt64{i: ival}, nil
 		}
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", v.RawStr())
 	}
@@ -418,6 +426,9 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation) (eva
 			hex := value.Raw()
 			raw, err := parseHexLiteral(hex[2 : len(hex)-1])
 			return newEvalBytesHex(raw), wrap(err)
+		} else if tt == sqltypes.BitNum {
+			raw, err := parseBitNum(value.Raw())
+			return newEvalBytesBit(raw), wrap(err)
 		} else {
 			return newEvalText(value.Raw(), collation), nil
 		}

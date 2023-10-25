@@ -41,7 +41,8 @@ type (
 	}
 
 	evalInt64 struct {
-		i int64
+		i          int64
+		bitLiteral bool
 	}
 
 	evalUint64 struct {
@@ -64,8 +65,8 @@ var _ evalNumeric = (*evalUint64)(nil)
 var _ evalNumeric = (*evalFloat)(nil)
 var _ evalNumeric = (*evalDecimal)(nil)
 
-var evalBoolTrue = &evalInt64{1}
-var evalBoolFalse = &evalInt64{0}
+var evalBoolTrue = &evalInt64{i: 1}
+var evalBoolFalse = &evalInt64{i: 0}
 
 func newEvalUint64(u uint64) *evalUint64 {
 	return &evalUint64{u: u}
@@ -109,6 +110,14 @@ func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 				return newEvalFloat(0)
 			}
 			return hex
+		}
+		if e.isBitLiteral() {
+			bit, ok := e.toNumericBit()
+			if !ok {
+				// overflow
+				return newEvalFloat(0)
+			}
+			return bit
 		}
 		f, _ := fastparse.ParseFloat64(e.string())
 		return &evalFloat{f: f}
@@ -160,6 +169,18 @@ func evalToFloat(e eval) (*evalFloat, bool) {
 			}
 			return f, true
 		}
+		if e.isBitLiteral() {
+			bit, ok := e.toNumericBit()
+			if !ok {
+				// overflow
+				return newEvalFloat(0), false
+			}
+			f, ok := bit.toFloat()
+			if !ok {
+				return newEvalFloat(0), false
+			}
+			return f, true
+		}
 		val, err := fastparse.ParseFloat64(e.string())
 		return &evalFloat{f: val}, err == nil
 	case *evalJSON:
@@ -197,6 +218,14 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 				return newEvalDecimal(decimal.Zero, m, d)
 			}
 			return hex.toDecimal(m, d)
+		}
+		if e.isBitLiteral() {
+			bit, ok := e.toNumericBit()
+			if !ok {
+				// overflow
+				return newEvalDecimal(decimal.Zero, m, d)
+			}
+			return bit.toDecimal(m, d)
 		}
 		dec, _ := decimal.NewFromString(e.string())
 		return newEvalDecimal(dec, m, d)
@@ -256,6 +285,14 @@ func evalToInt64(e eval) *evalInt64 {
 			}
 			return hex.toInt64()
 		}
+		if e.isBitLiteral() {
+			bit, ok := e.toNumericBit()
+			if !ok {
+				// overflow
+				return newEvalInt64(0)
+			}
+			return bit
+		}
 		i, _ := fastparse.ParseInt64(e.string(), 10)
 		return newEvalInt64(i)
 	case *evalJSON:
@@ -314,6 +351,9 @@ func (e *evalInt64) ToRawBytes() []byte {
 }
 
 func (e *evalInt64) negate() evalNumeric {
+	if e.bitLiteral {
+		return newEvalFloat(-float64(e.i))
+	}
 	if e.i == math.MinInt64 {
 		return newEvalDecimalWithPrec(decimal.NewFromInt(e.i).NegInPlace(), 0)
 	}
