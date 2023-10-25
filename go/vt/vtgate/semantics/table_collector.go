@@ -18,7 +18,6 @@ package semantics
 
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -130,7 +129,7 @@ func (tc *tableCollector) handleDerivedTable(node *sqlparser.AliasedTableExpr, t
 	case *sqlparser.Union:
 		return tc.addUnionDerivedTable(sel, node, node.Columns, node.As)
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %T in a derived table", sel)
+		return vterrors.VT13001("[BUG] %T in a derived table", sel)
 	}
 }
 
