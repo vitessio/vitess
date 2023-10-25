@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,18 +24,12 @@ func TestCTEWithOrderByLimit(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.Exec("insert into music(id, user_id) values(1,1), (2,5), (3,1), (4,2), (5,3), (6,4), (7,5)")
-	mcmp.Exec("insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
-
 	mcmp.Exec("with d as (select id,name from user order by id limit 2) select music.id from music join d on music.user_id = d.id")
 }
 
 func TestCTEAggregationOnRHS(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
-
-	mcmp.Exec("insert into music(id, user_id) values(1,1), (2,5), (3,1), (4,2), (5,3), (6,4), (7,5)")
-	mcmp.Exec("insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
 
 	mcmp.Exec("set sql_mode = ''")
 	mcmp.Exec("with d as (select id, count(*) as a from user) select d.a from music join d on music.user_id = d.id group by 1")
@@ -45,18 +39,12 @@ func TestCTERemoveInnerOrderBy(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.Exec("insert into music(id, user_id) values(1,1), (2,5), (3,1), (4,2), (5,3), (6,4), (7,5)")
-	mcmp.Exec("insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
-
 	mcmp.Exec("with toto as (select user.id as oui, music.id as non from user join music on user.id = music.user_id order by user.name) select count(*) from toto")
 }
 
 func TestCTEWithHaving(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
-
-	mcmp.Exec("insert into music(id, user_id) values(1,1), (2,5), (3,1), (4,2), (5,3), (6,4), (7,5)")
-	mcmp.Exec("insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
 
 	mcmp.Exec("set sql_mode = ''")
 	// For the given query, we can get any id back, because we aren't grouping by it.
@@ -68,7 +56,6 @@ func TestCTEColumns(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.Exec("insert into user(id, name) values(1,'toto'), (2,'tata'), (3,'titi'), (4,'tete'), (5,'foo')")
 	mcmp.AssertMatches(`with t(id) as (SELECT id FROM user) SELECT t.id FROM t ORDER BY t.id DESC`,
 		`[[INT64(5)] [INT64(4)] [INT64(3)] [INT64(2)] [INT64(1)]]`)
 }
