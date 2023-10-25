@@ -106,8 +106,8 @@ type VRepl struct {
 	alterQuery  string
 	tableRows   int64
 
-	originalCreateTable *sqlparser.CreateTable
-	vreplCreateTable    *sqlparser.CreateTable
+	originalShowCreateTable string
+	vreplShowCreateTable    string
 
 	analyzeTable bool
 
@@ -144,26 +144,26 @@ func NewVRepl(workflow string,
 	dbName string,
 	sourceTable string,
 	targetTable string,
-	originalCreateTable *sqlparser.CreateTable,
-	vreplCreateTable *sqlparser.CreateTable,
+	originalShowCreateTable string,
+	vreplShowCreateTable string,
 	alterQuery string,
 	analyzeTable bool,
 ) *VRepl {
 	return &VRepl{
-		workflow:            workflow,
-		keyspace:            keyspace,
-		shard:               shard,
-		dbName:              dbName,
-		sourceTable:         sourceTable,
-		targetTable:         targetTable,
-		originalCreateTable: originalCreateTable,
-		vreplCreateTable:    vreplCreateTable,
-		alterQuery:          alterQuery,
-		analyzeTable:        analyzeTable,
-		parser:              vrepl.NewAlterTableParser(),
-		enumToTextMap:       map[string]string{},
-		intToEnumMap:        map[string]bool{},
-		convertCharset:      map[string](*binlogdatapb.CharsetConversion){},
+		workflow:                workflow,
+		keyspace:                keyspace,
+		shard:                   shard,
+		dbName:                  dbName,
+		sourceTable:             sourceTable,
+		targetTable:             targetTable,
+		originalShowCreateTable: originalShowCreateTable,
+		vreplShowCreateTable:    vreplShowCreateTable,
+		alterQuery:              alterQuery,
+		analyzeTable:            analyzeTable,
+		parser:                  vrepl.NewAlterTableParser(),
+		enumToTextMap:           map[string]string{},
+		intToEnumMap:            map[string]bool{},
+		convertCharset:          map[string](*binlogdatapb.CharsetConversion){},
 	}
 }
 
@@ -424,7 +424,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	}
 	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
-	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.originalCreateTable, v.vreplCreateTable)
+	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.originalShowCreateTable, v.vreplShowCreateTable)
 	if err != nil {
 		return err
 	}

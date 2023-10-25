@@ -27,14 +27,14 @@ import (
 
 // RemovedForeignKeyNames returns the names of removed foreign keys, ignoring mere name changes
 func RemovedForeignKeyNames(
-	originalCreateTable *sqlparser.CreateTable,
-	vreplCreateTable *sqlparser.CreateTable,
+	originalCreateTable string,
+	vreplCreateTable string,
 ) (names []string, err error) {
-	if originalCreateTable == nil || vreplCreateTable == nil {
+	if originalCreateTable == "" || vreplCreateTable == "" {
 		return nil, nil
 	}
 	diffHints := schemadiff.DiffHints{ConstraintNamesStrategy: schemadiff.ConstraintNamesIgnoreAll}
-	diff, err := schemadiff.DiffTables(originalCreateTable, vreplCreateTable, &diffHints)
+	diff, err := schemadiff.DiffCreateTablesQueries(originalCreateTable, vreplCreateTable, &diffHints)
 	if err != nil {
 		return nil, err
 	}
