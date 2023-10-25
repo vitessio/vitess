@@ -2122,6 +2122,12 @@ func testForeignKeys(t *testing.T) {
 			allowForeignKeys: true,
 			expectHint:       "new_fk",
 		},
+		{
+			name:             "drop foreign key from a child",
+			sql:              "alter table child_table DROP FOREIGN KEY child_parent_fk",
+			allowForeignKeys: true,
+			expectHint:       "child_hint",
+		},
 	}
 
 	createParams := func(ddlStatement string, ddlStrategy string, executeStrategy string, expectHint string, expectError string, skipWait bool) *testOnlineDDLStatementParams {
