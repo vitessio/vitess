@@ -19,7 +19,7 @@ require (
 	github.com/evanphx/json-patch v5.6.0+incompatible
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-sql-driver/mysql v1.7.0
-	github.com/golang/glog v1.0.0
+	github.com/golang/glog v1.1.0
 	github.com/golang/protobuf v1.5.3
 	github.com/golang/snappy v0.0.4
 	github.com/google/go-cmp v0.5.9
@@ -82,7 +82,7 @@ require (
 	golang.org/x/tools v0.12.1-0.20230815132531-74c255bcf846
 	google.golang.org/api v0.121.0
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
-	google.golang.org/grpc v1.55.0-dev
+	google.golang.org/grpc v1.56.3
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.3.0
 	google.golang.org/grpc/examples v0.0.0-20210430044426-28078834f35b
 	google.golang.org/protobuf v1.30.0
@@ -115,7 +115,7 @@ require (
 
 require (
 	cloud.google.com/go v0.110.0 // indirect
-	cloud.google.com/go/compute v1.19.0 // indirect
+	cloud.google.com/go/compute v1.19.1 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v0.13.0 // indirect
 	github.com/DataDog/appsec-internal-go v1.0.0 // indirect
