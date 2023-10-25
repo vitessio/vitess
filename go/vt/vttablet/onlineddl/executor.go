@@ -2714,6 +2714,45 @@ func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDD
 	return withError
 }
 
+func (e *Executor) analyzeDropDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	// Schema analysis:
+	originalShowCreateTable, err := e.showCreateTable(ctx, onlineDDL.Table)
+	if err != nil {
+		if sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); isSQLErr {
+			switch sqlErr.Num {
+			case sqlerror.ERNoSuchTable:
+				// The table does not exist. For analysis purposed, that's fine.
+				return nil
+			default:
+				return vterrors.Wrapf(err, "attempting to read definition of %v", onlineDDL.Table)
+			}
+		}
+	}
+	stmt, err := sqlparser.ParseStrictDDL(originalShowCreateTable)
+	if err != nil {
+		return err
+	}
+	if createTable, ok := stmt.(*sqlparser.CreateTable); ok {
+		// This is a table rather than a view.
+
+		// Analyze foreign keys:
+		var removedForeignKeyNames []string
+
+		for _, constraint := range createTable.TableSpec.Constraints {
+			if _, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); ok {
+				removedForeignKeyNames = append(removedForeignKeyNames, constraint.Name.String())
+			}
+		}
+		// Write analysis:
+		if err := e.updateSchemaAnalysis(ctx, onlineDDL.UUID,
+			0, 0, "", strings.Join(sqlescape.EscapeIDs(removedForeignKeyNames), ","), "", "", "",
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (e *Executor) executeDropDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	failMigration := func(err error) error {
 		return e.failMigration(ctx, onlineDDL, err)
@@ -2736,6 +2775,10 @@ func (e *Executor) executeDropDDLActionMigration(ctx context.Context, onlineDDL 
 
 	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
 	if err != nil {
+		return failMigration(err)
+	}
+
+	if err := e.analyzeDropDDLActionMigration(ctx, onlineDDL); err != nil {
 		return failMigration(err)
 	}
 
@@ -4138,13 +4181,13 @@ func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, mess
 }
 
 func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
-	addedUniqueKeys, removedUnqiueKeys int, removedUniqueKeyNames string,
+	addedUniqueKeys, removedUniqueKeys int, removedUniqueKeyNames string,
 	removedForeignKeyNames string,
 	droppedNoDefaultColumnNames string, expandedColumnNames string,
 	revertibleNotes string) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateSchemaAnalysis,
 		sqltypes.Int64BindVariable(int64(addedUniqueKeys)),
-		sqltypes.Int64BindVariable(int64(removedUnqiueKeys)),
+		sqltypes.Int64BindVariable(int64(removedUniqueKeys)),
 		sqltypes.StringBindVariable(removedUniqueKeyNames),
 		sqltypes.StringBindVariable(removedForeignKeyNames),
 		sqltypes.StringBindVariable(droppedNoDefaultColumnNames),

@@ -256,9 +256,9 @@ func testRevertible(t *testing.T) {
 		},
 		{
 			name:                   "removed foreign key",
-			fromSchema:             "id int primary key, i int, constraint f foreign key (i) references parent (id) on delete cascade",
+			fromSchema:             "id int primary key, i int, constraint some_fk foreign key (i) references parent (id) on delete cascade",
 			toSchema:               "id int primary key, i int",
-			removedForeignKeyNames: "f",
+			removedForeignKeyNames: "some_fk",
 		},
 
 		{
@@ -377,7 +377,6 @@ func testRevertible(t *testing.T) {
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 				checkTable(t, tableName, false)
 			})
-
 			t.Run("create from-table", func(t *testing.T) {
 				// A preparation step, to re-create the base table
 				fromStatement := fmt.Sprintf(createTableWrapper, testcase.fromSchema)
@@ -411,6 +410,43 @@ func testRevertible(t *testing.T) {
 			})
 		})
 	}
+
+	t.Run("drop fk child table", func(t *testing.T) {
+		t.Run("ensure table dropped", func(t *testing.T) {
+			// A preparation step, to clean up anything from the previous test case
+			uuid := testOnlineDDLStatement(t, dropTableStatement, ddlStrategy, "vtgate", tableName, "")
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			checkTable(t, tableName, false)
+		})
+		t.Run("create child table", func(t *testing.T) {
+			fromStatement := fmt.Sprintf(createTableWrapper, "id int primary key, i int, constraint some_fk foreign key (i) references parent (id) on delete cascade")
+			uuid := testOnlineDDLStatement(t, fromStatement, ddlStrategy, "vtgate", tableName, "")
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			checkTable(t, tableName, true)
+		})
+		var uuid string
+		t.Run("drop", func(t *testing.T) {
+			uuid = testOnlineDDLStatement(t, dropTableStatement, ddlStrategy, "vtgate", tableName, "")
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			checkTable(t, tableName, false)
+		})
+		t.Run("check migration", func(t *testing.T) {
+			// All right, the actual test
+			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				removedForeignKeyNames := row.AsString("removed_foreign_key_names", "")
+				removedUniqueKeyNames := row.AsString("removed_unique_key_names", "")
+				droppedNoDefaultColumnNames := row.AsString("dropped_no_default_column_names", "")
+				expandedColumnNames := row.AsString("expanded_column_names", "")
+
+				assert.Equal(t, "some_fk", removeBackticks(removedForeignKeyNames))
+				assert.Equal(t, "", removeBackticks(removedUniqueKeyNames))
+				assert.Equal(t, "", removeBackticks(droppedNoDefaultColumnNames))
+				assert.Equal(t, "", removeBackticks(expandedColumnNames))
+			}
+		})
+	})
 }
 
 func testRevert(t *testing.T) {
