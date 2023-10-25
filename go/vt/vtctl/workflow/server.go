@@ -2940,9 +2940,17 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 
 // switchReads is a generic way of switching read traffic for a workflow.
 func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State, timeout time.Duration, cancel bool, direction TrafficSwitchDirection) (*[]string, error) {
-	roTypesToSwitchStr := topoproto.MakeStringTypeCSV(req.TabletTypes)
+	var tabletTypes []topodatapb.TabletType
+	// when we are switching all traffic we also get the primary tablet type, which we need to filter out for switching reads
+	for _, tabletType := range req.TabletTypes {
+		if tabletType != topodatapb.TabletType_PRIMARY {
+			tabletTypes = append(tabletTypes, tabletType)
+		}
+	}
+
+	roTypesToSwitchStr := topoproto.MakeStringTypeCSV(tabletTypes)
 	var switchReplica, switchRdonly bool
-	for _, roType := range req.TabletTypes {
+	for _, roType := range tabletTypes {
 		switch roType {
 		case topodatapb.TabletType_REPLICA:
 			switchReplica = true
@@ -2987,7 +2995,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 			return nil, err
 		}
 		if !rdonlyTabletsExist {
-			req.TabletTypes = append(req.TabletTypes, topodatapb.TabletType_RDONLY)
+			tabletTypes = append(tabletTypes, topodatapb.TabletType_RDONLY)
 		}
 	}
 
@@ -3017,12 +3025,6 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	}
 	defer unlock(&err)
 
-	var tabletTypes []topodatapb.TabletType
-	for _, tabletType := range req.TabletTypes {
-		if tabletType != topodatapb.TabletType_PRIMARY {
-			tabletTypes = append(tabletTypes, tabletType)
-		}
-	}
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		if ts.isPartialMigration {
 			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overridden for reads AND writes in the ShardRoutingRule created when switching writes.")
@@ -3032,7 +3034,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		return sw.logs(), nil
 	}
 	ts.Logger().Infof("About to switchShardReads: %+v, %+s, %+v", cells, roTypesToSwitchStr, direction)
-	if err := sw.switchShardReads(ctx, cells, req.TabletTypes, direction); err != nil {
+	if err := sw.switchShardReads(ctx, cells, tabletTypes, direction); err != nil {
 		return handleError("failed to switch read traffic for the shards", err)
 	}
 
