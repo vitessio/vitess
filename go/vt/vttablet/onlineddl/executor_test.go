@@ -158,6 +158,7 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 	e := Executor{}
 	tt := []struct {
 		alter  string
+		m      map[string]string
 		expect []string
 	}{
 		{
@@ -208,6 +209,13 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			alter:  "alter table t add constraint t_fk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check check (id != 1)",
 			expect: []string{"alter table t add constraint fk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
 		},
+		{
+			alter: "alter table t drop foreign key t_fk_1",
+			m: map[string]string{
+				"t_fk_1": "fk_1_aaaaaaaaaaaaaa",
+			},
+			expect: []string{"alter table t drop foreign key fk_1_aaaaaaaaaaaaaa, algorithm = copy"},
+		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.alter, func(t *testing.T) {
@@ -217,6 +225,9 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			require.True(t, ok)
 
 			m := map[string]string{}
+			for k, v := range tc.m {
+				m[k] = v
+			}
 			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "t", Options: "--unsafe-allow-foreign-keys"}
 			alters, err := e.validateAndEditAlterTableStatement(context.Background(), onlineDDL, alterTable, m)
 			assert.NoError(t, err)

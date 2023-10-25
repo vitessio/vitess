@@ -1195,8 +1195,8 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlin
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.DropKey:
-			if node.Type == sqlparser.CheckKeyType {
-				// drop a check constraint
+			if node.Type == sqlparser.CheckKeyType || node.Type == sqlparser.ForeignKeyType {
+				// drop a check or a foreign key constraint
 				mappedName, ok := constraintMap[node.Name.String()]
 				if !ok {
 					return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Found DROP CONSTRAINT: %v, but could not find constraint name in map", sqlparser.CanonicalString(node))
