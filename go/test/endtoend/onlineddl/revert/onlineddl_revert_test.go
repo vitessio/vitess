@@ -256,9 +256,9 @@ func testRevertible(t *testing.T) {
 		},
 		{
 			name:                   "removed foreign key",
-			fromSchema:             "id int primary key, i int, constraint some_fk foreign key (i) references parent (id) on delete cascade",
+			fromSchema:             "id int primary key, i int, constraint some_fk_1 foreign key (i) references parent (id) on delete cascade",
 			toSchema:               "id int primary key, i int",
-			removedForeignKeyNames: "some_fk",
+			removedForeignKeyNames: "some_fk_1",
 		},
 
 		{
@@ -419,7 +419,7 @@ func testRevertible(t *testing.T) {
 			checkTable(t, tableName, false)
 		})
 		t.Run("create child table", func(t *testing.T) {
-			fromStatement := fmt.Sprintf(createTableWrapper, "id int primary key, i int, constraint some_fk foreign key (i) references parent (id) on delete cascade")
+			fromStatement := fmt.Sprintf(createTableWrapper, "id int primary key, i int, constraint some_fk_2 foreign key (i) references parent (id) on delete cascade")
 			uuid := testOnlineDDLStatement(t, fromStatement, ddlStrategy, "vtgate", tableName, "")
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 			checkTable(t, tableName, true)
@@ -440,7 +440,7 @@ func testRevertible(t *testing.T) {
 				droppedNoDefaultColumnNames := row.AsString("dropped_no_default_column_names", "")
 				expandedColumnNames := row.AsString("expanded_column_names", "")
 
-				assert.Equal(t, "some_fk", removeBackticks(removedForeignKeyNames))
+				assert.Equal(t, "some_fk_2", removeBackticks(removedForeignKeyNames))
 				assert.Equal(t, "", removeBackticks(removedUniqueKeyNames))
 				assert.Equal(t, "", removeBackticks(droppedNoDefaultColumnNames))
 				assert.Equal(t, "", removeBackticks(expandedColumnNames))
