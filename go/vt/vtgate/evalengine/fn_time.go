@@ -282,9 +282,9 @@ func (b *builtinDateFormat) eval(env *ExpressionEnv) (eval, error) {
 	var t *evalTemporal
 	switch e := date.(type) {
 	case *evalTemporal:
-		t = e.toDateTime(datetime.DefaultPrecision)
+		t = e.toDateTime(datetime.DefaultPrecision, env.now)
 	default:
-		t = evalToDateTime(date, datetime.DefaultPrecision)
+		t = evalToDateTime(date, datetime.DefaultPrecision, env.now)
 		if t == nil || t.isZero() {
 			return nil, nil
 		}
@@ -381,7 +381,7 @@ func (call *builtinConvertTz) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	dt := evalToDateTime(n, -1)
+	dt := evalToDateTime(n, -1, env.now)
 	if dt == nil || dt.isZero() {
 		return nil, nil
 	}
@@ -445,7 +445,7 @@ func (b *builtinDate) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date)
+	d := evalToDate(date, env.now)
 	if d == nil {
 		return nil, nil
 	}
@@ -482,7 +482,7 @@ func (b *builtinDayOfMonth) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date)
+	d := evalToDate(date, env.now)
 	if d == nil {
 		return nil, nil
 	}
@@ -519,7 +519,7 @@ func (b *builtinDayOfWeek) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date)
+	d := evalToDate(date, env.now)
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
@@ -556,7 +556,7 @@ func (b *builtinDayOfYear) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date)
+	d := evalToDate(date, env.now)
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
@@ -1178,7 +1178,7 @@ func (b *builtinMonth) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date)
+	d := evalToDate(date, env.now)
 	if d == nil {
 		return nil, nil
 	}
@@ -1215,7 +1215,7 @@ func (b *builtinMonthName) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date)
+	d := evalToDate(date, env.now)
 	if d == nil {
 		return nil, nil
 	}
@@ -1258,7 +1258,7 @@ func (b *builtinQuarter) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date)
+	d := evalToDate(date, env.now)
 	if d == nil {
 		return nil, nil
 	}
@@ -1364,9 +1364,9 @@ func dateTimeUnixTimestamp(env *ExpressionEnv, date eval) evalNumeric {
 	var dt *evalTemporal
 	switch e := date.(type) {
 	case *evalTemporal:
-		dt = e.toDateTime(int(e.prec))
+		dt = e.toDateTime(int(e.prec), env.now)
 	default:
-		dt = evalToDateTime(date, -1)
+		dt = evalToDateTime(date, -1, env.now)
 		if dt == nil || dt.isZero() {
 			var prec int32
 			switch d := date.(type) {
@@ -1386,15 +1386,11 @@ func dateTimeUnixTimestamp(env *ExpressionEnv, date eval) evalNumeric {
 		}
 	}
 
-	tz := env.currentTimezone()
-	if tz == nil {
-		tz = time.Local
-	}
-
-	ts := dt.dt.ToStdTime(tz)
+	ts := dt.dt.ToStdTime(env.now)
 	if dt.prec == 0 {
 		return newEvalInt64(ts.Unix())
 	}
+
 	dec := decimal.New(ts.Unix(), 0)
 	dec = dec.Add(decimal.New(int64(dt.dt.Time.Nanosecond()), -9))
 	return newEvalDecimalWithPrec(dec, int32(dt.prec))
@@ -1458,7 +1454,7 @@ func (b *builtinWeek) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	d := evalToDate(date)
+	d := evalToDate(date, env.now)
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
@@ -1522,7 +1518,7 @@ func (b *builtinWeekDay) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date)
+	d := evalToDate(date, env.now)
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
@@ -1560,7 +1556,7 @@ func (b *builtinWeekOfYear) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date)
+	d := evalToDate(date, env.now)
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
@@ -1600,7 +1596,7 @@ func (b *builtinYear) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date)
+	d := evalToDate(date, env.now)
 	if d == nil {
 		return nil, nil
 	}
@@ -1640,7 +1636,7 @@ func (b *builtinYearWeek) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	d := evalToDate(date)
+	d := evalToDate(date, env.now)
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
@@ -1726,11 +1722,11 @@ func (call *builtinDateMath) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	if tmp, ok := date.(*evalTemporal); ok {
-		return tmp.addInterval(interval, collations.TypedCollation{}), nil
+		return tmp.addInterval(interval, collations.TypedCollation{}, env.now), nil
 	}
 
 	if tmp := evalToTemporal(date); tmp != nil {
-		return tmp.addInterval(interval, defaultCoercionCollation(call.collate)), nil
+		return tmp.addInterval(interval, defaultCoercionCollation(call.collate), env.now), nil
 	}
 
 	return nil, nil

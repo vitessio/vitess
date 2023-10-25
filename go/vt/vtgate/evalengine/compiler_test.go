@@ -457,6 +457,8 @@ func TestCompilerSingle(t *testing.T) {
 		},
 	}
 
+	tz, _ := time.LoadLocation("Europe/Madrid")
+
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
 			expr, err := sqlparser.ParseExpr(tc.expression)
@@ -478,6 +480,7 @@ func TestCompilerSingle(t *testing.T) {
 			}
 
 			env := evalengine.EmptyExpressionEnv()
+			env.SetTime(time.Date(2023, 10, 24, 12, 0, 0, 0, tz))
 			env.Row = tc.values
 
 			expected, err := env.Evaluate(evalengine.Deoptimize(converted))
