@@ -125,6 +125,7 @@ type revertibleTestCase struct {
 	fromSchema string
 	toSchema   string
 	// expectProblems              bool
+	removedForeignKeyNames      string
 	removedUniqueKeyNames       string
 	droppedNoDefaultColumnNames string
 	expandedColumnNames         string
@@ -254,6 +255,18 @@ func testRevertible(t *testing.T) {
 			removedUniqueKeyNames: ``,
 		},
 		{
+			name:                   "removed foreign key",
+			fromSchema:             "id int primary key, i int, constraint f foreign key (i) references parent (id) on delete cascade",
+			toSchema:               "id int primary key, i int",
+			removedForeignKeyNames: "f",
+		},
+
+		{
+			name:       "renamed foreign key",
+			fromSchema: "id int primary key, i int, constraint f1 foreign key (i) references parent (id) on delete cascade",
+			toSchema:   "id int primary key, i int, constraint f2 foreign key (i) references parent (id) on delete cascade",
+		},
+		{
 			name:                        "remove column without default",
 			fromSchema:                  `id int primary key, i1 int not null`,
 			toSchema:                    `id int primary key, i2 int not null default 0`,
@@ -344,9 +357,12 @@ func testRevertible(t *testing.T) {
 		dropTableStatement = `
 			DROP TABLE onlineddl_test
 		`
-		tableName   = "onlineddl_test"
-		ddlStrategy = "online --declarative --allow-zero-in-date"
+		tableName         = "onlineddl_test"
+		ddlStrategy       = "online --declarative --allow-zero-in-date --unsafe-allow-foreign-keys"
+		createParentTable = "create table parent (id int primary key)"
 	)
+
+	onlineddl.VtgateExecQuery(t, &vtParams, createParentTable, "")
 
 	removeBackticks := func(s string) string {
 		return strings.Replace(s, "`", "", -1)
@@ -382,10 +398,12 @@ func testRevertible(t *testing.T) {
 				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
+					removedForeignKeyNames := row.AsString("removed_foreign_key_names", "")
 					removedUniqueKeyNames := row.AsString("removed_unique_key_names", "")
 					droppedNoDefaultColumnNames := row.AsString("dropped_no_default_column_names", "")
 					expandedColumnNames := row.AsString("expanded_column_names", "")
 
+					assert.Equal(t, testcase.removedForeignKeyNames, removeBackticks(removedForeignKeyNames))
 					assert.Equal(t, testcase.removedUniqueKeyNames, removeBackticks(removedUniqueKeyNames))
 					assert.Equal(t, testcase.droppedNoDefaultColumnNames, removeBackticks(droppedNoDefaultColumnNames))
 					assert.Equal(t, testcase.expandedColumnNames, removeBackticks(expandedColumnNames))

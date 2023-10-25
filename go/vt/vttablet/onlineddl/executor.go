@@ -1246,34 +1246,57 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlin
 	return alters, nil
 }
 
-// createTableLike creates the table named by `newTableName` in the likeness of onlineDDL.Table
-// This function emulates MySQL's `CREATE TABLE LIKE ...` statement. The difference is that this function takes control over the generated CONSTRAINT names,
-// if any, such that they are detrministic across shards, as well as preserve original names where possible.
-func (e *Executor) createTableLike(ctx context.Context, newTableName string, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (constraintMap map[string]string, err error) {
-	existingShowCreateTable, err := e.showCreateTable(ctx, onlineDDL.Table)
+// duplicateCreateTable parses the given `CREATE TABLE` statement, and returns:
+// - The format CreateTable AST
+// - A new CreateTable AST, with the table renamed as `newTableName`, and with constraints renamed deterministically
+// - Map of renamed constraints
+func (e *Executor) duplicateCreateTable(ctx context.Context, onlineDDL *schema.OnlineDDL, originalShowCreateTable string, newTableName string) (
+	originalCreateTable *sqlparser.CreateTable,
+	newCreateTable *sqlparser.CreateTable,
+	constraintMap map[string]string,
+	err error,
+) {
+	stmt, err := sqlparser.ParseStrictDDL(originalShowCreateTable)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "in createTableLike(), newTableName=%s", newTableName)
+		return nil, nil, nil, err
 	}
-	stmt, err := sqlparser.ParseStrictDDL(existingShowCreateTable)
-	if err != nil {
-		return nil, err
-	}
-	createTable, ok := stmt.(*sqlparser.CreateTable)
+	originalCreateTable, ok := stmt.(*sqlparser.CreateTable)
 	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CreateTable statement, got: %v", sqlparser.CanonicalString(stmt))
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CreateTable statement, got: %v", sqlparser.CanonicalString(stmt))
 	}
-	createTable.SetTable(createTable.GetTable().Qualifier.CompliantName(), newTableName)
+	newCreateTable = sqlparser.CloneRefOfCreateTable(originalCreateTable)
+	newCreateTable.SetTable(newCreateTable.GetTable().Qualifier.CompliantName(), newTableName)
 	// manipulate CreateTable statement: take care of constraints names which have to be
 	// unique across the schema
-	constraintMap, err = e.validateAndEditCreateTableStatement(ctx, onlineDDL, createTable)
+	constraintMap, err = e.validateAndEditCreateTableStatement(ctx, onlineDDL, newCreateTable)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
-	// Create the table
-	if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(createTable), 0, false); err != nil {
-		return nil, err
+	return originalCreateTable, newCreateTable, constraintMap, nil
+}
+
+// createDuplicateTableLike creates the table named by `newTableName` in the likeness of onlineDDL.Table
+// This function emulates MySQL's `CREATE TABLE LIKE ...` statement. The difference is that this function takes control over the generated CONSTRAINT names,
+// if any, such that they are detrministic across shards, as well as preserve original names where possible.
+func (e *Executor) createDuplicateTableLike(ctx context.Context, newTableName string, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (
+	originalCreateTable *sqlparser.CreateTable,
+	newCreateTable *sqlparser.CreateTable,
+	constraintMap map[string]string,
+	err error,
+) {
+	originalShowCreateTable, err := e.showCreateTable(ctx, onlineDDL.Table)
+	if err != nil {
+		return nil, nil, nil, err
 	}
-	return constraintMap, nil
+	originalCreateTable, vreplCreateTable, constraintMap, err := e.duplicateCreateTable(ctx, onlineDDL, originalShowCreateTable, newTableName)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	// Create the vrepl (shadow) table:
+	if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(vreplCreateTable), 0, false); err != nil {
+		return nil, nil, nil, err
+	}
+	return originalCreateTable, vreplCreateTable, constraintMap, nil
 }
 
 // initVreplicationOriginalMigration performs the first steps towards running a VRepl ALTER migration:
@@ -1295,7 +1318,8 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
-	constraintMap, err := e.createTableLike(ctx, vreplTableName, onlineDDL, conn)
+	originalCreateTable, vreplCreateTable, constraintMap, err := e.createDuplicateTableLike(ctx, vreplTableName, onlineDDL, conn)
+
 	if err != nil {
 		return nil, err
 	}
@@ -1322,7 +1346,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 			}
 		}
 	}
-	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, onlineDDL.SQL, onlineDDL.StrategySetting().IsAnalyzeTableFlag())
+	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, originalCreateTable, vreplCreateTable, onlineDDL.SQL, onlineDDL.StrategySetting().IsAnalyzeTableFlag())
 	return v, nil
 }
 
@@ -1376,7 +1400,7 @@ func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDD
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
-	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, "", false)
+	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, nil, nil, "", false)
 	v.pos = revertStream.pos
 	return v, nil
 }
@@ -1427,6 +1451,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		len(v.addedUniqueKeys),
 		len(v.removedUniqueKeys),
 		strings.Join(sqlescape.EscapeIDs(removedUniqueKeyNames), ","),
+		strings.Join(sqlescape.EscapeIDs(v.removedForeignKeyNames), ","),
 		strings.Join(sqlescape.EscapeIDs(v.droppedNoDefaultColumnNames), ","),
 		strings.Join(sqlescape.EscapeIDs(v.expandedColumnNames), ","),
 		v.revertibleNotes,
@@ -2937,7 +2962,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 			}
 
 			// Apply CREATE TABLE for artifact table
-			if _, err := e.createTableLike(ctx, artifactTableName, onlineDDL, conn); err != nil {
+			if _, _, _, err := e.createDuplicateTableLike(ctx, artifactTableName, onlineDDL, conn); err != nil {
 				return err
 			}
 			// Remove partitioning
@@ -4111,12 +4136,14 @@ func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, mess
 
 func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
 	addedUniqueKeys, removedUnqiueKeys int, removedUniqueKeyNames string,
+	removedForeignKeyNames string,
 	droppedNoDefaultColumnNames string, expandedColumnNames string,
 	revertibleNotes string) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateSchemaAnalysis,
 		sqltypes.Int64BindVariable(int64(addedUniqueKeys)),
 		sqltypes.Int64BindVariable(int64(removedUnqiueKeys)),
 		sqltypes.StringBindVariable(removedUniqueKeyNames),
+		sqltypes.StringBindVariable(removedForeignKeyNames),
 		sqltypes.StringBindVariable(droppedNoDefaultColumnNames),
 		sqltypes.StringBindVariable(expandedColumnNames),
 		sqltypes.StringBindVariable(revertibleNotes),
