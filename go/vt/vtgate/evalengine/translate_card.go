@@ -174,7 +174,7 @@ func (ast *astCompiler) cardExpr(expr IR) error {
 				return errCardinality(1)
 			}
 		default:
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple, was %T", expr.Right)
 		}
 
 	case TupleExpr:
