@@ -388,8 +388,13 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 
 func (qp *QueryProjection) calculateDistinct(ctx *plancontext.PlanningContext) {
 	if qp.Distinct && !qp.HasAggr {
-		// grouping and distinct both lead to unique results, so we don't need
-		qp.groupByExprs = nil
+		if qp.useGroupingOverDistinct(ctx) {
+			// if order by exists with overlap with select expressions, we can use the aggregation with ordering over distinct.
+			qp.Distinct = false
+		} else {
+			// grouping and distinct both lead to unique results, so we don't need
+			qp.groupByExprs = nil
+		}
 	}
 
 	if qp.HasAggr && len(qp.groupByExprs) == 0 {
@@ -849,6 +854,45 @@ func (qp *QueryProjection) AddGroupBy(by GroupBy) {
 
 func (qp *QueryProjection) GetColumnCount() int {
 	return len(qp.SelectExprs) - qp.AddedColumn
+}
+
+func (qp *QueryProjection) orderByOverlapWithSelectExpr(ctx *plancontext.PlanningContext) bool {
+	for _, expr := range qp.OrderExprs {
+		idx, _ := qp.FindSelectExprIndexForExpr(ctx, expr.SimplifiedExpr)
+		if idx != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func (qp *QueryProjection) useGroupingOverDistinct(ctx *plancontext.PlanningContext) bool {
+	if !qp.orderByOverlapWithSelectExpr(ctx) {
+		return false
+	}
+	var gbs []GroupBy
+	for idx, selExpr := range qp.SelectExprs {
+		ae, err := selExpr.GetAliasedExpr()
+		if err != nil {
+			// not an alias Expr, cannot continue forward.
+			return false
+		}
+		sExpr := qp.GetSimplifiedExpr(ae.Expr)
+		// check if the grouping already exists on that column.
+		found := slices.IndexFunc(qp.groupByExprs, func(gb GroupBy) bool {
+			return ctx.SemTable.EqualsExprWithDeps(gb.SimplifiedExpr, sExpr)
+		})
+		if found != -1 {
+			continue
+		}
+		groupBy := NewGroupBy(ae.Expr, sExpr, ae)
+		selectExprIdx := idx
+		groupBy.InnerIndex = &selectExprIdx
+
+		gbs = append(gbs, groupBy)
+	}
+	qp.groupByExprs = append(qp.groupByExprs, gbs...)
+	return true
 }
 
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
