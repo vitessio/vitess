@@ -141,7 +141,7 @@ func (dt *DerivedTable) getAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return dt.ASTNode
 }
 
-func (dt *DerivedTable) canShortCut() *bool {
+func (dt *DerivedTable) canShortCut() shortCut {
 	panic(vterrors.VT12001("should not be called"))
 }
 

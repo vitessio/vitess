@@ -78,27 +78,24 @@ func (r *RealTable) getAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return r.ASTNode
 }
 
-var f = false
-var t = true
-
-func (r *RealTable) canShortCut() *bool {
+func (r *RealTable) canShortCut() shortCut {
 	if r.Table == nil {
-		return &f
+		return cannotShortCut
 	}
 	if r.Table.Type != "" {
 		// A reference table is not an issue when seeing if a query is going to an unsharded keyspace
 		if r.Table.Type == vindexes.TypeReference {
-			return &t
+			return canShortCut
 		}
-		return &f
+		return cannotShortCut
 	}
 
 	name, ok := r.ASTNode.Expr.(sqlparser.TableName)
 	if !ok || name.Name.String() != r.Table.Name.String() {
-		return &f
+		return cannotShortCut
 	}
 
-	return nil
+	return dependsOnKeyspace
 }
 
 // GetVindexTable implements the TableInfo interface

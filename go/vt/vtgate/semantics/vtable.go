@@ -74,8 +74,8 @@ func (v *vTableInfo) getAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return nil
 }
 
-func (v *vTableInfo) canShortCut() *bool {
-	return &t
+func (v *vTableInfo) canShortCut() shortCut {
+	return canShortCut
 }
 
 // GetVindexTable implements the TableInfo interface

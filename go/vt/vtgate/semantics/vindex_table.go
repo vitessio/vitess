@@ -71,8 +71,8 @@ func (v *VindexTable) getAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return v.Table.getAliasedTableExpr()
 }
 
-func (v *VindexTable) canShortCut() *bool {
-	return &f
+func (v *VindexTable) canShortCut() shortCut {
+	return cannotShortCut
 }
 
 // GetColumns implements the TableInfo interface

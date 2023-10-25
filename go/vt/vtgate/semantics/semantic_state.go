@@ -54,7 +54,7 @@ type (
 
 		// canShortCut will return nil when the keyspace needs to be checked,
 		// and a true/false if the decision has been made already
-		canShortCut() *bool
+		canShortCut() shortCut
 
 		// getColumns returns the known column information for this table
 		getColumns() []ColumnInfo
@@ -150,6 +150,14 @@ type (
 		// ForeignKeyMode returns the foreign_key flag value
 		ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
 	}
+
+	shortCut = int
+)
+
+const (
+	canShortCut shortCut = iota
+	cannotShortCut
+	dependsOnKeyspace
 )
 
 var (
@@ -634,20 +642,20 @@ func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*
 		sc := table.canShortCut()
 		var vtbl *vindexes.Table
 
-		switch {
-		case sc == nil:
+		switch sc {
+		case dependsOnKeyspace:
 			// we have to check the KS if the table doesn't know if it can be shortcut or not
 			vtbl = table.GetVindexTable()
 			if !validKS(vtbl.Keyspace) {
 				return nil, nil
 			}
-		case *sc:
+		case canShortCut:
 			// the table knows that it's safe to shortcut
 			vtbl = table.GetVindexTable()
 			if vtbl == nil {
 				continue
 			}
-		case !*sc:
+		case cannotShortCut:
 			// the table knows that we can't shortcut
 			return nil, nil
 		}

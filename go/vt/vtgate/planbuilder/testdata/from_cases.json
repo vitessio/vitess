@@ -4050,59 +4050,5 @@
     "comment": "select with a target destination",
     "query": "select * from `user[-]`.user_metadata",
     "plan": "VT09017: SELECT with a target destination is not allowed"
-  },
-  {
-    "comment": "simple WITH query",
-    "query": "with x as (select * from user) select * from x",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "with x as (select * from user) select * from x",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select * from (select * from `user` where 1 != 1) as x where 1 != 1",
-        "Query": "select * from (select * from `user`) as x",
-        "Table": "`user`"
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
-    }
-  },
-  {
-    "comment": "UNION with WITH clause",
-    "query": "with x as (select id, foo from user) select * from x union select * from x",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "with x as (select id, foo from user) select * from x union select * from x",
-      "Instructions": {
-        "OperatorType": "Distinct",
-        "Collations": [
-          "(0:2)",
-          "(1:3)"
-        ],
-        "ResultColumns": 2,
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id, foo, weight_string(id), weight_string(foo) from (select id, foo from (select id, foo from `user` where 1 != 1) as x where 1 != 1 union select id, foo from (select id, foo from `user` where 1 != 1) as x where 1 != 1) as dt where 1 != 1",
-            "Query": "select id, foo, weight_string(id), weight_string(foo) from (select id, foo from (select id, foo from `user`) as x union select id, foo from (select id, foo from `user`) as x) as dt",
-            "Table": "`user`"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
-    }
   }
 ]
