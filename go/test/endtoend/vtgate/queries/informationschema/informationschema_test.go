@@ -228,6 +228,10 @@ func TestInfrSchemaAndUnionAll(t *testing.T) {
 
 func TestTypeORMQuery(t *testing.T) {
 	// This test checks that we can run queries similar to the ones that the TypeORM framework uses
+
+	require.NoError(t,
+		utils.WaitForAuthoritative(t, "ks", "t1", clusterInstance.VtgateProcess.ReadVSchema))
+
 	mcmp, closer := start(t)
 	defer closer()
 	query := `SELECT *
