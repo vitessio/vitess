@@ -63,7 +63,7 @@ func Append(buf *strings.Builder, node SQLNode) {
 		Builder: buf,
 		fast:    true,
 	}
-	node.formatFast(tbuf)
+	node.FormatFast(tbuf)
 }
 
 // IndexColumn describes a column or expression in an index definition with optional length (for column)
