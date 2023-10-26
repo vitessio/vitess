@@ -707,16 +707,23 @@ func (e *Executor) tableParticipatesInForeignKeyRelationship(ctx context.Context
 	return false, nil
 }
 
-// validateTableForAlterAction checks whether a table is good to undergo a ALTER operation. It returns detailed error if not.
 func (e *Executor) validateTableForAlterAction(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
-	if !onlineDDL.StrategySetting().IsAllowForeignKeysFlag() {
-		// Validate table does not participate in foreign key relationship:
-		participates, err := e.tableParticipatesInForeignKeyRelationship(ctx, onlineDDL.Schema, onlineDDL.Table)
-		if err != nil {
-			return vterrors.Wrapf(err, "error while attempting to validate whether table %s participates in FOREIGN KEY constraint", onlineDDL.Table)
-		}
-		if participates {
+	participatesInFK, err := e.tableParticipatesInForeignKeyRelationship(ctx, onlineDDL.Schema, onlineDDL.Table)
+	if err != nil {
+		return vterrors.Wrapf(err, "error while attempting to validate whether table %s participates in FOREIGN KEY constraint", onlineDDL.Table)
+	}
+	if participatesInFK {
+		if !onlineDDL.StrategySetting().IsAllowForeignKeysFlag() {
+			// FK migrations not allowed
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s participates in a FOREIGN KEY constraint and FOREIGN KEY constraints are not supported in Online DDL unless the *experimental and unsafe* --unsafe-allow-foreign-keys strategy flag is specified", onlineDDL.Table)
+		}
+		// FK migrations allowed. Validate that underlying MySQL server supports it.
+		preserveFKSupported, err := e.isPreserveForeignKeySupported(ctx)
+		if err != nil {
+			return vterrors.Wrapf(err, "error while attempting to validate whether 'rename_table_preserve_foreign_key' is supported")
+		}
+		if !preserveFKSupported {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s participates in a FOREIGN KEY constraint and underlying database server does not support `rename_table_preserve_foreign_key`", onlineDDL.Table)
 		}
 	}
 	return nil
@@ -875,6 +882,19 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 			renameConn.Conn.Kill("premature exit while renaming tables", 0)
 		}
 	}()
+	// See if backend MySQL server supports 'rename_table_preserve_foreign_key' variable
+	preserveFKSupported, err := e.isPreserveForeignKeySupported(ctx)
+	if err != nil {
+		return err
+	}
+	if preserveFKSupported {
+		if _, err := renameConn.Conn.Exec(ctx, sqlEnablePreserveForeignKey, 1, false); err != nil {
+			return err
+		}
+		log.Infof("@@rename_table_preserve_foreign_key enabled")
+		defer renameConn.Conn.Exec(ctx, sqlDisablePreserveForeignKey, 1, false)
+	}
+
 	renameQuery := sqlparser.BuildParsedQuery(sqlSwapTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
 
 	waitForRenameProcess := func() error {
@@ -3370,6 +3390,15 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		return nil, err
 	}
 	return s, nil
+}
+
+// isPreserveForeignKeySupported checks if the underlying MySQL server supports 'rename_table_preserve_foreign_key'
+func (e *Executor) isPreserveForeignKeySupported(ctx context.Context) (isSupported bool, err error) {
+	rs, err := e.execQuery(ctx, sqlShowVariablesLikePreserveForeignKey)
+	if err != nil {
+		return false, err
+	}
+	return len(rs.Rows) > 0, nil
 }
 
 // isVReplMigrationReadyToCutOver sees if the vreplication migration has completed the row copy
