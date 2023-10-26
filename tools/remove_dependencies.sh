@@ -30,30 +30,30 @@ ARCH=$(uname -m)
 
 uninstall_protoc() {
     echo "Removing protoc..."
-    local DIST="$1"
+    local dist="$1"
 
-    if [ -f "$DIST/bin/protoc" ]; then
-        unlink "$DIST/bin/protoc"
+    if [ -f "$dist/bin/protoc" ]; then
+        unlink "$dist/bin/protoc"
         rm "$VTROOT/bin/protoc"
     fi
-    if [[ "$(echo $DIST | awk -F/ '{print $NF}')" == "vt-protoc-$PROTOC_VER" ]]; then
-        rm -rf $DIST
+    if [[ "${dist##*/}" == "vt-protoc-$PROTOC_VER" ]]; then
+        rm -rf $dist
     fi
 }
 
 uninstall_zookeeper() {
     echo "Removing zookeeper..."
-    local DIST="$1"
+    local dist="$1"
 
-    if [[ "$(echo $DIST | awk -F/ '{print $NF}')" == "vt-zookeeper-$ZK_VER" ]]; then
-        rm -rf $DIST
+    if [[ "${dist##*/}" == "vt-zookeeper-$ZK_VER" ]]; then
+        rm -rf $dist
     fi
 }
 
 uninstall_etcd() {
     echo "Removing etcd..."
     local version="$1"
-    local DIST="$2"
+    local dist="$2"
 
     case $UNAME in
         Linux)  local platform=linux; local ext=tar.gz;;
@@ -68,36 +68,36 @@ uninstall_etcd() {
         *)   echo "Etcd not installed. Ignoring..."; return;;
     esac
 
-    if [ -f "$DIST/etcd-${version}-${platform}-${target}/etcd" ]; then
-        unlink "$DIST/etcd-${version}-${platform}-${target}/etcd"
+    if [ -f "$dist/etcd-${version}-${platform}-${target}/etcd" ]; then
+        unlink "$dist/etcd-${version}-${platform}-${target}/etcd"
         rm "$VTROOT/bin/etcd"
     fi
-    if [ -f "$DIST/etcd-${version}-${platform}-${target}/etcdctl" ]; then
-        unlink "$DIST/etcd-${version}-${platform}-${target}/etcdctl"
+    if [ -f "$dist/etcd-${version}-${platform}-${target}/etcdctl" ]; then
+        unlink "$dist/etcd-${version}-${platform}-${target}/etcdctl"
         rm "$VTROOT/bin/etcdctl"
     fi
 
-    if [[ "$(echo $DIST | awk -F/ '{print $NF}')" == "etcd" ]]; then
-        rm -rf $DIST
+    if [[ "${dist##*/}" == "etcd" ]]; then
+        rm -rf $dist
     fi
 }
 
 uninstall_consul() {
     echo "Removing consul..."
-    local DIST="$1"
+    local dist="$1"
 
-    if [ -f "$DIST/consul" ]; then
-        unlink "$DIST/consul"
+    if [ -f "$dist/consul" ]; then
+        unlink "$dist/consul"
         rm "$VTROOT/bin/consul"
     fi
-    if [[ "${DIST##*/}" == "consul" ]]; then
-        rm -rf $DIST
+    if [[ "${dist##*/}" == "consul" ]]; then
+        rm -rf $dist
     fi
 }
 
 uninstall_toxiproxy() {
     echo "Removing toxiproxy..."
-    local DIST="$1"
+    local dist="$1"
 
     case $UNAME in
         Linux)  local platform=linux;;
@@ -114,11 +114,11 @@ uninstall_toxiproxy() {
 
     file="toxiproxy-server-${platform}-${target}"
 
-    if [ -f "$DIST/$file" ]; then
-        unlink "$DIST/$file"
+    if [ -f "$dist/$file" ]; then
+        unlink "$dist/$file"
         rm "$VTROOT/bin/toxiproxy-server"
     fi
-    if [[ "${DIST##*/}" == "toxiproxy" ]]; then
+    if [[ "${dist##*/}" == "toxiproxy" ]]; then
         rm -rf $DIST
     fi
 }
