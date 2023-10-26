@@ -90,7 +90,7 @@ uninstall_consul() {
         unlink "$DIST/consul"
         rm "$VTROOT/bin/consul"
     fi
-    if [[ "$(echo $DIST | awk -F/ '{print $NF}')" == "consul" ]]; then
+    if [[ "${DIST##*/}" == "consul" ]]; then
         rm -rf $DIST
     fi
 }
@@ -118,7 +118,7 @@ uninstall_toxiproxy() {
         unlink "$DIST/$file"
         rm "$VTROOT/bin/toxiproxy-server"
     fi
-    if [[ "$(echo $DIST | awk -F/ '{print $NF}')" == "toxiproxy" ]]; then
+    if [[ "${DIST##*/}" == "toxiproxy" ]]; then
         rm -rf $DIST
     fi
 }
