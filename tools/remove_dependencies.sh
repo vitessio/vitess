@@ -37,7 +37,7 @@ uninstall_protoc() {
         rm "$VTROOT/bin/protoc"
     fi
     if [[ "${dist##*/}" == "vt-protoc-$PROTOC_VER" ]]; then
-        rm -rf $dist
+        rm -rf "$dist"
     fi
 }
 
@@ -46,7 +46,7 @@ uninstall_zookeeper() {
     local dist="$1"
 
     if [[ "${dist##*/}" == "vt-zookeeper-$ZK_VER" ]]; then
-        rm -rf $dist
+        rm -rf "$dist"
     fi
 }
 
@@ -78,7 +78,7 @@ uninstall_etcd() {
     fi
 
     if [[ "${dist##*/}" == "etcd" ]]; then
-        rm -rf $dist
+        rm -rf "$dist"
     fi
 }
 
@@ -91,7 +91,7 @@ uninstall_consul() {
         rm "$VTROOT/bin/consul"
     fi
     if [[ "${dist##*/}" == "consul" ]]; then
-        rm -rf $dist
+        rm -rf "$dist"
     fi
 }
 
@@ -119,7 +119,7 @@ uninstall_toxiproxy() {
         rm "$VTROOT/bin/toxiproxy-server"
     fi
     if [[ "${dist##*/}" == "toxiproxy" ]]; then
-        rm -rf $dist
+        rm -rf "$dist"
     fi
 }
 
@@ -136,7 +136,7 @@ uninstall_all() {
     fi
 
     # etcd
-    uninstall_etcd $ETCD_VER "$VTROOT/dist/etcd"
+    uninstall_etcd "$ETCD_VER" "$VTROOT/dist/etcd"
 
     # consul
     if [ "$BUILD_CONSUL" == 1 ] ; then
