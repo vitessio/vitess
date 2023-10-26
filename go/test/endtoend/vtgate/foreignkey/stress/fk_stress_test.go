@@ -546,8 +546,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 
 				if tcase.onlineDDLTable != "" {
 					t.Run("migrating", func(t *testing.T) {
-						// This cannot work with Vanilla MySQL. We put the code for testing, but we're not actually going to use it
-						// for now. The test cases all have empty tcase.onlineDDLTable
+						// This only works on patched MySQL
 						hint := tcase.createTableHint
 						alterStatement := tcase.alterStatement
 						if alterStatement == "" {
