@@ -423,18 +423,20 @@ func (f *fakeSchema) Views(string) map[string]sqlparser.SelectStatement {
 
 var _ SchemaInfo = (*fakeSchema)(nil)
 
-func TestHasCyclesInFks(t *testing.T) {
+func TestMarkErrorIfCyclesInFk(t *testing.T) {
+	ksName := "ks"
 	tests := []struct {
 		name       string
 		getVschema func() *vindexes.VSchema
-		want       bool
+		errWanted  string
 	}{
 		{
 			name: "Has a cycle",
 			getVschema: func() *vindexes.VSchema {
 				vschema := &vindexes.VSchema{
 					Keyspaces: map[string]*vindexes.KeyspaceSchema{
-						"ks": {
+						ksName: {
+							ForeignKeyMode: vschemapb.Keyspace_managed,
 							Tables: map[string]*vindexes.Table{
 								"t1": {
 									Name: sqlparser.NewIdentifierCS("t1"),
@@ -454,14 +456,15 @@ func TestHasCyclesInFks(t *testing.T) {
 				_ = vschema.AddForeignKey("ks", "t1", createFkDefinition([]string{"col"}, "t3", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
 				return vschema
 			},
-			want: true,
+			errWanted: "VT09019: ks has cyclic foreign keys",
 		},
 		{
 			name: "No cycle",
 			getVschema: func() *vindexes.VSchema {
 				vschema := &vindexes.VSchema{
 					Keyspaces: map[string]*vindexes.KeyspaceSchema{
-						"ks": {
+						ksName: {
+							ForeignKeyMode: vschemapb.Keyspace_managed,
 							Tables: map[string]*vindexes.Table{
 								"t1": {
 									Name: sqlparser.NewIdentifierCS("t1"),
@@ -480,12 +483,18 @@ func TestHasCyclesInFks(t *testing.T) {
 				_ = vschema.AddForeignKey("ks", "t3", createFkDefinition([]string{"col"}, "t2", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
 				return vschema
 			},
-			want: false,
+			errWanted: "",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, hasCyclesInFks(tt.getVschema()))
+			vschema := tt.getVschema()
+			markErrorIfCyclesInFk(vschema)
+			if tt.errWanted != "" {
+				require.EqualError(t, vschema.Keyspaces[ksName].Error, tt.errWanted)
+				return
+			}
+			require.NoError(t, vschema.Keyspaces[ksName].Error)
 		})
 	}
 }

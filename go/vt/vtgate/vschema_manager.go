@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -189,11 +190,10 @@ func (vm *VSchemaManager) Rebuild() {
 func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vindexes.VSchema {
 	vschema := vindexes.BuildVSchema(v)
 	if vm.schema != nil {
+		// We mark the keyspaces that have foreign key management in Vitess and have cyclic foreign keys
+		// to have an error. This makes all queries against them to fail.
+		markErrorIfCyclesInFk(vschema)
 		vm.updateFromSchema(vschema)
-		if hasCyclesInFks(vschema) {
-			// TODO: Discuss how to handle this.
-			log.Errorf("There is a cycle in foreign keys.")
-		}
 	}
 	return vschema
 }
@@ -250,9 +250,14 @@ var tableColHash = func(tc tableCol) string {
 	return res
 }
 
-func hasCyclesInFks(vschema *vindexes.VSchema) bool {
+func markErrorIfCyclesInFk(vschema *vindexes.VSchema) {
 	g := graph.New(tableColHash, graph.PreventCycles())
-	for _, ks := range vschema.Keyspaces {
+	for ksName, ks := range vschema.Keyspaces {
+		// Only check cyclic foreign keys for keyspaces that have
+		// foreign keys managed in Vitess.
+		if ks.ForeignKeyMode != vschemapb.Keyspace_managed {
+			continue
+		}
 		for tableName, table := range ks.Tables {
 			for _, cfk := range table.ChildForeignKeys {
 				childTable := cfk.Table
@@ -268,13 +273,11 @@ func hasCyclesInFks(vschema *vindexes.VSchema) bool {
 				_ = g.AddVertex(childVertex)
 				err := g.AddEdge(tableColHash(parentVertex), tableColHash(childVertex))
 				if err != nil {
-					return true
+					ks.Error = vterrors.VT09019(ksName)
 				}
 			}
 		}
 	}
-
-	return false
 }
 
 func setColumns(ks *vindexes.KeyspaceSchema, tblName string, columns []vindexes.Column) *vindexes.Table {
