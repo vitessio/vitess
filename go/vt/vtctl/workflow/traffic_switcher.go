@@ -588,7 +588,7 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 	// For backward, we redirect to source.
 	for _, servedType := range servedTypes {
 		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
-			return fmt.Errorf("invalid tablet type specified for switchTableReads: %v", servedType)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid tablet type specified when switching reads: %v", servedType)
 		}
 
 		tt := strings.ToLower(servedType.String())
