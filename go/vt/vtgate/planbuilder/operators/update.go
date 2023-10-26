@@ -251,33 +251,26 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 			return nil, vterrors.VT13001("ON UPDATE RESTRICT foreign keys should already be filtered")
 		}
 
-		nonLiteralUpdate := semantics.HasNonLiteral(updStmt.Exprs, nil, []vindexes.ChildFKInfo{fk})
-
 		// We need to select all the parent columns for the foreign key constraint, to use in the update of the child table.
 		var selectOffsets []int
 		selectOffsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs)
 
-		// If we are updating a foreign key column to a non-literal value, then we need to get the updated value and
-		// whether it is different from the current value or not as well.
-		var updatedOffsets []int
-		var compOffsets []int
-		if nonLiteralUpdate {
-			// TODO: may only store non-literal update exprs OR store non-literal info along with update expr.
-			updExprs := ctx.SemTable.ChildFkToUpdExprs[fk.String(updatedTable)]
-			for _, updExpr := range updExprs {
-				if sqlparser.IsLiteral(updExpr.Expr) {
-					updatedOffsets = append(updatedOffsets, -1)
-					compOffsets = append(compOffsets, -1)
-					continue
-				}
-				var updateExprOffset, compExprOffset int
-				updateExprOffset, compExprOffset, selectExprs = addUpdExprToSelect(ctx, updExpr, selectExprs)
-				updatedOffsets = append(updatedOffsets, updateExprOffset)
-				compOffsets = append(compOffsets, compExprOffset)
+		// If we are updating a foreign key column to a non-literal value then, need information about
+		// 1. new value is different from the old value
+		// 2. the new value itself
+		var updFkColOffsets [][2]int
+		// TODO: may only store non-literal update exprs OR store non-literal info along with update expr.
+		updExprs := ctx.SemTable.ChildFkToUpdExprs[fk.String(updatedTable)]
+		for _, updExpr := range updExprs {
+			// TODO: not sure why we append for literals.
+			offset := [2]int{-1, -1}
+			if !sqlparser.IsLiteral(updExpr.Expr) {
+				offset, selectExprs = addUpdExprToSelect(ctx, updExpr, selectExprs)
 			}
+			updFkColOffsets = append(updFkColOffsets, offset)
 		}
 
-		fkChild, err := createFkChildForUpdate(ctx, fk, updStmt, selectOffsets, updatedOffsets, compOffsets, updatedTable)
+		fkChild, err := createFkChildForUpdate(ctx, fk, updStmt, selectOffsets, updFkColOffsets, updatedTable)
 		if err != nil {
 			return nil, err
 		}
@@ -318,12 +311,26 @@ func addColumns(ctx *plancontext.PlanningContext, columns sqlparser.Columns, exp
 	return offsets, selectExprs
 }
 
-func addUpdExprToSelect(ctx *plancontext.PlanningContext, updExpr *sqlparser.UpdateExpr, exprs []sqlparser.SelectExpr) (int, int, []sqlparser.SelectExpr) {
-	var updateExprOffset, compExprOffset int
-	updateExprOffset, exprs = addExprToSelect(ctx, updExpr.Expr, exprs)
+func addUpdExprToSelect(ctx *plancontext.PlanningContext, updExpr *sqlparser.UpdateExpr, exprs []sqlparser.SelectExpr) ([2]int, []sqlparser.SelectExpr) {
 	compExpr := sqlparser.NewComparisonExpr(sqlparser.NotEqualOp, updExpr.Name, updExpr.Expr, nil)
-	compExprOffset, exprs = addExprToSelect(ctx, compExpr, exprs)
-	return updateExprOffset, compExprOffset, exprs
+	offsets := [2]int{-1, -1}
+	for idx, selectExpr := range exprs {
+		if ctx.SemTable.EqualsExpr(selectExpr.(*sqlparser.AliasedExpr).Expr, compExpr) {
+			offsets[0] = idx
+		}
+		if ctx.SemTable.EqualsExpr(selectExpr.(*sqlparser.AliasedExpr).Expr, updExpr.Expr) {
+			offsets[1] = idx
+		}
+	}
+	if offsets[0] == -1 {
+		offsets[0] = len(exprs)
+		exprs = append(exprs, aeWrap(compExpr))
+	}
+	if offsets[1] == -1 {
+		offsets[1] = len(exprs)
+		exprs = append(exprs, aeWrap(updExpr.Expr))
+	}
+	return offsets, exprs
 }
 
 func addExprToSelect(ctx *plancontext.PlanningContext, expr sqlparser.Expr, exprs []sqlparser.SelectExpr) (int, []sqlparser.SelectExpr) {
@@ -337,7 +344,7 @@ func addExprToSelect(ctx *plancontext.PlanningContext, expr sqlparser.Expr, expr
 }
 
 // createFkChildForUpdate creates the update query operator for the child table based on the foreign key constraints.
-func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, updStmt *sqlparser.Update, selectOffsets, updatedOffsets, compOffsets []int, updatedTable *vindexes.Table) (*FkChild, error) {
+func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, updStmt *sqlparser.Update, selectOffsets []int, updFkColOffsets [][2]int, updatedTable *vindexes.Table) (*FkChild, error) {
 	// Create a ValTuple of child column names
 	var valTuple sqlparser.ValTuple
 	for _, column := range fk.ChildColumns {
@@ -351,9 +358,9 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 	var childWhereExpr sqlparser.Expr = compExpr
 
 	var updateExprBvNames []string
-	if len(updatedOffsets) > 0 {
-		for _, updateOffset := range updatedOffsets {
-			if updateOffset == -1 {
+	if len(updFkColOffsets) > 0 {
+		for _, offset := range updFkColOffsets {
+			if offset[1] == -1 {
 				updateExprBvNames = append(updateExprBvNames, "")
 				continue
 			}
@@ -376,7 +383,7 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 		return nil, err
 	}
 
-	updatedOffsets, compOffsets, updateExprBvNames = compressUpdateOffsets(updatedOffsets, compOffsets, updateExprBvNames)
+	updatedOffsets, compOffsets, updateExprBvNames := compressUpdateOffsets(updFkColOffsets, updateExprBvNames)
 
 	return &FkChild{
 		BVName:            bvName,
@@ -388,15 +395,15 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 	}, nil
 }
 
-func compressUpdateOffsets(updatedOffsets []int, compOffsets []int, updateExprBvNames []string) ([]int, []int, []string) {
+func compressUpdateOffsets(offsets [][2]int, updateExprBvNames []string) ([]int, []int, []string) {
 	var newUpdatedOffsets, newCompOffsets []int
 	var newUpdateExprBvNames []string
-	for idx, updateOffset := range updatedOffsets {
-		if updateOffset == -1 {
+	for idx, offset := range offsets {
+		if offset[1] == -1 {
 			continue
 		}
-		newUpdatedOffsets = append(newUpdatedOffsets, updateOffset)
-		newCompOffsets = append(newCompOffsets, compOffsets[idx])
+		newUpdatedOffsets = append(newUpdatedOffsets, offset[1])
+		newCompOffsets = append(newCompOffsets, offset[0])
 		newUpdateExprBvNames = append(newUpdateExprBvNames, updateExprBvNames[idx])
 	}
 	return newUpdatedOffsets, newCompOffsets, newUpdateExprBvNames

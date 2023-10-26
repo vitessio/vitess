@@ -821,8 +821,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col2, u_tbl2.col1 + 'bar', col2 != u_tbl2.col1 + 'bar' from u_tbl2 where 1 != 1",
-                "Query": "select col2, u_tbl2.col1 + 'bar', col2 != u_tbl2.col1 + 'bar' from u_tbl2 where u_tbl2.id = 1 for update",
+                "FieldQuery": "select col2, col2 != u_tbl2.col1 + 'bar', u_tbl2.col1 + 'bar' from u_tbl2 where 1 != 1",
+                "Query": "select col2, col2 != u_tbl2.col1 + 'bar', u_tbl2.col1 + 'bar' from u_tbl2 where u_tbl2.id = 1 for update",
                 "Table": "u_tbl2"
               },
               {
@@ -839,7 +839,7 @@
                   0
                 ],
                 "CompExprCols": [
-                  2
+                  1
                 ],
                 "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (:fkc_upd is null or (u_tbl3.col3) not in ((:fkc_upd)))",
                 "Table": "u_tbl3",
@@ -847,7 +847,7 @@
                   "fkc_upd"
                 ],
                 "UpdateExprCols": [
-                  1
+                  2
                 ]
               },
               {
@@ -890,8 +890,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col1, u_tbl1.x + 'bar', col1 != u_tbl1.x + 'bar' from u_tbl1 where 1 != 1",
-            "Query": "select col1, u_tbl1.x + 'bar', col1 != u_tbl1.x + 'bar' from u_tbl1 where id = 1 for update",
+            "FieldQuery": "select col1, col1 != u_tbl1.x + 'bar', u_tbl1.x + 'bar' from u_tbl1 where 1 != 1",
+            "Query": "select col1, col1 != u_tbl1.x + 'bar', u_tbl1.x + 'bar' from u_tbl1 where id = 1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -902,13 +902,13 @@
               0
             ],
             "CompExprCols": [
-              2
+              1
             ],
             "UpdateExprBvNames": [
               "fkc_upd"
             ],
             "UpdateExprCols": [
-              1
+              2
             ],
             "Inputs": [
               {
@@ -961,13 +961,13 @@
               0
             ],
             "CompExprCols": [
-              2
+              1
             ],
             "UpdateExprBvNames": [
               "fkc_upd1"
             ],
             "UpdateExprCols": [
-              1
+              2
             ],
             "Inputs": [
               {
