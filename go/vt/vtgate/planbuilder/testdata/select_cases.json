@@ -4765,5 +4765,27 @@
         "user.customer"
       ]
     }
+  },
+  {
+    "comment": "invisible column is not expanded, but valid in predicate",
+    "query": "select * from samecolvin where secret = 12",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from samecolvin where secret = 12",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from samecolvin where 1 != 1",
+        "Query": "select col from samecolvin where secret = 12",
+        "Table": "samecolvin"
+      },
+      "TablesUsed": [
+        "user.samecolvin"
+      ]
+    }
   }
 ]

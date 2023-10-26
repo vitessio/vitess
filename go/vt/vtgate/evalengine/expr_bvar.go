@@ -57,7 +57,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 
 		tuple := make([]eval, 0, len(bvar.Values))
 		for _, value := range bvar.Values {
-			e, err := valueToEval(sqltypes.MakeTrusted(value.Type, value.Value), defaultCoercionCollation(collations.DefaultCollationForType(value.Type)))
+			e, err := valueToEval(sqltypes.MakeTrusted(value.Type, value.Value), defaultCoercionCollation(collations.CollationForType(value.Type, bv.Collation.Collation)))
 			if err != nil {
 				return nil, err
 			}
@@ -73,7 +73,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 		if bv.typed() {
 			typ = bv.Type
 		}
-		return valueToEval(sqltypes.MakeTrusted(typ, bvar.Value), defaultCoercionCollation(collations.DefaultCollationForType(typ)))
+		return valueToEval(sqltypes.MakeTrusted(typ, bvar.Value), defaultCoercionCollation(collations.CollationForType(typ, bv.Collation.Collation)))
 	}
 }
 
@@ -92,6 +92,8 @@ func (bv *BindVariable) typeof(env *ExpressionEnv, _ []*querypb.Field) (sqltypes
 		return sqltypes.Null, flagNull | flagNullable
 	case sqltypes.HexNum, sqltypes.HexVal:
 		return sqltypes.VarBinary, flagHex
+	case sqltypes.BitNum:
+		return sqltypes.VarBinary, flagBit
 	default:
 		return tt, 0
 	}
@@ -102,7 +104,13 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 		return ctype{}, c.unsupported(bvar)
 	}
 
-	switch tt := bvar.Type; {
+	typ := ctype{
+		Type: bvar.Type,
+		Flag: 0,
+		Col:  bvar.Collation,
+	}
+
+	switch tt := typ.Type; {
 	case sqltypes.IsSigned(tt):
 		c.asm.PushBVar_i(bvar.Key)
 	case sqltypes.IsUnsigned(tt):
@@ -114,10 +122,18 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 	case sqltypes.IsText(tt):
 		if tt == sqltypes.HexNum {
 			c.asm.PushBVar_hexnum(bvar.Key)
+			typ.Type = sqltypes.VarBinary
+			typ.Flag |= flagHex
 		} else if tt == sqltypes.HexVal {
 			c.asm.PushBVar_hexval(bvar.Key)
+			typ.Type = sqltypes.VarBinary
+			typ.Flag |= flagHex
+		} else if tt == sqltypes.BitNum {
+			c.asm.PushBVar_bitnum(bvar.Key)
+			typ.Type = sqltypes.VarBinary
+			typ.Flag |= flagBit
 		} else {
-			c.asm.PushBVar_text(bvar.Key, bvar.Collation)
+			c.asm.PushBVar_text(bvar.Key, typ.Col)
 		}
 	case sqltypes.IsBinary(tt):
 		c.asm.PushBVar_bin(bvar.Key)
@@ -128,11 +144,7 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 	default:
 		return ctype{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Type is not supported: %s", tt)
 	}
-
-	return ctype{
-		Type: bvar.Type,
-		Col:  bvar.Collation,
-	}, nil
+	return typ, nil
 }
 
 func (bvar *BindVariable) typed() bool {

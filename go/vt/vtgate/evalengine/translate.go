@@ -246,7 +246,7 @@ func translateLiteral(lit *sqlparser.Literal, collation collations.ID) (*Literal
 		return NewLiteralBinaryFromHexNum(lit.Bytes())
 	case sqlparser.HexVal:
 		return NewLiteralBinaryFromHex(lit.Bytes())
-	case sqlparser.BitVal:
+	case sqlparser.BitNum:
 		return NewLiteralBinaryFromBit(lit.Bytes())
 	case sqlparser.DateVal:
 		return NewLiteralDateFromBytes(lit.Bytes())

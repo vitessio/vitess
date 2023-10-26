@@ -191,23 +191,23 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// Bin values work fine
 		in:      "select * from t where foo = b'11'",
-		outstmt: "select * from t where foo = :foo /* HEXNUM */",
+		outstmt: "select * from t where foo = :foo /* BITNUM */",
 		outbv: map[string]*querypb.BindVariable{
-			"foo": sqltypes.HexNumBindVariable([]byte("0x03")),
+			"foo": sqltypes.BitNumBindVariable([]byte("0b11")),
 		},
 	}, {
 		// Large bin values work fine
 		in:      "select * from t where foo = b'11101010100101010010101010101010101010101000100100100100100101001101010101010101000001'",
-		outstmt: "select * from t where foo = :foo /* HEXNUM */",
+		outstmt: "select * from t where foo = :foo /* BITNUM */",
 		outbv: map[string]*querypb.BindVariable{
-			"foo": sqltypes.HexNumBindVariable([]byte("0x3AA54AAAAAA24925355541")),
+			"foo": sqltypes.BitNumBindVariable([]byte("0b11101010100101010010101010101010101010101000100100100100100101001101010101010101000001")),
 		},
 	}, {
 		// Bin value does not convert for DMLs
 		in:      "update a set v1 = b'11'",
-		outstmt: "update a set v1 = :v1 /* HEXNUM */",
+		outstmt: "update a set v1 = :v1 /* BITNUM */",
 		outbv: map[string]*querypb.BindVariable{
-			"v1": sqltypes.HexNumBindVariable([]byte("0x03")),
+			"v1": sqltypes.BitNumBindVariable([]byte("0b11")),
 		},
 	}, {
 		// ORDER BY column_position
@@ -308,14 +308,14 @@ func TestNormalize(t *testing.T) {
 			"bv3": sqltypes.Int64BindVariable(3),
 		},
 	}, {
-		// BitVal should also be normalized
+		// BitNum should also be normalized
 		in:      `select b'1', 0b01, b'1010', 0b1111111`,
-		outstmt: `select :bv1 /* HEXNUM */, :bv2 /* HEXNUM */, :bv3 /* HEXNUM */, :bv4 /* HEXNUM */ from dual`,
+		outstmt: `select :bv1 /* BITNUM */, :bv2 /* BITNUM */, :bv3 /* BITNUM */, :bv4 /* BITNUM */ from dual`,
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.HexNumBindVariable([]byte("0x01")),
-			"bv2": sqltypes.HexNumBindVariable([]byte("0x01")),
-			"bv3": sqltypes.HexNumBindVariable([]byte("0x0A")),
-			"bv4": sqltypes.HexNumBindVariable([]byte("0x7F")),
+			"bv1": sqltypes.BitNumBindVariable([]byte("0b1")),
+			"bv2": sqltypes.BitNumBindVariable([]byte("0b01")),
+			"bv3": sqltypes.BitNumBindVariable([]byte("0b1010")),
+			"bv4": sqltypes.BitNumBindVariable([]byte("0b1111111")),
 		},
 	}, {
 		// DateVal should also be normalized

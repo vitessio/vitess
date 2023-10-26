@@ -91,9 +91,15 @@ func (c *compiler) compileToNumeric(ct ctype, offset int, fallback sqltypes.Type
 	if sqltypes.IsNumber(ct.Type) {
 		return ct
 	}
-	if ct.Type == sqltypes.VarBinary && (ct.Flag&flagHex) != 0 {
-		c.asm.Convert_hex(offset)
-		return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+	if ct.Type == sqltypes.VarBinary {
+		if (ct.Flag & flagHex) != 0 {
+			c.asm.Convert_hex(offset)
+			return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+		}
+		if (ct.Flag & flagBit) != 0 {
+			c.asm.Convert_bit(offset)
+			return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+		}
 	}
 
 	if sqltypes.IsDateOrTime(ct.Type) {

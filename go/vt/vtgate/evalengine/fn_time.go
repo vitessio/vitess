@@ -1375,7 +1375,7 @@ func dateTimeUnixTimestamp(env *ExpressionEnv, date eval) evalNumeric {
 			case *evalDecimal:
 				prec = d.length
 			case *evalBytes:
-				if d.isHexLiteral {
+				if d.isHexOrBitLiteral() {
 					return newEvalInt64(0)
 				}
 				prec = 6
