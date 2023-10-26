@@ -475,15 +475,16 @@ func TestInitialSetup(t *testing.T) {
 }
 
 type testCase struct {
-	onDeleteAction     sqlparser.ReferenceAction
-	onUpdateAction     sqlparser.ReferenceAction
-	workload           bool
-	onlineDDLTable     string
-	reseedInsertIgnore bool
-	preStatement       string
-	alterStatement     string
-	createTableHint    string
-	notes              string // human readable, added to test name
+	onDeleteAction       sqlparser.ReferenceAction
+	onUpdateAction       sqlparser.ReferenceAction
+	workload             bool
+	onlineDDLTable       string
+	reseedInsertIgnore   bool
+	preStatement         string
+	alterStatement       string
+	createTableHint      string
+	notes                string // human readable, added to test name
+	skipNofkOrphanedRows bool
 }
 
 // ExecuteFKTest runs a single test case, which can be:
@@ -602,7 +603,8 @@ func TestStressFK(t *testing.T) {
 	runOnlineDDL := false
 	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
 		// Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
-		// However, Online DDL is made possible in via these changes: https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced.
+		// However, Online DDL is made possible in via these changes: https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps1.
 		// Said changes introduce a new global/session boolean variable named 'rename_table_preserve_foreign_key'. It defaults 'false'/0 for backwards compatibility.
 		// When enabled, a `RENAME TABLE` to a FK parent "pins" the children's foreign keys to the table name rather than the table pointer. Which means after the RENAME,
 		// the children will point to the newly instated table rather than the original, renamed table.
@@ -668,16 +670,22 @@ func TestStressFK(t *testing.T) {
 		}
 		{
 			// Drop a constraint, leaving the table without any foreign keys.
+			// We use `skipNofkOrphanedRows` because for the duration of the migration,
+			// `stress_nofk` table will be compliant with `stress_parent`. It's only at
+			// the very end of the test, just as the migration completes, that the workload
+			// has the chance to inject orphaned rows. But then the test terminates immediately
+			// and so we can't be sure that orphaned rows will exist.
 			tcase := &testCase{
-				notes:              "drop fk",
-				workload:           true,
-				onDeleteAction:     sqlparser.NoAction,
-				onUpdateAction:     sqlparser.NoAction,
-				onlineDDLTable:     "stress_nofk",
-				preStatement:       alterAddFKStatement,
-				reseedInsertIgnore: true,
-				alterStatement:     alterDropFKStatement,
-				createTableHint:    "parent_id",
+				notes:                "drop fk",
+				workload:             true,
+				onDeleteAction:       sqlparser.NoAction,
+				onUpdateAction:       sqlparser.NoAction,
+				onlineDDLTable:       "stress_nofk",
+				preStatement:         alterAddFKStatement,
+				reseedInsertIgnore:   true,
+				alterStatement:       alterDropFKStatement,
+				createTableHint:      "parent_id",
+				skipNofkOrphanedRows: true,
 			}
 			ExecuteFKTest(t, tcase)
 		}
@@ -1251,11 +1259,13 @@ func testFKIntegrity(
 				rs := queryTablet(t, tablet, selectOrphanedRowsGrandchild, "")
 				assert.Zero(t, len(rs.Rows))
 			})
-			t.Run("parent-nofk orphaned rows", func(t *testing.T) {
-				rs := queryTablet(t, tablet, selectOrphanedRowsNoFK, "")
-				// Expect orphaned rows!
-				assert.NotZero(t, len(rs.Rows))
-			})
+			if !tcase.skipNofkOrphanedRows {
+				t.Run("parent-nofk orphaned rows", func(t *testing.T) {
+					rs := queryTablet(t, tablet, selectOrphanedRowsNoFK, "")
+					// Expect orphaned rows!
+					assert.NotZero(t, len(rs.Rows))
+				})
+			}
 		}
 	})
 }
