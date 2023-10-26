@@ -393,7 +393,6 @@ tools:
 	./bootstrap.sh
 
 clean_tools:
-	source build.env
 	./tools/remove_dependencies.sh
 
 minimaltools:

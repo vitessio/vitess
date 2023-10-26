@@ -18,6 +18,8 @@
 
 set -euo pipefail
 
+source build.env
+
 function fail() {
 	echo "ERROR: ${1}"
 	exit 1
