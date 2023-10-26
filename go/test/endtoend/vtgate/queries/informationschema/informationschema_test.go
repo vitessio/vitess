@@ -225,3 +225,35 @@ func TestInfrSchemaAndUnionAll(t *testing.T) {
 		})
 	}
 }
+
+func TestTypeORMQuery(t *testing.T) {
+	// This test checks that we can run queries similar to the ones that the TypeORM framework uses
+	mcmp, closer := start(t)
+	defer closer()
+	query := `SELECT *
+FROM (SELECT *
+      FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+      WHERE kcu.TABLE_SCHEMA = 'ks'
+        AND kcu.TABLE_NAME = 't1'
+      UNION
+      SELECT *
+      FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+      WHERE kcu.TABLE_SCHEMA = 'ks'
+        AND kcu.TABLE_NAME = 't7_xxhash') kcu
+         INNER JOIN
+     (SELECT *
+      FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+      WHERE CONSTRAINT_SCHEMA = 'ks'
+        AND TABLE_NAME = 't1'
+      UNION
+      SELECT *
+      FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+      WHERE CONSTRAINT_SCHEMA = 'ks'
+        AND TABLE_NAME = 't7_xxhash') rc
+     ON rc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA
+         AND
+        rc.TABLE_NAME = kcu.TABLE_NAME
+         AND
+        rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME`
+	utils.AssertMatches(t, mcmp.VtConn, query, "[]")
+}
