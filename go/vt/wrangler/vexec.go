@@ -920,19 +920,21 @@ func (wr *Wrangler) printWorkflowList(keyspace string, workflows []string) {
 }
 
 func (wr *Wrangler) getCopyStates(ctx context.Context, tablet *topo.TabletInfo, ids []int64) (map[int64][]copyState, error) {
-	var idStrs []string
-	for _, id := range ids {
-		idStrs = append(idStrs, strconv.FormatInt(id, 10))
+	idsBV, err := sqltypes.BuildBindVariable(ids)
+	if err != nil {
+		return nil, err
 	}
-	idsStr := strings.Join(idStrs, ",")
-	cs := make(map[int64][]copyState)
-	query := fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%s) and id in (select max(id) from _vt.copy_state where vrepl_id in (%s) group by vrepl_id, table_name)",
-		idsStr, idsStr)
+	query, err := sqlparser.ParseAndBind("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in %a and id in (select max(id) from _vt.copy_state where vrepl_id in %a group by vrepl_id, table_name)",
+		idsBV, idsBV)
+	if err != nil {
+		return nil, err
+	}
 	qr, err := wr.tmc.VReplicationExec(ctx, tablet.Tablet, query)
 	if err != nil {
 		return nil, err
 	}
 
+	cs := make(map[int64][]copyState)
 	result := sqltypes.Proto3ToResult(qr)
 	if result != nil {
 		for _, row := range result.Rows {
