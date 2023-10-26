@@ -31,6 +31,9 @@ import (
 )
 
 func start(t *testing.T) (utils.MySQLCompare, func()) {
+	// ensure that the vschema and the tables have been created before running any tests
+	_ = utils.WaitForAuthoritative(t, keyspaceName, "t1", clusterInstance.VtgateProcess.ReadVSchema)
+
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
