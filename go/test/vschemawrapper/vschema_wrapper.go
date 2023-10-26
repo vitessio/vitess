@@ -136,6 +136,10 @@ func (vw *VSchemaWrapper) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_Fo
 	return defaultFkMode, nil
 }
 
+func (vw *VSchemaWrapper) KeyspaceError(keyspace string) error {
+	return nil
+}
+
 func (vw *VSchemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	if vw.Keyspace == nil {
 		return nil, vterrors.VT13001("keyspace not available")

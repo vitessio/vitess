@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1609,6 +1610,27 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 				},
 			},
 			expectedErr: "undefined_ks keyspace not found",
+		},
+		{
+			name: "Cyclic fk constraints error",
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						tbl["t0"], tbl["t1"],
+						&DerivedTable{},
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks":           vschemapb.Keyspace_managed,
+							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
+						},
+						KsError: map[string]error{
+							"ks": fmt.Errorf("VT09019: ks has cyclic foreign keys"),
+						},
+					},
+				},
+			},
+			expectedErr: "VT09019: ks has cyclic foreign keys",
 		},
 	}
 	for _, tt := range tests {

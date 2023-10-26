@@ -190,10 +190,10 @@ func (vm *VSchemaManager) Rebuild() {
 func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vindexes.VSchema {
 	vschema := vindexes.BuildVSchema(v)
 	if vm.schema != nil {
+		vm.updateFromSchema(vschema)
 		// We mark the keyspaces that have foreign key management in Vitess and have cyclic foreign keys
 		// to have an error. This makes all queries against them to fail.
 		markErrorIfCyclesInFk(vschema)
-		vm.updateFromSchema(vschema)
 	}
 	return vschema
 }
@@ -251,13 +251,13 @@ var tableColHash = func(tc tableCol) string {
 }
 
 func markErrorIfCyclesInFk(vschema *vindexes.VSchema) {
-	g := graph.New(tableColHash, graph.PreventCycles())
 	for ksName, ks := range vschema.Keyspaces {
 		// Only check cyclic foreign keys for keyspaces that have
 		// foreign keys managed in Vitess.
 		if ks.ForeignKeyMode != vschemapb.Keyspace_managed {
 			continue
 		}
+		g := graph.New(tableColHash, graph.PreventCycles(), graph.Directed())
 		for tableName, table := range ks.Tables {
 			for _, cfk := range table.ChildForeignKeys {
 				childTable := cfk.Table
