@@ -36,7 +36,7 @@ uninstall_protoc() {
 
     if [ -f "$dist/bin/protoc" ]; then
         unlink "$dist/bin/protoc"
-        rm "$VTROOT/bin/protoc"
+        rm -f "$VTROOT/bin/protoc"
     fi
     if [[ "${dist##*/}" == "vt-protoc-$PROTOC_VER" ]]; then
         rm -rf "$dist"
@@ -72,11 +72,11 @@ uninstall_etcd() {
 
     if [ -f "$dist/etcd-${version}-${platform}-${target}/etcd" ]; then
         unlink "$dist/etcd-${version}-${platform}-${target}/etcd"
-        rm "$VTROOT/bin/etcd"
+        rm -f "$VTROOT/bin/etcd"
     fi
     if [ -f "$dist/etcd-${version}-${platform}-${target}/etcdctl" ]; then
         unlink "$dist/etcd-${version}-${platform}-${target}/etcdctl"
-        rm "$VTROOT/bin/etcdctl"
+        rm -f "$VTROOT/bin/etcdctl"
     fi
 
     if [[ "${dist##*/}" == "etcd" ]]; then
@@ -90,7 +90,7 @@ uninstall_consul() {
 
     if [ -f "$dist/consul" ]; then
         unlink "$dist/consul"
-        rm "$VTROOT/bin/consul"
+        rm -f "$VTROOT/bin/consul"
     fi
     if [[ "${dist##*/}" == "consul" ]]; then
         rm -rf "$dist"
@@ -118,7 +118,7 @@ uninstall_toxiproxy() {
 
     if [ -f "$dist/$file" ]; then
         unlink "$dist/$file"
-        rm "$VTROOT/bin/toxiproxy-server"
+        rm -f "$VTROOT/bin/toxiproxy-server"
     fi
     if [[ "${dist##*/}" == "toxiproxy" ]]; then
         rm -rf "$dist"
