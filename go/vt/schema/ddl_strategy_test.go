@@ -41,19 +41,23 @@ func TestIsDirect(t *testing.T) {
 
 func TestIsCutOverThresholdFlag(t *testing.T) {
 	tt := []struct {
-		s      string
-		expect bool
-		val    string
-		d      time.Duration
+		s           string
+		expect      bool
+		expectError string
+		val         string
+		d           time.Duration
 	}{
 		{
-			s: "something",
+			s:           "something",
+			expectError: "invalid flags",
 		},
 		{
-			s: "-cut-over-threshold",
+			s:           "-cut-over-threshold",
+			expectError: "invalid flags",
 		},
 		{
-			s: "--cut-over-threshold",
+			s:           "--cut-over-threshold",
+			expectError: "invalid flags",
 		},
 		{
 			s:      "--cut-over-threshold=",
@@ -87,6 +91,11 @@ func TestIsCutOverThresholdFlag(t *testing.T) {
 	for _, ts := range tt {
 		t.Run(ts.s, func(t *testing.T) {
 			setting, err := ParseDDLStrategy("online " + ts.s)
+			if ts.expectError != "" {
+				assert.ErrorContains(t, err, ts.expectError)
+				return
+			}
+
 			assert.NoError(t, err)
 
 			val, isCutOver := isCutOverThresholdFlag(ts.s)
@@ -104,19 +113,23 @@ func TestIsCutOverThresholdFlag(t *testing.T) {
 
 func TestIsExpireArtifactsFlag(t *testing.T) {
 	tt := []struct {
-		s      string
-		expect bool
-		val    string
-		d      time.Duration
+		s           string
+		expect      bool
+		expectError string
+		val         string
+		d           time.Duration
 	}{
 		{
-			s: "something",
+			s:           "something",
+			expectError: "invalid flags",
 		},
 		{
-			s: "-retain-artifacts",
+			s:           "-retain-artifacts",
+			expectError: "invalid flags",
 		},
 		{
-			s: "--retain-artifacts",
+			s:           "--retain-artifacts",
+			expectError: "invalid flags",
 		},
 		{
 			s:      "--retain-artifacts=",
@@ -150,6 +163,10 @@ func TestIsExpireArtifactsFlag(t *testing.T) {
 	for _, ts := range tt {
 		t.Run(ts.s, func(t *testing.T) {
 			setting, err := ParseDDLStrategy("online " + ts.s)
+			if ts.expectError != "" {
+				assert.ErrorContains(t, err, ts.expectError)
+				return
+			}
 			assert.NoError(t, err)
 
 			val, isRetainArtifacts := isRetainArtifactsFlag(ts.s)

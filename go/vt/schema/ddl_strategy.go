@@ -118,7 +118,7 @@ func ParseDDLStrategy(strategyVariable string) (*DDLStrategySetting, error) {
 	}
 
 	switch setting.Strategy {
-	case DDLStrategyVitess, DDLStrategyOnline:
+	case DDLStrategyVitess, DDLStrategyOnline, DDLStrategyMySQL, DDLStrategyDirect:
 		if opts := setting.RuntimeOptions(); len(opts) > 0 {
 			return nil, fmt.Errorf("invalid flags for vitess strategy: %s", strings.Join(opts, " "))
 		}
