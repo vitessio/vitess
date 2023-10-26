@@ -883,6 +883,17 @@ func (asm *assembler) Convert_hex(offset int) {
 	}, "CONV VARBINARY(SP-%d), HEX", offset)
 }
 
+func (asm *assembler) Convert_bit(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		var ok bool
+		env.vm.stack[env.vm.sp-offset], ok = env.vm.stack[env.vm.sp-offset].(*evalBytes).toNumericBit()
+		if !ok {
+			env.vm.err = errDeoptimize
+		}
+		return 1
+	}, "CONV VARBINARY(SP-%d), BIT", offset)
+}
+
 func (asm *assembler) Convert_Ti(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		v := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
@@ -3092,6 +3103,14 @@ func (asm *assembler) Neg_hex() {
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalFloat(-float64(arg.u))
 		return 1
 	}, "NEG HEX(SP-1)")
+}
+
+func (asm *assembler) Neg_bit() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalFloat(-float64(arg.i))
+		return 1
+	}, "NEG BIT(SP-1)")
 }
 
 func (asm *assembler) Neg_i() {

@@ -14654,7 +14654,7 @@ INPUT
 select hex(_utf8mb4 B'001111111111');
 END
 OUTPUT
-select hex(_utf8mb4 B'001111111111') from dual
+select hex(_utf8mb4 0b001111111111) from dual
 END
 INPUT
 select NULLIF(1,NULL), NULLIF(1.0, NULL), NULLIF("test", NULL);
@@ -18968,7 +18968,7 @@ INPUT
 select hex(_utf8 B'001111111111');
 END
 OUTPUT
-select hex(_utf8mb3 B'001111111111') from dual
+select hex(_utf8mb3 0b001111111111) from dual
 END
 INPUT
 select right('hello', -18446744073709551615);

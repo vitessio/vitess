@@ -455,6 +455,51 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `WEIGHT_STRING('foobar' as char(3))`,
 			result:     `VARBINARY("\x1c\xe5\x1d\xdd\x1d\xdd")`,
 		},
+		{
+			expression: `CAST(time '5 10:34:58' AS DATETIME)`,
+			result:     `DATETIME("2023-10-29 10:34:58")`,
+		},
+		{
+			expression: `CAST(time '130:34:58' AS DATETIME)`,
+			result:     `DATETIME("2023-10-29 10:34:58")`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP(time '5 10:34:58')`,
+			result:     `INT64(1698572098)`,
+		},
+		{
+			expression: `CONV(-1, -1.5e0, 3.141592653589793)`,
+			result:     `VARCHAR("11112220022122120101211020120210210211220")`,
+		},
+		{
+			expression: `column0 between 10 and 20`,
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     `NULL`,
+		},
+		{
+			expression: `1 + 0b1001`,
+			result:     `INT64(10)`,
+		},
+		{
+			expression: `1 + 0x6`,
+			result:     `UINT64(7)`,
+		},
+		{
+			expression: `0 DIV 0b1001`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `0 & 0b1001`,
+			result:     `UINT64(0)`,
+		},
+		{
+			expression: `CAST(0b1001 AS DECIMAL)`,
+			result:     `DECIMAL(9)`,
+		},
+		{
+			expression: `-0b1001`,
+			result:     `FLOAT64(-9)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

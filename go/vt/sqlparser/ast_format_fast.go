@@ -1727,14 +1727,10 @@ func (node *Literal) FormatFast(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
 		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Bytes()).EncodeSQL(buf)
-	case IntVal, FloatVal, DecimalVal, HexNum:
+	case IntVal, FloatVal, DecimalVal, HexNum, BitNum:
 		buf.WriteString(node.Val)
 	case HexVal:
 		buf.WriteString("X'")
-		buf.WriteString(node.Val)
-		buf.WriteByte('\'')
-	case BitVal:
-		buf.WriteString("B'")
 		buf.WriteString(node.Val)
 		buf.WriteByte('\'')
 	case DateVal:

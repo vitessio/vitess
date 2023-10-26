@@ -77,7 +77,7 @@ func LiteralToValue(lit *Literal) (sqltypes.Value, error) {
 		return parseHexLiteral(b[1:])
 	case HexVal:
 		return parseHexLiteral(lit.Bytes())
-	case BitVal:
+	case BitNum:
 		return parseBitLiteral(lit.Bytes())
 	case DateVal:
 		d, ok := datetime.ParseDate(lit.Val)
