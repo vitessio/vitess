@@ -319,7 +319,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0||1||0", j+1, now, now))
 			vreplIDs = append(vreplIDs, strconv.FormatInt(int64(j+1), 10))
 		}
-		vreplIDsJoined := strings.Join(vreplIDs, ",")
+		vreplIDsJoined := strings.Join(vreplIDs, ", ")
 		tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
 		tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
@@ -355,7 +355,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 			streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v||||1|0|0", j+1, bls))
 			vreplIDs = append(vreplIDs, strconv.FormatInt(int64(j+1), 10))
 		}
-		vreplIDsJoined := strings.Join(vreplIDs, ",")
+		vreplIDsJoined := strings.Join(vreplIDs, ", ")
 		tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
 		tme.dbSourceClients[i].addInvariant(reverseStreamInfoKs1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
@@ -497,7 +497,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 				streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0|||1||0", i+1, now, now))
 				vreplIDs = append(vreplIDs, strconv.FormatInt(int64(i+1), 10))
 			}
-			vreplIDsJoined := strings.Join(vreplIDs, ",")
+			vreplIDsJoined := strings.Join(vreplIDs, ", ")
 			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
 			tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
@@ -535,7 +535,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 				streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v||||1|0|0", i+1, bls))
 				vreplIDs = append(vreplIDs, strconv.FormatInt(int64(i+1), 10))
 			}
-			vreplIDsJoined := strings.Join(vreplIDs, ",")
+			vreplIDsJoined := strings.Join(vreplIDs, ", ")
 			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
 			tme.dbSourceClients[i].addInvariant(reverseStreamInfoKs1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
@@ -666,7 +666,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0|||", j+1, now, now))
 			vreplIDs = append(vreplIDs, strconv.FormatInt(int64(j+1), 10))
 		}
-		vreplIDsJoined := strings.Join(vreplIDs, ",")
+		vreplIDsJoined := strings.Join(vreplIDs, ", ")
 		tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
 		tme.dbTargetClients[i].addInvariant(streamInfoKs, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
@@ -693,7 +693,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks|%d|%d|0|0|||", j+1, now, now))
 			vreplIDs = append(vreplIDs, strconv.FormatInt(int64(j+1), 10))
 		}
-		vreplIDsJoined := strings.Join(vreplIDs, ",")
+		vreplIDsJoined := strings.Join(vreplIDs, ", ")
 		tme.dbSourceClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
 		tme.dbSourceClients[i].addInvariant(streamExtInfoKs, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags",
