@@ -109,18 +109,18 @@ func expectCanSwitchQueries(t *testing.T, tme *testMigraterEnv, keyspace, state 
 		"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|varchar|varchar"),
 		row)
 	copyStateResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"table|lastpk",
-		"varchar|varchar"),
-		"t1|pk1",
+		"vrepl_id|table|lastpk",
+		"int64|varchar|varchar"),
+		"1|t1|pk1",
 	)
 
 	for _, db := range tme.dbTargetClients {
 		db.addInvariant(streamExtInfoKs2, replicationResult)
 
 		if state == "Copying" {
-			db.addInvariant(fmt.Sprintf(copyStateQuery, 1, 1), copyStateResult)
+			db.addInvariant(fmt.Sprintf(copyStateQuery, "1", "1"), copyStateResult)
 		} else {
-			db.addInvariant(fmt.Sprintf(copyStateQuery, 1, 1), noResult)
+			db.addInvariant(fmt.Sprintf(copyStateQuery, "1", "1"), noResult)
 		}
 	}
 }

@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -56,7 +58,7 @@ import (
 const (
 	streamInfoQuery    = "select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow='%s' and db_name='vt_%s'"
 	streamExtInfoQuery = "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags, workflow_type, workflow_sub_type, defer_secondary_keys, rows_copied from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'"
-	copyStateQuery     = "select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)"
+	copyStateQuery     = "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%s) and id in (select max(id) from _vt.copy_state where vrepl_id in (%s) group by vrepl_id, table_name)"
 	maxValForSequence  = "select max(`id`) as maxval from `vt_%s`.`%s`"
 )
 
@@ -298,6 +300,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	for i, targetShard := range targetShards {
 		var streamInfoRows []string
 		var streamExtInfoRows []string
+		var vreplIDs []string
 		for j, sourceShard := range sourceShards {
 			bls := &binlogdatapb.BinlogSource{
 				Keyspace: "ks1",
@@ -314,8 +317,10 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 			}
 			streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v||||1|0|0", j+1, bls))
 			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0||1||0", j+1, now, now))
-			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1, j+1), noResult)
+			vreplIDs = append(vreplIDs, strconv.FormatInt(int64(j+1), 10))
 		}
+		vreplIDsJoined := strings.Join(vreplIDs, ",")
+		tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
 		tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
 			"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
@@ -332,6 +337,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 
 	for i, sourceShard := range sourceShards {
 		var streamInfoRows []string
+		var vreplIDs []string
 		for j, targetShard := range targetShards {
 			bls := &binlogdatapb.BinlogSource{
 				Keyspace: "ks2",
@@ -347,8 +353,10 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 				},
 			}
 			streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v||||1|0|0", j+1, bls))
-			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1, j+1), noResult)
+			vreplIDs = append(vreplIDs, strconv.FormatInt(int64(j+1), 10))
 		}
+		vreplIDsJoined := strings.Join(vreplIDs, ",")
+		tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
 		tme.dbSourceClients[i].addInvariant(reverseStreamInfoKs1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
 			"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
@@ -470,6 +478,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 		for _, shardToMove := range shardsToMove {
 			var streamInfoRows []string
 			var streamExtInfoRows []string
+			var vreplIDs []string
 			if shardToMove == shard {
 				bls := &binlogdatapb.BinlogSource{
 					Keyspace: "ks1",
@@ -486,8 +495,10 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 				}
 				streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v||||1|0|0", i+1, bls))
 				streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0|||1||0", i+1, now, now))
+				vreplIDs = append(vreplIDs, strconv.FormatInt(int64(i+1), 10))
 			}
-			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, i+1, i+1), noResult)
+			vreplIDsJoined := strings.Join(vreplIDs, ",")
+			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
 			tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
 				"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
@@ -506,6 +517,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 	for i, shard := range shards {
 		for _, shardToMove := range shardsToMove {
 			var streamInfoRows []string
+			var vreplIDs []string
 			if shardToMove == shard {
 				bls := &binlogdatapb.BinlogSource{
 					Keyspace: "ks2",
@@ -521,8 +533,10 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 					},
 				}
 				streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v||||1|0|0", i+1, bls))
-				tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, i+1, i+1), noResult)
+				vreplIDs = append(vreplIDs, strconv.FormatInt(int64(i+1), 10))
 			}
+			vreplIDsJoined := strings.Join(vreplIDs, ",")
+			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
 			tme.dbSourceClients[i].addInvariant(reverseStreamInfoKs1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
 				"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
@@ -632,6 +646,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	for i, targetShard := range targetShards {
 		var rows, rowsRdOnly []string
 		var streamExtInfoRows []string
+		var vreplIDs []string
 		for j, sourceShard := range sourceShards {
 			if !key.KeyRangeIntersect(tme.targetKeyRanges[i], tme.sourceKeyRanges[j]) {
 				continue
@@ -649,8 +664,10 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 			rows = append(rows, fmt.Sprintf("%d|%v||||1|0|0", j+1, bls))
 			rowsRdOnly = append(rows, fmt.Sprintf("%d|%v|||RDONLY|1|0|0", j+1, bls))
 			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0|||", j+1, now, now))
-			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1, j+1), noResult)
+			vreplIDs = append(vreplIDs, strconv.FormatInt(int64(j+1), 10))
 		}
+		vreplIDsJoined := strings.Join(vreplIDs, ",")
+		tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
 		tme.dbTargetClients[i].addInvariant(streamInfoKs, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
 			"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
@@ -670,11 +687,14 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	tme.targetKeyspace = "ks"
 	for i, dbclient := range tme.dbSourceClients {
 		var streamExtInfoRows []string
+		var vreplIDs []string
 		dbclient.addInvariant(streamInfoKs, &sqltypes.Result{})
 		for j := range targetShards {
 			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks|%d|%d|0|0|||", j+1, now, now))
-			tme.dbSourceClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1, j+1), noResult)
+			vreplIDs = append(vreplIDs, strconv.FormatInt(int64(j+1), 10))
 		}
+		vreplIDsJoined := strings.Join(vreplIDs, ",")
+		tme.dbSourceClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
 		tme.dbSourceClients[i].addInvariant(streamExtInfoKs, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags",
 			"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|varchar|varchar"),

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -582,7 +583,7 @@ type ReplicationStatus struct {
 	deferSecondaryKeys bool
 }
 
-func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltypes.RowNamedValues, primary *topo.TabletInfo) (*ReplicationStatus, string, error) {
+func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltypes.RowNamedValues, copyStates []copyState, primary *topo.TabletInfo) (*ReplicationStatus, string, error) {
 	var err error
 	var id int32
 	var timeUpdated, transactionTimestamp, timeHeartbeat, timeThrottled int64
@@ -688,11 +689,8 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 		deferSecondaryKeys:   deferSecondaryKeys,
 		RowsCopied:           rowsCopied,
 	}
-	status.CopyState, err = wr.getCopyState(ctx, primary, id)
-	if err != nil {
-		return nil, "", err
-	}
 
+	status.CopyState = copyStates
 	status.State = updateState(message, binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[state]), status.CopyState, timeUpdated)
 	return status, bls.Keyspace, nil
 }
@@ -739,8 +737,27 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 		if len(nqr.Rows) == 0 {
 			continue
 		}
+		// Get all copy states for the shard.
+		var vreplIDs []int64
 		for _, row := range nqr.Rows {
-			status, sk, err := wr.getReplicationStatusFromRow(ctx, row, primary)
+			vreplID, err := row.ToInt64("id")
+			if err != nil {
+				return nil, err
+			}
+			vreplIDs = append(vreplIDs, vreplID)
+		}
+		copyStatesByVReplID, err := wr.getCopyStates(ctx, primary, vreplIDs)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range nqr.Rows {
+			vreplID, err := row.ToInt64("id")
+			if err != nil {
+				return nil, err
+			}
+
+			copyStates := copyStatesByVReplID[vreplID]
+			status, sk, err := wr.getReplicationStatusFromRow(ctx, row, copyStates, primary)
 			if err != nil {
 				return nil, err
 			}
@@ -902,11 +919,16 @@ func (wr *Wrangler) printWorkflowList(keyspace string, workflows []string) {
 	wr.Logger().Printf("Following workflow(s) found in keyspace %s: %v\n", keyspace, list)
 }
 
-func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, id int32) ([]copyState, error) {
-	var cs []copyState
-	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)",
-		id, id)
-	qr, err := wr.VReplicationExec(ctx, tablet.Alias, query)
+func (wr *Wrangler) getCopyStates(ctx context.Context, tablet *topo.TabletInfo, ids []int64) (map[int64][]copyState, error) {
+	var idStrs []string
+	for _, id := range ids {
+		idStrs = append(idStrs, strconv.FormatInt(id, 10))
+	}
+	idsStr := strings.Join(idStrs, ",")
+	cs := make(map[int64][]copyState)
+	query := fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%s) and id in (select max(id) from _vt.copy_state where vrepl_id in (%s) group by vrepl_id, table_name)",
+		idsStr, idsStr)
+	qr, err := wr.tmc.VReplicationExec(ctx, tablet.Tablet, query)
 	if err != nil {
 		return nil, err
 	}
@@ -914,14 +936,18 @@ func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, i
 	result := sqltypes.Proto3ToResult(qr)
 	if result != nil {
 		for _, row := range result.Rows {
+			vreplID, err := row[0].ToInt64()
+			if err != nil {
+				return nil, fmt.Errorf("failed to cast vrepl_id to int64: %v", err)
+			}
 			// These fields are varbinary, but close enough
-			table := row[0].ToString()
-			lastPK := row[1].ToString()
+			table := row[1].ToString()
+			lastPK := row[2].ToString()
 			copyState := copyState{
 				Table:  table,
 				LastPK: lastPK,
 			}
-			cs = append(cs, copyState)
+			cs[vreplID] = append(cs[vreplID], copyState)
 		}
 	}
 

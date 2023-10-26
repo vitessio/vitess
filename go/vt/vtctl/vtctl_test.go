@@ -200,12 +200,12 @@ func TestMoveTables(t *testing.T) {
 			expectResults: func() {
 				env.tmc.setVRResults(
 					target.tablet,
-					fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)",
+					fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
 						vrID, vrID),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-						"table_name|lastpk",
-						"varchar|varbinary"),
-						fmt.Sprintf("%s|", table),
+						"vrepl_id|table_name|lastpk",
+						"int64|varchar|varbinary"),
+						fmt.Sprintf("%d|%s|", vrID, table),
 					),
 				)
 				env.tmc.setDBAResults(
@@ -260,12 +260,12 @@ func TestMoveTables(t *testing.T) {
 			expectResults: func() {
 				env.tmc.setVRResults(
 					target.tablet,
-					fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)",
+					fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
 						vrID, vrID),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-						"table_name|lastpk",
-						"varchar|varbinary"),
-						fmt.Sprintf("%s|", table),
+						"vrepl_id|table_name|lastpk",
+						"int64|varchar|varbinary"),
+						fmt.Sprintf("%d|%s|", vrID, table),
 					),
 				)
 				env.tmc.setDBAResults(
@@ -320,7 +320,7 @@ func TestMoveTables(t *testing.T) {
 			expectResults: func() {
 				env.tmc.setVRResults(
 					target.tablet,
-					fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)",
+					fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
 						vrID, vrID),
 					&sqltypes.Result{},
 				)
