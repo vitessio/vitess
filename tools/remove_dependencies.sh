@@ -119,7 +119,7 @@ uninstall_toxiproxy() {
         rm "$VTROOT/bin/toxiproxy-server"
     fi
     if [[ "${dist##*/}" == "toxiproxy" ]]; then
-        rm -rf $DIST
+        rm -rf $dist
     fi
 }
 
