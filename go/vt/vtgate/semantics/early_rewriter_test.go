@@ -48,6 +48,10 @@ func TestExpandStar(t *testing.T) {
 				}, {
 					Name: sqlparser.NewIdentifierCI("c"),
 					Type: sqltypes.VarChar,
+				}, {
+					Name:      sqlparser.NewIdentifierCI("secret"),
+					Type:      sqltypes.Decimal,
+					Invisible: true,
 				}},
 				ColumnListAuthoritative: true,
 			},

@@ -529,12 +529,12 @@ func (asm *assembler) CmpCase(cases int, hasElse bool, tt sqltypes.Type, cc coll
 		end := env.vm.sp - elseOffset
 		for sp := env.vm.sp - stackDepth; sp < end; sp += 2 {
 			if env.vm.stack[sp].(*evalInt64).i != 0 {
-				env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[sp+1], tt, cc.Collation)
+				env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[sp+1], tt, cc.Collation, env.now)
 				goto done
 			}
 		}
 		if elseOffset != 0 {
-			env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[env.vm.sp-1], tt, cc.Collation)
+			env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[env.vm.sp-1], tt, cc.Collation, env.now)
 		} else {
 			env.vm.stack[env.vm.sp-stackDepth] = nil
 		}
@@ -1110,7 +1110,7 @@ func (asm *assembler) Convert_xD(offset int) {
 		// Need to explicitly check here or we otherwise
 		// store a nil wrapper in an interface vs. a direct
 		// nil.
-		d := evalToDate(env.vm.stack[env.vm.sp-offset])
+		d := evalToDate(env.vm.stack[env.vm.sp-offset], env.now)
 		if d == nil {
 			env.vm.stack[env.vm.sp-offset] = nil
 		} else {
@@ -1125,7 +1125,7 @@ func (asm *assembler) Convert_xD_nz(offset int) {
 		// Need to explicitly check here or we otherwise
 		// store a nil wrapper in an interface vs. a direct
 		// nil.
-		d := evalToDate(env.vm.stack[env.vm.sp-offset])
+		d := evalToDate(env.vm.stack[env.vm.sp-offset], env.now)
 		if d == nil || d.isZero() {
 			env.vm.stack[env.vm.sp-offset] = nil
 		} else {
@@ -1140,7 +1140,7 @@ func (asm *assembler) Convert_xDT(offset, prec int) {
 		// Need to explicitly check here or we otherwise
 		// store a nil wrapper in an interface vs. a direct
 		// nil.
-		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset], prec)
+		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset], prec, env.now)
 		if dt == nil {
 			env.vm.stack[env.vm.sp-offset] = nil
 		} else {
@@ -1155,7 +1155,7 @@ func (asm *assembler) Convert_xDT_nz(offset, prec int) {
 		// Need to explicitly check here or we otherwise
 		// store a nil wrapper in an interface vs. a direct
 		// nil.
-		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset], prec)
+		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset], prec, env.now)
 		if dt == nil || dt.isZero() {
 			env.vm.stack[env.vm.sp-offset] = nil
 		} else {
@@ -2042,6 +2042,7 @@ func (asm *assembler) Fn_FROM_BASE64(t sqltypes.Type) {
 		}
 		str.tt = int16(t)
 		str.bytes = decoded
+		str.col = collationBinary
 		return 1
 	}, "FN FROM_BASE64 VARCHAR(SP-1)")
 }
@@ -4251,7 +4252,7 @@ func (asm *assembler) Fn_DATEADD_D(unit datetime.IntervalType, sub bool) {
 		}
 
 		tmp := env.vm.stack[env.vm.sp-2].(*evalTemporal)
-		env.vm.stack[env.vm.sp-2] = tmp.addInterval(interval, collations.TypedCollation{})
+		env.vm.stack[env.vm.sp-2] = tmp.addInterval(interval, collations.TypedCollation{}, env.now)
 		env.vm.sp--
 		return 1
 	}, "FN DATEADD TEMPORAL(SP-2), INTERVAL(SP-1)")
@@ -4273,7 +4274,7 @@ func (asm *assembler) Fn_DATEADD_s(unit datetime.IntervalType, sub bool, col col
 			goto baddate
 		}
 
-		env.vm.stack[env.vm.sp-2] = tmp.addInterval(interval, col)
+		env.vm.stack[env.vm.sp-2] = tmp.addInterval(interval, col, env.now)
 		env.vm.sp--
 		return 1
 

@@ -4191,6 +4191,8 @@ func (cached *Union) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(96)
 	}
+	// field With *vitess.io/vitess/go/vt/sqlparser.With
+	size += cached.With.CachedSize(true)
 	// field Left vitess.io/vitess/go/vt/sqlparser.SelectStatement
 	if cc, ok := cached.Left.(cachedObject); ok {
 		size += cc.CachedSize(true)
@@ -4206,8 +4208,6 @@ func (cached *Union) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
-	// field With *vitess.io/vitess/go/vt/sqlparser.With
-	size += cached.With.CachedSize(true)
 	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
 	size += cached.Limit.CachedSize(true)
 	// field Into *vitess.io/vitess/go/vt/sqlparser.SelectInto

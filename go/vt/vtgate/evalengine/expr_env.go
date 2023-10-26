@@ -99,6 +99,15 @@ func (env *ExpressionEnv) TypeOf(expr Expr, fields []*querypb.Field) (sqltypes.T
 	return ty, f, nil
 }
 
+func (env *ExpressionEnv) SetTime(now time.Time) {
+	// This function is called only once by NewExpressionEnv to ensure that all expressions in the same
+	// ExpressionEnv evaluate NOW() and similar SQL functions to the same value.
+	env.now = now
+	if tz := env.currentTimezone(); tz != nil {
+		env.now = env.now.In(tz)
+	}
+}
+
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
 func EmptyExpressionEnv() *ExpressionEnv {
 	return NewExpressionEnv(context.Background(), nil, nil)
@@ -108,14 +117,6 @@ func EmptyExpressionEnv() *ExpressionEnv {
 func NewExpressionEnv(ctx context.Context, bindVars map[string]*querypb.BindVariable, vc VCursor) *ExpressionEnv {
 	env := &ExpressionEnv{BindVars: bindVars, vc: vc}
 	env.user = callerid.ImmediateCallerIDFromContext(ctx)
-
-	// The current time for this ExpressionEnv is set only once, during creation.
-	// This is to ensure that all expressions in the same ExpressionEnv evaluate NOW()
-	// and similar SQL functions to the same value.
-	env.now = time.Now()
-
-	if tz := env.currentTimezone(); tz != nil {
-		env.now = env.now.In(tz)
-	}
+	env.SetTime(time.Now())
 	return env
 }
