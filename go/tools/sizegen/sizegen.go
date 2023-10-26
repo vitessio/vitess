@@ -487,7 +487,7 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 }
 
 var defaultGenTypes = []string{
-	"vitess.io/vitess/go/pools.Setting",
+	"vitess.io/vitess/go/pools/smartconnpool.Setting",
 	"vitess.io/vitess/go/vt/schema.DDLStrategySetting",
 	"vitess.io/vitess/go/vt/vtgate/engine.Plan",
 	"vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan",
