@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -466,7 +467,7 @@ func (route *Route) description() PrimitiveDescription {
 	if route.Values != nil {
 		formattedValues := make([]string, 0, len(route.Values))
 		for _, value := range route.Values {
-			formattedValues = append(formattedValues, evalengine.FormatExpr(value))
+			formattedValues = append(formattedValues, sqlparser.String(value))
 		}
 		other["Values"] = formattedValues
 	}
@@ -476,7 +477,7 @@ func (route *Route) description() PrimitiveDescription {
 			if idx != 0 {
 				sysTabSchema += ", "
 			}
-			sysTabSchema += evalengine.FormatExpr(tableSchema)
+			sysTabSchema += sqlparser.String(tableSchema)
 		}
 		sysTabSchema += "]"
 		other["SysTableTableSchema"] = sysTabSchema
@@ -484,7 +485,7 @@ func (route *Route) description() PrimitiveDescription {
 	if len(route.SysTableTableName) != 0 {
 		var sysTableName []string
 		for k, v := range route.SysTableTableName {
-			sysTableName = append(sysTableName, k+":"+evalengine.FormatExpr(v))
+			sysTableName = append(sysTableName, k+":"+sqlparser.String(v))
 		}
 		sort.Strings(sysTableName)
 		other["SysTableTableName"] = "[" + strings.Join(sysTableName, ", ") + "]"

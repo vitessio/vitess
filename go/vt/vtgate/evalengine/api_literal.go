@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql/hex"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -201,27 +202,30 @@ func NewLiteralBinaryFromBit(val []byte) (*Literal, error) {
 // NewBindVar returns a bind variable
 func NewBindVar(key string, typ Type) *BindVariable {
 	return &BindVariable{
-		Key:       key,
-		Type:      typ.Type,
-		Collation: defaultCoercionCollation(typ.Coll),
+		Key:               key,
+		Type:              typ.Type,
+		Collation:         typ.Coll,
+		dynamicTypeOffset: -1,
 	}
 }
 
 // NewBindVarTuple returns a bind variable containing a tuple
-func NewBindVarTuple(key string, col collations.ID) *BindVariable {
+func NewBindVarTuple(key string, coll collations.ID) *BindVariable {
 	return &BindVariable{
 		Key:       key,
 		Type:      sqltypes.Tuple,
-		Collation: defaultCoercionCollation(col),
+		Collation: coll,
 	}
 }
 
 // NewColumn returns a column expression
-func NewColumn(offset int, typ Type) *Column {
+func NewColumn(offset int, typ Type, original sqlparser.Expr) *Column {
 	return &Column{
-		Offset:    offset,
-		Type:      typ.Type,
-		Collation: defaultCoercionCollation(typ.Coll),
+		Offset:            offset,
+		Type:              typ.Type,
+		Collation:         defaultCoercionCollation(typ.Coll),
+		Original:          original,
+		dynamicTypeOffset: -1,
 	}
 }
 
@@ -229,7 +233,7 @@ func NewColumn(offset int, typ Type) *Column {
 func NewTupleExpr(exprs ...Expr) TupleExpr {
 	tupleExpr := make(TupleExpr, 0, len(exprs))
 	for _, f := range exprs {
-		tupleExpr = append(tupleExpr, f)
+		tupleExpr = append(tupleExpr, f.(IR))
 	}
 	return tupleExpr
 }

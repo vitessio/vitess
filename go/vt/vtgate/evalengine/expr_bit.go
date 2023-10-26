@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -56,8 +55,8 @@ type (
 	opBitShr struct{}
 )
 
-var _ Expr = (*BitwiseExpr)(nil)
-var _ Expr = (*BitwiseNotExpr)(nil)
+var _ IR = (*BitwiseExpr)(nil)
+var _ IR = (*BitwiseNotExpr)(nil)
 
 func (b *BitwiseNotExpr) eval(env *ExpressionEnv) (eval, error) {
 	e, err := b.Inner.eval(env)
@@ -78,14 +77,6 @@ func (b *BitwiseNotExpr) eval(env *ExpressionEnv) (eval, error) {
 
 	eu := evalToInt64(e)
 	return newEvalUint64(^uint64(eu.i)), nil
-}
-
-func (b *BitwiseNotExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	tt, f := b.Inner.typeof(env, fields)
-	if tt == sqltypes.VarBinary && f&(flagHex|flagBit) == 0 {
-		return sqltypes.VarBinary, f
-	}
-	return sqltypes.Uint64, f
 }
 
 func (expr *BitwiseNotExpr) compile(c *compiler) (ctype, error) {
@@ -249,25 +240,6 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 	default:
 		panic("unexpected bit operation")
 	}
-}
-
-func (bit *BitwiseExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	t1, f1 := bit.Left.typeof(env, fields)
-	t2, f2 := bit.Right.typeof(env, fields)
-
-	switch bit.Op.(type) {
-	case opBitBinary:
-		if t1 == sqltypes.VarBinary && t2 == sqltypes.VarBinary &&
-			(f1&(flagHex|flagBit) == 0 || f2&(flagHex|flagBit) == 0) {
-			return sqltypes.VarBinary, f1 | f2
-		}
-	case opBitShift:
-		if t1 == sqltypes.VarBinary && (f1&(flagHex|flagBit)) == 0 {
-			return sqltypes.VarBinary, f1 | f2
-		}
-	}
-
-	return sqltypes.Uint64, f1 | f2
 }
 
 func (expr *BitwiseExpr) compileBinary(c *compiler, asm_ins_bb, asm_ins_uu func()) (ctype, error) {
