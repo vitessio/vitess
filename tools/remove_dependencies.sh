@@ -56,8 +56,8 @@ uninstall_etcd() {
     local dist="$2"
 
     case $UNAME in
-        Linux)  local platform=linux; local ext=tar.gz;;
-        Darwin) local platform=darwin; local ext=zip;;
+        Linux)  local platform=linux;;
+        Darwin) local platform=darwin;;
         *)   echo "Etcd not installed. Ignoring..."; return;;
     esac
 
