@@ -62,8 +62,9 @@ type (
 
 	// ColumnInfo contains information about columns
 	ColumnInfo struct {
-		Name string
-		Type evalengine.Type
+		Name      string
+		Type      evalengine.Type
+		Invisible bool
 	}
 
 	// ExprDependencies stores the tables that an expression depends on as a map
