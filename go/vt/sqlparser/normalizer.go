@@ -366,7 +366,7 @@ func SQLToBindvar(node SQLNode) *querypb.BindVariable {
 		case BitNum:
 			out := make([]byte, 0, len(node.Bytes())+2)
 			out = append(out, '0', 'b')
-			out = append(out, node.Bytes()...)
+			out = append(out, node.Bytes()[2:]...)
 			v, err = sqltypes.NewValue(sqltypes.BitNum, out)
 		case DateVal:
 			v, err = sqltypes.NewValue(sqltypes.Date, node.Bytes())

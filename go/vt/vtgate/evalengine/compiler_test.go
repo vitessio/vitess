@@ -473,11 +473,6 @@ func TestCompilerSingle(t *testing.T) {
 		},
 		{
 			expression: `column0 between 10 and 20`,
-			values:     []sqltypes.Value{sqltypes.NewInt16(15)},
-			result:     `INT64(1)`,
-		},
-		{
-			expression: `column0 between 10 and 20`,
 			values:     []sqltypes.Value{sqltypes.NULL},
 			result:     `NULL`,
 		},

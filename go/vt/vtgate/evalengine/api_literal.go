@@ -162,12 +162,8 @@ func parseBitNum(val []byte) ([]byte, error) {
 	if val[0] != '0' || val[1] != 'b' {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "malformed Bit literal: %q (missing 0b prefix)", val)
 	}
-	return parseBitLiteral(val[2:])
-}
-
-func parseBitLiteral(val []byte) ([]byte, error) {
 	var i big.Int
-	_, ok := i.SetString(hack.String(val), 2)
+	_, ok := i.SetString(hack.String(val)[2:], 2)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "malformed Bit literal: %q (not base 2)", val)
 	}
@@ -195,7 +191,7 @@ func NewLiteralBinaryFromHexNum(val []byte) (*Literal, error) {
 }
 
 func NewLiteralBinaryFromBit(val []byte) (*Literal, error) {
-	raw, err := parseBitLiteral(val)
+	raw, err := parseBitNum(val)
 	if err != nil {
 		return nil, err
 	}
