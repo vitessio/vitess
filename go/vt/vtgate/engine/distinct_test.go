@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/test/utils"
@@ -86,10 +88,14 @@ func TestDistinct(t *testing.T) {
 				if sqltypes.IsNumber(tc.inputs.Fields[i].Type) {
 					collID = collations.CollationBinaryID
 				}
+				t := evalengine.Type{
+					Type:     tc.inputs.Fields[i].Type,
+					Coll:     collID,
+					Nullable: false,
+				}
 				checkCols = append(checkCols, CheckCol{
-					Col:       i,
-					Type:      tc.inputs.Fields[i].Type,
-					Collation: collID,
+					Col:  i,
+					Type: t,
 				})
 			}
 		}
@@ -132,10 +138,9 @@ func TestDistinct(t *testing.T) {
 func TestWeightStringFallBack(t *testing.T) {
 	offsetOne := 1
 	checkCols := []CheckCol{{
-		Col:       0,
-		WsCol:     &offsetOne,
-		Type:      sqltypes.Unknown,
-		Collation: collations.Unknown,
+		Col:   0,
+		WsCol: &offsetOne,
+		Type:  evalengine.UnknownType(),
 	}}
 	input := r("myid|weightstring(myid)",
 		"varchar|varbinary",
@@ -158,9 +163,8 @@ func TestWeightStringFallBack(t *testing.T) {
 
 	// the primitive must not change just because one run needed weight strings
 	utils.MustMatch(t, []CheckCol{{
-		Col:       0,
-		WsCol:     &offsetOne,
-		Type:      sqltypes.Unknown,
-		Collation: collations.Unknown,
+		Col:   0,
+		WsCol: &offsetOne,
+		Type:  evalengine.UnknownType(),
 	}}, distinct.CheckCols, "checkCols should not be updated")
 }

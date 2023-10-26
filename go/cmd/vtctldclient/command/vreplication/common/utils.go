@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
@@ -56,6 +57,7 @@ var (
 
 	CreateOptions = struct {
 		Cells                        []string
+		AllCells                     bool
 		TabletTypes                  []topodatapb.TabletType
 		TabletTypesInPreferenceOrder bool
 		OnDDL                        string
@@ -98,18 +100,41 @@ func GetCommandCtx() context.Context {
 	return commandCtx
 }
 
-func ParseCells(cmd *cobra.Command) {
-	if cmd.Flags().Lookup("cells").Changed { // Validate the provided value(s)
+func ParseCells(cmd *cobra.Command) error {
+	cf := cmd.Flags().Lookup("cells")
+	af := cmd.Flags().Lookup("all-cells")
+	if cf != nil && cf.Changed && af != nil && af.Changed {
+		return fmt.Errorf("cannot specify both --cells and --all-cells")
+	}
+	if cf.Changed { // Validate the provided value(s)
 		for i, cell := range CreateOptions.Cells { // Which only means trimming whitespace
 			CreateOptions.Cells[i] = strings.TrimSpace(cell)
 		}
 	}
+	if CreateOptions.AllCells { // Use all current cells
+		ctx, cancel := context.WithTimeout(commandCtx, topo.RemoteOperationTimeout)
+		defer cancel()
+		resp, err := client.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
+		if err != nil {
+			return fmt.Errorf("failed to get current cells: %v", err)
+		}
+		CreateOptions.Cells = make([]string, len(resp.Names))
+		copy(CreateOptions.Cells, resp.Names)
+	}
+	return nil
 }
 
-func ParseTabletTypes(cmd *cobra.Command) {
-	if !cmd.Flags().Lookup("tablet-types").Changed {
-		CreateOptions.TabletTypes = tabletTypesDefault
+func ParseTabletTypes(cmd *cobra.Command) error {
+	ttf := cmd.Flags().Lookup("tablet-types")
+	if ttf == nil {
+		return fmt.Errorf("no tablet-types flag found")
 	}
+	if !ttf.Changed {
+		CreateOptions.TabletTypes = tabletTypesDefault
+	} else if strings.TrimSpace(ttf.Value.String()) == "" {
+		return fmt.Errorf("invalid tablet-types value, at least one valid tablet type must be specified")
+	}
+	return nil
 }
 
 func validateOnDDL(cmd *cobra.Command) error {
@@ -123,8 +148,12 @@ func ParseAndValidateCreateOptions(cmd *cobra.Command) error {
 	if err := validateOnDDL(cmd); err != nil {
 		return err
 	}
-	ParseCells(cmd)
-	ParseTabletTypes(cmd)
+	if err := ParseCells(cmd); err != nil {
+		return err
+	}
+	if err := ParseTabletTypes(cmd); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -165,9 +194,11 @@ func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format strin
 					shardstream.Id, BaseOptions.TargetKeyspace, tablet, shardstream.Status, shardstream.Info))
 			}
 		}
+		tout.WriteString("\nTraffic State: ")
+		tout.WriteString(resp.TrafficState)
 		output = tout.Bytes()
 	}
-	fmt.Printf("%s\n", output)
+	fmt.Println(string(output))
 	return nil
 }
 
@@ -181,6 +212,7 @@ func AddCommonFlags(cmd *cobra.Command) {
 
 func AddCommonCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().StringSliceVarP(&CreateOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to copy table data from.")
+	cmd.Flags().BoolVarP(&CreateOptions.AllCells, "all-cells", "a", false, "Copy table data from any existing cell.")
 	cmd.Flags().Var((*topoproto.TabletTypeListFlag)(&CreateOptions.TabletTypes), "tablet-types", "Source tablet types to replicate table data from (e.g. PRIMARY,REPLICA,RDONLY).")
 	cmd.Flags().BoolVar(&CreateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-preference-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
 	cmd.Flags().StringVar(&CreateOptions.OnDDL, "on-ddl", onDDLDefault, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")

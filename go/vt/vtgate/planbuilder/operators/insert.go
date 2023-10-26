@@ -40,8 +40,6 @@ type Insert struct {
 	AutoIncrement *Generate
 	// Ignore specifies whether to ignore duplicate key errors during insertion.
 	Ignore bool
-	// ForceNonStreaming when true, select first then insert, this is to avoid locking rows by select for insert.
-	ForceNonStreaming bool
 
 	// ColVindexes are the vindexes that will use the VindexValues or VindexValueOffset
 	ColVindexes []*vindexes.ColumnVindex
@@ -53,24 +51,9 @@ type Insert struct {
 	// that will appear in the result set of the select query.
 	VindexValueOffset [][]int
 
-	// Insert using select query will have select plan as input operator for the insert operation.
-	Input ops.Operator
-
+	noInputs
 	noColumns
 	noPredicates
-}
-
-func (i *Insert) Inputs() []ops.Operator {
-	if i.Input == nil {
-		return nil
-	}
-	return []ops.Operator{i.Input}
-}
-
-func (i *Insert) SetInputs(inputs []ops.Operator) {
-	if len(inputs) > 0 {
-		i.Input = inputs[0]
-	}
 }
 
 // Generate represents an auto-increment generator for the insert operation.
@@ -102,18 +85,12 @@ func (i *Insert) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
 
 var _ ops.Operator = (*Insert)(nil)
 
-func (i *Insert) Clone(inputs []ops.Operator) ops.Operator {
-	var input ops.Operator
-	if len(inputs) > 0 {
-		input = inputs[0]
-	}
+func (i *Insert) Clone([]ops.Operator) ops.Operator {
 	return &Insert{
-		Input:             input,
 		VTable:            i.VTable,
 		AST:               i.AST,
 		AutoIncrement:     i.AutoIncrement,
 		Ignore:            i.Ignore,
-		ForceNonStreaming: i.ForceNonStreaming,
 		ColVindexes:       i.ColVindexes,
 		VindexValues:      i.VindexValues,
 		VindexValueOffset: i.VindexValueOffset,
@@ -144,26 +121,29 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 		return nil, err
 	}
 
+	if ins.Comments != nil {
+		insOp = &LockAndComment{
+			Source:   insOp,
+			Comments: ins.Comments,
+		}
+	}
+
 	// Find the foreign key mode and for unmanaged foreign-key-mode, we don't need to do anything.
 	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
 	if err != nil {
 		return nil, err
 	}
-	if ksMode != vschemapb.Keyspace_FK_MANAGED {
+	if ksMode != vschemapb.Keyspace_managed {
 		return insOp, nil
 	}
 
-	parentFKsForInsert := vindexTable.ParentFKsNeedsHandling(ctx.VerifyAllFKs, ctx.ParentFKToIgnore)
-	if len(parentFKsForInsert) > 0 {
+	parentFKs := ctx.SemTable.GetParentForeignKeysList()
+	childFks := ctx.SemTable.GetChildForeignKeysList()
+	if len(childFks) == 0 && len(parentFKs) == 0 {
+		return insOp, nil
+	}
+	if len(parentFKs) > 0 {
 		return nil, vterrors.VT12002()
-	}
-	if len(ins.OnDup) == 0 {
-		return insOp, nil
-	}
-
-	parentFksForUpdate, childFksForUpdate := getFKRequirementsForUpdate(ctx, sqlparser.UpdateExprs(ins.OnDup), vindexTable)
-	if len(parentFksForUpdate) == 0 && len(childFksForUpdate) == 0 {
-		return insOp, nil
 	}
 	return nil, vterrors.VT12001("ON DUPLICATE KEY UPDATE with foreign keys")
 }
@@ -211,15 +191,12 @@ func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.I
 			return nil, err
 		}
 	case sqlparser.SelectStatement:
-		route.Source, err = insertSelectPlan(ctx, insOp, insStmt, rows)
-		if err != nil {
-			return nil, err
-		}
+		return insertSelectPlan(ctx, insOp, route, insStmt, rows)
 	}
 	return route, nil
 }
 
-func insertSelectPlan(ctx *plancontext.PlanningContext, insOp *Insert, ins *sqlparser.Insert, sel sqlparser.SelectStatement) (*Insert, error) {
+func insertSelectPlan(ctx *plancontext.PlanningContext, insOp *Insert, routeOp *Route, ins *sqlparser.Insert, sel sqlparser.SelectStatement) (*InsertSelection, error) {
 	if columnMismatch(insOp.AutoIncrement, ins, sel) {
 		return nil, vterrors.VT03006()
 	}
@@ -229,23 +206,29 @@ func insertSelectPlan(ctx *plancontext.PlanningContext, insOp *Insert, ins *sqlp
 		return nil, err
 	}
 
-	// select plan will be taken as input to insert rows into the table.
-	insOp.Input = selOp
+	// output of the select plan will be used to insert rows into the table.
+	insertSelect := &InsertSelection{
+		Select: &LockAndComment{
+			Source: selOp,
+			Lock:   sqlparser.ShareModeLock,
+		},
+		Insert: routeOp,
+	}
 
-	// When the table you are steaming data from and table you are inserting from are same.
+	// When the table you are streaming data from and table you are inserting from are same.
 	// Then due to locking of the index range on the table we might not be able to insert into the table.
 	// Therefore, instead of streaming, this flag will ensure the records are first read and then inserted.
 	insertTbl := insOp.TablesUsed()[0]
 	selTables := TablesUsed(selOp)
 	for _, tbl := range selTables {
 		if insertTbl == tbl {
-			insOp.ForceNonStreaming = true
+			insertSelect.ForceNonStreaming = true
 			break
 		}
 	}
 
 	if len(insOp.ColVindexes) == 0 {
-		return insOp, nil
+		return insertSelect, nil
 	}
 
 	colVindexes := insOp.ColVindexes
@@ -266,7 +249,7 @@ func insertSelectPlan(ctx *plancontext.PlanningContext, insOp *Insert, ins *sqlp
 		}
 	}
 	insOp.VindexValueOffset = vv
-	return insOp, nil
+	return insertSelect, nil
 }
 
 func columnMismatch(gen *Generate, ins *sqlparser.Insert, sel sqlparser.SelectStatement) bool {

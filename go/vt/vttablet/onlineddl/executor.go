@@ -286,7 +286,7 @@ func (e *Executor) executeQuery(ctx context.Context, query string) (result *sqlt
 	}
 	defer conn.Recycle()
 
-	return conn.Exec(ctx, query, math.MaxInt32, true)
+	return conn.Conn.Exec(ctx, query, math.MaxInt32, true)
 }
 
 func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, query string) (result *sqltypes.Result, err error) {
@@ -303,7 +303,7 @@ func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, que
 	if err != nil {
 		return nil, err
 	}
-	return conn.Exec(ctx, uq, math.MaxInt32, true)
+	return conn.Conn.Exec(ctx, uq, math.MaxInt32, true)
 }
 
 // TabletAliasString returns tablet alias as string (duh)
@@ -506,7 +506,7 @@ func (e *Executor) readMySQLVariables(ctx context.Context) (variables *mysqlVari
 	}
 	defer conn.Recycle()
 
-	tm, err := conn.Exec(ctx, `select
+	tm, err := conn.Conn.Exec(ctx, `select
 			@@global.hostname as hostname,
 			@@global.port as port,
 			@@global.read_only as read_only,
@@ -861,7 +861,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return err
 	}
 	defer lockConn.Recycle()
-	defer lockConn.Exec(ctx, sqlUnlockTables, 1, false)
+	defer lockConn.Conn.Exec(ctx, sqlUnlockTables, 1, false)
 
 	renameCompleteChan := make(chan error)
 	renameWasSuccessful := false
@@ -872,7 +872,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	defer renameConn.Recycle()
 	defer func() {
 		if !renameWasSuccessful {
-			renameConn.Kill("premature exit while renaming tables", 0)
+			renameConn.Conn.Kill("premature exit while renaming tables", 0)
 		}
 	}()
 	renameQuery := sqlparser.BuildParsedQuery(sqlSwapTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
@@ -885,7 +885,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		defer cancel()
 
 		for {
-			renameProcessFound, err := e.doesConnectionInfoMatch(renameWaitCtx, renameConn.ID(), "rename")
+			renameProcessFound, err := e.doesConnectionInfoMatch(renameWaitCtx, renameConn.Conn.ID(), "rename")
 			if err != nil {
 				return err
 			}
@@ -968,14 +968,14 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		lockCtx, cancel := context.WithTimeout(ctx, migrationCutOverThreshold)
 		defer cancel()
 		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTwoTablesWrite, sentryTableName, onlineDDL.Table)
-		if _, err := lockConn.Exec(lockCtx, lockTableQuery.Query, 1, false); err != nil {
+		if _, err := lockConn.Conn.Exec(lockCtx, lockTableQuery.Query, 1, false); err != nil {
 			return err
 		}
 
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "renaming tables")
 		go func() {
 			defer close(renameCompleteChan)
-			_, err := renameConn.Exec(ctx, renameQuery.Query, 1, false)
+			_, err := renameConn.Conn.Exec(ctx, renameQuery.Query, 1, false)
 			renameCompleteChan <- err
 		}()
 		// the rename should block, because of the LOCK. Wait for it to show up.
@@ -1040,7 +1040,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				dropTableQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
 				lockCtx, cancel := context.WithTimeout(ctx, migrationCutOverThreshold)
 				defer cancel()
-				if _, err := lockConn.Exec(lockCtx, dropTableQuery.Query, 1, false); err != nil {
+				if _, err := lockConn.Conn.Exec(lockCtx, dropTableQuery.Query, 1, false); err != nil {
 					return err
 				}
 			}
@@ -1048,7 +1048,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				lockCtx, cancel := context.WithTimeout(ctx, migrationCutOverThreshold)
 				defer cancel()
 				e.updateMigrationStage(ctx, onlineDDL.UUID, "unlocking tables")
-				if _, err := lockConn.Exec(lockCtx, sqlUnlockTables, 1, false); err != nil {
+				if _, err := lockConn.Conn.Exec(lockCtx, sqlUnlockTables, 1, false); err != nil {
 					return err
 				}
 			}
@@ -1195,8 +1195,8 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlin
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.DropKey:
-			if node.Type == sqlparser.CheckKeyType {
-				// drop a check constraint
+			if node.Type == sqlparser.CheckKeyType || node.Type == sqlparser.ForeignKeyType {
+				// drop a check or a foreign key constraint
 				mappedName, ok := constraintMap[node.Name.String()]
 				if !ok {
 					return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Found DROP CONSTRAINT: %v, but could not find constraint name in map", sqlparser.CanonicalString(node))
@@ -2310,6 +2310,64 @@ func (e *Executor) reviewImmediateOperations(ctx context.Context, capableOf mysq
 	return false, nil
 }
 
+// reviewQueuedMigration investigates a single migration found in `queued` state.
+// It analyzes whether the migration can & should be fulfilled immediately (e.g. via INSTANT DDL or just because it's a CREATE or DROP),
+// or backfils necessary information if it's a REVERT.
+// If all goes well, it sets `reviewed_timestamp` which then allows the state machine to schedule the migration.
+func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capableOf mysql.CapableOf) error {
+	onlineDDL, row, err := e.readMigration(ctx, uuid)
+	if err != nil {
+		return err
+	}
+	// handle REVERT migrations: populate table name and update ddl action and is_view:
+	ddlAction := row["ddl_action"].ToString()
+	isRevert := false
+	if ddlAction == schema.RevertActionStr {
+		isRevert = true
+		rowModified, err := e.reviewEmptyTableRevertMigrations(ctx, onlineDDL)
+		if err != nil {
+			return err
+		}
+		if rowModified {
+			// re-read migration and entire row
+			onlineDDL, row, err = e.readMigration(ctx, uuid)
+			if err != nil {
+				return err
+			}
+			ddlAction = row["ddl_action"].ToString()
+		}
+	}
+	isView := row.AsBool("is_view", false)
+	isImmediate, err := e.reviewImmediateOperations(ctx, capableOf, onlineDDL, ddlAction, isRevert, isView)
+	if err != nil {
+		return err
+	}
+	if isImmediate {
+		if err := e.updateMigrationSetImmediateOperation(ctx, onlineDDL.UUID); err != nil {
+			return err
+		}
+	}
+	// Find conditions where the migration cannot take place:
+	switch onlineDDL.Strategy {
+	case schema.DDLStrategyMySQL:
+		strategySetting := onlineDDL.StrategySetting()
+		if strategySetting.IsPostponeCompletion() {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--postpone-completion not supported in 'mysql' strategy")
+		}
+		if strategySetting.IsAllowZeroInDateFlag() {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--allow-zero-in-date not supported in 'mysql' strategy")
+		}
+	}
+
+	// The review is complete. We've backfilled details on the migration row. We mark
+	// the migration as having been reviewed. The function scheduleNextMigration() will then
+	// have access to this row.
+	if err := e.updateMigrationTimestamp(ctx, "reviewed_timestamp", uuid); err != nil {
+		return err
+	}
+	return nil
+}
+
 // reviewQueuedMigrations iterates through queued migrations and sees if any information needs to be updated.
 // The function analyzes the queued migration and fills in some blanks:
 // - If this is a REVERT migration, what table is affected? What's the operation?
@@ -2332,57 +2390,9 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 
 	for _, uuidRow := range r.Named().Rows {
 		uuid := uuidRow["migration_uuid"].ToString()
-		onlineDDL, row, err := e.readMigration(ctx, uuid)
-		if err != nil {
-			return err
+		if err := e.reviewQueuedMigration(ctx, uuid, capableOf); err != nil {
+			e.failMigration(ctx, &schema.OnlineDDL{UUID: uuid}, err)
 		}
-		// handle REVERT migrations: populate table name and update ddl action and is_view:
-		ddlAction := row["ddl_action"].ToString()
-		isRevert := false
-		if ddlAction == schema.RevertActionStr {
-			isRevert = true
-			rowModified, err := e.reviewEmptyTableRevertMigrations(ctx, onlineDDL)
-			if err != nil {
-				return err
-			}
-			if rowModified {
-				// re-read migration and entire row
-				onlineDDL, row, err = e.readMigration(ctx, uuid)
-				if err != nil {
-					return err
-				}
-				ddlAction = row["ddl_action"].ToString()
-			}
-		}
-		isView := row.AsBool("is_view", false)
-		isImmediate, err := e.reviewImmediateOperations(ctx, capableOf, onlineDDL, ddlAction, isRevert, isView)
-		if err != nil {
-			return err
-		}
-		if isImmediate {
-			if err := e.updateMigrationSetImmediateOperation(ctx, onlineDDL.UUID); err != nil {
-				return err
-			}
-		}
-		// Find conditions where the migration cannot take place:
-		switch onlineDDL.Strategy {
-		case schema.DDLStrategyMySQL:
-			strategySetting := onlineDDL.StrategySetting()
-			if strategySetting.IsPostponeCompletion() {
-				e.failMigration(ctx, onlineDDL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--postpone-completion not supported in 'mysql' strategy"))
-			}
-			if strategySetting.IsAllowZeroInDateFlag() {
-				e.failMigration(ctx, onlineDDL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--allow-zero-in-date not supported in 'mysql' strategy"))
-			}
-		}
-
-		// The review is complete. We've backfilled details on the migration row. We mark
-		// the migration as having been reviewed. The function scheduleNextMigration() will then
-		// have access to this row.
-		if err := e.updateMigrationTimestamp(ctx, "reviewed_timestamp", uuid); err != nil {
-			return err
-		}
-
 	}
 	return nil
 }

@@ -178,6 +178,9 @@ type Column struct {
 	Name          sqlparser.IdentifierCI `json:"name"`
 	Type          querypb.Type           `json:"type"`
 	CollationName string                 `json:"collation_name"`
+
+	// Invisible marks this as a column that will not be automatically included in `*` projections
+	Invisible bool `json:"invisible"`
 }
 
 // MarshalJSON returns a JSON representation of Column.
@@ -326,7 +329,7 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 				Name:    ksname,
 				Sharded: ks.Sharded,
 			},
-			ForeignKeyMode: replaceDefaultForeignKeyMode(ks.ForeignKeyMode),
+			ForeignKeyMode: replaceUnspecifiedForeignKeyMode(ks.ForeignKeyMode),
 			Tables:         make(map[string]*Table),
 			Vindexes:       make(map[string]Vindex),
 		}
@@ -335,10 +338,10 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	}
 }
 
-// replaceDefaultForeignKeyMode replaces the default value of the foreign key mode enum with the default we want to keep.
-func replaceDefaultForeignKeyMode(fkMode vschemapb.Keyspace_ForeignKeyMode) vschemapb.Keyspace_ForeignKeyMode {
-	if fkMode == vschemapb.Keyspace_FK_DEFAULT {
-		return vschemapb.Keyspace_FK_UNMANAGED
+// replaceUnspecifiedForeignKeyMode replaces the default value of the foreign key mode enum with the default we want to keep.
+func replaceUnspecifiedForeignKeyMode(fkMode vschemapb.Keyspace_ForeignKeyMode) vschemapb.Keyspace_ForeignKeyMode {
+	if fkMode == vschemapb.Keyspace_unspecified {
+		return vschemapb.Keyspace_unmanaged
 	}
 	return fkMode
 }
@@ -610,7 +613,7 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				)
 			}
 			colNames[name.Lowered()] = true
-			t.Columns = append(t.Columns, Column{Name: name, Type: col.Type})
+			t.Columns = append(t.Columns, Column{Name: name, Type: col.Type, Invisible: col.Invisible})
 		}
 
 		// Initialize ColumnVindexes.

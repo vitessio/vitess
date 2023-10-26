@@ -2081,5 +2081,105 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "distinct with order by using aggregation engine",
+    "query": "select distinct col from user where id between :vtg1 and :vtg2 order by col asc",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select distinct col from user where id between :vtg1 and :vtg2 order by col asc",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "GroupBy": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from `user` where 1 != 1 group by col",
+            "OrderBy": "0 ASC",
+            "Query": "select col from `user` where id between :vtg1 and :vtg2 group by col order by col asc",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "distinct with order by having additional non-order by columns in the selection using aggregation engine",
+    "query": "select distinct foo, col from user where id between :vtg1 and :vtg2 order by col asc",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select distinct foo, col from user where id between :vtg1 and :vtg2 order by col asc",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "GroupBy": "1, (0|2)",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select foo, col, weight_string(foo) from `user` where 1 != 1 group by col, foo, weight_string(foo)",
+            "OrderBy": "1 ASC, (0|2) ASC",
+            "Query": "select foo, col, weight_string(foo) from `user` where id between :vtg1 and :vtg2 group by col, foo, weight_string(foo) order by col asc, foo asc",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "distinct with order by having no overalap with the selection columns - using distinct engine",
+    "query": "select distinct foo from user where id between :vtg1 and :vtg2 order by col asc",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select distinct foo from user where id between :vtg1 and :vtg2 order by col asc",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "1 ASC",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:2)",
+              "1"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select foo, col, weight_string(foo) from `user` where 1 != 1",
+                "Query": "select distinct foo, col, weight_string(foo) from `user` where id between :vtg1 and :vtg2",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

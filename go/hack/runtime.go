@@ -54,3 +54,6 @@ func RuntimeAllocSize(size int64) int64 {
 
 //go:linkname ParseFloatPrefix strconv.parseFloatPrefix
 func ParseFloatPrefix(s string, bitSize int) (float64, int, error)
+
+//go:linkname FastRand runtime.fastrand
+func FastRand() uint32

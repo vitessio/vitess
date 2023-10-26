@@ -41126,10 +41126,10 @@ export namespace vschema {
 
         /** ForeignKeyMode enum. */
         enum ForeignKeyMode {
-            FK_DEFAULT = 0,
-            FK_DISALLOW = 1,
-            FK_UNMANAGED = 2,
-            FK_MANAGED = 3
+            unspecified = 0,
+            disallow = 1,
+            unmanaged = 2,
+            managed = 3
         }
     }
 
@@ -41595,6 +41595,9 @@ export namespace vschema {
 
         /** Column type */
         type?: (query.Type|null);
+
+        /** Column invisible */
+        invisible?: (boolean|null);
     }
 
     /** Represents a Column. */
@@ -41611,6 +41614,9 @@ export namespace vschema {
 
         /** Column type. */
         public type: query.Type;
+
+        /** Column invisible. */
+        public invisible: boolean;
 
         /**
          * Creates a new Column instance using the specified properties.
@@ -67279,6 +67285,9 @@ export namespace vtctldata {
 
         /** WorkflowStatusResponse shard_streams */
         shard_streams?: ({ [k: string]: vtctldata.WorkflowStatusResponse.IShardStreams }|null);
+
+        /** WorkflowStatusResponse traffic_state */
+        traffic_state?: (string|null);
     }
 
     /** Represents a WorkflowStatusResponse. */
@@ -67295,6 +67304,9 @@ export namespace vtctldata {
 
         /** WorkflowStatusResponse shard_streams. */
         public shard_streams: { [k: string]: vtctldata.WorkflowStatusResponse.IShardStreams };
+
+        /** WorkflowStatusResponse traffic_state. */
+        public traffic_state: string;
 
         /**
          * Creates a new WorkflowStatusResponse instance using the specified properties.

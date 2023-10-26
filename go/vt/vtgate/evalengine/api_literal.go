@@ -28,6 +28,8 @@ import (
 	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/mysql/hex"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // NullExpr is just what you are lead to believe
@@ -156,11 +158,14 @@ func parseHexNumber(val []byte) ([]byte, error) {
 	return parseHexLiteral(val[1:])
 }
 
-func parseBitLiteral(val []byte) ([]byte, error) {
+func parseBitNum(val []byte) ([]byte, error) {
+	if val[0] != '0' || val[1] != 'b' {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "malformed Bit literal: %q (missing 0b prefix)", val)
+	}
 	var i big.Int
-	_, ok := i.SetString(string(val), 2)
+	_, ok := i.SetString(hack.String(val)[2:], 2)
 	if !ok {
-		panic("malformed bit literal from parser")
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "malformed Bit literal: %q (not base 2)", val)
 	}
 	return i.Bytes(), nil
 }
@@ -186,7 +191,7 @@ func NewLiteralBinaryFromHexNum(val []byte) (*Literal, error) {
 }
 
 func NewLiteralBinaryFromBit(val []byte) (*Literal, error) {
-	raw, err := parseBitLiteral(val)
+	raw, err := parseBitNum(val)
 	if err != nil {
 		return nil, err
 	}
@@ -194,11 +199,11 @@ func NewLiteralBinaryFromBit(val []byte) (*Literal, error) {
 }
 
 // NewBindVar returns a bind variable
-func NewBindVar(key string, typ sqltypes.Type, col collations.ID) *BindVariable {
+func NewBindVar(key string, typ Type) *BindVariable {
 	return &BindVariable{
 		Key:       key,
-		Type:      typ,
-		Collation: defaultCoercionCollation(col),
+		Type:      typ.Type,
+		Collation: defaultCoercionCollation(typ.Coll),
 	}
 }
 
@@ -212,11 +217,11 @@ func NewBindVarTuple(key string, col collations.ID) *BindVariable {
 }
 
 // NewColumn returns a column expression
-func NewColumn(offset int, typ sqltypes.Type, col collations.ID) *Column {
+func NewColumn(offset int, typ Type) *Column {
 	return &Column{
 		Offset:    offset,
-		Type:      typ,
-		Collation: defaultCoercionCollation(col),
+		Type:      typ.Type,
+		Collation: defaultCoercionCollation(typ.Coll),
 	}
 }
 

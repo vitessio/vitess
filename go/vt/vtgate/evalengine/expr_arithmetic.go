@@ -74,6 +74,9 @@ func makeNumericalType(t sqltypes.Type, f typeFlag) (sqltypes.Type, typeFlag) {
 	if t == sqltypes.VarBinary && (f&flagHex) != 0 {
 		return sqltypes.Uint64, f
 	}
+	if t == sqltypes.VarBinary && (f&flagBit) != 0 {
+		return sqltypes.Int64, f
+	}
 	if sqltypes.IsDateOrTime(t) {
 		return sqltypes.Int64, f | flagAmbiguousType
 	}
@@ -583,8 +586,13 @@ func (expr *NegateExpr) compile(c *compiler) (ctype, error) {
 
 	switch arg.Type {
 	case sqltypes.Int64:
-		neg = sqltypes.Int64
-		c.asm.Neg_i()
+		if arg.Flag&flagBit != 0 {
+			neg = sqltypes.Float64
+			c.asm.Neg_bit()
+		} else {
+			neg = sqltypes.Int64
+			c.asm.Neg_i()
+		}
 	case sqltypes.Uint64:
 		if arg.Flag&flagHex != 0 {
 			neg = sqltypes.Float64

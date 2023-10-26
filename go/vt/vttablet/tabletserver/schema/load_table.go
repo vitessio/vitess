@@ -34,7 +34,7 @@ import (
 )
 
 // LoadTable creates a Table from the schema info in the database.
-func LoadTable(conn *connpool.DBConn, databaseName, tableName, tableType string, comment string) (*Table, error) {
+func LoadTable(conn *connpool.PooledConn, databaseName, tableName, tableType string, comment string) (*Table, error) {
 	ta := NewTable(tableName, NoType)
 	sqlTableName := sqlparser.String(ta.Name)
 	if err := fetchColumns(ta, conn, databaseName, sqlTableName); err != nil {
@@ -55,10 +55,10 @@ func LoadTable(conn *connpool.DBConn, databaseName, tableName, tableType string,
 	return ta, nil
 }
 
-func fetchColumns(ta *Table, conn *connpool.DBConn, databaseName, sqlTableName string) error {
+func fetchColumns(ta *Table, conn *connpool.PooledConn, databaseName, sqlTableName string) error {
 	ctx := context.Background()
 	exec := func(query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
-		return conn.Exec(ctx, query, maxRows, wantFields)
+		return conn.Conn.Exec(ctx, query, maxRows, wantFields)
 	}
 	fields, _, err := mysqlctl.GetColumns(databaseName, sqlTableName, exec)
 	if err != nil {

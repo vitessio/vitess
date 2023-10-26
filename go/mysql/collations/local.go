@@ -49,9 +49,13 @@ func Default() ID {
 }
 
 func DefaultCollationForType(t sqltypes.Type) ID {
+	return CollationForType(t, Default())
+}
+
+func CollationForType(t sqltypes.Type, fallback ID) ID {
 	switch {
 	case sqltypes.IsText(t):
-		return Default()
+		return fallback
 	case t == sqltypes.TypeJSON:
 		return CollationUtf8mb4ID
 	default:

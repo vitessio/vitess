@@ -17,7 +17,8 @@ go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @froui
 /go/cache @vmg
 /go/cmd @ajm188 @deepthi
 /go/cmd/vtadmin @ajm188 @notfelineit
-/go/cmd/vtctldclient @ajm188 @notfelineit
+/go/cmd/vtctldclient @ajm188 @mattlord
+/go/cmd/vtctldclient/command/vreplication @mattlord @rohit-nayak-ps
 /go/internal/flag @ajm188 @rohit-nayak-ps
 /go/mysql @harshit-gangal @systay @mattlord
 /go/pools @deepthi @harshit-gangal

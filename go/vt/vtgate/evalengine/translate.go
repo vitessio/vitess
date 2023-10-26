@@ -184,7 +184,7 @@ func (ast *astCompiler) translateIsExpr(left sqlparser.Expr, op sqlparser.IsExpr
 }
 
 func (ast *astCompiler) translateBindVar(arg *sqlparser.Argument) (Expr, error) {
-	bvar := NewBindVar(arg.Name, arg.Type, ast.cfg.Collation)
+	bvar := NewBindVar(arg.Name, Type{Type: arg.Type, Coll: ast.cfg.Collation})
 
 	if !bvar.typed() {
 		ast.untyped++
@@ -193,16 +193,15 @@ func (ast *astCompiler) translateBindVar(arg *sqlparser.Argument) (Expr, error) 
 }
 
 func (ast *astCompiler) translateColOffset(col *sqlparser.Offset) (Expr, error) {
-	var typ sqltypes.Type = sqltypes.Unknown
-	var coll collations.ID
+	typ := UnknownType()
 	if ast.cfg.ResolveType != nil {
-		typ, coll, _ = ast.cfg.ResolveType(col.Original)
+		typ, _ = ast.cfg.ResolveType(col.Original)
 	}
-	if coll == collations.Unknown {
-		coll = ast.cfg.Collation
+	if typ.Coll == collations.Unknown {
+		typ.Coll = ast.cfg.Collation
 	}
 
-	column := NewColumn(col.V, typ, coll)
+	column := NewColumn(col.V, typ)
 	if !column.typed() {
 		ast.untyped++
 	}
@@ -217,16 +216,15 @@ func (ast *astCompiler) translateColName(colname *sqlparser.ColName) (Expr, erro
 	if err != nil {
 		return nil, err
 	}
-	var typ sqltypes.Type = sqltypes.Unknown
-	var coll collations.ID
+	typ := UnknownType()
 	if ast.cfg.ResolveType != nil {
-		typ, coll, _ = ast.cfg.ResolveType(colname)
+		typ, _ = ast.cfg.ResolveType(colname)
 	}
-	if coll == collations.Unknown {
-		coll = ast.cfg.Collation
+	if typ.Coll == collations.Unknown {
+		typ.Coll = ast.cfg.Collation
 	}
 
-	column := NewColumn(idx, typ, coll)
+	column := NewColumn(idx, typ)
 
 	if !column.typed() {
 		ast.untyped++
@@ -248,7 +246,7 @@ func translateLiteral(lit *sqlparser.Literal, collation collations.ID) (*Literal
 		return NewLiteralBinaryFromHexNum(lit.Bytes())
 	case sqlparser.HexVal:
 		return NewLiteralBinaryFromHex(lit.Bytes())
-	case sqlparser.BitVal:
+	case sqlparser.BitNum:
 		return NewLiteralBinaryFromBit(lit.Bytes())
 	case sqlparser.DateVal:
 		return NewLiteralDateFromBytes(lit.Bytes())
@@ -550,7 +548,7 @@ type astCompiler struct {
 }
 
 type ColumnResolver func(name *sqlparser.ColName) (int, error)
-type TypeResolver func(expr sqlparser.Expr) (sqltypes.Type, collations.ID, bool)
+type TypeResolver func(expr sqlparser.Expr) (Type, bool)
 
 type OptimizationLevel int8
 
@@ -622,15 +620,15 @@ func (fields FieldResolver) Column(col *sqlparser.ColName) (int, error) {
 	return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown column: %q", sqlparser.String(col))
 }
 
-func (fields FieldResolver) Type(expr sqlparser.Expr) (sqltypes.Type, collations.ID, bool) {
+func (fields FieldResolver) Type(expr sqlparser.Expr) (Type, bool) {
 	switch expr := expr.(type) {
 	case *sqlparser.ColName:
 		name := expr.CompliantName()
 		for _, f := range fields {
 			if f.Name == name {
-				return f.Type, collations.ID(f.Charset), true
+				return Type{Type: f.Type, Coll: collations.ID(f.Charset)}, true
 			}
 		}
 	}
-	return sqltypes.Unknown, collations.Unknown, false
+	return UnknownType(), false
 }

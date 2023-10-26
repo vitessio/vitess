@@ -363,6 +363,9 @@ func testScheduler(t *testing.T) {
 		createViewDependsOnExtraColumn = `
 			CREATE VIEW t1_test_view AS SELECT id, extra_column FROM t1_test
 		`
+		alterNonexistent = `
+				ALTER TABLE nonexistent FORCE
+		`
 	)
 
 	testReadTimestamp := func(t *testing.T, uuid string, timestampColumn string) (timestamp string) {
@@ -960,6 +963,22 @@ func testScheduler(t *testing.T) {
 			})
 		})
 	}
+	// Failure scenarios
+	t.Run("fail nonexistent", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, createParams(alterNonexistent, "vitess", "vtgate", "", "", false))
+
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			message := row["message"].ToString()
+			require.Contains(t, message, "errno 1146")
+		}
+	})
+
 	// 'mysql' strategy
 	t.Run("mysql strategy", func(t *testing.T) {
 		t.Run("declarative", func(t *testing.T) {
@@ -2102,6 +2121,12 @@ func testForeignKeys(t *testing.T) {
 			sql:              "alter table child_nofk_table add CONSTRAINT new_fk FOREIGN KEY (parent_id) REFERENCES parent_table(id) ON DELETE CASCADE",
 			allowForeignKeys: true,
 			expectHint:       "new_fk",
+		},
+		{
+			name:             "drop foreign key from a child",
+			sql:              "alter table child_table DROP FOREIGN KEY child_parent_fk",
+			allowForeignKeys: true,
+			expectHint:       "child_hint",
 		},
 	}
 

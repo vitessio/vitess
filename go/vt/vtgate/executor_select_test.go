@@ -4079,7 +4079,7 @@ func TestSelectHexAndBit(t *testing.T) {
 
 	qr, err = executor.Execute(context.Background(), nil, "TestSelectHexAndBit", session, "select 1 + 0b1001, 1 + b'1001', 1 + 0x9, 1 + x'09'", nil)
 	require.NoError(t, err)
-	require.Equal(t, `[[UINT64(10) UINT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, `[[INT64(10) INT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 // TestSelectCFC tests validates that cfc vindex plan gets cached and same plan is getting reused.

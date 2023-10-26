@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,7 +31,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/pools"
+	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/sync2"
@@ -44,7 +45,6 @@ import (
 	"vitess.io/vitess/go/vt/tableacl"
 	tacl "vitess.io/vitess/go/vt/tableacl/acl"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vthash"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -126,8 +126,8 @@ func isValid(planType planbuilder.PlanType, hasReservedCon bool, hasSysSettings 
 type PlanCacheKey = theine.StringKey
 type PlanCache = theine.Store[PlanCacheKey, *TabletPlan]
 
-type SettingsCacheKey = theine.HashKey256
-type SettingsCache = theine.Store[SettingsCacheKey, *pools.Setting]
+type SettingsCacheKey = theine.StringKey
+type SettingsCache = theine.Store[SettingsCacheKey, *smartconnpool.Setting]
 
 type currentSchema struct {
 	tables map[string]*schema.Table
@@ -217,7 +217,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	// not use a doorkeeper because custom connection settings are rarely one-off and we always
 	// want to cache them
 	var settingsCacheMemory = config.QueryCacheMemory / 4
-	qe.settings = theine.NewStore[SettingsCacheKey, *pools.Setting](settingsCacheMemory, false)
+	qe.settings = theine.NewStore[SettingsCacheKey, *smartconnpool.Setting](settingsCacheMemory, false)
 
 	qe.schema.Store(&currentSchema{
 		tables: make(map[string]*schema.Table),
@@ -320,7 +320,7 @@ func (qe *QueryEngine) Open() error {
 		qe.conns.Close()
 		return err
 	}
-	err = conn.VerifyMode(qe.strictTransTables)
+	err = conn.Conn.VerifyMode(qe.strictTransTables)
 	// Recycle needs to happen before error check.
 	// Otherwise, qe.conns.Close will hang.
 	conn.Recycle()
@@ -466,25 +466,24 @@ func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
 }
 
 // GetConnSetting returns system settings for the connection.
-func (qe *QueryEngine) GetConnSetting(ctx context.Context, settings []string) (*pools.Setting, error) {
+func (qe *QueryEngine) GetConnSetting(ctx context.Context, settings []string) (*smartconnpool.Setting, error) {
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetConnSetting")
 	defer span.Finish()
 
-	hasher := vthash.New256()
+	var buf strings.Builder
 	for _, q := range settings {
-		_, _ = hasher.WriteString(q)
+		_, _ = buf.WriteString(q)
+		_ = buf.WriteByte(';')
 	}
 
-	var cacheKey SettingsCacheKey
-	hasher.Sum(cacheKey[:0])
-
-	connSetting, _, err := qe.settings.GetOrLoad(cacheKey, 0, func() (*pools.Setting, error) {
+	cacheKey := SettingsCacheKey(buf.String())
+	connSetting, _, err := qe.settings.GetOrLoad(cacheKey, 0, func() (*smartconnpool.Setting, error) {
 		// build the setting queries
 		query, resetQuery, err := planbuilder.BuildSettingQuery(settings)
 		if err != nil {
 			return nil, err
 		}
-		return pools.NewSetting(query, resetQuery), nil
+		return smartconnpool.NewSetting(query, resetQuery), nil
 	})
 	return connSetting, err
 }
