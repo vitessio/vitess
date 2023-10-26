@@ -52,10 +52,10 @@ func DefaultCollationForType(t sqltypes.Type) ID {
 	return CollationForType(t, Default())
 }
 
-func CollationForType(t sqltypes.Type, default_ ID) ID {
+func CollationForType(t sqltypes.Type, fallback ID) ID {
 	switch {
 	case sqltypes.IsText(t):
-		return default_
+		return fallback
 	case t == sqltypes.TypeJSON:
 		return CollationUtf8mb4ID
 	default:
