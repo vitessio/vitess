@@ -516,15 +516,18 @@ const (
 		END,
 		COUNT_COLUMN_IN_INDEX
 	`
-	sqlDropTrigger       = "DROP TRIGGER IF EXISTS `%a`.`%a`"
-	sqlShowTablesLike    = "SHOW TABLES LIKE '%a'"
-	sqlDropTable         = "DROP TABLE `%a`"
-	sqlDropTableIfExists = "DROP TABLE IF EXISTS `%a`"
-	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
-	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
-	sqlAnalyzeTable      = "ANALYZE NO_WRITE_TO_BINLOG TABLE `%a`"
-	sqlShowCreateTable   = "SHOW CREATE TABLE `%a`"
-	sqlGetAutoIncrement  = `
+	sqlDropTrigger                         = "DROP TRIGGER IF EXISTS `%a`.`%a`"
+	sqlShowTablesLike                      = "SHOW TABLES LIKE '%a'"
+	sqlDropTable                           = "DROP TABLE `%a`"
+	sqlDropTableIfExists                   = "DROP TABLE IF EXISTS `%a`"
+	sqlShowColumnsFrom                     = "SHOW COLUMNS FROM `%a`"
+	sqlShowTableStatus                     = "SHOW TABLE STATUS LIKE '%a'"
+	sqlAnalyzeTable                        = "ANALYZE NO_WRITE_TO_BINLOG TABLE `%a`"
+	sqlShowCreateTable                     = "SHOW CREATE TABLE `%a`"
+	sqlShowVariablesLikePreserveForeignKey = "show global variables like 'rename_table_preserve_foreign_key'"
+	sqlEnablePreserveForeignKey            = "set @@rename_table_preserve_foreign_key = 1"
+	sqlDisablePreserveForeignKey           = "set @@rename_table_preserve_foreign_key = 0"
+	sqlGetAutoIncrement                    = `
 		SELECT
 			AUTO_INCREMENT
 		FROM INFORMATION_SCHEMA.TABLES
