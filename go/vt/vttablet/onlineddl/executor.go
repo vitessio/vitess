@@ -888,6 +888,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return err
 	}
 	if preserveFKSupported {
+		// This code is only applicable when MySQL supports the 'rename_table_preserve_foreign_key' variable. This variable
+		// does not exist in vanilla MySQL.
+		// See  https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps1.
 		if _, err := renameConn.Conn.Exec(ctx, sqlEnablePreserveForeignKey, 1, false); err != nil {
 			return err
 		}
@@ -3393,6 +3397,13 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 }
 
 // isPreserveForeignKeySupported checks if the underlying MySQL server supports 'rename_table_preserve_foreign_key'
+// Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
+// However, Online DDL is made possible in via these changes: https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps1.
+// Said changes introduce a new global/session boolean variable named 'rename_table_preserve_foreign_key'. It defaults 'false'/0 for backwards compatibility.
+// When enabled, a `RENAME TABLE` to a FK parent "pins" the children's foreign keys to the table name rather than the table pointer. Which means after the RENAME,
+// the children will point to the newly instated table rather than the original, renamed table.
+// (Note: this applies to a particular type of RENAME where we swap tables, see the above blog post).
 func (e *Executor) isPreserveForeignKeySupported(ctx context.Context) (isSupported bool, err error) {
 	rs, err := e.execQuery(ctx, sqlShowVariablesLikePreserveForeignKey)
 	if err != nil {
