@@ -183,7 +183,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		cutOverThreshold     time.Duration
 		expireArtifacts      time.Duration
 		runtimeOptions       string
-		err                  error
+		expectError          string
 	}{
 		{
 			strategyVariable: "direct",
@@ -317,10 +317,29 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:   "",
 			analyzeTable:     true,
 		},
+
+		{
+			strategyVariable: "vitess --alow-concrrnt", // intentional typo
+			strategy:         DDLStrategyVitess,
+			options:          "",
+			runtimeOptions:   "",
+			expectError:      "invalid flags",
+		},
+		{
+			strategyVariable: "vitess --declarative --max-load=Threads_running=100",
+			strategy:         DDLStrategyVitess,
+			options:          "--declarative --max-load=Threads_running=100",
+			runtimeOptions:   "--max-load=Threads_running=100",
+			expectError:      "invalid flags",
+		},
 	}
 	for _, ts := range tt {
 		t.Run(ts.strategyVariable, func(t *testing.T) {
 			setting, err := ParseDDLStrategy(ts.strategyVariable)
+			if ts.expectError != "" {
+				assert.ErrorContains(t, err, ts.expectError)
+				return
+			}
 			assert.NoError(t, err)
 			assert.Equal(t, ts.strategy, setting.Strategy)
 			assert.Equal(t, ts.options, setting.Options)

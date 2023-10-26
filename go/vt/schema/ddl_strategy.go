@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/shlex"
@@ -115,6 +116,14 @@ func ParseDDLStrategy(strategyVariable string) (*DDLStrategySetting, error) {
 	if _, err := setting.RetainArtifactsDuration(); err != nil {
 		return nil, err
 	}
+
+	switch setting.Strategy {
+	case DDLStrategyVitess, DDLStrategyOnline:
+		if opts := setting.RuntimeOptions(); len(opts) > 0 {
+			return nil, fmt.Errorf("invalid flags for vitess strategy: %s", strings.Join(opts, " "))
+		}
+	}
+
 	return setting, nil
 }
 
