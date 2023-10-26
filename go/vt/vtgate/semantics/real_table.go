@@ -119,6 +119,7 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 				Type: col.Type,
 				Coll: collation,
 			},
+			Invisible: col.Invisible,
 		})
 		nameMap[col.Name.String()] = nil
 	}

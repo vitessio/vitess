@@ -2496,3 +2496,7 @@ func IsLiteral(expr Expr) bool {
 		return false
 	}
 }
+
+func (ct *ColumnType) Invisible() bool {
+	return ct.Options.Invisible != nil && *ct.Options.Invisible
+}
