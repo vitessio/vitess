@@ -3139,7 +3139,7 @@ type (
 	}
 )
 
-// iExpr ensures that only expressions nodes can be assigned to a Expr
+// IsExpr ensures that only expressions nodes can be assigned to a Expr
 func (*AndExpr) IsExpr()                            {}
 func (*OrExpr) IsExpr()                             {}
 func (*XorExpr) IsExpr()                            {}
