@@ -43,7 +43,7 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStateme
 
 	sel, ok := query.(*sqlparser.Select)
 	if !ok {
-		return false
+		return true
 	}
 
 	if len(sel.GroupBy) > 0 {
