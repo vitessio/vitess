@@ -260,8 +260,11 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 		// 2. the new value itself
 		var updFkColOffsets [][2]int
 		// TODO: may only store non-literal update exprs OR store non-literal info along with update expr.
-		updExprs := ctx.SemTable.ChildFkToUpdExprs[fk.String(updatedTable)]
-		for _, updExpr := range updExprs {
+		ue := ctx.SemTable.ChildFkToUpdExprs[fk.String(updatedTable)]
+		if ue.DependencyUpdated {
+			return nil, vterrors.VT12001("same column referenced in foreign key column update is also updated")
+		}
+		for _, updExpr := range ue.Exprs {
 			// TODO: not sure why we append for literals.
 			offset := [2]int{-1, -1}
 			if !sqlparser.IsLiteral(updExpr.Expr) {
@@ -373,9 +376,9 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 	var err error
 	switch fk.OnUpdate {
 	case sqlparser.Cascade:
-		childOp, err = buildChildUpdOpForCascade(ctx, fk, updStmt, childWhereExpr, updateExprBvNames, updatedTable)
+		childOp, err = buildChildUpdOpForCascade(ctx, fk, childWhereExpr, updateExprBvNames, updatedTable)
 	case sqlparser.SetNull:
-		childOp, err = buildChildUpdOpForSetNull(ctx, fk, updStmt, childWhereExpr, updateExprBvNames, updatedTable)
+		childOp, err = buildChildUpdOpForSetNull(ctx, fk, childWhereExpr, updateExprBvNames, updatedTable)
 	case sqlparser.SetDefault:
 		return nil, vterrors.VT09016()
 	}
@@ -413,11 +416,11 @@ func compressUpdateOffsets(offsets [][2]int, updateExprBvNames []string) ([]int,
 // The query looks like this -
 //
 //	`UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query> WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
-func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, updStmt *sqlparser.Update, childWhereExpr sqlparser.Expr, updatedExprBvNames []string, updatedTable *vindexes.Table) (ops.Operator, error) {
+func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, childWhereExpr sqlparser.Expr, updatedExprBvNames []string, updatedTable *vindexes.Table) (ops.Operator, error) {
 	// The update expressions are the same as the update expressions in the parent update query
 	// with the column names replaced with the child column names.
 	var childUpdateExprs sqlparser.UpdateExprs
-	for idx, updateExpr := range ctx.SemTable.ChildFkToUpdExprs[fk.String(updatedTable)] {
+	for idx, updateExpr := range ctx.SemTable.ChildFkToUpdExprs[fk.String(updatedTable)].Exprs {
 		colIdx := fk.ParentColumns.FindColumn(updateExpr.Name.Name)
 		if colIdx == -1 {
 			continue
@@ -458,7 +461,7 @@ func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.Chi
 //	`UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query>
 //	WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)
 //	[AND ({<bind variables in the SET clause of the original update> IS NULL OR}... <child_columns_in_fk> NOT IN (<bind variables in the SET clause of the original update>))]`
-func buildChildUpdOpForSetNull(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, updStmt *sqlparser.Update, childWhereExpr sqlparser.Expr, updateExprBvNames []string, updatedTable *vindexes.Table) (ops.Operator, error) {
+func buildChildUpdOpForSetNull(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, childWhereExpr sqlparser.Expr, updateExprBvNames []string, updatedTable *vindexes.Table) (ops.Operator, error) {
 	// For the SET NULL type constraint, we need to set all the child columns to NULL.
 	var childUpdateExprs sqlparser.UpdateExprs
 	for _, column := range fk.ChildColumns {
@@ -477,7 +480,7 @@ func buildChildUpdOpForSetNull(ctx *plancontext.PlanningContext, fk vindexes.Chi
 	// For example, if we are setting `update parent cola = :v1 and colb = :v2`, then on the child, the where condition would look something like this -
 	// `:v1 IS NULL OR :v2 IS NULL OR (child_cola, child_colb) NOT IN ((:v1,:v2))`
 	// So, if either of :v1 or :v2 is NULL, then the entire condition is true (which is the same as not having the condition when :v1 or :v2 is NULL).
-	compExpr := nullSafeNotInComparison(ctx.SemTable.ChildFkToUpdExprs[fk.String(updatedTable)], fk, updatedTable.GetTableName(), updateExprBvNames)
+	compExpr := nullSafeNotInComparison(ctx.SemTable.ChildFkToUpdExprs[fk.String(updatedTable)].Exprs, fk, updatedTable.GetTableName(), updateExprBvNames)
 	if compExpr != nil {
 		childWhereExpr = &sqlparser.AndExpr{
 			Left:  childWhereExpr,
