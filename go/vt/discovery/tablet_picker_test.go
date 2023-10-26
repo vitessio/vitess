@@ -350,6 +350,28 @@ func TestPickCellPreferenceLocalAlias(t *testing.T) {
 	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
 }
 
+func TestPickWithIgnoreList(t *testing.T) {
+	ctx := context.Background()
+	te := newPickerTestEnv(t, []string{"cell1", "cell2"})
+
+	want := addTablet(te, 101, topodatapb.TabletType_REPLICA, "cell1", true, true)
+	defer deleteTablet(t, te, want)
+
+	dontWant := addTablet(te, 102, topodatapb.TabletType_REPLICA, "cell1", true, true)
+	defer deleteTablet(t, te, dontWant)
+
+	// Specify the alias as the cell.
+	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"cella"}, "cell1", te.keyspace, te.shard, "replica", TabletPickerOptions{}, dontWant.GetAlias())
+	require.NoError(t, err)
+
+	// Try it many times to be sure we don't ever pick from the ignore list.
+	for i := 0; i < 100; i++ {
+		tablet, err := tp.PickForStreaming(ctx)
+		require.NoError(t, err)
+		require.False(t, proto.Equal(dontWant, tablet), "Picked the tablet we shouldn't have: %v", dontWant)
+	}
+}
+
 func TestPickUsingCellAliasOnlySpecified(t *testing.T) {
 	// test env puts all cells into an alias called "cella"
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
