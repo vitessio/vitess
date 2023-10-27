@@ -1,0 +1,20 @@
+1. First we get all _vt.vreplication streams, for all workflows.
+1. Each shard has every workflow, with the same name, but potentially different values and counts of `id`.
+1. After getting this, we want to get all `id` values for a shard, and go get `_vt.copy_state` with those `id`.
+1. We then need to map those results back to streams organized by workflow.
+
+results map[tablet][]row = VExec('select * from _vt.vreplication')
+
+for tablet, qr = range results {
+  vreplIds []int64
+  for _, row := qr.Rows {
+    id = qr[...]
+    vreplIds = append(vreplIds, id)
+
+    workflow = qr[...]
+  }
+
+  go func() {
+    copyStatesById = getCopyState(tablet, vreplIds)
+  }
+}

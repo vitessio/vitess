@@ -263,6 +263,7 @@ message Workflow {
     message CopyState {
       string table = 1;
       string last_pk = 2;
+      int64 stream_id = 3;
     }
 
     message Log {
