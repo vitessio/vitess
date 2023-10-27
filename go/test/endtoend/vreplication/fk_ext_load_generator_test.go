@@ -166,7 +166,7 @@ func (lg *SimpleLoadGenerator) exec(query string) (*sqltypes.Result, error) {
 	case "vtgate":
 		return lg.execQueryWithRetry(query)
 	default:
-		err := fmt.Errorf("Invalid dbStrategy: %v", lg.dbStrategy)
+		err := fmt.Errorf("invalid dbStrategy: %v", lg.dbStrategy)
 		return nil, err
 	}
 }
@@ -238,92 +238,11 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 	}
 }
 
-func (lg *SimpleLoadGenerator) execQueryWithRetry2(query string) (*sqltypes.Result, error) {
-	timeout := 5 * time.Second
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	var vtgateConn *mysql.Conn
-	var err error
-	var qr *sqltypes.Result
-	retry := false
-	for {
-		if retry {
-			log.Infof("1: Retrying query %q", query)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-
-		vtgateConn, err = lg.getVtgateConn(ctx)
-		if err == nil {
-			if retry {
-				log.Infof("2: Retrying query %q", query)
-			}
-			select {
-			case <-timer.C:
-				cancel()
-				return nil, fmt.Errorf("query %q did not succeed before the timeout of %s", query, timeout)
-			default:
-
-				qr, err = vtgateConn.ExecuteFetch(query, 1000, false)
-			}
-
-			if err == nil {
-				if retry {
-					log.Infof("3: Retry successful query %q", query)
-				}
-				appendToQueryLog(query)
-				cancel()
-				return qr, nil
-			} else {
-				retry = true
-				retriableErrorStrings := []string{
-					"retry",
-					"resharded",
-					"VT13001",
-					"Lock wait timeout exceeded",
-				}
-				for _, retriableErrorString := range retriableErrorStrings {
-					if strings.Contains(err.Error(), retriableErrorString) {
-						log.Infof("found retriable error string %q in error %v, resetting timer", retriableErrorString, err)
-						if !timer.Stop() {
-							<-timer.C
-						}
-						timer.Reset(timeout)
-						break
-					}
-				}
-				log.Infof("query %q failed with error %v, retrying in %ds", query, err, int(defaultTick.Seconds()))
-			}
-
-		}
-		if vtgateConn != nil {
-			vtgateConn.Close()
-		}
-		if retry {
-			log.Infof("4: Retrying query before select %q", query)
-		}
-		select {
-		case <-timer.C:
-			if !retry {
-				require.FailNow(lg.vc.t, fmt.Sprintf("query %q did not succeed before the timeout of %s; last seen result: %v",
-					query, timeout, qr))
-			} else {
-				timer.Reset(timeout)
-			}
-		default:
-			log.Infof("query %q failed with error %v, retrying in %ds", query, err, int(defaultTick.Seconds()))
-			time.Sleep(defaultTick)
-		}
-		if retry {
-			log.Infof("5: Retrying query after select %q", query)
-		}
-	}
-}
-
 func (lg *SimpleLoadGenerator) Load() error {
 	lg.state = "loading"
 	defer func() { lg.state = "stopped" }()
 	log.Infof("Inserting initial FK data")
-	var queries []string = []string{
+	var queries = []string{
 		"insert into parent values(1, 'parent1'), (2, 'parent2');",
 		"insert into child values(1, 1, 'child11'), (2, 1, 'child21'), (3, 2, 'child32');",
 	}

@@ -193,10 +193,6 @@ func TestFKExt(t *testing.T) {
 
 	})
 	lg.Start()
-	t.Run("Validate materialize counts at end of test", func(t *testing.T) {
-		validateMaterializeRowCounts(t)
-	})
-	lg.Start()
 	if lg.WaitForAdditionalRows(100) != nil {
 		t.Fatal("WaitForAdditionalRows failed")
 	}
@@ -225,7 +221,7 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	for _, targetTab := range targetTabs {
 		catchup(t, targetTab, workflowName, "Reshard")
 	}
-	//vdiff(t, keyspace, workflowName, fkextConfig.cell, false, true, nil)
+	vdiff(t, keyspace, workflowName, fkextConfig.cell, false, true, nil)
 	rs.SwitchReadsAndWrites()
 	//if lg.WaitForAdditionalRows(100) != nil {
 	//	t.Fatal("WaitForAdditionalRows failed")
