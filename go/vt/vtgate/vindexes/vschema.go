@@ -118,6 +118,12 @@ type Table struct {
 
 	ChildForeignKeys  []ChildFKInfo  `json:"child_foreign_keys,omitempty"`
 	ParentForeignKeys []ParentFKInfo `json:"parent_foreign_keys,omitempty"`
+
+	// index can be columns or expression.
+	// For Primary key, functional indexes are not allowed, therefore it will only be columns.
+	// MySQL error message: ERROR 3756 (HY000): The primary key cannot be a functional index
+	PrimaryKey sqlparser.Columns
+	UniqueKeys []sqlparser.Exprs
 }
 
 // GetTableName gets the sqlparser.TableName for the vindex Table.
