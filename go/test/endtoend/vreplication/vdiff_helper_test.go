@@ -251,7 +251,7 @@ func execVDiffWithRetry(t *testing.T, useVtctldClient bool, args []string) (stri
 		retry := false
 		for {
 			if retry {
-				time.Sleep(1 * time.Second)
+				time.Sleep(5 * time.Second)
 			}
 			retry = false
 			if useVtctldClient {

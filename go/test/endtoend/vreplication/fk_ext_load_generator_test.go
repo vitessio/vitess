@@ -204,6 +204,11 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 				return
 			default:
 			}
+			if lg.runCtx != nil && lg.runCtx.Err() != nil {
+				log.Infof("Load generator run context done, query never completed: %q", query)
+				errCh <- fmt.Errorf("load generator stopped")
+				return
+			}
 			if retry {
 				time.Sleep(1 * time.Second)
 			}
@@ -319,6 +324,7 @@ func (lg *SimpleLoadGenerator) Stop() error {
 	select {
 	case <-lg.ch:
 		log.Infof("Load generator stopped")
+		lg.state = "stopped"
 		return nil
 	case <-time.After(timeout):
 		log.Infof("Timed out waiting for load generator to stop")
@@ -366,11 +372,21 @@ const (
 	insertChildQueryOverrideConstraints = "INSERT /*+ SET_VAR(foreign_key_checks=0) */ INTO %s.child (id, parent_id) VALUES (%d, %d)"
 )
 
+func isQueryCancelled(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "load generator stopped")
+}
+
 func (lg *SimpleLoadGenerator) insert() {
 	t := lg.vc.t
 	currentParentId++
 	query := fmt.Sprintf(insertQuery, lg.keyspace, currentParentId, currentParentId)
 	qr, err := lg.exec(query)
+	if isQueryCancelled(err) {
+		return
+	}
 	require.NoError(t, err)
 	require.NotNil(t, qr)
 	// insert one or more children, some with valid foreign keys, some without.
@@ -389,6 +405,9 @@ func (lg *SimpleLoadGenerator) insert() {
 func (lg *SimpleLoadGenerator) getRandomId() int64 {
 	t := lg.vc.t
 	qr, err := lg.exec(fmt.Sprintf(getRandomIdQuery, lg.keyspace))
+	if isQueryCancelled(err) {
+		return 0
+	}
 	require.NoError(t, err)
 	require.NotNil(t, qr)
 	if len(qr.Rows) == 0 {
@@ -401,14 +420,27 @@ func (lg *SimpleLoadGenerator) getRandomId() int64 {
 
 func (lg *SimpleLoadGenerator) update() {
 	id := lg.getRandomId()
+	if id == 0 {
+		return
+	}
 	updateQuery := fmt.Sprintf(updateQuery, lg.keyspace, id, id)
 	_, err := lg.exec(updateQuery)
+	if isQueryCancelled(err) {
+		return
+	}
 	require.NoError(lg.vc.t, err)
 }
 
 func (lg *SimpleLoadGenerator) delete() {
-	deleteQuery := fmt.Sprintf(deleteQuery, lg.keyspace, lg.getRandomId())
+	id := lg.getRandomId()
+	if id == 0 {
+		return
+	}
+	deleteQuery := fmt.Sprintf(deleteQuery, lg.keyspace, id)
 	_, err := lg.exec(deleteQuery)
+	if isQueryCancelled(err) {
+		return
+	}
 	require.NoError(lg.vc.t, err)
 }
 

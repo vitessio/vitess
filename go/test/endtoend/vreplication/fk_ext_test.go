@@ -223,14 +223,14 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	}
 	vdiff(t, keyspace, workflowName, fkextConfig.cell, false, true, nil)
 	rs.SwitchReadsAndWrites()
-	//if lg.WaitForAdditionalRows(100) != nil {
-	//	t.Fatal("WaitForAdditionalRows failed")
-	//}
+	if lg.WaitForAdditionalRows(100) != nil {
+		t.Fatal("WaitForAdditionalRows failed")
+	}
 	waitForLowLag(t, keyspace, workflowName+"_reverse")
 	//vdiff(t, keyspace, workflowName+"_reverse", fkextConfig.cell, true, false, nil)
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", fmt.Sprintf("%s.%s", keyspace, workflowName+"_reverse"))
-	require.NoError(t, err, output)
-	log.Infof(">>>>>>>>>>>>>> vdiff1 output is %s", output)
+	//output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", fmt.Sprintf("%s.%s", keyspace, workflowName+"_reverse"))
+	//require.NoError(t, err, output)
+	//log.Infof("vdiff1 output is %s", output)
 	//if lg.WaitForAdditionalRows(100) != nil {
 	//	t.Fatal("WaitForAdditionalRows failed")
 	//}
@@ -242,7 +242,7 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	//vdiff(t, keyspace, workflowName, fkextConfig.cell, false, true, nil)
 	//output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", fmt.Sprintf("%s.%s", keyspace, workflowName))
 	//require.NoError(t, err, output)
-	log.Infof(">>>>>>>>>>>>>> vdiff1 output is %s", output)
+	//log.Infof("vdiff1 output is %s", output)
 	lg.Stop()
 	rs.SwitchReadsAndWrites()
 	rs.Complete()
