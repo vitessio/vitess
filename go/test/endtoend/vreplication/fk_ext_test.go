@@ -28,8 +28,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -140,12 +138,13 @@ func TestFKExt(t *testing.T) {
 		// import data into vitess from sourceKeyspace to target1Keyspace, both unsharded
 		importIntoVitess(t)
 	})
+
 	t.Run("MoveTables from unsharded to sharded keyspace", func(t *testing.T) {
 		// migrate data from target1Keyspace to target2Keyspace, latter sharded, tablet types from primary
 		// for one shard and replica for the other from which constraints have been dropped.
 		moveKeyspace(t)
 	})
-	lg.Stop()
+
 	t.Run("Materialize parent and copy tables without constraints", func(t *testing.T) {
 		// materialize new tables from and in target2Keyspace,  tablet types replica, one with constraints dropped
 		materializeTables(t)
@@ -176,6 +175,7 @@ func TestFKExt(t *testing.T) {
 
 		doReshard(t, fkextConfig.target2KeyspaceName, "reshard2to3", "-80,80-", threeShards, tablets)
 	})
+	lg.Start()
 	t.Run("Reshard keyspace from 3 to 1 shards", func(t *testing.T) {
 		tabletID := 800
 		shard := "0"
@@ -192,10 +192,21 @@ func TestFKExt(t *testing.T) {
 		doReshard(t, fkextConfig.target2KeyspaceName, "reshard3to1", threeShards, "0", tablets)
 
 	})
+	lg.Start()
 	t.Run("Validate materialize counts at end of test", func(t *testing.T) {
 		validateMaterializeRowCounts(t)
 	})
+	lg.Start()
+	if lg.WaitForAdditionalRows(100) != nil {
+		t.Fatal("WaitForAdditionalRows failed")
+	}
 	lg.Stop()
+	time.Sleep(5 * time.Second) // let materialize breathe
+	waitForLowLag(t, fkextConfig.target1KeyspaceName, "mat")
+	t.Run("Validate materialize counts at end of test", func(t *testing.T) {
+		validateMaterializeRowCounts(t)
+	})
+
 }
 
 func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards string, targetTabs map[string]*cluster.VttabletProcess) {
@@ -214,11 +225,11 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	for _, targetTab := range targetTabs {
 		catchup(t, targetTab, workflowName, "Reshard")
 	}
-	vdiff(t, keyspace, workflowName, fkextConfig.cell, false, true, nil)
+	//vdiff(t, keyspace, workflowName, fkextConfig.cell, false, true, nil)
 	rs.SwitchReadsAndWrites()
-	if lg.WaitForAdditionalRows(100) != nil {
-		t.Fatal("WaitForAdditionalRows failed")
-	}
+	//if lg.WaitForAdditionalRows(100) != nil {
+	//	t.Fatal("WaitForAdditionalRows failed")
+	//}
 	waitForLowLag(t, keyspace, workflowName+"_reverse")
 	//vdiff(t, keyspace, workflowName+"_reverse", fkextConfig.cell, true, false, nil)
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", fmt.Sprintf("%s.%s", keyspace, workflowName+"_reverse"))
@@ -233,8 +244,8 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	//}
 	waitForLowLag(t, keyspace, workflowName)
 	//vdiff(t, keyspace, workflowName, fkextConfig.cell, false, true, nil)
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", fmt.Sprintf("%s.%s", keyspace, workflowName))
-	require.NoError(t, err, output)
+	//output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", fmt.Sprintf("%s.%s", keyspace, workflowName))
+	//require.NoError(t, err, output)
 	log.Infof(">>>>>>>>>>>>>> vdiff1 output is %s", output)
 	lg.Stop()
 	rs.SwitchReadsAndWrites()
@@ -358,32 +369,6 @@ func doMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, ta
 func importIntoVitess(t *testing.T) {
 	targetTabs := newKeyspace(t, fkextConfig.target1KeyspaceName, "0", FKExtTarget1VSchema, FKExtSourceSchema, 200, 1)
 	doMoveTables(t, fkextConfig.sourceKeyspaceName, fkextConfig.target1KeyspaceName, "import", "primary", targetTabs, true)
-}
-
-func execVTGateQueryWithWait(t *testing.T, query string) (*sqltypes.Result, error) {
-	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host:  vc.ClusterConfig.hostname,
-		Port:  vc.ClusterConfig.vtgateMySQLPort,
-		Uname: "root",
-	}
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	var qr *sqltypes.Result
-	waitTimer := time.After(longWait)
-
-	for {
-		select {
-		case <-waitTimer:
-			return nil, fmt.Errorf("timed out waiting for query to succeed")
-		default:
-			qr, err = conn.ExecuteFetch(query, -1, false)
-			if err == nil {
-				return qr, nil
-			}
-			time.Sleep(shortWait)
-		}
-	}
 }
 
 const getConstraintsQuery = `

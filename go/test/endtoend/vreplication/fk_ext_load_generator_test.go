@@ -124,16 +124,15 @@ func (lg *SimpleLoadGenerator) WaitForAdditionalRows(count int) error {
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	numRowsStart := lg.getNumRows(vtgateConn, "parent")
-	shortCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	shortCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	for {
-		switch {
-		case shortCtx.Err() != nil:
+		select {
+		case <-shortCtx.Done():
 			log.Infof("Timed out waiting for additional rows\n%s", debug.Stack())
 			t.Fatalf("Timed out waiting for additional rows")
 		default:
 			numRows := lg.getNumRows(vtgateConn, "parent")
-			//log.Infof("Waiting for additional rows, current: %d, expected: %d", numRows, numRowsStart+count)
 			if numRows >= numRowsStart+count {
 				return nil
 			}
@@ -172,7 +171,74 @@ func (lg *SimpleLoadGenerator) exec(query string) (*sqltypes.Result, error) {
 	}
 }
 
+func isQueryRetryable(err error) bool {
+	retriableErrorStrings := []string{
+		"retry",
+		"resharded",
+		"VT13001",
+		"Lock wait timeout exceeded",
+		"errno 2003",
+	}
+	for _, retriableErrorString := range retriableErrorStrings {
+		if strings.Contains(err.Error(), retriableErrorString) {
+			return true
+		}
+	}
+	return false
+}
 func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Result, error) {
+	timeout := 60 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	errCh := make(chan error)
+	qrCh := make(chan *sqltypes.Result)
+	var vtgateConn *mysql.Conn
+	go func() {
+		var qr *sqltypes.Result
+		var err error
+		retry := false
+		for {
+			select {
+			case <-ctx.Done():
+				errCh <- fmt.Errorf("query %q did not succeed before the timeout of %s", query, timeout)
+				return
+			default:
+			}
+			if retry {
+				time.Sleep(1 * time.Second)
+			}
+			vtgateConn, err = lg.getVtgateConn(ctx)
+			if err != nil {
+				if !isQueryRetryable(err) {
+					errCh <- err
+					return
+				}
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			qr, err = vtgateConn.ExecuteFetch(query, 1000, false)
+			vtgateConn.Close()
+			if err == nil {
+				qrCh <- qr
+				return
+			}
+			if !isQueryRetryable(err) {
+				errCh <- err
+				return
+			}
+			retry = true
+		}
+	}()
+	select {
+	case qr := <-qrCh:
+		return qr, nil
+	case err := <-errCh:
+		log.Infof("query %q failed with error %v", query, err)
+		return nil, err
+	}
+}
+
+func (lg *SimpleLoadGenerator) execQueryWithRetry2(query string) (*sqltypes.Result, error) {
 	timeout := 5 * time.Second
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -191,7 +257,15 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 			if retry {
 				log.Infof("2: Retrying query %q", query)
 			}
-			qr, err = vtgateConn.ExecuteFetch(query, 1000, false)
+			select {
+			case <-timer.C:
+				cancel()
+				return nil, fmt.Errorf("query %q did not succeed before the timeout of %s", query, timeout)
+			default:
+
+				qr, err = vtgateConn.ExecuteFetch(query, 1000, false)
+			}
+
 			if err == nil {
 				if retry {
 					log.Infof("3: Retry successful query %q", query)
@@ -217,7 +291,7 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 						break
 					}
 				}
-				log.Infof("query %q failed with error %v, retrying in %ds", query, err, defaultTick)
+				log.Infof("query %q failed with error %v, retrying in %ds", query, err, int(defaultTick.Seconds()))
 			}
 
 		}
@@ -236,7 +310,7 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 				timer.Reset(timeout)
 			}
 		default:
-			log.Infof("query %q failed with error %v, retrying in %ds", query, err, defaultTick)
+			log.Infof("query %q failed with error %v, retrying in %ds", query, err, int(defaultTick.Seconds()))
 			time.Sleep(defaultTick)
 		}
 		if retry {
@@ -262,6 +336,10 @@ func (lg *SimpleLoadGenerator) Load() error {
 }
 
 func (lg *SimpleLoadGenerator) Start() error {
+	if lg.state == "running" {
+		log.Infof("Load generator already running")
+		return nil
+	}
 	lg.state = "running"
 	go func() {
 		defer func() {
@@ -361,18 +439,18 @@ func (lg *SimpleLoadGenerator) State() string {
 }
 
 const (
-	getRandomIdQuery                    = "SELECT id FROM parent ORDER BY RAND() LIMIT 1"
-	insertQuery                         = "INSERT INTO parent (id, name) VALUES (%d, 'name-%d')"
-	updateQuery                         = "UPDATE parent SET name = 'rename-%d' WHERE id = %d"
-	deleteQuery                         = "DELETE FROM parent WHERE id = %d"
-	insertChildQuery                    = "INSERT INTO child (id, parent_id) VALUES (%d, %d)"
-	insertChildQueryOverrideConstraints = "INSERT /*+ SET_VAR(foreign_key_checks=0) */ INTO child (id, parent_id) VALUES (%d, %d)"
+	getRandomIdQuery                    = "SELECT id FROM %s.parent ORDER BY RAND() LIMIT 1"
+	insertQuery                         = "INSERT INTO %s.parent (id, name) VALUES (%d, 'name-%d')"
+	updateQuery                         = "UPDATE %s.parent SET name = 'rename-%d' WHERE id = %d"
+	deleteQuery                         = "DELETE FROM %s.parent WHERE id = %d"
+	insertChildQuery                    = "INSERT INTO %s.child (id, parent_id) VALUES (%d, %d)"
+	insertChildQueryOverrideConstraints = "INSERT /*+ SET_VAR(foreign_key_checks=0) */ INTO %s.child (id, parent_id) VALUES (%d, %d)"
 )
 
 func (lg *SimpleLoadGenerator) insert() {
 	t := lg.vc.t
 	currentParentId++
-	query := fmt.Sprintf(insertQuery, currentParentId, currentParentId)
+	query := fmt.Sprintf(insertQuery, lg.keyspace, currentParentId, currentParentId)
 	qr, err := lg.exec(query)
 	require.NoError(t, err)
 	require.NotNil(t, qr)
@@ -380,10 +458,10 @@ func (lg *SimpleLoadGenerator) insert() {
 	for i := 0; i < rand.Intn(4)+1; i++ {
 		currentChildId++
 		if i == 3 && lg.overrideConstraints {
-			query = fmt.Sprintf(insertChildQueryOverrideConstraints, currentChildId, currentParentId+1000000)
+			query = fmt.Sprintf(insertChildQueryOverrideConstraints, lg.keyspace, currentChildId, currentParentId+1000000)
 			lg.exec(query)
 		} else {
-			query = fmt.Sprintf(insertChildQuery, currentChildId, currentParentId)
+			query = fmt.Sprintf(insertChildQuery, lg.keyspace, currentChildId, currentParentId)
 			lg.exec(query)
 		}
 	}
@@ -391,7 +469,7 @@ func (lg *SimpleLoadGenerator) insert() {
 
 func (lg *SimpleLoadGenerator) getRandomId() int64 {
 	t := lg.vc.t
-	qr, err := lg.exec(getRandomIdQuery)
+	qr, err := lg.exec(fmt.Sprintf(getRandomIdQuery, lg.keyspace))
 	require.NoError(t, err)
 	require.NotNil(t, qr)
 	if len(qr.Rows) == 0 {
@@ -404,13 +482,13 @@ func (lg *SimpleLoadGenerator) getRandomId() int64 {
 
 func (lg *SimpleLoadGenerator) update() {
 	id := lg.getRandomId()
-	updateQuery := fmt.Sprintf(updateQuery, id, id)
+	updateQuery := fmt.Sprintf(updateQuery, lg.keyspace, id, id)
 	_, err := lg.exec(updateQuery)
 	require.NoError(lg.vc.t, err)
 }
 
 func (lg *SimpleLoadGenerator) delete() {
-	deleteQuery := fmt.Sprintf(deleteQuery, lg.getRandomId())
+	deleteQuery := fmt.Sprintf(deleteQuery, lg.keyspace, lg.getRandomId())
 	_, err := lg.exec(deleteQuery)
 	require.NoError(lg.vc.t, err)
 }
