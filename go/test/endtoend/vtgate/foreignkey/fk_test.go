@@ -834,6 +834,28 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t13 (id, col) values (1,1),(2,2)",
 				"update fk_t11 set col = id + 3",
 			},
+		}, {
+			name: "Single column update in a multi-col table - success",
+			queries: []string{
+				"insert into fk_multicol_t1 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t2 (id, cola, colb) values (1, 1, 1)",
+				"update fk_multicol_t1 set colb = 4 + (colb) where id = 2",
+			},
+		}, {
+			name: "Single column update in a multi-col table - restrict failure",
+			queries: []string{
+				"insert into fk_multicol_t1 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t2 (id, cola, colb) values (1, 1, 1)",
+				"update fk_multicol_t1 set colb = 4 + (colb) where id = 1",
+			},
+		}, {
+			name: "Single column update in multi-col table - cascade and set null",
+			queries: []string{
+				"insert into fk_multicol_t15 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t16 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t17 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"update fk_multicol_t15 set colb = 4 + (colb) where id = 1",
+			},
 		},
 	}
 

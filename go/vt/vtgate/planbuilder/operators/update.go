@@ -696,6 +696,8 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updSt
 // So, if either of :v1 or :v2 is NULL, then the entire condition is true (which is the same as not having the condition when :v1 or :v2 is NULL)
 // This expression is used in cascading SET NULLs and in verifying whether an update should be restricted.
 func nullSafeNotInComparison(updateExprs sqlparser.UpdateExprs, cFk vindexes.ChildFKInfo, parentTbl sqlparser.TableName, updatedExprBvNames []string) sqlparser.Expr {
+	//var updateValues sqlparser.ValTuple = make([]sqlparser.Expr, len(cFk.ChildColumns))
+	var valTuple sqlparser.ValTuple
 	var updateValues sqlparser.ValTuple
 	for idx, updateExpr := range updateExprs {
 		colIdx := cFk.ParentColumns.FindColumn(updateExpr.Name.Name)
@@ -707,14 +709,21 @@ func nullSafeNotInComparison(updateExprs sqlparser.UpdateExprs, cFk vindexes.Chi
 			if len(updatedExprBvNames) > 0 && updatedExprBvNames[idx] != "" {
 				childUpdateExpr = sqlparser.NewArgument(updatedExprBvNames[idx])
 			}
+			//updateValues[colIdx] = childUpdateExpr
 			updateValues = append(updateValues, childUpdateExpr)
+			valTuple = append(valTuple, sqlparser.NewColNameWithQualifier(cFk.ChildColumns[colIdx].String(), cFk.Table.GetTableName()))
 		}
 	}
+	//for idx, value := range updateValues {
+	//	if value == nil {
+	//		updateValues[idx] = sqlparser.NewColNameWithQualifier(cFk.ChildColumns[idx].String(), cFk.Table.GetTableName())
+	//	}
+	//}
 	// Create a ValTuple of child column names
-	var valTuple sqlparser.ValTuple
-	for _, column := range cFk.ChildColumns {
-		valTuple = append(valTuple, sqlparser.NewColNameWithQualifier(column.String(), cFk.Table.GetTableName()))
-	}
+	//var valTuple sqlparser.ValTuple
+	//for _, column := range cFk.ChildColumns {
+	//	valTuple = append(valTuple, sqlparser.NewColNameWithQualifier(column.String(), cFk.Table.GetTableName()))
+	//}
 	var finalExpr sqlparser.Expr = sqlparser.NewComparisonExpr(sqlparser.NotInOp, valTuple, sqlparser.ValTuple{updateValues}, nil)
 	for _, value := range updateValues {
 		finalExpr = &sqlparser.OrExpr{
