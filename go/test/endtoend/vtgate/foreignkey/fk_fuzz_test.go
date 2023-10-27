@@ -146,16 +146,26 @@ func (fz *fuzzer) generateUpdateDMLQuery() string {
 	idValue := 1 + rand.Intn(fz.maxValForId)
 	tableName := fkTables[tableId]
 	if tableName == "fk_t20" {
-		colValue := fz.generateExpression(rand.Intn(4)+1, "col", "col2")
-		col2Value := fz.generateExpression(rand.Intn(4)+1, "col", "col2")
+		colValue := convertIntValueToString(rand.Intn(1 + fz.maxValForCol))
+		col2Value := convertIntValueToString(rand.Intn(1 + fz.maxValForCol))
 		return fmt.Sprintf("update %v set col = %v, col2 = %v where id = %v", tableName, colValue, col2Value, idValue)
 	} else if isMultiColFkTable(tableName) {
-		colaValue := fz.generateExpression(rand.Intn(4)+1, "cola", "colb")
-		colbValue := fz.generateExpression(rand.Intn(4)+1, "cola", "colb")
-		return fmt.Sprintf("update %v set cola = %v, colb = %v where id = %v", tableName, colaValue, colbValue, idValue)
+		if rand.Intn(2) == 0 {
+			colaValue := convertIntValueToString(rand.Intn(1 + fz.maxValForCol))
+			colbValue := convertIntValueToString(rand.Intn(1 + fz.maxValForCol))
+			if fz.concurrency > 1 {
+				colaValue = fz.generateExpression(rand.Intn(4)+1, "cola", "colb", "id")
+				colbValue = fz.generateExpression(rand.Intn(4)+1, "cola", "colb", "id")
+			}
+			return fmt.Sprintf("update %v set cola = %v, colb = %v where id = %v", tableName, colaValue, colbValue, idValue)
+		} else {
+			colValue := fz.generateExpression(rand.Intn(4)+1, "cola", "colb", "id")
+			colToUpdate := []string{"cola", "colb"}[rand.Intn(2)]
+			return fmt.Sprintf("update %v set %v = %v where id = %v", tableName, colToUpdate, colValue, idValue)
+		}
 	} else {
-		colValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("update %v set col = %v where id = %v", tableName, convertIntValueToString(colValue), idValue)
+		colValue := fz.generateExpression(rand.Intn(4)+1, "col", "id")
+		return fmt.Sprintf("update %v set col = %v where id = %v", tableName, colValue, idValue)
 	}
 }
 
