@@ -148,6 +148,7 @@ type ColumnVindex struct {
 type TableInfo struct {
 	Columns     []Column
 	ForeignKeys []*sqlparser.ForeignKeyDefinition
+	Indexes     []*sqlparser.IndexDefinition
 }
 
 // IsUnique is used to tell whether the ColumnVindex

@@ -216,6 +216,16 @@ func (t *Tracker) GetForeignKeys(ks string, tbl string) []*sqlparser.ForeignKeyD
 	return tblInfo.ForeignKeys
 }
 
+// GetIndexes returns the indexes for table in the given keyspace.
+func (t *Tracker) GetIndexes(ks string, tbl string) []*sqlparser.IndexDefinition {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	tblInfo := t.tables.get(ks, tbl)
+	return tblInfo.Indexes
+
+}
+
 // Tables returns a map with the columns for all known tables in the keyspace
 func (t *Tracker) Tables(ks string) map[string]*vindexes.TableInfo {
 	t.mu.Lock()
@@ -293,7 +303,7 @@ func (t *Tracker) updateTables(keyspace string, res map[string]string) {
 
 		cols := getColumns(ddl.TableSpec)
 		fks := getForeignKeys(ddl.TableSpec)
-		t.tables.set(keyspace, tableName, cols, fks)
+		t.tables.set(keyspace, tableName, cols, fks, ddl.TableSpec.Indexes)
 	}
 }
 
@@ -403,13 +413,13 @@ type tableMap struct {
 	m map[keyspaceStr]map[tableNameStr]*vindexes.TableInfo
 }
 
-func (tm *tableMap) set(ks, tbl string, cols []vindexes.Column, fks []*sqlparser.ForeignKeyDefinition) {
+func (tm *tableMap) set(ks, tbl string, cols []vindexes.Column, fks []*sqlparser.ForeignKeyDefinition, indexes []*sqlparser.IndexDefinition) {
 	m := tm.m[ks]
 	if m == nil {
 		m = make(map[tableNameStr]*vindexes.TableInfo)
 		tm.m[ks] = m
 	}
-	m[tbl] = &vindexes.TableInfo{Columns: cols, ForeignKeys: fks}
+	m[tbl] = &vindexes.TableInfo{Columns: cols, ForeignKeys: fks, Indexes: indexes}
 }
 
 func (tm *tableMap) get(ks, tbl string) *vindexes.TableInfo {
