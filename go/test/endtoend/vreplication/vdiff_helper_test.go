@@ -189,7 +189,7 @@ func performVDiff2Action(t *testing.T, useVtctlclient bool, ksWorkflow, cells, a
 			args = append(args, extraFlags...)
 		}
 		args = append(args, ksWorkflow, action, actionArg)
-		output, err = execVDiffWithRetry(t, false, args)
+		output, err = execVDiffWithRetry(t, expectError, false, args)
 		log.Infof("vdiff output: %+v (err: %+v)", output, err)
 		if !expectError {
 			require.Nil(t, err)
@@ -215,7 +215,7 @@ func performVDiff2Action(t *testing.T, useVtctlclient bool, ksWorkflow, cells, a
 			args = append(args, actionArg)
 		}
 
-		output, err = execVDiffWithRetry(t, true, args)
+		output, err = execVDiffWithRetry(t, expectError, true, args)
 		log.Infof("vdiff output: %+v (err: %+v)", output, err)
 		if !expectError {
 			require.NoError(t, err)
@@ -239,12 +239,16 @@ func isVDiffRetryable(str string) bool {
 	return false
 }
 
-func execVDiffWithRetry(t *testing.T, useVtctldClient bool, args []string) (string, error) {
+type vdiffResult struct {
+	output string
+	err    error
+}
+
+func execVDiffWithRetry(t *testing.T, expectError bool, useVtctldClient bool, args []string) (string, error) {
 	timeout := 30 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	errCh := make(chan error)
-	outputCh := make(chan string)
+	vdiffResultCh := make(chan vdiffResult)
 	go func() {
 		var output string
 		var err error
@@ -260,13 +264,20 @@ func execVDiffWithRetry(t *testing.T, useVtctldClient bool, args []string) (stri
 				output, err = vc.VtctlClient.ExecuteCommandWithOutput(args...)
 			}
 			if err != nil {
+				if expectError {
+					log.Infof("Returning expected error: %s, output is %s", err, output)
+					result := vdiffResult{output: output, err: err}
+					vdiffResultCh <- result
+					return
+				}
 				log.Infof("vdiff error: %s", err)
 				if isVDiffRetryable(err.Error()) {
 					log.Infof("vdiff error is retryable, retrying...")
 					retry = true
 				} else {
 					log.Infof("vdiff error is not retryable, returning...")
-					errCh <- err
+					result := vdiffResult{output: output, err: err}
+					vdiffResultCh <- result
 					return
 				}
 			}
@@ -275,7 +286,8 @@ func execVDiffWithRetry(t *testing.T, useVtctldClient bool, args []string) (stri
 				retry = true
 			}
 			if !retry {
-				outputCh <- output
+				result := vdiffResult{output: output, err: nil}
+				vdiffResultCh <- result
 				return
 			}
 		}
@@ -283,10 +295,8 @@ func execVDiffWithRetry(t *testing.T, useVtctldClient bool, args []string) (stri
 	select {
 	case <-ctx.Done():
 		return "", fmt.Errorf("timed out waiting for vdiff to complete")
-	case err := <-errCh:
-		return "", err
-	case output := <-outputCh:
-		return output, nil
+	case result := <-vdiffResultCh:
+		return result.output, result.err
 	}
 }
 

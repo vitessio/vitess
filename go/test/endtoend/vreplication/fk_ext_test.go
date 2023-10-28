@@ -227,6 +227,8 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 		t.Fatal("WaitForAdditionalRows failed")
 	}
 	waitForLowLag(t, keyspace, workflowName+"_reverse")
+	log.Infof("Sleeeeeeeeeeep")
+	time.Sleep(5 * time.Minute)
 	//vdiff(t, keyspace, workflowName+"_reverse", fkextConfig.cell, true, false, nil)
 	//output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", fmt.Sprintf("%s.%s", keyspace, workflowName+"_reverse"))
 	//require.NoError(t, err, output)
