@@ -1029,11 +1029,12 @@ func (wr *Wrangler) prepareMaterializerStreams(ctx context.Context, ms *vtctldat
 	insertMap := make(map[string]string, len(mz.targetShards))
 	for _, targetShard := range mz.targetShards {
 		sourceShards := mz.filterSourceShards(targetShard)
-		// keyRangesEqual allows us to optimize the stream for the cases where
-		// while the target keyspace may be sharded, the shard mapping is 1:1
-		// between the source and target and the key ranges are equal. This
-		// can be done, for example, when doing shard by shard migrations --
-		// migrating a single shard at a time.
+		// streamKeyRangesEqual allows us to optimize the stream for the cases
+		// where while the target keyspace may be sharded, the target shard has
+		// a single source shard to stream data from and the target and source
+		// shard have equal key ranges. This can be done, for example, when doing
+		// shard by shard migrations -- migrating a single shard at a time between
+		// sharded source and sharded target keyspaces.
 		streamKeyRangesEqual := false
 		if len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, targetShard.KeyRange) {
 			streamKeyRangesEqual = true
