@@ -2739,7 +2739,7 @@ func (e *Executor) analyzeDropDDLActionMigration(ctx context.Context, onlineDDL 
 		var removedForeignKeyNames []string
 
 		for _, constraint := range createTable.TableSpec.Constraints {
-			if _, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); ok {
+			if GetConstraintType(constraint.Details) == ForeignKeyConstraintType {
 				removedForeignKeyNames = append(removedForeignKeyNames, constraint.Name.String())
 			}
 		}
