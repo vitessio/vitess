@@ -60,7 +60,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 						i int not null,
 						parent_id int not null,
 						primary key(id),
-						constraint test_fk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
+						constraint test_ibfk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
 					)
 				`,
 			expectError: schema.ErrForeignKeyFound.Error(),
@@ -73,12 +73,12 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 						i int not null,
 						parent_id int not null,
 						primary key(id),
-						constraint test_fk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
+						constraint test_ibfk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
 					)
 				`,
 			strategyOptions:     "--unsafe-allow-foreign-keys",
 			countConstraints:    1,
-			expectConstraintMap: map[string]string{"test_fk": "test_fk_2wtivm6zk4lthpz14g9uoyaqk"},
+			expectConstraintMap: map[string]string{"test_ibfk": "test_ibfk_2wtivm6zk4lthpz14g9uoyaqk"},
 		},
 		{
 			name: "table with default FK name, strip table name",
@@ -238,12 +238,12 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 		},
 		{
 			// stript out table name
-			alter:  "alter table t add constraint t_fk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
-			expect: []string{"alter table t add constraint fk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
+			alter:  "alter table t add constraint t_ibfk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
+			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
 		},
 		{
-			alter:  "alter table t add constraint t_fk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check check (id != 1)",
-			expect: []string{"alter table t add constraint fk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
+			alter:  "alter table t add constraint t_ibfk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check check (id != 1)",
+			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
 		},
 		{
 			alter: "alter table t drop foreign key t_fk_1",
