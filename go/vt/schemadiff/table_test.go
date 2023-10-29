@@ -608,6 +608,14 @@ func TestCreateTableDiff(t *testing.T) {
 			constraint: ConstraintNamesIgnoreAll,
 		},
 		{
+			name:       "check constraints, remove duplicate",
+			from:       "create table t1 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` > 2)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			diff:       "alter table t1 drop check check3",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `check3`",
+			constraint: ConstraintNamesIgnoreAll,
+		},
+		{
 			name:       "check constraints, remove, ignore vitess, no match",
 			from:       "create table t1 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `chk_789def` CHECK ((`i` < 5)))",
 			to:         "create table t2 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
@@ -679,6 +687,14 @@ func TestCreateTableDiff(t *testing.T) {
 			to:         "create table t2 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id))",
 			diff:       "alter table t1 drop foreign key f2",
 			cdiff:      "ALTER TABLE `t1` DROP FOREIGN KEY `f2`",
+			constraint: ConstraintNamesIgnoreAll,
+		},
+		{
+			name:       "add two identical foreign key constraints, ignore all names",
+			from:       "create table t1 (id int primary key, i int, key i_idex (i))",
+			to:         "create table t2 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id), constraint f2 foreign key (i) references parent(id))",
+			diff:       "alter table t1 add constraint f1 foreign key (i) references parent (id), add constraint f2 foreign key (i) references parent (id)",
+			cdiff:      "ALTER TABLE `t1` ADD CONSTRAINT `f1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`), ADD CONSTRAINT `f2` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
 			constraint: ConstraintNamesIgnoreAll,
 		},
 		{
