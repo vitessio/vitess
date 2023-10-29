@@ -3560,7 +3560,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 		wantBls      map[string]*binlogdatapb.BinlogSource
 	}{
 		{
-			name: "no in_keyrange filter -- partial, keyranges equal",
+			name: "no in_keyrange filter -- partial, one equal shard",
 			ms: &vtctldatapb.MaterializeSettings{
 				MaterializationIntent: mzi,
 				Workflow:              workflow,
@@ -3620,6 +3620,45 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 							{
 								Match:  table,
 								Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '80-')", table, targetKs),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "no in_keyrange filter -- all equal shards",
+			ms: &vtctldatapb.MaterializeSettings{
+				MaterializationIntent: mzi,
+				Workflow:              workflow,
+				TargetKeyspace:        targetKs,
+				SourceKeyspace:        sourceKs,
+				Cell:                  "cell",
+				TableSettings:         tableMaterializeSettings,
+			},
+			sourceShards: []string{"-80", "80-"},
+			targetShards: []string{"-80", "80-"},
+			wantBls: map[string]*binlogdatapb.BinlogSource{
+				"-80": {
+					Keyspace: sourceKs,
+					Shard:    "-80",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match:  table,
+								Filter: fmt.Sprintf("select * from %s", table),
+							},
+						},
+					},
+				},
+				"80-": {
+					Keyspace: sourceKs,
+					Shard:    "80-",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match:  table,
+								Filter: fmt.Sprintf("select * from %s", table),
 							},
 						},
 					},
