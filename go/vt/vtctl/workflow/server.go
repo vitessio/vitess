@@ -462,6 +462,10 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			streamIds = append(streamIds, streamId)
 		}
 
+		if len(streamIds) == 0 {
+			continue
+		}
+
 		fetchCopyStatesWg.Add(1)
 		go func(ctx context.Context, tablet *topo.TabletInfo, streamIds []int64) {
 			defer fetchCopyStatesWg.Done()
