@@ -796,13 +796,13 @@ func (vc *VitessCluster) getPrimaryTablet(t *testing.T, ksName, shardName string
 				continue
 			}
 			for _, tablet := range shard.Tablets {
-				if tablet.Vttablet.GetTabletStatus() == "SERVING" && strings.EqualFold(tablet.Vttablet.VreplicationTabletType, "primary") {
+				if strings.EqualFold(tablet.Vttablet.VreplicationTabletType, "primary") {
 					return tablet.Vttablet
 				}
 			}
 		}
 	}
-	require.FailNow(t, "no primary found for %s:%s", ksName, shardName)
+	require.FailNow(t, "no primary found", "keyspace %s, shard %s", ksName, shardName)
 	return nil
 }
 

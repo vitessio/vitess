@@ -192,17 +192,65 @@ func TestFKExt(t *testing.T) {
 		doReshard(t, fkextConfig.target2KeyspaceName, "reshard3to1", threeShards, "0", tablets)
 
 	})
-	lg.Start()
-	if lg.WaitForAdditionalRows(100) != nil {
-		t.Fatal("WaitForAdditionalRows failed")
-	}
 	lg.Stop()
-	time.Sleep(5 * time.Second) // let materialize breathe
 	waitForLowLag(t, fkextConfig.target1KeyspaceName, "mat")
 	t.Run("Validate materialize counts at end of test", func(t *testing.T) {
 		validateMaterializeRowCounts(t)
 	})
 
+}
+
+func compareRowCounts(t *testing.T, keyspace string, sourceShards, targetShards []string) error {
+	log.Infof("Comparing row counts for keyspace %s, source shards: %v, target shards: %v", keyspace, sourceShards, targetShards)
+	lg.Stop()
+	defer lg.Start()
+	time.Sleep(5 * time.Second)
+	var sourceParentCount, sourceChildCount int64
+	var targetParentCount, targetChildCount int64
+	sourceTabs := make(map[string]*cluster.VttabletProcess)
+	targetTabs := make(map[string]*cluster.VttabletProcess)
+	parentCountQuery := "select count(*) from parent"
+	childCountQuery := "select count(*) from child"
+	for _, shard := range sourceShards {
+		sourceTabs[shard] = vc.getPrimaryTablet(t, keyspace, shard)
+	}
+	for _, shard := range targetShards {
+		targetTabs[shard] = vc.getPrimaryTablet(t, keyspace, shard)
+	}
+	for _, tab := range sourceTabs {
+		qr, err := tab.QueryTablet(parentCountQuery, keyspace, true)
+		if err != nil {
+			return err
+		}
+		count, _ := qr.Rows[0][0].ToInt64()
+		sourceParentCount += count
+		qr, err = tab.QueryTablet(childCountQuery, keyspace, true)
+		if err != nil {
+			return err
+		}
+		count, err = qr.Rows[0][0].ToInt64()
+		sourceChildCount += count
+	}
+	for _, tab := range targetTabs {
+		qr, err := tab.QueryTablet(parentCountQuery, keyspace, true)
+		if err != nil {
+			return err
+		}
+		count, _ := qr.Rows[0][0].ToInt64()
+		targetParentCount += count
+		qr, err = tab.QueryTablet(childCountQuery, keyspace, true)
+		if err != nil {
+			return err
+		}
+		count, _ = qr.Rows[0][0].ToInt64()
+		targetChildCount += count
+	}
+	log.Infof("Source parent count: %d, child count: %d, target parent count: %d, child count: %d",
+		sourceParentCount, sourceChildCount, targetParentCount, targetChildCount)
+	if sourceParentCount != targetParentCount || sourceChildCount != targetChildCount {
+		return fmt.Errorf("Source and target counts do not match")
+	}
+	return nil
 }
 
 func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards string, targetTabs map[string]*cluster.VttabletProcess) {
@@ -227,25 +275,22 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 		t.Fatal("WaitForAdditionalRows failed")
 	}
 	waitForLowLag(t, keyspace, workflowName+"_reverse")
-	log.Infof("Sleeeeeeeeeeep")
-	time.Sleep(5 * time.Minute)
+	if compareRowCounts(t, keyspace, strings.Split(sourceShards, ","), strings.Split(targetShards, ",")) != nil {
+		t.Fatal("Row counts do not match")
+	}
 	//vdiff(t, keyspace, workflowName+"_reverse", fkextConfig.cell, true, false, nil)
-	//output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", fmt.Sprintf("%s.%s", keyspace, workflowName+"_reverse"))
-	//require.NoError(t, err, output)
-	//log.Infof("vdiff1 output is %s", output)
-	//if lg.WaitForAdditionalRows(100) != nil {
-	//	t.Fatal("WaitForAdditionalRows failed")
-	//}
+
 	rs.ReverseReadsAndWrites()
-	//if lg.WaitForAdditionalRows(100) != nil {
-	//	t.Fatal("WaitForAdditionalRows failed")
-	//}
+	if lg.WaitForAdditionalRows(100) != nil {
+		t.Fatal("WaitForAdditionalRows failed")
+	}
 	waitForLowLag(t, keyspace, workflowName)
+	if compareRowCounts(t, keyspace, strings.Split(targetShards, ","), strings.Split(sourceShards, ",")) != nil {
+		t.Fatal("Row counts do not match")
+	}
 	//vdiff(t, keyspace, workflowName, fkextConfig.cell, false, true, nil)
-	//output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", fmt.Sprintf("%s.%s", keyspace, workflowName))
-	//require.NoError(t, err, output)
-	//log.Infof("vdiff1 output is %s", output)
 	lg.Stop()
+
 	rs.SwitchReadsAndWrites()
 	rs.Complete()
 }
