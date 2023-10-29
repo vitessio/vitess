@@ -659,6 +659,13 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t2 (id int primary key, i int, constraint f foreign key (i) references parent(id) on delete cascade)",
 		},
 		{
+			name:  "two identical foreign keys, dropping one",
+			from:  "create table t1 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id), constraint f2 foreign key (i) references parent(id))",
+			to:    "create table t2 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id))",
+			diff:  "alter table t1 drop foreign key f2",
+			cdiff: "ALTER TABLE `t1` DROP FOREIGN KEY `f2`",
+		},
+		{
 			name: "implicit foreign key indexes",
 			from: "create table t1 (id int primary key, i int, key f(i), constraint f foreign key (i) references parent(id) on delete cascade)",
 			to:   "create table t2 (id int primary key, i int, constraint f foreign key (i) references parent(id) on delete cascade)",
