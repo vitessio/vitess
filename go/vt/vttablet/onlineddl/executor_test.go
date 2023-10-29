@@ -140,7 +140,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 						i int not null,
 						primary key(id),
 						constraint check_1 CHECK ((i >= 0)),
-						constraint test_fk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action,
+						constraint test_ibfk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action,
 						constraint chk_1111033c1d2d5908bf1f956ba900b192_check_4 CHECK ((i >= 0))
 					)
 				`,
@@ -149,7 +149,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 			expectConstraintMap: map[string]string{
 				"check_1": "check_1_7dbssrkwdaxhdunwi5zj53q83",
 				"chk_1111033c1d2d5908bf1f956ba900b192_check_4": "chk_1111033c1d2d5908bf1f956ba900b192_c_0se0t8x98mf8v7lqmj2la8j9u",
-				"test_fk": "test_fk_2wtivm6zk4lthpz14g9uoyaqk",
+				"test_ibfk": "test_ibfk_2wtivm6zk4lthpz14g9uoyaqk",
 			},
 		},
 	}
@@ -246,11 +246,11 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
 		},
 		{
-			alter: "alter table t drop foreign key t_fk_1",
+			alter: "alter table t drop foreign key t_ibfk_1",
 			m: map[string]string{
-				"t_fk_1": "fk_1_aaaaaaaaaaaaaa",
+				"t_ibfk_1": "ibfk_1_aaaaaaaaaaaaaa",
 			},
-			expect: []string{"alter table t drop foreign key fk_1_aaaaaaaaaaaaaa, algorithm = copy"},
+			expect: []string{"alter table t drop foreign key ibfk_1_aaaaaaaaaaaaaa, algorithm = copy"},
 		},
 	}
 	for _, tc := range tt {
