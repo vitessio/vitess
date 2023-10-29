@@ -417,6 +417,9 @@ func modifyForAutoinc(ins *sqlparser.Insert, vTable *vindexes.Table) (*Generate,
 	case sqlparser.Values:
 		autoIncValues := make([]evalengine.Expr, 0, len(rows))
 		for rowNum, row := range rows {
+			if len(ins.Columns) != len(row) {
+				return nil, vterrors.VT03006()
+			}
 			// Support the DEFAULT keyword by treating it as null
 			if _, ok := row[colNum].(*sqlparser.Default); ok {
 				row[colNum] = &sqlparser.NullVal{}
