@@ -39,9 +39,6 @@ func ExtractConstraintOriginalName(tableName string, constraintName string) stri
 	if strings.HasPrefix(constraintName, fmt.Sprintf("%s_chk_", tableName)) {
 		return constraintName[len(tableName)+1:]
 	}
-	if strings.HasPrefix(constraintName, fmt.Sprintf("%s_fk_", tableName)) {
-		return constraintName[len(tableName)+1:]
-	}
 	if strings.HasPrefix(constraintName, fmt.Sprintf("%s_ibfk_", tableName)) {
 		return constraintName[len(tableName)+1:]
 	}
