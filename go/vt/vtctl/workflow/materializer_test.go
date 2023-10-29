@@ -3422,6 +3422,51 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 			},
 		},
 		{
+			name: "in_keyrange filter -- unequal shards on merge",
+			moveTablesReq: &vtctldatapb.MoveTablesCreateRequest{
+				Workflow:       workflow,
+				TargetKeyspace: targetKs,
+				SourceKeyspace: sourceKs,
+				Cells:          []string{"cell"},
+				IncludeTables:  []string{table},
+			},
+			sourceShards: []string{"-80", "80-"},
+			targetShards: []string{"-"},
+			wantReqs: map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+				200: {
+					Workflow:     workflow,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Cells:        cells,
+					BinlogSource: []*binlogdatapb.BinlogSource{
+						{
+							Keyspace: sourceKs,
+							Shard:    "-80",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '-')", table, targetKs),
+									},
+								},
+							},
+						},
+						{
+							Keyspace: sourceKs,
+							Shard:    "80-",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '-')", table, targetKs),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "no in_keyrange filter -- all equal shards",
 			moveTablesReq: &vtctldatapb.MoveTablesCreateRequest{
 				Workflow:       workflow,

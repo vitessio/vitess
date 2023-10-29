@@ -3627,6 +3627,33 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 			},
 		},
 		{
+			name: "in_keyrange filter -- unequal shards on merge",
+			ms: &vtctldatapb.MaterializeSettings{
+				MaterializationIntent: mzi,
+				Workflow:              workflow,
+				TargetKeyspace:        targetKs,
+				SourceKeyspace:        sourceKs,
+				Cell:                  "cell",
+				TableSettings:         tableMaterializeSettings,
+			},
+			sourceShards: []string{"-80", "80-"},
+			targetShards: []string{"-"},
+			wantBls: map[string]*binlogdatapb.BinlogSource{
+				"-": {
+					Keyspace: sourceKs,
+					Shard:    "-80",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match:  table,
+								Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '-')", table, targetKs),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "no in_keyrange filter -- all equal shards",
 			ms: &vtctldatapb.MaterializeSettings{
 				MaterializationIntent: mzi,
