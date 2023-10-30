@@ -46,6 +46,12 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
+	if ctx.SemTable.HasNonLiteralForeignKeyUpdate(updStmt.Exprs) {
+		ctx.VerifyAllFKs = true
+		// We have to run the query with FKChecksOff.
+		updStmt.Comments = updStmt.Comments.Prepend("/*+ SET_VAR(foreign_key_checks=OFF) */").Parsed()
+	}
+
 	// Remove all the foreign keys that don't require any handling.
 	err = ctx.SemTable.RemoveNonRequiredForeignKeys(ctx.VerifyAllFKs, vindexes.UpdateAction)
 	if err != nil {

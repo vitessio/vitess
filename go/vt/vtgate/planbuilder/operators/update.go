@@ -184,11 +184,6 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		return nil, vterrors.VT12001("multi shard UPDATE with LIMIT")
 	}
 
-	if ctx.SemTable.FKChecksOff {
-		// We have to run the query with FKChecksOff.
-		updStmt.Comments = updStmt.Comments.Prepend("/*+ SET_VAR(foreign_key_checks=OFF) */").Parsed()
-	}
-
 	route := &Route{
 		Source: &Update{
 			QTable:                       qt,

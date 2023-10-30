@@ -133,7 +133,6 @@ type (
 		childForeignKeysInvolved  map[TableSet][]vindexes.ChildFKInfo
 		parentForeignKeysInvolved map[TableSet][]vindexes.ParentFKInfo
 		ChildFkToUpdExprs         map[string]sqlparser.UpdateExprs
-		FKChecksOff               bool
 	}
 
 	columnName struct {
@@ -321,6 +320,27 @@ func (st *SemTable) IsFkDependentColumnUpdated(updateExprs sqlparser.UpdateExprs
 		}
 	}
 	return false, nil
+}
+
+func (st *SemTable) HasNonLiteralForeignKeyUpdate(updExprs sqlparser.UpdateExprs) bool {
+	for _, updateExpr := range updExprs {
+		if sqlparser.IsLiteral(updateExpr.Expr) {
+			continue
+		}
+		parentFks := st.parentForeignKeysInvolved[st.RecursiveDeps(updateExpr.Name)]
+		for _, parentFk := range parentFks {
+			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				return true
+			}
+		}
+		childFks := st.childForeignKeysInvolved[st.RecursiveDeps(updateExpr.Name)]
+		for _, childFk := range childFks {
+			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // isShardScoped checks if the foreign key constraint is shard-scoped or not. It uses the vindex information to make this call.

@@ -108,7 +108,7 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		columns[union] = info.exprs
 	}
 
-	childFks, parentFks, childFkToUpdExprs, fkChecksOff, err := a.getInvolvedForeignKeys(statement)
+	childFks, parentFks, childFkToUpdExprs, err := a.getInvolvedForeignKeys(statement)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,6 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		childForeignKeysInvolved:  childFks,
 		parentForeignKeysInvolved: parentFks,
 		ChildFkToUpdExprs:         childFkToUpdExprs,
-		FKChecksOff:               fkChecksOff,
 	}, nil
 }
 
@@ -319,14 +318,14 @@ func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
 }
 
 // getInvolvedForeignKeys gets the foreign keys that might require taking care off when executing the given statement.
-func (a *analyzer) getInvolvedForeignKeys(statement sqlparser.Statement) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, map[string]sqlparser.UpdateExprs, bool, error) {
+func (a *analyzer) getInvolvedForeignKeys(statement sqlparser.Statement) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, map[string]sqlparser.UpdateExprs, error) {
 	// There are only the DML statements that require any foreign keys handling.
 	switch stmt := statement.(type) {
 	case *sqlparser.Delete:
 		// For DELETE statements, none of the parent foreign keys require handling.
 		// So we collect all the child foreign keys.
 		allChildFks, _, err := a.getAllManagedForeignKeys()
-		return allChildFks, nil, nil, false, err
+		return allChildFks, nil, nil, err
 	case *sqlparser.Insert:
 		// For INSERT statements, we have 3 different cases:
 		// 1. REPLACE statement: REPLACE statements are essentially DELETEs and INSERTs rolled into one.
@@ -336,33 +335,28 @@ func (a *analyzer) getInvolvedForeignKeys(statement sqlparser.Statement) (map[Ta
 		// 3. INSERT with ON DUPLICATE KEY UPDATE: This might trigger an update on the columns specified in the ON DUPLICATE KEY UPDATE clause.
 		allChildFks, allParentFKs, err := a.getAllManagedForeignKeys()
 		if err != nil {
-			return nil, nil, nil, false, err
+			return nil, nil, nil, err
 		}
 		if stmt.Action == sqlparser.ReplaceAct {
-			return allChildFks, allParentFKs, nil, false, nil
+			return allChildFks, allParentFKs, nil, nil
 		}
 		if len(stmt.OnDup) == 0 {
-			return nil, allParentFKs, nil, false, nil
+			return nil, allParentFKs, nil, nil
 		}
 		// If only a certain set of columns are being updated, then there might be some child foreign keys that don't need any consideration since their columns aren't being updated.
 		// So, we filter these child foreign keys out. We can't filter any parent foreign keys because the statement will INSERT a row too, which requires validating all the parent foreign keys.
 		updatedChildFks, _, childFkToUpdExprs := a.filterForeignKeysUsingUpdateExpressions(allChildFks, nil, sqlparser.UpdateExprs(stmt.OnDup))
-		return updatedChildFks, allParentFKs, childFkToUpdExprs, false, nil
+		return updatedChildFks, allParentFKs, childFkToUpdExprs, nil
 	case *sqlparser.Update:
 		// For UPDATE queries we get all the parent and child foreign keys, but we can filter some of them out if the columns that they consist off aren't being updated or are set to NULLs.
 		allChildFks, allParentFks, err := a.getAllManagedForeignKeys()
 		if err != nil {
-			return nil, nil, nil, false, err
+			return nil, nil, nil, err
 		}
 		childFks, parentFks, childFkToUpdExprs := a.filterForeignKeysUsingUpdateExpressions(allChildFks, allParentFks, stmt.Exprs)
-		// TODO: add comment for turning off the foreign_key_checks
-		fkChecksOff := false
-		if HasNonLiteral(stmt.Exprs, collectParentFksFromMap(parentFks), collectChildFksFromMap(childFks)) {
-			fkChecksOff = true
-		}
-		return childFks, parentFks, childFkToUpdExprs, fkChecksOff, nil
+		return childFks, parentFks, childFkToUpdExprs, nil
 	default:
-		return nil, nil, nil, false, nil
+		return nil, nil, nil, nil
 	}
 }
 
