@@ -447,7 +447,6 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 			if cmp != 0 {
 				return cmp
 			}
-			return cmp
 		}
 		return 0
 	})

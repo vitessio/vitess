@@ -193,84 +193,41 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 	return out, nil
 }
 
-// TryStreamExecute is a Primitive function.
-func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
+func (oa *OrderedAggregate) executeStreamGroupBy(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	cb := func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(oa.TruncateColumnCount))
 	}
 
-	var agg aggregationState
 	var fields []*querypb.Field
 	var currentKey []sqltypes.Value
 	var lastRow sqltypes.Row
-	var visitor func(qr *sqltypes.Result) error
 
-	if len(oa.Aggregates) > 0 {
-		visitor = func(qr *sqltypes.Result) error {
-			var err error
-
-			if agg == nil && len(qr.Fields) != 0 {
-				agg, fields, err = newAggregation(qr.Fields, oa.Aggregates)
-				if err != nil {
-					return err
-				}
-				if err = cb(&sqltypes.Result{Fields: fields}); err != nil {
-					return err
-				}
+	visitor := func(qr *sqltypes.Result) error {
+		var err error
+		if fields == nil && len(qr.Fields) > 0 {
+			fields = qr.Fields
+			if err = cb(&sqltypes.Result{Fields: fields}); err != nil {
+				return err
 			}
-
-			// This code is similar to the one in Execute.
-			for _, row := range qr.Rows {
-				var nextGroup bool
-
-				currentKey, nextGroup, err = oa.nextGroupBy(currentKey, row)
-				if err != nil {
-					return err
-				}
-
-				if nextGroup {
-					// this is a new grouping. let's yield the old one, and start a new
-					if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{agg.finish()}}); err != nil {
-						return err
-					}
-
-					agg.reset()
-				}
-
-				if err := agg.add(row); err != nil {
-					return err
-				}
-			}
-			return nil
 		}
-	} else {
-		visitor = func(qr *sqltypes.Result) error {
-			var err error
-			if fields == nil && len(qr.Fields) > 0 {
-				fields = qr.Fields
-				if err = cb(&sqltypes.Result{Fields: fields}); err != nil {
+		for _, row := range qr.Rows {
+			var nextGroup bool
+
+			currentKey, nextGroup, err = oa.nextGroupBy(currentKey, row)
+			if err != nil {
+				return err
+			}
+
+			if nextGroup {
+				// this is a new grouping. let's yield the old one, and start a new
+				if err := cb(&sqltypes.Result{Rows: []sqltypes.Row{lastRow}}); err != nil {
 					return err
 				}
 			}
-			for _, row := range qr.Rows {
-				var nextGroup bool
 
-				currentKey, nextGroup, err = oa.nextGroupBy(currentKey, row)
-				if err != nil {
-					return err
-				}
-
-				if nextGroup {
-					// this is a new grouping. let's yield the old one, and start a new
-					if err := cb(&sqltypes.Result{Rows: []sqltypes.Row{lastRow}}); err != nil {
-						return err
-					}
-				}
-
-				lastRow = row
-			}
-			return nil
+			lastRow = row
 		}
+		return nil
 	}
 
 	/* we need the input fields types to correctly calculate the output types */
@@ -281,6 +238,72 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 
 	if lastRow != nil {
 		if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{lastRow}}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// TryStreamExecute is a Primitive function.
+func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
+	if len(oa.Aggregates) == 0 {
+		return oa.executeStreamGroupBy(ctx, vcursor, bindVars, callback)
+	}
+
+	cb := func(qr *sqltypes.Result) error {
+		return callback(qr.Truncate(oa.TruncateColumnCount))
+	}
+
+	var agg aggregationState
+	var fields []*querypb.Field
+	var currentKey []sqltypes.Value
+
+	visitor := func(qr *sqltypes.Result) error {
+		var err error
+
+		if agg == nil && len(qr.Fields) != 0 {
+			agg, fields, err = newAggregation(qr.Fields, oa.Aggregates)
+			if err != nil {
+				return err
+			}
+			if err = cb(&sqltypes.Result{Fields: fields}); err != nil {
+				return err
+			}
+		}
+
+		// This code is similar to the one in Execute.
+		for _, row := range qr.Rows {
+			var nextGroup bool
+
+			currentKey, nextGroup, err = oa.nextGroupBy(currentKey, row)
+			if err != nil {
+				return err
+			}
+
+			if nextGroup {
+				// this is a new grouping. let's yield the old one, and start a new
+				if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{agg.finish()}}); err != nil {
+					return err
+				}
+
+				agg.reset()
+			}
+
+			if err := agg.add(row); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	/* we need the input fields types to correctly calculate the output types */
+	err := vcursor.StreamExecutePrimitive(ctx, oa.Input, bindVars, true, visitor)
+	if err != nil {
+		return err
+	}
+
+	if currentKey != nil {
+		if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{agg.finish()}}); err != nil {
 			return err
 		}
 	}
