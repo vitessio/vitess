@@ -446,11 +446,13 @@ func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
 		encodeBytesSQLBits(v.val, b)
 	case v.typ == Tuple:
 		b.WriteByte('(')
-		_ = v.ForEachValue(func(i int, bv Value) {
+		var i int
+		_ = v.ForEachValue(func(bv Value) {
 			if i > 0 {
 				b.WriteString(", ")
 			}
 			bv.EncodeSQLStringBuilder(b)
+			i++
 		})
 		b.WriteByte(')')
 	default:
@@ -667,13 +669,13 @@ func encodeTuple(tuple []Value) []byte {
 	return buf
 }
 
-func (v *Value) ForEachValue(each func(i int, bv Value)) error {
+func (v *Value) ForEachValue(each func(bv Value)) error {
 	if v.typ != Tuple {
 		panic("Value.ForEachValue on non-tuple")
 	}
 
 	var sz, ty uint64
-	var varlen, i int
+	var varlen int
 	buf := v.val
 	for len(buf) > 0 {
 		ty, varlen = protowire.ConsumeVarint(buf)
@@ -688,7 +690,7 @@ func (v *Value) ForEachValue(each func(i int, bv Value)) error {
 		}
 
 		buf = buf[varlen:]
-		each(i, Value{val: buf[:sz], typ: Type(ty)})
+		each(Value{val: buf[:sz], typ: Type(ty)})
 
 		buf = buf[sz:]
 	}
