@@ -2057,10 +2057,11 @@ func testForeignKeys(t *testing.T) {
 	)
 
 	type testCase struct {
-		name             string
-		sql              string
-		allowForeignKeys bool
-		expectHint       string
+		name                      string
+		sql                       string
+		allowForeignKeys          bool
+		expectHint                string
+		onlyIfFKOnlineDDLPossible bool
 	}
 	var testCases = []testCase{
 		{
@@ -2087,10 +2088,11 @@ func testForeignKeys(t *testing.T) {
 			// on vanilla MySQL, this migration ends with the child_table referencing the old, original table, and not to the new table now called parent_table.
 			// This is a fundamental foreign key limitation, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/
 			// However, this tests is still valid in the sense that it lets us modify the parent table in the first place.
-			name:             "modify parent, trivial",
-			sql:              "alter table parent_table engine=innodb",
-			allowForeignKeys: true,
-			expectHint:       "parent_hint_col",
+			name:                      "modify parent, trivial",
+			sql:                       "alter table parent_table engine=innodb",
+			allowForeignKeys:          true,
+			expectHint:                "parent_hint_col",
+			onlyIfFKOnlineDDLPossible: true,
 		},
 		{
 			// on vanilla MySQL, this migration ends with two tables, the original and the new child_table, both referencing parent_table. This has
@@ -2099,10 +2101,11 @@ func testForeignKeys(t *testing.T) {
 			// This is a fundamental foreign key limitation, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/
 			// However, this tests is still valid in the sense that it lets us modify the child table in the first place.
 			// A valid use case: using FOREIGN_KEY_CHECKS=0  at all times.
-			name:             "modify child, trivial",
-			sql:              "alter table child_table engine=innodb",
-			allowForeignKeys: true,
-			expectHint:       "REFERENCES `parent_table`",
+			name:                      "modify child, trivial",
+			sql:                       "alter table child_table engine=innodb",
+			allowForeignKeys:          true,
+			expectHint:                "REFERENCES `parent_table`",
+			onlyIfFKOnlineDDLPossible: true,
 		},
 		{
 			// on vanilla MySQL, this migration ends with two tables, the original and the new child_table, both referencing parent_table. This has
@@ -2111,10 +2114,11 @@ func testForeignKeys(t *testing.T) {
 			// This is a fundamental foreign key limitation, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/
 			// However, this tests is still valid in the sense that it lets us modify the child table in the first place.
 			// A valid use case: using FOREIGN_KEY_CHECKS=0  at all times.
-			name:             "add foreign key to child",
-			sql:              "alter table child_table add CONSTRAINT another_fk FOREIGN KEY (parent_id) REFERENCES parent_table(id) ON DELETE CASCADE",
-			allowForeignKeys: true,
-			expectHint:       "another_fk",
+			name:                      "add foreign key to child",
+			sql:                       "alter table child_table add CONSTRAINT another_fk FOREIGN KEY (parent_id) REFERENCES parent_table(id) ON DELETE CASCADE",
+			allowForeignKeys:          true,
+			expectHint:                "another_fk",
+			onlyIfFKOnlineDDLPossible: true,
 		},
 		{
 			name:             "add foreign key to table which wasn't a child before",
@@ -2123,12 +2127,32 @@ func testForeignKeys(t *testing.T) {
 			expectHint:       "new_fk",
 		},
 		{
-			name:             "drop foreign key from a child",
-			sql:              "alter table child_table DROP FOREIGN KEY child_parent_fk",
-			allowForeignKeys: true,
-			expectHint:       "child_hint",
+			name:                      "drop foreign key from a child",
+			sql:                       "alter table child_table DROP FOREIGN KEY child_parent_fk",
+			allowForeignKeys:          true,
+			expectHint:                "child_hint",
+			onlyIfFKOnlineDDLPossible: true,
 		},
 	}
+
+	fkOnlineDDLPossible := false
+	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
+		// Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
+		// However, Online DDL is made possible in via these changes: https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps1.
+		// Said changes introduce a new global/session boolean variable named 'rename_table_preserve_foreign_key'. It defaults 'false'/0 for backwards compatibility.
+		// When enabled, a `RENAME TABLE` to a FK parent "pins" the children's foreign keys to the table name rather than the table pointer. Which means after the RENAME,
+		// the children will point to the newly instated table rather than the original, renamed table.
+		// (Note: this applies to a particular type of RENAME where we swap tables, see the above blog post).
+		// For FK children, the MySQL changes simply ignore any Vitess-internal table.
+		//
+		// In this stress test, we enable Online DDL if the variable 'rename_table_preserve_foreign_key' is present. The Online DDL mechanism will in turn
+		// query for this variable, and manipulate it, when starting the migration and when cutting over.
+		rs, err := shards[0].Vttablets[0].VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
+		require.NoError(t, err)
+		fkOnlineDDLPossible = len(rs.Rows) > 0
+		t.Logf("MySQL support for 'rename_table_preserve_foreign_key': %v", fkOnlineDDLPossible)
+	})
 
 	createParams := func(ddlStatement string, ddlStrategy string, executeStrategy string, expectHint string, expectError string, skipWait bool) *testOnlineDDLStatementParams {
 		return &testOnlineDDLStatementParams{
@@ -2150,6 +2174,10 @@ func testForeignKeys(t *testing.T) {
 	}
 	for _, testcase := range testCases {
 		t.Run(testcase.name, func(t *testing.T) {
+			if testcase.onlyIfFKOnlineDDLPossible && !fkOnlineDDLPossible {
+				t.Skipf("skipped because backing database does not support 'rename_table_preserve_foreign_key'")
+				return
+			}
 			t.Run("create tables", func(t *testing.T) {
 				for _, statement := range createStatements {
 					t.Run(statement, func(t *testing.T) {
