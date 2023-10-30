@@ -3565,7 +3565,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 				workflowType: workflowType,
 			}
 			err = mz.createMoveTablesStreams(tc.moveTablesReq)
-			require.NoError(t, err, "prepareMaterializerStreams failed: %v", err)
+			require.NoError(t, err, "createMoveTablesStreams failed: %v", err)
 		})
 	}
 }
