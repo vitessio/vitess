@@ -6,102 +6,46 @@ package norm
 
 import "unicode/utf8"
 
-type input struct {
-	str   string
-	bytes []byte
-}
+type input []byte
 
 func inputBytes(str []byte) input {
-	return input{bytes: str}
+	return str
 }
 
-func inputString(str string) input {
-	return input{str: str}
-}
-
-func (in *input) setBytes(str []byte) {
-	in.str = ""
-	in.bytes = str
-}
-
-func (in *input) setString(str string) {
-	in.str = str
-	in.bytes = nil
-}
-
-func (in *input) _byte(p int) byte {
-	if in.bytes == nil {
-		return in.str[p]
-	}
-	return in.bytes[p]
-}
-
-func (in *input) skipASCII(p, max int) int {
-	if in.bytes == nil {
-		for ; p < max && in.str[p] < utf8.RuneSelf; p++ {
-		}
-	} else {
-		for ; p < max && in.bytes[p] < utf8.RuneSelf; p++ {
-		}
+func (in input) skipASCII(p, max int) int {
+	for ; p < max && in[p] < utf8.RuneSelf; p++ {
 	}
 	return p
 }
 
-func (in *input) skipContinuationBytes(p int) int {
-	if in.bytes == nil {
-		for ; p < len(in.str) && !utf8.RuneStart(in.str[p]); p++ {
-		}
-	} else {
-		for ; p < len(in.bytes) && !utf8.RuneStart(in.bytes[p]); p++ {
-		}
+func (in input) skipContinuationBytes(p int) int {
+	for ; p < len(in) && !utf8.RuneStart(in[p]); p++ {
 	}
 	return p
 }
 
-func (in *input) appendSlice(buf []byte, b, e int) []byte {
-	if in.bytes != nil {
-		return append(buf, in.bytes[b:e]...)
-	}
-	for i := b; i < e; i++ {
-		buf = append(buf, in.str[i])
-	}
-	return buf
+func (in input) appendSlice(buf []byte, b, e int) []byte {
+	return append(buf, in[b:e]...)
 }
 
-func (in *input) copySlice(buf []byte, b, e int) int {
-	if in.bytes == nil {
-		return copy(buf, in.str[b:e])
-	}
-	return copy(buf, in.bytes[b:e])
+func (in input) copySlice(buf []byte, b, e int) int {
+	return copy(buf, in[b:e])
 }
 
-func (in *input) charinfoNFC(p int) (uint16, int) {
-	if in.bytes == nil {
-		return nfcData.lookupString(in.str[p:])
-	}
-	return nfcData.lookup(in.bytes[p:])
+func (in input) charinfoNFC(p int) (uint16, int) {
+	return nfcData.lookup(in[p:])
 }
 
-func (in *input) charinfoNFKC(p int) (uint16, int) {
-	if in.bytes == nil {
-		return nfkcData.lookupString(in.str[p:])
-	}
-	return nfkcData.lookup(in.bytes[p:])
+func (in input) charinfoNFKC(p int) (uint16, int) {
+	return nfkcData.lookup(in[p:])
 }
 
-func (in *input) hangul(p int) (r rune) {
+func (in input) hangul(p int) (r rune) {
 	var size int
-	if in.bytes == nil {
-		if !isHangulString(in.str[p:]) {
-			return 0
-		}
-		r, size = utf8.DecodeRuneInString(in.str[p:])
-	} else {
-		if !isHangul(in.bytes[p:]) {
-			return 0
-		}
-		r, size = utf8.DecodeRune(in.bytes[p:])
+	if !isHangul(in[p:]) {
+		return 0
 	}
+	r, size = utf8.DecodeRune(in[p:])
 	if size != hangulUTF8Size {
 		return 0
 	}

@@ -5,33 +5,12 @@
 package colltab
 
 import (
-	"fmt"
 	"unicode"
-)
-
-// Level identifies the collation comparison level.
-// The primary level corresponds to the basic sorting of text.
-// The secondary level corresponds to accents and related linguistic elements.
-// The tertiary level corresponds to casing and related concepts.
-// The quaternary level is derived from the other levels by the
-// various algorithms for handling variable elements.
-type Level int
-
-const (
-	Primary Level = iota
-	Secondary
-	Tertiary
-	Quaternary
-	Identity
-
-	NumLevels
 )
 
 const (
 	defaultSecondary = 0x20
-	defaultTertiary  = 0x2
 	maxTertiary      = 0x1F
-	MaxQuaternary    = 0x1FFFFF // 21 bits.
 )
 
 // Elem is a representation of a collation element. This API provides ways to encode
@@ -42,12 +21,8 @@ type Elem uint32
 
 const (
 	maxCE       Elem = 0xAFFFFFFF
-	PrivateUse       = minContract
-	minContract      = 0xC0000000
-	maxContract      = 0xDFFFFFFF
-	minExpand        = 0xE0000000
-	maxExpand        = 0xEFFFFFFF
-	minDecomp        = 0xF0000000
+	maxContract Elem = 0xDFFFFFFF
+	maxExpand   Elem = 0xEFFFFFFF
 )
 
 type ceType int
@@ -65,14 +40,11 @@ func (ce Elem) ctype() ceType {
 	}
 	if ce <= maxContract {
 		return ceContractionIndex
-	} else {
-		if ce <= maxExpand {
-			return ceExpansionIndex
-		}
-		return ceDecompose
 	}
-	panic("should not reach here")
-	return ceType(-1)
+	if ce <= maxExpand {
+		return ceExpansionIndex
+	}
+	return ceDecompose
 }
 
 // For normal collation elements, we assume that a collation element either has
@@ -100,97 +72,21 @@ func (ce Elem) ctype() ceType {
 //	11qqqqqq qqqqqqqq qqqqqqq0 00000000
 //	  - q* quaternary value
 const (
-	ceTypeMask              = 0xC0000000
-	ceTypeMaskExt           = 0xE0000000
-	ceIgnoreMask            = 0xF00FFFFF
-	ceType1                 = 0x40000000
-	ceType2                 = 0x00000000
-	ceType3or4              = 0x80000000
-	ceType4                 = 0xA0000000
-	ceTypeQ                 = 0xC0000000
-	Ignore                  = ceType4
-	firstNonPrimary         = 0x80000000
-	lastSpecialPrimary      = 0xA0000000
-	secondaryMask           = 0x80000000
-	hasTertiaryMask         = 0x40000000
-	primaryValueMask        = 0x3FFFFE00
-	maxPrimaryBits          = 21
-	compactPrimaryBits      = 16
-	maxSecondaryBits        = 12
-	maxTertiaryBits         = 8
-	maxCCCBits              = 8
-	maxSecondaryCompactBits = 8
-	maxSecondaryDiffBits    = 4
-	maxTertiaryCompactBits  = 5
-	primaryShift            = 9
-	compactSecondaryShift   = 5
-	minCompactSecondary     = defaultSecondary - 4
+	ceTypeMask            = 0xC0000000
+	ceTypeMaskExt         = 0xE0000000
+	ceType1               = 0x40000000
+	ceType3or4            = 0x80000000
+	ceType4               = 0xA0000000
+	firstNonPrimary       = 0x80000000
+	lastSpecialPrimary    = 0xA0000000
+	primaryValueMask      = 0x3FFFFE00
+	primaryShift          = 9
+	compactSecondaryShift = 5
+	minCompactSecondary   = defaultSecondary - 4
 )
 
 func makeImplicitCE(primary int) Elem {
 	return ceType1 | Elem(primary<<primaryShift) | defaultSecondary
-}
-
-// MakeElem returns an Elem for the given values.  It will return an error
-// if the given combination of values is invalid.
-func MakeElem(primary, secondary, tertiary int, ccc uint8) (Elem, error) {
-	if w := primary; w >= 1<<maxPrimaryBits || w < 0 {
-		return 0, fmt.Errorf("makeCE: primary weight out of bounds: %x >= %x", w, 1<<maxPrimaryBits)
-	}
-	if w := secondary; w >= 1<<maxSecondaryBits || w < 0 {
-		return 0, fmt.Errorf("makeCE: secondary weight out of bounds: %x >= %x", w, 1<<maxSecondaryBits)
-	}
-	if w := tertiary; w >= 1<<maxTertiaryBits || w < 0 {
-		return 0, fmt.Errorf("makeCE: tertiary weight out of bounds: %x >= %x", w, 1<<maxTertiaryBits)
-	}
-	ce := Elem(0)
-	if primary != 0 {
-		if ccc != 0 {
-			if primary >= 1<<compactPrimaryBits {
-				return 0, fmt.Errorf("makeCE: primary weight with non-zero CCC out of bounds: %x >= %x", primary, 1<<compactPrimaryBits)
-			}
-			if secondary != defaultSecondary {
-				return 0, fmt.Errorf("makeCE: cannot combine non-default secondary value (%x) with non-zero CCC (%x)", secondary, ccc)
-			}
-			ce = Elem(tertiary << (compactPrimaryBits + maxCCCBits))
-			ce |= Elem(ccc) << compactPrimaryBits
-			ce |= Elem(primary)
-			ce |= ceType3or4
-		} else if tertiary == defaultTertiary {
-			if secondary >= 1<<maxSecondaryCompactBits {
-				return 0, fmt.Errorf("makeCE: secondary weight with non-zero primary out of bounds: %x >= %x", secondary, 1<<maxSecondaryCompactBits)
-			}
-			ce = Elem(primary<<(maxSecondaryCompactBits+1) + secondary)
-			ce |= ceType1
-		} else {
-			d := secondary - defaultSecondary + maxSecondaryDiffBits
-			if d >= 1<<maxSecondaryDiffBits || d < 0 {
-				return 0, fmt.Errorf("makeCE: secondary weight diff out of bounds: %x < 0 || %x > %x", d, d, 1<<maxSecondaryDiffBits)
-			}
-			if tertiary >= 1<<maxTertiaryCompactBits {
-				return 0, fmt.Errorf("makeCE: tertiary weight with non-zero primary out of bounds: %x > %x", tertiary, 1<<maxTertiaryCompactBits)
-			}
-			ce = Elem(primary<<maxSecondaryDiffBits + d)
-			ce = ce<<maxTertiaryCompactBits + Elem(tertiary)
-		}
-	} else {
-		ce = Elem(secondary<<maxTertiaryBits + tertiary)
-		ce += Elem(ccc) << (maxSecondaryBits + maxTertiaryBits)
-		ce |= ceType4
-	}
-	return ce, nil
-}
-
-// MakeQuaternary returns an Elem with the given quaternary value.
-func MakeQuaternary(v int) Elem {
-	return ceTypeQ | Elem(v<<primaryShift)
-}
-
-// Mask sets weights for any level smaller than l to 0.
-// The resulting Elem can be used to test for equality with
-// other Elems to which the same mask has been applied.
-func (ce Elem) Mask(l Level) uint32 {
-	return 0
 }
 
 // CCC returns the canonical combining class associated with the underlying character,
@@ -216,41 +112,6 @@ func (ce Elem) Primary() int {
 	return int(ce&primaryValueMask) >> primaryShift
 }
 
-// Secondary returns the secondary collation weight for ce.
-func (ce Elem) Secondary() int {
-	switch ce & ceTypeMask {
-	case ceType1:
-		return int(uint8(ce))
-	case ceType2:
-		return minCompactSecondary + int((ce>>compactSecondaryShift)&0xF)
-	case ceType3or4:
-		if ce < ceType4 {
-			return defaultSecondary
-		}
-		return int(ce>>8) & 0xFFF
-	case ceTypeQ:
-		return 0
-	}
-	panic("should not reach here")
-}
-
-// Tertiary returns the tertiary collation weight for ce.
-func (ce Elem) Tertiary() uint8 {
-	if ce&hasTertiaryMask == 0 {
-		if ce&ceType3or4 == 0 {
-			return uint8(ce & 0x1F)
-		}
-		if ce&ceType4 == ceType4 {
-			return uint8(ce)
-		}
-		return uint8(ce>>24) & 0x1F // type 2
-	} else if ce&ceTypeMask == ceType1 {
-		return defaultTertiary
-	}
-	// ce is a quaternary value.
-	return 0
-}
-
 func (ce Elem) updateTertiary(t uint8) Elem {
 	if ce&ceTypeMask == ceType1 {
 		// convert to type 4
@@ -265,33 +126,6 @@ func (ce Elem) updateTertiary(t uint8) Elem {
 		ce &= ^Elem(maxTertiary)
 	}
 	return ce | Elem(t)
-}
-
-// Quaternary returns the quaternary value if explicitly specified,
-// 0 if ce == Ignore, or MaxQuaternary otherwise.
-// Quaternary values are used only for shifted variants.
-func (ce Elem) Quaternary() int {
-	if ce&ceTypeMask == ceTypeQ {
-		return int(ce&primaryValueMask) >> primaryShift
-	} else if ce&ceIgnoreMask == Ignore {
-		return 0
-	}
-	return MaxQuaternary
-}
-
-// Weight returns the collation weight for the given level.
-func (ce Elem) Weight(l Level) int {
-	switch l {
-	case Primary:
-		return ce.Primary()
-	case Secondary:
-		return ce.Secondary()
-	case Tertiary:
-		return int(ce.Tertiary())
-	case Quaternary:
-		return ce.Quaternary()
-	}
-	return 0 // return 0 (ignore) for undefined levels.
 }
 
 // For contractions, collation elements are of the form
@@ -316,10 +150,6 @@ func splitContractIndex(ce Elem) (index, n, offset int) {
 	return
 }
 
-// For expansions, Elems are of the form 11100000 00000000 bbbbbbbb bbbbbbbb,
-// where b* is the index into the expansion sequence table.
-const maxExpandIndexBits = 16
-
 func splitExpandIndex(ce Elem) (index int) {
 	return int(uint16(ce))
 }
@@ -340,18 +170,15 @@ func splitDecompose(ce Elem) (t1, t2 uint8) {
 const (
 	// These constants were taken from https://www.unicode.org/versions/Unicode6.0.0/ch12.pdf.
 	minUnified       rune = 0x4E00
-	maxUnified            = 0x9FFF
-	minCompatibility      = 0xF900
-	maxCompatibility      = 0xFAFF
-	minRare               = 0x3400
-	maxRare               = 0x4DBF
+	maxUnified       rune = 0x9FFF
+	minCompatibility rune = 0xF900
+	maxCompatibility rune = 0xFAFF
 )
+
 const (
 	commonUnifiedOffset = 0x10000
 	rareUnifiedOffset   = 0x20000 // largest rune in common is U+FAFF
 	otherOffset         = 0x50000 // largest rune in rare is U+2FA1D
-	illegalOffset       = otherOffset + int(unicode.MaxRune)
-	maxPrimary          = illegalOffset + 1
 )
 
 // implicitPrimary returns the primary weight for the a rune

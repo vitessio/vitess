@@ -55,7 +55,6 @@ type formInfo struct {
 	form                     Form
 	composing, compatibility bool // form type
 	info                     lookupFunc
-	nextMain                 iterFunc
 }
 
 var formTable = []*formInfo{{
@@ -63,25 +62,21 @@ var formTable = []*formInfo{{
 	composing:     true,
 	compatibility: false,
 	info:          lookupInfoNFC,
-	nextMain:      nextComposed,
 }, {
 	form:          NFD,
 	composing:     false,
 	compatibility: false,
 	info:          lookupInfoNFC,
-	nextMain:      nextDecomposed,
 }, {
 	form:          NFKC,
 	composing:     true,
 	compatibility: true,
 	info:          lookupInfoNFKC,
-	nextMain:      nextComposed,
 }, {
 	form:          NFKD,
 	composing:     false,
 	compatibility: true,
 	info:          lookupInfoNFKC,
-	nextMain:      nextDecomposed,
 }}
 
 // We do not distinguish between boundaries for NFC, NFD, etc. to avoid
@@ -227,14 +222,6 @@ func (f Form) Properties(s []byte) Properties {
 		return compInfo(nfcData.lookup(s))
 	}
 	return compInfo(nfkcData.lookup(s))
-}
-
-// PropertiesString returns properties for the first rune in s.
-func (f Form) PropertiesString(s string) Properties {
-	if f == NFC || f == NFD {
-		return compInfo(nfcData.lookupString(s))
-	}
-	return compInfo(nfkcData.lookupString(s))
 }
 
 // compInfo converts the information contained in v and sz

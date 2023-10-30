@@ -130,20 +130,6 @@ func (i *Iter) Next() bool {
 	return done
 }
 
-// nextNoNorm is the same as next, but does not "normalize" the collation
-// elements.
-func (i *Iter) nextNoNorm() bool {
-	// TODO: remove this function. Using this instead of next does not seem
-	// to improve performance in any significant way. We retain this until
-	// later for evaluation purposes.
-	if i.done() {
-		return false
-	}
-	i.appendNext()
-	i.N = len(i.Elems)
-	return true
-}
-
 const maxCombiningCharacters = 30
 
 // doNorm reorders the collation elements in i.Elems.

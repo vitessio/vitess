@@ -71,7 +71,7 @@ func patchTail(rb *reorderBuffer) bool {
 		rb.insertCGJ()
 		rb.ss = 0
 	}
-	rb.insertUnsafe(inputBytes(buf), 0, info)
+	rb.insertUnsafe(buf, 0, info)
 	return true
 }
 
@@ -150,12 +150,6 @@ func doAppendInner(rb *reorderBuffer, p int) []byte {
 		p = appendQuick(rb, p)
 	}
 	return rb.out
-}
-
-// AppendString returns f(append(out, []byte(s))).
-// The buffer out must be nil, empty, or equal to f(out).
-func (f Form) AppendString(out []byte, src string) []byte {
-	return f.doAppend(out, inputString(src), len(src))
 }
 
 // quickSpan returns a boundary n such that src[0:n] == f(src[0:n]) and
@@ -247,12 +241,6 @@ func (f Form) firstBoundary(src input, nsrc int) int {
 			return nsrc
 		}
 	}
-}
-
-// FirstBoundaryInString returns the position i of the first boundary in s
-// or -1 if s contains no boundary.
-func (f Form) FirstBoundaryInString(s string) int {
-	return f.firstBoundary(inputString(s), len(s))
 }
 
 // decomposeSegment scans the first segment in src into rb. It inserts 0x034f

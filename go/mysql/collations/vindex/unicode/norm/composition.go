@@ -4,7 +4,11 @@
 
 package norm
 
-import "unicode/utf8"
+import (
+	"unicode/utf8"
+
+	"vitess.io/vitess/go/hack"
+)
 
 const (
 	maxNonStarters = 30
@@ -16,6 +20,10 @@ const (
 
 	maxByteBufferSize = utf8.UTFMax * maxBufferSize // 128
 )
+
+// MaxSegmentSize is the maximum size of a byte buffer needed to consider any
+// sequence of starter and non-starter runes for the purpose of normalization.
+const MaxSegmentSize = maxByteBufferSize
 
 // ssState is used for reporting the segment state after inserting a rune.
 // It is returned by streamSafe.next.
@@ -109,20 +117,6 @@ type reorderBuffer struct {
 
 	out    []byte
 	flushF func(*reorderBuffer) bool
-}
-
-func (rb *reorderBuffer) init(f Form, src []byte) {
-	rb.f = *formTable[f]
-	rb.src.setBytes(src)
-	rb.nsrc = len(src)
-	rb.ss = 0
-}
-
-func (rb *reorderBuffer) initString(f Form, src string) {
-	rb.f = *formTable[f]
-	rb.src.setString(src)
-	rb.nsrc = len(src)
-	rb.ss = 0
 }
 
 func (rb *reorderBuffer) setFlusher(out []byte, f func(*reorderBuffer) bool) {
@@ -247,7 +241,7 @@ func (rb *reorderBuffer) insertUnsafe(src input, i int, info Properties) {
 // in dcomp. dcomp must be a sequence of decomposed UTF-8-encoded runes.
 // It flushes the buffer on each new segment start.
 func (rb *reorderBuffer) insertDecomposed(dcomp []byte) insertErr {
-	rb.tmpBytes.setBytes(dcomp)
+	rb.tmpBytes = dcomp
 	// As the streamSafe accounting already handles the counting for modifiers,
 	// we don't have to call next. However, we do need to keep the accounting
 	// intact when flushing the buffer.
@@ -271,7 +265,7 @@ func (rb *reorderBuffer) insertSingle(src input, i int, info Properties) {
 
 // insertCGJ inserts a Combining Grapheme Joiner (0x034f) into rb.
 func (rb *reorderBuffer) insertCGJ() {
-	rb.insertSingle(input{str: GraphemeJoiner}, 0, Properties{size: uint8(len(GraphemeJoiner))})
+	rb.insertSingle(hack.StringBytes(GraphemeJoiner), 0, Properties{size: uint8(len(GraphemeJoiner))})
 }
 
 // appendRune inserts a rune at the end of the buffer. It is used for Hangul.
@@ -381,12 +375,6 @@ func isHangulString(b string) bool {
 func isJamoVT(b []byte) bool {
 	// True if (rune & 0xff00) == jamoLBase
 	return b[0] == jamoLBase0 && (b[1]&0xFC) == jamoLBase1
-}
-
-func isHangulWithoutJamoT(b []byte) bool {
-	c, _ := utf8.DecodeRune(b)
-	c -= hangulBase
-	return c < jamoLVTCount && c%jamoTCount == 0
 }
 
 // decomposeHangul writes the decomposed Hangul to buf and returns the number

@@ -18,10 +18,8 @@ type Table struct {
 	ExpandElem []uint32
 
 	// contraction info
-	ContractTries  ContractTrieSet
-	ContractElem   []uint32
-	MaxContractLen int
-	VariableTop    uint32
+	ContractTries ContractTrieSet
+	ContractElem  []uint32
 }
 
 // AppendNext appends the weights corresponding to the next rune or

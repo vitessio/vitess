@@ -16,11 +16,9 @@ func getTable(t tableIndex) *colltab.Table {
 			Index:   mainLookup[:],
 			Values:  mainValues[:],
 		},
-		ExpandElem:     mainExpandElem[:],
-		ContractTries:  mainCTEntries[:],
-		ContractElem:   mainContractElem[:],
-		MaxContractLen: 18,
-		VariableTop:    varTop,
+		ExpandElem:    mainExpandElem[:],
+		ContractTries: mainCTEntries[:],
+		ContractElem:  mainContractElem[:],
 	}
 }
 
