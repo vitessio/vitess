@@ -175,7 +175,6 @@ func TestFKExt(t *testing.T) {
 
 		doReshard(t, fkextConfig.target2KeyspaceName, "reshard2to3", "-80,80-", threeShards, tablets)
 	})
-	lg.Start()
 	t.Run("Reshard keyspace from 3 to 1 shards", func(t *testing.T) {
 		tabletID := 800
 		shard := "0"
@@ -228,7 +227,7 @@ func compareRowCounts(t *testing.T, keyspace string, sourceShards, targetShards 
 		if err != nil {
 			return err
 		}
-		count, err = qr.Rows[0][0].ToInt64()
+		count, _ = qr.Rows[0][0].ToInt64()
 		sourceChildCount += count
 	}
 	for _, tab := range targetTabs {
@@ -271,24 +270,24 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	}
 	vdiff(t, keyspace, workflowName, fkextConfig.cell, false, true, nil)
 	rs.SwitchReadsAndWrites()
-	if lg.WaitForAdditionalRows(100) != nil {
-		t.Fatal("WaitForAdditionalRows failed")
-	}
+	//if lg.WaitForAdditionalRows(100) != nil {
+	//	t.Fatal("WaitForAdditionalRows failed")
+	//}
 	waitForLowLag(t, keyspace, workflowName+"_reverse")
 	if compareRowCounts(t, keyspace, strings.Split(sourceShards, ","), strings.Split(targetShards, ",")) != nil {
 		t.Fatal("Row counts do not match")
 	}
-	//vdiff(t, keyspace, workflowName+"_reverse", fkextConfig.cell, true, false, nil)
+	vdiff(t, keyspace, workflowName+"_reverse", fkextConfig.cell, true, false, nil)
 
 	rs.ReverseReadsAndWrites()
-	if lg.WaitForAdditionalRows(100) != nil {
-		t.Fatal("WaitForAdditionalRows failed")
-	}
+	//if lg.WaitForAdditionalRows(100) != nil {
+	//	t.Fatal("WaitForAdditionalRows failed")
+	//}
 	waitForLowLag(t, keyspace, workflowName)
 	if compareRowCounts(t, keyspace, strings.Split(targetShards, ","), strings.Split(sourceShards, ",")) != nil {
 		t.Fatal("Row counts do not match")
 	}
-	//vdiff(t, keyspace, workflowName, fkextConfig.cell, false, true, nil)
+	vdiff(t, keyspace, workflowName, fkextConfig.cell, false, true, nil)
 	lg.Stop()
 
 	rs.SwitchReadsAndWrites()

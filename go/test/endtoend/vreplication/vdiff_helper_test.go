@@ -67,6 +67,7 @@ func doVtctlclientVDiff(t *testing.T, keyspace, workflow, cells string, want *ex
 		// update-table-stats is needed in order to test progress reports.
 		uuid, _ := performVDiff2Action(t, true, ksWorkflow, cells, "create", "", false, "--auto-retry", "--update-table-stats")
 		info := waitForVDiff2ToComplete(t, true, ksWorkflow, cells, uuid, time.Time{})
+		require.NotNil(t, info)
 		require.Equal(t, workflow, info.Workflow)
 		require.Equal(t, keyspace, info.Keyspace)
 		if want != nil {
@@ -94,6 +95,7 @@ func waitForVDiff2ToComplete(t *testing.T, useVtctlclient bool, ksWorkflow, cell
 			time.Sleep(1 * time.Second)
 			_, jsonStr := performVDiff2Action(t, useVtctlclient, ksWorkflow, cells, "show", uuid, false)
 			info = getVDiffInfo(jsonStr)
+			require.NotNil(t, info)
 			if info.State == "completed" {
 				if !completedAtMin.IsZero() {
 					ca := info.CompletedAt
@@ -156,7 +158,7 @@ func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *e
 		// update-table-stats is needed in order to test progress reports.
 		uuid, _ := performVDiff2Action(t, false, ksWorkflow, cells, "create", "", false, "--auto-retry", "--update-table-stats")
 		info := waitForVDiff2ToComplete(t, false, ksWorkflow, cells, uuid, time.Time{})
-
+		require.NotNil(t, info)
 		require.Equal(t, workflow, info.Workflow)
 		require.Equal(t, keyspace, info.Keyspace)
 		if want != nil {
