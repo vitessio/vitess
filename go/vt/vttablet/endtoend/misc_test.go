@@ -1004,20 +1004,8 @@ func TestTuple(t *testing.T) {
 		"__vals": {
 			Type: querypb.Type_TUPLE,
 			Values: []*querypb.Value{
-				{
-					Type: querypb.Type_TUPLE,
-					Values: []*querypb.Value{
-						{Type: querypb.Type_INT64, Value: []byte("100")},
-						{Type: querypb.Type_INT64, Value: []byte("103")},
-					},
-				},
-				{
-					Type: querypb.Type_TUPLE,
-					Values: []*querypb.Value{
-						{Type: querypb.Type_INT64, Value: []byte("87")},
-						{Type: querypb.Type_INT64, Value: []byte("4473")},
-					},
-				},
+				sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(100), sqltypes.NewInt64(103)}),
+				sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(87), sqltypes.NewInt64(4473)}),
 			},
 		},
 	}
@@ -1037,20 +1025,8 @@ func TestTuple(t *testing.T) {
 		"__vals": {
 			Type: querypb.Type_TUPLE,
 			Values: []*querypb.Value{
-				{
-					Type: querypb.Type_TUPLE,
-					Values: []*querypb.Value{
-						{Type: querypb.Type_INT64, Value: []byte("100")},
-						{Type: querypb.Type_INT64, Value: []byte("103")},
-					},
-				},
-				{
-					Type: querypb.Type_TUPLE,
-					Values: []*querypb.Value{
-						{Type: querypb.Type_INT64, Value: []byte("193")},
-						{Type: querypb.Type_INT64, Value: []byte("235")},
-					},
-				},
+				sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(100), sqltypes.NewInt64(103)}),
+				sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(193), sqltypes.NewInt64(235)}),
 			},
 		},
 	}
