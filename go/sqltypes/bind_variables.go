@@ -40,18 +40,21 @@ var (
 	NullBindVariable = &querypb.BindVariable{Type: querypb.Type_NULL_TYPE}
 )
 
+func TupleToProto(v []Value) *querypb.Value {
+	return &querypb.Value{
+		Type:  querypb.Type_TUPLE,
+		Value: encodeTuple(v),
+	}
+}
+
 // ValueToProto converts Value to a *querypb.Value.
 func ValueToProto(v Value) *querypb.Value {
-	var protoValues []*querypb.Value
-	for _, value := range v.values {
-		protoValues = append(protoValues, ValueToProto(value))
-	}
-	return &querypb.Value{Type: v.typ, Value: v.val, Values: protoValues}
+	return &querypb.Value{Type: v.typ, Value: v.val}
 }
 
 // ProtoToValue converts a *querypb.Value to a Value.
 func ProtoToValue(v *querypb.Value) Value {
-	return MakeTrustedValues(v.Type, v.Value, v.Values)
+	return MakeTrusted(v.Type, v.Value)
 }
 
 // BuildBindVariables builds a map[string]*querypb.BindVariable from a map[string]any
