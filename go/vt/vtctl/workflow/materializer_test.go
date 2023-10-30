@@ -3553,7 +3553,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 				if len(tc.moveTablesReq.SourceShards) > 0 && !slices.Contains(tc.moveTablesReq.SourceShards, tablet.Shard) {
 					continue
 				}
-				env.tmc.expectVReplicationWorkflowRequests(tablet.Alias.Uid, tc.wantReqs[tablet.Alias.Uid])
+				env.tmc.expectCreateVReplicationWorkflowRequest(tablet.Alias.Uid, tc.wantReqs[tablet.Alias.Uid])
 			}
 
 			mz := &materializer{

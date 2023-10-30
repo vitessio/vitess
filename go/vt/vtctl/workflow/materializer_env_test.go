@@ -300,7 +300,7 @@ func (tmc *testMaterializerTMClient) expectVRQuery(tabletID int, query string, r
 	})
 }
 
-func (tmc *testMaterializerTMClient) expectVReplicationWorkflowRequests(tabletID uint32, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) {
+func (tmc *testMaterializerTMClient) expectCreateVReplicationWorkflowRequest(tabletID uint32, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 
