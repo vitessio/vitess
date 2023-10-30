@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex"
 	icuerrors "vitess.io/vitess/go/mysql/icuregex/errors"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -315,16 +314,6 @@ func (r *builtinRegexpLike) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBool(ok), nil
 }
 
-func (r *builtinRegexpLike) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f1 := r.Arguments[0].typeof(env, fields)
-	_, f2 := r.Arguments[1].typeof(env, fields)
-	var f3 typeFlag
-	if len(r.Arguments) > 2 {
-		_, f3 = r.Arguments[2].typeof(env, fields)
-	}
-	return sqltypes.Int64, f1 | f2 | f3 | flagIsBoolean
-}
-
 func (r *builtinRegexpLike) compileSlow(c *compiler, input, pat, fl ctype, merged collations.TypedCollation, flags icuregex.RegexpFlag, skips ...*jump) (ctype, error) {
 	if !pat.isTextual() || pat.Col.Collation != merged.Collation {
 		c.asm.Convert_xce(len(r.Arguments)-1, sqltypes.VarChar, merged.Collation)
@@ -381,7 +370,7 @@ func (r *builtinRegexpLike) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | f.Flag | flagIsBoolean}, nil
 }
 
-var _ Expr = (*builtinRegexpLike)(nil)
+var _ IR = (*builtinRegexpLike)(nil)
 
 type builtinRegexpInstr struct {
 	CallExpr
@@ -498,25 +487,6 @@ func (r *builtinRegexpInstr) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalInt64(int64(m.End()) + pos), nil
 }
 
-func (r *builtinRegexpInstr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f1 := r.Arguments[0].typeof(env, fields)
-	_, f2 := r.Arguments[1].typeof(env, fields)
-	var f3, f4, f5, f6 typeFlag
-	if len(r.Arguments) > 2 {
-		_, f3 = r.Arguments[2].typeof(env, fields)
-	}
-	if len(r.Arguments) > 3 {
-		_, f4 = r.Arguments[3].typeof(env, fields)
-	}
-	if len(r.Arguments) > 4 {
-		_, f5 = r.Arguments[4].typeof(env, fields)
-	}
-	if len(r.Arguments) > 5 {
-		_, f6 = r.Arguments[5].typeof(env, fields)
-	}
-	return sqltypes.Int64, f1 | f2 | f3 | f4 | f5 | f6
-}
-
 func (r *builtinRegexpInstr) compileSlow(c *compiler, input, pat, pos, occ, returnOption, matchType ctype, merged collations.TypedCollation, flags icuregex.RegexpFlag, skips ...*jump) (ctype, error) {
 	if !pat.isTextual() || pat.Col.Collation != merged.Collation {
 		c.asm.Convert_xce(len(r.Arguments)-1, sqltypes.VarChar, merged.Collation)
@@ -607,7 +577,7 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | flagIsBoolean}, nil
 }
 
-var _ Expr = (*builtinRegexpInstr)(nil)
+var _ IR = (*builtinRegexpInstr)(nil)
 
 type builtinRegexpSubstr struct {
 	CallExpr
@@ -704,22 +674,6 @@ func (r *builtinRegexpSubstr) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalText(b, resultCollation(typedCol)), nil
 }
 
-func (r *builtinRegexpSubstr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f1 := r.Arguments[0].typeof(env, fields)
-	_, f2 := r.Arguments[1].typeof(env, fields)
-	var f3, f4, f5 typeFlag
-	if len(r.Arguments) > 2 {
-		_, f3 = r.Arguments[2].typeof(env, fields)
-	}
-	if len(r.Arguments) > 3 {
-		_, f4 = r.Arguments[3].typeof(env, fields)
-	}
-	if len(r.Arguments) > 4 {
-		_, f5 = r.Arguments[4].typeof(env, fields)
-	}
-	return sqltypes.VarChar, f1 | f2 | f3 | f4 | f5
-}
-
 func (r *builtinRegexpSubstr) compileSlow(c *compiler, input, pat, pos, occ, matchType ctype, merged collations.TypedCollation, flags icuregex.RegexpFlag, skips ...*jump) (ctype, error) {
 	if !pat.isTextual() || pat.Col.Collation != merged.Collation {
 		c.asm.Convert_xce(len(r.Arguments)-1, sqltypes.VarChar, merged.Collation)
@@ -800,7 +754,7 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | pos.Flag | occ.Flag | matchType.Flag}, nil
 }
 
-var _ Expr = (*builtinRegexpSubstr)(nil)
+var _ IR = (*builtinRegexpSubstr)(nil)
 
 type builtinRegexpReplace struct {
 	CallExpr
@@ -954,23 +908,6 @@ func (r *builtinRegexpReplace) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalRaw(sqltypes.Text, bytes, resultCollation(typedCol)), nil
 }
 
-func (r *builtinRegexpReplace) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f1 := r.Arguments[0].typeof(env, fields)
-	_, f2 := r.Arguments[1].typeof(env, fields)
-	_, f3 := r.Arguments[2].typeof(env, fields)
-	var f4, f5, f6 typeFlag
-	if len(r.Arguments) > 3 {
-		_, f4 = r.Arguments[3].typeof(env, fields)
-	}
-	if len(r.Arguments) > 4 {
-		_, f5 = r.Arguments[4].typeof(env, fields)
-	}
-	if len(r.Arguments) > 5 {
-		_, f6 = r.Arguments[5].typeof(env, fields)
-	}
-	return sqltypes.Text, f1 | f2 | f3 | f4 | f5 | f6
-}
-
 func (r *builtinRegexpReplace) compileSlow(c *compiler, input, pat, repl, pos, occ, matchType ctype, merged collations.TypedCollation, flags icuregex.RegexpFlag, skips ...*jump) (ctype, error) {
 	if !pat.isTextual() || pat.Col.Collation != merged.Collation {
 		c.asm.Convert_xce(len(r.Arguments)-1, sqltypes.VarChar, merged.Collation)
@@ -1061,4 +998,4 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | repl.Flag | pos.Flag | occ.Flag | matchType.Flag}, nil
 }
 
-var _ Expr = (*builtinRegexpReplace)(nil)
+var _ IR = (*builtinRegexpReplace)(nil)

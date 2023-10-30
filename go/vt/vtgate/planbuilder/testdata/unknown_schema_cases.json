@@ -60,10 +60,10 @@
     "plan": "Column 'col' in field list is ambiguous"
   },
   {
-  "comment": "unsharded insert, unqualified names and auto-inc combined",
-  "query": "insert into unsharded_auto select col from unsharded",
-  "plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
-},
+    "comment": "unsharded insert, unqualified names and auto-inc combined",
+    "query": "insert into unsharded_auto select col from unsharded",
+    "plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
+  },
   {
     "comment": "unsharded insert, no col list with auto-inc",
     "query": "insert into unsharded_auto values(1,1)",

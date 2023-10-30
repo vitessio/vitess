@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type (
@@ -33,7 +32,7 @@ type (
 
 	opArith interface {
 		eval(left, right eval) (eval, error)
-		compile(c *compiler, left, right Expr) (ctype, error)
+		compile(c *compiler, left, right IR) (ctype, error)
 		String() string
 	}
 
@@ -45,7 +44,7 @@ type (
 	opArithMod    struct{}
 )
 
-var _ Expr = (*ArithmeticExpr)(nil)
+var _ IR = (*ArithmeticExpr)(nil)
 
 var _ opArith = (*opArithAdd)(nil)
 var _ opArith = (*opArithSub)(nil)
@@ -74,63 +73,10 @@ func makeNumericalType(t sqltypes.Type, f typeFlag) (sqltypes.Type, typeFlag) {
 	if t == sqltypes.VarBinary && (f&flagHex) != 0 {
 		return sqltypes.Uint64, f
 	}
-	if t == sqltypes.VarBinary && (f&flagBit) != 0 {
-		return sqltypes.Int64, f
-	}
 	if sqltypes.IsDateOrTime(t) {
 		return sqltypes.Int64, f | flagAmbiguousType
 	}
 	return sqltypes.Float64, f
-}
-
-// typeof implements the Expr interface
-func (b *ArithmeticExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	t1, f1 := b.Left.typeof(env, fields)
-	t2, f2 := b.Right.typeof(env, fields)
-
-	t1, f1 = makeNumericalType(t1, f1)
-	t2, f2 = makeNumericalType(t2, f2)
-
-	flags := f1 | f2
-
-	switch b.Op.(type) {
-	case *opArithDiv:
-		if t1 == sqltypes.Float64 || t2 == sqltypes.Float64 {
-			return sqltypes.Float64, flags | flagNullable
-		}
-		return sqltypes.Decimal, flags | flagNullable
-	case *opArithIntDiv:
-		if t1 == sqltypes.Uint64 || t2 == sqltypes.Uint64 {
-			return sqltypes.Uint64, flags | flagNullable
-		}
-		return sqltypes.Int64, flags | flagNullable
-	case *opArithMod:
-		if t1 == sqltypes.Float64 || t2 == sqltypes.Float64 {
-			return sqltypes.Float64, flags | flagNullable
-		}
-		if t1 == sqltypes.Decimal || t2 == sqltypes.Decimal {
-			return sqltypes.Decimal, flags | flagNullable
-		}
-		return t1, flags | flagNullable
-	}
-
-	switch t1 {
-	case sqltypes.Int64:
-		switch t2 {
-		case sqltypes.Uint64, sqltypes.Float64, sqltypes.Decimal:
-			return t2, flags
-		}
-	case sqltypes.Uint64:
-		switch t2 {
-		case sqltypes.Float64, sqltypes.Decimal:
-			return t2, flags
-		}
-	case sqltypes.Decimal:
-		if t2 == sqltypes.Float64 {
-			return t2, flags
-		}
-	}
-	return t1, flags
 }
 
 func (b *ArithmeticExpr) compile(c *compiler) (ctype, error) {
@@ -142,7 +88,7 @@ func (op *opArithAdd) eval(left, right eval) (eval, error) {
 }
 func (op *opArithAdd) String() string { return "+" }
 
-func (op *opArithAdd) compile(c *compiler, left, right Expr) (ctype, error) {
+func (op *opArithAdd) compile(c *compiler, left, right IR) (ctype, error) {
 	lt, err := left.compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -202,7 +148,7 @@ func (op *opArithSub) eval(left, right eval) (eval, error) {
 }
 func (op *opArithSub) String() string { return "-" }
 
-func (op *opArithSub) compile(c *compiler, left, right Expr) (ctype, error) {
+func (op *opArithSub) compile(c *compiler, left, right IR) (ctype, error) {
 	lt, err := left.compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -286,7 +232,7 @@ func (op *opArithMul) eval(left, right eval) (eval, error) {
 
 func (op *opArithMul) String() string { return "*" }
 
-func (op *opArithMul) compile(c *compiler, left, right Expr) (ctype, error) {
+func (op *opArithMul) compile(c *compiler, left, right IR) (ctype, error) {
 	lt, err := left.compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -346,7 +292,7 @@ func (op *opArithDiv) eval(left, right eval) (eval, error) {
 
 func (op *opArithDiv) String() string { return "/" }
 
-func (op *opArithDiv) compile(c *compiler, left, right Expr) (ctype, error) {
+func (op *opArithDiv) compile(c *compiler, left, right IR) (ctype, error) {
 	lt, err := left.compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -384,7 +330,7 @@ func (op *opArithIntDiv) eval(left, right eval) (eval, error) {
 
 func (op *opArithIntDiv) String() string { return "DIV" }
 
-func (op *opArithIntDiv) compile(c *compiler, left, right Expr) (ctype, error) {
+func (op *opArithIntDiv) compile(c *compiler, left, right IR) (ctype, error) {
 	lt, err := left.compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -470,7 +416,7 @@ func (op *opArithMod) eval(left, right eval) (eval, error) {
 
 func (op *opArithMod) String() string { return "DIV" }
 
-func (op *opArithMod) compile(c *compiler, left, right Expr) (ctype, error) {
+func (op *opArithMod) compile(c *compiler, left, right IR) (ctype, error) {
 	lt, err := left.compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -550,28 +496,6 @@ func (n *NegateExpr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 	return evalToNumeric(e, false).negate(), nil
-}
-
-func (n *NegateExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	tt, f := n.Inner.typeof(env, fields)
-	switch tt {
-	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
-		if f&flagIntegerOvf != 0 {
-			return sqltypes.Decimal, f & ^flagIntegerRange
-		}
-		if f&flagIntegerCap != 0 {
-			return sqltypes.Int64, (f | flagIntegerUdf) & ^flagIntegerCap
-		}
-		return sqltypes.Int64, f
-	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
-		if f&flagIntegerUdf != 0 {
-			return sqltypes.Decimal, f & ^flagIntegerRange
-		}
-		return sqltypes.Int64, f
-	case sqltypes.Decimal:
-		return sqltypes.Decimal, f
-	}
-	return sqltypes.Float64, f
 }
 
 func (expr *NegateExpr) compile(c *compiler) (ctype, error) {
