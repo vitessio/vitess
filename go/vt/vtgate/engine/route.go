@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -428,10 +429,10 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 
 	comparers := extractSlices(route.OrderBy)
 
-	sort.Slice(out.Rows, func(i, j int) bool {
+	slices.SortFunc(out.Rows, func(a, b sqltypes.Row) int {
 		var cmp int
 		if err != nil {
-			return true
+			return -1
 		}
 		// If there are any errors below, the function sets
 		// the external err and returns true. Once err is set,
@@ -439,16 +440,15 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 		// Slice think that all elements are in the correct
 		// order and return more quickly.
 		for _, c := range comparers {
-			cmp, err = c.compare(out.Rows[i], out.Rows[j])
+			cmp, err = c.compare(a, b)
 			if err != nil {
-				return true
+				return -1
 			}
-			if cmp == 0 {
-				continue
+			if cmp != 0 {
+				return cmp
 			}
-			return cmp < 0
 		}
-		return true
+		return 0
 	})
 
 	return out.Truncate(route.TruncateColumnCount), err
