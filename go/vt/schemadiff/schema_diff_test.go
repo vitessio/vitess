@@ -649,6 +649,20 @@ func TestSchemaDiff(t *testing.T) {
 			sequential:       true,
 			conflictingDiffs: 2,
 		},
+		{
+			name: "two identical foreign keys in table, drop one",
+			fromQueries: []string{
+				"create table parent (id int primary key)",
+				"create table t1 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id), constraint f2 foreign key (i) references parent(id))",
+			},
+			toQueries: []string{
+				"create table parent (id int primary key)",
+				"create table t1 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id))",
+			},
+			expectDiffs: 1,
+			expectDeps:  0,
+			entityOrder: []string{"t1"},
+		},
 	}
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
 	for _, tc := range tt {
