@@ -176,7 +176,7 @@
         "Query": "select col from `user` where id = 5 order by aa asc",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -202,7 +202,7 @@
         "Query": "select col from `user` where id = 1 order by col asc",
         "Table": "`user`",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -476,7 +476,7 @@
             "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1",
             "Table": "`user`",
             "Values": [
-              "INT64(1)"
+              "1"
             ],
             "Vindex": "user_index"
           },
@@ -529,7 +529,7 @@
             "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by a asc",
             "Table": "`user`",
             "Values": [
-              "INT64(1)"
+              "1"
             ],
             "Vindex": "user_index"
           },
@@ -582,7 +582,7 @@
             "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by a asc",
             "Table": "`user`",
             "Values": [
-              "INT64(1)"
+              "1"
             ],
             "Vindex": "user_index"
           },
@@ -702,7 +702,7 @@
             "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by RAND()",
             "Table": "`user`",
             "Values": [
-              "INT64(1)"
+              "1"
             ],
             "Vindex": "user_index"
           },
@@ -791,7 +791,7 @@
         "Query": "select * from `user` where id = 5 order by col asc",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -817,7 +817,7 @@
         "Query": "select `user`.* from `user` where id = 5 order by `user`.col asc",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -843,7 +843,7 @@
         "Query": "select * from `user` where id = 5 order by `user`.col asc",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -951,7 +951,7 @@
         "Query": "select * from `user` where id = 5 order by `user`.col collate utf8_general_ci asc",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -977,7 +977,7 @@
         "Query": "select * from `user` where id = 5 order by -col1 asc",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -1003,7 +1003,7 @@
         "Query": "select * from `user` where id = 5 order by concat(col, col1) collate utf8_general_ci desc",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -1029,7 +1029,7 @@
         "Query": "select * from `user` where id = 5 order by id + col collate utf8_general_ci desc",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -1055,7 +1055,7 @@
         "Query": "select * from (select user_id from user_extra where user_id = 5) as eu, `user` as u where u.id = 5 and u.id = eu.user_id order by eu.user_id asc",
         "Table": "`user`, user_extra",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -1082,7 +1082,7 @@
         "Query": "select col from `user` as route1 where id = 1 order by col asc",
         "Table": "`user`",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -1108,7 +1108,7 @@
         "Query": "select col1 from `user` where id = 1 limit 1",
         "Table": "`user`",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -1125,7 +1125,7 @@
       "Original": "select user.col from user join user_extra limit 1",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(1)",
+        "Count": "1",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -1173,7 +1173,7 @@
       "Original": "select col from user limit 1",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(1)",
+        "Count": "1",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1229,7 +1229,7 @@
       "Original": "select * from user where (id1 = 4 AND name1 ='abc') limit 5",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(5)",
+        "Count": "5",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1257,7 +1257,7 @@
       "Original": "select col from user where col in (select col1 from user) limit 1",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(1)",
+        "Count": "1",
         "Inputs": [
           {
             "OperatorType": "UncorrelatedSubquery",
@@ -1330,7 +1330,7 @@
       "Original": "select id from user limit 1+1",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(2)",
+        "Count": "2",
         "Inputs": [
           {
             "OperatorType": "Route",

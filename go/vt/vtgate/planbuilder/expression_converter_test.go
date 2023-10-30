@@ -40,7 +40,7 @@ func TestConversion(t *testing.T) {
 		expressionsOut: e(evalengine.NewLiteralInt(1)),
 	}, {
 		expressionsIn:  "@@foo",
-		expressionsOut: e(evalengine.NewColumn(0, evalengine.UnknownType())),
+		expressionsOut: e(evalengine.NewColumn(0, evalengine.UnknownType(), nil)),
 	}}
 
 	for _, tc := range queries {
