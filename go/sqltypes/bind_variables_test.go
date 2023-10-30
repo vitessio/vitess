@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -42,67 +41,28 @@ func TestProtoConversions(t *testing.T) {
 			protoVal: &querypb.Value{Type: Int64, Value: []byte("1")},
 		}, {
 			name: "tuple value",
-			val: Value{
-				typ: Tuple,
-				values: []Value{
-					TestValue(VarChar, "1"),
-					TestValue(Int64, "3"),
-				},
-			},
-			protoVal: &querypb.Value{
-				Type: Tuple,
-				Values: []*querypb.Value{
-					{
-						Type:  VarChar,
-						Value: []byte("1"),
-					}, {
-						Type:  Int64,
-						Value: []byte("3"),
-					},
-				},
-			},
+			val:  TestTuple(TestValue(VarChar, "1"), TestValue(Int64, "3")),
 		}, {
 			name: "tuple of tuple as a value",
-			val: Value{
-				typ: Tuple,
-				values: []Value{
-					{
-						typ: Tuple,
-						values: []Value{
-							TestValue(VarChar, "1"),
-							TestValue(Int64, "3"),
-						},
-					},
-					TestValue(Int64, "5"),
-				},
-			},
-			protoVal: &querypb.Value{
-				Type: Tuple,
-				Values: []*querypb.Value{
-					{
-						Type: Tuple,
-						Values: []*querypb.Value{
-							{
-								Type:  VarChar,
-								Value: []byte("1"),
-							}, {
-								Type:  Int64,
-								Value: []byte("3"),
-							},
-						},
-					}, {
-						Type:  Int64,
-						Value: []byte("5"),
-					},
-				},
-			},
+			val: TestTuple(
+				TestTuple(
+					TestValue(VarChar, "1"),
+					TestValue(Int64, "3"),
+				),
+				TestValue(Int64, "5"),
+			),
 		},
 	}
 
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			got := ValueToProto(tcase.val)
-			require.True(t, proto.Equal(got, tcase.protoVal), "ValueToProto: %v, want %v", got, tcase.protoVal)
+			// If we have an expected protoVal, check that serialization matches.
+			// For nested tuples, we do not attempt to generate a protoVal, as it is binary data.
+			// We simply check that the roundtrip is correct.
+			if tcase.protoVal != nil {
+				require.True(t, proto.Equal(got, tcase.protoVal), "ValueToProto: %v, want %v", got, tcase.protoVal)
+			}
 			gotback := ProtoToValue(got)
 			require.EqualValues(t, tcase.val, gotback)
 		})
