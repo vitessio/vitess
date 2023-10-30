@@ -112,7 +112,7 @@ func (cached *Value) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(80)
 	}
 	// field unknownFields []byte
 	{
