@@ -33013,9 +33013,6 @@ export namespace query {
 
         /** Value value */
         value?: (Uint8Array|null);
-
-        /** Value values */
-        values?: (query.IValue[]|null);
     }
 
     /** Represents a Value. */
@@ -33032,9 +33029,6 @@ export namespace query {
 
         /** Value value. */
         public value: Uint8Array;
-
-        /** Value values. */
-        public values: query.IValue[];
 
         /**
          * Creates a new Value instance using the specified properties.
