@@ -122,12 +122,5 @@ func (cached *Value) CachedSize(alloc bool) int64 {
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Value)))
 	}
-	// field Values []*vitess.io/vitess/go/vt/proto/query.Value
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Values)) * int64(8))
-		for _, elem := range cached.Values {
-			size += elem.CachedSize(true)
-		}
-	}
 	return size
 }
