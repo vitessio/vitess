@@ -49,6 +49,7 @@ var (
 	VT03024 = errorWithoutState("VT03024", vtrpcpb.Code_INVALID_ARGUMENT, "'%s' user defined variable does not exists", "The query cannot be prepared using the user defined variable as it does not exists for this session.")
 	VT03025 = errorWithState("VT03025", vtrpcpb.Code_INVALID_ARGUMENT, WrongArguments, "Incorrect arguments to %s", "The execute statement have wrong number of arguments")
 	VT03026 = errorWithoutState("VT03024", vtrpcpb.Code_INVALID_ARGUMENT, "'%s' bind variable does not exists", "The query cannot be executed as missing the bind variable.")
+	VT03027 = errorWithState("VT03027", vtrpcpb.Code_INVALID_ARGUMENT, BadNullError, "Column '%s' cannot be null", "The column cannot have null value.")
 
 	VT05001 = errorWithState("VT05001", vtrpcpb.Code_NOT_FOUND, DbDropExists, "cannot drop database '%s'; database does not exists", "The given database does not exist; Vitess cannot drop it.")
 	VT05002 = errorWithState("VT05002", vtrpcpb.Code_NOT_FOUND, BadDb, "cannot alter database '%s'; unknown database", "The given database does not exist; Vitess cannot alter it.")
@@ -124,6 +125,7 @@ var (
 		VT03024,
 		VT03025,
 		VT03026,
+		VT03027,
 		VT05001,
 		VT05002,
 		VT05003,

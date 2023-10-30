@@ -144,3 +144,19 @@ func (vschema *VSchema) AddForeignKey(ksname, childTableName string, fkConstrain
 	cTbl.ParentForeignKeys = append(cTbl.ParentForeignKeys, NewParentFkInfo(pTbl, fkConstraint))
 	return nil
 }
+
+// AddPrimaryKey is for testing only.
+func (vschema *VSchema) AddPrimaryKey(ksname, tblName string, cols []string) error {
+	ks, ok := vschema.Keyspaces[ksname]
+	if !ok {
+		return fmt.Errorf("keyspace %s not found in vschema", ksname)
+	}
+	tbl, ok := ks.Tables[tblName]
+	if !ok {
+		return fmt.Errorf("table %s not found in keyspace %s", tblName, ksname)
+	}
+	for _, col := range cols {
+		tbl.PrimaryKey = append(tbl.PrimaryKey, sqlparser.NewIdentifierCI(col))
+	}
+	return nil
+}
