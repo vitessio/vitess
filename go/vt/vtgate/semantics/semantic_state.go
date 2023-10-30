@@ -132,7 +132,7 @@ type (
 		// The map is keyed by the tableset of the table that each of the foreign key belongs to.
 		childForeignKeysInvolved  map[TableSet][]vindexes.ChildFKInfo
 		parentForeignKeysInvolved map[TableSet][]vindexes.ParentFKInfo
-		ChildFkToUpdExprs         map[string]*UpdateExpression
+		ChildFkToUpdExprs         map[string]sqlparser.UpdateExprs
 		FKChecksOff               bool
 	}
 
@@ -268,6 +268,64 @@ func (st *SemTable) RemoveNonRequiredForeignKeys(verifyAllFks bool, getAction fu
 	}
 
 	return nil
+}
+
+func (st *SemTable) IsFkDependentColumnUpdated(updateExprs sqlparser.UpdateExprs) (bool, error) {
+	// Go over all the update expressions
+	for _, updateExpr := range updateExprs {
+		deps := st.RecursiveDeps(updateExpr.Name)
+		if deps.NumberOfTables() != 1 {
+			panic("expected to have single table dependency")
+		}
+		// Get all the child and parent foreign keys for the given table that the update expression belongs to.
+		childFks := st.childForeignKeysInvolved[deps]
+		parentFKs := st.parentForeignKeysInvolved[deps]
+
+		involvedInFk := false
+		// Check if this updated column is part of any child or parent foreign key.
+		for _, childFk := range childFks {
+			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				involvedInFk = true
+				break
+			}
+		}
+		for _, parentFk := range parentFKs {
+			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				involvedInFk = true
+				break
+			}
+		}
+
+		if !involvedInFk {
+			continue
+		}
+
+		dependencyUpdated := false
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			col, ok := node.(*sqlparser.ColName)
+			if !ok {
+				return true, nil
+			}
+			// self reference column dependency is not considered a dependent column being updated.
+			if st.EqualsExpr(updateExpr.Name, col) {
+				return true, nil
+			}
+			for _, updExpr := range updateExprs {
+				if st.EqualsExpr(updExpr.Name, col) {
+					dependencyUpdated = true
+					return false, nil
+				}
+			}
+			return false, nil
+		}, updateExpr.Expr)
+		if err != nil {
+			return false, err
+		}
+		if dependencyUpdated {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // isShardScoped checks if the foreign key constraint is shard-scoped or not. It uses the vindex information to make this call.

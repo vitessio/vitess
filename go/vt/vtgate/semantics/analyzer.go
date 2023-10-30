@@ -319,7 +319,7 @@ func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
 }
 
 // getInvolvedForeignKeys gets the foreign keys that might require taking care off when executing the given statement.
-func (a *analyzer) getInvolvedForeignKeys(statement sqlparser.Statement) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, map[string]*UpdateExpression, bool, error) {
+func (a *analyzer) getInvolvedForeignKeys(statement sqlparser.Statement) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, map[string]sqlparser.UpdateExprs, bool, error) {
 	// There are only the DML statements that require any foreign keys handling.
 	switch stmt := statement.(type) {
 	case *sqlparser.Delete:
@@ -402,7 +402,7 @@ func HasNonLiteral(updExprs sqlparser.UpdateExprs, parentFks []vindexes.ParentFK
 }
 
 // filterForeignKeysUsingUpdateExpressions filters the child and parent foreign key constraints that don't require any validations/cascades given the updated expressions.
-func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[TableSet][]vindexes.ChildFKInfo, allParentFks map[TableSet][]vindexes.ParentFKInfo, updExprs sqlparser.UpdateExprs) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, map[string]*UpdateExpression) {
+func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[TableSet][]vindexes.ChildFKInfo, allParentFks map[TableSet][]vindexes.ParentFKInfo, updExprs sqlparser.UpdateExprs) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, map[string]sqlparser.UpdateExprs) {
 	if len(allChildFks) == 0 && len(allParentFks) == 0 {
 		return nil, nil, nil
 	}
@@ -420,7 +420,7 @@ func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[Table
 	updExprToTableSet := make(map[*sqlparser.ColName]TableSet)
 
 	// childFKToUpdExprs stores child foreign key to update expressions mapping.
-	childFKToUpdExprs := map[string]*UpdateExpression{}
+	childFKToUpdExprs := map[string]sqlparser.UpdateExprs{}
 
 	// Go over all the update expressions
 	for _, updateExpr := range updExprs {
@@ -439,14 +439,9 @@ func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[Table
 			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
 				cFksRequired[deps][idx] = true
 				tbl, _ := a.tables.tableInfoFor(deps)
-				ue, exists := childFKToUpdExprs[childFk.String(tbl.GetVindexTable())]
-				if !exists {
-					ue = &UpdateExpression{}
-					childFKToUpdExprs[childFk.String(tbl.GetVindexTable())] = ue
-				}
-				ue.Exprs = append(ue.Exprs, updateExpr)
-				ue.DependencyUpdated = ue.DependencyUpdated || isDependentColumnUpdated(updateExpr, updExprs)
-
+				ue := childFKToUpdExprs[childFk.String(tbl.GetVindexTable())]
+				ue = append(ue, updateExpr)
+				childFKToUpdExprs[childFk.String(tbl.GetVindexTable())] = ue
 			}
 		}
 		// If we are setting a column to NULL, then we don't need to verify the existance of an
@@ -499,28 +494,6 @@ func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[Table
 		cFksNeedsHandling[ts] = cFKNeeded
 	}
 	return cFksNeedsHandling, pFksNeedsHandling, childFKToUpdExprs
-}
-
-func isDependentColumnUpdated(ue *sqlparser.UpdateExpr, updExprs sqlparser.UpdateExprs) bool {
-	dependencyUpdated := false
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		col, ok := node.(*sqlparser.ColName)
-		if !ok {
-			return true, nil
-		}
-		// self reference column dependency is not considered a dependent column being updated.
-		if ue.Name.Equal(col) {
-			return true, nil
-		}
-		for _, updExpr := range updExprs {
-			if updExpr.Name.Equal(col) {
-				dependencyUpdated = true
-				return false, nil
-			}
-		}
-		return false, nil
-	}, ue.Expr)
-	return dependencyUpdated
 }
 
 // getAllManagedForeignKeys gets all the foreign keys for the query we are analyzing that Vitess is reposible for managing.

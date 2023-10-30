@@ -2174,5 +2174,10 @@
         "unsharded_fk_allow.u_multicol_tbl3"
       ]
     }
+  },
+  {
+    "comment": "updating multiple columns of a fk constraint such that one uses the other",
+    "query": "update u_multicol_tbl3 set cola = id, colb = 5 * (cola + (1 - (cola))) where id = 2",
+    "plan": "VT12001: unsupported: same column referenced in foreign key column update is also updated"
   }
 ]
