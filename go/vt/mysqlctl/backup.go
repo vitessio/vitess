@@ -26,9 +26,8 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -87,8 +86,6 @@ var (
 	// backupCompressBlocks is the number of blocks that are processed
 	// once before the writer blocks
 	backupCompressBlocks = 2
-
-	titleCase = cases.Title(language.English).String
 )
 
 func init() {
@@ -138,7 +135,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	bsStats := params.Stats.Scope(
 		backupstats.Component(backupstats.BackupStorage),
 		backupstats.Implementation(
-			titleCase(backupstorage.BackupStorageImplementation),
+			textutil.Title(backupstorage.BackupStorageImplementation),
 		),
 	)
 	bs = bs.WithParams(backupstorage.Params{
@@ -156,7 +153,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	beParams := params.Copy()
 	beParams.Stats = params.Stats.Scope(
 		backupstats.Component(backupstats.BackupEngine),
-		backupstats.Implementation(titleCase(backupEngineImplementation)),
+		backupstats.Implementation(textutil.Title(backupEngineImplementation)),
 	)
 	var be BackupEngine
 	if isIncrementalBackup(beParams) {
@@ -374,7 +371,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	bsStats := params.Stats.Scope(
 		backupstats.Component(backupstats.BackupStorage),
 		backupstats.Implementation(
-			titleCase(backupstorage.BackupStorageImplementation),
+			textutil.Title(backupstorage.BackupStorageImplementation),
 		),
 	)
 	bs = bs.WithParams(backupstorage.Params{
@@ -428,7 +425,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	reParams := params.Copy()
 	reParams.Stats = params.Stats.Scope(
 		backupstats.Component(backupstats.BackupEngine),
-		backupstats.Implementation(titleCase(backupEngineImplementation)),
+		backupstats.Implementation(textutil.Title(backupEngineImplementation)),
 	)
 	manifest, err := re.ExecuteRestore(ctx, reParams, bh)
 	if err != nil {
