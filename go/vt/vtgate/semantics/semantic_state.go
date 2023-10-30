@@ -141,11 +141,6 @@ type (
 		ColumnName string
 	}
 
-	UpdateExpression struct {
-		Exprs             sqlparser.UpdateExprs
-		DependencyUpdated bool
-	}
-
 	// SchemaInformation is used tp provide table information from Vschema.
 	SchemaInformation interface {
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)

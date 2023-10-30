@@ -2179,5 +2179,94 @@
     "comment": "updating multiple columns of a fk constraint such that one uses the other",
     "query": "update u_multicol_tbl3 set cola = id, colb = 5 * (cola + (1 - (cola))) where id = 2",
     "plan": "VT12001: unsupported: same column referenced in foreign key column update is also updated"
+  },
+  {
+    "comment": "multicol foreign key updates with one literal and one non-literal update",
+    "query": "update u_multicol_tbl2 set cola = 2, colb = colc - (2) where id = 7",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update u_multicol_tbl2 set cola = 2, colb = colc - (2) where id = 7",
+      "Instructions": {
+        "OperatorType": "FKVerify",
+        "Inputs": [
+          {
+            "InputName": "VerifyParent-1",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where 1 != 1",
+            "Query": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl2.colc - 2 is not null and u_multicol_tbl2.id = 7 and u_multicol_tbl1.cola is null and u_multicol_tbl1.colb is null limit 1 lock in share mode",
+            "Table": "u_multicol_tbl1, u_multicol_tbl2"
+          },
+          {
+            "InputName": "PostVerify",
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select cola, colb, cola != 2, 2, colb != u_multicol_tbl2.colc - 2, u_multicol_tbl2.colc - 2 from u_multicol_tbl2 where 1 != 1",
+                "Query": "select cola, colb, cola != 2, 2, colb != u_multicol_tbl2.colc - 2, u_multicol_tbl2.colc - 2 from u_multicol_tbl2 where u_multicol_tbl2.id = 7 for update",
+                "Table": "u_multicol_tbl2"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0,
+                  1
+                ],
+                "CompExprCols": [
+                  2,
+                  4
+                ],
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = :fkc_upd, colb = :fkc_upd1 where (cola, colb) in ::fkc_vals",
+                "Table": "u_multicol_tbl3",
+                "UpdateExprBvNames": [
+                  "fkc_upd",
+                  "fkc_upd1"
+                ],
+                "UpdateExprCols": [
+                  3,
+                  5
+                ]
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl2 set cola = 2, colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl2.id = 7",
+                "Table": "u_multicol_tbl2"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_multicol_tbl1",
+        "unsharded_fk_allow.u_multicol_tbl2",
+        "unsharded_fk_allow.u_multicol_tbl3"
+      ]
+    }
   }
 ]

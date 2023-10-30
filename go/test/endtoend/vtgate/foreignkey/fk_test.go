@@ -872,6 +872,13 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t10 set col = id + null where id = 1",
 			},
+		}, {
+			name: "Multi column foreign key update with one literal and one non-literal update",
+			queries: []string{
+				"insert into fk_multicol_t15 (id, cola, colb) values (1,1,1),(2,2,2)",
+				"insert into fk_multicol_t16 (id, cola, colb) values (1,1,1),(2,2,2)",
+				"update fk_multicol_t15 set cola = 3, colb = (id * 2) - 2",
+			},
 		},
 	}
 

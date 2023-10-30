@@ -269,13 +269,14 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 		var updFkColOffsets [][2]int
 		// TODO: may only store non-literal update exprs OR store non-literal info along with update expr.
 		ue := ctx.SemTable.ChildFkToUpdExprs[fk.String(updatedTable)]
-		for _, updExpr := range ue {
-			// TODO: not sure why we append for literals.
-			offset := [2]int{-1, -1}
-			if !sqlparser.IsLiteral(updExpr.Expr) {
+		// If ue has any non-literal update, then we need this.
+		if hasNonLiteralUpdate(ue) {
+			for _, updExpr := range ue {
+				// TODO: not sure why we append for literals.
+				var offset [2]int
 				offset, selectExprs = addUpdExprToSelect(ctx, updExpr, selectExprs)
+				updFkColOffsets = append(updFkColOffsets, offset)
 			}
-			updFkColOffsets = append(updFkColOffsets, offset)
 		}
 
 		fkChild, err := createFkChildForUpdate(ctx, fk, updStmt, selectOffsets, updFkColOffsets, updatedTable)
@@ -295,6 +296,15 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 		Children:  fkChildren,
 		Parent:    parentOp,
 	}, nil
+}
+
+func hasNonLiteralUpdate(exprs sqlparser.UpdateExprs) bool {
+	for _, expr := range exprs {
+		if !sqlparser.IsLiteral(expr.Expr) {
+			return true
+		}
+	}
+	return false
 }
 
 func addColumns(ctx *plancontext.PlanningContext, columns sqlparser.Columns, exprs []sqlparser.SelectExpr) ([]int, []sqlparser.SelectExpr) {
