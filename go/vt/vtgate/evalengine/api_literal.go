@@ -230,10 +230,10 @@ func NewColumn(offset int, typ Type, original sqlparser.Expr) *Column {
 }
 
 // NewTupleExpr returns a tuple expression
-func NewTupleExpr(exprs ...Expr) TupleExpr {
+func NewTupleExpr(exprs ...IR) TupleExpr {
 	tupleExpr := make(TupleExpr, 0, len(exprs))
 	for _, f := range exprs {
-		tupleExpr = append(tupleExpr, f.(IR))
+		tupleExpr = append(tupleExpr, f)
 	}
 	return tupleExpr
 }

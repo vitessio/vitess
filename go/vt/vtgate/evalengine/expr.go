@@ -21,6 +21,7 @@ import (
 )
 
 type (
+	// Expr is a compiled expression that can be evaluated and serialized back to SQL.
 	Expr interface {
 		sqlparser.Expr
 		IR() IR
@@ -28,7 +29,9 @@ type (
 		typeof(env *ExpressionEnv) (ctype, error)
 	}
 
-	// IR is the interface that all evaluation nodes must implement
+	// IR is the interface that all evaluation nodes must implement. It can only be used to
+	// match the AST of the compiled expression for planning purposes. IR objects cannot be
+	// evaluated directly.
 	IR interface {
 		eval(env *ExpressionEnv) (eval, error)
 		format(buf *sqlparser.TrackedBuffer)

@@ -27,10 +27,15 @@ import (
 
 type (
 	Column struct {
-		Offset            int
-		Type              sqltypes.Type
-		Collation         collations.TypedCollation
-		Original          sqlparser.Expr
+		Offset    int
+		Type      sqltypes.Type
+		Collation collations.TypedCollation
+		Original  sqlparser.Expr
+
+		// dynamicTypeOffset is set when the type of this column cannot be calculated
+		// at translation time. Since expressions with dynamic types cannot be compiled ahead of time,
+		// compilation will be delayed until the expression is first executed with the bind variables
+		// sent by the user. See: UntypedExpr
 		dynamicTypeOffset int
 	}
 )

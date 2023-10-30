@@ -614,6 +614,11 @@ func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
 	}, nil
 }
 
+// typedExpr is a lazily compiled expression from an UntypedExpr. This expression
+// can only be compiled when it's evaluated with a fixed set of user-supplied types.
+// These static types are stored in the types slice so the next time the expression
+// is evaluated with the same set of types, we can match this typedExpr and not have
+// to compile it again.
 type typedExpr struct {
 	once     sync.Once
 	types    []ctype
@@ -634,12 +639,21 @@ type typedIR interface {
 	typeof(env *ExpressionEnv) (ctype, error)
 }
 
+// UntypedExpr is a translated expression that cannot be compiled ahead of time because it
+// contains dynamic types.
 type UntypedExpr struct {
-	ir        IR
+	// ir is the translated IR for the expression
+	ir IR
+	// collation is the default collation for the translated expression
 	collation collations.ID
+	// needTypes are the IR nodes in ir that could not be typed ahead of time: these must
+	// necessarily be either Column or BindVariable nodes, as all other nodes can always
+	// be statically typed. The dynamicTypeOffset field on each node is the offset of
+	// the node in this slice.
 	needTypes []typedIR
 
-	mu    sync.Mutex
+	mu sync.Mutex
+	// typed contains the lazily compiled versions of ir for every type set
 	typed []*typedExpr
 }
 
