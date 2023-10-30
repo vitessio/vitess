@@ -360,41 +360,6 @@ func (a *analyzer) getInvolvedForeignKeys(statement sqlparser.Statement) (map[Ta
 	}
 }
 
-func collectParentFksFromMap(parentFkMap map[TableSet][]vindexes.ParentFKInfo) []vindexes.ParentFKInfo {
-	var parentFks []vindexes.ParentFKInfo
-	for _, fkInfos := range parentFkMap {
-		parentFks = append(parentFks, fkInfos...)
-	}
-	return parentFks
-}
-
-func collectChildFksFromMap(childFkMap map[TableSet][]vindexes.ChildFKInfo) []vindexes.ChildFKInfo {
-	var childFks []vindexes.ChildFKInfo
-	for _, fkInfos := range childFkMap {
-		childFks = append(childFks, fkInfos...)
-	}
-	return childFks
-}
-
-func HasNonLiteral(updExprs sqlparser.UpdateExprs, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo) bool {
-	for _, updateExpr := range updExprs {
-		if sqlparser.IsLiteral(updateExpr.Expr) {
-			continue
-		}
-		for _, parentFk := range parentFks {
-			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				return true
-			}
-		}
-		for _, childFk := range childFks {
-			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // filterForeignKeysUsingUpdateExpressions filters the child and parent foreign key constraints that don't require any validations/cascades given the updated expressions.
 func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[TableSet][]vindexes.ChildFKInfo, allParentFks map[TableSet][]vindexes.ParentFKInfo, updExprs sqlparser.UpdateExprs) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, map[string]sqlparser.UpdateExprs) {
 	if len(allChildFks) == 0 && len(allParentFks) == 0 {
