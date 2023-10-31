@@ -839,13 +839,13 @@ func (ii *IndexInfo) Format(buf *TrackedBuffer) {
 		buf.astPrintf(ii, "%s %s", keywordStrings[PRIMARY], keywordStrings[KEY])
 		return
 	case IndexTypeDefault:
-		buf.astPrintf(ii, "%s", keywordStrings[INDEX])
+		buf.astPrintf(ii, "%s", keywordStrings[KEY])
 	case IndexTypeUnique:
-		buf.astPrintf(ii, "%s %s", keywordStrings[UNIQUE], keywordStrings[INDEX])
+		buf.astPrintf(ii, "%s %s", keywordStrings[UNIQUE], keywordStrings[KEY])
 	case IndexTypeSpatial:
-		buf.astPrintf(ii, "%s %s", keywordStrings[SPATIAL], keywordStrings[INDEX])
+		buf.astPrintf(ii, "%s %s", keywordStrings[SPATIAL], keywordStrings[KEY])
 	case IndexTypeFullText:
-		buf.astPrintf(ii, "%s %s", keywordStrings[FULLTEXT], keywordStrings[INDEX])
+		buf.astPrintf(ii, "%s %s", keywordStrings[FULLTEXT], keywordStrings[KEY])
 	}
 	if !ii.Name.IsEmpty() {
 		buf.astPrintf(ii, " %v", ii.Name)

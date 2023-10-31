@@ -2838,7 +2838,7 @@ func TestStripForeignKeys(t *testing.T) {
 				"\tid int(11) not null auto_increment,\n" +
 				"\tforeign_id int(11),\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tcheck (foreign_id > 10)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
@@ -2861,8 +2861,8 @@ func TestStripForeignKeys(t *testing.T) {
 				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
-				"\tindex fk_table1_ref_user_id (user_id),\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_user_id (user_id),\n" +
 				"\tcheck (foreign_id > 10)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
@@ -2907,8 +2907,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
-				"\tindex fk_table1_ref_user_id (user_id)\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_user_id (user_id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
 
@@ -2930,8 +2930,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
-				"\tindex fk_table1_ref_user_id (user_id)\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_user_id (user_id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
 		},
