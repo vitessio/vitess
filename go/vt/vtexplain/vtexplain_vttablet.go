@@ -846,7 +846,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			fallthrough
 		case sqlparser.HexVal:
 			fallthrough
-		case sqlparser.BitVal:
+		case sqlparser.BitNum:
 			colTypes = append(colTypes, querypb.Type_INT32)
 		case sqlparser.StrVal:
 			colTypes = append(colTypes, querypb.Type_VARCHAR)

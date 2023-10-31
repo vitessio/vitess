@@ -877,7 +877,7 @@ func (cached *Rows) CachedSize(alloc bool) int64 {
 		size += hack.RuntimeAllocSize(int64(cap(cached.rows)) * int64(24))
 		for _, elem := range cached.rows {
 			{
-				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(56))
+				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(32))
 				for _, elem := range elem {
 					size += elem.CachedSize(false)
 				}

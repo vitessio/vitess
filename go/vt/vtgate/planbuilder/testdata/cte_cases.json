@@ -127,7 +127,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as sum(col)"
+              "sum(col) * count(*) as sum(col)"
             ],
             "Inputs": [
               {
@@ -189,7 +189,7 @@
             "Inputs": [
               {
                 "OperatorType": "Limit",
-                "Count": "INT64(10)",
+                "Count": "10",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -232,7 +232,7 @@
             "Inputs": [
               {
                 "OperatorType": "Limit",
-                "Count": "INT64(10)",
+                "Count": "10",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -269,7 +269,7 @@
         "Inputs": [
           {
             "OperatorType": "Limit",
-            "Count": "INT64(10)",
+            "Count": "10",
             "Inputs": [
               {
                 "OperatorType": "Join",
@@ -337,7 +337,7 @@
             "Inputs": [
               {
                 "OperatorType": "Limit",
-                "Count": "INT64(2)",
+                "Count": "2",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -407,9 +407,9 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0] as a",
-          "[COLUMN 1] as b",
-          "[COLUMN 0] / [COLUMN 1] as d"
+          ":0 as a",
+          ":1 as b",
+          "A.a / A.b as d"
         ],
         "Inputs": [
           {
@@ -682,7 +682,7 @@
             "Inputs": [
               {
                 "OperatorType": "Limit",
-                "Count": "INT64(2)",
+                "Count": "2",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -767,7 +767,7 @@
         "Query": "select id from (select id, col from `user` where id = 5) as t",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -793,7 +793,7 @@
         "Query": "select t.id from (select id from `user` where id = 5) as t, user_extra where t.id = user_extra.user_id",
         "Table": "`user`, user_extra",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -820,7 +820,7 @@
         "Query": "select t.id from (select `user`.id from `user` where `user`.id = 5) as t, user_extra where t.id = user_extra.user_id",
         "Table": "`user`, user_extra",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -847,7 +847,7 @@
         "Query": "select t.id from (select id from `user` where id = 5) as t, user_extra where t.id = user_extra.user_id",
         "Table": "`user`, user_extra",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -883,7 +883,7 @@
             "Query": "select t.id from (select id from `user` where id = 5) as t",
             "Table": "`user`",
             "Values": [
-              "INT64(5)"
+              "5"
             ],
             "Vindex": "user_index"
           },
@@ -923,7 +923,7 @@
         "Query": "select id from (select id, col from `user` as route1 where id = 5) as t",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -949,7 +949,7 @@
         "Query": "select id from (select id, col from `user` as route1 where id = 5) as t",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -1024,7 +1024,7 @@
         "Query": "select u.col, e.col from (select col from `user` where id = 5) as u, (select col from user_extra where user_id = 5) as e",
         "Table": "`user`, user_extra",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -1401,7 +1401,7 @@
             "Query": "select id from (select `user`.id, `user`.col from `user` where `user`.id = 5) as t",
             "Table": "`user`",
             "Values": [
-              "INT64(5)"
+              "5"
             ],
             "Vindex": "user_index"
           },
@@ -1480,7 +1480,7 @@
           "Sharded": true
         },
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -1531,7 +1531,7 @@
           "Sharded": true
         },
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -1728,7 +1728,7 @@
       "Original": "with u as (select user.col from user join user_extra) select u.col from u join user_extra ue limit 1",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(1)",
+        "Count": "1",
         "Inputs": [
           {
             "OperatorType": "Join",

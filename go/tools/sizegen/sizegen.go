@@ -115,7 +115,8 @@ func isPod(tt types.Type) bool {
 func (sizegen *sizegen) getKnownType(named *types.Named) *typeState {
 	ts := sizegen.known[named]
 	if ts == nil {
-		local := strings.HasPrefix(named.Obj().Pkg().Path(), sizegen.mod.Path)
+		pkg := named.Obj().Pkg()
+		local := pkg != nil && strings.HasPrefix(pkg.Path(), sizegen.mod.Path)
 		ts = &typeState{
 			local: local,
 			pod:   isPod(named.Underlying()),

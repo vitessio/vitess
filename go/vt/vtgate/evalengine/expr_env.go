@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 
@@ -41,6 +40,7 @@ type (
 
 		BindVars map[string]*querypb.BindVariable
 		Row      []sqltypes.Value
+		Fields   []*querypb.Field
 
 		// internal state
 		now  time.Time
@@ -89,14 +89,21 @@ func (env *ExpressionEnv) Evaluate(expr Expr) (EvalResult, error) {
 	return EvalResult{e}, err
 }
 
-var ErrAmbiguousType = errors.New("the type of this expression cannot be statically computed")
+func (env *ExpressionEnv) EvaluateAST(expr Expr) (EvalResult, error) {
+	e, err := expr.eval(env)
+	return EvalResult{e}, err
+}
 
-func (env *ExpressionEnv) TypeOf(expr Expr, fields []*querypb.Field) (sqltypes.Type, typeFlag, error) {
-	ty, f := expr.typeof(env, fields)
-	if f&flagAmbiguousType != 0 {
-		return ty, f, ErrAmbiguousType
+func (env *ExpressionEnv) TypeOf(expr Expr) (Type, error) {
+	ty, err := expr.typeof(env)
+	if err != nil {
+		return Type{}, err
 	}
-	return ty, f, nil
+	return Type{
+		Type:     ty.Type,
+		Coll:     ty.Col.Collation,
+		Nullable: ty.Flag&flagNullable != 0,
+	}, nil
 }
 
 func (env *ExpressionEnv) SetTime(now time.Time) {

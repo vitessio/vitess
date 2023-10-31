@@ -86,6 +86,10 @@ func (buf *TrackedBuffer) SetUpperCase(enable bool) {
 	}
 }
 
+func (buf *TrackedBuffer) WriteLiteral(lit string) {
+	_, _ = buf.literal(lit)
+}
+
 // SetEscapeAllIdentifiers sets whether ALL identifiers in the serialized SQL query should be quoted
 // and escaped. By default, identifiers are only escaped if they match the name of a SQL keyword or they
 // contain characters that must be escaped.
