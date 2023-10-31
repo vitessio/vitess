@@ -37,6 +37,7 @@ type QueryFormat string
 
 const (
 	SQLQueries              QueryFormat = "SQLQueries"
+	OlapSQLQueries          QueryFormat = "OlapSQLQueries"
 	PreparedStatmentQueries QueryFormat = "PreparedStatmentQueries"
 	PreparedStatementPacket QueryFormat = "PreparedStatementPacket"
 )
@@ -93,7 +94,7 @@ func (fz *fuzzer) generateQuery() []string {
 	val := rand.Intn(fz.insertShare + fz.updateShare + fz.deleteShare)
 	if val < fz.insertShare {
 		switch fz.queryFormat {
-		case SQLQueries:
+		case OlapSQLQueries, SQLQueries:
 			return []string{fz.generateInsertDMLQuery()}
 		case PreparedStatmentQueries:
 			return fz.getPreparedInsertQueries()
@@ -103,7 +104,7 @@ func (fz *fuzzer) generateQuery() []string {
 	}
 	if val < fz.insertShare+fz.updateShare {
 		switch fz.queryFormat {
-		case SQLQueries:
+		case OlapSQLQueries, SQLQueries:
 			return []string{fz.generateUpdateDMLQuery()}
 		case PreparedStatmentQueries:
 			return fz.getPreparedUpdateQueries()
@@ -112,7 +113,7 @@ func (fz *fuzzer) generateQuery() []string {
 		}
 	}
 	switch fz.queryFormat {
-	case SQLQueries:
+	case OlapSQLQueries, SQLQueries:
 		return []string{fz.generateDeleteDMLQuery()}
 	case PreparedStatmentQueries:
 		return fz.getPreparedDeleteQueries()
@@ -222,13 +223,16 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, sharded bool, fuzzerThreadId int
 			_, _ = vitessDb.Exec("use `uks`")
 		}
 	}
+	if fz.queryFormat == OlapSQLQueries {
+		_ = utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	}
 	for {
 		// If fuzzer thread is marked to be stopped, then we should exit this go routine.
 		if fz.shouldStop.Load() == true {
 			return
 		}
 		switch fz.queryFormat {
-		case SQLQueries, PreparedStatmentQueries:
+		case OlapSQLQueries, SQLQueries, PreparedStatmentQueries:
 			if fz.generateAndExecuteStatementQuery(t, mcmp) {
 				return
 			}
@@ -606,7 +610,7 @@ func TestFkFuzzTest(t *testing.T) {
 
 	for _, tt := range testcases {
 		for _, testSharded := range []bool{false, true} {
-			for _, queryFormat := range []QueryFormat{SQLQueries, PreparedStatmentQueries, PreparedStatementPacket} {
+			for _, queryFormat := range []QueryFormat{OlapSQLQueries, SQLQueries, PreparedStatmentQueries, PreparedStatementPacket} {
 				t.Run(getTestName(tt.name, testSharded)+fmt.Sprintf(" QueryFormat - %v", queryFormat), func(t *testing.T) {
 					mcmp, closer := start(t)
 					defer closer()
