@@ -96,7 +96,7 @@ func (vind *UnicodeLooseXXHash) Map(ctx context.Context, vcursor VCursor, ids []
 }
 
 func (vind *UnicodeLooseXXHash) Hash(id sqltypes.Value) ([]byte, error) {
-	return unicodeHash(vXXHash, id)
+	return unicodeHash(&collateXX, id)
 }
 
 // UnknownParams implements the ParamValidating interface.
