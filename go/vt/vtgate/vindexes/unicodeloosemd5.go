@@ -96,7 +96,7 @@ func (vind *UnicodeLooseMD5) Map(ctx context.Context, vcursor VCursor, ids []sql
 }
 
 func (vind *UnicodeLooseMD5) Hash(id sqltypes.Value) ([]byte, error) {
-	return unicodeHash(vMD5Hash, id)
+	return unicodeHash(&collateMD5, id)
 }
 
 // UnknownParams implements the ParamValidating interface.

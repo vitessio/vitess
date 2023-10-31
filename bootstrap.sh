@@ -224,27 +224,25 @@ install_toxiproxy() {
 
 install_all() {
   echo "##local system details..."
-  echo "##platform: $(uname) target:$(get_arch) OS: $os"
+  echo "##platform: $(uname) target:$(get_arch) OS: $OSTYPE"
   # protoc
-  protoc_ver=21.3
-  install_dep "protoc" "$protoc_ver" "$VTROOT/dist/vt-protoc-$protoc_ver" install_protoc
+  install_dep "protoc" "$PROTOC_VER" "$VTROOT/dist/vt-protoc-$PROTOC_VER" install_protoc
 
   # zk
-  zk_ver=${ZK_VERSION:-3.8.0}
   if [ "$BUILD_JAVA" == 1 ] ; then
-    install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
+    install_dep "Zookeeper" "$ZK_VER" "$VTROOT/dist/vt-zookeeper-$ZK_VER" install_zookeeper
   fi
 
   # etcd
-  install_dep "etcd" "v3.5.6" "$VTROOT/dist/etcd" install_etcd
+  install_dep "etcd" "$ETCD_VER" "$VTROOT/dist/etcd" install_etcd
 
   # consul
   if [ "$BUILD_CONSUL" == 1 ] ; then
-    install_dep "Consul" "1.11.4" "$VTROOT/dist/consul" install_consul
+    install_dep "Consul" "$CONSUL_VER" "$VTROOT/dist/consul" install_consul
   fi
 
   # toxiproxy
-  install_dep "toxiproxy" "v2.5.0" "$VTROOT/dist/toxiproxy" install_toxiproxy
+  install_dep "toxiproxy" "$TOXIPROXY_VER" "$VTROOT/dist/toxiproxy" install_toxiproxy
 
   echo
   echo "bootstrap finished - run 'make build' to compile"

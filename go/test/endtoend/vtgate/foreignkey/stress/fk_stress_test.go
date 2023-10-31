@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -149,7 +150,8 @@ var (
 	childTableName        = "stress_child"
 	child2TableName       = "stress_child2"
 	grandchildTableName   = "stress_grandchild"
-	tableNames            = []string{parentTableName, childTableName, child2TableName, grandchildTableName}
+	nofkTableName         = "stress_nofk"
+	tableNames            = []string{parentTableName, childTableName, child2TableName, grandchildTableName, nofkTableName}
 	reverseTableNames     []string
 
 	seedOnce sync.Once
@@ -163,6 +165,20 @@ var (
 	createStatements = []string{
 		`
 		CREATE TABLE stress_parent (
+			id bigint not null,
+			parent_id bigint,
+			rand_val varchar(32) null default '',
+			hint_col varchar(64) not null default '',
+			created_timestamp timestamp not null default current_timestamp,
+			updates int unsigned not null default 0,
+			PRIMARY KEY (id),
+			key parent_id_idx(parent_id),
+			key created_idx(created_timestamp),
+			key updates_idx(updates)
+		) ENGINE=InnoDB
+		`,
+		`
+		CREATE TABLE stress_nofk (
 			id bigint not null,
 			parent_id bigint,
 			rand_val varchar(32) null default '',
@@ -221,6 +237,12 @@ var (
 		) ENGINE=InnoDB
 		`,
 	}
+	alterAddFKStatement = `
+		ALTER TABLE stress_nofk add CONSTRAINT stress_nofk_parent_fk FOREIGN KEY (parent_id) REFERENCES stress_parent (id) ON DELETE NO ACTION ON UPDATE NO ACTION
+	`
+	alterDropFKStatement = `
+		ALTER TABLE stress_nofk drop FOREIGN KEY stress_nofk_parent_fk
+	`
 	dropConstraintsStatements = []string{
 		`ALTER TABLE stress_child DROP CONSTRAINT child_parent_fk`,
 		`ALTER TABLE stress_child2 DROP CONSTRAINT child2_parent_fk`,
@@ -263,6 +285,9 @@ var (
 	selectOrphanedRowsGrandchild = `
 		select stress_grandchild.id from stress_grandchild left join stress_child on (stress_child.id = stress_grandchild.parent_id) where stress_child.id is null
 	`
+	selectOrphanedRowsNoFK = `
+		select stress_nofk.id from stress_nofk left join stress_parent on (stress_parent.id = stress_nofk.parent_id) where stress_parent.id is null
+	`
 	deleteAllStatement = `
 		DELETE FROM %s
 	`
@@ -279,9 +304,7 @@ const (
 // The test overrides these into more relaxed values if running on GITHUB_ACTIONS,
 // seeing that GitHub CI is much weaker.
 var (
-	maxConcurrency                = 10
-	singleConnectionSleepInterval = 10 * time.Millisecond
-	countIterations               = 3
+	countIterations = 3
 )
 
 func TestMain(m *testing.M) {
@@ -413,7 +436,7 @@ func waitForReplicaCatchup(t *testing.T) {
 }
 
 func validateMetrics(t *testing.T, tcase *testCase) {
-	for _, workloadTable := range []string{parentTableName, childTableName, child2TableName, grandchildTableName} {
+	for _, workloadTable := range tableNames {
 		t.Run(workloadTable, func(t *testing.T) {
 			t.Run("fk errors", func(t *testing.T) {
 				testSelectTableFKErrors(t, workloadTable, tcase)
@@ -442,7 +465,6 @@ func TestInitialSetup(t *testing.T) {
 	require.NotNil(t, replica)
 	require.NotEqual(t, primary.Alias, replica.Alias)
 
-	tableNames = []string{parentTableName, childTableName, child2TableName, grandchildTableName}
 	reverseTableNames = slices.Clone(tableNames)
 	slices.Reverse(reverseTableNames)
 	require.ElementsMatch(t, tableNames, reverseTableNames)
@@ -450,20 +472,19 @@ func TestInitialSetup(t *testing.T) {
 	for _, tableName := range tableNames {
 		writeMetrics[tableName] = &WriteMetrics{}
 	}
-
-	if val, present := os.LookupEnv("GITHUB_ACTIONS"); present && val != "" {
-		// This is the place to fine tune the stress parameters if GitHub actions are too slow
-		maxConcurrency = maxConcurrency / 2
-		singleConnectionSleepInterval = singleConnectionSleepInterval * 2
-	}
-	t.Logf("==== test setup: maxConcurrency=%v, singleConnectionSleepInterval=%v", maxConcurrency, singleConnectionSleepInterval)
 }
 
 type testCase struct {
-	onDeleteAction sqlparser.ReferenceAction
-	onUpdateAction sqlparser.ReferenceAction
-	workload       bool
-	onlineDDLTable string
+	onDeleteAction       sqlparser.ReferenceAction
+	onUpdateAction       sqlparser.ReferenceAction
+	workload             bool
+	onlineDDLTable       string
+	reseedInsertIgnore   bool
+	preStatement         string
+	alterStatement       string
+	createTableHint      string
+	notes                string // human readable, added to test name
+	skipNofkOrphanedRows bool
 }
 
 // ExecuteFKTest runs a single test case, which can be:
@@ -472,7 +493,6 @@ type testCase struct {
 // - Either one of ON UPDATE actions
 // - Potentially running an Online DDL on an indicated table (this will not work in Vanilla MySQL, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/)
 func ExecuteFKTest(t *testing.T, tcase *testCase) {
-	t.Logf("==== test setup: maxConcurrency=%v, singleConnectionSleepInterval=%v", maxConcurrency, singleConnectionSleepInterval)
 	workloadName := "static data"
 	if tcase.workload {
 		workloadName = "workload"
@@ -481,6 +501,9 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 	if tcase.onlineDDLTable != "" {
 		testName = fmt.Sprintf("%s/ddl=%s", testName, tcase.onlineDDLTable)
 	}
+	if tcase.notes != "" {
+		testName = fmt.Sprintf("%s/%s", testName, tcase.notes)
+	}
 	t.Run(testName, func(t *testing.T) {
 		ctx := context.Background()
 
@@ -488,28 +511,50 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 			createInitialSchema(t, tcase)
 		})
 		t.Run("init tables", func(t *testing.T) {
-			populateTables(t)
+			populateTables(t, tcase)
 		})
 		if tcase.workload {
 			t.Run("workload", func(t *testing.T) {
+				// The workload for a 16 vCPU machine is:
+				// - Concurrency of 16
+				// - 15ms interval between queries for each connection
+				// As the number of vCPUs decreases, so do we decrease concurrency, and increase intervals. For example, on a 8 vCPU machine
+				// we run concurrency of 8 and interval of 4ms. On a 4 vCPU machine we run concurrency of 4 and interval of 8ms.
+				maxConcurrency := max((len(tableNames) * 2), runtime.NumCPU()*2)
+				sleepModifier := 16.0 / float64(maxConcurrency)
+				baseSleepInterval := 15 * time.Millisecond
+				singleConnectionSleepIntervalNanoseconds := float64(baseSleepInterval.Nanoseconds()) * sleepModifier
+				sleepInterval := time.Duration(int64(singleConnectionSleepIntervalNanoseconds))
+				if tcase.onlineDDLTable != "" {
+					sleepInterval = sleepInterval * 2
+					maxConcurrency = max(1, maxConcurrency/2)
+				}
+				t.Logf("==== workload setup: maxConcurrency=%v, sleepInterval=%v", maxConcurrency, sleepInterval)
+
 				ctx, cancel := context.WithTimeout(ctx, workloadDuration)
 				defer cancel()
 
 				var wg sync.WaitGroup
-				for _, workloadTable := range []string{parentTableName, childTableName, child2TableName, grandchildTableName} {
+				for i := 0; i < maxConcurrency; i++ {
+					tableName := tableNames[i%len(tableNames)]
 					wg.Add(1)
-					go func(tbl string) {
+					go func() {
 						defer wg.Done()
-						runMultipleConnections(ctx, t, tbl)
-					}(workloadTable)
+						runSingleConnection(ctx, t, tableName, sleepInterval)
+					}()
 				}
 
 				if tcase.onlineDDLTable != "" {
 					t.Run("migrating", func(t *testing.T) {
-						// This cannot work with Vanilla MySQL. We put the code for testing, but we're not actually going to use it
-						// for now. The test cases all have empty tcase.onlineDDLTable
-						hint := "hint-alter"
-						uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, tcase.onlineDDLTable, hint), onlineDDLStrategy, "vtgate", hint)
+						// This only works on patched MySQL
+						hint := tcase.createTableHint
+						alterStatement := tcase.alterStatement
+						if alterStatement == "" {
+							hint = "hint-alter"
+							alterStatement = fmt.Sprintf(alterHintStatement, tcase.onlineDDLTable, hint)
+						}
+						t.Logf("alter statement: %v, hint: %v", alterStatement, hint)
+						uuid := testOnlineDDLStatement(t, alterStatement, onlineDDLStrategy, "vtgate", hint)
 						ok := onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 						require.True(t, ok) // or else don't attempt to cleanup artifacts
 						t.Run("cleanup artifacts", func(t *testing.T) {
@@ -555,9 +600,28 @@ func TestStressFK(t *testing.T) {
 	})
 
 	runOnlineDDL := false
+	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
+		// Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
+		// However, Online DDL is made possible in via these changes: https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps1.
+		// Said changes introduce a new global/session boolean variable named 'rename_table_preserve_foreign_key'. It defaults 'false'/0 for backwards compatibility.
+		// When enabled, a `RENAME TABLE` to a FK parent "pins" the children's foreign keys to the table name rather than the table pointer. Which means after the RENAME,
+		// the children will point to the newly instated table rather than the original, renamed table.
+		// (Note: this applies to a particular type of RENAME where we swap tables, see the above blog post).
+		// For FK children, the MySQL changes simply ignore any Vitess-internal table.
+		//
+		// In this stress test, we enable Online DDL if the variable 'rename_table_preserve_foreign_key' is present. The Online DDL mechanism will in turn
+		// query for this variable, and manipulate it, when starting the migration and when cutting over.
+		rs, err := primary.VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
+		require.NoError(t, err)
+		runOnlineDDL = len(rs.Rows) > 0
+		t.Logf("MySQL support for 'rename_table_preserve_foreign_key': %v", runOnlineDDL)
+	})
 	if val, present := os.LookupEnv("FK_STRESS_ONLINE_DDL"); present && val != "" {
+		// A way to force execution of Online DDL. Online DDL won't work correctly with vanilla MySQL. See above.
 		runOnlineDDL = true
 	}
+
 	// Without workload ; with workload
 	for _, workload := range []bool{false, true} {
 		// For any type of ON DELETE action
@@ -575,15 +639,12 @@ func TestStressFK(t *testing.T) {
 	}
 
 	if runOnlineDDL {
-		// Foreign keys introduce some overhead. We reduce concurrency so that GitHub CI can accommodate.
-		maxConcurrency = maxConcurrency * 4 / 5
-		singleConnectionSleepInterval = singleConnectionSleepInterval * 2
-
 		// Running Online DDL on all test tables. We don't use all of the combinations
 		// presented above; we will run with workload, and suffice with same ON DELETE - ON UPDATE actions.
 		for _, action := range referenceActions {
 			for _, table := range tableNames {
 				tcase := &testCase{
+					notes:          "standard alter",
 					workload:       true,
 					onDeleteAction: action,
 					onUpdateAction: action,
@@ -591,6 +652,41 @@ func TestStressFK(t *testing.T) {
 				}
 				ExecuteFKTest(t, tcase)
 			}
+		}
+		// Specific extra tests:
+		{
+			// Add foreign key constraint to a table without one.
+			tcase := &testCase{
+				notes:           "add fk",
+				workload:        true,
+				onDeleteAction:  sqlparser.NoAction,
+				onUpdateAction:  sqlparser.NoAction,
+				onlineDDLTable:  "stress_nofk",
+				alterStatement:  alterAddFKStatement,
+				createTableHint: "stress_nofk_parent_fk",
+			}
+			ExecuteFKTest(t, tcase)
+		}
+		{
+			// Drop a constraint, leaving the table without any foreign keys.
+			// We use `skipNofkOrphanedRows` because for the duration of the migration,
+			// `stress_nofk` table will be compliant with `stress_parent`. It's only at
+			// the very end of the test, just as the migration completes, that the workload
+			// has the chance to inject orphaned rows. But then the test terminates immediately
+			// and so we can't be sure that orphaned rows will exist.
+			tcase := &testCase{
+				notes:                "drop fk",
+				workload:             true,
+				onDeleteAction:       sqlparser.NoAction,
+				onUpdateAction:       sqlparser.NoAction,
+				onlineDDLTable:       "stress_nofk",
+				preStatement:         alterAddFKStatement,
+				reseedInsertIgnore:   true,
+				alterStatement:       alterDropFKStatement,
+				createTableHint:      "parent_id",
+				skipNofkOrphanedRows: true,
+			}
+			ExecuteFKTest(t, tcase)
 		}
 	}
 }
@@ -612,10 +708,14 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 		// Create the stress tables
 		var b strings.Builder
 		for i, sql := range createStatements {
-			if i == 0 {
+			switch i {
+			case 0:
 				// parent table, no foreign keys
 				b.WriteString(sql)
-			} else {
+			case 1:
+				// stress_nofk, no foreign keys
+				b.WriteString(sql)
+			default:
 				b.WriteString(fmt.Sprintf(sql, referenceActionMap[tcase.onDeleteAction], referenceActionMap[tcase.onUpdateAction]))
 			}
 			b.WriteString(";")
@@ -623,6 +723,12 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, b.String())
 		require.NoError(t, err)
 	})
+	if tcase.preStatement != "" {
+		t.Run("pre-statement", func(t *testing.T) {
+			_, err = conn.ExecuteFetch(tcase.preStatement, 1, false)
+			require.Nil(t, err)
+		})
+	}
 	t.Run("wait for replica", func(t *testing.T) {
 		waitForReplicaCatchup(t)
 	})
@@ -632,6 +738,7 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 		checkTable(t, childTableName, "hint_col")
 		checkTable(t, child2TableName, "hint_col")
 		checkTable(t, grandchildTableName, "hint_col")
+		checkTable(t, nofkTableName, "hint_col")
 	})
 	t.Run("validating tables: vtgate", func(t *testing.T) {
 		// Wait for tables to appear on VTGate
@@ -639,9 +746,10 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 		waitForTable(t, childTableName, conn)
 		waitForTable(t, child2TableName, conn)
 		waitForTable(t, grandchildTableName, conn)
+		waitForTable(t, nofkTableName, conn)
 	})
 	t.Run("waiting for vschema definition to apply", func(t *testing.T) {
-		for _, tableName := range []string{parentTableName, childTableName, child2TableName, grandchildTableName} {
+		for _, tableName := range tableNames {
 			err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, keyspaceName, tableName, "id")
 			require.NoError(t, err)
 		}
@@ -914,7 +1022,7 @@ func generateDelete(t *testing.T, tableName string, conn *mysql.Conn) error {
 	return err
 }
 
-func runSingleConnection(ctx context.Context, t *testing.T, tableName string) {
+func runSingleConnection(ctx context.Context, t *testing.T, tableName string, sleepInterval time.Duration) {
 	log.Infof("Running single connection on %s", tableName)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -938,23 +1046,9 @@ func runSingleConnection(ctx context.Context, t *testing.T, tableName string) {
 		case <-ctx.Done():
 			log.Infof("Terminating single connection")
 			return
-		case <-time.After(singleConnectionSleepInterval):
+		case <-time.After(sleepInterval):
 		}
 	}
-}
-
-func runMultipleConnections(ctx context.Context, t *testing.T, tableName string) {
-	log.Infof("Running multiple connections")
-	var wg sync.WaitGroup
-	for i := 0; i < maxConcurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			runSingleConnection(ctx, t, tableName)
-		}()
-	}
-	wg.Wait()
-	log.Infof("Running multiple connections: done")
 }
 
 func wrapWithNoFKChecks(sql string) string {
@@ -962,7 +1056,7 @@ func wrapWithNoFKChecks(sql string) string {
 }
 
 // populateTables randomly populates all test tables. This is done sequentially.
-func populateTables(t *testing.T) {
+func populateTables(t *testing.T, tcase *testCase) {
 	log.Infof("initTable begin")
 	defer log.Infof("initTable complete")
 
@@ -1029,7 +1123,11 @@ func populateTables(t *testing.T) {
 	if !tablesSeeded {
 		t.Run("reseeding", func(t *testing.T) {
 			for _, tableName := range tableNames {
-				seedQuery := fmt.Sprintf("insert into %s select * from %s_seed", tableName, tableName)
+				ignoreModifier := ""
+				if tcase.reseedInsertIgnore {
+					ignoreModifier = "ignore"
+				}
+				seedQuery := fmt.Sprintf("insert %s into %s select * from %s_seed", ignoreModifier, tableName, tableName)
 				_, err := conn.ExecuteFetch(seedQuery, 1000, true)
 				require.NoError(t, err)
 			}
@@ -1160,6 +1258,13 @@ func testFKIntegrity(
 				rs := queryTablet(t, tablet, selectOrphanedRowsGrandchild, "")
 				assert.Zero(t, len(rs.Rows))
 			})
+			if !tcase.skipNofkOrphanedRows {
+				t.Run("parent-nofk orphaned rows", func(t *testing.T) {
+					rs := queryTablet(t, tablet, selectOrphanedRowsNoFK, "")
+					// Expect orphaned rows!
+					assert.NotZero(t, len(rs.Rows))
+				})
+			}
 		}
 	})
 }

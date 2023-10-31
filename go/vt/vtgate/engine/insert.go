@@ -971,7 +971,7 @@ func (ins *Insert) description() PrimitiveDescription {
 			for _, exprs := range ints {
 				var this []string
 				for _, expr := range exprs {
-					this = append(this, evalengine.FormatExpr(expr))
+					this = append(this, sqlparser.String(expr))
 				}
 				res = append(res, strings.Join(this, ", "))
 			}
@@ -985,7 +985,7 @@ func (ins *Insert) description() PrimitiveDescription {
 		if ins.Generate.Values == nil {
 			other["AutoIncrement"] = fmt.Sprintf("%s:Offset(%d)", ins.Generate.Query, ins.Generate.Offset)
 		} else {
-			other["AutoIncrement"] = fmt.Sprintf("%s:Values::%s", ins.Generate.Query, evalengine.FormatExpr(ins.Generate.Values))
+			other["AutoIncrement"] = fmt.Sprintf("%s:Values::%s", ins.Generate.Query, sqlparser.String(ins.Generate.Values))
 		}
 	}
 

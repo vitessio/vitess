@@ -10177,7 +10177,7 @@ yydefault:
 		var yyLOCAL *With
 //line sql.y:705
 		{
-			yyLOCAL = &With{ctes: yyDollar[2].ctesUnion(), Recursive: false}
+			yyLOCAL = &With{CTEs: yyDollar[2].ctesUnion(), Recursive: false}
 		}
 		yyVAL.union = yyLOCAL
 	case 50:
@@ -10185,7 +10185,7 @@ yydefault:
 		var yyLOCAL *With
 //line sql.y:709
 		{
-			yyLOCAL = &With{ctes: yyDollar[3].ctesUnion(), Recursive: true}
+			yyLOCAL = &With{CTEs: yyDollar[3].ctesUnion(), Recursive: true}
 		}
 		yyVAL.union = yyLOCAL
 	case 51:
@@ -11676,7 +11676,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1691
 		{
-			yyLOCAL = NewBitLiteral(yyDollar[1].str[2:])
+			yyLOCAL = NewBitLiteral(yyDollar[1].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 240:
@@ -11684,7 +11684,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1695
 		{
-			yyLOCAL = NewBitLiteral(yyDollar[1].str)
+			yyLOCAL = NewBitLiteral("0b" + yyDollar[1].str)
 		}
 		yyVAL.union = yyLOCAL
 	case 241:
@@ -11700,7 +11700,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1703
 		{
-			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: NewBitLiteral(yyDollar[2].str)}
+			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: NewBitLiteral("0b" + yyDollar[2].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 243:
@@ -11716,7 +11716,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1711
 		{
-			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: NewBitLiteral(yyDollar[2].str[2:])}
+			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: NewBitLiteral(yyDollar[2].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 245:

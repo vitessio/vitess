@@ -52,12 +52,37 @@ func (err UnsupportedCollationError) Error() string {
 var UnsupportedCollationHashError = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "text type with an unknown/unsupported collation cannot be hashed")
 
 func compare(v1, v2 sqltypes.Value, collationID collations.ID) (int, error) {
+	v1t := v1.Type()
+
 	// We have a fast path here for the case where both values are
 	// the same type, and it's one of the basic types we can compare
 	// directly. This is a common case for equality checks.
-	if v1.Type() == v2.Type() {
+	if v1t == v2.Type() {
 		switch {
-		case sqltypes.IsSigned(v1.Type()):
+		case sqltypes.IsText(v1t):
+			if collationID == collations.CollationBinaryID {
+				return bytes.Compare(v1.Raw(), v2.Raw()), nil
+			}
+			coll := colldata.Lookup(collationID)
+			if coll == nil {
+				return 0, UnsupportedCollationError{ID: collationID}
+			}
+			result := coll.Collate(v1.Raw(), v2.Raw(), false)
+			switch {
+			case result < 0:
+				return -1, nil
+			case result > 0:
+				return 1, nil
+			default:
+				return 0, nil
+			}
+		case sqltypes.IsBinary(v1t), v1t == sqltypes.Date, v1t == sqltypes.Datetime, v1t == sqltypes.Timestamp:
+			// We can't optimize for Time here, since Time is not sortable
+			// based on the raw bytes. This is because of cases like
+			// '24:00:00' and '101:00:00' which are both valid times and
+			// order wrong based on the raw bytes.
+			return bytes.Compare(v1.Raw(), v2.Raw()), nil
+		case sqltypes.IsSigned(v1t):
 			i1, err := v1.ToInt64()
 			if err != nil {
 				return 0, err
@@ -74,7 +99,7 @@ func compare(v1, v2 sqltypes.Value, collationID collations.ID) (int, error) {
 			default:
 				return 0, nil
 			}
-		case sqltypes.IsUnsigned(v1.Type()):
+		case sqltypes.IsUnsigned(v1t):
 			u1, err := v1.ToUint64()
 			if err != nil {
 				return 0, err
@@ -87,30 +112,6 @@ func compare(v1, v2 sqltypes.Value, collationID collations.ID) (int, error) {
 			case u1 < u2:
 				return -1, nil
 			case u1 > u2:
-				return 1, nil
-			default:
-				return 0, nil
-			}
-		case sqltypes.IsBinary(v1.Type()), v1.Type() == sqltypes.Date,
-			v1.Type() == sqltypes.Datetime, v1.Type() == sqltypes.Timestamp:
-			// We can't optimize for Time here, since Time is not sortable
-			// based on the raw bytes. This is because of cases like
-			// '24:00:00' and '101:00:00' which are both valid times and
-			// order wrong based on the raw bytes.
-			return bytes.Compare(v1.Raw(), v2.Raw()), nil
-		case sqltypes.IsText(v1.Type()):
-			if collationID == collations.CollationBinaryID {
-				return bytes.Compare(v1.Raw(), v2.Raw()), nil
-			}
-			coll := colldata.Lookup(collationID)
-			if coll == nil {
-				return 0, UnsupportedCollationError{ID: collationID}
-			}
-			result := coll.Collate(v1.Raw(), v2.Raw(), false)
-			switch {
-			case result < 0:
-				return -1, nil
-			case result > 0:
 				return 1, nil
 			default:
 				return 0, nil

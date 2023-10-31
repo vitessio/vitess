@@ -120,10 +120,10 @@ func (r *Rewriter) Rewrite() error {
 func (r *Rewriter) replaceAstfmtCalls(cursor *astutil.Cursor) bool {
 	switch v := cursor.Node().(type) {
 	case *ast.Comment:
-		v.Text = strings.ReplaceAll(v.Text, " Format ", " formatFast ")
+		v.Text = strings.ReplaceAll(v.Text, " Format ", " FormatFast ")
 	case *ast.FuncDecl:
 		if v.Name.Name == "Format" {
-			v.Name.Name = "formatFast"
+			v.Name.Name = "FormatFast"
 		}
 	case *ast.ExprStmt:
 		if call, ok := v.X.(*ast.CallExpr); ok {
@@ -237,7 +237,7 @@ func (r *Rewriter) rewriteAstPrintf(cursor *astutil.Cursor, expr *ast.CallExpr) 
 				call = &ast.CallExpr{
 					Fun: &ast.SelectorExpr{
 						X:   rightExpr,
-						Sel: &ast.Ident{Name: "formatFast"},
+						Sel: &ast.Ident{Name: "FormatFast"},
 					},
 					Args: []ast.Expr{callexpr.X},
 				}

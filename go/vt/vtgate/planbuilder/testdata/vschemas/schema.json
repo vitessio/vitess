@@ -302,6 +302,10 @@
           "columns": [
             {
               "name": "col"
+            },
+            {
+              "name": "secret",
+              "invisible": true
             }
           ],
           "column_list_authoritative": true
