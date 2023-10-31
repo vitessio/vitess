@@ -558,7 +558,7 @@ func TestSchemaDiff(t *testing.T) {
 			entityOrder: []string{"t3"},
 		},
 		{
-			name: "create two table with fk",
+			name: "create two tables with fk",
 			toQueries: append(
 				createQueries,
 				"create table tp (id int primary key, info int not null);",
@@ -567,6 +567,7 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs: 2,
 			expectDeps:  1,
 			entityOrder: []string{"tp", "t3"},
+			sequential:  true,
 		},
 		{
 			name: "add FK",
@@ -648,6 +649,7 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs: 2,
 			expectDeps:  1,
 			entityOrder: []string{"t1", "t3"},
+			sequential:  true,
 		},
 		{
 			name: "add column. add FK referencing new column",
@@ -818,6 +820,20 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs: 1,
 			expectDeps:  0,
 			entityOrder: []string{"t1"},
+		},
+		{
+			name: "test",
+			fromQueries: []string{
+				"CREATE TABLE t1 (id bigint NOT NULL, name varchar(255), PRIMARY KEY (id))",
+			},
+			toQueries: []string{
+				"CREATE TABLE t1 (id bigint NOT NULL, name varchar(255), PRIMARY KEY (id), KEY idx_name (name))",
+				"CREATE TABLE t3 (id bigint NOT NULL, name varchar(255), t1_id bigint, PRIMARY KEY (id), KEY t1_id (t1_id), KEY nameidx (name), CONSTRAINT t3_ibfk_1 FOREIGN KEY (t1_id) REFERENCES t1 (id) ON DELETE CASCADE ON UPDATE CASCADE, CONSTRAINT t3_ibfk_2 FOREIGN KEY (name) REFERENCES t1 (name) ON DELETE CASCADE ON UPDATE CASCADE)",
+			},
+			expectDiffs: 2,
+			expectDeps:  1,
+			sequential:  true,
+			entityOrder: []string{"t1", "t3"},
 		},
 	}
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
