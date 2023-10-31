@@ -135,6 +135,8 @@ type TabletPicker struct {
 	inOrder       bool
 	cellPref      TabletPickerCellPreference
 	localCellInfo localCellInfo
+	// This map is keyed on the results of TabletAlias.String().
+	ignoreTablets map[string]struct{}
 }
 
 // NewTabletPicker returns a TabletPicker.
@@ -144,6 +146,7 @@ func NewTabletPicker(
 	cells []string,
 	localCell, keyspace, shard, tabletTypesStr string,
 	options TabletPickerOptions,
+	ignoreTablets ...*topodatapb.TabletAlias,
 ) (*TabletPicker, error) {
 	// Keep inOrder parsing here for backward compatability until TabletPickerTabletOrder is fully adopted.
 	if tabletTypesStr == "" {
@@ -219,7 +222,7 @@ func NewTabletPicker(
 		}
 	}
 
-	return &TabletPicker{
+	tp := &TabletPicker{
 		ts:            ts,
 		cells:         dedupeCells(cells),
 		localCellInfo: localCellInfo{localCell: localCell, cellsInAlias: aliasCellMap},
@@ -228,7 +231,15 @@ func NewTabletPicker(
 		tabletTypes:   tabletTypes,
 		inOrder:       inOrder,
 		cellPref:      cellPref,
-	}, nil
+		ignoreTablets: make(map[string]struct{}, len(ignoreTablets)),
+	}
+
+	for _, ignoreTablet := range ignoreTablets {
+		tp.ignoreTablets[ignoreTablet.String()] = struct{}{}
+	}
+
+	return tp, nil
+
 }
 
 // dedupeCells is used to remove duplicates in the cell list in case it is passed in
@@ -358,7 +369,9 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 			log.Errorf("Error getting shard %s/%s: %v", tp.keyspace, tp.shard, err)
 			return nil
 		}
-		aliases = append(aliases, si.PrimaryAlias)
+		if _, ignore := tp.ignoreTablets[si.PrimaryAlias.String()]; !ignore {
+			aliases = append(aliases, si.PrimaryAlias)
+		}
 	} else {
 		actualCells := make([]string, 0)
 		for _, cell := range tp.cells {
@@ -394,7 +407,9 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 				continue
 			}
 			for _, node := range sri.Nodes {
-				aliases = append(aliases, node.TabletAlias)
+				if _, ignore := tp.ignoreTablets[node.TabletAlias.String()]; !ignore {
+					aliases = append(aliases, node.TabletAlias)
+				}
 			}
 		}
 	}

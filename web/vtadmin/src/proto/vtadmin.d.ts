@@ -33019,9 +33019,6 @@ export namespace query {
 
         /** Value value */
         value?: (Uint8Array|null);
-
-        /** Value values */
-        values?: (query.IValue[]|null);
     }
 
     /** Represents a Value. */
@@ -33038,9 +33035,6 @@ export namespace query {
 
         /** Value value. */
         public value: Uint8Array;
-
-        /** Value values. */
-        public values: query.IValue[];
 
         /**
          * Creates a new Value instance using the specified properties.
@@ -41595,6 +41589,9 @@ export namespace vschema {
 
         /** Column type */
         type?: (query.Type|null);
+
+        /** Column invisible */
+        invisible?: (boolean|null);
     }
 
     /** Represents a Column. */
@@ -41611,6 +41608,9 @@ export namespace vschema {
 
         /** Column type. */
         public type: query.Type;
+
+        /** Column invisible. */
+        public invisible: boolean;
 
         /**
          * Creates a new Column instance using the specified properties.

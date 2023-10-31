@@ -391,6 +391,29 @@ func TestPickUsingCellAsAlias(t *testing.T) {
 	}
 }
 
+func TestPickWithIgnoreList(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	te := newPickerTestEnv(t, ctx, []string{"cell1", "cell2"})
+
+	want := addTablet(ctx, te, 101, topodatapb.TabletType_REPLICA, "cell1", true, true)
+	defer deleteTablet(t, te, want)
+
+	dontWant := addTablet(ctx, te, 102, topodatapb.TabletType_REPLICA, "cell1", true, true)
+	defer deleteTablet(t, te, dontWant)
+
+	// Specify the alias as the cell.
+	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"cella"}, "cell1", te.keyspace, te.shard, "replica", TabletPickerOptions{}, dontWant.GetAlias())
+	require.NoError(t, err)
+
+	// Try it many times to be sure we don't ever pick from the ignore list.
+	for i := 0; i < 100; i++ {
+		tablet, err := tp.PickForStreaming(ctx)
+		require.NoError(t, err)
+		require.False(t, proto.Equal(dontWant, tablet), "Picked the tablet we shouldn't have: %v", dontWant)
+	}
+}
+
 func TestPickUsingCellAliasOnlySpecified(t *testing.T) {
 	ctx := utils.LeakCheckContextTimeout(t, 200*time.Millisecond)
 

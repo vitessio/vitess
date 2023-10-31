@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -428,10 +430,10 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 
 	comparers := extractSlices(route.OrderBy)
 
-	sort.Slice(out.Rows, func(i, j int) bool {
+	slices.SortFunc(out.Rows, func(a, b sqltypes.Row) int {
 		var cmp int
 		if err != nil {
-			return true
+			return -1
 		}
 		// If there are any errors below, the function sets
 		// the external err and returns true. Once err is set,
@@ -439,16 +441,15 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 		// Slice think that all elements are in the correct
 		// order and return more quickly.
 		for _, c := range comparers {
-			cmp, err = c.compare(out.Rows[i], out.Rows[j])
+			cmp, err = c.compare(a, b)
 			if err != nil {
-				return true
+				return -1
 			}
-			if cmp == 0 {
-				continue
+			if cmp != 0 {
+				return cmp
 			}
-			return cmp < 0
 		}
-		return true
+		return 0
 	})
 
 	return out.Truncate(route.TruncateColumnCount), err
@@ -466,7 +467,7 @@ func (route *Route) description() PrimitiveDescription {
 	if route.Values != nil {
 		formattedValues := make([]string, 0, len(route.Values))
 		for _, value := range route.Values {
-			formattedValues = append(formattedValues, evalengine.FormatExpr(value))
+			formattedValues = append(formattedValues, sqlparser.String(value))
 		}
 		other["Values"] = formattedValues
 	}
@@ -476,7 +477,7 @@ func (route *Route) description() PrimitiveDescription {
 			if idx != 0 {
 				sysTabSchema += ", "
 			}
-			sysTabSchema += evalengine.FormatExpr(tableSchema)
+			sysTabSchema += sqlparser.String(tableSchema)
 		}
 		sysTabSchema += "]"
 		other["SysTableTableSchema"] = sysTabSchema
@@ -484,7 +485,7 @@ func (route *Route) description() PrimitiveDescription {
 	if len(route.SysTableTableName) != 0 {
 		var sysTableName []string
 		for k, v := range route.SysTableTableName {
-			sysTableName = append(sysTableName, k+":"+evalengine.FormatExpr(v))
+			sysTableName = append(sysTableName, k+":"+sqlparser.String(v))
 		}
 		sort.Strings(sysTableName)
 		other["SysTableTableName"] = "[" + strings.Join(sysTableName, ", ") + "]"

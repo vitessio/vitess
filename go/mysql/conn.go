@@ -1708,6 +1708,10 @@ func (c *Conn) IsMarkedForClose() bool {
 	return c.closing
 }
 
+func (c *Conn) IsShuttingDown() bool {
+	return c.listener.shutdown.Load()
+}
+
 // ConnCheck ensures that this connection to the MySQL server hasn't been broken.
 // This is a fast, non-blocking check. For details on its implementation, please read
 // "Three Bugs in the Go MySQL Driver" (Vicent Marti, GitHub, 2020)
@@ -1744,9 +1748,4 @@ func (c *Conn) ConnCheck() error {
 		}
 	}
 	return nil
-}
-
-// GetTestConn returns a conn for testing purpose only.
-func GetTestConn() *Conn {
-	return newConn(testConn{})
 }

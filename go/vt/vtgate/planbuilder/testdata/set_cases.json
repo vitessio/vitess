@@ -11,7 +11,7 @@
           {
             "Type": "UserDefinedVariable",
             "Name": "foo",
-            "Expr": "INT64(42)"
+            "Expr": "42"
           }
         ],
         "Inputs": [
@@ -34,7 +34,7 @@
           {
             "Type": "UserDefinedVariable",
             "Name": "foo",
-            "Expr": "INT64(42)"
+            "Expr": "42"
           },
           {
             "Type": "UserDefinedVariable",
@@ -62,12 +62,12 @@
           {
             "Type": "UserDefinedVariable",
             "Name": "foo",
-            "Expr": "INT64(42)"
+            "Expr": "42"
           },
           {
             "Type": "UserDefinedVariable",
             "Name": "bar",
-            "Expr": ":__vtudvfoo + INT64(1)"
+            "Expr": ":__vtudvfoo + 1"
           }
         ],
         "Inputs": [
@@ -90,7 +90,7 @@
           {
             "Type": "UserDefinedVariable",
             "Name": "foo",
-            "Expr": "[COLUMN 0]"
+            "Expr": "_vt_column_0"
           }
         ],
         "Inputs": [
@@ -186,17 +186,17 @@
           {
             "Type": "SysVarAware",
             "Name": "autocommit",
-            "Expr": "INT64(1)"
+            "Expr": "1"
           },
           {
             "Type": "SysVarAware",
             "Name": "autocommit",
-            "Expr": "INT64(1)"
+            "Expr": "1"
           },
           {
             "Type": "SysVarAware",
             "Name": "autocommit",
-            "Expr": "INT64(1)"
+            "Expr": "1"
           },
           {
             "Type": "SysVarAware",
@@ -206,12 +206,12 @@
           {
             "Type": "SysVarAware",
             "Name": "autocommit",
-            "Expr": "INT64(1)"
+            "Expr": "1"
           },
           {
             "Type": "SysVarAware",
             "Name": "autocommit",
-            "Expr": "INT64(0)"
+            "Expr": "0"
           }
         ],
         "Inputs": [
@@ -387,7 +387,7 @@
           {
             "Type": "SysVarAware",
             "Name": "autocommit",
-            "Expr": "INT64(1)"
+            "Expr": "1"
           }
         ],
         "Inputs": [
@@ -410,7 +410,7 @@
           {
             "Type": "SysVarAware",
             "Name": "autocommit",
-            "Expr": "INT64(0)"
+            "Expr": "0"
           }
         ],
         "Inputs": [
@@ -433,7 +433,7 @@
           {
             "Type": "SysVarAware",
             "Name": "autocommit",
-            "Expr": "INT64(0)"
+            "Expr": "0"
           }
         ],
         "Inputs": [
@@ -456,17 +456,17 @@
           {
             "Type": "SysVarAware",
             "Name": "client_found_rows",
-            "Expr": "INT64(0)"
+            "Expr": "0"
           },
           {
             "Type": "SysVarAware",
             "Name": "skip_query_plan_cache",
-            "Expr": "INT64(1)"
+            "Expr": "1"
           },
           {
             "Type": "SysVarAware",
             "Name": "sql_select_limit",
-            "Expr": "INT64(20)"
+            "Expr": "20"
           }
         ],
         "Inputs": [
@@ -489,7 +489,7 @@
           {
             "Type": "SysVarAware",
             "Name": "autocommit",
-            "Expr": "INT64(1)"
+            "Expr": "1"
           }
         ],
         "Inputs": [
@@ -545,7 +545,7 @@
           {
             "Type": "SysVarAware",
             "Name": "transaction_read_only",
-            "Expr": "INT64(1)"
+            "Expr": "1"
           }
         ],
         "Inputs": [

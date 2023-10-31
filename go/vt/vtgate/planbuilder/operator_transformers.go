@@ -326,7 +326,7 @@ func getEvalEngingeExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr
 		return e.EExpr, nil
 	case operators.Offset:
 		typ, _ := ctx.SemTable.TypeForExpr(pe.EvalExpr)
-		return evalengine.NewColumn(int(e), typ), nil
+		return evalengine.NewColumn(int(e), typ, pe.EvalExpr), nil
 	default:
 		return nil, vterrors.VT13001("project not planned for: %s", pe.String())
 	}

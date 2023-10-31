@@ -20,9 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -155,7 +154,7 @@ func addFieldsIfNotEmpty(dml *DML, other map[string]any) {
 	if len(dml.Values) > 0 {
 		s := []string{}
 		for _, value := range dml.Values {
-			s = append(s, evalengine.FormatExpr(value))
+			s = append(s, sqlparser.String(value))
 		}
 		other["Values"] = s
 	}

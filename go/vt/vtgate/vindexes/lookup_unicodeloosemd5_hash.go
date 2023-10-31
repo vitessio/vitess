@@ -427,7 +427,7 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) UnknownParams() []string {
 }
 
 func unicodeHashValue(value sqltypes.Value) (sqltypes.Value, error) {
-	hash, err := unicodeHash(vMD5Hash, value)
+	hash, err := unicodeHash(&collateMD5, value)
 	if err != nil {
 		return sqltypes.NULL, err
 	}
