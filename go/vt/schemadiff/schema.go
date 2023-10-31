@@ -795,6 +795,69 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 		return dependentDiffs, relationsMade
 	}
 
+	checkChildForeignKeyDefinition := func(fk *sqlparser.ForeignKeyDefinition, diff EntityDiff) (bool, error) {
+		// We add a foreign key. Normally that's fine, expect for a couple specific scenarios
+		parentTableName := fk.ReferenceDefinition.ReferencedTable.Name.String()
+		dependentDiffs, ok := checkDependencies(diff, []string{parentTableName})
+		if !ok {
+			// No dependency. Not interesting
+			return true, nil
+		}
+		for _, parentDiff := range dependentDiffs {
+			switch parentDiff := parentDiff.(type) {
+			case *CreateTableEntityDiff:
+				// We add a foreign key constraint onto a new table... That table must therefore be first created,
+				// and only then can we proceed to add the FK
+				schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+			case *AlterTableEntityDiff:
+				// The current diff is ALTER TABLE ... ADD FOREIGN KEY, or it is a CREATE TABLE with a FOREIGN KEY
+				// and the parent table also has an ALTER TABLE.
+				// so if the parent's ALTER in any way modifies the referenced FK columns, that's
+				// a sequential execution dependency.
+				// Also, if there is no index on the parent's referenced columns, and a migration adds an index
+				// on those columns, that's a sequential execution dependency.
+				referencedColumnNames := map[string]bool{}
+				for _, referencedColumn := range fk.ReferenceDefinition.ReferencedColumns {
+					referencedColumnNames[referencedColumn.Lowered()] = true
+				}
+				// Walk parentDiff.Statement()
+				_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+					switch node := node.(type) {
+					case *sqlparser.ModifyColumn:
+						if referencedColumnNames[node.NewColDefinition.Name.Lowered()] {
+							schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+						}
+					case *sqlparser.AddColumns:
+						for _, col := range node.Columns {
+							if referencedColumnNames[col.Name.Lowered()] {
+								schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+							}
+						}
+					case *sqlparser.DropColumn:
+						if referencedColumnNames[node.Name.Name.Lowered()] {
+							schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+						}
+					case *sqlparser.AddIndexDefinition:
+						referencedTableEntity, _ := parentDiff.Entities()
+						// We _know_ the type is *CreateTableEntity
+						referencedTable, _ := referencedTableEntity.(*CreateTableEntity)
+						if indexCoversColumnsInOrder(node.IndexDefinition, fk.ReferenceDefinition.ReferencedColumns) {
+							// This diff adds an index covering referenced columns
+							if !referencedTable.columnsCoveredByInOrderIndex(fk.ReferenceDefinition.ReferencedColumns) {
+								// And there was no earlier index on referenced columns. So this is a new index.
+								// In MySQL, you can't add a foreign key constraint on a child, before the parent
+								// has an index of referenced columns. This is a sequential dependency.
+								schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+							}
+						}
+					}
+					return true, nil
+				}, parentDiff.Statement())
+			}
+		}
+		return true, nil
+	}
+
 	for _, diff := range schemaDiff.UnorderedDiffs() {
 		switch diff := diff.(type) {
 		case *CreateViewEntityDiff:
@@ -806,6 +869,19 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 			checkDependencies(diff, getViewDependentTableNames(diff.from.CreateView))
 		case *CreateTableEntityDiff:
 			checkDependencies(diff, getForeignKeyParentTableNames(diff.CreateTable()))
+			_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node := node.(type) {
+				case *sqlparser.ConstraintDefinition:
+					// Only interested in a foreign key
+					fk, ok := node.Details.(*sqlparser.ForeignKeyDefinition)
+					if !ok {
+						return true, nil
+					}
+					return checkChildForeignKeyDefinition(fk, diff)
+				}
+				return true, nil
+			}, diff.Statement())
+
 		case *AlterTableEntityDiff:
 			_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 				switch node := node.(type) {
@@ -815,51 +891,7 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 					if !ok {
 						return true, nil
 					}
-					// We add a foreign key. Normally that's fine, expect for a couple specific scenarios
-					parentTableName := fk.ReferenceDefinition.ReferencedTable.Name.String()
-					dependentDiffs, ok := checkDependencies(diff, []string{parentTableName})
-					if !ok {
-						// No dependency. Not interesting
-						return true, nil
-					}
-					for _, parentDiff := range dependentDiffs {
-						switch parentDiff := parentDiff.(type) {
-						case *CreateTableEntityDiff:
-							// We add a foreign key constraint onto a new table... That table must therefore be first created,
-							// and only then can we proceed to add the FK
-							schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
-						case *AlterTableEntityDiff:
-							// The current diff is ALTER TABLE ... ADD FOREIGN KEY
-							// and the parent table also has an ALTER TABLE.
-							// so if the parent's ALTER in any way modifies the referenced FK columns, that's
-							// a sequential execution dependency
-							referencedColumnNames := map[string]bool{}
-							for _, referencedColumn := range fk.ReferenceDefinition.ReferencedColumns {
-								referencedColumnNames[referencedColumn.Lowered()] = true
-							}
-							// Walk parentDiff.Statement()
-							_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-								switch node := node.(type) {
-								case *sqlparser.ModifyColumn:
-									if referencedColumnNames[node.NewColDefinition.Name.Lowered()] {
-										schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
-									}
-								case *sqlparser.AddColumns:
-									for _, col := range node.Columns {
-										if referencedColumnNames[col.Name.Lowered()] {
-											schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
-										}
-									}
-								case *sqlparser.DropColumn:
-									if referencedColumnNames[node.Name.Name.Lowered()] {
-										schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
-									}
-								}
-								return true, nil
-							}, parentDiff.Statement())
-						}
-					}
-
+					return checkChildForeignKeyDefinition(fk, diff)
 				case *sqlparser.DropKey:
 					if node.Type != sqlparser.ForeignKeyType {
 						// Not interesting
