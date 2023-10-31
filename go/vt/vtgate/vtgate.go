@@ -71,6 +71,7 @@ var (
 	defaultDDLStrategy   = flag.String("ddl_strategy", string(schema.DDLStrategyDirect), "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
 	dbDDLPlugin          = flag.String("dbddl_plugin", "fail", "controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service")
 	noScatter            = flag.Bool("no_scatter", false, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
+	noVstreamCopy        = flag.Bool("no_vstream_copy", false, "when set to true, vstream copy will not be allowed - temporary until we can properly support RDONLY for this")
 
 	// TODO(deepthi): change these two vars to unexported and move to healthcheck.go when LegacyHealthcheck is removed
 
@@ -210,7 +211,7 @@ func Init(
 	sc := NewScatterConn("VttabletCall", tc, gw)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
-	vsm := newVStreamManager(srvResolver, serv, cell)
+	vsm := newVStreamManager(srvResolver, serv, cell, !*noVstreamCopy)
 
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
@@ -238,6 +239,7 @@ func Init(
 		si,
 		*noScatter,
 		pv,
+		*noVstreamCopy,
 	)
 
 	// connect the schema tracker with the vschema manager

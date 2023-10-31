@@ -17,9 +17,8 @@
 package process
 
 import (
-	"time"
-
 	"fmt"
+	"time"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"

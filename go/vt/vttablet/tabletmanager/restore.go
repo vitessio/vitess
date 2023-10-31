@@ -164,6 +164,10 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		log.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, backupTime)
 	}
 
+	if backupTime.IsZero() {
+		backupTime = logutil.ProtoToTime(keyspaceInfo.SnapshotTime)
+	}
+
 	params := mysqlctl.RestoreParams{
 		Cnf:                 tm.Cnf,
 		Mysqld:              tm.MysqlDaemon,
@@ -305,7 +309,7 @@ func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.
 // getGTIDFromTimestamp computes 2 GTIDs based on restoreTime
 // afterPos is the GTID of the first event at or after restoreTime.
 // beforePos is the GTID of the last event before restoreTime. This is the GTID upto which replication will be applied
-// afterPos can be used directly in the query `START SLAVE UNTIL SQL_BEFORE_GTIDS = ''`
+// afterPos can be used directly in the query `START SLAVE UNTIL SQL_BEFORE_GTIDS = ”`
 // beforePos will be used to check if replication was able to catch up from the binlog server
 func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Position, restoreTime int64) (afterPos string, beforePos string, err error) {
 	connParams := &mysql.ConnParams{

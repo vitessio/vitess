@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 
@@ -47,6 +49,9 @@ type vstreamManager struct {
 	resolver *srvtopo.Resolver
 	toposerv srvtopo.Server
 	cell     string
+	// allowVstreamCopy will fail on vstream copy if false and no GTID provided for the stream.
+	// This is temporary until RDONLYs are properly supported for bootstrapping.
+	allowVstreamCopy bool
 
 	vstreamsCreated *stats.CountersWithMultiLabels
 	vstreamsLag     *stats.GaugesWithMultiLabels
@@ -54,6 +59,10 @@ type vstreamManager struct {
 
 // maxSkewTimeoutSeconds is the maximum allowed skew between two streams when the MinimizeSkew flag is set
 const maxSkewTimeoutSeconds = 10 * 60
+
+// tabletPickerContextTimeout is the timeout for the child context used to select candidate tablets
+// for a vstream
+const tabletPickerContextTimeout = 90 * time.Second
 
 // vstream contains the metadata for one VStream request.
 type vstream struct {
@@ -106,11 +115,15 @@ type vstream struct {
 	// the timestamp of the most recent event, keyed by streamId. streamId is of the form <keyspace>.<shard>
 	timestamps map[string]int64
 
+	// the shard map tracking the copy completion, keyed by streamId. streamId is of the form <keyspace>.<shard>
+	copyCompletedShard map[string]struct{}
+
 	vsm *vstreamManager
 
-	eventCh           chan []*binlogdatapb.VEvent
-	heartbeatInterval uint32
-	ts                *topo.Server
+	eventCh             chan []*binlogdatapb.VEvent
+	heartbeatInterval   uint32
+	ts                  *topo.Server
+	tabletPickerOptions discovery.TabletPickerOptions
 }
 
 type journalEvent struct {
@@ -119,12 +132,14 @@ type journalEvent struct {
 	done         chan struct{}
 }
 
-func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string) *vstreamManager {
+func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string, allowVstreamCopy bool) *vstreamManager {
 	exporter := servenv.NewExporter(cell, "VStreamManager")
+
 	return &vstreamManager{
-		resolver: resolver,
-		toposerv: serv,
-		cell:     cell,
+		resolver:         resolver,
+		toposerv:         serv,
+		cell:             cell,
+		allowVstreamCopy: allowVstreamCopy,
 		vstreamsCreated: exporter.NewCountersWithMultiLabels(
 			"VStreamsCreated",
 			"Number of vstreams created",
@@ -166,6 +181,11 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		eventCh:            make(chan []*binlogdatapb.VEvent),
 		heartbeatInterval:  flags.GetHeartbeatInterval(),
 		ts:                 ts,
+		copyCompletedShard: make(map[string]struct{}),
+		tabletPickerOptions: discovery.TabletPickerOptions{
+			CellPreference: flags.GetCellPreference(),
+			TabletOrder:    flags.GetTabletOrder(),
+		},
 	}
 	return vs.stream(ctx)
 }
@@ -189,31 +209,51 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vgtid must have at least one value with a starting position")
 	}
 	// To fetch from all keyspaces, the input must contain a single ShardGtid
-	// that has an empty keyspace, and the Gtid must be "current". In the
-	// future, we'll allow the Gtid to be empty which will also support
-	// copying of existing data.
-	if len(vgtid.ShardGtids) == 1 && vgtid.ShardGtids[0].Keyspace == "" {
-		if vgtid.ShardGtids[0].Gtid != "current" {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "for an empty keyspace, the Gtid value must be 'current': %v", vgtid)
+	// that has an empty keyspace, and the Gtid must be "current".
+	// Or the input must contain a single ShardGtid that has keyspace wildcards.
+	if len(vgtid.ShardGtids) == 1 {
+		inputKeyspace := vgtid.ShardGtids[0].Keyspace
+		isEmpty := inputKeyspace == ""
+		isRegexp := strings.HasPrefix(inputKeyspace, "/")
+		if isEmpty || isRegexp {
+			newvgtid := &binlogdatapb.VGtid{}
+			keyspaces, err := vsm.toposerv.GetSrvKeyspaceNames(ctx, vsm.cell, false)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			if isEmpty {
+				if vgtid.ShardGtids[0].Gtid != "current" {
+					return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "for an empty keyspace, the Gtid value must be 'current': %v", vgtid)
+				}
+				for _, keyspace := range keyspaces {
+					newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
+						Keyspace: keyspace,
+						Gtid:     "current",
+					})
+				}
+			} else {
+				re, err := regexp.Compile(strings.Trim(inputKeyspace, "/"))
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				for _, keyspace := range keyspaces {
+					if re.MatchString(keyspace) {
+						newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
+							Keyspace: keyspace,
+							Gtid:     vgtid.ShardGtids[0].Gtid,
+						})
+					}
+				}
+			}
+			vgtid = newvgtid
 		}
-		keyspaces, err := vsm.toposerv.GetSrvKeyspaceNames(ctx, vsm.cell, false)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		newvgtid := &binlogdatapb.VGtid{}
-		for _, keyspace := range keyspaces {
-			newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
-				Keyspace: keyspace,
-				Gtid:     "current",
-			})
-		}
-		vgtid = newvgtid
 	}
 	newvgtid := &binlogdatapb.VGtid{}
 	for _, sgtid := range vgtid.ShardGtids {
 		if sgtid.Shard == "" {
-			if sgtid.Gtid != "current" {
-				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "if shards are unspecified, the Gtid value must be 'current': %v", vgtid)
+			if sgtid.Gtid != "current" && sgtid.Gtid != "" {
+				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "if shards are unspecified, the Gtid value must be 'current' or empty; got: %v", vgtid)
 			}
 			// TODO(sougou): this should work with the new Migrate workflow
 			_, _, allShards, err := vsm.resolver.GetKeyspaceShards(ctx, sgtid.Keyspace, tabletType)
@@ -425,46 +465,19 @@ func (vs *vstream) alignStreams(ctx context.Context, event *binlogdatapb.VEvent,
 	}
 }
 
-// getCells determines the availability zones to select tablets from
-// 2 scenarios:
-//
-// 1. No cells specified by the client via the gRPC request:
-// Tablets from the local cell AND the cell alias that the VTGate's local cell belongs to will be selected.
-// The local cell of the VTGate will take precendence over any other cell in the alias.
-//
-// 2. Cells are specified by the client via the gRPC request
-// These cells will take precendence over the default cell and its alias and only tablets belonging to
-// the specified cells will be selected.
-// If the "local" tag is passed in as an option in the list of optCells,
-// the local cell of the VTGate will take precedence over any other cell specified.
-func (vs *vstream) getCells(ctx context.Context) []string {
+func (vs *vstream) getCells() []string {
 	var cells []string
 	if vs.optCells != "" {
-		for i, cell := range strings.Split(strings.TrimSpace(vs.optCells), ",") {
-			// if the local tag is passed in, we must give local cell priority
-			// during tablet selection. Append the VTGate's local cell to the list of cells
-			if i == 0 && cell == "local" {
-				cells = append(cells, fmt.Sprintf("local:%s", vs.vsm.cell))
-				continue
-			}
+		for _, cell := range strings.Split(strings.TrimSpace(vs.optCells), ",") {
 			cells = append(cells, strings.TrimSpace(cell))
 		}
 	}
 
-	// if no cell override provided in gRPC request, perform cell alias fallback
 	if len(cells) == 0 {
-		log.Info("[VSTREAM MANAGER] no cells specified by client, falling back to alias...")
-		// append the alias this cell belongs to, otherwise appends the vtgate's cell
-		alias := topo.GetAliasByCell(ctx, vs.ts, vs.vsm.cell)
-		// an alias was actually found
-		if alias != vs.vsm.cell {
-			// send in the vtgate's cell for local cell preference
-			cells = append(cells, fmt.Sprintf("local:%s", vs.vsm.cell))
-		}
-		cells = append(cells, alias)
+		// use the vtgate's cell by default
+		cells = append(cells, vs.vsm.cell)
 	}
 
-	log.Infof("[VSTREAM MANAGER] cells to pick from %v", cells)
 	return cells
 }
 
@@ -473,6 +486,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 	// journalDone is assigned a channel when a journal event is encountered.
 	// It will be closed when all journal events converge.
 	var journalDone chan struct{}
+	ignoreTablets := make([]*topodatapb.TabletAlias, 0)
 
 	errCount := 0
 	for {
@@ -489,13 +503,19 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		var eventss [][]*binlogdatapb.VEvent
 		var err error
-		cells := vs.getCells(ctx)
-		tp, err := discovery.NewTabletPicker(vs.ts, cells, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String())
+		cells := vs.getCells()
+		tp, err := discovery.NewTabletPicker(ctx, vs.ts, cells, vs.vsm.cell, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String(), vs.tabletPickerOptions, ignoreTablets...)
 		if err != nil {
 			log.Errorf(err.Error())
 			return err
 		}
-		tablet, err := tp.PickForStreaming(ctx)
+
+		// Create a child context with a stricter timeout when picking a tablet.
+		// This will prevent hanging in the case no tablets are found.
+		tpCtx, tpCancel := context.WithTimeout(ctx, tabletPickerContextTimeout)
+		defer tpCancel()
+
+		tablet, err := tp.PickForStreaming(tpCtx)
 		if err != nil {
 			log.Errorf(err.Error())
 			return err
@@ -540,6 +560,12 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		log.Infof("Starting to vstream from %s", tablet.Alias.String())
 		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
 		var vstreamCreatedOnce sync.Once
+
+		if !vs.vsm.allowVstreamCopy && (sgtid.Gtid == "" || len(sgtid.TablePKs) > 0) {
+			// We are attempting a vstream copy, but are not allowed (temporary until we can properly support RDONLYs for bootstrapping)
+			return vterrors.NewErrorf(vtrpc.Code_UNIMPLEMENTED, vterrors.NotSupportedYet, "vstream copy is not currently supported")
+		}
+
 		err = tabletConn.VStream(ctx, target, sgtid.Gtid, sgtid.TablePKs, vs.filter, func(events []*binlogdatapb.VEvent) error {
 			// We received a valid event. Reset error count.
 			errCount = 0
@@ -581,6 +607,22 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					sendevents = append(sendevents, ev)
 				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
 					sendevents = append(sendevents, event)
+					eventss = append(eventss, sendevents)
+
+					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
+						return err
+					}
+
+					if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
+						return err
+					}
+					eventss = nil
+					sendevents = nil
+				case binlogdatapb.VEventType_COPY_COMPLETED:
+					sendevents = append(sendevents, event)
+					if fullyCopied, doneEvent := vs.isCopyFullyCompleted(ctx, sgtid, event); fullyCopied {
+						sendevents = append(sendevents, doneEvent)
+					}
 					eventss = append(eventss, sendevents)
 
 					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
@@ -648,17 +690,47 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			// Unreachable.
 			err = vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "vstream ended unexpectedly")
 		}
-		if vterrors.Code(err) != vtrpcpb.Code_FAILED_PRECONDITION && vterrors.Code(err) != vtrpcpb.Code_UNAVAILABLE {
+		retry, ignoreTablet := vs.shouldRetry(err)
+		if !retry {
 			log.Errorf("vstream for %s/%s error: %v", sgtid.Keyspace, sgtid.Shard, err)
 			return err
 		}
+		if ignoreTablet {
+			ignoreTablets = append(ignoreTablets, tablet.GetAlias())
+		}
+
 		errCount++
+		// Retry, at most, 3 times if the error can be retried.
 		if errCount >= 3 {
 			log.Errorf("vstream for %s/%s had three consecutive failures: %v", sgtid.Keyspace, sgtid.Shard, err)
 			return err
 		}
 		log.Infof("vstream for %s/%s error, retrying: %v", sgtid.Keyspace, sgtid.Shard, err)
 	}
+}
+
+// shouldRetry determines whether we should exit immediately or retry the vstream.
+// The first return value determines if the error can be retried, while the second
+// indicates whether the tablet with which the error occurred should be ommitted
+// from the candidate list of tablets to choose from on the retry.
+//
+// An error should be retried if it is expected to be transient.
+// A tablet should be ignored upon retry if it's likely another tablet will not
+// produce the same error.
+func (vs *vstream) shouldRetry(err error) (bool, bool) {
+	errCode := vterrors.Code(err)
+
+	if errCode == vtrpcpb.Code_FAILED_PRECONDITION || errCode == vtrpcpb.Code_UNAVAILABLE {
+		return true, false
+	}
+
+	// If there is a GTIDSet Mismatch on the tablet, omit it from the candidate
+	// list in the TabletPicker on retry.
+	if errCode == vtrpcpb.Code_INVALID_ARGUMENT && strings.Contains(err.Error(), "GTIDSet Mismatch") {
+		return true, true
+	}
+
+	return false, false
 }
 
 // sendAll sends a group of events together while holding the lock.
@@ -720,6 +792,25 @@ func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, e
 		}
 	}
 	return nil
+}
+
+// isCopyFullyCompleted returns true if all stream has received a copy_completed event.
+// If true, it will also return a new copy_completed event that needs to be sent.
+// This new event represents the completion of all the copy operations.
+func (vs *vstream) isCopyFullyCompleted(ctx context.Context, sgtid *binlogdatapb.ShardGtid, event *binlogdatapb.VEvent) (bool, *binlogdatapb.VEvent) {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+
+	vs.copyCompletedShard[fmt.Sprintf("%s/%s", event.Keyspace, event.Shard)] = struct{}{}
+
+	for _, shard := range vs.vgtid.ShardGtids {
+		if _, ok := vs.copyCompletedShard[fmt.Sprintf("%s/%s", shard.Keyspace, shard.Shard)]; !ok {
+			return false, nil
+		}
+	}
+	return true, &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_COPY_COMPLETED,
+	}
 }
 
 func (vs *vstream) getError() error {
