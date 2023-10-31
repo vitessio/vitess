@@ -191,7 +191,7 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 			}
 			raw := uint64(i)
 			raw = raw ^ (1 << 63)
-			v.TinyWeight = uint32(min(raw, 0xFFFFFFFF))
+			v.TinyWeight = uint32(raw >> 32)
 		}
 
 	case sqltypes.IsUnsigned(f.Type):
@@ -200,7 +200,7 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 			if err != nil {
 				return
 			}
-			v.TinyWeight = uint32(min(u, 0xFFFFFFFF))
+			v.TinyWeight = uint32(u >> 32)
 		}
 
 	case sqltypes.IsFloat(f.Type):
@@ -215,7 +215,7 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 			} else {
 				raw = raw ^ (1 << 63)
 			}
-			v.TinyWeight = uint32(min(raw, 0xFFFFFFFF))
+			v.TinyWeight = uint32(raw >> 32)
 		}
 
 	case sqltypes.IsBinary(f.Type):
@@ -243,7 +243,19 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 		return nil
 
 	case sqltypes.IsDecimal(f.Type):
-		return nil // TODO
+		return func(v *sqltypes.Value) {
+			if v.IsNull() {
+				return
+			}
+			dec, err := decimal.NewFromMySQL(v.Raw())
+			if err != nil {
+				return
+			}
+
+			var w32 [4]byte
+			copy(w32[:4], dec.WeightString(nil, int32(f.ColumnLength), int32(f.Decimals)))
+			v.TinyWeight = binary.BigEndian.Uint32(w32[:4])
+		}
 
 	case f.Type == sqltypes.TypeJSON:
 		return nil // TODO

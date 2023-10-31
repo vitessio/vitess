@@ -296,7 +296,7 @@ func TestSelectNone(t *testing.T) {
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	require.Empty(t, vc.log)
-	expectResult(t, "sel.StreamExecute", result, nil)
+	require.Nil(t, result)
 
 	vc.Rewind()
 
@@ -452,7 +452,7 @@ func TestSelectEqualNoRoute(t *testing.T) {
 		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
 	})
-	expectResult(t, "sel.StreamExecute", result, nil)
+	require.Nil(t, result)
 
 	// test with special no-routes handling
 	sel.NoRoutesSpecialHandling = true
