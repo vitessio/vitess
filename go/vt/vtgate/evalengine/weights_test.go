@@ -72,9 +72,9 @@ func TestTinyWeightStrings(t *testing.T) {
 			var fastComparisons int
 			var fullComparisons int
 			slices.SortFunc(items, func(a, b sqltypes.Value) int {
-				if a.TinyWeight != b.TinyWeight {
+				if cmp := a.TinyWeightCmp(b); cmp != 0 {
 					fastComparisons++
-					return int(int64(a.TinyWeight) - int64(b.TinyWeight))
+					return cmp
 				}
 
 				cmp, err := NullsafeCompare(a, b, tc.col)
@@ -92,7 +92,7 @@ func TestTinyWeightStrings(t *testing.T) {
 				require.NoError(t, err)
 
 				if cmp > 0 {
-					t.Fatalf("expected %v [pos=%d] to come after %v [pos=%d]\nav = %08x\nbv = %08x", a, i, b, i+1, a.TinyWeight, b.TinyWeight)
+					t.Fatalf("expected %v [pos=%d] to come after %v [pos=%d]", a, i, b, i+1)
 				}
 			}
 

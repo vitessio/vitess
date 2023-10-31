@@ -41,16 +41,12 @@ func (c *comparer) compare(r1, r2 []sqltypes.Value) int {
 		colIndex = c.orderBy
 	}
 
-	var (
-		cmp int
-		err error
-		v1  = r1[colIndex]
-		v2  = r2[colIndex]
-	)
+	v1 := r1[colIndex]
+	v2 := r2[colIndex]
+	cmp := v1.TinyWeightCmp(v2)
 
-	if v1.TinyWeight != v2.TinyWeight {
-		cmp = int(int64(v1.TinyWeight) - int64(v2.TinyWeight))
-	} else {
+	if cmp == 0 {
+		var err error
 		cmp, err = evalengine.NullsafeCompare(v1, v2, c.collationID)
 		if err != nil {
 			_, isCollationErr := err.(evalengine.UnsupportedCollationError)

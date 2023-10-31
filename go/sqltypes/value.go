@@ -18,6 +18,7 @@ limitations under the License.
 package sqltypes
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -52,6 +53,10 @@ var (
 	ErrIncompatibleTypeCast = errors.New("Cannot convert value to desired type")
 )
 
+const (
+	flagTinyWeight = 0x1
+)
+
 type (
 	// BinWriter interface is used for encoding values.
 	// Types like bytes.Buffer conform to this interface.
@@ -65,8 +70,9 @@ type (
 	// an integral type, the bytes are always stored as a canonical
 	// representation that matches how MySQL returns such values.
 	Value struct {
-		typ        querypb.Type
-		TinyWeight uint32
+		typ        uint16
+		flags      uint16
+		tinyweight uint32
 		val        []byte
 	}
 
@@ -115,7 +121,7 @@ func MakeTrusted(typ querypb.Type, val []byte) Value {
 	if typ == Null {
 		return NULL
 	}
-	return Value{typ: typ, val: val}
+	return Value{typ: uint16(typ), val: val}
 }
 
 // NewHexNum builds an Hex Value.
@@ -272,7 +278,7 @@ func InterfaceToValue(goval any) (Value, error) {
 
 // Type returns the type of Value.
 func (v Value) Type() querypb.Type {
-	return v.typ
+	return querypb.Type(v.typ)
 }
 
 // Raw returns the internal representation of the value. For newer types,
@@ -293,7 +299,7 @@ func (v Value) RawStr() string {
 // match MySQL's representation for hex encoded binary data or newer types.
 // If the value is not convertible like in the case of Expression, it returns an error.
 func (v Value) ToBytes() ([]byte, error) {
-	switch v.typ {
+	switch v.Type() {
 	case Expression:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "expression cannot be converted to bytes")
 	case HexVal: // TODO: all the decode below have problem when decoding odd number of bytes. This needs to be fixed.
@@ -346,7 +352,7 @@ func (v Value) ToInt() (int, error) {
 
 // ToFloat64 returns the value as MySQL would return it as a float64.
 func (v Value) ToFloat64() (float64, error) {
-	if !IsNumber(v.typ) {
+	if !IsNumber(v.Type()) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
@@ -404,7 +410,7 @@ func (v Value) ToBool() (bool, error) {
 // ToString returns the value as MySQL would return it as string.
 // If the value is not convertible like in the case of Expression, it returns nil.
 func (v Value) ToString() string {
-	if v.typ == Expression {
+	if v.Type() == Expression {
 		return ""
 	}
 	return hack.String(v.val)
@@ -412,23 +418,23 @@ func (v Value) ToString() string {
 
 // String returns a printable version of the value.
 func (v Value) String() string {
-	if v.typ == Null {
+	if v.Type() == Null {
 		return "NULL"
 	}
-	if v.IsQuoted() || v.typ == Bit {
-		return fmt.Sprintf("%v(%q)", v.typ, v.val)
+	if v.IsQuoted() || v.Type() == Bit {
+		return fmt.Sprintf("%v(%q)", Type(v.typ), v.val)
 	}
-	return fmt.Sprintf("%v(%s)", v.typ, v.val)
+	return fmt.Sprintf("%v(%s)", Type(v.typ), v.val)
 }
 
 // EncodeSQL encodes the value into an SQL statement. Can be binary.
 func (v Value) EncodeSQL(b BinWriter) {
 	switch {
-	case v.typ == Null:
+	case v.Type() == Null:
 		b.Write(NullBytes)
 	case v.IsQuoted():
 		encodeBytesSQL(v.val, b)
-	case v.typ == Bit:
+	case v.Type() == Bit:
 		encodeBytesSQLBits(v.val, b)
 	default:
 		b.Write(v.val)
@@ -439,13 +445,13 @@ func (v Value) EncodeSQL(b BinWriter) {
 // as its writer, so it can be inlined for performance.
 func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
 	switch {
-	case v.typ == Null:
+	case v.Type() == Null:
 		b.Write(NullBytes)
 	case v.IsQuoted():
 		encodeBytesSQLStringBuilder(v.val, b)
-	case v.typ == Bit:
+	case v.Type() == Bit:
 		encodeBytesSQLBits(v.val, b)
-	case v.typ == Tuple:
+	case v.Type() == Tuple:
 		b.WriteByte('(')
 		var i int
 		_ = v.ForEachValue(func(bv Value) {
@@ -465,11 +471,11 @@ func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
 // as its writer, so it can be inlined for performance.
 func (v Value) EncodeSQLBytes2(b *bytes2.Buffer) {
 	switch {
-	case v.typ == Null:
+	case v.Type() == Null:
 		b.Write(NullBytes)
 	case v.IsQuoted():
 		encodeBytesSQLBytes2(v.val, b)
-	case v.typ == Bit:
+	case v.Type() == Bit:
 		encodeBytesSQLBits(v.val, b)
 	default:
 		b.Write(v.val)
@@ -479,9 +485,9 @@ func (v Value) EncodeSQLBytes2(b *bytes2.Buffer) {
 // EncodeASCII encodes the value using 7-bit clean ascii bytes.
 func (v Value) EncodeASCII(b BinWriter) {
 	switch {
-	case v.typ == Null:
+	case v.Type() == Null:
 		b.Write(NullBytes)
-	case v.IsQuoted() || v.typ == Bit:
+	case v.IsQuoted() || v.Type() == Bit:
 		encodeBytesASCII(v.val, b)
 	default:
 		b.Write(v.val)
@@ -490,75 +496,75 @@ func (v Value) EncodeASCII(b BinWriter) {
 
 // IsNull returns true if Value is null.
 func (v Value) IsNull() bool {
-	return v.typ == Null
+	return v.Type() == Null
 }
 
 // IsIntegral returns true if Value is an integral.
 func (v Value) IsIntegral() bool {
-	return IsIntegral(v.typ)
+	return IsIntegral(v.Type())
 }
 
 // IsSigned returns true if Value is a signed integral.
 func (v Value) IsSigned() bool {
-	return IsSigned(v.typ)
+	return IsSigned(v.Type())
 }
 
 // IsUnsigned returns true if Value is an unsigned integral.
 func (v Value) IsUnsigned() bool {
-	return IsUnsigned(v.typ)
+	return IsUnsigned(v.Type())
 }
 
 // IsFloat returns true if Value is a float.
 func (v Value) IsFloat() bool {
-	return IsFloat(v.typ)
+	return IsFloat(v.Type())
 }
 
 // IsQuoted returns true if Value must be SQL-quoted.
 func (v Value) IsQuoted() bool {
-	return IsQuoted(v.typ)
+	return IsQuoted(v.Type())
 }
 
 // IsText returns true if Value is a collatable text.
 func (v Value) IsText() bool {
-	return IsText(v.typ)
+	return IsText(v.Type())
 }
 
 // IsBinary returns true if Value is binary.
 func (v Value) IsBinary() bool {
-	return IsBinary(v.typ)
+	return IsBinary(v.Type())
 }
 
 // IsDateTime returns true if Value is datetime.
 func (v Value) IsDateTime() bool {
-	return v.typ == querypb.Type_DATETIME
+	return v.Type() == querypb.Type_DATETIME
 }
 
 // IsTimestamp returns true if Value is date.
 func (v Value) IsTimestamp() bool {
-	return v.typ == querypb.Type_TIMESTAMP
+	return v.Type() == querypb.Type_TIMESTAMP
 }
 
 // IsDate returns true if Value is date.
 func (v Value) IsDate() bool {
-	return v.typ == querypb.Type_DATE
+	return v.Type() == querypb.Type_DATE
 }
 
 // IsTime returns true if Value is time.
 func (v Value) IsTime() bool {
-	return v.typ == querypb.Type_TIME
+	return v.Type() == querypb.Type_TIME
 }
 
 // IsDecimal returns true if Value is a decimal.
 func (v Value) IsDecimal() bool {
-	return IsDecimal(v.typ)
+	return IsDecimal(v.Type())
 }
 
 // IsComparable returns true if the Value is null safe comparable without collation information.
 func (v *Value) IsComparable() bool {
-	if v.typ == Null || IsNumber(v.typ) || IsBinary(v.typ) {
+	if v.Type() == Null || IsNumber(v.Type()) || IsBinary(v.Type()) {
 		return true
 	}
-	switch v.typ {
+	switch v.Type() {
 	case Timestamp, Date, Time, Datetime, Enum, Set, TypeJSON, Bit:
 		return true
 	}
@@ -569,9 +575,9 @@ func (v *Value) IsComparable() bool {
 // It's not a complete implementation.
 func (v Value) MarshalJSON() ([]byte, error) {
 	switch {
-	case v.IsQuoted() || v.typ == Bit:
+	case v.IsQuoted() || v.Type() == Bit:
 		return json.Marshal(v.ToString())
-	case v.typ == Null:
+	case v.Type() == Null:
 		return NullBytes, nil
 	}
 	return v.val, nil
@@ -671,7 +677,7 @@ func encodeTuple(tuple []Value) []byte {
 }
 
 func (v *Value) ForEachValue(each func(bv Value)) error {
-	if v.typ != Tuple {
+	if v.Type() != Tuple {
 		panic("Value.ForEachValue on non-tuple")
 	}
 
@@ -691,11 +697,27 @@ func (v *Value) ForEachValue(each func(bv Value)) error {
 		}
 
 		buf = buf[varlen:]
-		each(Value{val: buf[:sz], typ: Type(ty)})
+		each(Value{val: buf[:sz], typ: uint16(ty)})
 
 		buf = buf[sz:]
 	}
 	return nil
+}
+
+func (v Value) Equal(other Value) bool {
+	return v.typ == other.typ && bytes.Equal(v.val, other.val)
+}
+
+func (v *Value) SetTinyWeight(w uint32) {
+	v.tinyweight = w
+	v.flags |= flagTinyWeight
+}
+
+func (v Value) TinyWeightCmp(other Value) int {
+	if v.flags&other.flags&flagTinyWeight == 0 {
+		return 0
+	}
+	return int(int64(v.tinyweight) - int64(other.tinyweight))
 }
 
 func encodeBytesSQL(val []byte, b BinWriter) {

@@ -191,7 +191,7 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 			}
 			raw := uint64(i)
 			raw = raw ^ (1 << 63)
-			v.TinyWeight = uint32(raw >> 32)
+			v.SetTinyWeight(uint32(raw >> 32))
 		}
 
 	case sqltypes.IsUnsigned(f.Type):
@@ -200,7 +200,7 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 			if err != nil {
 				return
 			}
-			v.TinyWeight = uint32(u >> 32)
+			v.SetTinyWeight(uint32(u >> 32))
 		}
 
 	case sqltypes.IsFloat(f.Type):
@@ -215,7 +215,7 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 			} else {
 				raw = raw ^ (1 << 63)
 			}
-			v.TinyWeight = uint32(raw >> 32)
+			v.SetTinyWeight(uint32(raw >> 32))
 		}
 
 	case sqltypes.IsBinary(f.Type):
@@ -226,7 +226,7 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 
 			var w32 [4]byte
 			copy(w32[:4], v.Raw())
-			v.TinyWeight = binary.BigEndian.Uint32(w32[:4])
+			v.SetTinyWeight(binary.BigEndian.Uint32(w32[:4]))
 		}
 
 	case sqltypes.IsText(f.Type):
@@ -236,7 +236,7 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 					if v.IsNull() {
 						return
 					}
-					v.TinyWeight = twcoll.TinyWeightString(v.Raw())
+					v.SetTinyWeight(twcoll.TinyWeightString(v.Raw()))
 				}
 			}
 		}
@@ -254,7 +254,7 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 
 			var w32 [4]byte
 			copy(w32[:4], dec.WeightString(nil, int32(f.ColumnLength), int32(f.Decimals)))
-			v.TinyWeight = binary.BigEndian.Uint32(w32[:4])
+			v.SetTinyWeight(binary.BigEndian.Uint32(w32[:4]))
 		}
 
 	case f.Type == sqltypes.TypeJSON:
@@ -268,7 +268,7 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 			}
 			var w32 [4]byte
 			copy(w32[:4], j.WeightString(nil))
-			v.TinyWeight = binary.BigEndian.Uint32(w32[:4])
+			v.SetTinyWeight(binary.BigEndian.Uint32(w32[:4]))
 		}
 
 	default:

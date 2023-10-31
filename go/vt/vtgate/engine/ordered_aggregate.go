@@ -344,7 +344,7 @@ func (oa *OrderedAggregate) nextGroupBy(currentKey, nextRow []sqltypes.Value) (n
 	for _, gb := range oa.GroupByKeys {
 		v1 := currentKey[gb.KeyCol]
 		v2 := nextRow[gb.KeyCol]
-		if v1.TinyWeight != v2.TinyWeight {
+		if v1.TinyWeightCmp(v2) != 0 {
 			return nextRow, true, nil
 		}
 

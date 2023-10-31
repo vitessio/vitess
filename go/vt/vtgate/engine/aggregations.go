@@ -111,7 +111,7 @@ func (a *aggregatorDistinct) shouldReturn(row []sqltypes.Value) (bool, error) {
 		last := a.last
 		next := row[a.column]
 		if !last.IsNull() {
-			if last.TinyWeight == next.TinyWeight {
+			if last.TinyWeightCmp(next) == 0 {
 				cmp, err := evalengine.NullsafeCompare(last, next, a.coll)
 				if err != nil {
 					return true, err
