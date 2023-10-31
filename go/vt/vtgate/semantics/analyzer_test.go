@@ -604,6 +604,9 @@ func TestOrderByBindingTable(t *testing.T) {
 	}, {
 		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by id",
 		MergeTableSets(TS0, TS1, TS3),
+	}, {
+		"select * from (SELECT c1, c2 FROM a UNION SELECT c1, c2 FROM b) AS u ORDER BY u.c1",
+		MergeTableSets(TS0, TS1),
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
