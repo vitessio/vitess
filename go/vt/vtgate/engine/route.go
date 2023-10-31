@@ -22,11 +22,9 @@ import (
 	"math/rand"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -71,7 +69,7 @@ type Route struct {
 	// OrderBy specifies the key order for merge sorting. This will be
 	// set only for scatter queries that need the results to be
 	// merge-sorted.
-	OrderBy []OrderByParams
+	OrderBy []evalengine.OrderByParams
 
 	// TruncateColumnCount specifies the number of columns to return
 	// in the final result. Rest of the columns are truncated
@@ -110,41 +108,6 @@ func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery stri
 		Query:      query,
 		FieldQuery: fieldQuery,
 	}
-}
-
-// OrderByParams specifies the parameters for ordering.
-// This is used for merge-sorting scatter queries.
-type OrderByParams struct {
-	Col int
-	// WeightStringCol is the weight_string column that will be used for sorting.
-	// It is set to -1 if such a column is not added to the query
-	WeightStringCol   int
-	Desc              bool
-	StarColFixedIndex int
-
-	// Type for knowing if the collation is relevant
-	Type evalengine.Type
-}
-
-// String returns a string. Used for plan descriptions
-func (obp OrderByParams) String() string {
-	val := strconv.Itoa(obp.Col)
-	if obp.StarColFixedIndex > obp.Col {
-		val = strconv.Itoa(obp.StarColFixedIndex)
-	}
-	if obp.WeightStringCol != -1 && obp.WeightStringCol != obp.Col {
-		val = fmt.Sprintf("(%s|%d)", val, obp.WeightStringCol)
-	}
-	if obp.Desc {
-		val += " DESC"
-	} else {
-		val += " ASC"
-	}
-
-	if sqltypes.IsText(obp.Type.Type) && obp.Type.Coll != collations.Unknown {
-		val += " COLLATE " + collations.Local().LookupName(obp.Type.Coll)
-	}
-	return val
 }
 
 var (
@@ -429,22 +392,12 @@ func (route *Route) sort(in *sqltypes.Result) (_ *sqltypes.Result, err error) {
 	// the contents of any row.
 	out := in.ShallowCopy()
 
-	comparers := extractSlices(route.OrderBy)
-
-	var weighted []evalengine.WeightedColumn
-	for _, cmp := range comparers {
-		weighted = append(weighted, evalengine.WeightedColumn{
-			Column:    cmp.orderBy,
-			Collation: cmp.collationID,
-			Field:     out.Fields[cmp.orderBy],
-		})
-	}
-
-	evalengine.ApplyTinyWeights(out.Rows, weighted)
+	comparers := route.OrderBy
+	evalengine.ApplyTinyWeights(out, comparers)
 
 	slices.SortFunc(out.Rows, func(a, b sqltypes.Row) int {
 		for _, c := range comparers {
-			if cmp := c.compare(a, b); cmp != 0 {
+			if cmp := c.Compare(a, b); cmp != 0 {
 				return cmp
 			}
 		}
@@ -589,7 +542,8 @@ func getQueries(query string, bvs []map[string]*querypb.BindVariable) []*querypb
 }
 
 func orderByToString(in any) string {
-	return in.(OrderByParams).String()
+	obp := in.(evalengine.OrderByParams)
+	return obp.String()
 }
 
 func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, queries []*querypb.BoundQuery) {

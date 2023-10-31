@@ -19,11 +19,11 @@ package evalengine
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -162,13 +162,7 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 	return compare(v1, v2, collationID)
 }
 
-type WeightedColumn struct {
-	Column    int
-	Collation collations.ID
-	Field     *querypb.Field
-}
-
-func ApplyTinyWeights(rows []sqltypes.Row, columns []WeightedColumn) {
+func ApplyTinyWeights(out *sqltypes.Result, columns []OrderByParams) {
 	type tinyWeighter struct {
 		col   int
 		apply func(v *sqltypes.Value)
@@ -176,8 +170,8 @@ func ApplyTinyWeights(rows []sqltypes.Row, columns []WeightedColumn) {
 
 	weights := make([]tinyWeighter, 0, len(columns))
 	for _, c := range columns {
-		if apply := TinyWeightString(c.Field, c.Collation); apply != nil {
-			weights = append(weights, tinyWeighter{c.Column, apply})
+		if apply := TinyWeightString(out.Fields[c.Col], c.Type.Coll); apply != nil {
+			weights = append(weights, tinyWeighter{c.Col, apply})
 		}
 	}
 
@@ -185,9 +179,69 @@ func ApplyTinyWeights(rows []sqltypes.Row, columns []WeightedColumn) {
 		return
 	}
 
-	for _, row := range rows {
+	for _, row := range out.Rows {
 		for _, w := range weights {
 			w.apply(&row[w.col])
 		}
 	}
+}
+
+// OrderByParams specifies the parameters for ordering.
+// This is used for merge-sorting scatter queries.
+type OrderByParams struct {
+	Col int
+	// WeightStringCol is the weight_string column that will be used for sorting.
+	// It is set to -1 if such a column is not added to the query
+	WeightStringCol int
+	Desc            bool
+
+	// Type for knowing if the collation is relevant
+	Type Type
+}
+
+// String returns a string. Used for plan descriptions
+func (obp *OrderByParams) String() string {
+	val := strconv.Itoa(obp.Col)
+	if obp.WeightStringCol != -1 && obp.WeightStringCol != obp.Col {
+		val = fmt.Sprintf("(%s|%d)", val, obp.WeightStringCol)
+	}
+	if obp.Desc {
+		val += " DESC"
+	} else {
+		val += " ASC"
+	}
+
+	if sqltypes.IsText(obp.Type.Type) && obp.Type.Coll != collations.Unknown {
+		val += " COLLATE " + collations.Local().LookupName(obp.Type.Coll)
+	}
+	return val
+}
+
+func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
+	v1 := r1[obp.Col]
+	v2 := r2[obp.Col]
+	cmp := v1.TinyWeightCmp(v2)
+
+	if cmp == 0 {
+		var err error
+		cmp, err = NullsafeCompare(v1, v2, obp.Type.Coll)
+		if err != nil {
+			_, isCollationErr := err.(UnsupportedCollationError)
+			if !isCollationErr || obp.WeightStringCol == -1 {
+				panic(err)
+			}
+			// in case of a comparison or collation error switch to using the weight string column for ordering
+			obp.Col = obp.WeightStringCol
+			obp.WeightStringCol = -1
+			cmp, err = NullsafeCompare(r1[obp.Col], r2[obp.Col], obp.Type.Coll)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+	// change the result if descending ordering is required
+	if obp.Desc {
+		cmp = -cmp
+	}
+	return cmp
 }

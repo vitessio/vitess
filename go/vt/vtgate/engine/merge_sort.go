@@ -22,6 +22,7 @@ import (
 	"io"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -49,7 +50,7 @@ var _ Primitive = (*MergeSort)(nil)
 // so that vdiff can use it. In that situation, only StreamExecute is used.
 type MergeSort struct {
 	Primitives              []StreamExecutor
-	OrderBy                 []OrderByParams
+	OrderBy                 []evalengine.OrderByParams
 	ScatterErrorsAsWarnings bool
 	noInputs
 	noTxNeeded
@@ -99,10 +100,9 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		}
 	}
 
-	comparers := extractSlices(ms.OrderBy)
 	sh := &scatterHeap{
 		rows:      make([]streamRow, 0, len(handles)),
-		comparers: comparers,
+		comparers: ms.OrderBy,
 	}
 
 	var errs []error
@@ -274,7 +274,7 @@ type streamRow struct {
 // after every heap operation.
 type scatterHeap struct {
 	rows      []streamRow
-	comparers []*comparer
+	comparers []evalengine.OrderByParams
 }
 
 // Len satisfies sort.Interface and heap.Interface.
@@ -286,7 +286,7 @@ func (sh *scatterHeap) Len() int {
 func (sh *scatterHeap) Less(i, j int) bool {
 	for _, c := range sh.comparers {
 		// First try to compare the columns that we want to order
-		cmp := c.compare(sh.rows[i].row, sh.rows[j].row)
+		cmp := c.Compare(sh.rows[i].row, sh.rows[j].row)
 		if cmp == 0 {
 			continue
 		}

@@ -36,7 +36,7 @@ var _ Primitive = (*MemorySort)(nil)
 // MemorySort is a primitive that performs in-memory sorting.
 type MemorySort struct {
 	UpperLimit evalengine.Expr
-	OrderBy    []OrderByParams
+	OrderBy    []evalengine.OrderByParams
 	Input      Primitive
 
 	// TruncateColumnCount specifies the number of columns to return
@@ -91,7 +91,7 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	}
 	sh := &sortHeap{
 		rows:      result.Rows,
-		comparers: extractSlices(ms.OrderBy),
+		comparers: ms.OrderBy,
 	}
 	sort.Sort(sh)
 	result.Rows = sh.rows
@@ -117,7 +117,7 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	// You have to reverse the ordering because the highest values
 	// must be dropped once the upper limit is reached.
 	sh := &sortHeap{
-		comparers: extractSlices(ms.OrderBy),
+		comparers: ms.OrderBy,
 		reverse:   true,
 	}
 	err = vcursor.StreamExecutePrimitive(ctx, ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
@@ -198,7 +198,8 @@ func (ms *MemorySort) description() PrimitiveDescription {
 }
 
 func orderByParamsToString(i any) string {
-	return i.(OrderByParams).String()
+	obp := i.(evalengine.OrderByParams)
+	return obp.String()
 }
 
 // GenericJoin will iterate over arrays, slices or maps, and executes the f function to get a
@@ -225,7 +226,7 @@ func GenericJoin(input any, f func(any) string) string {
 // Implementation is similar to scatterHeap
 type sortHeap struct {
 	rows      [][]sqltypes.Value
-	comparers []*comparer
+	comparers []evalengine.OrderByParams
 	reverse   bool
 }
 
@@ -237,7 +238,7 @@ func (sh *sortHeap) Len() int {
 // Less satisfies sort.Interface and heap.Interface.
 func (sh *sortHeap) Less(i, j int) bool {
 	for _, c := range sh.comparers {
-		cmp := c.compare(sh.rows[i], sh.rows[j])
+		cmp := c.Compare(sh.rows[i], sh.rows[j])
 		if cmp == 0 {
 			continue
 		}
