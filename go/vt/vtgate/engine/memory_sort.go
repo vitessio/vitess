@@ -26,10 +26,9 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 var _ Primitive = (*MemorySort)(nil)
@@ -66,8 +65,21 @@ func (ms *MemorySort) SetTruncateColumnCount(count int) {
 	ms.TruncateColumnCount = count
 }
 
+func PanicHandler(err *error) {
+	if r := recover(); r != nil {
+		badness, ok := r.(error)
+		if !ok {
+			panic(r)
+		}
+
+		*err = badness
+	}
+}
+
 // TryExecute satisfies the Primitive interface.
-func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (qr *sqltypes.Result, err error) {
+	defer PanicHandler(&err)
+
 	count, err := ms.fetchCount(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -82,9 +94,6 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		comparers: extractSlices(ms.OrderBy),
 	}
 	sort.Sort(sh)
-	if sh.err != nil {
-		return nil, sh.err
-	}
 	result.Rows = sh.rows
 	if len(result.Rows) > count {
 		result.Rows = result.Rows[:count]
@@ -93,7 +102,9 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 }
 
 // TryStreamExecute satisfies the Primitive interface.
-func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) (err error) {
+	defer PanicHandler(&err)
+
 	count, err := ms.fetchCount(ctx, vcursor, bindVars)
 	if err != nil {
 		return err
@@ -131,16 +142,9 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	if err != nil {
 		return err
 	}
-	if sh.err != nil {
-		return sh.err
-	}
 	// Set ordering to normal for the final ordering.
 	sh.reverse = false
 	sort.Sort(sh)
-	if sh.err != nil {
-		// Unreachable.
-		return sh.err
-	}
 	return cb(&sqltypes.Result{Rows: sh.rows})
 }
 
@@ -223,7 +227,6 @@ type sortHeap struct {
 	rows      [][]sqltypes.Value
 	comparers []*comparer
 	reverse   bool
-	err       error
 }
 
 // Len satisfies sort.Interface and heap.Interface.
@@ -234,14 +237,7 @@ func (sh *sortHeap) Len() int {
 // Less satisfies sort.Interface and heap.Interface.
 func (sh *sortHeap) Less(i, j int) bool {
 	for _, c := range sh.comparers {
-		if sh.err != nil {
-			return true
-		}
-		cmp, err := c.compare(sh.rows[i], sh.rows[j])
-		if err != nil {
-			sh.err = err
-			return true
-		}
+		cmp := c.compare(sh.rows[i], sh.rows[j])
 		if cmp == 0 {
 			continue
 		}

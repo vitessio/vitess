@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -175,4 +176,79 @@ func evalWeightString(dst []byte, e eval, length, precision int) ([]byte, bool, 
 	}
 
 	return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", e.SQLType())
+}
+
+func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltypes.Value) {
+	switch {
+	case sqltypes.IsNull(f.Type):
+		return nil
+
+	case sqltypes.IsSigned(f.Type):
+		return func(v *sqltypes.Value) {
+			i, err := v.ToInt64()
+			if err != nil {
+				return
+			}
+			raw := uint64(i)
+			raw = raw ^ (1 << 63)
+			v.TinyWeight = uint32(min(raw, 0xFFFFFFFF))
+		}
+
+	case sqltypes.IsUnsigned(f.Type):
+		return func(v *sqltypes.Value) {
+			u, err := v.ToUint64()
+			if err != nil {
+				return
+			}
+			v.TinyWeight = uint32(min(u, 0xFFFFFFFF))
+		}
+
+	case sqltypes.IsFloat(f.Type):
+		return func(v *sqltypes.Value) {
+			f, err := v.ToFloat64()
+			if err != nil {
+				return
+			}
+			raw := math.Float64bits(f)
+			if math.Signbit(f) {
+				raw = ^raw
+			} else {
+				raw = raw ^ (1 << 63)
+			}
+			v.TinyWeight = uint32(min(raw, 0xFFFFFFFF))
+		}
+
+	case sqltypes.IsBinary(f.Type):
+		return func(v *sqltypes.Value) {
+			if v.IsNull() {
+				return
+			}
+
+			var w32 [4]byte
+			copy(w32[:4], v.Raw())
+			v.TinyWeight = binary.BigEndian.Uint32(w32[:4])
+		}
+
+	case sqltypes.IsText(f.Type):
+		if coll := colldata.Lookup(collation); coll != nil {
+			if twcoll, ok := coll.(colldata.TinyWeightCollation); ok {
+				return func(v *sqltypes.Value) {
+					if v.IsNull() {
+						return
+					}
+					v.TinyWeight = twcoll.TinyWeightString(v.Raw())
+				}
+			}
+		}
+		return nil
+
+	case sqltypes.IsDecimal(f.Type):
+		return nil // TODO
+
+	case f.Type == sqltypes.TypeJSON:
+		return nil // TODO
+
+	default:
+		return nil
+	}
 }

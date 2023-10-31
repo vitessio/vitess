@@ -155,6 +155,11 @@ type CaseAwareCollation interface {
 	ToLower(dst []byte, src []byte) []byte
 }
 
+type TinyWeightCollation interface {
+	Collation
+	TinyWeightString(src []byte) uint32
+}
+
 func Lookup(id collations.ID) Collation {
 	if int(id) >= len(collationsById) {
 		return nil

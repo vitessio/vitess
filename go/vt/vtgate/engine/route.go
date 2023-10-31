@@ -421,8 +421,9 @@ func (route *Route) GetFields(ctx context.Context, vcursor VCursor, bindVars map
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
-func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
-	var err error
+func (route *Route) sort(in *sqltypes.Result) (_ *sqltypes.Result, err error) {
+	defer PanicHandler(&err)
+
 	// Since Result is immutable, we make a copy.
 	// The copy can be shallow because we won't be changing
 	// the contents of any row.
@@ -430,29 +431,27 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 
 	comparers := extractSlices(route.OrderBy)
 
+	var weighted []evalengine.WeightedColumn
+	for _, cmp := range comparers {
+		weighted = append(weighted, evalengine.WeightedColumn{
+			Column:    cmp.orderBy,
+			Collation: cmp.collationID,
+			Field:     out.Fields[cmp.orderBy],
+		})
+	}
+
+	evalengine.ApplyTinyWeights(out.Rows, weighted)
+
 	slices.SortFunc(out.Rows, func(a, b sqltypes.Row) int {
-		var cmp int
-		if err != nil {
-			return -1
-		}
-		// If there are any errors below, the function sets
-		// the external err and returns true. Once err is set,
-		// all subsequent calls return true. This will make
-		// Slice think that all elements are in the correct
-		// order and return more quickly.
 		for _, c := range comparers {
-			cmp, err = c.compare(a, b)
-			if err != nil {
-				return -1
-			}
-			if cmp != 0 {
+			if cmp := c.compare(a, b); cmp != 0 {
 				return cmp
 			}
 		}
 		return 0
 	})
 
-	return out.Truncate(route.TruncateColumnCount), err
+	return out.Truncate(route.TruncateColumnCount), nil
 }
 
 func (route *Route) description() PrimitiveDescription {

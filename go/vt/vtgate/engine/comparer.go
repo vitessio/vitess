@@ -33,33 +33,44 @@ type comparer struct {
 // -1 if the first row should be earlier
 // 1 is the second row should be earlier
 // 0 if both the rows have equal ordering
-func (c *comparer) compare(r1, r2 []sqltypes.Value) (int, error) {
+func (c *comparer) compare(r1, r2 []sqltypes.Value) int {
 	var colIndex int
 	if c.starColFixedIndex > c.orderBy && c.starColFixedIndex < len(r1) {
 		colIndex = c.starColFixedIndex
 	} else {
 		colIndex = c.orderBy
 	}
-	cmp, err := evalengine.NullsafeCompare(r1[colIndex], r2[colIndex], c.collationID)
-	if err != nil {
-		_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
-		_, isCollationErr := err.(evalengine.UnsupportedCollationError)
-		if !isComparisonErr && !isCollationErr || c.weightString == -1 {
-			return 0, err
-		}
-		// in case of a comparison or collation error switch to using the weight string column for ordering
-		c.orderBy = c.weightString
-		c.weightString = -1
-		cmp, err = evalengine.NullsafeCompare(r1[c.orderBy], r2[c.orderBy], c.collationID)
+
+	var (
+		cmp int
+		err error
+		v1  = r1[colIndex]
+		v2  = r2[colIndex]
+	)
+
+	if v1.TinyWeight != v2.TinyWeight {
+		cmp = int(int64(v1.TinyWeight) - int64(v2.TinyWeight))
+	} else {
+		cmp, err = evalengine.NullsafeCompare(v1, v2, c.collationID)
 		if err != nil {
-			return 0, err
+			_, isCollationErr := err.(evalengine.UnsupportedCollationError)
+			if !isCollationErr || c.weightString == -1 {
+				panic(err)
+			}
+			// in case of a comparison or collation error switch to using the weight string column for ordering
+			c.orderBy = c.weightString
+			c.weightString = -1
+			cmp, err = evalengine.NullsafeCompare(r1[c.orderBy], r2[c.orderBy], c.collationID)
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 	// change the result if descending ordering is required
 	if c.desc {
 		cmp = -cmp
 	}
-	return cmp, nil
+	return cmp
 }
 
 // extractSlices extracts the three fields of OrderByParams into a slice of comparers

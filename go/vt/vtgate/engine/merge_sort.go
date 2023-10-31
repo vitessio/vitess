@@ -75,7 +75,9 @@ func (ms *MergeSort) GetFields(ctx context.Context, vcursor VCursor, bindVars ma
 }
 
 // TryStreamExecute performs a streaming exec.
-func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) (err error) {
+	defer PanicHandler(&err)
+
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithCancel(ctx)
 	defer cancel()
@@ -127,9 +129,6 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		}
 	}
 	heap.Init(sh)
-	if sh.err != nil {
-		return sh.err
-	}
 
 	// Iterate one row at a time:
 	// Pop a row from the heap and send it out.
@@ -137,10 +136,6 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	// row came from and push it into the heap.
 	for len(sh.rows) != 0 {
 		sr := heap.Pop(sh).(streamRow)
-		if sh.err != nil {
-			// Unreachable: This should never fail.
-			return sh.err
-		}
 		if err := callback(&sqltypes.Result{Rows: [][]sqltypes.Value{sr.row}}); err != nil {
 			return err
 		}
@@ -155,15 +150,12 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			}
 			sr.row = row
 			heap.Push(sh, sr)
-			if sh.err != nil {
-				return sh.err
-			}
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
 
-	err := vterrors.Aggregate(errs)
+	err = vterrors.Aggregate(errs)
 	if err != nil && ms.ScatterErrorsAsWarnings && len(errs) < len(handles) {
 		// we got errors, but not all shards failed, so we can hide the error and just warn instead
 		partialSuccessScatterQueries.Add(1)
@@ -282,7 +274,6 @@ type streamRow struct {
 // after every heap operation.
 type scatterHeap struct {
 	rows      []streamRow
-	err       error
 	comparers []*comparer
 }
 
@@ -294,15 +285,8 @@ func (sh *scatterHeap) Len() int {
 // Less satisfies sort.Interface and heap.Interface.
 func (sh *scatterHeap) Less(i, j int) bool {
 	for _, c := range sh.comparers {
-		if sh.err != nil {
-			return true
-		}
 		// First try to compare the columns that we want to order
-		cmp, err := c.compare(sh.rows[i].row, sh.rows[j].row)
-		if err != nil {
-			sh.err = err
-			return true
-		}
+		cmp := c.compare(sh.rows[i].row, sh.rows[j].row)
 		if cmp == 0 {
 			continue
 		}

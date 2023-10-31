@@ -106,8 +106,7 @@ func TestComparer(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			got, err := test.comparer.compare(test.row1, test.row2)
-			require.NoError(t, err)
+			got := test.comparer.compare(test.row1, test.row2)
 			require.Equal(t, test.output, got)
 		})
 	}

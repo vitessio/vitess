@@ -23,20 +23,10 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
-
-// UnsupportedComparisonError represents the error where the comparison between the two types is unsupported on vitess
-type UnsupportedComparisonError struct {
-	Type1 sqltypes.Type
-	Type2 sqltypes.Type
-}
-
-// Error function implements the error interface
-func (err UnsupportedComparisonError) Error() string {
-	return fmt.Sprintf("types are not comparable: %v vs %v", err.Type1, err.Type2)
-}
 
 // UnsupportedCollationError represents the error where the comparison using provided collation is unsupported on vitess
 type UnsupportedCollationError struct {
@@ -170,4 +160,34 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 		return 1, nil
 	}
 	return compare(v1, v2, collationID)
+}
+
+type WeightedColumn struct {
+	Column    int
+	Collation collations.ID
+	Field     *querypb.Field
+}
+
+func ApplyTinyWeights(rows []sqltypes.Row, columns []WeightedColumn) {
+	type tinyWeighter struct {
+		col   int
+		apply func(v *sqltypes.Value)
+	}
+
+	weights := make([]tinyWeighter, 0, len(columns))
+	for _, c := range columns {
+		if apply := TinyWeightString(c.Field, c.Collation); apply != nil {
+			weights = append(weights, tinyWeighter{c.Column, apply})
+		}
+	}
+
+	if len(weights) == 0 {
+		return
+	}
+
+	for _, row := range rows {
+		for _, w := range weights {
+			w.apply(&row[w.col])
+		}
+	}
 }

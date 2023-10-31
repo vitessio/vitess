@@ -65,8 +65,9 @@ type (
 	// an integral type, the bytes are always stored as a canonical
 	// representation that matches how MySQL returns such values.
 	Value struct {
-		typ querypb.Type
-		val []byte
+		typ        querypb.Type
+		TinyWeight uint32
+		val        []byte
 	}
 
 	Row = []Value
