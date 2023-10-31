@@ -4,8 +4,6 @@
 
 package norm
 
-import "encoding/binary"
-
 // This file contains Form-specific logic and wrappers for data in tables.go.
 
 // Rune info is stored in a separate trie per composing form. A composing form
@@ -52,31 +50,16 @@ type lookupFunc func(b input, i int) Properties
 
 // formInfo holds Form-specific functions and tables.
 type formInfo struct {
-	form                     Form
-	composing, compatibility bool // form type
-	info                     lookupFunc
+	form Form
+	info lookupFunc
 }
 
 var formTable = []*formInfo{{
-	form:          NFC,
-	composing:     true,
-	compatibility: false,
-	info:          lookupInfoNFC,
+	form: NFD,
+	info: lookupInfoNFC,
 }, {
-	form:          NFD,
-	composing:     false,
-	compatibility: false,
-	info:          lookupInfoNFC,
-}, {
-	form:          NFKC,
-	composing:     true,
-	compatibility: true,
-	info:          lookupInfoNFKC,
-}, {
-	form:          NFKD,
-	composing:     false,
-	compatibility: true,
-	info:          lookupInfoNFKC,
+	form: NFKD,
+	info: lookupInfoNFKC,
 }}
 
 // We do not distinguish between boundaries for NFC, NFD, etc. to avoid
@@ -115,19 +98,13 @@ func (p Properties) BoundaryAfter() bool {
 // influenced by normalization.
 type qcInfo uint8
 
-func (p Properties) isYesC() bool { return p.flags&0x10 == 0 }
 func (p Properties) isYesD() bool { return p.flags&0x4 == 0 }
 
-func (p Properties) combinesForward() bool  { return p.flags&0x20 != 0 }
 func (p Properties) combinesBackward() bool { return p.flags&0x8 != 0 } // == isMaybe
 func (p Properties) hasDecomposition() bool { return p.flags&0x4 != 0 } // == isNoD
 
 func (p Properties) isInert() bool {
 	return p.flags&qcInfoMask == 0 && p.ccc == 0
-}
-
-func (p Properties) multiSegment() bool {
-	return p.index >= firstMulti && p.index < endMulti
 }
 
 func (p Properties) nLeadingNonStarters() uint8 {
@@ -156,14 +133,6 @@ func (p Properties) Size() int {
 	return int(p.size)
 }
 
-// CCC returns the canonical combining class of the underlying rune.
-func (p Properties) CCC() uint8 {
-	if p.index >= firstCCCZeroExcept {
-		return 0
-	}
-	return ccc[p.ccc]
-}
-
 // LeadCCC returns the CCC of the first rune in the decomposition.
 // If there is no decomposition, LeadCCC equals CCC.
 func (p Properties) LeadCCC() uint8 {
@@ -174,36 +143,6 @@ func (p Properties) LeadCCC() uint8 {
 // If there is no decomposition, TrailCCC equals CCC.
 func (p Properties) TrailCCC() uint8 {
 	return ccc[p.tccc]
-}
-
-func buildRecompMap() {
-	recompMap = make(map[uint32]rune, len(recompMapPacked)/8)
-	var buf [8]byte
-	for i := 0; i < len(recompMapPacked); i += 8 {
-		copy(buf[:], recompMapPacked[i:i+8])
-		key := binary.BigEndian.Uint32(buf[:4])
-		val := binary.BigEndian.Uint32(buf[4:])
-		recompMap[key] = rune(val)
-	}
-}
-
-// Recomposition
-// We use 32-bit keys instead of 64-bit for the two codepoint keys.
-// This clips off the bits of three entries, but we know this will not
-// result in a collision. In the unlikely event that changes to
-// UnicodeData.txt introduce collisions, the compiler will catch it.
-// Note that the recomposition map for NFC and NFKC are identical.
-
-// combine returns the combined rune or 0 if it doesn't exist.
-//
-// The caller is responsible for calling
-// recompMapOnce.Do(buildRecompMap) sometime before this is called.
-func combine(a, b rune) rune {
-	key := uint32(uint16(a))<<16 + uint32(uint16(b))
-	if recompMap == nil {
-		panic("caller error") // see func comment
-	}
-	return recompMap[key]
 }
 
 func lookupInfoNFC(b input, i int) Properties {
@@ -218,7 +157,7 @@ func lookupInfoNFKC(b input, i int) Properties {
 
 // Properties returns properties for the first rune in s.
 func (f Form) Properties(s []byte) Properties {
-	if f == NFC || f == NFD {
+	if f == NFD {
 		return compInfo(nfcData.lookup(s))
 	}
 	return compInfo(nfkcData.lookup(s))

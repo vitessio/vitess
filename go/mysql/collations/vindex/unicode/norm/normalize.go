@@ -16,9 +16,7 @@ import (
 // A Form denotes a canonical representation of Unicode code points.
 // The Unicode-defined normalization and equivalence forms are:
 //
-//	NFC   Unicode Normalization Form C
 //	NFD   Unicode Normalization Form D
-//	NFKC  Unicode Normalization Form KC
 //	NFKD  Unicode Normalization Form KD
 //
 // For a Form f, this documentation uses the notation f(x) to mean
@@ -33,9 +31,7 @@ import (
 type Form int
 
 const (
-	NFC Form = iota
-	NFD
-	NFKC
+	NFD Form = iota
 	NFKD
 )
 
@@ -188,14 +184,8 @@ func (f *formInfo) quickSpan(src input, i, end int, atEOF bool) (n int, ok bool)
 				return lastSegStart, false
 			}
 		}
-		if f.composing {
-			if !info.isYesC() {
-				break
-			}
-		} else {
-			if !info.isYesD() {
-				break
-			}
+		if !info.isYesD() {
+			break
 		}
 		lastCC = info.ccc
 		i += int(info.size)

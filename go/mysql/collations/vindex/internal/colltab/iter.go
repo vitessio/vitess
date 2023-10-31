@@ -32,23 +32,12 @@ func (i *Iter) Reset(p int) {
 	i.pNext = p
 }
 
-// Len returns the length of the input text.
-func (i *Iter) Len() int {
-	return len(i.bytes)
-}
-
 // Discard removes the collation elements up to N.
 func (i *Iter) Discard() {
 	// TODO: change this such that only modifiers following starters will have
 	// to be copied.
 	i.Elems = i.Elems[:copy(i.Elems, i.Elems[i.N:])]
 	i.N = 0
-}
-
-// End returns the end position of the input text for which Next has returned
-// results.
-func (i *Iter) End() int {
-	return i.pEnd
 }
 
 // SetInput resets i to input s.

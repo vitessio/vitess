@@ -14,9 +14,7 @@ const (
 	maxNonStarters = 30
 	// The maximum number of characters needed for a buffer is
 	// maxNonStarters + 1 for the starter + 1 for the GCJ
-	maxBufferSize    = maxNonStarters + 2
-	maxNFCExpansion  = 3  // NFC(0x1D160)
-	maxNFKCExpansion = 18 // NFKC(0xFDFA)
+	maxBufferSize = maxNonStarters + 2
 
 	maxByteBufferSize = utf8.UTFMax * maxBufferSize // 128
 )
@@ -131,9 +129,6 @@ func (rb *reorderBuffer) reset() {
 }
 
 func (rb *reorderBuffer) doFlush() bool {
-	if rb.f.composing {
-		rb.compose()
-	}
 	res := rb.flushF(rb)
 	rb.reset()
 	return res
@@ -147,29 +142,6 @@ func appendFlush(rb *reorderBuffer) bool {
 		rb.out = append(rb.out, rb.byte[start:end]...)
 	}
 	return true
-}
-
-// flush appends the normalized segment to out and resets rb.
-func (rb *reorderBuffer) flush(out []byte) []byte {
-	for i := 0; i < rb.nrune; i++ {
-		start := rb.rune[i].pos
-		end := start + rb.rune[i].size
-		out = append(out, rb.byte[start:end]...)
-	}
-	rb.reset()
-	return out
-}
-
-// flushCopy copies the normalized segment to buf and resets rb.
-// It returns the number of bytes written to buf.
-func (rb *reorderBuffer) flushCopy(buf []byte) int {
-	p := 0
-	for i := 0; i < rb.nrune; i++ {
-		runep := rb.rune[i]
-		p += copy(buf[p:], rb.byte[runep.pos:runep.pos+runep.size])
-	}
-	rb.reset()
-	return p
 }
 
 // insertOrdered inserts a rune in the buffer, ordered by Canonical Combining Class.
@@ -277,52 +249,22 @@ func (rb *reorderBuffer) appendRune(r rune) {
 	rb.nrune++
 }
 
-// assignRune sets a rune at position pos. It is used for Hangul and recomposition.
-func (rb *reorderBuffer) assignRune(pos int, r rune) {
-	bn := rb.rune[pos].pos
-	sz := utf8.EncodeRune(rb.byte[bn:], rune(r))
-	rb.rune[pos] = Properties{pos: bn, size: uint8(sz)}
-}
-
-// runeAt returns the rune at position n. It is used for Hangul and recomposition.
-func (rb *reorderBuffer) runeAt(n int) rune {
-	inf := rb.rune[n]
-	r, _ := utf8.DecodeRune(rb.byte[inf.pos : inf.pos+inf.size])
-	return r
-}
-
-// bytesAt returns the UTF-8 encoding of the rune at position n.
-// It is used for Hangul and recomposition.
-func (rb *reorderBuffer) bytesAt(n int) []byte {
-	inf := rb.rune[n]
-	return rb.byte[inf.pos : int(inf.pos)+int(inf.size)]
-}
-
 // For Hangul we combine algorithmically, instead of using tables.
 const (
 	hangulBase  = 0xAC00 // UTF-8(hangulBase) -> EA B0 80
 	hangulBase0 = 0xEA
 	hangulBase1 = 0xB0
-	hangulBase2 = 0x80
 
-	hangulEnd  = hangulBase + jamoLVTCount // UTF-8(0xD7A4) -> ED 9E A4
 	hangulEnd0 = 0xED
 	hangulEnd1 = 0x9E
 	hangulEnd2 = 0xA4
 
-	jamoLBase  = 0x1100 // UTF-8(jamoLBase) -> E1 84 00
-	jamoLBase0 = 0xE1
-	jamoLBase1 = 0x84
-	jamoLEnd   = 0x1113
-	jamoVBase  = 0x1161
-	jamoVEnd   = 0x1176
-	jamoTBase  = 0x11A7
-	jamoTEnd   = 0x11C3
+	jamoLBase = 0x1100 // UTF-8(jamoLBase) -> E1 84 00
+	jamoVBase = 0x1161
+	jamoTBase = 0x11A7
 
-	jamoTCount   = 28
-	jamoVCount   = 21
-	jamoVTCount  = 21 * 28
-	jamoLVTCount = 19 * 21 * 28
+	jamoTCount = 28
+	jamoVCount = 21
 )
 
 const hangulUTF8Size = 3
@@ -349,50 +291,6 @@ func isHangul(b []byte) bool {
 	return b1 == hangulEnd1 && b[2] < hangulEnd2
 }
 
-func isHangulString(b string) bool {
-	if len(b) < hangulUTF8Size {
-		return false
-	}
-	b0 := b[0]
-	if b0 < hangulBase0 {
-		return false
-	}
-	b1 := b[1]
-	switch {
-	case b0 == hangulBase0:
-		return b1 >= hangulBase1
-	case b0 < hangulEnd0:
-		return true
-	case b0 > hangulEnd0:
-		return false
-	case b1 < hangulEnd1:
-		return true
-	}
-	return b1 == hangulEnd1 && b[2] < hangulEnd2
-}
-
-// Caller must ensure len(b) >= 2.
-func isJamoVT(b []byte) bool {
-	// True if (rune & 0xff00) == jamoLBase
-	return b[0] == jamoLBase0 && (b[1]&0xFC) == jamoLBase1
-}
-
-// decomposeHangul writes the decomposed Hangul to buf and returns the number
-// of bytes written.  len(buf) should be at least 9.
-func decomposeHangul(buf []byte, r rune) int {
-	const JamoUTF8Len = 3
-	r -= hangulBase
-	x := r % jamoTCount
-	r /= jamoTCount
-	utf8.EncodeRune(buf, jamoLBase+r/jamoVCount)
-	utf8.EncodeRune(buf[JamoUTF8Len:], jamoVBase+r%jamoVCount)
-	if x != 0 {
-		utf8.EncodeRune(buf[2*JamoUTF8Len:], jamoTBase+x)
-		return 3 * JamoUTF8Len
-	}
-	return 2 * JamoUTF8Len
-}
-
 // decomposeHangul algorithmically decomposes a Hangul rune into
 // its Jamo components.
 // See https://unicode.org/reports/tr15/#Hangul for details on decomposing Hangul.
@@ -405,96 +303,4 @@ func (rb *reorderBuffer) decomposeHangul(r rune) {
 	if x != 0 {
 		rb.appendRune(jamoTBase + x)
 	}
-}
-
-// combineHangul algorithmically combines Jamo character components into Hangul.
-// See https://unicode.org/reports/tr15/#Hangul for details on combining Hangul.
-func (rb *reorderBuffer) combineHangul(s, i, k int) {
-	b := rb.rune[:]
-	bn := rb.nrune
-	for ; i < bn; i++ {
-		cccB := b[k-1].ccc
-		cccC := b[i].ccc
-		if cccB == 0 {
-			s = k - 1
-		}
-		if s != k-1 && cccB >= cccC {
-			// b[i] is blocked by greater-equal cccX below it
-			b[k] = b[i]
-			k++
-		} else {
-			l := rb.runeAt(s) // also used to compare to hangulBase
-			v := rb.runeAt(i) // also used to compare to jamoT
-			switch {
-			case jamoLBase <= l && l < jamoLEnd &&
-				jamoVBase <= v && v < jamoVEnd:
-				// 11xx plus 116x to LV
-				rb.assignRune(s, hangulBase+
-					(l-jamoLBase)*jamoVTCount+(v-jamoVBase)*jamoTCount)
-			case hangulBase <= l && l < hangulEnd &&
-				jamoTBase < v && v < jamoTEnd &&
-				((l-hangulBase)%jamoTCount) == 0:
-				// ACxx plus 11Ax to LVT
-				rb.assignRune(s, l+v-jamoTBase)
-			default:
-				b[k] = b[i]
-				k++
-			}
-		}
-	}
-	rb.nrune = k
-}
-
-// compose recombines the runes in the buffer.
-// It should only be used to recompose a single segment, as it will not
-// handle alternations between Hangul and non-Hangul characters correctly.
-func (rb *reorderBuffer) compose() {
-	// Lazily load the map used by the combine func below, but do
-	// it outside of the loop.
-	recompMapOnce.Do(buildRecompMap)
-
-	// UAX #15, section X5 , including Corrigendum #5
-	// "In any character sequence beginning with starter S, a character C is
-	//  blocked from S if and only if there is some character B between S
-	//  and C, and either B is a starter or it has the same or higher
-	//  combining class as C."
-	bn := rb.nrune
-	if bn == 0 {
-		return
-	}
-	k := 1
-	b := rb.rune[:]
-	for s, i := 0, 1; i < bn; i++ {
-		if isJamoVT(rb.bytesAt(i)) {
-			// Redo from start in Hangul mode. Necessary to support
-			// U+320E..U+321E in NFKC mode.
-			rb.combineHangul(s, i, k)
-			return
-		}
-		ii := b[i]
-		// We can only use combineForward as a filter if we later
-		// get the info for the combined character. This is more
-		// expensive than using the filter. Using combinesBackward()
-		// is safe.
-		if ii.combinesBackward() {
-			cccB := b[k-1].ccc
-			cccC := ii.ccc
-			blocked := false // b[i] blocked by starter or greater or equal CCC?
-			if cccB == 0 {
-				s = k - 1
-			} else {
-				blocked = s != k-1 && cccB >= cccC
-			}
-			if !blocked {
-				combined := combine(rb.runeAt(s), rb.runeAt(i))
-				if combined != 0 {
-					rb.assignRune(s, combined)
-					continue
-				}
-			}
-		}
-		b[k] = b[i]
-		k++
-	}
-	rb.nrune = k
 }
