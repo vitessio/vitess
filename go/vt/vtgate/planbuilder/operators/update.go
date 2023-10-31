@@ -125,6 +125,8 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		return nil, vterrors.VT12001("update with limit with foreign key constraints")
 	}
 
+	// Now we check if any of the foreign key columns that are being udpated have dependencies on other updated columns.
+	// This is unsafe, and we currently don't support this in Vitess.
 	depUpd, err := ctx.SemTable.IsFkDependentColumnUpdated(updStmt.Exprs)
 	if err != nil {
 		return nil, err
@@ -259,15 +261,14 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 		selectOffsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs)
 
 		// If we are updating a foreign key column to a non-literal value then, need information about
-		// 1. new value is different from the old value
-		// 2. the new value itself
+		// 1. whether the new value is different from the old value
+		// 2. the new value itself.
 		var updFkColOffsets [][2]int
-		// TODO: may only store non-literal update exprs OR store non-literal info along with update expr.
 		ue := ctx.SemTable.GetUpdateExpressionsForFk(fk.String(updatedTable))
-		// If ue has any non-literal update, then we need this.
+		// We only need to store these offsets and add these expressions to SELECT when there are non-literal updates present.
 		if hasNonLiteralUpdate(ue) {
 			for _, updExpr := range ue {
-				// TODO: not sure why we append for literals.
+				// We add the expression and a comparison expression to the SELECT exprssion while storing their offsets.
 				var offset [2]int
 				offset, selectExprs = addUpdExprToSelect(ctx, updExpr, selectExprs)
 				updFkColOffsets = append(updFkColOffsets, offset)
@@ -293,6 +294,7 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 	}, nil
 }
 
+// hasNonLiteralUpdate checks if any of the update expressions have a non-literal update.
 func hasNonLiteralUpdate(exprs sqlparser.UpdateExprs) bool {
 	for _, expr := range exprs {
 		if !sqlparser.IsLiteral(expr.Expr) {
@@ -302,6 +304,8 @@ func hasNonLiteralUpdate(exprs sqlparser.UpdateExprs) bool {
 	return false
 }
 
+// addColumns adds the given set of columns to the select expressions provided. It tries to reuse the columns if already present in it.
+// It returns the list of offsets for the columns and the updated select expressions.
 func addColumns(ctx *plancontext.PlanningContext, columns sqlparser.Columns, exprs []sqlparser.SelectExpr) ([]int, []sqlparser.SelectExpr) {
 	var offsets []int
 	selectExprs := exprs
@@ -324,9 +328,14 @@ func addColumns(ctx *plancontext.PlanningContext, columns sqlparser.Columns, exp
 	return offsets, selectExprs
 }
 
+// For an update query having non-literal updates, we add the updated expression and a comparison expression to the select query.
+// For example, for a query like `update fk_table set col = id * 100 + 1`
+// We would add the expression `id * 100 + 1` and the comparison expression `col != id * 100 + 1` to the select query.
 func addUpdExprToSelect(ctx *plancontext.PlanningContext, updExpr *sqlparser.UpdateExpr, exprs []sqlparser.SelectExpr) ([2]int, []sqlparser.SelectExpr) {
+	// Create the comparison expression.
 	compExpr := sqlparser.NewComparisonExpr(sqlparser.NotEqualOp, updExpr.Name, updExpr.Expr, nil)
 	offsets := [2]int{-1, -1}
+	// Add the expressions to the select expressions. We make sure to reuse the offset if it has already been added once.
 	for idx, selectExpr := range exprs {
 		if ctx.SemTable.EqualsExpr(selectExpr.(*sqlparser.AliasedExpr).Expr, compExpr) {
 			offsets[0] = idx
@@ -335,6 +344,7 @@ func addUpdExprToSelect(ctx *plancontext.PlanningContext, updExpr *sqlparser.Upd
 			offsets[1] = idx
 		}
 	}
+	// If the expression doesn't exist, then we add the expression and store the offset.
 	if offsets[0] == -1 {
 		offsets[0] = len(exprs)
 		exprs = append(exprs, aeWrap(compExpr))
@@ -344,16 +354,6 @@ func addUpdExprToSelect(ctx *plancontext.PlanningContext, updExpr *sqlparser.Upd
 		exprs = append(exprs, aeWrap(updExpr.Expr))
 	}
 	return offsets, exprs
-}
-
-func addExprToSelect(ctx *plancontext.PlanningContext, expr sqlparser.Expr, exprs []sqlparser.SelectExpr) (int, []sqlparser.SelectExpr) {
-	for idx, selectExpr := range exprs {
-		if ctx.SemTable.EqualsExpr(selectExpr.(*sqlparser.AliasedExpr).Expr, expr) {
-			return idx, exprs
-		}
-	}
-	offset := len(exprs)
-	return offset, append(exprs, aeWrap(expr))
 }
 
 // createFkChildForUpdate creates the update query operator for the child table based on the foreign key constraints.
@@ -370,13 +370,11 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, valTuple, sqlparser.NewListArg(bvName), nil)
 	var childWhereExpr sqlparser.Expr = compExpr
 
+	// In the case of non-literal updates, we need to assign bindvariables for storing the updated value of the columns
+	// coming from the SELECT query.
 	var updateExprBvNames []string
 	if len(updFkColOffsets) > 0 {
-		for _, offset := range updFkColOffsets {
-			if offset[1] == -1 {
-				updateExprBvNames = append(updateExprBvNames, "")
-				continue
-			}
+		for range updFkColOffsets {
 			updateBvName := ctx.ReservedVars.ReserveVariable(foreignKeyUpdateExpr)
 			updateExprBvNames = append(updateExprBvNames, updateBvName)
 		}
@@ -396,7 +394,7 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 		return nil, err
 	}
 
-	updatedOffsets, compOffsets, updateExprBvNames := compressUpdateOffsets(updFkColOffsets, updateExprBvNames)
+	updatedOffsets, compOffsets := splitUpdateOffsets(updFkColOffsets)
 
 	return &FkChild{
 		BVName:            bvName,
@@ -408,18 +406,14 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 	}, nil
 }
 
-func compressUpdateOffsets(offsets [][2]int, updateExprBvNames []string) ([]int, []int, []string) {
+// splitUpdateOffsets splits the slice of a pair of ints, into 2 separate slices of ints.
+func splitUpdateOffsets(offsets [][2]int) ([]int, []int) {
 	var newUpdatedOffsets, newCompOffsets []int
-	var newUpdateExprBvNames []string
-	for idx, offset := range offsets {
-		if offset[1] == -1 {
-			continue
-		}
+	for _, offset := range offsets {
 		newUpdatedOffsets = append(newUpdatedOffsets, offset[1])
 		newCompOffsets = append(newCompOffsets, offset[0])
-		newUpdateExprBvNames = append(newUpdateExprBvNames, updateExprBvNames[idx])
 	}
-	return newUpdatedOffsets, newCompOffsets, newUpdateExprBvNames
+	return newUpdatedOffsets, newCompOffsets
 }
 
 // buildChildUpdOpForCascade builds the child update statement operator for the CASCADE type foreign key constraint.
@@ -706,7 +700,6 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updSt
 // So, if either of :v1 or :v2 is NULL, then the entire condition is true (which is the same as not having the condition when :v1 or :v2 is NULL)
 // This expression is used in cascading SET NULLs and in verifying whether an update should be restricted.
 func nullSafeNotInComparison(updateExprs sqlparser.UpdateExprs, cFk vindexes.ChildFKInfo, parentTbl sqlparser.TableName, updatedExprBvNames []string) sqlparser.Expr {
-	//var updateValues sqlparser.ValTuple = make([]sqlparser.Expr, len(cFk.ChildColumns))
 	var valTuple sqlparser.ValTuple
 	var updateValues sqlparser.ValTuple
 	for idx, updateExpr := range updateExprs {
@@ -719,21 +712,11 @@ func nullSafeNotInComparison(updateExprs sqlparser.UpdateExprs, cFk vindexes.Chi
 			if len(updatedExprBvNames) > 0 && updatedExprBvNames[idx] != "" {
 				childUpdateExpr = sqlparser.NewArgument(updatedExprBvNames[idx])
 			}
-			//updateValues[colIdx] = childUpdateExpr
 			updateValues = append(updateValues, childUpdateExpr)
 			valTuple = append(valTuple, sqlparser.NewColNameWithQualifier(cFk.ChildColumns[colIdx].String(), cFk.Table.GetTableName()))
 		}
 	}
-	//for idx, value := range updateValues {
-	//	if value == nil {
-	//		updateValues[idx] = sqlparser.NewColNameWithQualifier(cFk.ChildColumns[idx].String(), cFk.Table.GetTableName())
-	//	}
-	//}
-	// Create a ValTuple of child column names
-	//var valTuple sqlparser.ValTuple
-	//for _, column := range cFk.ChildColumns {
-	//	valTuple = append(valTuple, sqlparser.NewColNameWithQualifier(column.String(), cFk.Table.GetTableName()))
-	//}
+
 	var finalExpr sqlparser.Expr = sqlparser.NewComparisonExpr(sqlparser.NotInOp, valTuple, sqlparser.ValTuple{updateValues}, nil)
 	for _, value := range updateValues {
 		finalExpr = &sqlparser.OrExpr{

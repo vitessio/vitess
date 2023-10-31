@@ -46,9 +46,10 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
+	// If there are non-literal foreign key updates, we have to run the query with foreign key checks off.
 	if ctx.SemTable.HasNonLiteralForeignKeyUpdate(updStmt.Exprs) {
+		// Since we are running the query with foreign key checks off, we have to verify all the foreign keys validity on vtgate.
 		ctx.VerifyAllFKs = true
-		// We have to run the query with FKChecksOff.
 		updStmt.Comments = updStmt.Comments.Prepend("/*+ SET_VAR(foreign_key_checks=OFF) */").Parsed()
 	}
 
