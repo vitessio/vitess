@@ -206,10 +206,6 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 }
 
 func TestInfrSchemaAndUnionAll(t *testing.T) {
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--planner-version=gen4")
-	require.NoError(t,
-		clusterInstance.RestartVtgate())
-
 	vtConnParams := clusterInstance.GetVTParams(keyspaceName)
 	vtConnParams.DbName = keyspaceName
 	conn, err := mysql.Connect(context.Background(), &vtConnParams)
