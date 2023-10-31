@@ -717,6 +717,27 @@ func TestSchemaDiff(t *testing.T) {
 			conflictingDiffs: 1,
 		},
 		{
+			name: "add hierarchical constraints",
+			fromQueries: []string{
+				"create table t1 (id int primary key, ref int, key ref_idx (ref));",
+				"create table t2 (id int primary key, ref int, key ref_idx (ref));",
+				"create table t3 (id int primary key, ref int, key ref_idx (ref));",
+				"create table t4 (id int primary key, ref int, key ref_idx (ref));",
+				"create table t5 (id int primary key, ref int, key ref_idx (ref));",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, ref int, key ref_idx (ref));",
+				"create table t2 (id int primary key, ref int, key ref_idx (ref), foreign key (ref) references t1 (id) on delete no action);",
+				"create table t3 (id int primary key, ref int, key ref_idx (ref), foreign key (ref) references t2 (id) on delete no action);",
+				"create table t4 (id int primary key, ref int, key ref_idx (ref), foreign key (ref) references t3 (id) on delete no action);",
+				"create table t5 (id int primary key, ref int, key ref_idx (ref), foreign key (ref) references t1 (id) on delete no action);",
+			},
+			expectDiffs: 4,
+			expectDeps:  2, // t2<->t3, t3<->t4
+			sequential:  false,
+			entityOrder: []string{"t2", "t3", "t4", "t5"},
+		},
+		{
 			name: "drop fk",
 			fromQueries: []string{
 				"create table t1 (id int primary key, info int not null);",
