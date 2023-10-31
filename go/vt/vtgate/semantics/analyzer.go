@@ -130,7 +130,7 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		QuerySignature:            a.sig,
 		childForeignKeysInvolved:  childFks,
 		parentForeignKeysInvolved: parentFks,
-		ChildFkToUpdExprs:         childFkToUpdExprs,
+		childFkToUpdExprs:         childFkToUpdExprs,
 	}, nil
 }
 

@@ -133,7 +133,7 @@ type (
 		// The map is keyed by the tableset of the table that each of the foreign key belongs to.
 		childForeignKeysInvolved  map[TableSet][]vindexes.ChildFKInfo
 		parentForeignKeysInvolved map[TableSet][]vindexes.ParentFKInfo
-		ChildFkToUpdExprs         map[string]sqlparser.UpdateExprs
+		childFkToUpdExprs         map[string]sqlparser.UpdateExprs
 	}
 
 	columnName struct {
@@ -180,6 +180,11 @@ func (st *SemTable) GetParentForeignKeysList() []vindexes.ParentFKInfo {
 		parentFkInfos = append(parentFkInfos, infos...)
 	}
 	return parentFkInfos
+}
+
+// GetUpdateExpressionsForFk gets the update expressions for the given serialized foreign key constraint.
+func (st *SemTable) GetUpdateExpressionsForFk(foreignKey string) sqlparser.UpdateExprs {
+	return st.childFkToUpdExprs[foreignKey]
 }
 
 // RemoveParentForeignKey removes the given foreign key from the parent foreign keys that sem table stores.
