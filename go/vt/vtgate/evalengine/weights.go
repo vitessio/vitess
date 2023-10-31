@@ -258,7 +258,18 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 		}
 
 	case f.Type == sqltypes.TypeJSON:
-		return nil // TODO
+		return func(v *sqltypes.Value) {
+			if v.IsNull() {
+				return
+			}
+			j, err := json.NewFromSQL(*v)
+			if err != nil {
+				return
+			}
+			var w32 [4]byte
+			copy(w32[:4], j.WeightString(nil))
+			v.TinyWeight = binary.BigEndian.Uint32(w32[:4])
+		}
 
 	default:
 		return nil

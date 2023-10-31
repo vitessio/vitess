@@ -38,7 +38,9 @@ func TestTinyWeightStrings(t *testing.T) {
 		len  int
 		prec int
 	}{
+		{typ: sqltypes.Int32, gen: sqltypes.RandomGenerators[sqltypes.Int32], col: collations.CollationBinaryID},
 		{typ: sqltypes.Int64, gen: sqltypes.RandomGenerators[sqltypes.Int64], col: collations.CollationBinaryID},
+		{typ: sqltypes.Uint32, gen: sqltypes.RandomGenerators[sqltypes.Uint32], col: collations.CollationBinaryID},
 		{typ: sqltypes.Uint64, gen: sqltypes.RandomGenerators[sqltypes.Uint64], col: collations.CollationBinaryID},
 		{typ: sqltypes.Float64, gen: sqltypes.RandomGenerators[sqltypes.Float64], col: collations.CollationBinaryID},
 		{typ: sqltypes.VarChar, gen: sqltypes.RandomGenerators[sqltypes.VarChar], col: collations.CollationUtf8mb4ID},

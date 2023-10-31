@@ -108,16 +108,20 @@ type aggregatorDistinct struct {
 
 func (a *aggregatorDistinct) shouldReturn(row []sqltypes.Value) (bool, error) {
 	if a.column >= 0 {
-		if !a.last.IsNull() {
-			cmp, err := evalengine.NullsafeCompare(a.last, row[a.column], a.coll)
-			if err != nil {
-				return true, err
-			}
-			if cmp == 0 {
-				return true, nil
+		last := a.last
+		next := row[a.column]
+		if !last.IsNull() {
+			if last.TinyWeight == next.TinyWeight {
+				cmp, err := evalengine.NullsafeCompare(last, next, a.coll)
+				if err != nil {
+					return true, err
+				}
+				if cmp == 0 {
+					return true, nil
+				}
 			}
 		}
-		a.last = row[a.column]
+		a.last = next
 	}
 	return false, nil
 }
