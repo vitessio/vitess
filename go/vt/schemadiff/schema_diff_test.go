@@ -702,6 +702,21 @@ func TestSchemaDiff(t *testing.T) {
 			entityOrder: []string{"t1", "t2"},
 		},
 		{
+			name: "modify fk column types, fail",
+			fromQueries: []string{
+				"create table t1 (id int primary key);",
+				"create table t2 (id int primary key, ts timestamp, t1_id int, foreign key (t1_id) references t1 (id) on delete no action);",
+			},
+			toQueries: []string{
+				"create table t1 (id bigint primary key);",
+				"create table t2 (id int primary key, ts timestamp, t1_id bigint, foreign key (t1_id) references t1 (id) on delete no action);",
+			},
+			expectDiffs:      2,
+			expectDeps:       0,
+			sequential:       false,
+			conflictingDiffs: 1,
+		},
+		{
 			name: "drop fk",
 			fromQueries: []string{
 				"create table t1 (id int primary key, info int not null);",
@@ -818,11 +833,14 @@ func TestSchemaDiff(t *testing.T) {
 
 			orderedDiffs, err := schemaDiff.OrderedDiffs(ctx)
 			if tc.conflictingDiffs > 0 {
-				require.Greater(t, tc.conflictingDiffs, 1) // self integrity. If there's a conflict, then obviously there's at least two conflicting diffs (a single diff has nothing to conflict with)
 				assert.Error(t, err)
 				impossibleOrderErr, ok := err.(*ImpossibleApplyDiffOrderError)
 				assert.True(t, ok)
-				assert.Equal(t, tc.conflictingDiffs, len(impossibleOrderErr.ConflictingDiffs))
+				conflictingDiffsStatements := []string{}
+				for _, diff := range impossibleOrderErr.ConflictingDiffs {
+					conflictingDiffsStatements = append(conflictingDiffsStatements, diff.CanonicalStatementString())
+				}
+				assert.Equalf(t, tc.conflictingDiffs, len(impossibleOrderErr.ConflictingDiffs), "found conflicting diffs: %+v\n diff statements=%+v", conflictingDiffsStatements, allDiffsStatements)
 			} else {
 				require.NoErrorf(t, err, "Unordered diffs: %v", allDiffsStatements)
 			}
