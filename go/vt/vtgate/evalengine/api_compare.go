@@ -19,6 +19,7 @@ package evalengine
 import (
 	"bytes"
 	"fmt"
+	"slices"
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -244,4 +245,31 @@ func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
 		cmp = -cmp
 	}
 	return cmp
+}
+
+func PanicHandler(err *error) {
+	if r := recover(); r != nil {
+		badness, ok := r.(error)
+		if !ok {
+			panic(r)
+		}
+
+		*err = badness
+	}
+}
+
+func SortResult(out *sqltypes.Result, comparers []OrderByParams) (err error) {
+	defer PanicHandler(&err)
+
+	ApplyTinyWeights(out, comparers)
+
+	slices.SortFunc(out.Rows, func(a, b sqltypes.Row) int {
+		for _, c := range comparers {
+			if cmp := c.Compare(a, b); cmp != 0 {
+				return cmp
+			}
+		}
+		return 0
+	})
+	return
 }

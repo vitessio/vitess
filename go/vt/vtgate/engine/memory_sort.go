@@ -77,9 +77,7 @@ func PanicHandler(err *error) {
 }
 
 // TryExecute satisfies the Primitive interface.
-func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (qr *sqltypes.Result, err error) {
-	defer PanicHandler(&err)
-
+func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := ms.fetchCount(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -89,12 +87,10 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	if err != nil {
 		return nil, err
 	}
-	sh := &sortHeap{
-		rows:      result.Rows,
-		comparers: ms.OrderBy,
+
+	if err = evalengine.SortResult(result, ms.OrderBy); err != nil {
+		return nil, err
 	}
-	sort.Sort(sh)
-	result.Rows = sh.rows
 	if len(result.Rows) > count {
 		result.Rows = result.Rows[:count]
 	}

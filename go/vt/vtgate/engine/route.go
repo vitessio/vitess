@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -384,26 +383,15 @@ func (route *Route) GetFields(ctx context.Context, vcursor VCursor, bindVars map
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
-func (route *Route) sort(in *sqltypes.Result) (_ *sqltypes.Result, err error) {
-	defer PanicHandler(&err)
-
+func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	// Since Result is immutable, we make a copy.
 	// The copy can be shallow because we won't be changing
 	// the contents of any row.
 	out := in.ShallowCopy()
 
-	comparers := route.OrderBy
-	evalengine.ApplyTinyWeights(out, comparers)
-
-	slices.SortFunc(out.Rows, func(a, b sqltypes.Row) int {
-		for _, c := range comparers {
-			if cmp := c.Compare(a, b); cmp != 0 {
-				return cmp
-			}
-		}
-		return 0
-	})
-
+	if err := evalengine.SortResult(out, route.OrderBy); err != nil {
+		return nil, err
+	}
 	return out.Truncate(route.TruncateColumnCount), nil
 }
 
