@@ -425,6 +425,9 @@ var _ SchemaInfo = (*fakeSchema)(nil)
 
 func TestMarkErrorIfCyclesInFk(t *testing.T) {
 	ksName := "ks"
+	keyspace := &vindexes.Keyspace{
+		Name: ksName,
+	}
 	tests := []struct {
 		name       string
 		getVschema func() *vindexes.VSchema
@@ -439,13 +442,16 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 							ForeignKeyMode: vschemapb.Keyspace_managed,
 							Tables: map[string]*vindexes.Table{
 								"t1": {
-									Name: sqlparser.NewIdentifierCS("t1"),
+									Name:     sqlparser.NewIdentifierCS("t1"),
+									Keyspace: keyspace,
 								},
 								"t2": {
-									Name: sqlparser.NewIdentifierCS("t2"),
+									Name:     sqlparser.NewIdentifierCS("t2"),
+									Keyspace: keyspace,
 								},
 								"t3": {
-									Name: sqlparser.NewIdentifierCS("t3"),
+									Name:     sqlparser.NewIdentifierCS("t3"),
+									Keyspace: keyspace,
 								},
 							},
 						},
@@ -467,13 +473,16 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 							ForeignKeyMode: vschemapb.Keyspace_managed,
 							Tables: map[string]*vindexes.Table{
 								"t1": {
-									Name: sqlparser.NewIdentifierCS("t1"),
+									Name:     sqlparser.NewIdentifierCS("t1"),
+									Keyspace: keyspace,
 								},
 								"t2": {
-									Name: sqlparser.NewIdentifierCS("t2"),
+									Name:     sqlparser.NewIdentifierCS("t2"),
+									Keyspace: keyspace,
 								},
 								"t3": {
-									Name: sqlparser.NewIdentifierCS("t3"),
+									Name:     sqlparser.NewIdentifierCS("t3"),
+									Keyspace: keyspace,
 								},
 							},
 						},

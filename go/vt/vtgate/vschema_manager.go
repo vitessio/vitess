@@ -238,14 +238,14 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 }
 
 type tableCol struct {
-	tableName string
+	tableName sqlparser.TableName
 	colNames  sqlparser.Columns
 }
 
 var tableColHash = func(tc tableCol) string {
-	res := tc.tableName
+	res := sqlparser.String(tc.tableName)
 	for _, colName := range tc.colNames {
-		res += "|" + colName.Lowered()
+		res += "|" + sqlparser.String(colName)
 	}
 	return res
 }
@@ -258,15 +258,15 @@ func markErrorIfCyclesInFk(vschema *vindexes.VSchema) {
 			continue
 		}
 		g := graph.New(tableColHash, graph.PreventCycles(), graph.Directed())
-		for tableName, table := range ks.Tables {
+		for _, table := range ks.Tables {
 			for _, cfk := range table.ChildForeignKeys {
 				childTable := cfk.Table
 				parentVertex := tableCol{
-					tableName: tableName,
+					tableName: table.GetTableName(),
 					colNames:  cfk.ParentColumns,
 				}
 				childVertex := tableCol{
-					tableName: childTable.Name.String(),
+					tableName: childTable.GetTableName(),
 					colNames:  cfk.ChildColumns,
 				}
 				_ = g.AddVertex(parentVertex)
