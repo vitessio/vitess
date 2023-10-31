@@ -832,7 +832,9 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 							// The current diff is ALTER TABLE ... ADD FOREIGN KEY
 							// and the parent table also has an ALTER TABLE.
 							// so if the parent's ALTER in any way modifies the referenced FK columns, that's
-							// a sequential execution dependency
+							// a sequential execution dependency.
+							// Also, if there is no index on the parent's referenced columns, and a migration adds an index
+							// on those columns, that's a sequential execution dependency.
 							referencedColumnNames := map[string]bool{}
 							for _, referencedColumn := range fk.ReferenceDefinition.ReferencedColumns {
 								referencedColumnNames[referencedColumn.Lowered()] = true
@@ -853,6 +855,19 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 								case *sqlparser.DropColumn:
 									if referencedColumnNames[node.Name.Name.Lowered()] {
 										schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+									}
+								case *sqlparser.AddIndexDefinition:
+									referencedTableEntity, _ := parentDiff.Entities()
+									// We _know_ the type is *CreateTableEntity
+									referencedTable, _ := referencedTableEntity.(*CreateTableEntity)
+									if indexCoversColumnsInOrder(node.IndexDefinition, fk.ReferenceDefinition.ReferencedColumns) {
+										// This diff adds an index covering referenced columns
+										if !referencedTable.columnsCoveredByInOrderIndex(fk.ReferenceDefinition.ReferencedColumns) {
+											// And there was no earlier index on referenced columns. So this is a new index.
+											// In MySQL, you can't add a foreign key constraint on a child, before the parent
+											// has an index of referenced columns. This is a sequential dependency.
+											schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+										}
 									}
 								}
 								return true, nil

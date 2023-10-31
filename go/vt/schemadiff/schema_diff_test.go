@@ -672,6 +672,34 @@ func TestSchemaDiff(t *testing.T) {
 			expectDeps:  1,
 			sequential:  true,
 			entityOrder: []string{"t2", "t1"},
+		}, {
+			name: "add index on parent. add FK to index column",
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null, key info_idx(info));",
+				"create table t2 (id int primary key, ts timestamp, t1_info int not null, constraint parent_info_fk foreign key (t1_info) references t1 (info));",
+				"create view v1 as select id from t1",
+			},
+			expectDiffs: 2,
+			expectDeps:  1,
+			sequential:  true,
+			entityOrder: []string{"t1", "t2"},
+		},
+		{
+			name: "add index on parent with existing index. add FK to index column",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null, key existing_info_idx(info));",
+				"create table t2 (id int primary key, ts timestamp);",
+				"create view v1 as select id from t1",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null, key existing_info_idx(info), key info_idx(info));",
+				"create table t2 (id int primary key, ts timestamp, t1_info int not null, constraint parent_info_fk foreign key (t1_info) references t1 (info));",
+				"create view v1 as select id from t1",
+			},
+			expectDiffs: 2,
+			expectDeps:  1,
+			sequential:  false,
+			entityOrder: []string{"t1", "t2"},
 		},
 		{
 			name: "drop fk",
