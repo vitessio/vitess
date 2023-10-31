@@ -58,6 +58,7 @@ type controller struct {
 	id              int64 // id from row in _vt.vdiff
 	uuid            string
 	workflow        string
+	workflowType    binlogdatapb.VReplicationWorkflowType
 	cancel          context.CancelFunc
 	dbClientFactory func() binlogplayer.DBClient
 	ts              *topo.Server
@@ -83,11 +84,12 @@ func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFac
 
 	log.Infof("VDiff controller initializing for %+v", row)
 	id, _ := row["id"].ToInt64()
-
+	workflowType, _ := row["workflow_type"].ToInt64()
 	ct := &controller{
 		id:              id,
 		uuid:            row["vdiff_uuid"].ToString(),
 		workflow:        row["workflow"].ToString(),
+		workflowType:    binlogdatapb.VReplicationWorkflowType(workflowType),
 		dbClientFactory: dbClientFactory,
 		ts:              ts,
 		vde:             vde,
