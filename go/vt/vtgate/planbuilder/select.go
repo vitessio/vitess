@@ -38,17 +38,6 @@ func gen4SelectStmtPlanner(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
-	switch node := stmt.(type) {
-	case *sqlparser.Select:
-		if node.With != nil {
-			return nil, vterrors.VT12001("WITH expression in SELECT statement")
-		}
-	case *sqlparser.Union:
-		if node.With != nil {
-			return nil, vterrors.VT12001("WITH expression in UNION statement")
-		}
-	}
-
 	sel, isSel := stmt.(*sqlparser.Select)
 	if isSel {
 		// handle dual table for processing at vtgate.
