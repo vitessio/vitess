@@ -23,7 +23,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -62,7 +61,7 @@ type (
 	}
 
 	builtinWeightString struct {
-		Expr   Expr
+		CallExpr
 		Cast   string
 		Len    int
 		HasLen bool
@@ -92,17 +91,17 @@ type (
 	}
 )
 
-var _ Expr = (*builtinChangeCase)(nil)
-var _ Expr = (*builtinCharLength)(nil)
-var _ Expr = (*builtinLength)(nil)
-var _ Expr = (*builtinASCII)(nil)
-var _ Expr = (*builtinOrd)(nil)
-var _ Expr = (*builtinBitLength)(nil)
-var _ Expr = (*builtinCollation)(nil)
-var _ Expr = (*builtinWeightString)(nil)
-var _ Expr = (*builtinLeftRight)(nil)
-var _ Expr = (*builtinPad)(nil)
-var _ Expr = (*builtinTrim)(nil)
+var _ IR = (*builtinChangeCase)(nil)
+var _ IR = (*builtinCharLength)(nil)
+var _ IR = (*builtinLength)(nil)
+var _ IR = (*builtinASCII)(nil)
+var _ IR = (*builtinOrd)(nil)
+var _ IR = (*builtinBitLength)(nil)
+var _ IR = (*builtinCollation)(nil)
+var _ IR = (*builtinWeightString)(nil)
+var _ IR = (*builtinLeftRight)(nil)
+var _ IR = (*builtinPad)(nil)
+var _ IR = (*builtinTrim)(nil)
 
 func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -136,11 +135,6 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call *builtinChangeCase) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.VarChar, f
-}
-
 func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 	str, err := call.Arguments[0].compile(c)
 	if err != nil {
@@ -152,7 +146,7 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, 0, false)
 	}
 
 	c.asm.Fn_LUCASE(call.upcase)
@@ -181,11 +175,6 @@ func (call *builtinCharLength) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call *builtinCharLength) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Int64, f
-}
-
 func (call *builtinCharLength) compile(c *compiler) (ctype, error) {
 	return c.compileFn_length(call.Arguments[0], c.asm.Fn_CHAR_LENGTH)
 }
@@ -201,11 +190,6 @@ func (call *builtinLength) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalInt64(int64(len(arg.ToRawBytes()))), nil
 }
 
-func (call *builtinLength) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Int64, f
-}
-
 func (call *builtinLength) compile(c *compiler) (ctype, error) {
 	return c.compileFn_length(call.Arguments[0], c.asm.Fn_LENGTH)
 }
@@ -219,11 +203,6 @@ func (call *builtinBitLength) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 	return newEvalInt64(int64(len(arg.ToRawBytes())) * 8), nil
-}
-
-func (call *builtinBitLength) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Int64, f
 }
 
 func (call *builtinBitLength) compile(c *compiler) (ctype, error) {
@@ -247,11 +226,6 @@ func (call *builtinASCII) eval(env *ExpressionEnv) (eval, error) {
 		return newEvalInt64(0), nil
 	}
 	return newEvalInt64(int64(b.bytes[0])), nil
-}
-
-func (call *builtinASCII) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Int64, f
 }
 
 func (call *builtinASCII) compile(c *compiler) (ctype, error) {
@@ -305,11 +279,6 @@ func (call *builtinOrd) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	return newEvalInt64(charOrd(c.bytes, c.col.Collation)), nil
-}
-
-func (call *builtinOrd) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Int64, f
 }
 
 func (call *builtinOrd) compile(c *compiler) (ctype, error) {
@@ -392,13 +361,6 @@ func validMaxLength(len, repeat int64) bool {
 	return len*repeat <= maxRepeatLength
 }
 
-func (call *builtinRepeat) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f1 := call.Arguments[0].typeof(env, fields)
-	// typecheck the right-hand argument but ignore its flags
-	call.Arguments[1].typeof(env, fields)
-	return sqltypes.VarChar, f1
-}
-
 func (expr *builtinRepeat) compile(c *compiler) (ctype, error) {
 	str, err := expr.Arguments[0].compile(c)
 	if err != nil {
@@ -415,7 +377,7 @@ func (expr *builtinRepeat) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(2, sqltypes.VarChar, c.cfg.Collation, 0, false)
+		c.asm.Convert_xc(2, sqltypes.VarChar, c.collation, 0, false)
 	}
 	_ = c.compileToInt64(repeat, 1)
 
@@ -437,10 +399,6 @@ func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalText([]byte(collations.Local().LookupName(col.Collation)), collationUtf8mb3), nil
 }
 
-func (*builtinCollation) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return sqltypes.VarChar, 0
-}
-
 func (expr *builtinCollation) compile(c *compiler) (ctype, error) {
 	_, err := expr.Arguments[0].compile(c)
 	if err != nil {
@@ -455,23 +413,10 @@ func (expr *builtinCollation) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Col: collationUtf8mb3}, nil
 }
 
-func (c *builtinWeightString) callable() []Expr {
-	return []Expr{c.Expr}
-}
-
-func (c *builtinWeightString) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	tt, f := c.Expr.typeof(env, fields)
-	switch tt {
-	case sqltypes.Blob, sqltypes.Text, sqltypes.TypeJSON:
-		return sqltypes.Blob, f
-	}
-	return sqltypes.VarBinary, f
-}
-
 func (c *builtinWeightString) eval(env *ExpressionEnv) (eval, error) {
 	var weights []byte
 
-	input, err := c.Expr.eval(env)
+	input, err := c.arg1(env)
 	if err != nil {
 		return nil, err
 	}
@@ -535,7 +480,7 @@ func (c *builtinWeightString) eval(env *ExpressionEnv) (eval, error) {
 }
 
 func (call *builtinWeightString) compile(c *compiler) (ctype, error) {
-	str, err := call.Expr.compile(c)
+	str, err := call.Arguments[0].compile(c)
 	if err != nil {
 		return ctype{}, err
 	}
@@ -590,7 +535,7 @@ func (call *builtinWeightString) compile(c *compiler) (ctype, error) {
 	return ctype{Type: typ, Flag: flag, Col: collationBinary}, nil
 }
 
-func (call builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
+func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 	str, l, err := call.arg2(env)
 	if err != nil {
 		return nil, err
@@ -629,12 +574,7 @@ func (call builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalText(res, text.col), nil
 }
 
-func (call builtinLeftRight) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f1 := call.Arguments[0].typeof(env, fields)
-	return sqltypes.VarChar, f1
-}
-
-func (call builtinLeftRight) compile(c *compiler) (ctype, error) {
+func (call *builtinLeftRight) compile(c *compiler) (ctype, error) {
 	str, err := call.Arguments[0].compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -647,7 +587,7 @@ func (call builtinLeftRight) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck2(str, l)
 
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := defaultCoercionCollation(c.collation)
 	switch {
 	case str.isTextual():
 		col = str.Col
@@ -665,7 +605,7 @@ func (call builtinLeftRight) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: flagNullable}, nil
 }
 
-func (call builtinPad) eval(env *ExpressionEnv) (eval, error) {
+func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
 	str, l, p, err := call.arg3(env)
 	if err != nil {
 		return nil, err
@@ -735,12 +675,7 @@ func (call builtinPad) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalText(res, text.col), nil
 }
 
-func (call builtinPad) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f1 := call.Arguments[0].typeof(env, fields)
-	return sqltypes.VarChar, f1
-}
-
-func (call builtinPad) compile(c *compiler) (ctype, error) {
+func (call *builtinPad) compile(c *compiler) (ctype, error) {
 	str, err := call.Arguments[0].compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -758,7 +693,7 @@ func (call builtinPad) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck3(str, l, pad)
 
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := defaultCoercionCollation(c.collation)
 	switch {
 	case str.isTextual():
 		col = str.Col
@@ -839,13 +774,6 @@ func (l *builtinStrcmp) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	return newEvalInt64(strcmpCollate(left.ToRawBytes(), right.ToRawBytes(), mcol.Collation)), nil
-}
-
-// typeof implements the ComparisonOp interface
-func (l *builtinStrcmp) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f1 := l.Arguments[0].typeof(env, fields)
-	_, f2 := l.Arguments[1].typeof(env, fields)
-	return sqltypes.Int64, f1 | f2
 }
 
 func (expr *builtinStrcmp) compile(c *compiler) (ctype, error) {
@@ -944,11 +872,6 @@ func (call builtinTrim) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call builtinTrim) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f1 := call.Arguments[0].typeof(env, fields)
-	return sqltypes.VarChar, f1
-}
-
 func (call builtinTrim) compile(c *compiler) (ctype, error) {
 	str, err := call.Arguments[0].compile(c)
 	if err != nil {
@@ -957,7 +880,7 @@ func (call builtinTrim) compile(c *compiler) (ctype, error) {
 
 	skip1 := c.compileNullCheck1(str)
 
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := defaultCoercionCollation(c.collation)
 	switch {
 	case str.isTextual():
 		col = str.Col
@@ -1090,17 +1013,6 @@ func (call *builtinConcat) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalRaw(tt, buf, tc), nil
 }
 
-func (call *builtinConcat) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	var f typeFlag
-	tt := sqltypes.VarChar
-	for _, arg := range call.Arguments {
-		argf, af := arg.typeof(env, fields)
-		tt = concatSQLType(argf, tt)
-		f |= af
-	}
-	return tt, f
-}
-
 func (call *builtinConcat) compile(c *compiler) (ctype, error) {
 	local := collations.Local()
 	var ca collationAggregation
@@ -1228,17 +1140,6 @@ func (call *builtinConcatWs) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	return newEvalRaw(tt, buf, tc), nil
-}
-
-func (call *builtinConcatWs) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	tt := sqltypes.VarChar
-	sep, f := call.Arguments[0].typeof(env, fields)
-	tt = concatSQLType(sep, tt)
-	for _, arg := range call.Arguments[1:] {
-		argf, _ := arg.typeof(env, fields)
-		tt = concatSQLType(argf, tt)
-	}
-	return tt, f
 }
 
 func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {

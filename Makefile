@@ -178,7 +178,7 @@ demo:
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
 		--in ./go/... \
-		--gen vitess.io/vitess/go/pools.Setting \
+		--gen vitess.io/vitess/go/pools/smartconnpool.Setting \
 		--gen vitess.io/vitess/go/vt/schema.DDLStrategySetting \
 		--gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
 		--gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
@@ -391,6 +391,9 @@ back_to_dev_mode:
 tools:
 	echo $$(date): Installing dependencies
 	./bootstrap.sh
+
+clean_tools:
+	./tools/remove_dependencies.sh
 
 minimaltools:
 	echo $$(date): Installing minimal dependencies

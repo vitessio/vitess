@@ -4068,6 +4068,17 @@ func TestSelectAggregationRandom(t *testing.T) {
 	assert.Equal(t, `[[DECIMAL(10) DECIMAL(1) DECIMAL(10.0000)]]`, fmt.Sprintf("%v", rs.Rows))
 }
 
+func TestSelectDateTypes(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+	executor.normalize = true
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	qr, err := executor.Execute(context.Background(), nil, "TestSelectDateTypes", session, "select '2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month))-1 month", nil)
+	require.NoError(t, err)
+	require.Equal(t, sqltypes.Char, qr.Fields[0].Type)
+	require.Equal(t, `[[CHAR("2020-12-01")]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
 func TestSelectHexAndBit(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 	executor.normalize = true
@@ -4079,7 +4090,7 @@ func TestSelectHexAndBit(t *testing.T) {
 
 	qr, err = executor.Execute(context.Background(), nil, "TestSelectHexAndBit", session, "select 1 + 0b1001, 1 + b'1001', 1 + 0x9, 1 + x'09'", nil)
 	require.NoError(t, err)
-	require.Equal(t, `[[UINT64(10) UINT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, `[[INT64(10) INT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 // TestSelectCFC tests validates that cfc vindex plan gets cached and same plan is getting reused.

@@ -527,7 +527,7 @@ var (
 		output: "select `name`, numbers from (select * from users) as x(`name`, numbers)",
 	}, {
 		input:  "select 0b010, 0b0111, b'0111', b'011'",
-		output: "select B'010', B'0111', B'0111', B'011' from dual",
+		output: "select 0b010, 0b0111, 0b0111, 0b011 from dual",
 	}, {
 		input:  "select 0x010, 0x0111, x'0111'",
 		output: "select 0x010, 0x0111, X'0111' from dual",
@@ -1120,9 +1120,10 @@ var (
 		input: "select /* hex caps */ X'F0a1' from t",
 	}, {
 		input:  "select /* bit literal */ b'0101' from t",
-		output: "select /* bit literal */ B'0101' from t",
+		output: "select /* bit literal */ 0b0101 from t",
 	}, {
-		input: "select /* bit literal caps */ B'010011011010' from t",
+		input:  "select /* bit literal caps */ B'010011011010' from t",
+		output: "select /* bit literal caps */ 0b010011011010 from t",
 	}, {
 		input: "select /* 0x */ 0xf0 from t",
 	}, {
@@ -5004,7 +5005,7 @@ func TestCreateTable(t *testing.T) {
 	` + "`" + `s3` + "`" + ` varchar default null,
 	s4 timestamp default current_timestamp(),
 	s41 timestamp default now(),
-	s5 bit(1) default B'0'
+	s5 bit(1) default 0b0
 )`,
 		}, {
 			// test non_reserved word in column name

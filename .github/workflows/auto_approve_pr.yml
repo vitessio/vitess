@@ -1,0 +1,23 @@
+name: Auto Approval of Bot Pull Requests
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  auto_approve:
+    name: Auto Approve Pull Request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Auto Approve Pull Request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # here we are checking that the PR has been created by the vitess-bot[bot] account and that it is not a draft
+          # if there is a merge conflict in the backport, the PR will always be created as a draft, meaning we can rely
+          # on checking whether or not the PR is a draft
+          if [[ "${{github.event.pull_request.user.login}}" ==  "vitess-bot[bot]" ]] && [[ "${{github.event.pull_request.draft}}" == "false" ]]; then
+            gh pr review ${{ github.event.pull_request.number }} --approve
+          fi

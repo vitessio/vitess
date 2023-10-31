@@ -558,7 +558,7 @@ func generateExternalPrimary(
 	if dbInfo.dbName != "" {
 		externalDb = "1"
 	} else {
-		return fmt.Sprintf(``)
+		return ""
 	}
 
 	return fmt.Sprintf(`

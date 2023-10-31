@@ -615,6 +615,9 @@ func (e *expanderState) processColumnsFor(tbl TableInfo) error {
 outer:
 	// in this first loop we just find columns used in any JOIN USING used on this table
 	for _, col := range tbl.getColumns() {
+		if col.Invisible {
+			continue
+		}
 		ts, found := usingCols[col.Name]
 		if found {
 			for i, ts := range ts.Constituents() {
@@ -631,6 +634,10 @@ outer:
 
 	// and this time around we are printing any columns not involved in any JOIN USING
 	for _, col := range tbl.getColumns() {
+		if col.Invisible {
+			continue
+		}
+
 		if ts, found := usingCols[col.Name]; found && currTable.IsSolvedBy(ts) {
 			continue
 		}

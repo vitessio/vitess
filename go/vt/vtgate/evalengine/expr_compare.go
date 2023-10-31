@@ -22,7 +22,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vthash"
@@ -65,9 +64,9 @@ type (
 	compareNullSafeEQ struct{}
 )
 
-var _ Expr = (*ComparisonExpr)(nil)
-var _ Expr = (*InExpr)(nil)
-var _ Expr = (*LikeExpr)(nil)
+var _ IR = (*ComparisonExpr)(nil)
+var _ IR = (*InExpr)(nil)
+var _ IR = (*LikeExpr)(nil)
 
 func (*ComparisonExpr) filterExpr() {}
 func (*InExpr) filterExpr()         {}
@@ -286,7 +285,7 @@ func evalCompareTuplesNullSafe(left, right []eval) (int, error) {
 	return 0, nil
 }
 
-// eval implements the Expr interface
+// eval implements the expression interface
 func (c *ComparisonExpr) eval(env *ExpressionEnv) (eval, error) {
 	left, err := c.Left.eval(env)
 	if err != nil {
@@ -308,13 +307,6 @@ func (c *ComparisonExpr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 	return cmp.eval(), nil
-}
-
-// typeof implements the Expr interface
-func (c *ComparisonExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f1 := c.Left.typeof(env, fields)
-	_, f2 := c.Right.typeof(env, fields)
-	return sqltypes.Int64, f1 | f2
 }
 
 func (expr *ComparisonExpr) compileAsTuple(c *compiler) (ctype, error) {
@@ -509,12 +501,6 @@ func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
 	return in.eval(), nil
 }
 
-func (i *InExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f1 := i.Left.typeof(env, fields)
-	_, f2 := i.Right.typeof(env, fields)
-	return sqltypes.Int64, f1 | f2
-}
-
 func (i *InExpr) compileTable(lhs ctype, rhs TupleExpr) map[vthash.Hash]struct{} {
 	var (
 		table  = make(map[vthash.Hash]struct{})
@@ -552,18 +538,23 @@ func (expr *InExpr) compile(c *compiler) (ctype, error) {
 		return ctype{}, nil
 	}
 
-	rhs := expr.Right.(TupleExpr)
-
-	if table := expr.compileTable(lhs, rhs); table != nil {
-		c.asm.In_table(expr.Negate, table)
-	} else {
-		_, err := rhs.compile(c)
-		if err != nil {
-			return ctype{}, err
+	switch rhs := expr.Right.(type) {
+	case TupleExpr:
+		if table := expr.compileTable(lhs, rhs); table != nil {
+			c.asm.In_table(expr.Negate, table)
+		} else {
+			_, err := rhs.compile(c)
+			if err != nil {
+				return ctype{}, err
+			}
+			c.asm.In_slow(expr.Negate)
 		}
-		c.asm.In_slow(expr.Negate)
+		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
+	case *BindVariable:
+		return ctype{}, c.unsupported(expr)
+	default:
+		panic("unreachable")
 	}
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
 }
 
 func (l *LikeExpr) matchWildcard(left, right []byte, coll collations.ID) bool {
@@ -601,13 +592,6 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBool(matched == !l.Negate), nil
 }
 
-// typeof implements the ComparisonOp interface
-func (l *LikeExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f1 := l.Left.typeof(env, fields)
-	_, f2 := l.Right.typeof(env, fields)
-	return sqltypes.Int64, f1 | f2
-}
-
 func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 	lt, err := expr.Left.compile(c)
 	if err != nil {
@@ -622,18 +606,18 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck2(lt, rt)
 
 	if !lt.isTextual() {
-		c.asm.Convert_xc(2, sqltypes.VarChar, c.cfg.Collation, 0, false)
+		c.asm.Convert_xc(2, sqltypes.VarChar, c.collation, 0, false)
 		lt.Col = collations.TypedCollation{
-			Collation:    c.cfg.Collation,
+			Collation:    c.collation,
 			Coercibility: collations.CoerceCoercible,
 			Repertoire:   collations.RepertoireASCII,
 		}
 	}
 
 	if !rt.isTextual() {
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, 0, false)
 		rt.Col = collations.TypedCollation{
-			Collation:    c.cfg.Collation,
+			Collation:    c.collation,
 			Coercibility: collations.CoerceCoercible,
 			Repertoire:   collations.RepertoireASCII,
 		}

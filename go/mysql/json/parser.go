@@ -678,7 +678,7 @@ func (v *Value) MarshalDate() string {
 
 func (v *Value) MarshalDateTime() string {
 	if dt, ok := v.DateTime(); ok {
-		return dt.ToStdTime(time.Local).Format("2006-01-02 15:04:05.000000")
+		return dt.ToStdTime(time.Now()).Format("2006-01-02 15:04:05.000000")
 	}
 	return ""
 }

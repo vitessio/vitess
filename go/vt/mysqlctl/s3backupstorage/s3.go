@@ -173,7 +173,8 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		})
 		object := objName(bh.dir, bh.name, filename)
 		sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
-		_, err := uploader.UploadWithContext(ctx, &s3manager.UploadInput{
+		// Using UploadWithContext breaks uploading to Minio and Ceph https://github.com/vitessio/vitess/issues/14188
+		_, err := uploader.Upload(&s3manager.UploadInput{
 			Bucket:               &bucket,
 			Key:                  object,
 			Body:                 reader,

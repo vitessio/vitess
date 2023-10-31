@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"strconv"
+	"time"
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/hack"
@@ -32,7 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vthash"
 )
 
-type typeFlag uint32
+type typeFlag uint16
 
 const (
 	// flagNull marks that this value is null; implies flagNullable
@@ -148,13 +149,21 @@ func evalIsTruthy(e eval) boolean {
 	case *evalDecimal:
 		return makeboolean(!e.dec.IsZero())
 	case *evalBytes:
-		if e.isHexLiteral {
+		if e.isHexLiteral() {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
 				return makeboolean(true)
 			}
 			return makeboolean(hex.u != 0)
+		}
+		if e.isBitLiteral() {
+			bit, ok := e.toNumericBit()
+			if !ok {
+				// overflow
+				return makeboolean(true)
+			}
+			return makeboolean(bit.i != 0)
 		}
 		f, _ := fastparse.ParseFloat64(e.string())
 		return makeboolean(f != 0.0)
@@ -167,7 +176,7 @@ func evalIsTruthy(e eval) boolean {
 	}
 }
 
-func evalCoerce(e eval, typ sqltypes.Type, col collations.ID) (eval, error) {
+func evalCoerce(e eval, typ sqltypes.Type, col collations.ID, now time.Time) (eval, error) {
 	if e == nil {
 		return nil, nil
 	}
@@ -199,9 +208,9 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID) (eval, error) {
 	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
 		return evalToInt64(e).toUint64(), nil
 	case sqltypes.Date:
-		return evalToDate(e), nil
+		return evalToDate(e, now), nil
 	case sqltypes.Datetime, sqltypes.Timestamp:
-		return evalToDateTime(e, -1), nil
+		return evalToDateTime(e, -1, now), nil
 	case sqltypes.Time:
 		return evalToTime(e, -1), nil
 	default:
@@ -329,7 +338,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			return nil, err
 		}
 		// Separate return here to avoid nil wrapped in interface type
-		d := evalToDate(e)
+		d := evalToDate(e, time.Now())
 		if d == nil {
 			return nil, nil
 		}
@@ -340,7 +349,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			return nil, err
 		}
 		// Separate return here to avoid nil wrapped in interface type
-		dt := evalToDateTime(e, -1)
+		dt := evalToDateTime(e, -1, time.Now())
 		if dt == nil {
 			return nil, nil
 		}
@@ -367,7 +376,7 @@ func valueToEvalNumeric(v sqltypes.Value) (eval, error) {
 		if err != nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		return &evalInt64{ival}, nil
+		return &evalInt64{i: ival}, nil
 	case v.IsUnsigned():
 		var uval uint64
 		uval, err := v.ToUint64()
@@ -382,7 +391,7 @@ func valueToEvalNumeric(v sqltypes.Value) (eval, error) {
 		}
 		ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
 		if err == nil {
-			return &evalInt64{ival}, nil
+			return &evalInt64{i: ival}, nil
 		}
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", v.RawStr())
 	}
@@ -417,6 +426,9 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation) (eva
 			hex := value.Raw()
 			raw, err := parseHexLiteral(hex[2 : len(hex)-1])
 			return newEvalBytesHex(raw), wrap(err)
+		} else if tt == sqltypes.BitNum {
+			raw, err := parseBitNum(value.Raw())
+			return newEvalBytesBit(raw), wrap(err)
 		} else {
 			return newEvalText(value.Raw(), collation), nil
 		}

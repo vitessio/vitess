@@ -21,7 +21,7 @@
         "Query": "insert into tbl2(col2, coly) values (:_col2_0, 3)",
         "TableName": "tbl2",
         "VindexValues": {
-          "hash_vin": "INT64(1)"
+          "hash_vin": "1"
         }
       },
       "TablesUsed": [
@@ -46,7 +46,7 @@
         "Query": "insert into multicol_tbl2(cola, colb, colc) values (:_cola_0, :_colb_0, :_colc_0)",
         "TableName": "multicol_tbl2",
         "VindexValues": {
-          "multicolIdx": "INT64(1), INT64(2), INT64(3)"
+          "multicolIdx": "1, 2, 3"
         }
       },
       "TablesUsed": [
@@ -85,9 +85,9 @@
             "Query": "select colb, cola, y, colc, x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update",
             "Table": "multicol_tbl1",
             "Values": [
-              "INT64(1)",
-              "INT64(2)",
-              "INT64(3)"
+              "1",
+              "2",
+              "3"
             ],
             "Vindex": "multicolIdx"
           },
@@ -123,9 +123,9 @@
             "Query": "delete from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
             "Table": "multicol_tbl1",
             "Values": [
-              "INT64(1)",
-              "INT64(2)",
-              "INT64(3)"
+              "1",
+              "2",
+              "3"
             ],
             "Vindex": "multicolIdx"
           }
@@ -501,12 +501,12 @@
           {
             "InputName": "VerifyParent-1",
             "OperatorType": "Limit",
-            "Count": "INT64(1)",
+            "Count": "1",
             "Inputs": [
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "INT64(1) as 1"
+                  "1 as 1"
                 ],
                 "Inputs": [
                   {
@@ -595,7 +595,7 @@
             "Query": "select col9 from tbl9 where col9 = 34 for update",
             "Table": "tbl9",
             "Values": [
-              "INT64(34)"
+              "34"
             ],
             "Vindex": "hash_vin"
           },
@@ -627,7 +627,7 @@
             "Query": "delete from tbl9 where col9 = 34",
             "Table": "tbl9",
             "Values": [
-              "INT64(34)"
+              "34"
             ],
             "Vindex": "hash_vin"
           }
@@ -1341,12 +1341,12 @@
           {
             "InputName": "VerifyParent-1",
             "OperatorType": "Limit",
-            "Count": "INT64(1)",
+            "Count": "1",
             "Inputs": [
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "INT64(1) as 1"
+                  "1 as 1"
                 ],
                 "Inputs": [
                   {

@@ -106,15 +106,12 @@ func (fkc *FkCascade) executeLiteralUpdateFkChild(ctx context.Context, vcursor V
 		Type: querypb.Type_TUPLE,
 	}
 	for _, row := range selectionRes.Rows {
-		// Create a tuple from each Row.
-		tuple := &querypb.Value{
-			Type: querypb.Type_TUPLE,
-		}
+		var tupleValues []sqltypes.Value
+
 		for _, colIdx := range child.Cols {
-			tuple.Values = append(tuple.Values,
-				sqltypes.ValueToProto(row[colIdx]))
+			tupleValues = append(tupleValues, row[colIdx])
 		}
-		bv.Values = append(bv.Values, tuple)
+		bv.Values = append(bv.Values, sqltypes.TupleToProto(tupleValues))
 	}
 	// Execute the child primitive, and bail out incase of failure.
 	// Since this Primitive is always executed in a transaction, the changes should
@@ -154,14 +151,11 @@ func (fkc *FkCascade) executeNonLiteralUpdateFkChild(ctx context.Context, vcurso
 			Type: querypb.Type_TUPLE,
 		}
 		// Create a tuple from each Row.
-		tuple := &querypb.Value{
-			Type: querypb.Type_TUPLE,
-		}
+		var tupleValues []sqltypes.Value
 		for _, colIdx := range child.Cols {
-			tuple.Values = append(tuple.Values,
-				sqltypes.ValueToProto(row[colIdx]))
+			tupleValues = append(tupleValues, row[colIdx])
 		}
-		bv.Values = append(bv.Values, tuple)
+		bv.Values = append(bv.Values, sqltypes.TupleToProto(tupleValues))
 		// Execute the child primitive, and bail out incase of failure.
 		// Since this Primitive is always executed in a transaction, the changes should
 		// be rolled back incase of an error.
@@ -202,15 +196,11 @@ func (fkc *FkCascade) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		}
 		for idx, child := range fkc.Children {
 			for _, row := range result.Rows {
-				// Create a tuple from each Row.
-				tuple := &querypb.Value{
-					Type: querypb.Type_TUPLE,
-				}
+				var tupleValues []sqltypes.Value
 				for _, colIdx := range child.Cols {
-					tuple.Values = append(tuple.Values,
-						sqltypes.ValueToProto(row[colIdx]))
+					tupleValues = append(tupleValues, row[colIdx])
 				}
-				bindVariables[idx].Values = append(bindVariables[idx].Values, tuple)
+				bindVariables[idx].Values = append(bindVariables[idx].Values, sqltypes.TupleToProto(tupleValues))
 			}
 		}
 		return nil
