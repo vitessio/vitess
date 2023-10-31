@@ -171,7 +171,9 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	if ValidAsMapKey(to) {
 		st.Recursive[to] = st.RecursiveDeps(from)
 		st.Direct[to] = st.DirectDeps(from)
-		st.ExprTypes[to] = st.ExprTypes[from]
+		if ValidAsMapKey(from) {
+			st.ExprTypes[to] = st.ExprTypes[from]
+		}
 	}
 }
 
