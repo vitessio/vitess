@@ -84,12 +84,11 @@ func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFac
 
 	log.Infof("VDiff controller initializing for %+v", row)
 	id, _ := row["id"].ToInt64()
-	workflowType, _ := row["workflow_type"].ToInt64()
+
 	ct := &controller{
 		id:              id,
 		uuid:            row["vdiff_uuid"].ToString(),
 		workflow:        row["workflow"].ToString(),
-		workflowType:    binlogdatapb.VReplicationWorkflowType(workflowType),
 		dbClientFactory: dbClientFactory,
 		ts:              ts,
 		vde:             vde,
@@ -229,6 +228,12 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 			ct.sourceKeyspace = bls.Keyspace
 			ct.filter = bls.Filter
 		}
+
+		workflowType, err := row["workflow_type"].ToInt64()
+		if err != nil {
+			return err
+		}
+		ct.workflowType = binlogdatapb.VReplicationWorkflowType(workflowType)
 	}
 
 	if err := ct.validate(); err != nil {

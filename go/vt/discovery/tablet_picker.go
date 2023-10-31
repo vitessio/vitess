@@ -357,7 +357,7 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			}
 			continue
 		}
-		log.Infof("Tablet picker found a healthy serving tablet for streaming: %s", candidates[0].Tablet.String())
+		log.Infof("Tablet picker found a healthy tablet for streaming: %s", candidates[0].Tablet.String())
 		return candidates[0].Tablet, nil
 	}
 }
