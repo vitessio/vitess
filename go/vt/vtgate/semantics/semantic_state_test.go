@@ -418,7 +418,7 @@ func TestRemoveParentForeignKey(t *testing.T) {
 					},
 				},
 			},
-			fkToIgnore: "ks.t2child_coldks.t3cold",
+			fkToIgnore: "ks.t2|child_cold||ks.t3|cold",
 			parentFksWanted: []vindexes.ParentFKInfo{
 				pkInfo(t3Table, []string{"colb"}, []string{"child_colb"}),
 				pkInfo(t3Table, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}),
