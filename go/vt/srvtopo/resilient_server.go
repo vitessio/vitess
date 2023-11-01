@@ -85,7 +85,7 @@ func NewResilientServer(ctx context.Context, base *topo.Server, counterPrefix st
 	}
 
 	var metric string
-	if counterPrefix == "" {
+	if counterPrefix != "" {
 		metric = counterPrefix + "Counts"
 	} else {
 		metric = ""
