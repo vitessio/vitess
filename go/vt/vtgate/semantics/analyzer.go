@@ -469,6 +469,11 @@ func (a *analyzer) getAllManagedForeignKeys() (map[TableSet][]vindexes.ChildFKIn
 		if fkMode != vschemapb.Keyspace_managed {
 			continue
 		}
+		// Cyclic foreign key constraints error is stored in the keyspace.
+		ksErr := a.tables.si.KeyspaceError(vi.Keyspace.Name)
+		if ksErr != nil {
+			return nil, nil, ksErr
+		}
 
 		// Add all the child and parent foreign keys to our map.
 		ts := SingleTableSet(idx)

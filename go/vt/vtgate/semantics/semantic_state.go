@@ -150,6 +150,7 @@ type (
 		ConnCollation() collations.ID
 		// ForeignKeyMode returns the foreign_key flag value
 		ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
+		KeyspaceError(keyspace string) error
 	}
 
 	shortCut = int

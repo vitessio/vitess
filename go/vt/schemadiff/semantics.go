@@ -60,6 +60,10 @@ func (si *declarativeSchemaInformation) ForeignKeyMode(keyspace string) (vschema
 	return vschemapb.Keyspace_unmanaged, nil
 }
 
+func (si *declarativeSchemaInformation) KeyspaceError(keyspace string) error {
+	return nil
+}
+
 // addTable adds a fake table with an empty column list
 func (si *declarativeSchemaInformation) addTable(tableName string) {
 	tbl := &vindexes.Table{

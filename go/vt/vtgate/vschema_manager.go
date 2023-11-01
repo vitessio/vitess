@@ -20,11 +20,13 @@ import (
 	"context"
 	"sync"
 
+	"vitess.io/vitess/go/vt/graph"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -188,6 +190,9 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 	vschema := vindexes.BuildVSchema(v)
 	if vm.schema != nil {
 		vm.updateFromSchema(vschema)
+		// We mark the keyspaces that have foreign key management in Vitess and have cyclic foreign keys
+		// to have an error. This makes all queries against them to fail.
+		markErrorIfCyclesInFk(vschema)
 	}
 	return vschema
 }
@@ -227,6 +232,47 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 			for name, def := range views {
 				ks.Views[name] = sqlparser.CloneSelectStatement(def)
 			}
+		}
+	}
+}
+
+type tableCol struct {
+	tableName sqlparser.TableName
+	colNames  sqlparser.Columns
+}
+
+var tableColHash = func(tc tableCol) string {
+	res := sqlparser.String(tc.tableName)
+	for _, colName := range tc.colNames {
+		res += "|" + sqlparser.String(colName)
+	}
+	return res
+}
+
+func markErrorIfCyclesInFk(vschema *vindexes.VSchema) {
+	for ksName, ks := range vschema.Keyspaces {
+		// Only check cyclic foreign keys for keyspaces that have
+		// foreign keys managed in Vitess.
+		if ks.ForeignKeyMode != vschemapb.Keyspace_managed {
+			continue
+		}
+		g := graph.NewGraph[string]()
+		for _, table := range ks.Tables {
+			for _, cfk := range table.ChildForeignKeys {
+				childTable := cfk.Table
+				parentVertex := tableCol{
+					tableName: table.GetTableName(),
+					colNames:  cfk.ParentColumns,
+				}
+				childVertex := tableCol{
+					tableName: childTable.GetTableName(),
+					colNames:  cfk.ChildColumns,
+				}
+				g.AddEdge(tableColHash(parentVertex), tableColHash(childVertex))
+			}
+		}
+		if g.HasCycles() {
+			ks.Error = vterrors.VT09019(ksName)
 		}
 	}
 }

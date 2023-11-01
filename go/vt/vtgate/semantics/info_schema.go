@@ -1717,3 +1717,7 @@ func (i *infoSchemaWithColumns) ConnCollation() collations.ID {
 func (i *infoSchemaWithColumns) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
 	return i.inner.ForeignKeyMode(keyspace)
 }
+
+func (i *infoSchemaWithColumns) KeyspaceError(keyspace string) error {
+	return i.inner.KeyspaceError(keyspace)
+}
