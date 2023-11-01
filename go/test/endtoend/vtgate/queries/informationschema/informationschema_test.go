@@ -206,10 +206,6 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 }
 
 func TestInfrSchemaAndUnionAll(t *testing.T) {
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--planner-version=gen4")
-	require.NoError(t,
-		clusterInstance.RestartVtgate())
-
 	vtConnParams := clusterInstance.GetVTParams(keyspaceName)
 	vtConnParams.DbName = keyspaceName
 	conn, err := mysql.Connect(context.Background(), &vtConnParams)
@@ -224,4 +220,40 @@ func TestInfrSchemaAndUnionAll(t *testing.T) {
 			utils.Exec(t, conn, "rollback")
 		})
 	}
+}
+
+func TestTypeORMQuery(t *testing.T) {
+	// This test checks that we can run queries similar to the ones that the TypeORM framework uses
+
+	require.NoError(t,
+		utils.WaitForAuthoritative(t, "ks", "t1", clusterInstance.VtgateProcess.ReadVSchema))
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	query := `SELECT kcu.TABLE_NAME, kcu.COLUMN_NAME, cols.DATA_TYPE
+FROM (SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
+      FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+      WHERE kcu.TABLE_SCHEMA = 'ks'
+        AND kcu.TABLE_NAME = 't1'
+      UNION
+      SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
+      FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+      WHERE kcu.TABLE_SCHEMA = 'ks'
+        AND kcu.TABLE_NAME = 't7_xxhash') kcu
+         INNER JOIN (SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE
+                     FROM INFORMATION_SCHEMA.COLUMNS cols
+                     WHERE cols.TABLE_SCHEMA = 'ks'
+                       AND cols.TABLE_NAME = 't1'
+                     UNION
+                     SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE
+                     FROM INFORMATION_SCHEMA.COLUMNS cols
+                     WHERE cols.TABLE_SCHEMA = 'ks'
+                       AND cols.TABLE_NAME = 't7_xxhash') cols
+                    ON kcu.TABLE_SCHEMA = cols.TABLE_SCHEMA AND kcu.TABLE_NAME = cols.TABLE_NAME AND
+                       kcu.COLUMN_NAME = cols.COLUMN_NAME`
+	utils.AssertMatchesAny(t, mcmp.VtConn, query,
+		`[[VARBINARY("t1") VARCHAR("id1") BLOB("bigint")] [VARBINARY("t7_xxhash") VARCHAR("uid") BLOB("varchar")]]`,
+		`[[VARCHAR("t1") VARCHAR("id1") BLOB("bigint")] [VARCHAR("t7_xxhash") VARCHAR("uid") BLOB("varchar")]]`,
+	)
 }
