@@ -201,17 +201,20 @@ func (node *Insert) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *With) FormatFast(buf *TrackedBuffer) {
+	if len(node.CTEs) == 0 {
+		return
+	}
 	buf.WriteString("with ")
 
 	if node.Recursive {
 		buf.WriteString("recursive ")
 	}
-	ctesLength := len(node.ctes)
+	ctesLength := len(node.CTEs)
 	for i := 0; i < ctesLength-1; i++ {
-		node.ctes[i].FormatFast(buf)
+		node.CTEs[i].FormatFast(buf)
 		buf.WriteString(", ")
 	}
-	node.ctes[ctesLength-1].FormatFast(buf)
+	node.CTEs[ctesLength-1].FormatFast(buf)
 }
 
 // FormatFast formats the node.

@@ -703,11 +703,11 @@ load_statement:
 with_clause:
   WITH with_list
   {
-	$$ = &With{ctes: $2, Recursive: false}
+	$$ = &With{CTEs: $2, Recursive: false}
   }
 | WITH RECURSIVE with_list
   {
-	$$ = &With{ctes: $3, Recursive: true}
+	$$ = &With{CTEs: $3, Recursive: true}
   }
 
 with_clause_opt:

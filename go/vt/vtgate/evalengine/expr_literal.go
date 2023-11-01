@@ -20,7 +20,6 @@ import (
 	"math"
 
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type (
@@ -29,19 +28,26 @@ type (
 	}
 )
 
+var _ IR = (*Literal)(nil)
 var _ Expr = (*Literal)(nil)
 
-// eval implements the Expr interface
+func (l *Literal) IR() IR {
+	return l
+}
+
+func (l *Literal) IsExpr() {}
+
+// eval implements the expression interface
 func (l *Literal) eval(_ *ExpressionEnv) (eval, error) {
 	return l.inner, nil
 }
 
 // typeof implements the Expr interface
-func (l *Literal) typeof(*ExpressionEnv, []*querypb.Field) (sqltypes.Type, typeFlag) {
+func (l *Literal) typeof(*ExpressionEnv) (ctype, error) {
 	var f typeFlag
 	switch e := l.inner.(type) {
 	case nil:
-		return sqltypes.Null, flagNull | flagNullable
+		return ctype{Type: sqltypes.Null, Flag: flagNull | flagNullable, Col: collationNull}, nil
 	case *evalBytes:
 		f = e.flag
 	case *evalInt64:
@@ -65,7 +71,7 @@ func (l *Literal) typeof(*ExpressionEnv, []*querypb.Field) (sqltypes.Type, typeF
 			f |= flagIntegerOvf
 		}
 	}
-	return l.inner.SQLType(), f
+	return ctype{Type: l.inner.SQLType(), Flag: f, Col: evalCollation(l.inner)}, nil
 }
 
 func (l *Literal) compile(c *compiler) (ctype, error) {
@@ -74,8 +80,5 @@ func (l *Literal) compile(c *compiler) (ctype, error) {
 	} else if err := c.asm.PushLiteral(l.inner); err != nil {
 		return ctype{}, err
 	}
-
-	t, f := l.typeof(nil, nil)
-	return ctype{t, f, evalCollation(l.inner)}, nil
-
+	return l.typeof(nil)
 }

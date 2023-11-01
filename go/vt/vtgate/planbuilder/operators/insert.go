@@ -415,7 +415,7 @@ func modifyForAutoinc(ins *sqlparser.Insert, vTable *vindexes.Table) (*Generate,
 		gen.Offset = colNum
 		gen.added = newColAdded
 	case sqlparser.Values:
-		autoIncValues := make([]evalengine.Expr, 0, len(rows))
+		autoIncValues := make(sqlparser.ValTuple, 0, len(rows))
 		for rowNum, row := range rows {
 			if len(ins.Columns) != len(row) {
 				return nil, vterrors.VT03006()
@@ -424,14 +424,14 @@ func modifyForAutoinc(ins *sqlparser.Insert, vTable *vindexes.Table) (*Generate,
 			if _, ok := row[colNum].(*sqlparser.Default); ok {
 				row[colNum] = &sqlparser.NullVal{}
 			}
-			expr, err := evalengine.Translate(row[colNum], nil)
-			if err != nil {
-				return nil, err
-			}
-			autoIncValues = append(autoIncValues, expr)
+			autoIncValues = append(autoIncValues, row[colNum])
 			row[colNum] = sqlparser.NewArgument(engine.SeqVarName + strconv.Itoa(rowNum))
 		}
-		gen.Values = evalengine.NewTupleExpr(autoIncValues...)
+		var err error
+		gen.Values, err = evalengine.Translate(autoIncValues, nil)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return gen, nil
 }

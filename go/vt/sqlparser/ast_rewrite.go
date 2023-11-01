@@ -7344,6 +7344,11 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 			return true
 		}
 	}
+	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
+		parent.(*Select).With = newNode.(*With)
+	}) {
+		return false
+	}
 	for x, el := range node.From {
 		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -7365,11 +7370,6 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}
 	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
 		parent.(*Select).Where = newNode.(*Where)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
-		parent.(*Select).With = newNode.(*With)
 	}) {
 		return false
 	}
@@ -8594,6 +8594,11 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 			return true
 		}
 	}
+	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
+		parent.(*Union).With = newNode.(*With)
+	}) {
+		return false
+	}
 	if !a.rewriteSelectStatement(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*Union).Left = newNode.(SelectStatement)
 	}) {
@@ -8606,11 +8611,6 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 	}
 	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Union).OrderBy = newNode.(OrderBy)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
-		parent.(*Union).With = newNode.(*With)
 	}) {
 		return false
 	}
@@ -9474,10 +9474,10 @@ func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer repl
 			return true
 		}
 	}
-	for x, el := range node.ctes {
+	for x, el := range node.CTEs {
 		if !a.rewriteRefOfCommonTableExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(*With).ctes[idx] = newNode.(*CommonTableExpr)
+				parent.(*With).CTEs[idx] = newNode.(*CommonTableExpr)
 			}
 		}(x)) {
 			return false
