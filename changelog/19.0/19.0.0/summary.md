@@ -12,6 +12,7 @@
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions
 
 - The `MYSQL_FLAVOR` environment variable is now removed from all Docker Images.
+- VTTablet metrics for TxThrottler's topology watchers have been deprecated. They will be deleted in the next release.
 
 ### <a id="docker"/>Docker
 
