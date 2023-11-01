@@ -129,6 +129,7 @@ type revertibleTestCase struct {
 	removedUniqueKeyNames       string
 	droppedNoDefaultColumnNames string
 	expandedColumnNames         string
+	onlyIfFKOnlineDDLPossible   bool
 }
 
 func TestMain(m *testing.M) {
@@ -219,6 +220,25 @@ func TestSchemaChange(t *testing.T) {
 
 func testRevertible(t *testing.T) {
 
+	fkOnlineDDLPossible := false
+	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
+		// Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
+		// However, Online DDL is made possible in via these changes: https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps1.
+		// Said changes introduce a new global/session boolean variable named 'rename_table_preserve_foreign_key'. It defaults 'false'/0 for backwards compatibility.
+		// When enabled, a `RENAME TABLE` to a FK parent "pins" the children's foreign keys to the table name rather than the table pointer. Which means after the RENAME,
+		// the children will point to the newly instated table rather than the original, renamed table.
+		// (Note: this applies to a particular type of RENAME where we swap tables, see the above blog post).
+		// For FK children, the MySQL changes simply ignore any Vitess-internal table.
+		//
+		// In this stress test, we enable Online DDL if the variable 'rename_table_preserve_foreign_key' is present. The Online DDL mechanism will in turn
+		// query for this variable, and manipulate it, when starting the migration and when cutting over.
+		rs, err := shards[0].Vttablets[0].VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
+		require.NoError(t, err)
+		fkOnlineDDLPossible = len(rs.Rows) > 0
+		t.Logf("MySQL support for 'rename_table_preserve_foreign_key': %v", fkOnlineDDLPossible)
+	})
+
 	var testCases = []revertibleTestCase{
 		{
 			name:       "identical schemas",
@@ -255,16 +275,18 @@ func testRevertible(t *testing.T) {
 			removedUniqueKeyNames: ``,
 		},
 		{
-			name:                   "removed foreign key",
-			fromSchema:             "id int primary key, i int, constraint some_fk_1 foreign key (i) references parent (id) on delete cascade",
-			toSchema:               "id int primary key, i int",
-			removedForeignKeyNames: "some_fk_1",
+			name:                      "removed foreign key",
+			fromSchema:                "id int primary key, i int, constraint some_fk_1 foreign key (i) references parent (id) on delete cascade",
+			toSchema:                  "id int primary key, i int",
+			removedForeignKeyNames:    "some_fk_1",
+			onlyIfFKOnlineDDLPossible: true,
 		},
 
 		{
-			name:       "renamed foreign key",
-			fromSchema: "id int primary key, i int, constraint f1 foreign key (i) references parent (id) on delete cascade",
-			toSchema:   "id int primary key, i int, constraint f2 foreign key (i) references parent (id) on delete cascade",
+			name:                      "renamed foreign key",
+			fromSchema:                "id int primary key, i int, constraint f1 foreign key (i) references parent (id) on delete cascade",
+			toSchema:                  "id int primary key, i int, constraint f2 foreign key (i) references parent (id) on delete cascade",
+			onlyIfFKOnlineDDLPossible: true,
 		},
 		{
 			name:                        "remove column without default",
@@ -370,6 +392,10 @@ func testRevertible(t *testing.T) {
 
 	for _, testcase := range testCases {
 		t.Run(testcase.name, func(t *testing.T) {
+			if testcase.onlyIfFKOnlineDDLPossible && !fkOnlineDDLPossible {
+				t.Skipf("skipped because backing database does not support 'rename_table_preserve_foreign_key'")
+				return
+			}
 
 			t.Run("ensure table dropped", func(t *testing.T) {
 				// A preparation step, to clean up anything from the previous test case
