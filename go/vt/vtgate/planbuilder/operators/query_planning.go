@@ -424,8 +424,7 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 			if err != nil {
 				return err
 			}
-			tblExpr := tbl.GetExpr()
-			tblName, err := tblExpr.TableName()
+			tblName, err := tbl.Name()
 			if err != nil {
 				return err
 			}

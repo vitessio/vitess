@@ -558,7 +558,7 @@ func TestSchemaDiff(t *testing.T) {
 			entityOrder: []string{"t3"},
 		},
 		{
-			name: "create two table with fk",
+			name: "create two tables with fk",
 			toQueries: append(
 				createQueries,
 				"create table tp (id int primary key, info int not null);",
@@ -567,6 +567,7 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs: 2,
 			expectDeps:  1,
 			entityOrder: []string{"tp", "t3"},
+			sequential:  true,
 		},
 		{
 			name: "add FK",
@@ -648,6 +649,7 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs: 2,
 			expectDeps:  1,
 			entityOrder: []string{"t1", "t3"},
+			sequential:  true,
 		},
 		{
 			name: "add column. add FK referencing new column",
@@ -672,6 +674,70 @@ func TestSchemaDiff(t *testing.T) {
 			expectDeps:  1,
 			sequential:  true,
 			entityOrder: []string{"t2", "t1"},
+		}, {
+			name: "add index on parent. add FK to index column",
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null, key info_idx(info));",
+				"create table t2 (id int primary key, ts timestamp, t1_info int not null, constraint parent_info_fk foreign key (t1_info) references t1 (info));",
+				"create view v1 as select id from t1",
+			},
+			expectDiffs: 2,
+			expectDeps:  1,
+			sequential:  true,
+			entityOrder: []string{"t1", "t2"},
+		},
+		{
+			name: "add index on parent with existing index. add FK to index column",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null, key existing_info_idx(info));",
+				"create table t2 (id int primary key, ts timestamp);",
+				"create view v1 as select id from t1",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null, key existing_info_idx(info), key info_idx(info));",
+				"create table t2 (id int primary key, ts timestamp, t1_info int not null, constraint parent_info_fk foreign key (t1_info) references t1 (info));",
+				"create view v1 as select id from t1",
+			},
+			expectDiffs: 2,
+			expectDeps:  1,
+			sequential:  false,
+			entityOrder: []string{"t1", "t2"},
+		},
+		{
+			name: "modify fk column types, fail",
+			fromQueries: []string{
+				"create table t1 (id int primary key);",
+				"create table t2 (id int primary key, ts timestamp, t1_id int, foreign key (t1_id) references t1 (id) on delete no action);",
+			},
+			toQueries: []string{
+				"create table t1 (id bigint primary key);",
+				"create table t2 (id int primary key, ts timestamp, t1_id bigint, foreign key (t1_id) references t1 (id) on delete no action);",
+			},
+			expectDiffs:      2,
+			expectDeps:       0,
+			sequential:       false,
+			conflictingDiffs: 1,
+		},
+		{
+			name: "add hierarchical constraints",
+			fromQueries: []string{
+				"create table t1 (id int primary key, ref int, key ref_idx (ref));",
+				"create table t2 (id int primary key, ref int, key ref_idx (ref));",
+				"create table t3 (id int primary key, ref int, key ref_idx (ref));",
+				"create table t4 (id int primary key, ref int, key ref_idx (ref));",
+				"create table t5 (id int primary key, ref int, key ref_idx (ref));",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, ref int, key ref_idx (ref));",
+				"create table t2 (id int primary key, ref int, key ref_idx (ref), foreign key (ref) references t1 (id) on delete no action);",
+				"create table t3 (id int primary key, ref int, key ref_idx (ref), foreign key (ref) references t2 (id) on delete no action);",
+				"create table t4 (id int primary key, ref int, key ref_idx (ref), foreign key (ref) references t3 (id) on delete no action);",
+				"create table t5 (id int primary key, ref int, key ref_idx (ref), foreign key (ref) references t1 (id) on delete no action);",
+			},
+			expectDiffs: 4,
+			expectDeps:  2, // t2<->t3, t3<->t4
+			sequential:  false,
+			entityOrder: []string{"t2", "t3", "t4", "t5"},
 		},
 		{
 			name: "drop fk",
@@ -741,6 +807,34 @@ func TestSchemaDiff(t *testing.T) {
 			sequential:       true,
 			conflictingDiffs: 2,
 		},
+		{
+			name: "two identical foreign keys in table, drop one",
+			fromQueries: []string{
+				"create table parent (id int primary key)",
+				"create table t1 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id), constraint f2 foreign key (i) references parent(id))",
+			},
+			toQueries: []string{
+				"create table parent (id int primary key)",
+				"create table t1 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id))",
+			},
+			expectDiffs: 1,
+			expectDeps:  0,
+			entityOrder: []string{"t1"},
+		},
+		{
+			name: "test",
+			fromQueries: []string{
+				"CREATE TABLE t1 (id bigint NOT NULL, name varchar(255), PRIMARY KEY (id))",
+			},
+			toQueries: []string{
+				"CREATE TABLE t1 (id bigint NOT NULL, name varchar(255), PRIMARY KEY (id), KEY idx_name (name))",
+				"CREATE TABLE t3 (id bigint NOT NULL, name varchar(255), t1_id bigint, PRIMARY KEY (id), KEY t1_id (t1_id), KEY nameidx (name), CONSTRAINT t3_ibfk_1 FOREIGN KEY (t1_id) REFERENCES t1 (id) ON DELETE CASCADE ON UPDATE CASCADE, CONSTRAINT t3_ibfk_2 FOREIGN KEY (name) REFERENCES t1 (name) ON DELETE CASCADE ON UPDATE CASCADE)",
+			},
+			expectDiffs: 2,
+			expectDeps:  1,
+			sequential:  true,
+			entityOrder: []string{"t1", "t3"},
+		},
 	}
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
 	for _, tc := range tt {
@@ -776,11 +870,14 @@ func TestSchemaDiff(t *testing.T) {
 
 			orderedDiffs, err := schemaDiff.OrderedDiffs(ctx)
 			if tc.conflictingDiffs > 0 {
-				require.Greater(t, tc.conflictingDiffs, 1) // self integrity. If there's a conflict, then obviously there's at least two conflicting diffs (a single diff has nothing to conflict with)
 				assert.Error(t, err)
 				impossibleOrderErr, ok := err.(*ImpossibleApplyDiffOrderError)
 				assert.True(t, ok)
-				assert.Equal(t, tc.conflictingDiffs, len(impossibleOrderErr.ConflictingDiffs))
+				conflictingDiffsStatements := []string{}
+				for _, diff := range impossibleOrderErr.ConflictingDiffs {
+					conflictingDiffsStatements = append(conflictingDiffsStatements, diff.CanonicalStatementString())
+				}
+				assert.Equalf(t, tc.conflictingDiffs, len(impossibleOrderErr.ConflictingDiffs), "found conflicting diffs: %+v\n diff statements=%+v", conflictingDiffsStatements, allDiffsStatements)
 			} else {
 				require.NoErrorf(t, err, "Unordered diffs: %v", allDiffsStatements)
 			}

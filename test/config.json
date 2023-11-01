@@ -871,7 +871,7 @@
 		},
 		"vtgate_foreignkey_stress": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/foreignkey/stress"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/foreignkey/stress", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_foreignkey_stress",

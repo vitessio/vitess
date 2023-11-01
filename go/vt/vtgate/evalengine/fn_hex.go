@@ -21,7 +21,6 @@ import (
 	"vitess.io/vitess/go/mysql/hex"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type builtinHex struct {
@@ -29,7 +28,7 @@ type builtinHex struct {
 	collate collations.ID
 }
 
-var _ Expr = (*builtinHex)(nil)
+var _ IR = (*builtinHex)(nil)
 
 func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -55,14 +54,6 @@ func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalText(encoded, defaultCoercionCollation(call.collate)), nil
 }
 
-func (call *builtinHex) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	tt, f := call.Arguments[0].typeof(env, fields)
-	if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
-		return sqltypes.Text, f
-	}
-	return sqltypes.VarChar, f
-}
-
 func (call *builtinHex) compile(c *compiler) (ctype, error) {
 	str, err := call.Arguments[0].compile(c)
 	if err != nil {
@@ -70,7 +61,7 @@ func (call *builtinHex) compile(c *compiler) (ctype, error) {
 	}
 
 	skip := c.compileNullCheck1(str)
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := defaultCoercionCollation(c.collation)
 	t := sqltypes.VarChar
 	if str.Type == sqltypes.Blob || str.Type == sqltypes.TypeJSON {
 		t = sqltypes.Text
@@ -82,7 +73,7 @@ func (call *builtinHex) compile(c *compiler) (ctype, error) {
 	case str.isTextual():
 		c.asm.Fn_HEX_c(t, col)
 	default:
-		c.asm.Convert_xc(1, t, c.cfg.Collation, 0, false)
+		c.asm.Convert_xc(1, t, c.collation, 0, false)
 		c.asm.Fn_HEX_c(t, col)
 	}
 
@@ -95,7 +86,7 @@ type builtinUnhex struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinUnhex)(nil)
+var _ IR = (*builtinUnhex)(nil)
 
 func hexDecodeJSON(j *evalJSON) ([]byte, bool) {
 	switch j.Type() {
@@ -174,14 +165,6 @@ func (call *builtinUnhex) eval(env *ExpressionEnv) (eval, error) {
 		return newEvalRaw(sqltypes.Blob, decoded, collationBinary), nil
 	}
 	return newEvalBinary(decoded), nil
-}
-
-func (call *builtinUnhex) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	tt, f := call.Arguments[0].typeof(env, fields)
-	if tt == sqltypes.Text || tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
-		return sqltypes.Blob, f
-	}
-	return sqltypes.VarBinary, f | flagNullable
 }
 
 func (call *builtinUnhex) compile(c *compiler) (ctype, error) {
