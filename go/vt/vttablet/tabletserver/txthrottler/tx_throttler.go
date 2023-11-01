@@ -38,24 +38,19 @@ import (
 )
 
 // These vars store the functions used to create the topo server, healthcheck,
-// topology watchers and go/vt/throttler. These are provided here so that they can be overridden
+// and go/vt/throttler. These are provided here so that they can be overridden
 // in tests to generate mocks.
 type healthCheckFactoryFunc func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck
-type topologyWatcherFactoryFunc func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface
 type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error)
 
 var (
-	healthCheckFactory     healthCheckFactoryFunc
-	topologyWatcherFactory topologyWatcherFactoryFunc
-	throttlerFactory       throttlerFactoryFunc
+	healthCheckFactory healthCheckFactoryFunc
+	throttlerFactory   throttlerFactoryFunc
 )
 
 func resetTxThrottlerFactories() {
 	healthCheckFactory = func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck {
 		return discovery.NewHealthCheck(context.Background(), discovery.DefaultHealthCheckRetryDelay, discovery.DefaultHealthCheckTimeout, topoServer, cell, strings.Join(cellsToWatch, ","))
-	}
-	topologyWatcherFactory = func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
-		return discovery.NewCellTabletsWatcher(context.Background(), topoServer, hc, discovery.NewFilterByKeyspace([]string{keyspace}), cell, refreshInterval, true, topoReadConcurrency)
 	}
 	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error) {
 		return throttler.NewThrottlerFromConfig(name, unit, threadCount, maxRate, maxReplicationLagConfig, time.Now)
@@ -149,7 +144,8 @@ type txThrottler struct {
 	topoServer *topo.Server
 
 	// stats
-	throttlerRunning          *stats.Gauge
+	throttlerRunning *stats.Gauge
+	// TODO(deepthi): deprecated, should be deleted in v20
 	topoWatchers              *stats.GaugesWithSingleLabel
 	healthChecksReadTotal     *stats.CountersWithMultiLabels
 	healthChecksRecordedTotal *stats.CountersWithMultiLabels
@@ -170,10 +166,9 @@ type txThrottlerStateImpl struct {
 
 	// throttleMu serializes calls to throttler.Throttler.Throttle(threadId).
 	// That method is required to be called in serial for each threadId.
-	throttleMu       sync.Mutex
-	throttler        ThrottlerInterface
-	stopHealthCheck  context.CancelFunc
-	topologyWatchers map[string]TopologyWatcherInterface
+	throttleMu      sync.Mutex
+	throttler       ThrottlerInterface
+	stopHealthCheck context.CancelFunc
 
 	healthCheck      discovery.HealthCheck
 	healthCheckChan  chan *discovery.TabletHealth
@@ -204,7 +199,7 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 		config:           config,
 		topoServer:       topoServer,
 		throttlerRunning: env.Exporter().NewGauge(TxThrottlerName+"Running", "transaction throttler running state"),
-		topoWatchers:     env.Exporter().NewGaugesWithSingleLabel(TxThrottlerName+"TopoWatchers", "transaction throttler topology watchers", "cell"),
+		topoWatchers:     env.Exporter().NewGaugesWithSingleLabel(TxThrottlerName+"TopoWatchers", "DEPRECATED: transaction throttler topology watchers", "cell"),
 		healthChecksReadTotal: env.Exporter().NewCountersWithMultiLabels(TxThrottlerName+"HealthchecksRead", "transaction throttler healthchecks read",
 			[]string{"cell", "DbType"}),
 		healthChecksRecordedTotal: env.Exporter().NewCountersWithMultiLabels(TxThrottlerName+"HealthchecksRecorded", "transaction throttler healthchecks recorded",
@@ -322,31 +317,12 @@ func (ts *txThrottlerStateImpl) initHealthCheckStream(topoServer *topo.Server, t
 	ts.healthCheck = healthCheckFactory(topoServer, target.Cell, ts.healthCheckCells)
 	ts.healthCheckChan = ts.healthCheck.Subscribe()
 
-	ts.topologyWatchers = make(
-		map[string]TopologyWatcherInterface, len(ts.healthCheckCells))
-	for _, cell := range ts.healthCheckCells {
-		ts.topologyWatchers[cell] = topologyWatcherFactory(
-			topoServer,
-			ts.healthCheck,
-			cell,
-			target.Keyspace,
-			target.Shard,
-			discovery.DefaultTopologyWatcherRefreshInterval,
-			discovery.DefaultTopoReadConcurrency,
-		)
-		ts.txThrottler.topoWatchers.Add(cell, 1)
-	}
 }
 
 func (ts *txThrottlerStateImpl) closeHealthCheckStream() {
 	if ts.healthCheck == nil {
 		return
 	}
-	for cell, watcher := range ts.topologyWatchers {
-		watcher.Stop()
-		ts.txThrottler.topoWatchers.Reset(cell)
-	}
-	ts.topologyWatchers = nil
 	ts.stopHealthCheck()
 	ts.healthCheck.Close()
 }
