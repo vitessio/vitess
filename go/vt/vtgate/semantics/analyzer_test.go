@@ -1792,12 +1792,13 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 	colc := sqlparser.NewColName("colc")
 	cold := sqlparser.NewColName("cold")
 	tests := []struct {
-		name            string
-		stmt            sqlparser.Statement
-		analyzer        *analyzer
-		childFksWanted  map[TableSet][]vindexes.ChildFKInfo
-		parentFksWanted map[TableSet][]vindexes.ParentFKInfo
-		expectedErr     string
+		name                     string
+		stmt                     sqlparser.Statement
+		analyzer                 *analyzer
+		childFksWanted           map[TableSet][]vindexes.ChildFKInfo
+		parentFksWanted          map[TableSet][]vindexes.ParentFKInfo
+		childFkUpdateExprsWanted map[string]sqlparser.UpdateExprs
+		expectedErr              string
 	}{
 		{
 			name: "Delete Query",
@@ -1872,6 +1873,12 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 				SingleTableSet(1): {
 					pkInfo(parentTbl, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
 				},
+			},
+			childFkUpdateExprsWanted: map[string]sqlparser.UpdateExprs{
+				"ks.parentt|child_cola|child_colx||ks.t4|cola|colx": {&sqlparser.UpdateExpr{Name: cola, Expr: sqlparser.NewIntLiteral("1")}},
+				"ks.parentt|child_colb||ks.t4|colb":                 {&sqlparser.UpdateExpr{Name: colb, Expr: &sqlparser.NullVal{}}},
+				"ks.parentt|child_colc|child_colx||ks.t5|colc|colx": {&sqlparser.UpdateExpr{Name: colc, Expr: sqlparser.NewIntLiteral("1")}},
+				"ks.parentt|child_cold||ks.t5|cold":                 {&sqlparser.UpdateExpr{Name: cold, Expr: &sqlparser.NullVal{}}},
 			},
 		},
 		{
@@ -1974,6 +1981,10 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 					pkInfo(parentTbl, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
 				},
 			},
+			childFkUpdateExprsWanted: map[string]sqlparser.UpdateExprs{
+				"ks.parentt|child_cola|child_colx||ks.t6|cola|colx": {&sqlparser.UpdateExpr{Name: cola, Expr: sqlparser.NewIntLiteral("1")}},
+				"ks.parentt|child_colb||ks.t6|colb":                 {&sqlparser.UpdateExpr{Name: colb, Expr: &sqlparser.NullVal{}}},
+			},
 		},
 		{
 			name: "Insert error",
@@ -2014,12 +2025,13 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			childFks, parentFks, _, err := tt.analyzer.getInvolvedForeignKeys(tt.stmt)
+			childFks, parentFks, childFkUpdateExprs, err := tt.analyzer.getInvolvedForeignKeys(tt.stmt)
 			if tt.expectedErr != "" {
 				require.EqualError(t, err, tt.expectedErr)
 				return
 			}
 			require.EqualValues(t, tt.childFksWanted, childFks)
+			require.EqualValues(t, tt.childFkUpdateExprsWanted, childFkUpdateExprs)
 			require.EqualValues(t, tt.parentFksWanted, parentFks)
 		})
 	}
