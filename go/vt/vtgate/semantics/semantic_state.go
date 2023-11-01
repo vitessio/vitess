@@ -332,6 +332,7 @@ func (st *SemTable) IsFkDependentColumnUpdated(updateExprs sqlparser.UpdateExprs
 	return false
 }
 
+// HasNonLiteralForeignKeyUpdate returns if any of the updated expressions have a non-literal update and are part of a foreign key.
 func (st *SemTable) HasNonLiteralForeignKeyUpdate(updExprs sqlparser.UpdateExprs) bool {
 	for _, updateExpr := range updExprs {
 		if sqlparser.IsLiteral(updateExpr.Expr) {

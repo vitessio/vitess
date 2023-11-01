@@ -862,3 +862,116 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 		})
 	}
 }
+
+func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
+	keyspaceName := "ks"
+	t3Table := &vindexes.Table{
+		Keyspace: &vindexes.Keyspace{Name: keyspaceName},
+		Name:     sqlparser.NewIdentifierCS("t3"),
+	}
+	tests := []struct {
+		name          string
+		query         string
+		fakeSi        *FakeSI
+		hasNonLiteral bool
+	}{
+		{
+			name:  "non literal child foreign key update",
+			query: "update t1 set col = id + 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					keyspaceName: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.Table{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Cascade),
+						},
+					},
+				},
+			},
+			hasNonLiteral: true,
+		}, {
+			name:  "non literal parent foreign key update",
+			query: "update t1 set col = id + 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					keyspaceName: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.Table{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
+						ParentForeignKeys: []vindexes.ParentFKInfo{
+							pkInfo(t3Table, []string{"col"}, []string{"col"}),
+						},
+					},
+				},
+			},
+			hasNonLiteral: true,
+		}, {
+			name:  "literal updates only",
+			query: "update t1 set col = 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					keyspaceName: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.Table{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
+						ParentForeignKeys: []vindexes.ParentFKInfo{
+							pkInfo(t3Table, []string{"col"}, []string{"col"}),
+						},
+					},
+				},
+			},
+			hasNonLiteral: false,
+		}, {
+			name:  "self-referenced foreign key",
+			query: "update t1 set col = col + 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					keyspaceName: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.Table{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
+						ParentForeignKeys: []vindexes.ParentFKInfo{
+							pkInfo(t3Table, []string{"col"}, []string{"col"}),
+						},
+					},
+				},
+			},
+			hasNonLiteral: true,
+		}, {
+			name:  "no foreign keys",
+			query: "update t1 set col = id + 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					keyspaceName: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.Table{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
+					},
+				},
+			},
+			hasNonLiteral: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := sqlparser.Parse(tt.query)
+			require.NoError(t, err)
+			semTable, err := Analyze(stmt, keyspaceName, tt.fakeSi)
+			require.NoError(t, err)
+			got := semTable.HasNonLiteralForeignKeyUpdate(stmt.(*sqlparser.Update).Exprs)
+			require.EqualValues(t, tt.hasNonLiteral, got)
+		})
+	}
+}
