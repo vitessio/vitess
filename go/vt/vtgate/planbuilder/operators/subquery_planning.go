@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
 	"io"
 
 	"golang.org/x/exp/slices"
@@ -41,34 +42,36 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStateme
 		return false
 	}
 
-	sel, ok := query.(*sqlparser.Select)
-	if !ok {
-		return true
-	}
-
-	if len(sel.GroupBy) > 0 {
-		// iff we are grouping, we need to check that we can perform the grouping inside a single shard, and we check that
-		// by checking that one of the grouping expressions used is a unique single column vindex.
-		// TODO: we could also support the case where all the columns of a multi-column vindex are used in the grouping
-		for _, gb := range sel.GroupBy {
-			if validVindex(gb) {
-				return true
+	switch node := query.(type) {
+	case *sqlparser.Select:
+		if len(node.GroupBy) > 0 {
+			// iff we are grouping, we need to check that we can perform the grouping inside a single shard, and we check that
+			// by checking that one of the grouping expressions used is a unique single column vindex.
+			// TODO: we could also support the case where all the columns of a multi-column vindex are used in the grouping
+			for _, gb := range node.GroupBy {
+				if validVindex(gb) {
+					return true
+				}
 			}
+			return false
 		}
-		return false
-	}
 
-	// if we have grouping, we have already checked that it's safe, and don't need to check for aggregations
-	// but if we don't have groupings, we need to check if there are aggregations that will mess with us
-	if sqlparser.ContainsAggregation(sel.SelectExprs) {
-		return false
-	}
+		// if we have grouping, we have already checked that it's safe, and don't need to check for aggregations
+		// but if we don't have groupings, we need to check if there are aggregations that will mess with us
+		if sqlparser.ContainsAggregation(node.SelectExprs) {
+			return false
+		}
 
-	if sqlparser.ContainsAggregation(sel.Having) {
-		return false
-	}
+		if sqlparser.ContainsAggregation(node.Having) {
+			return false
+		}
 
-	return true
+		return true
+	case *sqlparser.Union:
+		return isMergeable(ctx, node.Left, op) && isMergeable(ctx, node.Right, op)
+	default:
+		panic(vterrors.VT13001(fmt.Sprintf("Unknown SelectStatement type - %T", node)))
+	}
 }
 
 func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) ops.Operator {
