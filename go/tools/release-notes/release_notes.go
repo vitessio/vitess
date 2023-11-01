@@ -201,6 +201,10 @@ func loadMergedPRsAndAuthors(name string) (pris []pullRequestInformation, author
 	authorMap := map[string]bool{}
 	for _, pri := range pris {
 		login := pri.Author.Login
+		if strings.HasPrefix(login, "@app") {
+			// skip the bots
+			continue
+		}
 		if ok := authorMap[login]; !ok {
 			authors = append(authors, login)
 			authorMap[login] = true
