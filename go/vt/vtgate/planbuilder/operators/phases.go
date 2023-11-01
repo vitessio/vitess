@@ -84,7 +84,7 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Opera
 	case delegateAggregation:
 		return enableDelegateAggregation(ctx, op)
 	case addAggrOrdering:
-		return addOrderBysForAggregations(ctx, op)
+		return addOrderingForAllAggregations(ctx, op)
 	case cleanOutPerfDistinct:
 		return removePerformanceDistinctAboveRoute(ctx, op)
 	case subquerySettling:
@@ -120,39 +120,48 @@ func enableDelegateAggregation(ctx *plancontext.PlanningContext, op ops.Operator
 	return addColumnsToInput(ctx, op)
 }
 
-func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+// addOrderingForAllAggregations is run we have pushed down Aggregators as far down as possible.
+func addOrderingForAllAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		aggrOp, ok := in.(*Aggregator)
 		if !ok {
 			return in, rewrite.SameTree, nil
 		}
 
+		var res *rewrite.ApplyResult
+
 		requireOrdering, err := needsOrdering(ctx, aggrOp)
 		if err != nil {
 			return nil, nil, err
 		}
-		if !requireOrdering {
-			return in, rewrite.SameTree, nil
+
+		if requireOrdering {
+			addOrderingFor(aggrOp)
+			res = rewrite.NewTree("added ordering before aggregation", in)
 		}
-		orderBys := slice.Map(aggrOp.Grouping, func(from GroupBy) ops.OrderBy {
-			return from.AsOrderBy()
-		})
-		if aggrOp.DistinctExpr != nil {
-			orderBys = append(orderBys, ops.OrderBy{
-				Inner: &sqlparser.Order{
-					Expr: aggrOp.DistinctExpr,
-				},
-				SimplifiedExpr: aggrOp.DistinctExpr,
-			})
-		}
-		aggrOp.Source = &Ordering{
-			Source: aggrOp.Source,
-			Order:  orderBys,
-		}
-		return in, rewrite.NewTree("added ordering before aggregation", in), nil
+
+		return in, res, nil
 	}
 
 	return rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
+}
+
+func addOrderingFor(aggrOp *Aggregator) {
+	orderBys := slice.Map(aggrOp.Grouping, func(from GroupBy) ops.OrderBy {
+		return from.AsOrderBy()
+	})
+	if aggrOp.DistinctExpr != nil {
+		orderBys = append(orderBys, ops.OrderBy{
+			Inner: &sqlparser.Order{
+				Expr: aggrOp.DistinctExpr,
+			},
+			SimplifiedExpr: aggrOp.DistinctExpr,
+		})
+	}
+	aggrOp.Source = &Ordering{
+		Source: aggrOp.Source,
+		Order:  orderBys,
+	}
 }
 
 func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) (bool, error) {
