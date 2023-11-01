@@ -269,7 +269,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 			!ct.lastWorkflowError.ShouldRetry() {
 
 			if errSetState := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); errSetState != nil {
-				log.Errorf("INTERNAL: unable to setState() in controller: %v, Could not set error text to: %v.", errSetState, err)
+				log.Errorf("INTERNAL: unable to setState() in controller: %v. Could not set error text to: %v.", errSetState, err)
 				return err // yes, err and not errSetState.
 			}
 			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)

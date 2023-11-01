@@ -31,6 +31,11 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+const (
+	contextTimeout    = 5 * time.Second
+	numTestIterations = 50
+)
+
 func TestPickPrimary(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -591,7 +596,7 @@ func TestPickFallbackType(t *testing.T) {
 	assert.True(t, proto.Equal(primaryTablet, tablet), "Pick: %v, want %v", tablet, primaryTablet)
 }
 
-// TestPickNonServingTablets validates that  non serving tablets are included when the
+// TestPickNonServingTablets validates that non serving tablets are included when the
 // IncludeNonServingTablets option is set. Unhealthy tablets should not be picked, irrespective of this option.
 func TestPickNonServingTablets(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
@@ -615,7 +620,7 @@ func TestPickNonServingTablets(t *testing.T) {
 	defer deleteTablet(t, te, replicaTablet2)
 
 	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, 200*time.Millisecond)
+	ctx, cancel = context.WithTimeout(ctx, contextTimeout)
 	defer cancel()
 	_, err := te.topoServ.UpdateShardFields(ctx, te.keyspace, te.shard, func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = primaryTablet.Alias
@@ -625,7 +630,7 @@ func TestPickNonServingTablets(t *testing.T) {
 
 	tp, err := NewTabletPicker(ctx, te.topoServ, cells, localCell, te.keyspace, te.shard, tabletTypes, options)
 	require.NoError(t, err)
-	ctx2, cancel2 := context.WithTimeout(ctx, 1*time.Second)
+	ctx2, cancel2 := context.WithTimeout(ctx, contextTimeout)
 	defer cancel2()
 	tablet, err := tp.PickForStreaming(ctx2)
 	require.NoError(t, err)
@@ -635,11 +640,11 @@ func TestPickNonServingTablets(t *testing.T) {
 	options.IncludeNonServingTablets = true
 	tp, err = NewTabletPicker(ctx, te.topoServ, cells, localCell, te.keyspace, te.shard, tabletTypes, options)
 	require.NoError(t, err)
-	ctx3, cancel3 := context.WithTimeout(ctx, 1*time.Second)
+	ctx3, cancel3 := context.WithTimeout(ctx, contextTimeout)
 	defer cancel3()
 	var picked1, picked2, picked3 bool
 	// IncludeNonServingTablets is true: both the healthy tablets should be picked even though one is not serving.
-	for i := 0; i < 30; i++ {
+	for i := 0; i < numTestIterations; i++ {
 		tablet, err := tp.PickForStreaming(ctx3)
 		require.NoError(t, err)
 		if proto.Equal(tablet, primaryTablet) {
