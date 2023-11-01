@@ -23,6 +23,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -311,6 +313,7 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 			row := qr.Named().Row()
 			vdiffID, _ := row["id"].ToInt64()
 			summary, err := vde.getVDiffSummary(vdiffID, dbClient)
+			log.Infof("9999999999999 summary: %v", summary.Rows)
 			resp.Output = summary
 			if err != nil {
 				return err

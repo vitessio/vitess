@@ -1781,7 +1781,7 @@ func (s *Server) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowReques
 		log.Errorf("Error executing vdiff show action: %v", output.err)
 		return nil, output.err
 	}
-
+	log.Infof("999999999 VDiffShow: %v", output.responses)
 	return &vtctldatapb.VDiffShowResponse{
 		TabletResponses: output.responses,
 	}, nil
