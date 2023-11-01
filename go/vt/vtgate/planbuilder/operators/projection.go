@@ -455,10 +455,6 @@ func (p *Projection) ShortDescription() string {
 }
 
 func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
-	if p.isDerived() {
-		return p, rewrite.SameTree, nil
-	}
-
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
 		return p, rewrite.SameTree, nil

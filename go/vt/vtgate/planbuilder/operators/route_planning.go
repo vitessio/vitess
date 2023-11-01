@@ -350,7 +350,7 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op ops.Operator) b
 	_ = rewrite.Visit(op, func(current ops.Operator) error {
 		horizon, isHorizon := current.(*Horizon)
 
-		if isHorizon && horizon.IsDerived() && !horizon.IsMergeable(ctx) {
+		if isHorizon && !horizon.IsMergeable(ctx) {
 			required = true
 			return io.EOF
 		}
