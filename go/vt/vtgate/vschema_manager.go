@@ -20,8 +20,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/dominikbraun/graph"
-
+	"vitess.io/vitess/go/vt/graph"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -257,7 +256,7 @@ func markErrorIfCyclesInFk(vschema *vindexes.VSchema) {
 		if ks.ForeignKeyMode != vschemapb.Keyspace_managed {
 			continue
 		}
-		g := graph.New(tableColHash, graph.PreventCycles(), graph.Directed())
+		g := graph.NewGraph[string]()
 		for _, table := range ks.Tables {
 			for _, cfk := range table.ChildForeignKeys {
 				childTable := cfk.Table
@@ -269,13 +268,11 @@ func markErrorIfCyclesInFk(vschema *vindexes.VSchema) {
 					tableName: childTable.GetTableName(),
 					colNames:  cfk.ChildColumns,
 				}
-				_ = g.AddVertex(parentVertex)
-				_ = g.AddVertex(childVertex)
-				err := g.AddEdge(tableColHash(parentVertex), tableColHash(childVertex))
-				if err != nil {
-					ks.Error = vterrors.VT09019(ksName)
-				}
+				g.AddEdge(tableColHash(parentVertex), tableColHash(childVertex))
 			}
+		}
+		if g.HasCycles() {
+			ks.Error = vterrors.VT09019(ksName)
 		}
 	}
 }
