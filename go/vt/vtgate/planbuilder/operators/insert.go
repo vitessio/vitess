@@ -119,7 +119,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	deleteBeforeInsert := false
 	if ins.Action == sqlparser.ReplaceAct &&
 		(ctx.SemTable.ForeignKeysPresent() || vTbl.Keyspace.Sharded) &&
-		len(vTbl.PrimaryKey) > 0 || len(vTbl.UniqueKeys) > 0 {
+		(len(vTbl.PrimaryKey) > 0 || len(vTbl.UniqueKeys) > 0) {
 		// this needs a delete before insert as there can be row clash which needs to be deleted first.
 		ins.Action = sqlparser.InsertAct
 		deleteBeforeInsert = true
