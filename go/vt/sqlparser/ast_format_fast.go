@@ -1140,19 +1140,19 @@ func (ii *IndexInfo) FormatFast(buf *TrackedBuffer) {
 		buf.WriteString(keywordStrings[KEY])
 		return
 	case IndexTypeDefault:
-		buf.WriteString(keywordStrings[INDEX])
+		buf.WriteString(keywordStrings[KEY])
 	case IndexTypeUnique:
 		buf.WriteString(keywordStrings[UNIQUE])
 		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[INDEX])
+		buf.WriteString(keywordStrings[KEY])
 	case IndexTypeSpatial:
 		buf.WriteString(keywordStrings[SPATIAL])
 		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[INDEX])
+		buf.WriteString(keywordStrings[KEY])
 	case IndexTypeFullText:
 		buf.WriteString(keywordStrings[FULLTEXT])
 		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[INDEX])
+		buf.WriteString(keywordStrings[KEY])
 	}
 	if !ii.Name.IsEmpty() {
 		buf.WriteByte(' ')
