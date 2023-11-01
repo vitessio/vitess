@@ -29,8 +29,17 @@ var _ logicalPlan = (*sequential)(nil)
 // Primitive implements the logicalPlan interface
 func (s *sequential) Primitive() engine.Primitive {
 	var sources []engine.Primitive
-	for _, source := range s.sources {
-		sources = append(sources, source.Primitive())
+	for idx, source := range s.sources {
+		prim := source.Primitive()
+		if idx == 0 {
+			switch dml := prim.(type) {
+			case *engine.Update:
+				dml.PreventAutoCommit = true
+			case *engine.Delete:
+				dml.PreventAutoCommit = true
+			}
+		}
+		sources = append(sources, prim)
 	}
 
 	return engine.NewSequential(sources)
