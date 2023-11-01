@@ -1044,6 +1044,8 @@ func testRevert(t *testing.T) {
 			assert.Empty(t, specialPlan)
 			assert.NotEmpty(t, artifacts)
 		}
+		removedForeignKeyNames := row.AsString("removed_foreign_key_names", "")
+		assert.Empty(t, removedForeignKeyNames)
 	})
 	t.Run("INSTANT DDL: fail revert", func(t *testing.T) {
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)

@@ -2738,6 +2738,7 @@ func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDD
 	return withError
 }
 
+// analyzeDropDDLActionMigration analyzes a DROP <TABLE|VIEW> migration.
 func (e *Executor) analyzeDropDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	// Schema analysis:
 	originalShowCreateTable, err := e.showCreateTable(ctx, onlineDDL.Table)
@@ -2756,11 +2757,12 @@ func (e *Executor) analyzeDropDDLActionMigration(ctx context.Context, onlineDDL 
 	if err != nil {
 		return err
 	}
+
+	var removedForeignKeyNames []string
 	if createTable, ok := stmt.(*sqlparser.CreateTable); ok {
 		// This is a table rather than a view.
 
 		// Analyze foreign keys:
-		var removedForeignKeyNames []string
 
 		for _, constraint := range createTable.TableSpec.Constraints {
 			if GetConstraintType(constraint.Details) == ForeignKeyConstraintType {
@@ -2768,11 +2770,11 @@ func (e *Executor) analyzeDropDDLActionMigration(ctx context.Context, onlineDDL 
 			}
 		}
 		// Write analysis:
-		if err := e.updateSchemaAnalysis(ctx, onlineDDL.UUID,
-			0, 0, "", strings.Join(sqlescape.EscapeIDs(removedForeignKeyNames), ","), "", "", "",
-		); err != nil {
-			return err
-		}
+	}
+	if err := e.updateSchemaAnalysis(ctx, onlineDDL.UUID,
+		0, 0, "", strings.Join(sqlescape.EscapeIDs(removedForeignKeyNames), ","), "", "", "",
+	); err != nil {
+		return err
 	}
 	return nil
 }
