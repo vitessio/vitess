@@ -230,30 +230,30 @@ func TestTypeORMQuery(t *testing.T) {
 
 	mcmp, closer := start(t)
 	defer closer()
-	query := `SELECT *
-FROM (SELECT *
+
+	query := `SELECT kcu.TABLE_NAME, kcu.COLUMN_NAME, cols.DATA_TYPE
+FROM (SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
       WHERE kcu.TABLE_SCHEMA = 'ks'
         AND kcu.TABLE_NAME = 't1'
       UNION
-      SELECT *
+      SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
       WHERE kcu.TABLE_SCHEMA = 'ks'
         AND kcu.TABLE_NAME = 't7_xxhash') kcu
-         INNER JOIN
-     (SELECT *
-      FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
-      WHERE CONSTRAINT_SCHEMA = 'ks'
-        AND TABLE_NAME = 't1'
-      UNION
-      SELECT *
-      FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
-      WHERE CONSTRAINT_SCHEMA = 'ks'
-        AND TABLE_NAME = 't7_xxhash') rc
-     ON rc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA
-         AND
-        rc.TABLE_NAME = kcu.TABLE_NAME
-         AND
-        rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME`
-	utils.AssertMatches(t, mcmp.VtConn, query, "[]")
+         INNER JOIN (SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE
+                     FROM INFORMATION_SCHEMA.COLUMNS cols
+                     WHERE cols.TABLE_SCHEMA = 'ks'
+                       AND cols.TABLE_NAME = 't1'
+                     UNION
+                     SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE
+                     FROM INFORMATION_SCHEMA.COLUMNS cols
+                     WHERE cols.TABLE_SCHEMA = 'ks'
+                       AND cols.TABLE_NAME = 't7_xxhash') cols
+                    ON kcu.TABLE_SCHEMA = cols.TABLE_SCHEMA AND kcu.TABLE_NAME = cols.TABLE_NAME AND
+                       kcu.COLUMN_NAME = cols.COLUMN_NAME`
+	utils.AssertMatchesAny(t, mcmp.VtConn, query,
+		`[[VARBINARY("t1") VARCHAR("id1") BLOB("bigint")] [VARBINARY("t7_xxhash") VARCHAR("uid") BLOB("varchar")]]`,
+		`[[VARCHAR("t1") VARCHAR("id1") BLOB("bigint")] [VARCHAR("t7_xxhash") VARCHAR("uid") BLOB("varchar")]]`,
+	)
 }
