@@ -270,7 +270,8 @@ func (st *SemTable) RemoveNonRequiredForeignKeys(verifyAllFks bool, getAction fu
 	return nil
 }
 
-func (st *SemTable) IsFkDependentColumnUpdated(updateExprs sqlparser.UpdateExprs) (bool, error) {
+// IsFkDependentColumnUpdated checks if a foreign key column that is being updated is dependent on another column which also being updated.
+func (st *SemTable) IsFkDependentColumnUpdated(updateExprs sqlparser.UpdateExprs) bool {
 	// Go over all the update expressions
 	for _, updateExpr := range updateExprs {
 		deps := st.RecursiveDeps(updateExpr.Name)
@@ -300,8 +301,14 @@ func (st *SemTable) IsFkDependentColumnUpdated(updateExprs sqlparser.UpdateExprs
 			continue
 		}
 
+		// We cannot support updating a foreign key column that is using a column which is also being updated.
+		// For 2 reasons—
+		// 1. For the child foreign keys, we aren't sure what the final value of the updated foreign key column will be. So we don't know
+		// what to cascade to the child. The selection that we do isn't enough to know if the updated value, since one of the columns used in the update is also being updated.
+		// 2. For the parent foriegn keys, we don't know if we need to reject this update. Because we don't know the final updated value, the update might be needed to be failed,
+		// but we can't say for certain.
 		dependencyUpdated := false
-		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			col, ok := node.(*sqlparser.ColName)
 			if !ok {
 				return true, nil
@@ -318,14 +325,11 @@ func (st *SemTable) IsFkDependentColumnUpdated(updateExprs sqlparser.UpdateExprs
 			}
 			return false, nil
 		}, updateExpr.Expr)
-		if err != nil {
-			return false, err
-		}
 		if dependencyUpdated {
-			return true, nil
+			return true
 		}
 	}
-	return false, nil
+	return false
 }
 
 func (st *SemTable) HasNonLiteralForeignKeyUpdate(updExprs sqlparser.UpdateExprs) bool {

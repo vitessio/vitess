@@ -127,11 +127,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 
 	// Now we check if any of the foreign key columns that are being udpated have dependencies on other updated columns.
 	// This is unsafe, and we currently don't support this in Vitess.
-	depUpd, err := ctx.SemTable.IsFkDependentColumnUpdated(updStmt.Exprs)
-	if err != nil {
-		return nil, err
-	}
-	if depUpd {
+	if ctx.SemTable.IsFkDependentColumnUpdated(updStmt.Exprs) {
 		return nil, vterrors.VT12001("same column referenced in foreign key column update is also updated")
 	}
 

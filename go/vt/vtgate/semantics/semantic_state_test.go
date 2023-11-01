@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -745,6 +746,119 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 			}
 			require.EqualValues(t, tt.childFkWanted, tt.semTable.childForeignKeysInvolved)
 			require.EqualValues(t, tt.parentFkWanted, tt.semTable.parentForeignKeysInvolved)
+		})
+	}
+}
+
+func TestIsFkDependentColumnUpdated(t *testing.T) {
+	keyspaceName := "ks"
+	t3Table := &vindexes.Table{
+		Keyspace: &vindexes.Keyspace{Name: keyspaceName},
+		Name:     sqlparser.NewIdentifierCS("t3"),
+	}
+	tests := []struct {
+		name      string
+		query     string
+		fakeSi    *FakeSI
+		isUpdated bool
+	}{
+		{
+			name:  "updated child foreign key column is dependent on another updated column",
+			query: "update t1 set col = id + 1, id = 6 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					keyspaceName: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.Table{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
+						ChildForeignKeys: []vindexes.ChildFKInfo{
+							ckInfo(t3Table, []string{"col"}, []string{"col"}, sqlparser.Cascade),
+						},
+					},
+				},
+			},
+			isUpdated: true,
+		}, {
+			name:  "updated parent foreign key column is dependent on another updated column",
+			query: "update t1 set col = id + 1, id = 6 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					keyspaceName: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.Table{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
+						ParentForeignKeys: []vindexes.ParentFKInfo{
+							pkInfo(t3Table, []string{"col"}, []string{"col"}),
+						},
+					},
+				},
+			},
+			isUpdated: true,
+		}, {
+			name:  "no foreign key column is dependent on a updated value",
+			query: "update t1 set col = id + 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					keyspaceName: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.Table{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
+						ParentForeignKeys: []vindexes.ParentFKInfo{
+							pkInfo(t3Table, []string{"col"}, []string{"col"}),
+						},
+					},
+				},
+			},
+			isUpdated: false,
+		}, {
+			name:  "self-referenced foreign key",
+			query: "update t1 set col = col + 1 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					keyspaceName: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.Table{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
+						ParentForeignKeys: []vindexes.ParentFKInfo{
+							pkInfo(t3Table, []string{"col"}, []string{"col"}),
+						},
+					},
+				},
+			},
+			isUpdated: false,
+		}, {
+			name:  "no foreign keys",
+			query: "update t1 set col = id + 1, id = 6 where foo = 3",
+			fakeSi: &FakeSI{
+				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+					keyspaceName: vschemapb.Keyspace_managed,
+				},
+				Tables: map[string]*vindexes.Table{
+					"t1": {
+						Name:     sqlparser.NewIdentifierCS("t1"),
+						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
+					},
+				},
+			},
+			isUpdated: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := sqlparser.Parse(tt.query)
+			require.NoError(t, err)
+			semTable, err := Analyze(stmt, keyspaceName, tt.fakeSi)
+			require.NoError(t, err)
+			got := semTable.IsFkDependentColumnUpdated(stmt.(*sqlparser.Update).Exprs)
+			require.EqualValues(t, tt.isUpdated, got)
 		})
 	}
 }
