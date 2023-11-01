@@ -301,11 +301,10 @@ func (st *SemTable) IsFkDependentColumnUpdated(updateExprs sqlparser.UpdateExprs
 			continue
 		}
 
-		// We cannot support updating a foreign key column that is using a column which is also being updated.
-		// For 2 reasons—
+		// We cannot support updating a foreign key column that is using a column which is also being updated for 2 reasons—
 		// 1. For the child foreign keys, we aren't sure what the final value of the updated foreign key column will be. So we don't know
 		// what to cascade to the child. The selection that we do isn't enough to know if the updated value, since one of the columns used in the update is also being updated.
-		// 2. For the parent foriegn keys, we don't know if we need to reject this update. Because we don't know the final updated value, the update might be needed to be failed,
+		// 2. For the parent foreign keys, we don't know if we need to reject this update. Because we don't know the final updated value, the update might need to be failed,
 		// but we can't say for certain.
 		dependencyUpdated := false
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
