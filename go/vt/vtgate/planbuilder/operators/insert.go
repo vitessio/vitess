@@ -117,12 +117,12 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	}
 
 	deleteBeforeInsert := false
-	if ins.Action == sqlparser.ReplaceAct && (ctx.SemTable.ForeignKeysPresent() || vTbl.Keyspace.Sharded) {
+	if ins.Action == sqlparser.ReplaceAct &&
+		(ctx.SemTable.ForeignKeysPresent() || vTbl.Keyspace.Sharded) &&
+		len(vTbl.PrimaryKey) > 0 || len(vTbl.UniqueKeys) > 0 {
+		// this needs a delete before insert as there can be row clash which needs to be deleted first.
 		ins.Action = sqlparser.InsertAct
-		if len(vTbl.PrimaryKey) > 0 || len(vTbl.UniqueKeys) > 0 {
-			// this needs a delete before insert as there can be row clash which needs to be deleted first.
-			deleteBeforeInsert = true
-		}
+		deleteBeforeInsert = true
 	}
 
 	insOp, err := checkAndCreateInsertOperator(ctx, ins, vTbl, routing)
@@ -248,7 +248,7 @@ func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sq
 					if offsets[colIdx] == -1 {
 						cursor.Replace(&sqlparser.NullVal{})
 					} else {
-						cursor.Replace(row[colIdx])
+						cursor.Replace(row[offsets[colIdx]])
 					}
 					colIdx++
 				}, nil).(sqlparser.Expr)
@@ -289,11 +289,16 @@ func checkAndCreateInsertOperator(ctx *plancontext.PlanningContext, ins *sqlpars
 
 	parentFKs := ctx.SemTable.GetParentForeignKeysList()
 	childFks := ctx.SemTable.GetChildForeignKeysList()
-	if len(parentFKs) != 0 {
+	if len(parentFKs) > 0 {
 		return nil, vterrors.VT12002()
 	}
-	if len(childFks) != 0 && len(ins.OnDup) != 0 {
-		return nil, vterrors.VT12001("ON DUPLICATE KEY UPDATE with foreign keys")
+	if len(childFks) > 0 {
+		if ins.Action == sqlparser.ReplaceAct {
+			return nil, vterrors.VT12001("REPLACE INTO with foreign keys")
+		}
+		if len(ins.OnDup) > 0 {
+			return nil, vterrors.VT12001("ON DUPLICATE KEY UPDATE with foreign keys")
+		}
 	}
 	return insOp, nil
 }

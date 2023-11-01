@@ -178,6 +178,8 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 	}
 
 	_ = vschema.AddPrimaryKey("unsharded_fk_allow", "u_tbl1", []string{"id"})
+	_ = vschema.AddPrimaryKey("unsharded_fk_allow", "u_tbl9", []string{"id"})
+	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("col9")})
 
 }
 

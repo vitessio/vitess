@@ -160,3 +160,17 @@ func (vschema *VSchema) AddPrimaryKey(ksname, tblName string, cols []string) err
 	}
 	return nil
 }
+
+// AddUniqueKey is for testing only.
+func (vschema *VSchema) AddUniqueKey(ksname, tblName string, exprs sqlparser.Exprs) error {
+	ks, ok := vschema.Keyspaces[ksname]
+	if !ok {
+		return fmt.Errorf("keyspace %s not found in vschema", ksname)
+	}
+	tbl, ok := ks.Tables[tblName]
+	if !ok {
+		return fmt.Errorf("table %s not found in keyspace %s", tblName, ksname)
+	}
+	tbl.UniqueKeys = append(tbl.UniqueKeys, exprs)
+	return nil
+}
