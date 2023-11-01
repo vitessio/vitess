@@ -621,7 +621,7 @@ options:PassthroughDMLs
       "Role": 2
     }
   ],
-  "FullQuery":"alter table b add index a (id)"
+  "FullQuery":"alter table b add key a (id)"
 }
 
 # create view
