@@ -23,6 +23,9 @@ import (
 	"testing"
 	"time"
 
+	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
@@ -187,7 +190,7 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 	ft.Tablet.PortMap["vt"] = vtPort
 	ft.Tablet.PortMap["grpc"] = gRPCPort
 	ft.Tablet.Hostname = "127.0.0.1"
-
+	config := &tabletenv.TabletConfig{}
 	// Create a test tm on that port, and re-read the record
 	// (it has new ports and IP).
 	ft.TM = &tabletmanager.TabletManager{
@@ -196,6 +199,7 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 		MysqlDaemon:         ft.FakeMysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
+		VDiffEngine:         vdiff2.NewEngine(config, wr.TopoServer(), ft.Tablet),
 	}
 	if err := ft.TM.Start(ft.Tablet, 0); err != nil {
 		t.Fatal(err)
