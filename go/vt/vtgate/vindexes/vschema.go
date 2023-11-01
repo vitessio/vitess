@@ -185,6 +185,7 @@ type Column struct {
 	Name          sqlparser.IdentifierCI `json:"name"`
 	Type          querypb.Type           `json:"type"`
 	CollationName string                 `json:"collation_name"`
+	Default       sqlparser.Expr         `json:"default,omitempty"`
 
 	// Invisible marks this as a column that will not be automatically included in `*` projections
 	Invisible bool `json:"invisible"`
@@ -192,13 +193,22 @@ type Column struct {
 
 // MarshalJSON returns a JSON representation of Column.
 func (col *Column) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Name string `json:"name"`
-		Type string `json:"type,omitempty"`
+	cj := struct {
+		Name      string `json:"name"`
+		Type      string `json:"type,omitempty"`
+		Invisible bool   `json:"invisible,omitempty"`
+		Default   string `json:"default,omitempty"`
 	}{
 		Name: col.Name.String(),
 		Type: querypb.Type_name[int32(col.Type)],
-	})
+	}
+	if col.Invisible {
+		cj.Invisible = true
+	}
+	if col.Default != nil {
+		cj.Default = sqlparser.String(col.Default)
+	}
+	return json.Marshal(cj)
 }
 
 // KeyspaceSchema contains the schema(table) for a keyspace.
@@ -619,8 +629,17 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 					tname,
 				)
 			}
+			var colDefault sqlparser.Expr
+			if col.Default != "" {
+				var err error
+				colDefault, err = sqlparser.ParseExpr(col.Default)
+				if err != nil {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"could not parse the '%s' column's default expression '%s' for table '%s'", col.Name, col.Default, tname)
+				}
+			}
 			colNames[name.Lowered()] = true
-			t.Columns = append(t.Columns, Column{Name: name, Type: col.Type, Invisible: col.Invisible})
+			t.Columns = append(t.Columns, Column{Name: name, Type: col.Type, Invisible: col.Invisible, Default: colDefault})
 		}
 
 		// Initialize ColumnVindexes.

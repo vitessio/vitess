@@ -293,8 +293,8 @@ func TestFKInfoRetrieval(t *testing.T) {
 		expTbl: map[string][]vindexes.Column{
 			"my_tbl": {
 				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "utf8mb4_0900_ai_ci"},
-				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci"},
-				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "utf8mb4_0900_ai_ci"},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci", Default: &sqlparser.NullVal{}},
+				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "utf8mb4_0900_ai_ci", Default: &sqlparser.NullVal{}},
 			},
 		},
 	}, {
@@ -303,14 +303,14 @@ func TestFKInfoRetrieval(t *testing.T) {
 		expTbl: map[string][]vindexes.Column{
 			"my_tbl": {
 				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "utf8mb4_0900_ai_ci"},
-				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci"},
-				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "utf8mb4_0900_ai_ci"},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci", Default: &sqlparser.NullVal{}},
+				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "utf8mb4_0900_ai_ci", Default: &sqlparser.NullVal{}},
 			},
 			"my_child_tbl": {
 				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "utf8mb4_0900_ai_ci"},
-				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci"},
-				{Name: sqlparser.NewIdentifierCI("code"), Type: querypb.Type_VARCHAR, CollationName: "utf8mb4_0900_ai_ci"},
-				{Name: sqlparser.NewIdentifierCI("my_id"), Type: querypb.Type_INT64, CollationName: "utf8mb4_0900_ai_ci"},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci", Default: &sqlparser.NullVal{}},
+				{Name: sqlparser.NewIdentifierCI("code"), Type: querypb.Type_VARCHAR, CollationName: "utf8mb4_0900_ai_ci", Default: &sqlparser.NullVal{}},
+				{Name: sqlparser.NewIdentifierCI("my_id"), Type: querypb.Type_INT64, CollationName: "utf8mb4_0900_ai_ci", Default: &sqlparser.NullVal{}},
 			},
 		},
 		expFk: map[string]string{
@@ -350,8 +350,8 @@ func TestIndexInfoRetrieval(t *testing.T) {
 		expTbl: map[string][]vindexes.Column{
 			"my_tbl": {
 				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "utf8mb4_0900_ai_ci"},
-				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci"},
-				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "utf8mb4_0900_ai_ci"},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci", Default: &sqlparser.NullVal{}},
+				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "utf8mb4_0900_ai_ci", Default: &sqlparser.NullVal{}},
 			},
 		},
 		expIdx: map[string][]string{
@@ -366,8 +366,8 @@ func TestIndexInfoRetrieval(t *testing.T) {
 		expTbl: map[string][]vindexes.Column{
 			"my_tbl": {
 				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "utf8mb4_0900_ai_ci"},
-				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci"},
-				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "utf8mb4_0900_ai_ci"},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci", Default: &sqlparser.NullVal{}},
+				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "utf8mb4_0900_ai_ci", Default: &sqlparser.NullVal{}},
 			},
 		},
 		expIdx: map[string][]string{
@@ -395,7 +395,6 @@ type testCases struct {
 }
 
 func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []testCases) {
-	t.Helper()
 	ch := make(chan *discovery.TabletHealth)
 	tracker := NewTracker(ch, true)
 	tracker.consumeDelay = 1 * time.Millisecond

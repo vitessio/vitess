@@ -318,6 +318,7 @@ func getColumns(tblSpec *sqlparser.TableSpec) []vindexes.Column {
 				Type:          column.Type.SQLType(),
 				CollationName: colCollation,
 				Invisible:     column.Type.Invisible(),
+				Default:       column.Type.Options.Default,
 			})
 	}
 	return cols

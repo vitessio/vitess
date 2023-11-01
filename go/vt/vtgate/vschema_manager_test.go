@@ -213,41 +213,18 @@ func TestVSchemaUpdate(t *testing.T) {
 					Sharded:        false,
 					ForeignKeyMode: vschemapb.Keyspace_managed,
 					Tables: map[string]*vschemapb.Table{
-						"t1": {
-							Columns: []*vschemapb.Column{
-								{
-									Name: "id",
-									Type: querypb.Type_INT64,
-								},
-							},
-						},
-						"t2": {
-							Columns: []*vschemapb.Column{
-								{
-									Name: "id",
-									Type: querypb.Type_INT64,
-								},
-							},
-						},
+						"t1": {Columns: []*vschemapb.Column{{Name: "id", Type: querypb.Type_INT64}}},
+						"t2": {Columns: []*vschemapb.Column{{Name: "id", Type: querypb.Type_INT64}}},
 						"multicol_t1": {
 							Columns: []*vschemapb.Column{
-								{
-									Name: "uid",
-									Type: querypb.Type_INT64,
-								}, {
-									Name: "name",
-									Type: querypb.Type_VARCHAR,
-								},
+								{Name: "uid", Type: querypb.Type_INT64},
+								{Name: "name", Type: querypb.Type_VARCHAR},
 							},
-						}, "multicol_t2": {
+						},
+						"multicol_t2": {
 							Columns: []*vschemapb.Column{
-								{
-									Name: "uid",
-									Type: querypb.Type_INT64,
-								}, {
-									Name: "name",
-									Type: querypb.Type_VARCHAR,
-								},
+								{Name: "uid", Type: querypb.Type_INT64},
+								{Name: "name", Type: querypb.Type_VARCHAR},
 							},
 						},
 					},
