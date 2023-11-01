@@ -122,8 +122,8 @@ type Table struct {
 	// index can be columns or expression.
 	// For Primary key, functional indexes are not allowed, therefore it will only be columns.
 	// MySQL error message: ERROR 3756 (HY000): The primary key cannot be a functional index
-	PrimaryKey sqlparser.Columns
-	UniqueKeys []sqlparser.Exprs
+	PrimaryKey sqlparser.Columns `json:"primary_key,omitempty"`
+	UniqueKeys []sqlparser.Exprs `json:"unique_keys,omitempty"`
 }
 
 // GetTableName gets the sqlparser.TableName for the vindex Table.
