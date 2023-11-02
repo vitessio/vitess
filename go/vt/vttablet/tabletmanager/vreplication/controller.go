@@ -258,11 +258,11 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		if (err != nil && vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy)) ||
 			isUnrecoverableError(err) || !ct.lastWorkflowError.ShouldRetry() {
 
-			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)
 			if errSetState := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); errSetState != nil {
-				log.Errorf("INTERNAL: unable to setState() in controller. Attempting to set error text: [%v]; setState() error is: %v", err, errSetState)
+				log.Errorf("INTERNAL: unable to setState() in controller: %v. Could not set error text to: %v.", errSetState, err)
 				return err // yes, err and not errSetState.
 			}
+			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)
 			return nil // this will cause vreplicate to quit the workflow
 		}
 		return err
