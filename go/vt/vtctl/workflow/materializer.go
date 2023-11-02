@@ -78,7 +78,7 @@ func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowS
 	}
 }
 
-func (mz *materializer) createMoveTablesStreams(req *vtctldatapb.MoveTablesCreateRequest) error {
+func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) error {
 	if err := validateNewWorkflow(mz.ctx, mz.ts, mz.tmc, mz.ms.TargetKeyspace, mz.ms.Workflow); err != nil {
 		return err
 	}
@@ -95,6 +95,7 @@ func (mz *materializer) createMoveTablesStreams(req *vtctldatapb.MoveTablesCreat
 	if err != nil {
 		return err
 	}
+	req.WorkflowSubType = workflowSubType
 
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
@@ -113,22 +114,12 @@ func (mz *materializer) createMoveTablesStreams(req *vtctldatapb.MoveTablesCreat
 		if len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, target.KeyRange) {
 			streamKeyRangesEqual = true
 		}
-		blses, err := mz.generateBinlogSources(mz.ctx, target, sourceShards, streamKeyRangesEqual)
+		req.BinlogSource, err = mz.generateBinlogSources(mz.ctx, target, sourceShards, streamKeyRangesEqual)
 		if err != nil {
 			return err
 		}
-		_, err = mz.tmc.CreateVReplicationWorkflow(mz.ctx, targetPrimary.Tablet, &tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
-			Workflow:                  req.Workflow,
-			BinlogSource:              blses,
-			Cells:                     req.Cells,
-			TabletTypes:               req.TabletTypes,
-			TabletSelectionPreference: req.TabletSelectionPreference,
-			WorkflowType:              mz.workflowType,
-			WorkflowSubType:           workflowSubType,
-			DeferSecondaryKeys:        req.DeferSecondaryKeys,
-			AutoStart:                 req.AutoStart,
-			StopAfterCopy:             req.StopAfterCopy,
-		})
+
+		_, err = mz.tmc.CreateVReplicationWorkflow(mz.ctx, targetPrimary.Tablet, req)
 		return err
 	})
 }

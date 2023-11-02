@@ -3564,8 +3564,17 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 				ms:           ms,
 				workflowType: workflowType,
 			}
-			err = mz.createMoveTablesStreams(tc.moveTablesReq)
-			require.NoError(t, err, "createMoveTablesStreams failed: %v", err)
+			err = mz.createWorkflowStreams(&tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+				Workflow:                  tc.moveTablesReq.Workflow,
+				Cells:                     tc.moveTablesReq.Cells,
+				TabletTypes:               tc.moveTablesReq.TabletTypes,
+				TabletSelectionPreference: tc.moveTablesReq.TabletSelectionPreference,
+				WorkflowType:              workflowType,
+				DeferSecondaryKeys:        tc.moveTablesReq.DeferSecondaryKeys,
+				AutoStart:                 tc.moveTablesReq.AutoStart,
+				StopAfterCopy:             tc.moveTablesReq.StopAfterCopy,
+			})
+			require.NoError(t, err, "createWorkflowStreams failed: %v", err)
 		})
 	}
 }

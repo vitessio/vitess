@@ -1386,7 +1386,16 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		ms:           ms,
 		workflowType: workflowType,
 	}
-	err = mz.createMoveTablesStreams(req)
+	err = mz.createWorkflowStreams(&tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+		Workflow:                  req.Workflow,
+		Cells:                     req.Cells,
+		TabletTypes:               req.TabletTypes,
+		TabletSelectionPreference: req.TabletSelectionPreference,
+		WorkflowType:              mz.workflowType,
+		DeferSecondaryKeys:        req.DeferSecondaryKeys,
+		AutoStart:                 req.AutoStart,
+		StopAfterCopy:             req.StopAfterCopy,
+	})
 	if err != nil {
 		return nil, err
 	}
