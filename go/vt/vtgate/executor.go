@@ -901,7 +901,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 	for _, s := range status {
 		for _, ts := range s.TabletsStats {
 			// We only want to show REPLICA and RDONLY tablets
-			if ts.Tablet.Type != topodatapb.TabletType_REPLICA && ts.Tablet.Type != topodatapb.TabletType_RDONLY {
+			if ts.Target.TabletType != topodatapb.TabletType_REPLICA && ts.Target.TabletType != topodatapb.TabletType_RDONLY {
 				continue
 			}
 
