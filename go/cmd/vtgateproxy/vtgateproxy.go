@@ -38,11 +38,12 @@ func main() {
 	servenv.ParseFlags("vtgateproxy")
 	servenv.Init()
 
-	vtgateproxy.Init()
-
 	servenv.OnRun(func() {
 		// Flags are parsed now. Parse the template using the actual flag value and overwrite the current template.
+		vtgateproxy.RegisterJsonDiscovery()
+		vtgateproxy.Init()
 	})
+
 	servenv.OnClose(func() {
 	})
 	servenv.RunDefault()

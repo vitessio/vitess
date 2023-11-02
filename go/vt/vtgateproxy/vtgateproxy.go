@@ -42,7 +42,7 @@ var (
 	defaultDDLStrategy = flag.String("ddl_strategy", string(schema.DDLStrategyDirect), "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
 	sysVarSetEnabled   = flag.Bool("enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
 
-	vtGateProxy *VTGateProxy
+	vtGateProxy *VTGateProxy = &VTGateProxy{}
 )
 
 type VTGateProxy struct {
@@ -52,6 +52,10 @@ type VTGateProxy struct {
 func (proxy *VTGateProxy) connect(ctx context.Context) error {
 	grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
 		return append(opts, grpc.WithBlock()), nil
+	})
+
+	grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
+		return append(opts, grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`)), nil
 	})
 
 	conn, err := vtgateconn.DialProtocol(ctx, "grpc", *target)
@@ -104,8 +108,6 @@ func (proxy *VTGateProxy) StreamExecute(ctx context.Context, session *vtgateconn
 }
 
 func Init() error {
-	vtGateProxy = &VTGateProxy{}
-
 	// XXX maybe add connect timeout?
 	ctx, cancel := context.WithTimeout(context.Background(), *dialTimeout)
 	defer cancel()
