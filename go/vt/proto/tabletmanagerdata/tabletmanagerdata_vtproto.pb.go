@@ -2076,9 +2076,10 @@ func (m *VDiffReportOptions) CloneVT() *VDiffReportOptions {
 		return (*VDiffReportOptions)(nil)
 	}
 	r := &VDiffReportOptions{
-		OnlyPks:    m.OnlyPks,
-		DebugQuery: m.DebugQuery,
-		Format:     m.Format,
+		OnlyPks:            m.OnlyPks,
+		DebugQuery:         m.DebugQuery,
+		Format:             m.Format,
+		MaxVdiffReportRows: m.MaxVdiffReportRows,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -7194,6 +7195,11 @@ func (m *VDiffReportOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.MaxVdiffReportRows != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.MaxVdiffReportRows))
+		i--
+		dAtA[i] = 0x20
+	}
 	if len(m.Format) > 0 {
 		i -= len(m.Format)
 		copy(dAtA[i:], m.Format)
@@ -9447,6 +9453,9 @@ func (m *VDiffReportOptions) SizeVT() (n int) {
 	l = len(m.Format)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
+	}
+	if m.MaxVdiffReportRows != 0 {
+		n += 1 + sov(uint64(m.MaxVdiffReportRows))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -20376,6 +20385,25 @@ func (m *VDiffReportOptions) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Format = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxVdiffReportRows", wireType)
+			}
+			m.MaxVdiffReportRows = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxVdiffReportRows |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
