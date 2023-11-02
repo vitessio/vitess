@@ -19,10 +19,14 @@ package evalengine
 import (
 	"context"
 	"fmt"
+	"math"
+	"math/rand"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -1324,4 +1328,79 @@ func BenchmarkNullSafeComparison(b *testing.B) {
 			}
 		}
 	})
+}
+
+func linear() sqltypes.RandomGenerator {
+	var n int64
+	return func() sqltypes.Value {
+		n++
+		return sqltypes.NewInt64(n)
+	}
+}
+
+func TestCompareSorter(t *testing.T) {
+
+	var cases = []struct {
+		Count  int
+		Limit  int
+		Random sqltypes.RandomGenerator
+		Cmp    Comparison
+	}{
+		{
+			Count:  100,
+			Limit:  10,
+			Random: sqltypes.RandomGenerators[sqltypes.Int64],
+			Cmp:    Comparison{{Col: 0, Desc: false, Type: Type{Type: sqltypes.Int64}}},
+		},
+		{
+			Count:  100,
+			Limit:  10,
+			Random: sqltypes.RandomGenerators[sqltypes.Int64],
+			Cmp:    Comparison{{Col: 0, Desc: true, Type: Type{Type: sqltypes.Int64}}},
+		},
+		{
+			Count:  100,
+			Limit:  math.MaxInt,
+			Random: sqltypes.RandomGenerators[sqltypes.Int64],
+			Cmp:    Comparison{{Col: 0, Desc: false, Type: Type{Type: sqltypes.Int64}}},
+		},
+		{
+			Count:  100,
+			Limit:  math.MaxInt,
+			Random: sqltypes.RandomGenerators[sqltypes.Int64],
+			Cmp:    Comparison{{Col: 0, Desc: true, Type: Type{Type: sqltypes.Int64}}},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%s-%d-%d", tc.Cmp[0].Type.Type, tc.Count, tc.Limit), func(t *testing.T) {
+			unsorted := make([]sqltypes.Row, 0, tc.Count)
+			for i := 0; i < tc.Count; i++ {
+				unsorted = append(unsorted, []sqltypes.Value{tc.Random()})
+			}
+			rand.Shuffle(len(unsorted), func(i, j int) {
+				unsorted[i], unsorted[j] = unsorted[j], unsorted[i]
+			})
+
+			want := slices.Clone(unsorted)
+			tc.Cmp.Sort(want)
+			if len(want) > tc.Limit {
+				want = want[:tc.Limit]
+			}
+
+			sorter := &Sorter{Compare: tc.Cmp, Limit: tc.Limit}
+			for _, v := range unsorted {
+				sorter.Push(v)
+			}
+
+			sorted := sorter.Sorted()
+			assert.Equal(t, len(want), len(sorted))
+			for i := 0; i < len(want); i++ {
+				if !sqltypes.RowEqual(want[i], sorted[i]) {
+					t.Fatalf("row %d is not sorted.\nwant: %v\ngot:  %v", i, want, sorted)
+				}
+			}
+		})
+	}
+
 }

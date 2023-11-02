@@ -17,12 +17,10 @@ limitations under the License.
 package engine
 
 import (
-	"container/heap"
 	"context"
 	"fmt"
 	"math"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -36,7 +34,7 @@ var _ Primitive = (*MemorySort)(nil)
 // MemorySort is a primitive that performs in-memory sorting.
 type MemorySort struct {
 	UpperLimit evalengine.Expr
-	OrderBy    []evalengine.OrderByParams
+	OrderBy    evalengine.Comparison
 	Input      Primitive
 
 	// TruncateColumnCount specifies the number of columns to return
@@ -88,7 +86,7 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return nil, err
 	}
 
-	if err = evalengine.SortResult(result, ms.OrderBy); err != nil {
+	if err = ms.OrderBy.SortResult(result); err != nil {
 		return nil, err
 	}
 	if len(result.Rows) > count {
@@ -110,27 +108,21 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		return callback(qr.Truncate(ms.TruncateColumnCount))
 	}
 
-	// You have to reverse the ordering because the highest values
-	// must be dropped once the upper limit is reached.
-	sh := &sortHeap{
-		comparers: ms.OrderBy,
-		reverse:   true,
+	sorter := &evalengine.Sorter{
+		Compare: ms.OrderBy,
+		Limit:   count,
 	}
 	err = vcursor.StreamExecutePrimitive(ctx, ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
 			}
+			sorter.SetFields(qr.Fields)
 		}
 		for _, row := range qr.Rows {
-			heap.Push(sh, row)
-			// Remove the highest element from the heap if the size is more than the count
-			// This optimization means that the maximum size of the heap is going to be (count + 1)
-			for len(sh.rows) > count {
-				_ = heap.Pop(sh)
-			}
+			sorter.Push(row)
 		}
-		if vcursor.ExceedsMaxMemoryRows(len(sh.rows)) {
+		if vcursor.ExceedsMaxMemoryRows(sorter.Len()) {
 			return fmt.Errorf("in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
 		}
 		return nil
@@ -138,10 +130,7 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	if err != nil {
 		return err
 	}
-	// Set ordering to normal for the final ordering.
-	sh.reverse = false
-	sort.Sort(sh)
-	return cb(&sqltypes.Result{Rows: sh.rows})
+	return cb(&sqltypes.Result{Rows: sorter.Sorted()})
 }
 
 // GetFields satisfies the Primitive interface.
@@ -216,50 +205,4 @@ func GenericJoin(input any, f func(any) string) string {
 		panic("GenericJoin doesn't know how to deal with " + sl.Kind().String())
 	}
 	return strings.Join(keys, ", ")
-}
-
-// sortHeap is sorted based on the orderBy params.
-// Implementation is similar to scatterHeap
-type sortHeap struct {
-	rows      [][]sqltypes.Value
-	comparers []evalengine.OrderByParams
-	reverse   bool
-}
-
-// Len satisfies sort.Interface and heap.Interface.
-func (sh *sortHeap) Len() int {
-	return len(sh.rows)
-}
-
-// Less satisfies sort.Interface and heap.Interface.
-func (sh *sortHeap) Less(i, j int) bool {
-	for _, c := range sh.comparers {
-		cmp := c.Compare(sh.rows[i], sh.rows[j])
-		if cmp == 0 {
-			continue
-		}
-		if sh.reverse {
-			cmp = -cmp
-		}
-		return cmp < 0
-	}
-	return true
-}
-
-// Swap satisfies sort.Interface and heap.Interface.
-func (sh *sortHeap) Swap(i, j int) {
-	sh.rows[i], sh.rows[j] = sh.rows[j], sh.rows[i]
-}
-
-// Push satisfies heap.Interface.
-func (sh *sortHeap) Push(x any) {
-	sh.rows = append(sh.rows, x.([]sqltypes.Value))
-}
-
-// Pop satisfies heap.Interface.
-func (sh *sortHeap) Pop() any {
-	n := len(sh.rows)
-	x := sh.rows[n-1]
-	sh.rows = sh.rows[:n-1]
-	return x
 }

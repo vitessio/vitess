@@ -68,7 +68,7 @@ type Route struct {
 	// OrderBy specifies the key order for merge sorting. This will be
 	// set only for scatter queries that need the results to be
 	// merge-sorted.
-	OrderBy []evalengine.OrderByParams
+	OrderBy evalengine.Comparison
 
 	// TruncateColumnCount specifies the number of columns to return
 	// in the final result. Rest of the columns are truncated
@@ -389,7 +389,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	// the contents of any row.
 	out := in.ShallowCopy()
 
-	if err := evalengine.SortResult(out, route.OrderBy); err != nil {
+	if err := route.OrderBy.SortResult(out); err != nil {
 		return nil, err
 	}
 	return out.Truncate(route.TruncateColumnCount), nil

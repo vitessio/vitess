@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -163,19 +164,23 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 	return compare(v1, v2, collationID)
 }
 
-func ApplyTinyWeights(out *sqltypes.Result, columns []OrderByParams) {
-	type tinyWeighter struct {
-		col   int
-		apply func(v *sqltypes.Value)
-	}
+type tinyWeighter struct {
+	col   int
+	apply func(v *sqltypes.Value)
+}
 
-	weights := make([]tinyWeighter, 0, len(columns))
-	for _, c := range columns {
-		if apply := TinyWeightString(out.Fields[c.Col], c.Type.Coll); apply != nil {
+func (cmp Comparison) tinyWeighters(fields []*querypb.Field) []tinyWeighter {
+	weights := make([]tinyWeighter, 0, len(cmp))
+	for _, c := range cmp {
+		if apply := TinyWeightString(fields[c.Col], c.Type.Coll); apply != nil {
 			weights = append(weights, tinyWeighter{c.Col, apply})
 		}
 	}
+	return weights
+}
 
+func (cmp Comparison) ApplyTinyWeights(out *sqltypes.Result) {
+	weights := cmp.tinyWeighters(out.Fields)
 	if len(weights) == 0 {
 		return
 	}
@@ -198,6 +203,35 @@ type OrderByParams struct {
 
 	// Type for knowing if the collation is relevant
 	Type Type
+}
+
+type Comparison []OrderByParams
+
+func (cmp Comparison) Compare(a, b sqltypes.Row) int {
+	for _, c := range cmp {
+		if cmp := c.Compare(a, b); cmp != 0 {
+			return cmp
+		}
+	}
+	return 0
+}
+
+func (cmp Comparison) Less(a, b sqltypes.Row) bool {
+	for _, c := range cmp {
+		if cmp := c.Compare(a, b); cmp != 0 {
+			return cmp < 0
+		}
+	}
+	return false
+}
+
+func (cmp Comparison) More(a, b sqltypes.Row) bool {
+	for _, c := range cmp {
+		if cmp := c.Compare(a, b); cmp != 0 {
+			return cmp > 0
+		}
+	}
+	return false
 }
 
 // String returns a string. Used for plan descriptions
@@ -258,18 +292,116 @@ func PanicHandler(err *error) {
 	}
 }
 
-func SortResult(out *sqltypes.Result, comparers []OrderByParams) (err error) {
+func (cmp Comparison) SortResult(out *sqltypes.Result) (err error) {
 	defer PanicHandler(&err)
-
-	ApplyTinyWeights(out, comparers)
-
-	slices.SortFunc(out.Rows, func(a, b sqltypes.Row) int {
-		for _, c := range comparers {
-			if cmp := c.Compare(a, b); cmp != 0 {
-				return cmp
-			}
-		}
-		return 0
-	})
+	cmp.ApplyTinyWeights(out)
+	cmp.Sort(out.Rows)
 	return
+}
+
+func (cmp Comparison) Sort(out []sqltypes.Row) {
+	slices.SortFunc(out, func(a, b sqltypes.Row) int {
+		return cmp.Compare(a, b)
+	})
+}
+
+type Sorter struct {
+	Compare Comparison
+	Limit   int
+
+	weights []tinyWeighter
+	rows    []sqltypes.Row
+	heap    bool
+}
+
+func (s *Sorter) Len() int {
+	return len(s.rows)
+}
+
+func (s *Sorter) SetFields(f []*querypb.Field) {
+	s.weights = s.Compare.tinyWeighters(f)
+}
+
+func (s *Sorter) Push(row sqltypes.Row) {
+	for _, w := range s.weights {
+		w.apply(&row[w.col])
+	}
+	if len(s.rows) < s.Limit {
+		s.rows = append(s.rows, row)
+		return
+	}
+	if !s.heap {
+		heapify(s.rows, s.Compare.More)
+		s.heap = true
+	}
+	if s.Compare.Compare(s.rows[0], row) < 0 {
+		return
+	}
+	s.rows[0] = row
+	fix(s.rows, 0, s.Compare.More)
+}
+
+func (s *Sorter) Sorted() []sqltypes.Row {
+	if !s.heap {
+		s.Compare.Sort(s.rows)
+		return s.rows
+	}
+
+	h := s.rows
+	end := len(h)
+	for end > 1 {
+		end = end - 1
+		h[end], h[0] = h[0], h[end]
+		down(h[:end], 0, s.Compare.More)
+	}
+	return h
+}
+
+func heapify[T any](h []T, less func(a, b T) bool) {
+	n := len(h)
+	for i := n/2 - 1; i >= 0; i-- {
+		down(h, i, less)
+	}
+}
+
+func fix[T any](h []T, i int, less func(a, b T) bool) {
+	if !down(h, i, less) {
+		up(h, i, less)
+	}
+}
+
+func down[T any](h []T, i0 int, less func(a, b T) bool) bool {
+	i := i0
+	for {
+		left, right := 2*i+1, 2*i+2
+		if left >= len(h) || left < 0 { // `left < 0` in case of overflow
+			break
+		}
+
+		// find the smallest child
+		j := left
+		if right < len(h) && less(h[right], h[left]) {
+			j = right
+		}
+
+		if !less(h[j], h[i]) {
+			break
+		}
+
+		h[i], h[j] = h[j], h[i]
+		i = j
+	}
+	return i > i0
+}
+
+func up[T any](h []T, i int, less func(a, b T) bool) {
+	for {
+		parent := (i - 1) / 2
+		if i == 0 || !less(h[i], h[parent]) {
+			break
+		}
+
+		h[i], h[parent] = h[parent], h[i]
+		i = parent
+	}
 }
