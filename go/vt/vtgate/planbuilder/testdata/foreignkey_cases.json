@@ -2383,7 +2383,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                "Query": "select col9 from u_tbl9 where (col9) in ((10), (20), (30)) or (id) in ((1), (2), (3)) for update",
+                "Query": "select col9 from u_tbl9 where (col9) in ((10), (20), (30)) or (col9 * foo) in ((10 * null), (20 * null), (30 * null)) or (bar, col9) in ((1, 10), (1, 20), (1, 30)) or (id) in ((1), (2), (3)) for update",
                 "Table": "u_tbl9"
               },
               {
@@ -2411,7 +2411,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl9 where (col9) in ((10), (20), (30)) or (id) in ((1), (2), (3))",
+                "Query": "delete from u_tbl9 where (col9) in ((10), (20), (30)) or (col9 * foo) in ((10 * null), (20 * null), (30 * null)) or (bar, col9) in ((1, 10), (1, 20), (1, 30)) or (id) in ((1), (2), (3))",
                 "Table": "u_tbl9"
               }
             ]

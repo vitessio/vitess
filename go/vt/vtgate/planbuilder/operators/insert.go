@@ -269,7 +269,7 @@ func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sq
 						}
 					}
 					if !found {
-						panic("column not found")
+						return nil, vterrors.VT03014(col.Name.String(), vTbl.Name.String())
 					}
 				}
 				if skipKey {
@@ -277,7 +277,7 @@ func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sq
 				}
 				offsets = append(offsets, uComp{idx, nil})
 			} else {
-				_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 					col, ok := node.(*sqlparser.ColName)
 					if !ok {
 						return true, nil
@@ -297,15 +297,21 @@ func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sq
 
 						}
 						if !found {
-							panic("column not found")
+							return false, vterrors.VT03014(col.Name.String(), vTbl.Name.String())
 						}
 					}
 					offsets = append(offsets, uComp{idx, nil})
 					return false, nil
 				}, expr)
+				if err != nil {
+					return nil, err
+				}
 			}
 			uIndexes = append(uIndexes, offsets)
 			uColTuple = append(uColTuple, expr)
+		}
+		if skipKey {
+			continue
 		}
 		allIndexes = append(allIndexes, uIdx{uIndexes, uniqKey})
 		allColTuples = append(allColTuples, uColTuple)
