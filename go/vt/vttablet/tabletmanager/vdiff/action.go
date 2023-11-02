@@ -48,7 +48,7 @@ const (
 	AllActionArg              = "all"
 	LastActionArg             = "last"
 
-	allVDiffsCount = 100
+	maxVDiffsToReport = 100
 )
 
 var (
@@ -327,7 +327,7 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 		query, err := sqlparser.ParseAndBind(sqlGetMostRecentVDiffByKeyspaceWorkflow,
 			sqltypes.StringBindVariable(req.Keyspace),
 			sqltypes.StringBindVariable(req.Workflow),
-			sqltypes.Int64BindVariable(allVDiffsCount),
+			sqltypes.Int64BindVariable(maxVDiffsToReport),
 		)
 		if err != nil {
 			return err
