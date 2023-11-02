@@ -357,7 +357,7 @@ func TestIndexInfoRetrieval(t *testing.T) {
 		expIdx: map[string][]string{
 			"my_tbl": {
 				"primary key (id)",
-				"index id (id, `name`)",
+				"key id (id, `name`)",
 			},
 		},
 	}, {
@@ -373,8 +373,8 @@ func TestIndexInfoRetrieval(t *testing.T) {
 		expIdx: map[string][]string{
 			"my_tbl": {
 				"primary key (id)",
-				"index id (id, `name`)",
-				"unique index email (email)",
+				"key id (id, `name`)",
+				"unique key email (email)",
 			},
 		},
 	}}
