@@ -1248,20 +1248,16 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		ms:       ms,
 	}
 
-	tsp := tabletmanagerdatapb.TabletSelectionPreference_INORDER
-	tt, inOrder, err := discovery.ParseTabletTypesAndOrder(ms.TabletTypes)
+	tt, err := topoproto.ParseTabletTypes(ms.TabletTypes)
 	if err != nil {
 		return err
-	}
-	if inOrder {
-		tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
 	}
 
 	err = mz.createWorkflowStreams(&tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
 		Workflow:                  ms.Workflow,
 		Cells:                     strings.Split(ms.Cell, ","),
 		TabletTypes:               tt,
-		TabletSelectionPreference: tsp,
+		TabletSelectionPreference: ms.TabletSelectionPreference,
 		WorkflowType:              mz.getWorkflowType(),
 		DeferSecondaryKeys:        ms.DeferSecondaryKeys,
 		AutoStart:                 true,
