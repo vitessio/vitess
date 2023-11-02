@@ -3300,39 +3300,7 @@
   {
     "comment": "scatter aggregate symtab lookup error",
     "query": "select id, b as id, count(*) from user order by id",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select id, b as id, count(*) from user order by id",
-      "Instructions": {
-        "OperatorType": "Sort",
-        "Variant": "Memory",
-        "OrderBy": "(1|3) ASC",
-        "ResultColumns": 3,
-        "Inputs": [
-          {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "any_value(0) AS id, any_value(1) AS id, sum_count_star(2) AS count(*), any_value(3)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id, b as id, count(*), weight_string(b) from `user` where 1 != 1",
-                "Query": "select id, b as id, count(*), weight_string(b) from `user`",
-                "Table": "`user`"
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
-    }
+    "plan": "Column 'id' in field list is ambiguous"
   },
   {
     "comment": "aggr and non-aggr without group by (with query does not give useful result out)",
@@ -3388,9 +3356,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.id, weight_string(id) from `user` where 1 != 1 group by id, weight_string(id)",
+                "FieldQuery": "select `user`.id, weight_string(`user`.id) from `user` where 1 != 1 group by id, weight_string(`user`.id)",
                 "OrderBy": "(0|1) ASC",
-                "Query": "select `user`.id, weight_string(id) from `user` group by id, weight_string(id) order by id asc",
+                "Query": "select `user`.id, weight_string(`user`.id) from `user` group by id, weight_string(`user`.id) order by id asc",
                 "Table": "`user`"
               },
               {
@@ -4768,34 +4736,7 @@
   {
     "comment": "scatter aggregate with ambiguous aliases",
     "query": "select distinct a, b as a from user",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select distinct a, b as a from user",
-      "Instructions": {
-        "OperatorType": "Distinct",
-        "Collations": [
-          "(0:2)",
-          "(1:2)"
-        ],
-        "ResultColumns": 2,
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select a, b as a, weight_string(b) from `user` where 1 != 1",
-            "Query": "select distinct a, b as a, weight_string(b) from `user`",
-            "Table": "`user`"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
-    }
+    "plan": "Column 'a' in field list is ambiguous"
   },
   {
     "comment": "scatter aggregate with complex select list (can't build order by)",

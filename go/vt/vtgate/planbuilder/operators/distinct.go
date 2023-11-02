@@ -49,7 +49,10 @@ type (
 func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) {
 	columns := d.GetColumns(ctx)
 	for idx, col := range columns {
-		e := d.QP.GetSimplifiedExpr(col.Expr)
+		e, err := d.QP.GetSimplifiedExpr(ctx, col.Expr)
+		if err != nil {
+			panic(err)
+		}
 		var wsCol *int
 		typ, _ := ctx.SemTable.TypeForExpr(e)
 
