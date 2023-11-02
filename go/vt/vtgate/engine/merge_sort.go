@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"container/heap"
 	"context"
 	"io"
 
@@ -50,7 +49,7 @@ var _ Primitive = (*MergeSort)(nil)
 // so that vdiff can use it. In that situation, only StreamExecute is used.
 type MergeSort struct {
 	Primitives              []StreamExecutor
-	OrderBy                 []evalengine.OrderByParams
+	OrderBy                 evalengine.Comparison
 	ScatterErrorsAsWarnings bool
 	noInputs
 	noTxNeeded
@@ -93,21 +92,23 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		}
 	}
 
+	merge := &evalengine.Merger{
+		Compare: ms.OrderBy,
+	}
+
 	if wantfields {
-		err := ms.getStreamingFields(handles, callback)
+		fields, err := ms.getStreamingFields(handles)
 		if err != nil {
 			return err
 		}
-	}
-
-	sh := &scatterHeap{
-		rows:      make([]streamRow, 0, len(handles)),
-		comparers: ms.OrderBy,
+		if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
+			return err
+		}
+		merge.SetFields(fields)
 	}
 
 	var errs []error
-	// Prime the heap. One element must be pulled from
-	// each stream.
+	// Prime the heap. One element must be pulled from each stream.
 	for i, handle := range handles {
 		select {
 		case row, ok := <-handle.row:
@@ -123,33 +124,32 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 				// If so, don't add anything to the heap.
 				continue
 			}
-			sh.rows = append(sh.rows, streamRow{row: row, id: i})
+			merge.Push(row, i)
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
-	heap.Init(sh)
+	merge.Init()
 
 	// Iterate one row at a time:
 	// Pop a row from the heap and send it out.
 	// Then pull the next row from the stream the popped
 	// row came from and push it into the heap.
-	for len(sh.rows) != 0 {
-		sr := heap.Pop(sh).(streamRow)
-		if err := callback(&sqltypes.Result{Rows: [][]sqltypes.Value{sr.row}}); err != nil {
+	for merge.Len() != 0 {
+		row, stream := merge.Pop()
+		if err := callback(&sqltypes.Result{Rows: [][]sqltypes.Value{row}}); err != nil {
 			return err
 		}
 
 		select {
-		case row, ok := <-handles[sr.id].row:
+		case row, ok := <-handles[stream].row:
 			if !ok {
-				if handles[sr.id].err != nil {
-					return handles[sr.id].err
+				if handles[stream].err != nil {
+					return handles[stream].err
 				}
 				continue
 			}
-			sr.row = row
-			heap.Push(sh, sr)
+			merge.Push(row, stream)
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -166,7 +166,7 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	return err
 }
 
-func (ms *MergeSort) getStreamingFields(handles []*streamHandle, callback func(*sqltypes.Result) error) error {
+func (ms *MergeSort) getStreamingFields(handles []*streamHandle) ([]*querypb.Field, error) {
 	var fields []*querypb.Field
 
 	if ms.ScatterErrorsAsWarnings {
@@ -185,20 +185,16 @@ func (ms *MergeSort) getStreamingFields(handles []*streamHandle, callback func(*
 	if fields == nil {
 		// something went wrong. need to figure out where the error can be
 		if !ms.ScatterErrorsAsWarnings {
-			return handles[0].err
+			return nil, handles[0].err
 		}
 
 		var errs []error
 		for _, handle := range handles {
 			errs = append(errs, handle.err)
 		}
-		return vterrors.Aggregate(errs)
+		return nil, vterrors.Aggregate(errs)
 	}
-
-	if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
-		return err
-	}
-	return nil
+	return fields, nil
 }
 
 func (ms *MergeSort) description() PrimitiveDescription {
@@ -257,58 +253,4 @@ func runOneStream(ctx context.Context, vcursor VCursor, input StreamExecutor, bi
 	}()
 
 	return handle
-}
-
-// A streamRow represents a row identified by the stream
-// it came from. It is used as an element in scatterHeap.
-type streamRow struct {
-	row []sqltypes.Value
-	id  int
-}
-
-// scatterHeap is the heap that is used for merge-sorting.
-// You can push streamRow elements into it. Popping an
-// element will return the one with the lowest value
-// as defined by the orderBy criteria. If a comparison
-// yielded an error, err is set. This must be checked
-// after every heap operation.
-type scatterHeap struct {
-	rows      []streamRow
-	comparers []evalengine.OrderByParams
-}
-
-// Len satisfies sort.Interface and heap.Interface.
-func (sh *scatterHeap) Len() int {
-	return len(sh.rows)
-}
-
-// Less satisfies sort.Interface and heap.Interface.
-func (sh *scatterHeap) Less(i, j int) bool {
-	for _, c := range sh.comparers {
-		// First try to compare the columns that we want to order
-		cmp := c.Compare(sh.rows[i].row, sh.rows[j].row)
-		if cmp == 0 {
-			continue
-		}
-		return cmp < 0
-	}
-	return true
-}
-
-// Swap satisfies sort.Interface and heap.Interface.
-func (sh *scatterHeap) Swap(i, j int) {
-	sh.rows[i], sh.rows[j] = sh.rows[j], sh.rows[i]
-}
-
-// Push satisfies heap.Interface.
-func (sh *scatterHeap) Push(x any) {
-	sh.rows = append(sh.rows, x.(streamRow))
-}
-
-// Pop satisfies heap.Interface.
-func (sh *scatterHeap) Pop() any {
-	n := len(sh.rows)
-	x := sh.rows[n-1]
-	sh.rows = sh.rows[:n-1]
-	return x
 }

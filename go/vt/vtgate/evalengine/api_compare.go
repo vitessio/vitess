@@ -357,6 +357,49 @@ func (s *Sorter) Sorted() []sqltypes.Row {
 	return h
 }
 
+type mergeRow struct {
+	row    sqltypes.Row
+	source int
+}
+
+type Merger struct {
+	Compare Comparison
+
+	weights []tinyWeighter
+	rows    []mergeRow
+	less    func(a, b mergeRow) bool
+}
+
+func (m *Merger) Len() int {
+	return len(m.rows)
+}
+
+func (m *Merger) Init() {
+	m.less = func(a, b mergeRow) bool {
+		return m.Compare.Less(a.row, b.row)
+	}
+	heapify(m.rows, m.less)
+}
+
+func (m *Merger) SetFields(f []*querypb.Field) {
+	m.weights = m.Compare.tinyWeighters(f)
+}
+
+func (m *Merger) Push(row sqltypes.Row, source int) {
+	m.rows = append(m.rows, mergeRow{row, source})
+	if m.less != nil {
+		up(m.rows, len(m.rows)-1, m.less)
+	}
+}
+
+func (m *Merger) Pop() (sqltypes.Row, int) {
+	x := m.rows[0]
+	m.rows[0] = m.rows[len(m.rows)-1]
+	m.rows = m.rows[:len(m.rows)-1]
+	down(m.rows, 0, m.less)
+	return x.row, x.source
+}
+
 func heapify[T any](h []T, less func(a, b T) bool) {
 	n := len(h)
 	for i := n/2 - 1; i >= 0; i-- {
