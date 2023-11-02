@@ -9,7 +9,7 @@ jobs:
   update_golang_version:
     strategy:
       matrix:
-        branch: [ main, release-16.0, release-15.0, release-14.0 ]
+        branch: [ main, release-16.0, release-15.0, release-14.0, slack-vitess-r14.0.5 ]
     name: Update Golang Version
     runs-on: ubuntu-latest
     steps:
