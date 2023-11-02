@@ -21,16 +21,24 @@ package vtgateproxy
 import (
 	"context"
 	"flag"
+	"time"
 
+	"google.golang.org/grpc"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vterrors"
+	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
 var (
+	target      = flag.String("target", "", "vtgate host:port target used to dial the GRPC connection")
+	dialTimeout = flag.Duration("dial_timeout", 5*time.Second, "dialer timeout for the GRPC connection")
+
 	defaultDDLStrategy = flag.String("ddl_strategy", string(schema.DDLStrategyDirect), "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
 	sysVarSetEnabled   = flag.Bool("enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
 
@@ -38,12 +46,36 @@ var (
 )
 
 type VTGateProxy struct {
+	conn *vtgateconn.VTGateConn
+}
+
+func (proxy *VTGateProxy) connect(ctx context.Context) error {
+	grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
+		return append(opts, grpc.WithBlock()), nil
+	})
+
+	conn, err := vtgateconn.DialProtocol(ctx, "grpc", *target)
+	if err != nil {
+		return err
+	}
+
+	proxy.conn = conn
+	return nil
+}
+
+func (proxy *VTGateProxy) NewSession(options *querypb.ExecuteOptions) (*vtgateconn.VTGateSession, error) {
+	if proxy.conn == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "not connnected")
+	}
+
+	// XXX/demmer handle schemaName?
+	return proxy.conn.Session("", options), nil
 }
 
 // CloseSession closes the session, rolling back any implicit transactions. This has the
 // same effect as if a "rollback" statement was executed, but does not affect the query
 // statistics.
-func (proxy *VTGateProxy) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
+func (proxy *VTGateProxy) CloseSession(ctx context.Context, session *vtgateconn.VTGateSession) error {
 	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented")
 }
 
@@ -53,16 +85,36 @@ func (proxy *VTGateProxy) ResolveTransaction(ctx context.Context, dtid string) e
 }
 
 // Prepare supports non-streaming prepare statement query with multi shards
-func (proxy *VTGateProxy) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, fld []*querypb.Field, err error) {
+func (proxy *VTGateProxy) Prepare(ctx context.Context, session *vtgateconn.VTGateSession, sql string, bindVariables map[string]*querypb.BindVariable) (newsession *vtgateconn.VTGateSession, fld []*querypb.Field, err error) {
 	return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented")
 }
 
-func (proxy *VTGateProxy) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
-	return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented")
+func (proxy *VTGateProxy) Execute(ctx context.Context, session *vtgateconn.VTGateSession, sql string, bindVariables map[string]*querypb.BindVariable) (qr *sqltypes.Result, err error) {
+	log.Infof("Execute %s", sql)
+
+	if proxy.conn == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "not connnected")
+	}
+
+	return session.Execute(ctx, sql, bindVariables)
 }
 
-func (proxy *VTGateProxy) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+func (proxy *VTGateProxy) StreamExecute(ctx context.Context, session *vtgateconn.VTGateSession, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented")
 }
 
-func Init() {}
+func Init() error {
+	vtGateProxy = &VTGateProxy{}
+
+	// XXX maybe add connect timeout?
+	ctx, cancel := context.WithTimeout(context.Background(), *dialTimeout)
+	defer cancel()
+	err := vtGateProxy.connect(ctx)
+	if err != nil {
+		log.Fatalf("error connecting to vtgate: %v", err)
+		return err
+	}
+	log.Infof("Connected to VTGate at %s", *target)
+
+	return nil
+}
