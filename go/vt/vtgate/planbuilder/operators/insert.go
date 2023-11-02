@@ -184,22 +184,44 @@ func pkCompExpression(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sqlparse
 	if len(vTbl.PrimaryKey) == 0 {
 		return nil, nil
 	}
-	var pIndexes []int
+	type pComp struct {
+		idx int
+		def sqlparser.Expr
+	}
+	var pIndexes []pComp
 	var pColTuple sqlparser.ValTuple
 	for _, pCol := range vTbl.PrimaryKey {
 		idx := ins.Columns.FindColumn(pCol)
 		if idx == -1 {
-			return nil, vterrors.VT03027(pCol.String())
+			found := false
+			for _, column := range vTbl.Columns {
+				if column.Name.Equal(pCol) {
+					found = true
+					if column.Default == nil {
+						// default value is empty, nothing to compare as it will always be false.
+						return nil, nil
+					}
+					pIndexes = append(pIndexes, pComp{-1, column.Default})
+				}
+
+			}
+			if !found {
+				panic("column not found")
+			}
 		}
-		pIndexes = append(pIndexes, idx)
+		pIndexes = append(pIndexes, pComp{idx, nil})
 		pColTuple = append(pColTuple, sqlparser.NewColName(pCol.String()))
 	}
 
 	var pValTuple sqlparser.ValTuple
 	for _, row := range rows {
 		var rowTuple sqlparser.ValTuple
-		for _, idx := range pIndexes {
-			rowTuple = append(rowTuple, row[idx])
+		for _, pIdx := range pIndexes {
+			if pIdx.idx == -1 {
+				rowTuple = append(rowTuple, pIdx.def)
+			} else {
+				rowTuple = append(rowTuple, row[pIdx.idx])
+			}
 		}
 		pValTuple = append(pValTuple, rowTuple)
 	}
@@ -212,43 +234,98 @@ func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sq
 		return nil, nil
 	}
 
-	allIndexes := make([][][]int, 0, noOfUniqKeys)
+	type uComp struct {
+		idx int
+		def sqlparser.Expr
+	}
+
+	type uIdx struct {
+		Indexes [][]uComp
+		uniqKey sqlparser.Exprs
+	}
+
+	allIndexes := make([]uIdx, 0, noOfUniqKeys)
 	allColTuples := make([]sqlparser.ValTuple, 0, noOfUniqKeys)
 	for _, uniqKey := range vTbl.UniqueKeys {
-		var uIndexes [][]int
+		var uIndexes [][]uComp
 		var uColTuple sqlparser.ValTuple
+		skipKey := false
 		for _, expr := range uniqKey {
-			var offsets []int
-			_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-				col, ok := node.(*sqlparser.ColName)
-				if !ok {
-					return true, nil
+			var offsets []uComp
+			col, isCol := expr.(*sqlparser.ColName)
+			if isCol {
+				idx := ins.Columns.FindColumn(col.Name)
+				if idx == -1 {
+					found := false
+					for _, column := range vTbl.Columns {
+						if column.Name.Equal(col.Name) {
+							found = true
+							if column.Default == nil {
+								// default value is empty, nothing to compare as it will always be false.
+								skipKey = true
+								break
+							}
+							offsets = append(offsets, uComp{-1, column.Default})
+						}
+					}
+					if !found {
+						panic("column not found")
+					}
 				}
-				offsets = append(offsets, ins.Columns.FindColumn(col.Name))
-				return false, nil
-			}, expr)
+				if skipKey {
+					break
+				}
+				offsets = append(offsets, uComp{idx, nil})
+			} else {
+				_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+					col, ok := node.(*sqlparser.ColName)
+					if !ok {
+						return true, nil
+					}
+					idx := ins.Columns.FindColumn(col.Name)
+					if idx == -1 {
+						found := false
+						for _, column := range vTbl.Columns {
+							if column.Name.Equal(col.Name) {
+								found = true
+								if column.Default == nil {
+									offsets = append(offsets, uComp{-1, &sqlparser.NullVal{}})
+									break
+								}
+								offsets = append(offsets, uComp{-1, column.Default})
+							}
+
+						}
+						if !found {
+							panic("column not found")
+						}
+					}
+					offsets = append(offsets, uComp{idx, nil})
+					return false, nil
+				}, expr)
+			}
 			uIndexes = append(uIndexes, offsets)
 			uColTuple = append(uColTuple, expr)
 		}
-		allIndexes = append(allIndexes, uIndexes)
+		allIndexes = append(allIndexes, uIdx{uIndexes, uniqKey})
 		allColTuples = append(allColTuples, uColTuple)
 	}
 
 	allValTuples := make([]sqlparser.ValTuple, len(allColTuples))
 	for _, row := range rows {
-		for i, uniqKeyIndexes := range allIndexes {
+		for i, uk := range allIndexes {
 			var rowTuple sqlparser.ValTuple
-			for j, offsets := range uniqKeyIndexes {
+			for j, offsets := range uk.Indexes {
 				colIdx := 0
-				valExpr := sqlparser.CopyOnRewrite(vTbl.UniqueKeys[i][j], nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+				valExpr := sqlparser.CopyOnRewrite(uk.uniqKey[j], nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 					_, isCol := cursor.Node().(*sqlparser.ColName)
 					if !isCol {
 						return
 					}
-					if offsets[colIdx] == -1 {
-						cursor.Replace(&sqlparser.NullVal{})
+					if offsets[colIdx].idx == -1 {
+						cursor.Replace(offsets[colIdx].def)
 					} else {
-						cursor.Replace(row[offsets[colIdx]])
+						cursor.Replace(row[offsets[colIdx].idx])
 					}
 					colIdx++
 				}, nil).(sqlparser.Expr)
