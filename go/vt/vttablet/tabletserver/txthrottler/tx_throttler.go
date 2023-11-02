@@ -150,7 +150,6 @@ type txThrottler struct {
 
 	// stats
 	throttlerRunning          *stats.Gauge
-	topoWatchers              *stats.GaugesWithSingleLabel
 	healthChecksReadTotal     *stats.CountersWithMultiLabels
 	healthChecksRecordedTotal *stats.CountersWithMultiLabels
 	requestsTotal             *stats.CountersWithSingleLabel
@@ -204,7 +203,6 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 		config:           config,
 		topoServer:       topoServer,
 		throttlerRunning: env.Exporter().NewGauge(TxThrottlerName+"Running", "transaction throttler running state"),
-		topoWatchers:     env.Exporter().NewGaugesWithSingleLabel(TxThrottlerName+"TopoWatchers", "transaction throttler topology watchers", "cell"),
 		healthChecksReadTotal: env.Exporter().NewCountersWithMultiLabels(TxThrottlerName+"HealthchecksRead", "transaction throttler healthchecks read",
 			[]string{"cell", "DbType"}),
 		healthChecksRecordedTotal: env.Exporter().NewCountersWithMultiLabels(TxThrottlerName+"HealthchecksRecorded", "transaction throttler healthchecks recorded",
@@ -334,7 +332,6 @@ func (ts *txThrottlerStateImpl) initHealthCheckStream(topoServer *topo.Server, t
 			discovery.DefaultTopologyWatcherRefreshInterval,
 			discovery.DefaultTopoReadConcurrency,
 		)
-		ts.txThrottler.topoWatchers.Add(cell, 1)
 	}
 }
 
@@ -342,9 +339,8 @@ func (ts *txThrottlerStateImpl) closeHealthCheckStream() {
 	if ts.healthCheck == nil {
 		return
 	}
-	for cell, watcher := range ts.topologyWatchers {
+	for _, watcher := range ts.topologyWatchers {
 		watcher.Stop()
-		ts.txThrottler.topoWatchers.Reset(cell)
 	}
 	ts.topologyWatchers = nil
 	ts.stopHealthCheck()

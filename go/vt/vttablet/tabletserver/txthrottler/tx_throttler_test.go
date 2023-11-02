@@ -131,7 +131,6 @@ func TestEnabledThrottler(t *testing.T) {
 	throttlerStateImpl := throttlerImpl.state.(*txThrottlerStateImpl)
 	assert.Equal(t, map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: true}, throttlerStateImpl.tabletTypes)
 	assert.Equal(t, int64(1), throttlerImpl.throttlerRunning.Get())
-	assert.Equal(t, map[string]int64{"cell1": 1, "cell2": 1}, throttlerImpl.topoWatchers.Counts())
 
 	assert.False(t, throttlerImpl.Throttle(100, "some_workload"))
 	assert.Equal(t, int64(1), throttlerImpl.requestsTotal.Counts()["some_workload"])
@@ -162,7 +161,6 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some_workload"])
 	throttlerImpl.Close()
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
-	assert.Equal(t, map[string]int64{"cell1": 0, "cell2": 0}, throttlerImpl.topoWatchers.Counts())
 }
 
 func TestFetchKnownCells(t *testing.T) {
