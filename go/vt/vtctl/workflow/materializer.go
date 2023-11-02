@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -39,6 +40,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -565,9 +567,18 @@ func (mz *materializer) startStreams(ctx context.Context) error {
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
 		}
-		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow=%s", encodeString(targetPrimary.DbName()), encodeString(mz.ms.Workflow))
-		if _, err := mz.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {
-			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetPrimary.Tablet, query)
+		req := &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow: mz.ms.Workflow,
+			State:    binlogdatapb.VReplicationWorkflowState_Running,
+			// Don't change anything else, so pass simulated NULLs.
+			Cells: textutil.SimulatedNullStringSlice,
+			TabletTypes: []topodatapb.TabletType{
+				topodatapb.TabletType(textutil.SimulatedNullInt),
+			},
+			OnDdl: binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+		}
+		if _, err := mz.tmc.UpdateVReplicationWorkflow(ctx, targetPrimary.Tablet, req); err != nil {
+			return vterrors.Wrap(err, "failed to update workflow")
 		}
 		return nil
 	})
