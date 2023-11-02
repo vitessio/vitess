@@ -64,14 +64,18 @@ func (s *Sequential) GetTableName() string {
 
 // TryExecute performs a non-streaming exec.
 func (s *Sequential) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantFields bool) (*sqltypes.Result, error) {
-	var finalRes *sqltypes.Result
+	finalRes := &sqltypes.Result{}
 	for _, source := range s.Sources {
 		res, err := source.TryExecute(ctx, vcursor, bindVars, wantFields)
 		if err != nil {
 			return nil, err
 		}
-		if finalRes == nil {
-			finalRes = res
+		finalRes.RowsAffected += res.RowsAffected
+		if finalRes.InsertID == 0 {
+			finalRes.InsertID = res.InsertID
+		}
+		if res.Info != "" {
+			finalRes.Info = res.Info
 		}
 	}
 	return finalRes, nil
