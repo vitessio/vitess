@@ -164,75 +164,27 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 	return compare(v1, v2, collationID)
 }
 
-type tinyWeighter struct {
-	col   int
-	apply func(v *sqltypes.Value)
-}
-
-func (cmp Comparison) tinyWeighters(fields []*querypb.Field) []tinyWeighter {
-	weights := make([]tinyWeighter, 0, len(cmp))
-	for _, c := range cmp {
-		if apply := TinyWeightString(fields[c.Col], c.Type.Coll); apply != nil {
-			weights = append(weights, tinyWeighter{c.Col, apply})
-		}
-	}
-	return weights
-}
-
-func (cmp Comparison) ApplyTinyWeights(out *sqltypes.Result) {
-	weights := cmp.tinyWeighters(out.Fields)
-	if len(weights) == 0 {
-		return
-	}
-
-	for _, row := range out.Rows {
-		for _, w := range weights {
-			w.apply(&row[w.col])
-		}
-	}
-}
-
 // OrderByParams specifies the parameters for ordering.
 // This is used for merge-sorting scatter queries.
-type OrderByParams struct {
-	Col int
-	// WeightStringCol is the weight_string column that will be used for sorting.
-	// It is set to -1 if such a column is not added to the query
-	WeightStringCol int
-	Desc            bool
+type (
+	OrderByParams struct {
+		Col int
+		// WeightStringCol is the weight_string column that will be used for sorting.
+		// It is set to -1 if such a column is not added to the query
+		WeightStringCol int
+		Desc            bool
 
-	// Type for knowing if the collation is relevant
-	Type Type
-}
-
-type Comparison []OrderByParams
-
-func (cmp Comparison) Compare(a, b sqltypes.Row) int {
-	for _, c := range cmp {
-		if cmp := c.Compare(a, b); cmp != 0 {
-			return cmp
-		}
+		// Type for knowing if the collation is relevant
+		Type Type
 	}
-	return 0
-}
 
-func (cmp Comparison) Less(a, b sqltypes.Row) bool {
-	for _, c := range cmp {
-		if cmp := c.Compare(a, b); cmp != 0 {
-			return cmp < 0
-		}
-	}
-	return false
-}
+	Comparison []OrderByParams
 
-func (cmp Comparison) More(a, b sqltypes.Row) bool {
-	for _, c := range cmp {
-		if cmp := c.Compare(a, b); cmp != 0 {
-			return cmp > 0
-		}
+	tinyWeighter struct {
+		col   int
+		apply func(v *sqltypes.Value)
 	}
-	return false
-}
+)
 
 // String returns a string. Used for plan descriptions
 func (obp *OrderByParams) String() string {
@@ -279,6 +231,56 @@ func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
 		cmp = -cmp
 	}
 	return cmp
+}
+
+func (cmp Comparison) tinyWeighters(fields []*querypb.Field) []tinyWeighter {
+	weights := make([]tinyWeighter, 0, len(cmp))
+	for _, c := range cmp {
+		if apply := TinyWeightString(fields[c.Col], c.Type.Coll); apply != nil {
+			weights = append(weights, tinyWeighter{c.Col, apply})
+		}
+	}
+	return weights
+}
+
+func (cmp Comparison) ApplyTinyWeights(out *sqltypes.Result) {
+	weights := cmp.tinyWeighters(out.Fields)
+	if len(weights) == 0 {
+		return
+	}
+
+	for _, row := range out.Rows {
+		for _, w := range weights {
+			w.apply(&row[w.col])
+		}
+	}
+}
+
+func (cmp Comparison) Compare(a, b sqltypes.Row) int {
+	for _, c := range cmp {
+		if cmp := c.Compare(a, b); cmp != 0 {
+			return cmp
+		}
+	}
+	return 0
+}
+
+func (cmp Comparison) Less(a, b sqltypes.Row) bool {
+	for _, c := range cmp {
+		if cmp := c.Compare(a, b); cmp != 0 {
+			return cmp < 0
+		}
+	}
+	return false
+}
+
+func (cmp Comparison) More(a, b sqltypes.Row) bool {
+	for _, c := range cmp {
+		if cmp := c.Compare(a, b); cmp != 0 {
+			return cmp > 0
+		}
+	}
+	return false
 }
 
 func PanicHandler(err *error) {
