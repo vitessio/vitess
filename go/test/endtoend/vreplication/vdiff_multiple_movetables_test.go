@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tidwall/gjson"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -62,42 +64,32 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 				index += 1
 				vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 				q := fmt.Sprintf(query, tableName, index, index)
-				_, err := vtgateConn.ExecuteFetch(q, 1000, false)
-				if err != nil {
-					t.Fatalf("failed to insert data: %s: %v", q, err)
-				}
-				//log.Infof("inserted data: %s", q)
+				vtgateConn.ExecuteFetch(q, 1000, false)
 				vtgateConn.Close()
 			}
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
-	time.Sleep(5 * time.Minute)
-	workflowName1 := "wf1"
-	ksWorkflow1 := fmt.Sprintf("%s.%s", targetKeyspace, workflowName1)
-	mt1 := newMoveTables(vc, &moveTables{
-		workflowName:   workflowName1,
-		targetKeyspace: targetKeyspace,
-		sourceKeyspace: sourceKeyspace,
-		tables:         "customer",
-	}, moveTablesFlavorVtctld)
-	mt1.Create()
-	waitForWorkflowState(t, vc, ksWorkflow1, binlogdatapb.VReplicationWorkflowState_Running.String())
 	targetKs := vc.Cells[cellName].Keyspaces[targetKeyspace]
 	targetTab := targetKs.Shards["0"].Tablets[fmt.Sprintf("%s-%d", cellName, targetTabletId)].Vttablet
 	require.NotNil(t, targetTab)
-	catchup(t, targetTab, workflowName1, "MoveTables")
 
-	workflowName2 := "wf2"
-	ksWorkflow2 := fmt.Sprintf("%s.%s", targetKeyspace, workflowName2)
-	mt2 := newMoveTables(vc, &moveTables{
-		workflowName:   workflowName2,
-		targetKeyspace: targetKeyspace,
-		sourceKeyspace: sourceKeyspace,
-		tables:         "customer2",
-	}, moveTablesFlavorVtctld)
-	mt2.Create()
-	waitForWorkflowState(t, vc, ksWorkflow2, binlogdatapb.VReplicationWorkflowState_Running.String())
-	catchup(t, targetTab, workflowName2, "MoveTables")
+	time.Sleep(15 * time.Second) // wait for some rows to be inserted.
+
+	createWorkflow := func(workflowName, tables string) {
+		mt := newMoveTables(vc, &moveTables{
+			workflowName:   workflowName,
+			targetKeyspace: targetKeyspace,
+			sourceKeyspace: sourceKeyspace,
+			tables:         tables,
+		}, moveTablesFlavorVtctld)
+		mt.Create()
+		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+		catchup(t, targetTab, workflowName, "MoveTables")
+	}
+
+	createWorkflow("wf1", "customer")
+	createWorkflow("wf2", "customer2")
 
 	go load("customer")
 	go load("customer2")
@@ -108,16 +100,20 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 	doVdiff := func(workflowName, table string) {
 		defer wg.Done()
 		vdiff(t, targetKeyspace, workflowName, cellName, true, false, nil)
-		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-		defer vtgateConn.Close()
-		qr, err := vtgateConn.ExecuteFetch(fmt.Sprintf("select count(*) from %s", table), 1000, false)
-		if err != nil {
-			t.Fatalf("failed to get count of table %s: %v", table, err)
-		}
-		log.Infof("count of table %s: %v", table, qr.Rows[0][0])
 	}
-	go doVdiff(workflowName1, "customer")
-	go doVdiff(workflowName2, "customer2")
+	go doVdiff("wf1", "customer")
+	go doVdiff("wf2", "customer2")
 	wg.Wait()
 	loadCancel()
+
+	// confirm that show all shows the correct workflow and only that workflow.
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("VDiff", "--format", "json", "--workflow", "wf1", "--target-keyspace", "customer", "show", "all")
+	require.NoError(t, err)
+	log.Infof("VDiff output: %s", output)
+	count := gjson.Get(output, "..#").Int()
+	wf := gjson.Get(output, "0.Workflow").String()
+	ksName := gjson.Get(output, "0.Keyspace").String()
+	require.Equal(t, int64(1), count)
+	require.Equal(t, "wf1", wf)
+	require.Equal(t, "customer", ksName)
 }
