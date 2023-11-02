@@ -21,6 +21,7 @@ package vtgateproxy
 import (
 	"context"
 	"flag"
+	"io"
 	"time"
 
 	"google.golang.org/grpc"
@@ -104,7 +105,23 @@ func (proxy *VTGateProxy) Execute(ctx context.Context, session *vtgateconn.VTGat
 }
 
 func (proxy *VTGateProxy) StreamExecute(ctx context.Context, session *vtgateconn.VTGateSession, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
-	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented")
+	stream, err := session.StreamExecute(ctx, sql, bindVariables)
+	if err != nil {
+		return err
+	}
+
+	for {
+		qr, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		callback(qr)
+	}
+
+	return nil
 }
 
 func Init() error {

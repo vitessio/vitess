@@ -203,14 +203,10 @@ func (ph *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sql
 		}
 	}()
 
-	/*
-		XXX/demmer figure out OLAP
-
-		if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-			err := ph.proxy.StreamExecute(ctx, session, query, make(map[string]*querypb.BindVariable), callback)
-			return mysql.NewSQLErrorFromError(err)
-		}
-	*/
+	if session.SessionPb().Options.Workload == querypb.ExecuteOptions_OLAP {
+		err := ph.proxy.StreamExecute(ctx, session, query, make(map[string]*querypb.BindVariable), callback)
+		return mysql.NewSQLErrorFromError(err)
+	}
 
 	result, err := ph.proxy.Execute(ctx, session, query, make(map[string]*querypb.BindVariable))
 
@@ -311,18 +307,14 @@ func (ph *proxyHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData
 		}
 	}()
 
-	/*
-			XXX/demmer figure out OLAP
-		if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-			err := ph.proxy.StreamExecute(ctx, session, prepare.PrepareStmt, prepare.BindVars, callback)
-			return mysql.NewSQLErrorFromError(err)
-		}
-	*/
+	if session.SessionPb().Options.Workload == querypb.ExecuteOptions_OLAP {
+		err := ph.proxy.StreamExecute(ctx, session, prepare.PrepareStmt, prepare.BindVars, callback)
+		return mysql.NewSQLErrorFromError(err)
+	}
 
 	qr, err := ph.proxy.Execute(ctx, session, prepare.PrepareStmt, prepare.BindVars)
 	if err != nil {
-		err = mysql.NewSQLErrorFromError(err)
-		return err
+		return mysql.NewSQLErrorFromError(err)
 	}
 	fillInTxStatusFlags(c, session)
 
