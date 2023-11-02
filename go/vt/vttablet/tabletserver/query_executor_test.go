@@ -208,13 +208,13 @@ func TestQueryExecutorPlans(t *testing.T) {
 	}, {
 		input: "create index a on user(id)",
 		dbResponses: []dbResponse{{
-			query:  "alter table `user` add index a (id)",
+			query:  "alter table `user` add key a (id)",
 			result: emptyResult,
 		}},
 		resultWant: emptyResult,
 		planWant:   "DDL",
-		logWant:    "alter table `user` add index a (id)",
-		inTxWant:   "alter table `user` add index a (id)",
+		logWant:    "alter table `user` add key a (id)",
+		inTxWant:   "alter table `user` add key a (id)",
 	}, {
 		input: "create index a on user(id1 + id2)",
 		dbResponses: []dbResponse{{

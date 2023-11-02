@@ -950,3 +950,26 @@ func TestFkOneCase(t *testing.T) {
 	// Verify the consistency of the data.
 	verifyDataIsCorrect(t, mcmp, 1)
 }
+
+func TestCyclicFks(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+	_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
+
+	// Create a cyclic foreign key constraint.
+	utils.Exec(t, mcmp.VtConn, "alter table fk_t10 add constraint test_cyclic_fks foreign key (col) references fk_t12 (col) on delete cascade on update cascade")
+	defer func() {
+		utils.Exec(t, mcmp.VtConn, "alter table fk_t10 drop foreign key test_cyclic_fks")
+	}()
+
+	// Wait for schema-tracking to be complete.
+	ksErr := utils.WaitForKsError(t, clusterInstance.VtgateProcess, unshardedKs)
+	// Make sure Vschema has the error for cyclic foreign keys.
+	assert.Contains(t, ksErr, "VT09019: uks has cyclic foreign keys")
+
+	// Ensure that the Vitess database is originally empty
+	ensureDatabaseState(t, mcmp.VtConn, true)
+
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, "insert into fk_t10(id, col) values (1, 1)")
+	require.ErrorContains(t, err, "VT09019: uks has cyclic foreign keys")
+}

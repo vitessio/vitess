@@ -133,16 +133,19 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *With) Format(buf *TrackedBuffer) {
+	if len(node.CTEs) == 0 {
+		return
+	}
 	buf.astPrintf(node, "with ")
 
 	if node.Recursive {
 		buf.astPrintf(node, "recursive ")
 	}
-	ctesLength := len(node.ctes)
+	ctesLength := len(node.CTEs)
 	for i := 0; i < ctesLength-1; i++ {
-		buf.astPrintf(node, "%v, ", node.ctes[i])
+		buf.astPrintf(node, "%v, ", node.CTEs[i])
 	}
-	buf.astPrintf(node, "%v", node.ctes[ctesLength-1])
+	buf.astPrintf(node, "%v", node.CTEs[ctesLength-1])
 }
 
 // Format formats the node.
@@ -836,13 +839,13 @@ func (ii *IndexInfo) Format(buf *TrackedBuffer) {
 		buf.astPrintf(ii, "%s %s", keywordStrings[PRIMARY], keywordStrings[KEY])
 		return
 	case IndexTypeDefault:
-		buf.astPrintf(ii, "%s", keywordStrings[INDEX])
+		buf.astPrintf(ii, "%s", keywordStrings[KEY])
 	case IndexTypeUnique:
-		buf.astPrintf(ii, "%s %s", keywordStrings[UNIQUE], keywordStrings[INDEX])
+		buf.astPrintf(ii, "%s %s", keywordStrings[UNIQUE], keywordStrings[KEY])
 	case IndexTypeSpatial:
-		buf.astPrintf(ii, "%s %s", keywordStrings[SPATIAL], keywordStrings[INDEX])
+		buf.astPrintf(ii, "%s %s", keywordStrings[SPATIAL], keywordStrings[KEY])
 	case IndexTypeFullText:
-		buf.astPrintf(ii, "%s %s", keywordStrings[FULLTEXT], keywordStrings[INDEX])
+		buf.astPrintf(ii, "%s %s", keywordStrings[FULLTEXT], keywordStrings[KEY])
 	}
 	if !ii.Name.IsEmpty() {
 		buf.astPrintf(ii, " %v", ii.Name)

@@ -169,7 +169,7 @@ func (pe *ProjExpr) String() string {
 	if !pe.Original.As.IsEmpty() {
 		alias = " AS " + pe.Original.As.String()
 	}
-	if pe.EvalExpr == pe.ColExpr {
+	if sqlparser.Equals.Expr(pe.EvalExpr, pe.ColExpr) {
 		expr = sqlparser.String(pe.EvalExpr)
 	} else {
 		expr = fmt.Sprintf("%s|%s", sqlparser.String(pe.EvalExpr), sqlparser.String(pe.ColExpr))
@@ -455,10 +455,6 @@ func (p *Projection) ShortDescription() string {
 }
 
 func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
-	if p.isDerived() {
-		return p, rewrite.SameTree, nil
-	}
-
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
 		return p, rewrite.SameTree, nil

@@ -749,29 +749,22 @@
       "QueryType": "SELECT",
       "Original": "select * from ((select id from user union select id+1 from user) union select user_id from user_extra) as t",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
         ],
+        "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Distinct",
-            "Collations": [
-              "(0:1)"
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select id + 1 from `user` where 1 != 1 union select user_id from user_extra where 1 != 1) as dt where 1 != 1",
-                "Query": "select id, weight_string(id) from (select id from `user` union select id + 1 from `user` union select user_id from user_extra) as dt",
-                "Table": "`user`, user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select id + 1 from `user` where 1 != 1 union select user_id from user_extra where 1 != 1) as dt where 1 != 1",
+            "Query": "select id, weight_string(id) from (select id from `user` union select id + 1 from `user` union select user_id from user_extra) as dt",
+            "Table": "`user`, user_extra"
           }
         ]
       },
@@ -955,49 +948,41 @@
         "TableName": "`user`_`user`",
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0
-            ],
+            "OperatorType": "Concatenate",
             "Inputs": [
               {
-                "OperatorType": "Concatenate",
+                "OperatorType": "Limit",
+                "Count": "5",
                 "Inputs": [
                   {
-                    "OperatorType": "Limit",
-                    "Count": "5",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-                        "OrderBy": "(0|1) ASC",
-                        "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
-                        "Table": "`user`"
-                      }
-                    ]
-                  },
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                    "OrderBy": "(0|1) ASC",
+                    "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+                    "Table": "`user`"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Limit",
+                "Count": "5",
+                "Inputs": [
                   {
-                    "OperatorType": "Limit",
-                    "Count": "5",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-                        "OrderBy": "(0|1) DESC",
-                        "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
-                        "Table": "`user`"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                    "OrderBy": "(0|1) DESC",
+                    "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
+                    "Table": "`user`"
                   }
                 ]
               }
@@ -1098,41 +1083,35 @@
         ],
         "Inputs": [
           {
-            "OperatorType": "Projection",
-            "Expressions": null,
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:1)"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Distinct",
-                "Collations": [
-                  "(0:1)"
-                ],
+                "OperatorType": "Concatenate",
                 "Inputs": [
                   {
-                    "OperatorType": "Concatenate",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select id + 42 as foo, weight_string(id + 42) from `user` where 1 != 1",
-                        "Query": "select distinct id + 42 as foo, weight_string(id + 42) from `user`",
-                        "Table": "`user`"
-                      },
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Unsharded",
-                        "Keyspace": {
-                          "Name": "main",
-                          "Sharded": false
-                        },
-                        "FieldQuery": "select 1 + id as foo, weight_string(1 + id) from unsharded where 1 != 1",
-                        "Query": "select distinct 1 + id as foo, weight_string(1 + id) from unsharded",
-                        "Table": "unsharded"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id + 42 as foo, weight_string(id + 42) from `user` where 1 != 1",
+                    "Query": "select distinct id + 42 as foo, weight_string(id + 42) from `user`",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select 1 + id as foo, weight_string(1 + id) from unsharded where 1 != 1",
+                    "Query": "select distinct 1 + id as foo, weight_string(1 + id) from unsharded",
+                    "Table": "unsharded"
                   }
                 ]
               }
@@ -1212,8 +1191,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select X.`name`, X.foo from (select `name`, id as foo from `user` where 1 != 1 union select 'extra', user_id from user_extra where 1 != 1) as X where 1 != 1",
-        "Query": "select X.`name`, X.foo from (select `name`, id as foo from `user` where id = 3 union select 'extra', user_id from user_extra where user_id = 3) as X",
+        "FieldQuery": "select `name`, foo from (select `name`, id as foo from `user` where 1 != 1 union select 'extra', user_id from user_extra where 1 != 1) as X where 1 != 1",
+        "Query": "select `name`, foo from (select `name`, id as foo from `user` where id = 3 union select 'extra', user_id from user_extra where user_id = 3) as X",
         "Table": "`user`, user_extra",
         "Values": [
           "3"
@@ -1263,8 +1242,8 @@
                       "Name": "main",
                       "Sharded": false
                     },
-                    "FieldQuery": "select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
-                    "Query": "select distinct kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name /* VARCHAR */",
+                    "FieldQuery": "select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
+                    "Query": "select distinct CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name /* VARCHAR */",
                     "SysTableTableName": "[kcu_table_name:'user_extra']",
                     "SysTableTableSchema": "['user']",
                     "Table": "information_schema.key_column_usage"
@@ -1276,8 +1255,8 @@
                       "Name": "main",
                       "Sharded": false
                     },
-                    "FieldQuery": "select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
-                    "Query": "select distinct kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name1 /* VARCHAR */",
+                    "FieldQuery": "select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
+                    "Query": "select distinct CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name1 /* VARCHAR */",
                     "SysTableTableName": "[kcu_table_name1:'music']",
                     "SysTableTableSchema": "['user']",
                     "Table": "information_schema.key_column_usage"
@@ -1487,6 +1466,67 @@
             "FieldQuery": "select foo, foo, foo, weight_string(foo) from (select foo, foo, foo from `user` where 1 != 1 union select bar, baz, toto from music where 1 != 1) as dt where 1 != 1",
             "Query": "select foo, foo, foo, weight_string(foo) from (select foo, foo, foo from `user` union select bar, baz, toto from music) as dt",
             "Table": "`user`, music"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "join between two derived tables containing UNION",
+    "query": "select * from (select foo from user where bar = 12 union select foo from user where bar = 134) as t1 join (select bar from music where foo = 12 union select bar from music where foo = 1234) as t2 on t1.foo = t2.bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select foo from user where bar = 12 union select foo from user where bar = 134) as t1 join (select bar from music where foo = 12 union select bar from music where foo = 1234) as t2 on t1.foo = t2.bar",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "JoinVars": {
+          "t1_foo": 0
+        },
+        "TableName": "`user`_music",
+        "Inputs": [
+          {
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:1)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select foo, weight_string(foo) from (select foo from `user` where 1 != 1 union select foo from `user` where 1 != 1) as dt where 1 != 1",
+                "Query": "select foo, weight_string(foo) from (select foo from `user` where bar = 12 union select foo from `user` where bar = 134) as dt",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:1)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select bar, weight_string(bar) from (select bar from music where 1 != 1 union select bar from music where 1 != 1) as dt where 1 != 1",
+                "Query": "select bar, weight_string(bar) from (select bar from music where foo = 12 and bar = :t1_foo union select bar from music where foo = 1234 and bar = :t1_foo) as dt",
+                "Table": "music"
+              }
+            ]
           }
         ]
       },
