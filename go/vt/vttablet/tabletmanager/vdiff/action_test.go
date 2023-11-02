@@ -175,6 +175,22 @@ func TestPerformVDiffAction(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "show all",
+			req: &tabletmanagerdatapb.VDiffRequest{
+				Action:    string(ShowAction),
+				ActionArg: "all",
+				Keyspace:  keyspace,
+				Workflow:  workflow,
+			},
+			expectQueries: []queryAndResult{
+				{
+					query: fmt.Sprintf("select * from _vt.vdiff where keyspace = %s and workflow = %s order by id desc limit %d",
+						encodeString(keyspace), encodeString(workflow), maxVDiffsToReport),
+					result: noResults,
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
