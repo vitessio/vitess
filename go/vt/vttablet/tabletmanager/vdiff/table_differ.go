@@ -286,7 +286,7 @@ func (td *tableDiffer) pickTablet(ctx context.Context, ts *topo.Server, cells []
 func (td *tableDiffer) syncSourceStreams(ctx context.Context) error {
 	// source can be replica, wait for them to at least reach max gtid of all target streams
 	ct := td.wd.ct
-	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*uint64(time.Second)))
+	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*int64(time.Second)))
 	defer cancel()
 
 	if err := td.forEachSource(func(source *migrationSource) error {
@@ -303,7 +303,7 @@ func (td *tableDiffer) syncSourceStreams(ctx context.Context) error {
 
 func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
 	ct := td.wd.ct
-	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*uint64(time.Second)))
+	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*int64(time.Second)))
 	defer cancel()
 
 	if err := td.forEachSource(func(source *migrationSource) error {

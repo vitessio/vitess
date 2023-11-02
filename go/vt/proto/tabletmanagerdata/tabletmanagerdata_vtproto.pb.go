@@ -20579,7 +20579,7 @@ func (m *VDiffCoreOptions) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.TimeoutSeconds |= uint64(b&0x7F) << shift
+				m.TimeoutSeconds |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

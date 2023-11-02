@@ -618,7 +618,7 @@ message VDiffCoreOptions {
   uint64  max_rows = 3;
   bool checksum = 4;
   uint64 sample_pct = 5;
-  uint64 timeout_seconds = 6;
+  int64 timeout_seconds = 6;
   uint64 max_extra_rows_to_compare = 7;
   bool update_table_stats = 8;
 }

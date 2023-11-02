@@ -27596,6 +27596,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffReportOptions format */
         format?: (string|null);
+
+        /** VDiffReportOptions max_report_sample_rows */
+        max_report_sample_rows?: (number|Long|null);
     }
 
     /** Represents a VDiffReportOptions. */
@@ -27615,6 +27618,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffReportOptions format. */
         public format: string;
+
+        /** VDiffReportOptions max_report_sample_rows. */
+        public max_report_sample_rows: (number|Long);
 
         /**
          * Creates a new VDiffReportOptions instance using the specified properties.
@@ -65776,7 +65782,7 @@ export namespace vtctldata {
         tables?: (string[]|null);
 
         /** VDiffCreateRequest limit */
-        limit?: (number|Long|null);
+        limit?: (number|null);
 
         /** VDiffCreateRequest filtered_replication_wait_time */
         filtered_replication_wait_time?: (vttime.IDuration|null);
@@ -65804,6 +65810,9 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest verbose */
         verbose?: (boolean|null);
+
+        /** VDiffCreateRequest max_report_sample_rows */
+        max_report_sample_rows?: (number|Long|null);
     }
 
     /** Represents a VDiffCreateRequest. */
@@ -65840,7 +65849,7 @@ export namespace vtctldata {
         public tables: string[];
 
         /** VDiffCreateRequest limit. */
-        public limit: (number|Long);
+        public limit: number;
 
         /** VDiffCreateRequest filtered_replication_wait_time. */
         public filtered_replication_wait_time?: (vttime.IDuration|null);
@@ -65868,6 +65877,9 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest verbose. */
         public verbose: boolean;
+
+        /** VDiffCreateRequest max_report_sample_rows. */
+        public max_report_sample_rows: (number|Long);
 
         /**
          * Creates a new VDiffCreateRequest instance using the specified properties.
