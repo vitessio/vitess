@@ -117,7 +117,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 			MaxRows:               *maxRows,
 			Checksum:              *checksum,
 			SamplePct:             *samplePct,
-			TimeoutSeconds:        uint64(timeout.Seconds()),
+			TimeoutSeconds:        int64(timeout.Seconds()),
 			MaxExtraRowsToCompare: *maxExtraRowsToCompare,
 			UpdateTableStats:      *updateTableStats,
 		},
