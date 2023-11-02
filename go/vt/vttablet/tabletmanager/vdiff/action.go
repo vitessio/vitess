@@ -23,8 +23,6 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -49,6 +47,8 @@ const (
 	DeleteAction  VDiffAction = "delete"
 	AllActionArg              = "all"
 	LastActionArg             = "last"
+
+	allVDiffsCount = 100
 )
 
 var (
@@ -269,13 +269,13 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 
 func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
 	var qr *sqltypes.Result
-	var err error
 	vdiffUUID := ""
 
 	if req.ActionArg == LastActionArg {
-		query, err := sqlparser.ParseAndBind(sqlGetMostRecentVDiff,
+		query, err := sqlparser.ParseAndBind(sqlGetMostRecentVDiffByKeyspaceWorkflow,
 			sqltypes.StringBindVariable(req.Keyspace),
 			sqltypes.StringBindVariable(req.Workflow),
+			sqltypes.Int64BindVariable(1),
 		)
 		if err != nil {
 			return err
@@ -313,7 +313,6 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 			row := qr.Named().Row()
 			vdiffID, _ := row["id"].ToInt64()
 			summary, err := vde.getVDiffSummary(vdiffID, dbClient)
-			log.Infof("9999999999999 summary: %v", summary.Rows)
 			resp.Output = summary
 			if err != nil {
 				return err
@@ -325,7 +324,15 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 	}
 	switch req.ActionArg {
 	case AllActionArg:
-		if qr, err = dbClient.ExecuteFetch(sqlGetAllVDiffs, -1); err != nil {
+		query, err := sqlparser.ParseAndBind(sqlGetMostRecentVDiffByKeyspaceWorkflow,
+			sqltypes.StringBindVariable(req.Keyspace),
+			sqltypes.StringBindVariable(req.Workflow),
+			sqltypes.Int64BindVariable(allVDiffsCount),
+		)
+		if err != nil {
+			return err
+		}
+		if qr, err = dbClient.ExecuteFetch(query, -1); err != nil {
 			return err
 		}
 		resp.Output = sqltypes.ResultToProto3(qr)
