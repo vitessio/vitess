@@ -1248,7 +1248,25 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		ms:       ms,
 	}
 
-	err := mz.createMaterializerStreams()
+	tsp := tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	tt, inOrder, err := discovery.ParseTabletTypesAndOrder(ms.TabletTypes)
+	if err != nil {
+		return err
+	}
+	if inOrder {
+		tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	}
+
+	err = mz.createWorkflowStreams(&tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+		Workflow:                  ms.Workflow,
+		Cells:                     strings.Split(ms.Cell, ","),
+		TabletTypes:               tt,
+		TabletSelectionPreference: tsp,
+		WorkflowType:              mz.getWorkflowType(),
+		DeferSecondaryKeys:        ms.DeferSecondaryKeys,
+		AutoStart:                 true,
+		StopAfterCopy:             ms.StopAfterCopy,
+	})
 	if err != nil {
 		return err
 	}

@@ -66,6 +66,19 @@ type materializer struct {
 	workflowType          binlogdatapb.VReplicationWorkflowType
 }
 
+func (mz *materializer) getWorkflowType() binlogdatapb.VReplicationWorkflowType {
+	var workflowType binlogdatapb.VReplicationWorkflowType
+	switch mz.ms.MaterializationIntent {
+	case vtctldatapb.MaterializationIntent_CUSTOM:
+		workflowType = binlogdatapb.VReplicationWorkflowType_Materialize
+	case vtctldatapb.MaterializationIntent_MOVETABLES:
+		workflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
+	case vtctldatapb.MaterializationIntent_CREATELOOKUPINDEX:
+		workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
+	}
+	return workflowType
+}
+
 func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowSubType, error) {
 	switch {
 	case mz.isPartial && mz.ms.AtomicCopy:

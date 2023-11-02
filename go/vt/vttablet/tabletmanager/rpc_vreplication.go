@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -300,6 +301,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 	}
 	if !textutil.ValueIsSimulatedNull(req.State) {
 		state = binlogdatapb.VReplicationWorkflowState_name[int32(req.State)]
+		log.Errorf("DEBUG: State was updated to %s using request value: %v", state, req.State)
 	}
 	bindVars = map[string]*querypb.BindVariable{
 		"st": sqltypes.StringBindVariable(state),
