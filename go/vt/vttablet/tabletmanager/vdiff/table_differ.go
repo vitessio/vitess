@@ -462,7 +462,7 @@ func (td *tableDiffer) setupRowSorters() {
 	}
 }
 
-func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onlyPks bool, maxExtraRowsToCompare int64, maxVdiffReportRows uint64) (*DiffReport, error) {
+func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onlyPks bool, maxExtraRowsToCompare int64, maxReportSampleRows uint64) (*DiffReport, error) {
 	dbClient := td.wd.ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -629,7 +629,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 			return nil, err
 		case c != 0:
 			// We don't do a second pass to compare mismatched rows so we can cap the slice here
-			if maxVdiffReportRows == 0 || uint64(dr.MismatchedRows) < maxVdiffReportRows {
+			if maxReportSampleRows == 0 || uint64(dr.MismatchedRows) < maxReportSampleRows {
 				sourceDiffRow, err := td.genRowDiff(td.tablePlan.targetQuery, sourceRow, debug, onlyPks)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")

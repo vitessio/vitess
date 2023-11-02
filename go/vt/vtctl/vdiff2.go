@@ -56,7 +56,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	tabletTypes := subFlags.String("tablet_types", "in_order:RDONLY,REPLICA,PRIMARY", "Tablet types for source (PRIMARY is always used on target)")
 
 	debugQuery := subFlags.Bool("debug_query", false, "Adds a mysql query to the report that can be used for further debugging")
-	maxVDiffReportRows := subFlags.Uint64("max-vdiff-report-rows", 10, "Maximum number of row differences to report (0 for all differences). NOTE: when increasing this value it is highly recommended to also specify --only_pks=true")
+	maxReportSampleRows := subFlags.Uint64("max-report-sample-rows", 10, "Maximum number of row differences to report (0 for all differences). NOTE: when increasing this value it is highly recommended to also specify --only_pks=true")
 	onlyPks := subFlags.Bool("only_pks", false, "When reporting missing rows, only show primary keys in the report.")
 	var format string
 	subFlags.StringVar(&format, "format", "text", "Format of report") // "json" or "text"
@@ -122,10 +122,10 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 			UpdateTableStats:      *updateTableStats,
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-			OnlyPks:            *onlyPks,
-			DebugQuery:         *debugQuery,
-			Format:             format,
-			MaxVdiffReportRows: *maxVDiffReportRows,
+			OnlyPks:             *onlyPks,
+			DebugQuery:          *debugQuery,
+			Format:              format,
+			MaxReportSampleRows: *maxReportSampleRows,
 		},
 	}
 
