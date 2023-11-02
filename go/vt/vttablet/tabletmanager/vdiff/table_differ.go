@@ -286,7 +286,7 @@ func (td *tableDiffer) pickTablet(ctx context.Context, ts *topo.Server, cells []
 func (td *tableDiffer) syncSourceStreams(ctx context.Context) error {
 	// source can be replica, wait for them to at least reach max gtid of all target streams
 	ct := td.wd.ct
-	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*int64(time.Second)))
+	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*uint64(time.Second)))
 	defer cancel()
 
 	if err := td.forEachSource(func(source *migrationSource) error {
@@ -303,7 +303,7 @@ func (td *tableDiffer) syncSourceStreams(ctx context.Context) error {
 
 func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
 	ct := td.wd.ct
-	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*int64(time.Second)))
+	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*uint64(time.Second)))
 	defer cancel()
 
 	if err := td.forEachSource(func(source *migrationSource) error {
@@ -462,7 +462,7 @@ func (td *tableDiffer) setupRowSorters() {
 	}
 }
 
-func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onlyPks bool, maxExtraRowsToCompare int64, maxReportSampleRows uint64) (*DiffReport, error) {
+func (td *tableDiffer) diff(ctx context.Context, rowsToCompare uint64, debug, onlyPks bool, maxExtraRowsToCompare uint64, maxReportSampleRows uint64) (*DiffReport, error) {
 	dbClient := td.wd.ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -531,8 +531,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 				return nil, err
 			}
 		}
-		rowsToCompare--
-		if rowsToCompare < 0 {
+		if rowsToCompare == 0 {
 			log.Infof("Stopping vdiff, specified limit reached")
 			return dr, nil
 		}
@@ -591,6 +590,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		}
 
 		dr.ProcessedRows++
+		rowsToCompare--
 
 		// Compare pk values.
 		c, err := td.compare(sourceRow, targetRow, td.tablePlan.comparePKs, false)
@@ -629,7 +629,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 			return nil, err
 		case c != 0:
 			// We don't do a second pass to compare mismatched rows so we can cap the slice here
-			if maxReportSampleRows == 0 || uint64(dr.MismatchedRows) < maxReportSampleRows {
+			if maxReportSampleRows == 0 || dr.MismatchedRows < maxReportSampleRows {
 				sourceDiffRow, err := td.genRowDiff(td.tablePlan.targetQuery, sourceRow, debug, onlyPks)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
@@ -701,7 +701,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		}
 
 		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
-			sqltypes.Int64BindVariable(dr.ProcessedRows),
+			sqltypes.Uint64BindVariable(dr.ProcessedRows),
 			sqltypes.StringBindVariable(string(lastPK)),
 			sqltypes.StringBindVariable(string(rpt)),
 			sqltypes.Int64BindVariable(td.wd.ct.id),
@@ -712,7 +712,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		}
 	} else {
 		query, err = sqlparser.ParseAndBind(sqlUpdateTableNoProgress,
-			sqltypes.Int64BindVariable(dr.ProcessedRows),
+			sqltypes.Uint64BindVariable(dr.ProcessedRows),
 			sqltypes.StringBindVariable(string(rpt)),
 			sqltypes.Int64BindVariable(td.wd.ct.id),
 			sqltypes.StringBindVariable(td.table.Name),
@@ -757,7 +757,7 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 	}
 	query, err := sqlparser.ParseAndBind(sqlUpdateTableStateAndReport,
 		sqltypes.StringBindVariable(string(state)),
-		sqltypes.Int64BindVariable(dr.ProcessedRows),
+		sqltypes.Uint64BindVariable(dr.ProcessedRows),
 		sqltypes.StringBindVariable(report),
 		sqltypes.Int64BindVariable(td.wd.ct.id),
 		sqltypes.StringBindVariable(td.table.Name),

@@ -669,7 +669,7 @@ func TestGetStructNames(t *testing.T) {
 func TestBuildProgressReport(t *testing.T) {
 	type args struct {
 		summary       *vdiffSummary
-		rowsToCompare int64
+		rowsToCompare uint64
 	}
 	tests := []struct {
 		name string

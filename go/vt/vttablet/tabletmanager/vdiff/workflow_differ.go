@@ -64,7 +64,7 @@ func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions) (
 // by MySQL on each side then we'll have the same number of extras on
 // both sides. If that's the case, then let's see if the extra rows on
 // both sides are actually different.
-func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64, maxReportSampleRows uint64) error {
+func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare uint64, maxReportSampleRows uint64) error {
 	if dr.MismatchedRows == 0 {
 		// Get the VSchema on the target and source keyspaces. We can then use this
 		// for handling additional edge cases, such as adjusting results for reference

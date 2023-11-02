@@ -34,11 +34,11 @@ type DiffReport struct {
 	TableName string
 
 	// counts
-	ProcessedRows   int64
-	MatchingRows    int64
-	MismatchedRows  int64
-	ExtraRowsSource int64
-	ExtraRowsTarget int64
+	ProcessedRows   uint64
+	MatchingRows    uint64
+	MismatchedRows  uint64
+	ExtraRowsSource uint64
+	ExtraRowsTarget uint64
 
 	// actual data for a few sample rows
 	ExtraRowsSourceDiffs []*RowDiff      `json:"ExtraRowsSourceSample,omitempty"`
