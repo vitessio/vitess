@@ -929,7 +929,6 @@ func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, partici
 			log.Errorf("WaitForPosition error: %s", err)
 			return vterrors.Wrapf(err, "WaitForPosition for tablet %v", topoproto.TabletAliasString(participant.tablet.Alias))
 		}
-		log.Infof("WaitForPosition: tablet %s did reach position %s", participant.tablet.Alias.String(), replication.EncodePosition(participant.position))
 		participant.result = make(chan *sqltypes.Result, 1)
 		gtidch := make(chan string, 1)
 
@@ -973,9 +972,7 @@ func (df *vdiff) streamOne(ctx context.Context, keyspace, shard string, particip
 			TabletType: participant.tablet.Type,
 		}
 		var fields []*querypb.Field
-		log.Infof("VStreamResults: tablet %s.%s.%s will execute %s", keyspace, shard, participant.tablet.Alias.String(), query)
 		return conn.VStreamResults(ctx, target, query, func(vrs *binlogdatapb.VStreamResultsResponse) error {
-			log.Infof("VStreamResults: tablet %s.%s.%s received %d rows, gtid %s", keyspace, shard, participant.tablet.Alias.String(), len(vrs.Rows), vrs.Gtid)
 			if vrs.Fields != nil {
 				fields = vrs.Fields
 				gtidch <- vrs.Gtid

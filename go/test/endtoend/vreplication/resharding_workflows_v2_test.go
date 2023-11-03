@@ -61,9 +61,18 @@ var (
 	currentWorkflowType wrangler.VReplicationWorkflowType
 )
 
+type workflowExecOptions struct {
+	deferSecondaryKeys bool
+	atomicCopy         bool
+}
+
+var defaultWorkflowExecOptions = &workflowExecOptions{
+	deferSecondaryKeys: true,
+}
+
 func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) error {
 	err := tstWorkflowExec(t, defaultCellName, workflowName, targetKs, targetKs,
-		"", workflowActionCreate, "", sourceShards, targetShards, false)
+		"", workflowActionCreate, "", sourceShards, targetShards, defaultWorkflowExecOptions)
 	require.NoError(t, err)
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, "")
@@ -78,7 +87,7 @@ func createMoveTablesWorkflow(t *testing.T, tables string) {
 		tables = tablesToMove
 	}
 	err := tstWorkflowExec(t, defaultCellName, workflowName, sourceKs, targetKs,
-		tables, workflowActionCreate, "", "", "", false)
+		tables, workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, tables)
@@ -88,10 +97,12 @@ func createMoveTablesWorkflow(t *testing.T, tables string) {
 }
 
 func tstWorkflowAction(t *testing.T, action, tabletTypes, cells string) error {
-	return tstWorkflowExec(t, cells, workflowName, sourceKs, targetKs, tablesToMove, action, tabletTypes, "", "", false)
+	return tstWorkflowExec(t, cells, workflowName, sourceKs, targetKs, tablesToMove, action, tabletTypes, "", "", defaultWorkflowExecOptions)
 }
 
-func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes, sourceShards, targetShards string, atomicCopy bool) error {
+func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes,
+	sourceShards, targetShards string, options *workflowExecOptions) error {
+
 	var args []string
 	if currentWorkflowType == wrangler.MoveTablesWorkflow {
 		args = append(args, "MoveTables")
@@ -104,7 +115,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	if BypassLagCheck {
 		args = append(args, "--max_replication_lag_allowed=2542087h")
 	}
-	if atomicCopy {
+	if options.atomicCopy {
 		args = append(args, "--atomic-copy")
 	}
 	switch action {
@@ -125,10 +136,12 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		// Test new experimental --defer-secondary-keys flag
 		switch currentWorkflowType {
 		case wrangler.MoveTablesWorkflow, wrangler.MigrateWorkflow, wrangler.ReshardWorkflow:
-			// fixme: add a parameter to pass flags, so we can conditionally add --defer-secondary-keys
-			//if !atomicCopy {
-			//args = append(args, "--defer-secondary-keys")
-			//}
+
+			if !options.atomicCopy && options.deferSecondaryKeys {
+				log.Infof("Testing --defer-secondary-keys flag, %t, %t, %s, %s, %s",
+					options.atomicCopy, options.deferSecondaryKeys, sourceKs, targetKs, tables)
+				args = append(args, "--defer-secondary-keys")
+			}
 			args = append(args, "--initialize-target-sequences") // Only used for MoveTables
 		}
 	}
@@ -318,17 +331,17 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	// use MoveTables to move customer2 from product to customer using
 	currentWorkflowType = wrangler.MoveTablesWorkflow
 	err := tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
-		"customer2", workflowActionCreate, "", "", "", false)
+		"customer2", workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
 
 	waitForWorkflowState(t, vc, "customer.wf2", binlogdatapb.VReplicationWorkflowState_Running.String())
 	waitForLowLag(t, "customer", "wf2")
 
 	err = tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
-		"", workflowActionSwitchTraffic, "", "", "", false)
+		"", workflowActionSwitchTraffic, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
 	err = tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
-		"", workflowActionComplete, "", "", "", false)
+		"", workflowActionComplete, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
 
 	// sanity check
@@ -353,16 +366,16 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 
 	// use MoveTables to move customer2 back to product. Note that now the table has an associated sequence
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
-		"customer2", workflowActionCreate, "", "", "", false)
+		"customer2", workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
 	waitForWorkflowState(t, vc, "product.wf3", binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	waitForLowLag(t, "product", "wf3")
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
-		"", workflowActionSwitchTraffic, "", "", "", false)
+		"", workflowActionSwitchTraffic, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
-		"", workflowActionComplete, "", "", "", false)
+		"", workflowActionComplete, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
 
 	// sanity check
