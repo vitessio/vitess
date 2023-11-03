@@ -908,7 +908,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 			// Allow people to filter by Keyspace and Shard using a LIKE clause
 			if filter != nil {
 				ksFilterRegex := sqlparser.LikeToRegexp(filter.Like)
-				keyspaceShardStr := fmt.Sprintf("%s/%s", ts.Tablet.Keyspace, ts.Tablet.Shard)
+				keyspaceShardStr := fmt.Sprintf("%s/%s", ts.Target.Keyspace, ts.Target.Shard)
 				if !ksFilterRegex.MatchString(keyspaceShardStr) {
 					continue
 				}
