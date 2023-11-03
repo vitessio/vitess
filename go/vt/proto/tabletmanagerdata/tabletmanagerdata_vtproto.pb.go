@@ -20399,7 +20399,7 @@ func (m *VDiffReportOptions) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.MaxReportSampleRows |= uint64(b&0x7F) << shift
+				m.MaxReportSampleRows |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -20521,7 +20521,7 @@ func (m *VDiffCoreOptions) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.MaxRows |= uint64(b&0x7F) << shift
+				m.MaxRows |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -20560,7 +20560,7 @@ func (m *VDiffCoreOptions) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.SamplePct |= uint64(b&0x7F) << shift
+				m.SamplePct |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -20598,7 +20598,7 @@ func (m *VDiffCoreOptions) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.MaxExtraRowsToCompare |= uint64(b&0x7F) << shift
+				m.MaxExtraRowsToCompare |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

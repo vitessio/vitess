@@ -48,7 +48,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	_ = subFlags.Bool("v1", false, "Use legacy VDiff v1")
 
 	timeout := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on primary migrations. The migration will be cancelled on a timeout.")
-	maxRows := subFlags.Uint64("limit", math.MaxInt64, "Max rows to stop comparing after")
+	maxRows := subFlags.Int64("limit", math.MaxInt64, "Max rows to stop comparing after")
 	tables := subFlags.String("tables", "", "Only run vdiff for these tables in the workflow")
 
 	sourceCell := subFlags.String("source_cell", "", "The source cell to compare from; default is any available cell")
@@ -59,11 +59,11 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	onlyPks := subFlags.Bool("only_pks", false, "When reporting missing rows, only show primary keys in the report.")
 	var format string
 	subFlags.StringVar(&format, "format", "text", "Format of report") // "json" or "text"
-	maxExtraRowsToCompare := subFlags.Uint64("max_extra_rows_to_compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
+	maxExtraRowsToCompare := subFlags.Int64("max_extra_rows_to_compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 
 	autoRetry := subFlags.Bool("auto-retry", true, "Should this vdiff automatically retry and continue in case of recoverable errors")
 	checksum := subFlags.Bool("checksum", false, "Use row-level checksums to compare, not yet implemented")
-	samplePct := subFlags.Uint64("sample_pct", 100, "How many rows to sample, not yet implemented")
+	samplePct := subFlags.Int64("sample_pct", 100, "How many rows to sample, not yet implemented")
 	verbose := subFlags.Bool("verbose", false, "Show verbose vdiff output in summaries")
 	wait := subFlags.Bool("wait", false, "When creating or resuming a vdiff, wait for it to finish before exiting")
 	waitUpdateInterval := subFlags.Duration("wait-update-interval", time.Duration(1*time.Minute), "When waiting on a vdiff to finish, check and display the current status this often")
@@ -226,18 +226,18 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 type vdiffTableSummary struct {
 	TableName       string
 	State           vdiff.VDiffState
-	RowsCompared    uint64
-	MatchingRows    uint64
-	MismatchedRows  uint64
-	ExtraRowsSource uint64
-	ExtraRowsTarget uint64
+	RowsCompared    int64
+	MatchingRows    int64
+	MismatchedRows  int64
+	ExtraRowsSource int64
+	ExtraRowsTarget int64
 	LastUpdated     string `json:"LastUpdated,omitempty"`
 }
 type vdiffSummary struct {
 	Workflow, Keyspace string
 	State              vdiff.VDiffState
 	UUID               string
-	RowsCompared       uint64
+	RowsCompared       int64
 	HasMismatch        bool
 	Shards             string
 	StartedAt          string                                 `json:"StartedAt,omitempty"`
@@ -473,7 +473,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 		vdiff.CompletedState: 0,
 	}
 	// Keep a tally of the approximate total rows to process as we'll use this for our progress report
-	totalRowsToCompare := uint64(0)
+	totalRowsToCompare := int64(0)
 	var shards []string
 	for shard, resp := range output.Responses {
 		first := true
@@ -508,8 +508,8 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 				}
 
 				{ // Global VDiff summary updates that take into account the per table details per shard
-					summary.RowsCompared += row.AsUint64("rows_compared", 0)
-					totalRowsToCompare += row.AsUint64("table_rows", 0)
+					summary.RowsCompared += row.AsInt64("rows_compared", 0)
+					totalRowsToCompare += row.AsInt64("table_rows", 0)
 
 					// If we had a mismatch on any table on any shard then the global VDiff summary does too
 					if mm, _ := row.ToBool("has_mismatch"); mm {
@@ -655,7 +655,7 @@ func displayVDiff2ActionStatusResponse(wr *wrangler.Wrangler, format, uuid strin
 	}
 }
 
-func buildProgressReport(summary *vdiffSummary, rowsToCompare uint64) {
+func buildProgressReport(summary *vdiffSummary, rowsToCompare int64) {
 	report := &vdiff.ProgressReport{}
 	if summary.RowsCompared >= 1 {
 		// Round to 2 decimal points

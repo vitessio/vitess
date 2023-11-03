@@ -65782,7 +65782,7 @@ export namespace vtctldata {
         tables?: (string[]|null);
 
         /** VDiffCreateRequest limit */
-        limit?: (number|null);
+        limit?: (number|Long|null);
 
         /** VDiffCreateRequest filtered_replication_wait_time */
         filtered_replication_wait_time?: (vttime.IDuration|null);
@@ -65849,7 +65849,7 @@ export namespace vtctldata {
         public tables: string[];
 
         /** VDiffCreateRequest limit. */
-        public limit: number;
+        public limit: (number|Long);
 
         /** VDiffCreateRequest filtered_replication_wait_time. */
         public filtered_replication_wait_time?: (vttime.IDuration|null);

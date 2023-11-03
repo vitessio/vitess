@@ -695,7 +695,7 @@ func TestBuildProgressReport(t *testing.T) {
 	now := time.Now()
 	type args struct {
 		summary       *summary
-		rowsToCompare uint64
+		rowsToCompare int64
 	}
 	tests := []struct {
 		name string

@@ -93,8 +93,8 @@ func (pe *primitiveExecutor) next() ([]sqltypes.Value, error) {
 
 // drain fastforward's a shard to process (and ignore) everything from its results stream and return a count of the
 // discarded rows.
-func (pe *primitiveExecutor) drain(ctx context.Context) (uint64, error) {
-	var count uint64
+func (pe *primitiveExecutor) drain(ctx context.Context) (int64, error) {
+	var count int64
 	for {
 		row, err := pe.next()
 		if err != nil {

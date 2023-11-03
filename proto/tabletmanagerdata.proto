@@ -609,17 +609,17 @@ message VDiffReportOptions {
   bool only_pks = 1;
   bool debug_query = 2;
   string format = 3;
-  uint64 max_report_sample_rows = 4;
+  int64 max_report_sample_rows = 4;
 }
 
 message VDiffCoreOptions {
   string tables = 1;
   bool auto_retry = 2;
-  uint64  max_rows = 3;
+  int64  max_rows = 3;
   bool checksum = 4;
-  uint64 sample_pct = 5;
+  int64 sample_pct = 5;
   int64 timeout_seconds = 6;
-  uint64 max_extra_rows_to_compare = 7;
+  int64 max_extra_rows_to_compare = 7;
   bool update_table_stats = 8;
 }
 

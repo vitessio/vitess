@@ -462,7 +462,7 @@ func (td *tableDiffer) setupRowSorters() {
 	}
 }
 
-func (td *tableDiffer) diff(ctx context.Context, rowsToCompare uint64, debug, onlyPks bool, maxExtraRowsToCompare uint64, maxReportSampleRows uint64) (*DiffReport, error) {
+func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onlyPks bool, maxExtraRowsToCompare int64, maxReportSampleRows int64) (*DiffReport, error) {
 	dbClient := td.wd.ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -531,7 +531,8 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare uint64, debug, on
 				return nil, err
 			}
 		}
-		if rowsToCompare == 0 {
+		rowsToCompare--
+		if rowsToCompare < 0 {
 			log.Infof("Stopping vdiff, specified limit reached")
 			return dr, nil
 		}
@@ -590,7 +591,6 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare uint64, debug, on
 		}
 
 		dr.ProcessedRows++
-		rowsToCompare--
 
 		// Compare pk values.
 		c, err := td.compare(sourceRow, targetRow, td.tablePlan.comparePKs, false)
@@ -701,7 +701,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		}
 
 		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
-			sqltypes.Uint64BindVariable(dr.ProcessedRows),
+			sqltypes.Int64BindVariable(dr.ProcessedRows),
 			sqltypes.StringBindVariable(string(lastPK)),
 			sqltypes.StringBindVariable(string(rpt)),
 			sqltypes.Int64BindVariable(td.wd.ct.id),
@@ -712,7 +712,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		}
 	} else {
 		query, err = sqlparser.ParseAndBind(sqlUpdateTableNoProgress,
-			sqltypes.Uint64BindVariable(dr.ProcessedRows),
+			sqltypes.Int64BindVariable(dr.ProcessedRows),
 			sqltypes.StringBindVariable(string(rpt)),
 			sqltypes.Int64BindVariable(td.wd.ct.id),
 			sqltypes.StringBindVariable(td.table.Name),
@@ -757,7 +757,7 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 	}
 	query, err := sqlparser.ParseAndBind(sqlUpdateTableStateAndReport,
 		sqltypes.StringBindVariable(string(state)),
-		sqltypes.Uint64BindVariable(dr.ProcessedRows),
+		sqltypes.Int64BindVariable(dr.ProcessedRows),
 		sqltypes.StringBindVariable(report),
 		sqltypes.Int64BindVariable(td.wd.ct.id),
 		sqltypes.StringBindVariable(td.table.Name),

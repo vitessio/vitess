@@ -398,7 +398,7 @@ func TestGetStructNames(t *testing.T) {
 func TestBuildProgressReport(t *testing.T) {
 	type args struct {
 		summary       *vdiffSummary
-		rowsToCompare uint64
+		rowsToCompare int64
 	}
 	tests := []struct {
 		name string

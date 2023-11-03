@@ -55366,7 +55366,7 @@ func (m *VDiffCreateRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Limit |= uint32(b&0x7F) << shift
+				m.Limit |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -55481,7 +55481,7 @@ func (m *VDiffCreateRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.MaxExtraRowsToCompare |= uint64(b&0x7F) << shift
+				m.MaxExtraRowsToCompare |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -55596,7 +55596,7 @@ func (m *VDiffCreateRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.MaxReportSampleRows |= uint64(b&0x7F) << shift
+				m.MaxReportSampleRows |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

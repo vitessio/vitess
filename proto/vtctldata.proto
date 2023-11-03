@@ -1715,17 +1715,17 @@ message VDiffCreateRequest {
   repeated topodata.TabletType tablet_types = 6;
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 7;
   repeated string tables = 8;
-  uint32 limit = 9;
+  int64 limit = 9;
   vttime.Duration filtered_replication_wait_time = 10;
   bool debug_query = 11;
   bool only_p_ks = 12;
   bool update_table_stats = 13;
-  uint64 max_extra_rows_to_compare = 14;
+  int64 max_extra_rows_to_compare = 14;
   bool wait = 15;
   vttime.Duration wait_update_interval = 16;
   bool auto_retry = 17;
   bool verbose = 18;
-  uint64 max_report_sample_rows = 19;
+  int64 max_report_sample_rows = 19;
 }
 
 message VDiffCreateResponse {

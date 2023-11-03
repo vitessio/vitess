@@ -57,13 +57,13 @@ var (
 		TargetCells                 []string
 		TabletTypes                 []topodatapb.TabletType
 		Tables                      []string
-		Limit                       uint32
+		Limit                       uint32 // We only accept positive values but pass on an int64
 		FilteredReplicationWaitTime time.Duration
 		DebugQuery                  bool
 		MaxReportSampleRows         uint64
 		OnlyPKs                     bool
 		UpdateTableStats            bool
-		MaxExtraRowsToCompare       uint64
+		MaxExtraRowsToCompare       uint32 // We only accept positive values but pass on an int64
 		Wait                        bool
 		WaitUpdateInterval          time.Duration
 		AutoRetry                   bool
@@ -271,16 +271,16 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		TabletTypes:                 createOptions.TabletTypes,
 		TabletSelectionPreference:   tsp,
 		Tables:                      createOptions.Tables,
-		Limit:                       createOptions.Limit,
+		Limit:                       int64(createOptions.Limit),
 		FilteredReplicationWaitTime: protoutil.DurationToProto(createOptions.FilteredReplicationWaitTime),
 		DebugQuery:                  createOptions.DebugQuery,
 		OnlyPKs:                     createOptions.OnlyPKs,
 		UpdateTableStats:            createOptions.UpdateTableStats,
-		MaxExtraRowsToCompare:       createOptions.MaxExtraRowsToCompare,
+		MaxExtraRowsToCompare:       int64(createOptions.MaxExtraRowsToCompare),
 		Wait:                        createOptions.Wait,
 		WaitUpdateInterval:          protoutil.DurationToProto(createOptions.WaitUpdateInterval),
 		AutoRetry:                   createOptions.AutoRetry,
-		MaxReportSampleRows:         createOptions.MaxReportSampleRows,
+		MaxReportSampleRows:         int64(createOptions.MaxReportSampleRows),
 	})
 
 	if err != nil {
@@ -379,11 +379,11 @@ func commandResume(cmd *cobra.Command, args []string) error {
 type tableSummary struct {
 	TableName       string
 	State           vdiff.VDiffState
-	RowsCompared    uint64
-	MatchingRows    uint64
-	MismatchedRows  uint64
-	ExtraRowsSource uint64
-	ExtraRowsTarget uint64
+	RowsCompared    int64
+	MatchingRows    int64
+	MismatchedRows  int64
+	ExtraRowsSource int64
+	ExtraRowsTarget int64
 	LastUpdated     string `json:"LastUpdated,omitempty"`
 }
 
@@ -392,7 +392,7 @@ type summary struct {
 	Workflow, Keyspace string
 	State              vdiff.VDiffState
 	UUID               string
-	RowsCompared       uint64
+	RowsCompared       int64
 	HasMismatch        bool
 	Shards             string
 	StartedAt          string                                 `json:"StartedAt,omitempty"`
@@ -630,7 +630,7 @@ func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiff
 	}
 	// Keep a tally of the approximate total rows to process as we'll use this for our progress
 	// report.
-	totalRowsToCompare := uint64(0)
+	totalRowsToCompare := int64(0)
 	var shards []string
 	for shard, resp := range resp.TabletResponses {
 		first := true
@@ -670,8 +670,8 @@ func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiff
 				// Global VDiff summary updates that take into account the per table details
 				// per shard.
 				{
-					summary.RowsCompared += row.AsUint64("rows_compared", 0)
-					totalRowsToCompare += row.AsUint64("table_rows", 0)
+					summary.RowsCompared += row.AsInt64("rows_compared", 0)
+					totalRowsToCompare += row.AsInt64("table_rows", 0)
 
 					// If we had a mismatch on any table on any shard then the global VDiff
 					// summary does too.
@@ -784,7 +784,7 @@ func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiff
 	return summary, nil
 }
 
-func buildProgressReport(summary *summary, rowsToCompare uint64) {
+func buildProgressReport(summary *summary, rowsToCompare int64) {
 	report := &vdiff.ProgressReport{}
 	if summary.RowsCompared >= 1 {
 		// Round to 2 decimal points.
@@ -865,10 +865,10 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().DurationVar(&createOptions.FilteredReplicationWaitTime, "filtered-replication-wait-time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for replication to catch up when syncing tablet streams.")
 	create.Flags().Uint32Var(&createOptions.Limit, "limit", math.MaxUint32, "Max rows to stop comparing after.")
 	create.Flags().BoolVar(&createOptions.DebugQuery, "debug-query", false, "Adds a mysql query to the report that can be used for further debugging.")
-	create.Flags().Uint64Var(&createOptions.MaxReportSampleRows, "max-report-sample-rows", 10, "Maximum number of row differences to report (0 for all differences). NOTE: when increasing this value it is highly recommended to also specify --only_pks")
+	create.Flags().Uint64Var(&createOptions.MaxReportSampleRows, "max-report-sample-rows", 10, "Maximum number of row differences to report (0 for all differences). NOTE: when increasing this value it is highly recommended to also specify --only-pks")
 	create.Flags().BoolVar(&createOptions.OnlyPKs, "only-pks", false, "When reporting missing rows, only show primary keys in the report.")
 	create.Flags().StringSliceVar(&createOptions.Tables, "tables", nil, "Only run vdiff for these tables in the workflow.")
-	create.Flags().Uint64Var(&createOptions.MaxExtraRowsToCompare, "max-extra-rows-to-compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
+	create.Flags().Uint32Var(&createOptions.MaxExtraRowsToCompare, "max-extra-rows-to-compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 	create.Flags().BoolVar(&createOptions.Wait, "wait", false, "When creating or resuming a vdiff, wait for it to finish before exiting.")
 	create.Flags().DurationVar(&createOptions.WaitUpdateInterval, "wait-update-interval", time.Duration(1*time.Minute), "When waiting on a vdiff to finish, check and display the current status this often.")
 	create.Flags().BoolVar(&createOptions.AutoRetry, "auto-retry", true, "Should this vdiff automatically retry and continue in case of recoverable errors.")
