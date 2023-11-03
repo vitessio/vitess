@@ -127,7 +127,7 @@ func (r *resolveJSONGateConfig) loadConfig() (*[]resolver.Address, error) {
 		// Apply filters
 		if r.filters.gate_type != "" {
 			if r.filters.gate_type != s.Type {
-				fmt.Printf("Dropped non matching type: %v\n", s.Type)
+				//				fmt.Printf("Dropped non matching type: %v\n", s.Type)
 				continue
 			}
 		}
