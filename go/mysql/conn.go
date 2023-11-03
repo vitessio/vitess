@@ -132,7 +132,7 @@ type Conn struct {
 	// ConnectionAttributes stores attributes set in the connection phase when
 	// attributes from the client are sent. This is arbitrary key/value pairs
 	// sent by the client.
-	ConnectionAttributes ConnectionAttributesMap
+	Attributes ConnectionAttributes
 
 	bufferedReader *bufio.Reader
 	flushTimer     *time.Timer

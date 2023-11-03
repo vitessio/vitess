@@ -359,7 +359,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		log.Errorf("Cannot parse client handshake response from %s: %v", c, err)
 		return
 	}
-	c.ConnectionAttributes = clientAttributes
+	c.Attributes = clientAttributes
 
 	c.recycleReadPacket()
 
@@ -377,7 +377,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			log.Errorf("Cannot parse post-SSL client handshake response from %s: %v", c, err)
 			return
 		}
-		c.ConnectionAttributes = clientAttributes
+		c.Attributes = clientAttributes
 		c.recycleReadPacket()
 
 		if con, ok := c.conn.(*tls.Conn); ok {
@@ -640,7 +640,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 // parseClientHandshakePacket parses the handshake sent by the client.
 // Returns the username, auth method, auth data, connection attributes, error.
 // The original data is not pointed at, and can be freed.
-func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []byte) (string, AuthMethodDescription, []byte, ConnectionAttributesMap, error) {
+func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []byte) (string, AuthMethodDescription, []byte, ConnectionAttributes, error) {
 	pos := 0
 
 	// Client flags, 4 bytes.
@@ -768,7 +768,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	return username, AuthMethodDescription(authMethod), authResponse, clientAttributes, nil
 }
 
-func parseConnAttrs(data []byte, pos int) (ConnectionAttributesMap, int, error) {
+func parseConnAttrs(data []byte, pos int) (ConnectionAttributes, int, error) {
 	var attrLen uint64
 
 	attrLen, pos, ok := readLenEncInt(data, pos)

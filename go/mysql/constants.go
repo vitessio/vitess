@@ -40,7 +40,7 @@ type AuthMethodDescription string
 
 // Map of client key/value pairs sent by the client during
 // the connection phase
-type ConnectionAttributesMap map[string]string
+type ConnectionAttributes map[string]string
 
 // Supported auth forms.
 const (
