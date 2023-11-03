@@ -463,7 +463,6 @@ func (vr *vreplicator) setMessage(message string) error {
 }
 
 func (vr *vreplicator) insertLog(typ, message string) error {
-	log.Infof("Inserting into vreplication log for id %d %s:%s", vr.id, typ, message)
 	return insertLog(vr.dbClient, typ, vr.id, vr.state.String(), message)
 }
 
@@ -697,7 +696,6 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 			return vterrors.Wrap(err, "unable to connect to the database when saving secondary keys for deferred creation")
 		}
 		defer dbClient.Close()
-		log.Infof("Executing post copy action queries %s, %s", insert, sqlparser.String(alterDrop))
 		if _, err := dbClient.ExecuteFetch(insert, 1); err != nil {
 			return err
 		}

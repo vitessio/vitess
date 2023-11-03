@@ -138,7 +138,6 @@ func (ts *trafficSwitcher) TopoServer() *topo.Server                          { 
 func (ts *trafficSwitcher) TabletManagerClient() tmclient.TabletManagerClient { return ts.wr.tmc }
 func (ts *trafficSwitcher) Logger() logutil.Logger                            { return ts.wr.logger }
 func (ts *trafficSwitcher) VReplicationExec(ctx context.Context, alias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
-	log.Infof("Executing on %v: %s", alias, query)
 	return ts.wr.VReplicationExec(ctx, alias, query)
 }
 
@@ -658,14 +657,10 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	if err := sw.streamMigraterfinalize(ctx, ts, sourceWorkflows); err != nil {
 		handleError("failed to finalize the traffic switch", err)
 	}
-	log.Infof("Reverse replication is %v", reverseReplication)
 	if reverseReplication {
-		log.Infof("Starting reverse replication")
 		if err := sw.startReverseVReplication(ctx); err != nil {
 			return handleError("failed to start the reverse workflow", err)
 		}
-	} else {
-		log.Infof("Skipping reverse replication")
 	}
 
 	if err := sw.freezeTargetVReplication(ctx); err != nil {

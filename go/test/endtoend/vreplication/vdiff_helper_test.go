@@ -32,7 +32,10 @@ import (
 )
 
 const (
-	vdiffTimeout = time.Second * 90 // we can leverage auto retry on error with this longer-than-usual timeout
+	vdiffTimeout             = 90 * time.Second // we can leverage auto retry on error with this longer-than-usual timeout
+	vdiffRetryTimeout        = 30 * time.Second
+	vdiffStatusCheckInterval = 1 * time.Second
+	vdiffRetryInterval       = 5 * time.Second
 )
 
 var (
@@ -92,7 +95,7 @@ func waitForVDiff2ToComplete(t *testing.T, useVtctlclient bool, ksWorkflow, cell
 	ch := make(chan bool)
 	go func() {
 		for {
-			time.Sleep(1 * time.Second)
+			time.Sleep(vdiffStatusCheckInterval)
 			_, jsonStr := performVDiff2Action(t, useVtctlclient, ksWorkflow, cells, "show", uuid, false)
 			info = getVDiffInfo(jsonStr)
 			require.NotNil(t, info)
@@ -139,9 +142,8 @@ func waitForVDiff2ToComplete(t *testing.T, useVtctlclient bool, ksWorkflow, cell
 	case <-ch:
 		return info
 	case <-time.After(vdiffTimeout):
-		// temporarily allow incomplete vdiffs to pass
 		log.Errorf("VDiff never completed for UUID %s", uuid)
-		//require.FailNow(t, fmt.Sprintf("VDiff never completed for UUID %s", uuid))
+		require.FailNow(t, fmt.Sprintf("VDiff never completed for UUID %s", uuid))
 		return nil
 	}
 }
@@ -232,6 +234,8 @@ func performVDiff2Action(t *testing.T, useVtctlclient bool, ksWorkflow, cells, a
 	return uuid, output
 }
 
+// During SwitchTraffic, due to changes in the cluster, vdiff can return transient errors. isVDiffRetryable() is used to
+// ignore such errors and retry vdiff expecting the condition to be resolved.
 func isVDiffRetryable(str string) bool {
 	for _, s := range []string{"Error while dialing", "failed to connect"} {
 		if strings.Contains(str, s) {
@@ -246,9 +250,9 @@ type vdiffResult struct {
 	err    error
 }
 
+// execVDiffWithRetry will ignore transient errors that can occur during workflow state changes.
 func execVDiffWithRetry(t *testing.T, expectError bool, useVtctldClient bool, args []string) (string, error) {
-	timeout := 30 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), vdiffRetryTimeout)
 	defer cancel()
 	vdiffResultCh := make(chan vdiffResult)
 	go func() {
@@ -257,7 +261,7 @@ func execVDiffWithRetry(t *testing.T, expectError bool, useVtctldClient bool, ar
 		retry := false
 		for {
 			if retry {
-				time.Sleep(5 * time.Second)
+				time.Sleep(vdiffRetryInterval)
 			}
 			retry = false
 			if useVtctldClient {
@@ -267,24 +271,20 @@ func execVDiffWithRetry(t *testing.T, expectError bool, useVtctldClient bool, ar
 			}
 			if err != nil {
 				if expectError {
-					log.Infof("Returning expected error: %s, output is %s", err, output)
 					result := vdiffResult{output: output, err: err}
 					vdiffResultCh <- result
 					return
 				}
 				log.Infof("vdiff error: %s", err)
 				if isVDiffRetryable(err.Error()) {
-					log.Infof("vdiff error is retryable, retrying...")
 					retry = true
 				} else {
-					log.Infof("vdiff error is not retryable, returning...")
 					result := vdiffResult{output: output, err: err}
 					vdiffResultCh <- result
 					return
 				}
 			}
 			if isVDiffRetryable(output) {
-				log.Infof("vdiff output is retryable, retrying...")
 				retry = true
 			}
 			if !retry {

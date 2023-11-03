@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"sort"
@@ -870,5 +871,18 @@ func (lg *loadGenerator) waitForCount(want int64) {
 		default:
 			time.Sleep(defaultTick)
 		}
+	}
+}
+
+// used during debugging tests
+func appendToQueryLog(msg string) {
+	file, err := os.OpenFile(queryLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Errorf("Error opening query log file: %v", err)
+		return
+	}
+	defer file.Close()
+	if _, err := file.WriteString(msg + "\n"); err != nil {
+		log.Errorf("Error writing to query log file: %v", err)
 	}
 }

@@ -244,7 +244,6 @@ func (ts *trafficSwitcher) Logger() logutil.Logger {
 	return ts.logger
 }
 func (ts *trafficSwitcher) VReplicationExec(ctx context.Context, alias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
-	log.Infof("VReplicationExec on tablet %v: %s", alias, query)
 	return ts.ws.VReplicationExec(ctx, alias, query)
 }
 func (ts *trafficSwitcher) ExternalTopo() *topo.Server                     { return ts.externalTopo }
@@ -614,7 +613,6 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 func (ts *trafficSwitcher) startReverseVReplication(ctx context.Context) error {
 	return ts.ForAllSources(func(source *MigrationSource) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s", encodeString(source.GetPrimary().DbName()))
-		log.Infof("Starting reverse vreplication on %s, query %s", source.GetPrimary().String(), query)
 		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias, query)
 		return err
 	})

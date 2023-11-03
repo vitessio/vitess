@@ -152,16 +152,19 @@ func (vp *vplayer) play(ctx context.Context) error {
 // The foreign_key_checks value for a transaction is determined by the 2nd bit (least significant) of the flags:
 // - If set (1), foreign key checks are disabled.
 // - If unset (0), foreign key checks are enabled.
-// updateFKCheck also updates the state for the first row event that this vplayer and hence the connection sees.
+// updateFKCheck also updates the state for the first row event that this vplayer, and hence the db connection, sees.
 func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
 	mustUpdate := false
 	if vp.vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) {
+		// If this is an atomic copy, we must update the foreign_key_checks state even when the vplayer runs during
+		// the copy phase, i.e., for catchup and fastforward.
 		mustUpdate = true
 	} else if vp.vr.state == binlogdatapb.VReplicationWorkflowState_Running {
+		// If the vreplication workflow is in Running state, we must update the foreign_key_checks
+		// state for all workflow types.
 		mustUpdate = true
 	}
 	if !mustUpdate {
-		log.Infof("Skipping foreign_key_checks update as the vreplication workflow is not in Running state or is not an atomic copy")
 		return nil
 	}
 	dbForeignKeyChecksEnabled := true

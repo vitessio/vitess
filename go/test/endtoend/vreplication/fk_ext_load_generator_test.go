@@ -20,8 +20,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"os"
-	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -33,6 +31,14 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+)
+
+const (
+	queryLog = "queries.txt"
+
+	dataLoadTimeout = 1 * time.Minute
+	tickInterval    = 1 * time.Second
+	queryTimeout    = 1 * time.Minute
 )
 
 type ILoadGenerator interface {
@@ -124,34 +130,19 @@ func (lg *SimpleLoadGenerator) WaitForAdditionalRows(count int) error {
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	numRowsStart := lg.getNumRows(vtgateConn, "parent")
-	shortCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	shortCtx, cancel := context.WithTimeout(context.Background(), dataLoadTimeout)
 	defer cancel()
 	for {
 		select {
 		case <-shortCtx.Done():
-			log.Infof("Timed out waiting for additional rows\n%s", debug.Stack())
 			t.Fatalf("Timed out waiting for additional rows")
 		default:
 			numRows := lg.getNumRows(vtgateConn, "parent")
 			if numRows >= numRowsStart+count {
 				return nil
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(tickInterval)
 		}
-	}
-}
-
-const queryLog = "queries.txt"
-
-func appendToQueryLog(msg string) {
-	file, err := os.OpenFile(queryLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Errorf("Error opening query log file: %v", err)
-		return
-	}
-	defer file.Close()
-	if _, err := file.WriteString(msg + "\n"); err != nil {
-		log.Errorf("Error writing to query log file: %v", err)
 	}
 }
 
@@ -171,24 +162,27 @@ func (lg *SimpleLoadGenerator) exec(query string) (*sqltypes.Result, error) {
 	}
 }
 
+// When a workflow switches traffic it is possible to get transient errors from vtgate while executing queries
+// due to cluster-level changes. isQueryRetryable() checks for such errors so that tests can wait for such changes
+// to complete before proceeding.
 func isQueryRetryable(err error) bool {
-	retriableErrorStrings := []string{
+	retryableErrorStrings := []string{
 		"retry",
 		"resharded",
 		"VT13001",
 		"Lock wait timeout exceeded",
 		"errno 2003",
 	}
-	for _, retriableErrorString := range retriableErrorStrings {
-		if strings.Contains(err.Error(), retriableErrorString) {
+	for _, e := range retryableErrorStrings {
+		if strings.Contains(err.Error(), e) {
 			return true
 		}
 	}
 	return false
 }
+
 func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Result, error) {
-	timeout := 60 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	errCh := make(chan error)
 	qrCh := make(chan *sqltypes.Result)
@@ -200,7 +194,7 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 		for {
 			select {
 			case <-ctx.Done():
-				errCh <- fmt.Errorf("query %q did not succeed before the timeout of %s", query, timeout)
+				errCh <- fmt.Errorf("query %q did not succeed before the timeout of %s", query, queryTimeout)
 				return
 			default:
 			}
