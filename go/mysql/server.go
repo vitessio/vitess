@@ -354,11 +354,12 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		}
 		return
 	}
-	user, clientAuthMethod, clientAuthResponse, err := l.parseClientHandshakePacket(c, true, response)
+	user, clientAuthMethod, clientAuthResponse, clientAttributes, err := l.parseClientHandshakePacket(c, true, response)
 	if err != nil {
 		log.Errorf("Cannot parse client handshake response from %s: %v", c, err)
 		return
 	}
+	c.ConnectionAttributes = clientAttributes
 
 	c.recycleReadPacket()
 
@@ -371,11 +372,12 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		}
 
 		// Returns copies of the data, so we can recycle the buffer.
-		user, clientAuthMethod, clientAuthResponse, err = l.parseClientHandshakePacket(c, false, response)
+		user, clientAuthMethod, clientAuthResponse, clientAttributes, err = l.parseClientHandshakePacket(c, false, response)
 		if err != nil {
 			log.Errorf("Cannot parse post-SSL client handshake response from %s: %v", c, err)
 			return
 		}
+		c.ConnectionAttributes = clientAttributes
 		c.recycleReadPacket()
 
 		if con, ok := c.conn.(*tls.Conn); ok {
@@ -636,18 +638,18 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 }
 
 // parseClientHandshakePacket parses the handshake sent by the client.
-// Returns the username, auth method, auth data, error.
+// Returns the username, auth method, auth data, connection attributes, error.
 // The original data is not pointed at, and can be freed.
-func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []byte) (string, AuthMethodDescription, []byte, error) {
+func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []byte) (string, AuthMethodDescription, []byte, ConnectionAttributesMap, error) {
 	pos := 0
 
 	// Client flags, 4 bytes.
 	clientFlags, pos, ok := readUint32(data, pos)
 	if !ok {
-		return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read client flags")
+		return "", "", nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read client flags")
 	}
 	if clientFlags&CapabilityClientProtocol41 == 0 {
-		return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: only support protocol 4.1")
+		return "", "", nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: only support protocol 4.1")
 	}
 
 	// Remember a subset of the capabilities, so we can use them
@@ -666,13 +668,13 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	// See doc.go for more information.
 	_, pos, ok = readUint32(data, pos)
 	if !ok {
-		return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read maxPacketSize")
+		return "", "", nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read maxPacketSize")
 	}
 
 	// Character set. Need to handle it.
 	characterSet, pos, ok := readByte(data, pos)
 	if !ok {
-		return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read characterSet")
+		return "", "", nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read characterSet")
 	}
 	c.CharacterSet = collations.ID(characterSet)
 
@@ -686,13 +688,13 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		c.conn = conn
 		c.bufferedReader.Reset(conn)
 		c.Capabilities |= CapabilityClientSSL
-		return "", "", nil, nil
+		return "", "", nil, nil, nil
 	}
 
 	// username
 	username, pos, ok := readNullString(data, pos)
 	if !ok {
-		return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read username")
+		return "", "", nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read username")
 	}
 
 	// auth-response can have three forms.
@@ -701,29 +703,29 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		var l uint64
 		l, pos, ok = readLenEncInt(data, pos)
 		if !ok {
-			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response variable length")
+			return "", "", nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response variable length")
 		}
 		authResponse, pos, ok = readBytesCopy(data, pos, int(l))
 		if !ok {
-			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response")
+			return "", "", nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response")
 		}
 
 	} else if clientFlags&CapabilityClientSecureConnection != 0 {
 		var l byte
 		l, pos, ok = readByte(data, pos)
 		if !ok {
-			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response length")
+			return "", "", nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response length")
 		}
 
 		authResponse, pos, ok = readBytesCopy(data, pos, int(l))
 		if !ok {
-			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response")
+			return "", "", nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response")
 		}
 	} else {
 		a := ""
 		a, pos, ok = readNullString(data, pos)
 		if !ok {
-			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response")
+			return "", "", nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response")
 		}
 		authResponse = []byte(a)
 	}
@@ -733,7 +735,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		dbname := ""
 		dbname, pos, ok = readNullString(data, pos)
 		if !ok {
-			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read dbname")
+			return "", "", nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read dbname")
 		}
 		c.schemaName = dbname
 	}
@@ -744,7 +746,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		var authMethodStr string
 		authMethodStr, pos, ok = readNullString(data, pos)
 		if !ok {
-			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read authMethod")
+			return "", "", nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read authMethod")
 		}
 		// The JDBC driver sometimes sends an empty string as the auth method when it wants to use mysql_native_password
 		if authMethodStr != "" {
@@ -753,16 +755,20 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	}
 
 	// Decode connection attributes send by the client
+	var clientAttributes map[string]string
 	if clientFlags&CapabilityClientConnAttr != 0 {
-		if _, _, err := parseConnAttrs(data, pos); err != nil {
+		ca, _, err := parseConnAttrs(data, pos)
+		if err != nil {
 			log.Warningf("Decode connection attributes send by the client: %v", err)
 		}
+
+		clientAttributes = ca
 	}
 
-	return username, AuthMethodDescription(authMethod), authResponse, nil
+	return username, AuthMethodDescription(authMethod), authResponse, clientAttributes, nil
 }
 
-func parseConnAttrs(data []byte, pos int) (map[string]string, int, error) {
+func parseConnAttrs(data []byte, pos int) (ConnectionAttributesMap, int, error) {
 	var attrLen uint64
 
 	attrLen, pos, ok := readLenEncInt(data, pos)

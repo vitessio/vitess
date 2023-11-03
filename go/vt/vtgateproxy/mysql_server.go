@@ -343,7 +343,7 @@ func (ph *proxyHandler) session(c *mysql.Conn) *vtgateconn.VTGateSession {
 		}
 
 		var err error
-		session, err = ph.proxy.NewSession(options)
+		session, err = ph.proxy.NewSession(options, c.ConnectionAttributes)
 		if err != nil {
 			log.Errorf("error creating new session for %s: %v", c.GetRawConn().RemoteAddr().String(), err)
 		}
