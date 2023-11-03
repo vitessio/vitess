@@ -225,7 +225,7 @@ func joinFields(lfields, rfields []*querypb.Field, cols []int) []*querypb.Field 
 	return fields
 }
 
-func joinRows(lrow, rrow []sqltypes.Value, cols []int) []sqltypes.Value {
+func joinRows(lrow, rrow sqltypes.Row, cols []int) sqltypes.Row {
 	row := make([]sqltypes.Value, len(cols))
 	for i, index := range cols {
 		if index < 0 {

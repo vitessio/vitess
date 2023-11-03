@@ -30,38 +30,52 @@ import (
 
 var _ Primitive = (*HashJoin)(nil)
 
-// HashJoin specifies the parameters for a join primitive
-// Hash joins work by fetch all the input from the LHS, and building a hash map, known as the probe table, for this input.
-// The key to the map is the hashcode of the value for column that we are joining by.
-// Then the RHS is fetched, and we can check if the rows from the RHS matches any from the LHS.
-// When they match by hash code, we double-check that we are not working with a false positive by comparing the values.
-type HashJoin struct {
-	Opcode JoinOpcode
+type (
+	// HashJoin specifies the parameters for a join primitive
+	// Hash joins work by fetch all the input from the LHS, and building a hash map, known as the probe table, for this input.
+	// The key to the map is the hashcode of the value for column that we are joining by.
+	// Then the RHS is fetched, and we can check if the rows from the RHS matches any from the LHS.
+	// When they match by hash code, we double-check that we are not working with a false positive by comparing the values.
+	HashJoin struct {
+		Opcode JoinOpcode
 
-	// Left and Right are the LHS and RHS primitives
-	// of the Join. They can be any primitive.
-	Left, Right Primitive `json:",omitempty"`
+		// Left and Right are the LHS and RHS primitives
+		// of the Join. They can be any primitive.
+		Left, Right Primitive `json:",omitempty"`
 
-	// Cols defines which columns from the left
-	// or right results should be used to build the
-	// return result. For results coming from the
-	// left query, the index values go as -1, -2, etc.
-	// For the right query, they're 1, 2, etc.
-	// If Cols is {-1, -2, 1, 2}, it means that
-	// the returned result will be {Left0, Left1, Right0, Right1}.
-	Cols []int `json:",omitempty"`
+		// Cols defines which columns from the left
+		// or right results should be used to build the
+		// return result. For results coming from the
+		// left query, the index values go as -1, -2, etc.
+		// For the right query, they're 1, 2, etc.
+		// If Cols is {-1, -2, 1, 2}, it means that
+		// the returned result will be {Left0, Left1, Right0, Right1}.
+		Cols []int `json:",omitempty"`
 
-	// The keys correspond to the column offset in the inputs where
-	// the join columns can be found
-	LHSKey, RHSKey int
+		// The keys correspond to the column offset in the inputs where
+		// the join columns can be found
+		LHSKey, RHSKey int
 
-	// The join condition. Used for plan descriptions
-	ASTPred sqlparser.Expr
+		// The join condition. Used for plan descriptions
+		ASTPred sqlparser.Expr
 
-	// collation and type are used to hash the incoming values correctly
-	Collation      collations.ID
-	ComparisonType querypb.Type
-}
+		// collation and type are used to hash the incoming values correctly
+		Collation      collations.ID
+		ComparisonType querypb.Type
+	}
+
+	hashJoinProbeTable struct {
+		lft            map[evalengine.HashCode][]probeTableEntry
+		coll           collations.ID
+		typ            querypb.Type
+		lhsKey, rhsKey int
+		cols           []int
+	}
+	probeTableEntry struct {
+		row  sqltypes.Row
+		seen bool
+	}
+)
 
 // TryExecute implements the Primitive interface
 func (hj *HashJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -70,10 +84,13 @@ func (hj *HashJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 		return nil, err
 	}
 
+	pt := newHashJoinProbeTable(hj.Collation, hj.ComparisonType, hj.LHSKey, hj.RHSKey, hj.Cols)
 	// build the probe table from the LHS result
-	probeTable, err := hj.buildProbeTable(lresult)
-	if err != nil {
-		return nil, err
+	for _, row := range lresult.Rows {
+		err := pt.addLeftRow(row)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	rresult, err := vcursor.ExecutePrimitive(ctx, hj.Right, bindVars, wantfields)
@@ -86,68 +103,35 @@ func (hj *HashJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 	}
 
 	for _, currentRHSRow := range rresult.Rows {
-		joinVal := currentRHSRow[hj.RHSKey]
-		if joinVal.IsNull() {
-			continue
-		}
-		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType)
+		matches, err := pt.get(currentRHSRow)
 		if err != nil {
 			return nil, err
 		}
-		lftRows := probeTable[hashcode]
-		for _, currentLHSRow := range lftRows {
-			lhsVal := currentLHSRow[hj.LHSKey]
-			// hash codes can give false positives, so we need to check with a real comparison as well
-			cmp, err := evalengine.NullsafeCompare(joinVal, lhsVal, hj.Collation)
-			if err != nil {
-				return nil, err
-			}
+		result.Rows = append(result.Rows, matches...)
+	}
 
-			if cmp == 0 {
-				// we have a match!
-				result.Rows = append(result.Rows, joinRows(currentLHSRow, currentRHSRow, hj.Cols))
-			}
-		}
+	if hj.Opcode == LeftJoin {
+		result.Rows = append(result.Rows, pt.notFetched()...)
 	}
 
 	return result, nil
 }
 
-func (hj *HashJoin) buildProbeTable(lresult *sqltypes.Result) (map[evalengine.HashCode][]sqltypes.Row, error) {
-	probeTable := map[evalengine.HashCode][]sqltypes.Row{}
-	for _, current := range lresult.Rows {
-		joinVal := current[hj.LHSKey]
-		if joinVal.IsNull() {
-			continue
-		}
-		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType)
-		if err != nil {
-			return nil, err
-		}
-		probeTable[hashcode] = append(probeTable[hashcode], current)
-	}
-	return probeTable, nil
-}
-
 // TryStreamExecute implements the Primitive interface
 func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	// build the probe table from the LHS result
-	probeTable := map[evalengine.HashCode][]sqltypes.Row{}
+	pt := newHashJoinProbeTable(hj.Collation, hj.ComparisonType, hj.LHSKey, hj.RHSKey, hj.Cols)
 	var lfields []*querypb.Field
+
 	err := vcursor.StreamExecutePrimitive(ctx, hj.Left, bindVars, wantfields, func(result *sqltypes.Result) error {
 		if len(lfields) == 0 && len(result.Fields) != 0 {
 			lfields = result.Fields
 		}
 		for _, current := range result.Rows {
-			joinVal := current[hj.LHSKey]
-			if joinVal.IsNull() {
-				continue
-			}
-			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType)
+			err := pt.addLeftRow(current)
 			if err != nil {
 				return err
 			}
-			probeTable[hashcode] = append(probeTable[hashcode], current)
 		}
 		return nil
 	})
@@ -164,28 +148,11 @@ func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 			}
 		}
 		for _, currentRHSRow := range result.Rows {
-			joinVal := currentRHSRow[hj.RHSKey]
-			if joinVal.IsNull() {
-				continue
-			}
-			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType)
+			results, err := pt.get(currentRHSRow)
 			if err != nil {
 				return err
 			}
-			lftRows := probeTable[hashcode]
-			for _, currentLHSRow := range lftRows {
-				lhsVal := currentLHSRow[hj.LHSKey]
-				// hash codes can give false positives, so we need to check with a real comparison as well
-				cmp, err := evalengine.NullsafeCompare(joinVal, lhsVal, hj.Collation)
-				if err != nil {
-					return err
-				}
-
-				if cmp == 0 {
-					// we have a match!
-					res.Rows = append(res.Rows, joinRows(currentLHSRow, currentRHSRow, hj.Cols))
-				}
-			}
+			res.Rows = append(res.Rows, results...)
 		}
 		if len(res.Rows) != 0 || len(res.Fields) != 0 {
 			return callback(res)
@@ -255,4 +222,62 @@ func (hj *HashJoin) description() PrimitiveDescription {
 		Variant:      "Hash" + hj.Opcode.String(),
 		Other:        other,
 	}
+}
+
+func newHashJoinProbeTable(coll collations.ID, typ querypb.Type, lhsKey, rhsKey int, cols []int) *hashJoinProbeTable {
+	return &hashJoinProbeTable{
+		lft:    map[evalengine.HashCode][]probeTableEntry{},
+		coll:   coll,
+		typ:    typ,
+		lhsKey: lhsKey,
+		rhsKey: rhsKey,
+		cols:   cols,
+	}
+}
+
+func (pt *hashJoinProbeTable) addLeftRow(r sqltypes.Row) error {
+	h, err := evalengine.NullsafeHashcode(r[pt.lhsKey], pt.coll, pt.typ)
+	if err != nil {
+		return err
+	}
+
+	pt.lft[h] = append(pt.lft[h], probeTableEntry{row: r})
+
+	return nil
+}
+
+func (pt *hashJoinProbeTable) get(rrow sqltypes.Row) (result []sqltypes.Row, err error) {
+	val := rrow[pt.rhsKey]
+	if val.IsNull() {
+		return
+	}
+
+	h, err := evalengine.NullsafeHashcode(val, pt.coll, pt.typ)
+	if err != nil {
+		return nil, err
+	}
+
+	for idx, entry := range pt.lft[h] {
+		cmp, err := evalengine.NullsafeCompare(val, entry.row[pt.lhsKey], pt.coll)
+		if err != nil {
+			return nil, err
+		}
+		if cmp == 0 {
+			pt.lft[h][idx].seen = true
+			result = append(result, joinRows(entry.row, rrow, pt.cols))
+		}
+	}
+
+	return
+}
+
+func (pt *hashJoinProbeTable) notFetched() (rows []sqltypes.Row) {
+	for _, v := range pt.lft {
+		for _, entry := range v {
+			if !entry.seen {
+				rows = append(rows, joinRows(entry.row, nil, pt.cols))
+			}
+		}
+	}
+	return
 }

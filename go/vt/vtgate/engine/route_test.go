@@ -74,7 +74,7 @@ func TestSelectUnsharded(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -83,7 +83,7 @@ func TestSelectUnsharded(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`StreamExecuteMulti dummy_select ks.0: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
@@ -219,7 +219,7 @@ func TestSelectScatter(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -228,7 +228,7 @@ func TestSelectScatter(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`StreamExecuteMulti dummy_select ks.-20: {} ks.20-: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestSelectEqualUnique(t *testing.T) {
@@ -257,7 +257,7 @@ func TestSelectEqualUnique(t *testing.T) {
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -266,7 +266,7 @@ func TestSelectEqualUnique(t *testing.T) {
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestSelectNone(t *testing.T) {
@@ -290,7 +290,7 @@ func TestSelectNone(t *testing.T) {
 	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	require.Empty(t, vc.log)
-	expectResult(t, "sel.Execute", result, &sqltypes.Result{})
+	expectResult(t, result, &sqltypes.Result{})
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -308,7 +308,7 @@ func TestSelectNone(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, &sqltypes.Result{})
+	expectResult(t, result, &sqltypes.Result{})
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -317,7 +317,7 @@ func TestSelectNone(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, &sqltypes.Result{})
+	expectResult(t, result, &sqltypes.Result{})
 }
 
 func TestSelectEqualUniqueScatter(t *testing.T) {
@@ -351,7 +351,7 @@ func TestSelectEqualUniqueScatter(t *testing.T) {
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyRange(-)`,
 		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -360,7 +360,7 @@ func TestSelectEqualUniqueScatter(t *testing.T) {
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyRange(-)`,
 		`StreamExecuteMulti dummy_select ks.-20: {} ks.20-: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestSelectEqual(t *testing.T) {
@@ -403,7 +403,7 @@ func TestSelectEqual(t *testing.T) {
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceIDs(00,80)`,
 		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -413,7 +413,7 @@ func TestSelectEqual(t *testing.T) {
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceIDs(00,80)`,
 		`StreamExecuteMulti dummy_select ks.-20: {} ks.20-: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestSelectEqualNoRoute(t *testing.T) {
@@ -443,7 +443,7 @@ func TestSelectEqualNoRoute(t *testing.T) {
 		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
 	})
-	expectResult(t, "sel.Execute", result, &sqltypes.Result{})
+	expectResult(t, result, &sqltypes.Result{})
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -466,7 +466,7 @@ func TestSelectEqualNoRoute(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, &sqltypes.Result{})
+	expectResult(t, result, &sqltypes.Result{})
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -477,7 +477,7 @@ func TestSelectEqualNoRoute(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, &sqltypes.Result{})
+	expectResult(t, result, &sqltypes.Result{})
 }
 
 func TestINUnique(t *testing.T) {
@@ -513,7 +513,7 @@ func TestINUnique(t *testing.T) {
 			`ks.20-: dummy_select {__vals: type:TUPLE values:{type:INT64 value:"4"}} ` +
 			`false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -522,7 +522,7 @@ func TestINUnique(t *testing.T) {
 		`ResolveDestinations ks [type:INT64 value:"1" type:INT64 value:"2" type:INT64 value:"4"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`,
 		`StreamExecuteMulti dummy_select ks.-20: {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} ks.20-: {__vals: type:TUPLE values:{type:INT64 value:"4"}} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestINNonUnique(t *testing.T) {
@@ -579,7 +579,7 @@ func TestINNonUnique(t *testing.T) {
 			`ks.20-: dummy_select {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"4"}} ` +
 			`false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -589,7 +589,7 @@ func TestINNonUnique(t *testing.T) {
 		`ResolveDestinations ks [type:INT64 value:"1" type:INT64 value:"2" type:INT64 value:"4"] Destinations:DestinationKeyspaceIDs(00,80),DestinationKeyspaceIDs(00),DestinationKeyspaceIDs(80)`,
 		`StreamExecuteMulti dummy_select ks.-20: {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} ks.20-: {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"4"}} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestMultiEqual(t *testing.T) {
@@ -623,7 +623,7 @@ func TestMultiEqual(t *testing.T) {
 		`ResolveDestinations ks [type:INT64 value:"1" type:INT64 value:"2" type:INT64 value:"4"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`,
 		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -632,7 +632,7 @@ func TestMultiEqual(t *testing.T) {
 		`ResolveDestinations ks [type:INT64 value:"1" type:INT64 value:"2" type:INT64 value:"4"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`,
 		`StreamExecuteMulti dummy_select ks.-20: {} ks.20-: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestSelectLike(t *testing.T) {
@@ -670,7 +670,7 @@ func TestSelectLike(t *testing.T) {
 		`ResolveDestinations ks [type:VARCHAR value:"a%"] Destinations:DestinationKeyRange(0c-0d)`,
 		`ExecuteMultiShard ks.-0c80: dummy_select {} ks.0c80-0d: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 
@@ -681,7 +681,7 @@ func TestSelectLike(t *testing.T) {
 		`ResolveDestinations ks [type:VARCHAR value:"a%"] Destinations:DestinationKeyRange(0c-0d)`,
 		`StreamExecuteMulti dummy_select ks.-0c80: {} ks.0c80-0d: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 
@@ -700,7 +700,7 @@ func TestSelectLike(t *testing.T) {
 		`ResolveDestinations ks [type:VARCHAR value:"ab%"] Destinations:DestinationKeyRange(0c92-0c93)`,
 		`ExecuteMultiShard ks.0c80-0d: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 
@@ -711,7 +711,7 @@ func TestSelectLike(t *testing.T) {
 		`ResolveDestinations ks [type:VARCHAR value:"ab%"] Destinations:DestinationKeyRange(0c92-0c93)`,
 		`StreamExecuteMulti dummy_select ks.0c80-0d: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 }
 
@@ -736,7 +736,7 @@ func TestSelectNext(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.-: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, _ = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -744,7 +744,7 @@ func TestSelectNext(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`StreamExecuteMulti dummy_select ks.-: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestSelectDBA(t *testing.T) {
@@ -768,7 +768,7 @@ func TestSelectDBA(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, _ = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -776,7 +776,7 @@ func TestSelectDBA(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestSelectReference(t *testing.T) {
@@ -800,7 +800,7 @@ func TestSelectReference(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, _ = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -808,7 +808,7 @@ func TestSelectReference(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestRouteGetFields(t *testing.T) {
@@ -840,7 +840,7 @@ func TestRouteGetFields(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.-20: dummy_select_field {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, &sqltypes.Result{})
+	expectResult(t, result, &sqltypes.Result{})
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, true)
@@ -851,7 +851,7 @@ func TestRouteGetFields(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.-20: dummy_select_field {} false false`,
 	})
-	expectResult(t, "sel.StreamExecute", result, &sqltypes.Result{})
+	expectResult(t, result, &sqltypes.Result{})
 	vc.Rewind()
 
 	// test with special no-routes handling
@@ -864,7 +864,7 @@ func TestRouteGetFields(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, &sqltypes.Result{})
+	expectResult(t, result, &sqltypes.Result{})
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, true)
@@ -875,7 +875,7 @@ func TestRouteGetFields(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, &sqltypes.Result{})
+	expectResult(t, result, &sqltypes.Result{})
 }
 
 func TestRouteSort(t *testing.T) {
@@ -924,7 +924,7 @@ func TestRouteSort(t *testing.T) {
 		"2",
 		"3",
 	)
-	expectResult(t, "sel.Execute", result, wantResult)
+	expectResult(t, result, wantResult)
 
 	sel.OrderBy[0].Desc = true
 	vc.Rewind()
@@ -940,7 +940,7 @@ func TestRouteSort(t *testing.T) {
 		"1",
 		"1",
 	)
-	expectResult(t, "sel.Execute", result, wantResult)
+	expectResult(t, result, wantResult)
 
 	vc = &loggingVCursor{
 		shards: []string{"0"},
@@ -1013,7 +1013,7 @@ func TestRouteSortWeightStrings(t *testing.T) {
 			"g|d",
 			"v|x",
 		)
-		expectResult(t, "sel.Execute", result, wantResult)
+		expectResult(t, result, wantResult)
 	})
 
 	t.Run("Descending ordering using weighted strings", func(t *testing.T) {
@@ -1032,7 +1032,7 @@ func TestRouteSortWeightStrings(t *testing.T) {
 			"c|t",
 			"a|a",
 		)
-		expectResult(t, "sel.Execute", result, wantResult)
+		expectResult(t, result, wantResult)
 	})
 
 	t.Run("Error when no weight string set", func(t *testing.T) {
@@ -1118,7 +1118,7 @@ func TestRouteSortCollation(t *testing.T) {
 			"cs",
 			"d",
 		)
-		expectResult(t, "sel.Execute", result, wantResult)
+		expectResult(t, result, wantResult)
 	})
 
 	t.Run("Descending ordering using Collation", func(t *testing.T) {
@@ -1137,7 +1137,7 @@ func TestRouteSortCollation(t *testing.T) {
 			"c",
 			"c",
 		)
-		expectResult(t, "sel.Execute", result, wantResult)
+		expectResult(t, result, wantResult)
 	})
 
 	t.Run("Error when Unknown Collation", func(t *testing.T) {
@@ -1239,7 +1239,7 @@ func TestRouteSortTruncate(t *testing.T) {
 		"2",
 		"3",
 	)
-	expectResult(t, "sel.Execute", result, wantResult)
+	expectResult(t, result, wantResult)
 }
 
 func TestRouteStreamTruncate(t *testing.T) {
@@ -1281,7 +1281,7 @@ func TestRouteStreamTruncate(t *testing.T) {
 		"1",
 		"2",
 	)
-	expectResult(t, "sel.Execute", result, wantResult)
+	expectResult(t, result, wantResult)
 }
 
 func TestRouteStreamSortTruncate(t *testing.T) {
@@ -1330,7 +1330,7 @@ func TestRouteStreamSortTruncate(t *testing.T) {
 		"1",
 		"2",
 	)
-	expectResult(t, "sel.Execute", result, wantResult)
+	expectResult(t, result, wantResult)
 }
 
 func TestParamsFail(t *testing.T) {
@@ -1432,7 +1432,7 @@ func TestExecFail(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 			`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
 		})
-		expectResult(t, "sel.Execute", result, defaultSelectResult)
+		expectResult(t, result, defaultSelectResult)
 
 		vc.Rewind()
 		vc.resultErr = sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, "", "query timeout -20")
@@ -1474,7 +1474,7 @@ func TestSelectEqualUniqueMultiColumnVindex(t *testing.T) {
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -1483,7 +1483,7 @@ func TestSelectEqualUniqueMultiColumnVindex(t *testing.T) {
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestSelectEqualMultiColumnVindex(t *testing.T) {
@@ -1511,7 +1511,7 @@ func TestSelectEqualMultiColumnVindex(t *testing.T) {
 		`ResolveDestinationsMultiCol ks [[INT64(32)]] Destinations:DestinationKeyRange(20-21)`,
 		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -1520,7 +1520,7 @@ func TestSelectEqualMultiColumnVindex(t *testing.T) {
 		`ResolveDestinationsMultiCol ks [[INT64(32)]] Destinations:DestinationKeyRange(20-21)`,
 		`StreamExecuteMulti dummy_select ks.-20: {} ks.20-: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestINMultiColumnVindex(t *testing.T) {
@@ -1557,7 +1557,7 @@ func TestINMultiColumnVindex(t *testing.T) {
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
 		`ExecuteMultiShard ks.-20: dummy_select {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: dummy_select {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} __vals1: type:TUPLE values:{type:INT64 value:"4"} values:{type:INT64 value:"3"}} false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -1566,7 +1566,7 @@ func TestINMultiColumnVindex(t *testing.T) {
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
 		`StreamExecuteMulti dummy_select ks.-20: {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} __vals1: type:TUPLE values:{type:INT64 value:"4"} values:{type:INT64 value:"3"}} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestINMixedMultiColumnComparision(t *testing.T) {
@@ -1600,7 +1600,7 @@ func TestINMixedMultiColumnComparision(t *testing.T) {
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe)`,
 		`ExecuteMultiShard ks.-20: dummy_select {__vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: dummy_select {__vals1: type:TUPLE values:{type:INT64 value:"4"}} false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -1609,7 +1609,7 @@ func TestINMixedMultiColumnComparision(t *testing.T) {
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe)`,
 		`StreamExecuteMulti dummy_select ks.-20: {__vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: {__vals1: type:TUPLE values:{type:INT64 value:"4"}} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestMultiEqualMultiCol(t *testing.T) {
@@ -1643,7 +1643,7 @@ func TestMultiEqualMultiCol(t *testing.T) {
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)] [INT64(3) INT64(4)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f),DestinationKeyspaceID(03d2fd8867d50d2dfe)`,
 		`ExecuteMultiShard ks.-20: dummy_select {} ks.40-: dummy_select {} false false`,
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -1652,7 +1652,7 @@ func TestMultiEqualMultiCol(t *testing.T) {
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)] [INT64(3) INT64(4)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f),DestinationKeyspaceID(03d2fd8867d50d2dfe)`,
 		`StreamExecuteMulti dummy_select ks.-20: {} ks.40-: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+	expectResult(t, result, defaultSelectResult)
 }
 
 func TestBuildRowColValues(t *testing.T) {
