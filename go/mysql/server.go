@@ -19,6 +19,7 @@ package mysql
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -316,6 +317,11 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	c := newServerConn(conn, l)
 	c.ConnectionID = connectionID
 
+	t := time.Now()
+	defer func() {
+		fmt.Printf("CLOSE CONNECTION %d [%v] \n", connectionID, time.Since(t))
+	}()
+
 	// Catch panics, and close the connection in any case.
 	defer func() {
 		if x := recover(); x != nil {
@@ -466,9 +472,11 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Set initial db name.
 	if c.schemaName != "" {
+		fmt.Printf("handshake use %s\n", c.schemaName)
 		err = l.handler.ComQuery(c, "use "+sqlescape.EscapeID(c.schemaName), func(result *sqltypes.Result) error {
 			return nil
 		})
+		fmt.Printf("handshake use %s %v [%s]\n", c.schemaName, err, time.Now().Sub(t))
 		if err != nil {
 			c.writeErrorPacketFromError(err)
 			return
@@ -490,6 +498,8 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		connSlow.Add(1)
 		log.Warningf("Slow connection from %s: %v", c, connectTime)
 	}
+
+	fmt.Printf("Connection %d connectTime %s\n", connectionID, connectTime)
 
 	// Tell our handler that we're finished handshake and are ready to
 	// process commands.
