@@ -146,7 +146,7 @@ func TestHashJoinVariations(t *testing.T) {
 		t.Run("Streaming "+tc.name, func(t *testing.T) {
 			jn.Left = first()
 			jn.Right = last()
-			r, err := jn.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+			r, err := wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
 			require.NoError(t, err)
 			expectResultAnyOrder(t, r, expected)
 		})

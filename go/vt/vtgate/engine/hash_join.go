@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -65,12 +67,14 @@ type (
 	}
 
 	hashJoinProbeTable struct {
-		lft            map[evalengine.HashCode][]probeTableEntry
+		innerMap map[evalengine.HashCode][]probeTableEntry
+
 		coll           collations.ID
 		typ            querypb.Type
 		lhsKey, rhsKey int
 		cols           []int
 	}
+
 	probeTableEntry struct {
 		row  sqltypes.Row
 		seen bool
@@ -122,13 +126,15 @@ func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 	// build the probe table from the LHS result
 	pt := newHashJoinProbeTable(hj.Collation, hj.ComparisonType, hj.LHSKey, hj.RHSKey, hj.Cols)
 	var lfields []*querypb.Field
-
+	var mu sync.Mutex
 	err := vcursor.StreamExecutePrimitive(ctx, hj.Left, bindVars, wantfields, func(result *sqltypes.Result) error {
 		if len(lfields) == 0 && len(result.Fields) != 0 {
 			lfields = result.Fields
 		}
 		for _, current := range result.Rows {
+			mu.Lock()
 			err := pt.addLeftRow(current)
+			mu.Unlock()
 			if err != nil {
 				return err
 			}
@@ -139,16 +145,19 @@ func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 		return err
 	}
 
-	return vcursor.StreamExecutePrimitive(ctx, hj.Right, bindVars, wantfields, func(result *sqltypes.Result) error {
+	var sendFields atomic.Bool
+	sendFields.Store(wantfields)
+
+	err = vcursor.StreamExecutePrimitive(ctx, hj.Right, bindVars, sendFields.Load(), func(result *sqltypes.Result) error {
 		// compare the results coming from the RHS with the probe-table
 		res := &sqltypes.Result{}
-		if len(result.Fields) != 0 {
-			res = &sqltypes.Result{
-				Fields: joinFields(lfields, result.Fields, hj.Cols),
-			}
+		if len(result.Fields) != 0 && sendFields.CompareAndSwap(true, false) {
+			res.Fields = joinFields(lfields, result.Fields, hj.Cols)
 		}
 		for _, currentRHSRow := range result.Rows {
+			mu.Lock()
 			results, err := pt.get(currentRHSRow)
+			mu.Unlock()
 			if err != nil {
 				return err
 			}
@@ -159,6 +168,27 @@ func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	if hj.Opcode == LeftJoin {
+		res := &sqltypes.Result{}
+		if sendFields.CompareAndSwap(true, false) {
+			// If we still have not sent the fields, we need to fetch
+			// the fields from the RHS to be able to build the result fields
+			rres, err := hj.Right.GetFields(ctx, vcursor, bindVars)
+			if err != nil {
+				return err
+			}
+			res.Fields = joinFields(lfields, rres.Fields, hj.Cols)
+		}
+		// this will only be called when all the concurrent access to the pt has
+		// ceased, so we don't need to lock it here
+		res.Rows = pt.notFetched()
+		return callback(res)
+	}
+	return nil
 }
 
 // RouteType implements the Primitive interface
@@ -226,12 +256,12 @@ func (hj *HashJoin) description() PrimitiveDescription {
 
 func newHashJoinProbeTable(coll collations.ID, typ querypb.Type, lhsKey, rhsKey int, cols []int) *hashJoinProbeTable {
 	return &hashJoinProbeTable{
-		lft:    map[evalengine.HashCode][]probeTableEntry{},
-		coll:   coll,
-		typ:    typ,
-		lhsKey: lhsKey,
-		rhsKey: rhsKey,
-		cols:   cols,
+		innerMap: map[evalengine.HashCode][]probeTableEntry{},
+		coll:     coll,
+		typ:      typ,
+		lhsKey:   lhsKey,
+		rhsKey:   rhsKey,
+		cols:     cols,
 	}
 }
 
@@ -241,7 +271,7 @@ func (pt *hashJoinProbeTable) addLeftRow(r sqltypes.Row) error {
 		return err
 	}
 
-	pt.lft[h] = append(pt.lft[h], probeTableEntry{row: r})
+	pt.innerMap[h] = append(pt.innerMap[h], probeTableEntry{row: r})
 
 	return nil
 }
@@ -257,13 +287,13 @@ func (pt *hashJoinProbeTable) get(rrow sqltypes.Row) (result []sqltypes.Row, err
 		return nil, err
 	}
 
-	for idx, entry := range pt.lft[h] {
+	for idx, entry := range pt.innerMap[h] {
 		cmp, err := evalengine.NullsafeCompare(val, entry.row[pt.lhsKey], pt.coll)
 		if err != nil {
 			return nil, err
 		}
 		if cmp == 0 {
-			pt.lft[h][idx].seen = true
+			pt.innerMap[h][idx].seen = true
 			result = append(result, joinRows(entry.row, rrow, pt.cols))
 		}
 	}
@@ -272,7 +302,7 @@ func (pt *hashJoinProbeTable) get(rrow sqltypes.Row) (result []sqltypes.Row, err
 }
 
 func (pt *hashJoinProbeTable) notFetched() (rows []sqltypes.Row) {
-	for _, v := range pt.lft {
+	for _, v := range pt.innerMap {
 		for _, entry := range v {
 			if !entry.seen {
 				rows = append(rows, joinRows(entry.row, nil, pt.cols))
