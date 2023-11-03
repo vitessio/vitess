@@ -76,6 +76,8 @@ type ILoadGenerator interface {
 	//GetTables() ([]string, []int, error)
 }
 
+var lg ILoadGenerator
+
 var _ ILoadGenerator = (*SimpleLoadGenerator)(nil)
 
 type LoadGenerator struct {
@@ -314,7 +316,7 @@ func (lg *SimpleLoadGenerator) Start() error {
 				lg.delete()
 			}
 			require.NoError(t, err)
-			time.Sleep(tickInterval)
+			time.Sleep(1 * time.Millisecond)
 		}
 	}()
 	return nil

@@ -33,23 +33,18 @@ import (
 )
 
 const (
-	longWait  = 30 * time.Second
-	shortWait = 1 * time.Second
+	shardStatusWaitTimeout = 30 * time.Second
 )
 
 var (
 	//go:embed schema/fkext/source_schema.sql
 	FKExtSourceSchema string
-
 	//go:embed schema/fkext/source_vschema.json
 	FKExtSourceVSchema string
-
 	//go:embed schema/fkext/target1_vschema.json
 	FKExtTarget1VSchema string
-
 	//go:embed schema/fkext/target2_vschema.json
 	FKExtTarget2VSchema string
-
 	//go:embed schema/fkext/materialize_schema.sql
 	FKExtMaterializeSchema string
 )
@@ -73,8 +68,6 @@ func initFKExtConfig(t *testing.T) {
 		cell:                "zone1",
 	}
 }
-
-var lg ILoadGenerator
 
 /*
 TestFKExt is an end-to-end test for validating the foreign key implementation with respect to, both vreplication
@@ -102,7 +95,7 @@ func TestFKExt(t *testing.T) {
 
 	cellName := fkextConfig.cell
 	cells := []string{cellName}
-	vc = NewVitessCluster(t, "TestFKExtWorkflow", cells, fkextConfig.ClusterConfig)
+	vc = NewVitessCluster(t, t.Name(), cells, fkextConfig.ClusterConfig)
 
 	require.NotNil(t, vc)
 	allCellNames = cellName
@@ -110,7 +103,7 @@ func TestFKExt(t *testing.T) {
 	defaultCell = vc.Cells[defaultCellName]
 	cell := vc.Cells[cellName]
 
-	//FIXME defer vc.TearDown(t)
+	defer vc.TearDown(t)
 
 	sourceKeyspace := fkextConfig.sourceKeyspaceName
 	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, "0", FKExtSourceVSchema, FKExtSourceSchema, 0, 0, 100, nil)
@@ -119,7 +112,7 @@ func TestFKExt(t *testing.T) {
 	require.NotNil(t, vtgate)
 	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKeyspace, "0")
 	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKeyspace, "0"), 1, shortWait)
+	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKeyspace, "0"), 1, shardStatusWaitTimeout))
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -135,18 +128,18 @@ func TestFKExt(t *testing.T) {
 		t.Fatal("Start failed")
 	}
 	t.Run("Import from external db", func(t *testing.T) {
-		// import data into vitess from sourceKeyspace to target1Keyspace, both unsharded
+		// Import data into vitess from sourceKeyspace to target1Keyspace, both unsharded.
 		importIntoVitess(t)
 	})
 
 	t.Run("MoveTables from unsharded to sharded keyspace", func(t *testing.T) {
-		// migrate data from target1Keyspace to target2Keyspace, latter sharded, tablet types from primary
-		// for one shard and replica for the other from which constraints have been dropped.
+		// Migrate data from target1Keyspace to the sharded target2Keyspace. Streams only from primaries
+		// for one shard and replica for the other shard. Constraints have been dropped from this replica.
 		moveKeyspace(t)
 	})
 
 	t.Run("Materialize parent and copy tables without constraints", func(t *testing.T) {
-		// materialize new tables from and in target2Keyspace,  tablet types replica, one with constraints dropped
+		// Materialize the tables from target2Keyspace to target1Keyspace. Stream only from replicas, one shard with constraints dropped.
 		materializeTables(t)
 	})
 	lg.SetDBStrategy("vtgate", fkextConfig.target2KeyspaceName)
@@ -158,12 +151,12 @@ func TestFKExt(t *testing.T) {
 	ks := vc.Cells[fkextConfig.cell].Keyspaces[keyspaceName]
 	numReplicas := 1
 
-	t.Run("Reshard keyspace from 2 to 3 shards", func(t *testing.T) {
+	t.Run("Reshard keyspace from 2 shards to 3 shards", func(t *testing.T) {
 		tabletID := 500
 		require.NoError(t, vc.AddShards(t, []*Cell{defaultCell}, ks, threeShards, numReplicas, 0, tabletID, nil))
 		tablets := make(map[string]*cluster.VttabletProcess)
 		for i, shard := range strings.Split(threeShards, ",") {
-			vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), numReplicas, shortWait)
+			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), numReplicas, shardStatusWaitTimeout))
 			tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletID+i*100)].Vttablet
 		}
 		sqls := strings.Split(FKExtSourceSchema, "\n")
@@ -172,15 +165,14 @@ func TestFKExt(t *testing.T) {
 				"--ddl_strategy=direct", "--sql", sql, keyspaceName)
 			require.NoErrorf(t, err, output)
 		}
-
 		doReshard(t, fkextConfig.target2KeyspaceName, "reshard2to3", "-80,80-", threeShards, tablets)
 	})
-	t.Run("Reshard keyspace from 3 to 1 shards", func(t *testing.T) {
+	t.Run("Reshard keyspace from 3 shards to 1 shard", func(t *testing.T) {
 		tabletID := 800
 		shard := "0"
 		require.NoError(t, vc.AddShards(t, []*Cell{defaultCell}, ks, shard, numReplicas, 0, tabletID, nil))
 		tablets := make(map[string]*cluster.VttabletProcess)
-		vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), numReplicas, shortWait)
+		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), numReplicas, shardStatusWaitTimeout))
 		tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletID)].Vttablet
 		sqls := strings.Split(FKExtSourceSchema, "\n")
 		for _, sql := range sqls {
@@ -189,7 +181,6 @@ func TestFKExt(t *testing.T) {
 			require.NoErrorf(t, err, output)
 		}
 		doReshard(t, fkextConfig.target2KeyspaceName, "reshard3to1", threeShards, "0", tablets)
-
 	})
 	lg.Stop()
 	waitForLowLag(t, fkextConfig.target1KeyspaceName, "mat")
@@ -199,55 +190,53 @@ func TestFKExt(t *testing.T) {
 
 }
 
+// compareRowCounts compares the row counts for the parent and child tables in the source and target shards. In addition to vdiffs,
+// it is another check to ensure that both tables have the same number of rows in the source and target shards after load generation
+// has stopped.
 func compareRowCounts(t *testing.T, keyspace string, sourceShards, targetShards []string) error {
 	log.Infof("Comparing row counts for keyspace %s, source shards: %v, target shards: %v", keyspace, sourceShards, targetShards)
 	lg.Stop()
 	defer lg.Start()
-	time.Sleep(5 * time.Second)
-	var sourceParentCount, sourceChildCount int64
-	var targetParentCount, targetChildCount int64
+	if err := waitForCondition("load generator to stop", func() bool { return lg.State() == "stopped" }, 10*time.Second); err != nil {
+		return err
+	}
+
 	sourceTabs := make(map[string]*cluster.VttabletProcess)
 	targetTabs := make(map[string]*cluster.VttabletProcess)
-	parentCountQuery := "select count(*) from parent"
-	childCountQuery := "select count(*) from child"
 	for _, shard := range sourceShards {
 		sourceTabs[shard] = vc.getPrimaryTablet(t, keyspace, shard)
 	}
 	for _, shard := range targetShards {
 		targetTabs[shard] = vc.getPrimaryTablet(t, keyspace, shard)
 	}
-	for _, tab := range sourceTabs {
-		qr, err := tab.QueryTablet(parentCountQuery, keyspace, true)
+
+	getCount := func(tab *cluster.VttabletProcess, table string) (int64, error) {
+		qr, err := tab.QueryTablet(fmt.Sprintf("select count(*) from %s", table), keyspace, true)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		count, _ := qr.Rows[0][0].ToInt64()
+		return count, nil
+	}
+
+	var sourceParentCount, sourceChildCount int64
+	var targetParentCount, targetChildCount int64
+	for _, tab := range sourceTabs {
+		count, _ := getCount(tab, "parent")
 		sourceParentCount += count
-		qr, err = tab.QueryTablet(childCountQuery, keyspace, true)
-		if err != nil {
-			return err
-		}
-		count, _ = qr.Rows[0][0].ToInt64()
+		count, _ = getCount(tab, "child")
 		sourceChildCount += count
 	}
 	for _, tab := range targetTabs {
-		qr, err := tab.QueryTablet(parentCountQuery, keyspace, true)
-		if err != nil {
-			return err
-		}
-		count, _ := qr.Rows[0][0].ToInt64()
+		count, _ := getCount(tab, "parent")
 		targetParentCount += count
-		qr, err = tab.QueryTablet(childCountQuery, keyspace, true)
-		if err != nil {
-			return err
-		}
-		count, _ = qr.Rows[0][0].ToInt64()
+		count, _ = getCount(tab, "child")
 		targetChildCount += count
 	}
-	log.Infof("Source parent count: %d, child count: %d, target parent count: %d, child count: %d",
+	log.Infof("Source parent count: %d, child count: %d, target parent count: %d, child count: %d.",
 		sourceParentCount, sourceChildCount, targetParentCount, targetChildCount)
 	if sourceParentCount != targetParentCount || sourceChildCount != targetChildCount {
-		return fmt.Errorf("Source and target counts do not match")
+		return fmt.Errorf("source and target counts do not match")
 	}
 	return nil
 }
@@ -346,7 +335,7 @@ func newKeyspace(t *testing.T, keyspaceName, shards, vschema, schema string, tab
 	cell := vc.Cells[fkextConfig.cell]
 	vc.AddKeyspace(t, []*Cell{cell}, keyspaceName, shards, vschema, schema, numReplicas, 0, tabletId, nil)
 	for i, shard := range strings.Split(shards, ",") {
-		vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), 1, shortWait)
+		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), 1, shardStatusWaitTimeout))
 		tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletId+i*100)].Vttablet
 	}
 	err := vc.VtctldClient.ExecuteCommand("RebuildVSchemaGraph")

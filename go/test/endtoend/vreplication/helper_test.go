@@ -886,3 +886,23 @@ func appendToQueryLog(msg string) {
 		log.Errorf("Error writing to query log file: %v", err)
 	}
 }
+
+func waitForCondition(name string, condition func() bool, timeout time.Duration) error {
+	if condition() {
+		return nil
+	}
+
+	ticker := time.NewTicker(tickInterval)
+	defer ticker.Stop()
+	timeoutCh := time.After(timeout)
+	for {
+		select {
+		case <-ticker.C:
+			if condition() {
+				return nil
+			}
+		case <-timeoutCh:
+			return fmt.Errorf("timed out waiting for %s", name)
+		}
+	}
+}
