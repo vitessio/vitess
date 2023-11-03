@@ -21,7 +21,6 @@ package vtgateproxy
 import (
 	"context"
 	"flag"
-	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -118,15 +117,7 @@ func (proxy *VTGateProxy) Prepare(ctx context.Context, session *vtgateconn.VTGat
 }
 
 func (proxy *VTGateProxy) Execute(ctx context.Context, session *vtgateconn.VTGateSession, sql string, bindVariables map[string]*querypb.BindVariable) (qr *sqltypes.Result, err error) {
-	t := time.Now()
-	qr, err = session.Execute(ctx, sql, bindVariables)
-	logSql := sql
-	if len(logSql) > 40 {
-		logSql = logSql[:40]
-	}
-	fmt.Printf("Execute %s [%s]\n", logSql, time.Since(t))
-	return qr, err
-
+	return session.Execute(ctx, sql, bindVariables)
 }
 
 func (proxy *VTGateProxy) StreamExecute(ctx context.Context, session *vtgateconn.VTGateSession, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {

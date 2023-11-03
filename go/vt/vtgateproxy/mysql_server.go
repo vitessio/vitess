@@ -179,15 +179,6 @@ func (ph *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sql
 		defer cancel()
 	}
 
-	t := time.Now()
-	defer func() {
-		logSql := query
-		if len(logSql) > 40 {
-			logSql = logSql[:40]
-		}
-		fmt.Printf("ComQuery conn %d %s [%s]\n", c.ConnectionID, logSql, time.Since(t))
-	}()
-
 	span, ctx, err := startSpan(ctx, query, "proxyHandler.ComQuery")
 	if err != nil {
 		return vterrors.Wrap(err, "failed to extract span")
