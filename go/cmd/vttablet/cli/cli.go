@@ -104,7 +104,6 @@ vttablet \
 
 func run(cmd *cobra.Command, args []string) error {
 	servenv.Init()
-	defer servenv.Close()
 
 	tabletAlias, err := topoproto.ParseTabletAlias(tabletPath)
 	if err != nil {
