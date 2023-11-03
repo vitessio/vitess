@@ -460,14 +460,13 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	tabletTypes := []string{"replica"}
 	workflow := "testwf"
 	keyspace := "testks"
-	vreplID := int64(1)
+	vreplID := 1
 	tabletUID := 100
 
-	tenv := newTestEnv(t, ctx, keyspace, []string{"-80", "80-"})
+	tenv := newTestEnv(t, ctx, keyspace, []string{shard})
 	defer tenv.close()
 
-	// Shard merge so the target will have 2 streams.
-	tablet := tenv.addTablet(t, tabletUID, keyspace, "0")
+	tablet := tenv.addTablet(t, tabletUID, keyspace, shard)
 	defer tenv.deleteTablet(tablet.tablet)
 
 	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecar.DefaultName, ":wf")
@@ -487,7 +486,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 		fmt.Sprintf("%d|%s|%s|%s|Running|", vreplID+1, blsStr, cells[0], tabletTypes[0]),
 	)
 	idQuery, err := sqlparser.ParseAndBind("select id from _vt.vreplication where id = %a",
-		sqltypes.Int64BindVariable(vreplID))
+		sqltypes.Int64BindVariable(int64(vreplID)))
 	require.NoError(t, err)
 	idRes := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
