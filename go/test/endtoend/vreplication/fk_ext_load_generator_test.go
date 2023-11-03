@@ -39,8 +39,16 @@ const (
 	dataLoadTimeout = 1 * time.Minute
 	tickInterval    = 1 * time.Second
 	queryTimeout    = 1 * time.Minute
+
+	getRandomIdQuery                    = "SELECT id FROM %s.parent ORDER BY RAND() LIMIT 1"
+	insertQuery                         = "INSERT INTO %s.parent (id, name) VALUES (%d, 'name-%d')"
+	updateQuery                         = "UPDATE %s.parent SET name = 'rename-%d' WHERE id = %d"
+	deleteQuery                         = "DELETE FROM %s.parent WHERE id = %d"
+	insertChildQuery                    = "INSERT INTO %s.child (id, parent_id) VALUES (%d, %d)"
+	insertChildQueryOverrideConstraints = "INSERT /*+ SET_VAR(foreign_key_checks=0) */ INTO %s.child (id, parent_id) VALUES (%d, %d)"
 )
 
+// ILoadGenerator is an interface for load generators that we will use to simulate different types of loads.
 type ILoadGenerator interface {
 	Init(ctx context.Context, vc *VitessCluster) // nme & description only for logging.
 	Teardown()
@@ -60,9 +68,12 @@ type ILoadGenerator interface {
 	Start() error // start populating additional data.
 	Stop() error  // stop populating additional data.
 
-	WaitForAdditionalRows(count int) error // implementation will decide which table to wait for extra rows on.
-	GetRowCount(table string) (int, error) // table == "", implementation will decide which table to get rows from.
-	GetTables() ([]string, []int, error)   // list of tables used by implementation with number of rows.
+	// implementation will decide which table to wait for extra rows on.
+	WaitForAdditionalRows(count int) error
+	// table == "", implementation will decide which table to get rows from, same table as in WaitForAdditionalRows().
+	GetRowCount(table string) (int, error)
+	// list of tables used by implementation with number of rows.
+	//GetTables() ([]string, []int, error)
 }
 
 var _ ILoadGenerator = (*SimpleLoadGenerator)(nil)
@@ -78,6 +89,8 @@ type LoadGenerator struct {
 	tableNumRows        []int
 }
 
+// SimpleLoadGenerator, which has a single parent table and a single child table for which different types
+// of DMLs are run.
 type SimpleLoadGenerator struct {
 	LoadGenerator
 	currentParentId int
@@ -149,7 +162,8 @@ func (lg *SimpleLoadGenerator) WaitForAdditionalRows(count int) error {
 func (lg *SimpleLoadGenerator) exec(query string) (*sqltypes.Result, error) {
 	switch lg.dbStrategy {
 	case "direct":
-		// direct is expected to be used only for unsharded keyspaces.
+		// direct is expected to be used only for unsharded keyspaces to simulate an unmanaged keyspace
+		// that proxies to an external database.
 		primary := lg.vc.getPrimaryTablet(lg.vc.t, lg.keyspace, "0")
 		qr, err := primary.QueryTablet(query, lg.keyspace, true)
 		require.NoError(lg.vc.t, err)
@@ -204,15 +218,17 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 				return
 			}
 			if retry {
-				time.Sleep(1 * time.Second)
+				time.Sleep(tickInterval)
 			}
+			// We need to parse the error as well as the output of vdiff to determine if the error is retryable, since
+			// sometimes it is observed that we get the error output as part of vdiff output.
 			vtgateConn, err = lg.getVtgateConn(ctx)
 			if err != nil {
 				if !isQueryRetryable(err) {
 					errCh <- err
 					return
 				}
-				time.Sleep(1 * time.Second)
+				time.Sleep(tickInterval)
 				continue
 			}
 			qr, err = vtgateConn.ExecuteFetch(query, 1000, false)
@@ -274,7 +290,7 @@ func (lg *SimpleLoadGenerator) Start() error {
 		log.Infof("Load generator starting")
 		for i := 0; ; i++ {
 			if i%1000 == 0 {
-				// log occasionally ...
+				// log occasionally to show that the test is still running ...
 				log.Infof("Load simulation iteration %d", i)
 			}
 			select {
@@ -298,7 +314,7 @@ func (lg *SimpleLoadGenerator) Start() error {
 				lg.delete()
 			}
 			require.NoError(t, err)
-			time.Sleep(1 * time.Millisecond)
+			time.Sleep(tickInterval)
 		}
 	}()
 	return nil
@@ -314,7 +330,7 @@ func (lg *SimpleLoadGenerator) Stop() error {
 		lg.runCtxCancel()
 	}
 	// wait for ch to be closed with a timeout
-	timeout := 30 * time.Second
+	timeout := vdiffTimeout
 	select {
 	case <-lg.ch:
 		log.Infof("Load generator stopped")
@@ -322,7 +338,7 @@ func (lg *SimpleLoadGenerator) Stop() error {
 		return nil
 	case <-time.After(timeout):
 		log.Infof("Timed out waiting for load generator to stop")
-		return fmt.Errorf("Timed out waiting for load generator to stop")
+		return fmt.Errorf("timed out waiting for load generator to stop")
 	}
 }
 
@@ -356,15 +372,6 @@ func (lg *SimpleLoadGenerator) DBStrategy() string {
 func (lg *SimpleLoadGenerator) State() string {
 	return lg.state
 }
-
-const (
-	getRandomIdQuery                    = "SELECT id FROM %s.parent ORDER BY RAND() LIMIT 1"
-	insertQuery                         = "INSERT INTO %s.parent (id, name) VALUES (%d, 'name-%d')"
-	updateQuery                         = "UPDATE %s.parent SET name = 'rename-%d' WHERE id = %d"
-	deleteQuery                         = "DELETE FROM %s.parent WHERE id = %d"
-	insertChildQuery                    = "INSERT INTO %s.child (id, parent_id) VALUES (%d, %d)"
-	insertChildQueryOverrideConstraints = "INSERT /*+ SET_VAR(foreign_key_checks=0) */ INTO %s.child (id, parent_id) VALUES (%d, %d)"
-)
 
 func isQueryCancelled(err error) bool {
 	if err == nil {
@@ -438,7 +445,8 @@ func (lg *SimpleLoadGenerator) delete() {
 	require.NoError(lg.vc.t, err)
 }
 
-// FIXME: following three functions need to be refactored
+// FIXME: following three functions are copied over from vtgate test utility functions in `go/test/endtoend/utils/utils.go`
+// We will to refactor and then reuse the same functionality from vtgate tests, in the near future.
 
 func convertToMap(input interface{}) map[string]interface{} {
 	output := input.(map[string]interface{})
@@ -453,7 +461,8 @@ func getTableT2Map(res *interface{}, ks, tbl string) map[string]interface{} {
 	return convertToMap(tblMap)
 }
 
-// waitForColumn waits for a table's column to be present
+// waitForColumn waits for a table's column to be present in the vschema because vtgate's foreign key managed mode
+// expects the column to be present in the vschema before it can be used in a foreign key constraint.
 func waitForColumn(t *testing.T, vtgateProcess *cluster.VtgateProcess, ks, tbl, col string) error {
 	timeout := time.After(60 * time.Second)
 	for {
