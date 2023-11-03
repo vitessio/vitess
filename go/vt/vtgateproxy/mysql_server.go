@@ -99,7 +99,7 @@ func (ph *proxyHandler) NewConnection(c *mysql.Conn) {
 
 func (ph *proxyHandler) ComResetConnection(c *mysql.Conn) {
 	ctx := context.Background()
-	session, err := ph.getSession(c)
+	session, err := ph.getSession(ctx, c)
 	if err != nil {
 		return
 	}
@@ -127,7 +127,7 @@ func (ph *proxyHandler) ConnectionClosed(c *mysql.Conn) {
 	} else {
 		ctx = context.Background()
 	}
-	session, err := ph.getSession(c)
+	session, err := ph.getSession(ctx, c)
 	if err != nil {
 		return
 	}
@@ -199,7 +199,7 @@ func (ph *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sql
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
 
-	session, err := ph.getSession(c)
+	session, err := ph.getSession(ctx, c)
 	if err != nil {
 		return err
 	}
@@ -264,7 +264,7 @@ func (ph *proxyHandler) ComPrepare(c *mysql.Conn, query string, bindVars map[str
 		"VTGateProxy MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
 
-	session, err := ph.getSession(c)
+	session, err := ph.getSession(ctx, c)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +309,7 @@ func (ph *proxyHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData
 		"VTGateProxy MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
 
-	session, err := ph.getSession(c)
+	session, err := ph.getSession(ctx, c)
 	if err != nil {
 		return err
 	}
@@ -337,8 +337,8 @@ func (ph *proxyHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData
 }
 
 func (ph *proxyHandler) WarningCount(c *mysql.Conn) uint16 {
-	session, err := ph.getSession(c)
-	if err != nil {
+	session, _ := c.ClientData.(*vtgateconn.VTGateSession)
+	if session == nil {
 		return 0
 	}
 
@@ -350,7 +350,7 @@ func (ph *proxyHandler) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) 
 	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ComBinlogDumpGTID")
 }
 
-func (ph *proxyHandler) getSession(c *mysql.Conn) (*vtgateconn.VTGateSession, error) {
+func (ph *proxyHandler) getSession(ctx context.Context, c *mysql.Conn) (*vtgateconn.VTGateSession, error) {
 	session, _ := c.ClientData.(*vtgateconn.VTGateSession)
 	if session == nil {
 		options := &querypb.ExecuteOptions{
@@ -363,7 +363,7 @@ func (ph *proxyHandler) getSession(c *mysql.Conn) (*vtgateconn.VTGateSession, er
 		}
 
 		var err error
-		session, err = ph.proxy.NewSession(options, c.Attributes)
+		session, err = ph.proxy.NewSession(ctx, options, c.Attributes)
 		if err != nil {
 			log.Errorf("error creating new session for %s: %v", c.GetRawConn().RemoteAddr().String(), err)
 			return nil, err
