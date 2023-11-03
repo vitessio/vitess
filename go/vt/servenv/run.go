@@ -18,6 +18,7 @@ package servenv
 
 import (
 	"net"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -73,6 +74,7 @@ func Run(bindAddress string, port int) {
 
 	log.Info("Shutting down gracefully")
 	fireOnCloseHooks(onCloseTimeout)
+	ListeningURL = url.URL{}
 }
 
 // OnClose registers f to be run at the end of the app lifecycle.
