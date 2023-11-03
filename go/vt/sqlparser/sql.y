@@ -309,7 +309,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE CHAIN
 
 // Type Tokens
-%token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM SERIAL
+%token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM SERIAL INT1 INT2 INT3 INT4 INT8
 %token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC DEC FIXED PRECISION
 %token <bytes> TIME TIMESTAMP DATETIME
 %token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR NVARCHAR NATIONAL VARYING VARCHARACTER
@@ -382,7 +382,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> FLOAT4 FLOAT8
 %token <bytes> GET
 %token <bytes> HIGH_PRIORITY
-%token <bytes> INSENSITIVE INT1 INT2 INT3 INT4 INT8 IO_AFTER_GTIDS IO_BEFORE_GTIDS LINEAR
+%token <bytes> INSENSITIVE IO_AFTER_GTIDS IO_BEFORE_GTIDS LINEAR
 %token <bytes> MASTER_BIND MASTER_SSL_VERIFY_SERVER_CERT MIDDLEINT
 %token <bytes> PURGE
 %token <bytes> READ_WRITE RLIKE
@@ -3100,6 +3100,26 @@ int_type:
 | SERIAL
   {
     $$ = ColumnType{Type: "bigint", Unsigned: true, NotNull: true, Autoincrement: true, KeyOpt: colKeyUnique}
+  }
+| INT1
+  {
+    $$ = ColumnType{Type: "tinyint"}
+  }
+| INT2
+  {
+    $$ = ColumnType{Type: "smallint"}
+  }
+| INT3
+  {
+    $$ = ColumnType{Type: "mediumint"}
+  }
+| INT4
+  {
+    $$ = ColumnType{Type: "int"}
+  }
+| INT8
+  {
+    $$ = ColumnType{Type: "bigint"}
   }
 
 decimal_type:
