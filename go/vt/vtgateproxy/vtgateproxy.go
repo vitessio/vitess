@@ -104,7 +104,7 @@ func (proxy *VTGateProxy) NewSession(ctx context.Context, options *querypb.Execu
 // same effect as if a "rollback" statement was executed, but does not affect the query
 // statistics.
 func (proxy *VTGateProxy) CloseSession(ctx context.Context, session *vtgateconn.VTGateSession) error {
-	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented")
+	return session.CloseSession(ctx)
 }
 
 // ResolveTransaction resolves the specified 2PC transaction.
