@@ -79,9 +79,11 @@ to test that we can import data with foreign key constraints and that data is ke
 since the tables continue to have the FK Constraints.
 * Creates a new keyspace with two shards, the Vitess keyspace, into which the data is migrated using MoveTables.
 * Materializes the parent and child tables into a different keyspace.
+* Reshards the keyspace from 2 shards to 3 shards.
+* Reshards the keyspace from 3 shards to 1 shard.
 
-We drop constraints from the replica tables in the target keyspace to simulate a replica that is not doing cascades in
-innodb, to confirm that vtgate is doing the cascades correctly.
+We drop constraints from the tables from some replicas to simulate a replica that is not doing cascades in
+innodb, to confirm that vtgate's fkmanaged mode is working properly.
 */
 
 func TestFKExt(t *testing.T) {
