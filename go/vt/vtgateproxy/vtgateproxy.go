@@ -22,10 +22,12 @@ import (
 	"context"
 	"flag"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
 	"google.golang.org/grpc"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -117,6 +119,14 @@ func (proxy *VTGateProxy) Prepare(ctx context.Context, session *vtgateconn.VTGat
 }
 
 func (proxy *VTGateProxy) Execute(ctx context.Context, session *vtgateconn.VTGateSession, sql string, bindVariables map[string]*querypb.BindVariable) (qr *sqltypes.Result, err error) {
+
+	// Intercept "use" statements since they just have to update the local session
+	if strings.HasPrefix(sql, "use ") {
+		targetString := sqlescape.UnescapeID(sql[4:])
+		session.SessionPb().TargetString = targetString
+		return &sqltypes.Result{}, nil
+	}
+
 	return session.Execute(ctx, sql, bindVariables)
 }
 
