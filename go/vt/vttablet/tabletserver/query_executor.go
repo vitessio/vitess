@@ -24,11 +24,9 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
@@ -68,6 +66,7 @@ type QueryExecutor struct {
 
 const (
 	streamRowsSize           = 256
+	queryTimeoutMethodMySQL  = "mysql"
 	queryTimeoutMysqlMaxWait = time.Second
 )
 
@@ -824,7 +823,7 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	if err != nil {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
-	query = addMySQLOptimizerHints(qre.tsv.config, query)
+	query = addMysqlOptimizerHintsToQuery(qre.tsv.config, query)
 	if qre.tsv.config.AnnotateQueries {
 		username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
 		if username == "" {
@@ -854,10 +853,11 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	return buf.String(), query, nil
 }
 
-func addMySQLOptimizerHints(config *tabletenv.TabletConfig, query string) string {
+func addMysqlOptimizerHintsToQuery(config *tabletenv.TabletConfig, query string) string {
 	hints := make([]string, 0)
 
-	if config.Oltp.QueryTimeoutMethod == "mysql" && config.Oltp.QueryTimeoutSeconds > 0 {
+	switch config.Oltp.QueryTimeoutMethod.String() {
+	case tabletenv.QueryTimeoutMethodMysql:
 		// The MAX_EXECUTION_TIME(N) hint sets a statement execution timeout of N milliseconds.
 		// https://dev.mysql.com/doc/refman/8.0/en/optimizer-hints.html#optimizer-hints-execution-time
 		hints = append(hints,

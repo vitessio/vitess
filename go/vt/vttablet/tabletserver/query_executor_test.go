@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -1794,16 +1795,21 @@ func TestQueryExecSchemaReloadCount(t *testing.T) {
 	}
 }
 
-func TestAddMySQLOptimizerHints(t *testing.T) {
+func TestAddMysqlOptimizerHintsToQuery(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	{
-		config.Oltp.QueryTimeoutMethod = "vttablet"
-		t.Logf("sql: %v", addMySQLOptimizerHints(config, "select * from something"))
+		assert.Equal(t,
+			`select * from something`,
+			addMysqlOptimizerHintsToQuery(config, "select * from something"),
+		)
 	}
 	{
-		config.Oltp.QueryTimeoutMethod = "mysql"
-		config.Oltp.QueryTimeoutSeconds = tabletenv.Seconds(1)
-		t.Logf("sql: %v", addMySQLOptimizerHints(config, "select * from something"))
+		config.Oltp.QueryTimeoutMethod.Set(tabletenv.QueryTimeoutMethodMysql)
+		config.Oltp.QueryTimeoutSeconds = flagutil.NewDeprecatedFloat64Seconds(t.Name(), time.Second)
+		assert.Equal(t,
+			`select /*+ MAX_EXECUTION_TIME(1000) */ * from something`,
+			addMysqlOptimizerHintsToQuery(config, "select * from something"),
+		)
 	}
 }
 

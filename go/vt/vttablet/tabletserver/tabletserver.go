@@ -163,7 +163,8 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 	}
 
 	queryTimeoutNanos := config.Oltp.QueryTimeoutSeconds.Get().Nanoseconds()
-	if config.Oltp.QueryTimeoutMethod == "mysql" {
+	switch config.Oltp.QueryTimeoutMethod.String() {
+	case tabletenv.QueryTimeoutMethodMysql:
 		queryTimeoutNanos = queryTimeoutNanos + queryTimeoutMysqlMaxWait.Nanoseconds()
 	}
 	tsv.QueryTimeout.Store(queryTimeoutNanos)

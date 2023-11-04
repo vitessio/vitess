@@ -44,13 +44,14 @@ import (
 
 // These constants represent values for various config parameters.
 const (
-	Enable                    = "enable"
-	Disable                   = "disable"
-	Dryrun                    = "dryRun"
-	NotOnPrimary              = "notOnPrimary"
-	Polling                   = "polling"
-	Heartbeat                 = "heartbeat"
-	DefaultQueryTimeoutMethod = "vttablet"
+	Enable                     = "enable"
+	Disable                    = "disable"
+	Dryrun                     = "dryRun"
+	NotOnPrimary               = "notOnPrimary"
+	Polling                    = "polling"
+	Heartbeat                  = "heartbeat"
+	QueryTimeoutMethodVttablet = "vttablet"
+	QueryTimeoutMethodMysql    = "mysql"
 )
 
 var (
@@ -237,7 +238,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.EnableViews, "queryserver-enable-views", false, "Enable views support in vttablet.")
 
 	fs.BoolVar(&currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics include a label that identifies the workload")
-	fs.StringVar(&currentConfig.Oltp.QueryTimeoutMethod, "query-timeout-method", defaultConfig.Oltp.QueryTimeoutMethod, "The method to be used to kill MySQL queries, options: 'vttablet' and 'mysql'. 'vttablet' issues a MySQL KILL operation whereas 'mysql' pushes the kill to MySQL.")
+	fs.Var(currentConfig.Oltp.QueryTimeoutMethod, "query-timeout-method", "The method to be used to kill MySQL queries, options: 'vttablet' and 'mysql'. 'vttablet' issues a MySQL KILL operation whereas 'mysql' pushes the kill to MySQL.")
 }
 
 var (
@@ -474,7 +475,7 @@ func (cfg *OlapConfig) MarshalJSON() ([]byte, error) {
 // OltpConfig contains the config for oltp settings.
 type OltpConfig struct {
 	QueryTimeoutSeconds flagutil.DeprecatedFloat64Seconds `json:"queryTimeoutSeconds,omitempty"`
-	QueryTimeoutMethod  string                            `json:"queryTimeoutMethod,omitempty"`
+	QueryTimeoutMethod  *flagutil.StringEnum              `json:"queryTimeoutMethod,omitempty"`
 	TxTimeoutSeconds    flagutil.DeprecatedFloat64Seconds `json:"txTimeoutSeconds,omitempty"`
 	MaxRows             int                               `json:"maxRows,omitempty"`
 	WarnRows            int                               `json:"warnRows,omitempty"`
@@ -783,7 +784,7 @@ var defaultConfig = TabletConfig{
 	},
 	Oltp: OltpConfig{
 		QueryTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-query-timeout", 30*time.Second),
-		QueryTimeoutMethod:  DefaultQueryTimeoutMethod,
+		QueryTimeoutMethod:  flagutil.NewStringEnum("query-timeout-method", QueryTimeoutMethodVttablet, []string{QueryTimeoutMethodVttablet, QueryTimeoutMethodMysql}),
 		TxTimeoutSeconds:    flagutil.NewDeprecatedFloat64Seconds("queryserver-config-transaction-timeout", 30*time.Second),
 		MaxRows:             10000,
 	},
