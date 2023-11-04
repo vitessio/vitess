@@ -162,7 +162,6 @@ func run(cmd *cobra.Command, args []string) error {
 	_ = cmd.Flags().Set("logtostderr", "true")
 
 	servenv.Init()
-	defer servenv.Close()
 
 	var clientProto vtbench.ClientProtocol
 	switch protocol {
