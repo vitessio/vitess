@@ -238,7 +238,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.EnableViews, "queryserver-enable-views", false, "Enable views support in vttablet.")
 
 	fs.BoolVar(&currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics include a label that identifies the workload")
-	fs.Var(currentConfig.Oltp.QueryTimeoutMethod, "query-timeout-method", "The method to be used to kill MySQL queries, options: 'vttablet' and 'mysql'. 'vttablet' issues a MySQL KILL operation whereas 'mysql' pushes the kill to MySQL.")
+	fs.Var(currentConfig.Oltp.QueryTimeoutMethod, "query-timeout-method", "The preferred method to timeout/kill MySQL queries, options: 'vttablet' and 'mysql'. 'vttablet' issues a MySQL KILL operation, 'mysql' pushes the kill to MySQL with a fallback to a KILL.")
 }
 
 var (
