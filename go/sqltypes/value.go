@@ -720,6 +720,10 @@ func (v Value) TinyWeightCmp(other Value) int {
 	return int(int64(v.tinyweight) - int64(other.tinyweight))
 }
 
+func (v Value) TinyWeight() uint32 {
+	return v.tinyweight
+}
+
 func encodeBytesSQL(val []byte, b BinWriter) {
 	buf := &bytes2.Buffer{}
 	encodeBytesSQLBytes2(val, buf)

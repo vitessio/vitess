@@ -92,7 +92,7 @@ func TestTinyWeightStrings(t *testing.T) {
 				require.NoError(t, err)
 
 				if cmp > 0 {
-					t.Fatalf("expected %v [pos=%d] to come after %v [pos=%d]", a, i, b, i+1)
+					t.Fatalf("expected %v [pos=%d] to come after %v [pos=%d]\n%v | %032b\n%v | %032b", a, i, b, i+1, a, a.TinyWeight(), b, b.TinyWeight())
 				}
 			}
 

@@ -19,6 +19,7 @@ package evalengine
 import (
 	"encoding/binary"
 	"math"
+	"math/bits"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -178,6 +179,27 @@ func evalWeightString(dst []byte, e eval, length, precision int) ([]byte, bool, 
 	return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", e.SQLType())
 }
 
+func DeMorgan(n uint64) uint32 {
+	var w32 [4]byte
+
+	lead := byte(bits.LeadingZeros64(n))
+	w32[0] = 64 - lead
+
+	n = n << (lead + 1)
+	lead = byte(bits.LeadingZeros64(n))
+	w32[1] = w32[0] - lead - 1
+
+	n = n << (lead + 1)
+	lead = byte(bits.LeadingZeros64(n))
+	w32[2] = w32[1] - lead - 1
+
+	n = n << (lead + 1)
+	lead = byte(bits.LeadingZeros64(n))
+	w32[3] = w32[2] - lead - 1
+
+	return binary.BigEndian.Uint32(w32[:4])
+}
+
 func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltypes.Value) {
 	switch {
 	case sqltypes.IsNull(f.Type):
@@ -189,9 +211,13 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 			if err != nil {
 				return
 			}
-			raw := uint64(i)
-			raw = raw ^ (1 << 63)
-			v.SetTinyWeight(uint32(raw >> 32))
+			raw := math.Float32bits(float32(i))
+			if i < 0 {
+				raw = ^raw
+			} else {
+				raw = raw ^ (1 << 31)
+			}
+			v.SetTinyWeight(raw)
 		}
 
 	case sqltypes.IsUnsigned(f.Type):
@@ -200,7 +226,7 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 			if err != nil {
 				return
 			}
-			v.SetTinyWeight(uint32(u >> 32))
+			v.SetTinyWeight(math.Float32bits(float32(u)))
 		}
 
 	case sqltypes.IsFloat(f.Type):
@@ -209,13 +235,13 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 			if err != nil {
 				return
 			}
-			raw := math.Float64bits(f)
+			raw := math.Float32bits(float32(f))
 			if math.Signbit(f) {
 				raw = ^raw
 			} else {
-				raw = raw ^ (1 << 63)
+				raw = raw ^ (1 << 31)
 			}
-			v.SetTinyWeight(uint32(raw >> 32))
+			v.SetTinyWeight(raw)
 		}
 
 	case sqltypes.IsBinary(f.Type):
