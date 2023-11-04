@@ -217,7 +217,6 @@ func init() {
 
 func run(_ *cobra.Command, args []string) error {
 	servenv.Init()
-	defer servenv.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	servenv.OnClose(func() {
