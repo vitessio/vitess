@@ -822,7 +822,7 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	if err != nil {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
-	query = addMysqlOptimizerHintsToQuery(qre.tsv.config, query)
+	query = addMysqlOptimizerHintsToQuery(qre.tsv.config, qre.plan.PlanID, query)
 	if qre.tsv.config.AnnotateQueries {
 		username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
 		if username == "" {
@@ -852,7 +852,11 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	return buf.String(), query, nil
 }
 
-func addMysqlOptimizerHintsToQuery(config *tabletenv.TabletConfig, query string) string {
+func addMysqlOptimizerHintsToQuery(config *tabletenv.TabletConfig, planType p.PlanType, query string) string {
+	if planType != p.PlanSelect {
+		return query
+	}
+
 	hints := make([]string, 0)
 
 	switch config.Oltp.QueryTimeoutMethod.String() {
@@ -865,6 +869,8 @@ func addMysqlOptimizerHintsToQuery(config *tabletenv.TabletConfig, query string)
 	}
 
 	if len(hints) > 0 {
+		// MySQL optimizer hints must come immediately after the 1st
+		// field/verb, which should always be "select" or "SELECT".
 		fields := strings.SplitN(query, " ", 2)
 		return strings.Join([]string{
 			fields[0],

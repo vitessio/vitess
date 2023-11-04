@@ -1800,7 +1800,7 @@ func TestAddMysqlOptimizerHintsToQuery(t *testing.T) {
 	{
 		assert.Equal(t,
 			`select * from something`,
-			addMysqlOptimizerHintsToQuery(config, "select * from something"),
+			addMysqlOptimizerHintsToQuery(config, planbuilder.PlanSelect, "select * from something"),
 		)
 	}
 	{
@@ -1808,7 +1808,13 @@ func TestAddMysqlOptimizerHintsToQuery(t *testing.T) {
 		config.Oltp.QueryTimeoutSeconds = flagutil.NewDeprecatedFloat64Seconds(t.Name(), time.Second)
 		assert.Equal(t,
 			`select /*+ MAX_EXECUTION_TIME(1000) */ * from something`,
-			addMysqlOptimizerHintsToQuery(config, "select * from something"),
+			addMysqlOptimizerHintsToQuery(config, planbuilder.PlanSelect, "select * from something"),
+		)
+	}
+	{
+		assert.Equal(t,
+			`insert into something (id, value) values(1, 2)`,
+			addMysqlOptimizerHintsToQuery(config, planbuilder.PlanInsert, "insert into something (id, value) values(1, 2)"),
 		)
 	}
 }
