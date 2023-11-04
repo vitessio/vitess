@@ -95,7 +95,7 @@ func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (replication.Posit
 
 	// Since we handle replication, just stop it.
 	cmds := []string{
-		conn.StopReplicationCommand(),
+		conn.Conn.StopReplicationCommand(),
 		"RESET SLAVE ALL", // "ALL" makes it forget primary host:port.
 		// When using semi-sync and GTID, a replica first connects to the new primary with a given GTID set,
 		// it can take a long time to scan the current binlog file to find the corresponding position.
@@ -108,5 +108,5 @@ func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (replication.Posit
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, cmds); err != nil {
 		return replication.Position{}, err
 	}
-	return conn.PrimaryPosition()
+	return conn.Conn.PrimaryPosition()
 }

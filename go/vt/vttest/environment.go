@@ -107,16 +107,8 @@ type LocalTestEnv struct {
 // flavor is given.
 const DefaultMySQLFlavor = "MySQL56"
 
-// GetMySQLOptions returns the default option set for the given MySQL
-// flavor. If flavor is not set, DefaultMySQLFlavor will
-// be used.
-// Returns the name of the MySQL flavor being used, the set of MySQL CNF
-// files specific to this flavor, and any errors.
-func GetMySQLOptions(flavor string) (string, []string, error) {
-	if flavor == "" {
-		flavor = DefaultMySQLFlavor
-	}
-
+// GetMySQLOptions returns the set of MySQL CNF files and any errors.
+func GetMySQLOptions() ([]string, error) {
 	mycnf := []string{}
 	mycnf = append(mycnf, "config/mycnf/test-suite.cnf")
 
@@ -124,7 +116,7 @@ func GetMySQLOptions(flavor string) (string, []string, error) {
 		mycnf[i] = path.Join(os.Getenv("VTROOT"), cnf)
 	}
 
-	return flavor, mycnf, nil
+	return mycnf, nil
 }
 
 // EnvVars implements EnvVars for LocalTestEnv
@@ -258,17 +250,17 @@ func randomPort() int {
 // - MySQLManager() will return a vttest.Mysqlctl instance, configured with the
 // given MySQL flavor. This will use the `mysqlctl` command to initialize and
 // teardown a single mysqld instance.
-func NewLocalTestEnv(flavor string, basePort int) (*LocalTestEnv, error) {
+func NewLocalTestEnv(basePort int) (*LocalTestEnv, error) {
 	directory, err := tmpdir(os.Getenv("VTDATAROOT"))
 	if err != nil {
 		return nil, err
 	}
-	return NewLocalTestEnvWithDirectory(flavor, basePort, directory)
+	return NewLocalTestEnvWithDirectory(basePort, directory)
 }
 
 // NewLocalTestEnvWithDirectory returns a new instance of the default test
 // environment with a directory explicitly specified.
-func NewLocalTestEnvWithDirectory(flavor string, basePort int, directory string) (*LocalTestEnv, error) {
+func NewLocalTestEnvWithDirectory(basePort int, directory string) (*LocalTestEnv, error) {
 	if _, err := os.Stat(path.Join(directory, "logs")); os.IsNotExist(err) {
 		err := os.Mkdir(path.Join(directory, "logs"), 0700)
 		if err != nil {
@@ -276,7 +268,7 @@ func NewLocalTestEnvWithDirectory(flavor string, basePort int, directory string)
 		}
 	}
 
-	flavor, mycnf, err := GetMySQLOptions(flavor)
+	mycnf, err := GetMySQLOptions()
 	if err != nil {
 		return nil, err
 	}
@@ -291,14 +283,13 @@ func NewLocalTestEnvWithDirectory(flavor string, basePort int, directory string)
 		DefaultMyCnf: mycnf,
 		Env: []string{
 			fmt.Sprintf("VTDATAROOT=%s", directory),
-			fmt.Sprintf("MYSQL_FLAVOR=%s", flavor),
 			"VTTEST=endtoend",
 		},
 	}, nil
 }
 
 func defaultEnvFactory() (Environment, error) {
-	return NewLocalTestEnv("", 0)
+	return NewLocalTestEnv(0)
 }
 
 // NewDefaultEnv is an user-configurable callback that returns a new Environment

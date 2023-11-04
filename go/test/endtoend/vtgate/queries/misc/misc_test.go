@@ -59,8 +59,8 @@ func TestBitVals(t *testing.T) {
 
 	mcmp.AssertMatches(`select b'1001', 0x9, B'010011011010'`, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\x04\xda")]]`)
 	mcmp.AssertMatches(`select b'1001', 0x9, B'010011011010' from t1`, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\x04\xda")]]`)
-	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010'`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
-	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010' from t1`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
+	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010'`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[INT64(10) UINT64(11) INT64(1245)]]`)
+	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010' from t1`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[INT64(10) UINT64(11) INT64(1245)]]`)
 }
 
 func TestHexVals(t *testing.T) {
@@ -251,4 +251,19 @@ func TestLeftJoinUsingUnsharded(t *testing.T) {
 
 	utils.Exec(t, mcmp.VtConn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
 	utils.Exec(t, mcmp.VtConn, "select * from uks.unsharded as A left join uks.unsharded as B using(id1)")
+}
+
+// TestAnalyze executes different analyze statement and validates that they run successfully.
+func TestAnalyze(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	for _, workload := range []string{"olap", "oltp"} {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
+			utils.Exec(t, mcmp.VtConn, "analyze table t1")
+			utils.Exec(t, mcmp.VtConn, "analyze table uks.unsharded")
+			utils.Exec(t, mcmp.VtConn, "analyze table mysql.user")
+		})
+	}
 }

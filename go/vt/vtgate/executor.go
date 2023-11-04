@@ -119,6 +119,9 @@ type Executor struct {
 
 	// queryLogger is passed in for logging from this vtgate executor.
 	queryLogger *streamlog.StreamLogger[*logstats.LogStats]
+
+	warmingReadsPercent int
+	warmingReadsChannel chan bool
 }
 
 var executorOnce sync.Once
@@ -148,20 +151,23 @@ func NewExecutor(
 	schemaTracker SchemaInfo,
 	noScatter bool,
 	pv plancontext.PlannerVersion,
+	warmingReadsPercent int,
 ) *Executor {
 	e := &Executor{
-		serv:            serv,
-		cell:            cell,
-		resolver:        resolver,
-		scatterConn:     resolver.scatterConn,
-		txConn:          resolver.scatterConn.txConn,
-		normalize:       normalize,
-		warnShardedOnly: warnOnShardedOnly,
-		streamSize:      streamSize,
-		schemaTracker:   schemaTracker,
-		allowScatter:    !noScatter,
-		pv:              pv,
-		plans:           plans,
+		serv:                serv,
+		cell:                cell,
+		resolver:            resolver,
+		scatterConn:         resolver.scatterConn,
+		txConn:              resolver.scatterConn.txConn,
+		normalize:           normalize,
+		warnShardedOnly:     warnOnShardedOnly,
+		streamSize:          streamSize,
+		schemaTracker:       schemaTracker,
+		allowScatter:        !noScatter,
+		pv:                  pv,
+		plans:               plans,
+		warmingReadsPercent: warmingReadsPercent,
+		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
 	}
 
 	vschemaacl.Init()
@@ -895,14 +901,14 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 	for _, s := range status {
 		for _, ts := range s.TabletsStats {
 			// We only want to show REPLICA and RDONLY tablets
-			if ts.Tablet.Type != topodatapb.TabletType_REPLICA && ts.Tablet.Type != topodatapb.TabletType_RDONLY {
+			if ts.Target.TabletType != topodatapb.TabletType_REPLICA && ts.Target.TabletType != topodatapb.TabletType_RDONLY {
 				continue
 			}
 
 			// Allow people to filter by Keyspace and Shard using a LIKE clause
 			if filter != nil {
 				ksFilterRegex := sqlparser.LikeToRegexp(filter.Like)
-				keyspaceShardStr := fmt.Sprintf("%s/%s", ts.Tablet.Keyspace, ts.Tablet.Shard)
+				keyspaceShardStr := fmt.Sprintf("%s/%s", ts.Target.Keyspace, ts.Target.Shard)
 				if !ksFilterRegex.MatchString(keyspaceShardStr) {
 					continue
 				}
@@ -1319,7 +1325,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 	case sqlparser.StmtSelect, sqlparser.StmtShow:
 		return e.handlePrepare(ctx, safeSession, sql, bindVars, logStats)
 	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
-		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment, sqlparser.StmtExplain, sqlparser.StmtFlush, sqlparser.StmtKill:
+		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtAnalyze, sqlparser.StmtComment, sqlparser.StmtExplain, sqlparser.StmtFlush, sqlparser.StmtKill:
 		return nil, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized prepare statement: %s", sql)

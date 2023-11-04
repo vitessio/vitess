@@ -36,8 +36,7 @@ func TestParseNextValid(t *testing.T) {
 	}
 
 	tokens := NewStringTokenizer(sql.String())
-	for i, tcase := range validSQL {
-		input := tcase.input + ";"
+	for _, tcase := range validSQL {
 		want := tcase.output
 		if want == "" {
 			want = tcase.input
@@ -45,16 +44,12 @@ func TestParseNextValid(t *testing.T) {
 
 		tree, err := ParseNext(tokens)
 		require.NoError(t, err)
-
-		if got := String(tree); got != want {
-			t.Fatalf("[%d] ParseNext(%q) = %q, want %q", i, input, got, want)
-		}
+		require.Equal(t, want, String(tree))
 	}
 
 	// Read once more and it should be EOF.
-	if tree, err := ParseNext(tokens); err != io.EOF {
-		t.Errorf("ParseNext(tokens) = (%q, %v) want io.EOF", String(tree), err)
-	}
+	tree, err := ParseNext(tokens)
+	require.ErrorIsf(t, err, io.EOF, "ParseNext(tokens) = (%q, %v) want io.EOF", String(tree), err)
 }
 
 func TestIgnoreSpecialComments(t *testing.T) {

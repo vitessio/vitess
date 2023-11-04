@@ -20,7 +20,6 @@ import (
 	"slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -47,52 +46,28 @@ type (
 	}
 )
 
-func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
-	columns, err := d.GetColumns(ctx)
-	if err != nil {
-		return err
-	}
-	var wsExprs []*sqlparser.AliasedExpr
-	var addToGroupBy []bool
-	wsNeeded := make([]bool, len(columns))
+func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) {
+	columns := d.GetColumns(ctx)
 	for idx, col := range columns {
-		addToGroupBy = append(addToGroupBy, false)
-		e := d.QP.GetSimplifiedExpr(col.Expr)
-		if ctx.SemTable.NeedsWeightString(e) {
-			wsExprs = append(wsExprs, aeWrap(weightStringFor(e)))
-			addToGroupBy = append(addToGroupBy, false)
-			wsNeeded[idx] = true
+		e, err := d.QP.GetSimplifiedExpr(ctx, col.Expr)
+		if err != nil {
+			// ambiguous columns are not a problem for DISTINCT
+			e = col.Expr
 		}
-	}
-	offsets, err := d.Source.AddColumns(ctx, true, addToGroupBy, append(columns, wsExprs...))
-	if err != nil {
-		return err
-	}
-	modifiedCols, err := d.GetColumns(ctx)
-	if err != nil {
-		return err
-	}
-	if len(modifiedCols) < len(columns) {
-		return vterrors.VT12001("unable to plan the distinct query as not able to align the columns")
-	}
-	n := len(columns)
-	wsOffset := 0
-	for i, col := range columns {
 		var wsCol *int
-		if wsNeeded[i] {
-			wsCol = &offsets[n+wsOffset]
-			wsOffset++
+		typ, _ := ctx.SemTable.TypeForExpr(e)
+
+		if ctx.SemTable.NeedsWeightString(e) {
+			offset := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(e)))
+			wsCol = &offset
 		}
-		e := d.QP.GetSimplifiedExpr(col.Expr)
-		typ, coll, _ := ctx.SemTable.TypeForExpr(e)
+
 		d.Columns = append(d.Columns, engine.CheckCol{
-			Col:       i,
-			WsCol:     wsCol,
-			Type:      typ,
-			Collation: coll,
+			Col:   idx,
+			WsCol: wsCol,
+			Type:  typ,
 		})
 	}
-	return nil
 }
 
 func (d *Distinct) Clone(inputs []ops.Operator) ops.Operator {
@@ -114,28 +89,24 @@ func (d *Distinct) SetInputs(operators []ops.Operator) {
 	d.Source = operators[0]
 }
 
-func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := d.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	d.Source = newSrc
-	return d, nil
+func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	d.Source = d.Source.AddPredicate(ctx, expr)
+	return d
 }
 
-func (d *Distinct) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
-	return d.Source.AddColumns(ctx, reuse, addToGroupBy, exprs)
+func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
+	return d.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
-func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return d.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (d *Distinct) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (d *Distinct) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return d.Source.GetColumns(ctx)
 }
 
-func (d *Distinct) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (d *Distinct) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return d.Source.GetSelectExprs(ctx)
 }
 
@@ -146,8 +117,8 @@ func (d *Distinct) ShortDescription() string {
 	return "Performance"
 }
 
-func (d *Distinct) GetOrdering() ([]ops.OrderBy, error) {
-	return d.Source.GetOrdering()
+func (d *Distinct) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+	return d.Source.GetOrdering(ctx)
 }
 
 func (d *Distinct) setTruncateColumnCount(offset int) {

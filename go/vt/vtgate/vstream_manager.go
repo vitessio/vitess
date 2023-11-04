@@ -27,17 +27,17 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/topo"
-
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // vstreamManager manages vstream requests.
@@ -52,6 +52,10 @@ type vstreamManager struct {
 
 // maxSkewTimeoutSeconds is the maximum allowed skew between two streams when the MinimizeSkew flag is set
 const maxSkewTimeoutSeconds = 10 * 60
+
+// tabletPickerContextTimeout is the timeout for the child context used to select candidate tablets
+// for a vstream
+const tabletPickerContextTimeout = 90 * time.Second
 
 // vstream contains the metadata for one VStream request.
 type vstream struct {
@@ -124,6 +128,7 @@ type journalEvent struct {
 
 func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string) *vstreamManager {
 	exporter := servenv.NewExporter(cell, "VStreamManager")
+
 	return &vstreamManager{
 		resolver: resolver,
 		toposerv: serv,
@@ -473,6 +478,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 	// journalDone is assigned a channel when a journal event is encountered.
 	// It will be closed when all journal events converge.
 	var journalDone chan struct{}
+	ignoreTablets := make([]*topodatapb.TabletAlias, 0)
 
 	errCount := 0
 	for {
@@ -490,12 +496,19 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		var eventss [][]*binlogdatapb.VEvent
 		var err error
 		cells := vs.getCells()
-		tp, err := discovery.NewTabletPicker(ctx, vs.ts, cells, vs.vsm.cell, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String(), vs.tabletPickerOptions)
+
+		tp, err := discovery.NewTabletPicker(ctx, vs.ts, cells, vs.vsm.cell, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String(), vs.tabletPickerOptions, ignoreTablets...)
 		if err != nil {
 			log.Errorf(err.Error())
 			return err
 		}
-		tablet, err := tp.PickForStreaming(ctx)
+
+		// Create a child context with a stricter timeout when picking a tablet.
+		// This will prevent hanging in the case no tablets are found.
+		tpCtx, tpCancel := context.WithTimeout(ctx, tabletPickerContextTimeout)
+		defer tpCancel()
+
+		tablet, err := tp.PickForStreaming(tpCtx)
 		if err != nil {
 			log.Errorf(err.Error())
 			return err
@@ -670,17 +683,48 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			// Unreachable.
 			err = vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "vstream ended unexpectedly")
 		}
-		if vterrors.Code(err) != vtrpcpb.Code_FAILED_PRECONDITION && vterrors.Code(err) != vtrpcpb.Code_UNAVAILABLE {
+
+		retry, ignoreTablet := vs.shouldRetry(err)
+		if !retry {
 			log.Errorf("vstream for %s/%s error: %v", sgtid.Keyspace, sgtid.Shard, err)
 			return err
 		}
+		if ignoreTablet {
+			ignoreTablets = append(ignoreTablets, tablet.GetAlias())
+		}
+
 		errCount++
+		// Retry, at most, 3 times if the error can be retried.
 		if errCount >= 3 {
 			log.Errorf("vstream for %s/%s had three consecutive failures: %v", sgtid.Keyspace, sgtid.Shard, err)
 			return err
 		}
 		log.Infof("vstream for %s/%s error, retrying: %v", sgtid.Keyspace, sgtid.Shard, err)
 	}
+}
+
+// shouldRetry determines whether we should exit immediately or retry the vstream.
+// The first return value determines if the error can be retried, while the second
+// indicates whether the tablet with which the error occurred should be ommitted
+// from the candidate list of tablets to choose from on the retry.
+//
+// An error should be retried if it is expected to be transient.
+// A tablet should be ignored upon retry if it's likely another tablet will not
+// produce the same error.
+func (vs *vstream) shouldRetry(err error) (bool, bool) {
+	errCode := vterrors.Code(err)
+
+	if errCode == vtrpcpb.Code_FAILED_PRECONDITION || errCode == vtrpcpb.Code_UNAVAILABLE {
+		return true, false
+	}
+
+	// If there is a GTIDSet Mismatch on the tablet, omit it from the candidate
+	// list in the TabletPicker on retry.
+	if errCode == vtrpcpb.Code_INVALID_ARGUMENT && strings.Contains(err.Error(), "GTIDSet Mismatch") {
+		return true, true
+	}
+
+	return false, false
 }
 
 // sendAll sends a group of events together while holding the lock.

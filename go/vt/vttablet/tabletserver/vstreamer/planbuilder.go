@@ -23,23 +23,20 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // Plan represents the plan for a table.
@@ -727,7 +724,26 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			FixedValue: sqltypes.NewInt64(num),
 		}, nil
 	case *sqlparser.ConvertUsingExpr:
-		colnum, err := findColumn(plan.Table, aliased.As)
+		// Here we find the actual column name in the convert, in case
+		// this is a column rename and the AS is the new column.
+		// For example, in convert(c1 using utf8mb4) as c2, we want to find
+		// c1, because c1 exists in the current table whereas c2 is the renamed column
+		// in the desired table.
+		var colName sqlparser.IdentifierCI
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				if !node.Qualifier.IsEmpty() {
+					return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
+				}
+				colName = node.Name
+			}
+			return true, nil
+		}, aliased.Expr)
+		if err != nil {
+			return ColExpr{}, fmt.Errorf("failed to find column name for convert using expression: %v, %v", sqlparser.String(aliased.Expr), err)
+		}
+		colnum, err := findColumn(plan.Table, colName)
 		if err != nil {
 			return ColExpr{}, err
 		}
@@ -846,5 +862,5 @@ func findColumn(ti *Table, name sqlparser.IdentifierCI) (int, error) {
 			return i, nil
 		}
 	}
-	return 0, fmt.Errorf("column %s not found in table %s", sqlparser.String(name), ti.Name)
+	return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "column %s not found in table %s", sqlparser.String(name), ti.Name)
 }

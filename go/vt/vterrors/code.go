@@ -48,6 +48,7 @@ var (
 	VT03023 = errorWithoutState("VT03023", vtrpcpb.Code_INVALID_ARGUMENT, "INSERT not supported when targeting a key range: %s", "When targeting a range of shards, Vitess does not know which shard to send the INSERT to.")
 	VT03024 = errorWithoutState("VT03024", vtrpcpb.Code_INVALID_ARGUMENT, "'%s' user defined variable does not exists", "The query cannot be prepared using the user defined variable as it does not exists for this session.")
 	VT03025 = errorWithState("VT03025", vtrpcpb.Code_INVALID_ARGUMENT, WrongArguments, "Incorrect arguments to %s", "The execute statement have wrong number of arguments")
+	VT03026 = errorWithoutState("VT03024", vtrpcpb.Code_INVALID_ARGUMENT, "'%s' bind variable does not exists", "The query cannot be executed as missing the bind variable.")
 
 	VT05001 = errorWithState("VT05001", vtrpcpb.Code_NOT_FOUND, DbDropExists, "cannot drop database '%s'; database does not exists", "The given database does not exist; Vitess cannot drop it.")
 	VT05002 = errorWithState("VT05002", vtrpcpb.Code_NOT_FOUND, BadDb, "cannot alter database '%s'; unknown database", "The given database does not exist; Vitess cannot alter it.")
@@ -77,6 +78,9 @@ var (
 	VT09014 = errorWithoutState("VT09014", vtrpcpb.Code_FAILED_PRECONDITION, "vindex cannot be modified", "The vindex cannot be used as table in DML statement")
 	VT09015 = errorWithoutState("VT09015", vtrpcpb.Code_FAILED_PRECONDITION, "schema tracking required", "This query cannot be planned without more information on the SQL schema. Please turn on schema tracking or add authoritative columns information to your VSchema.")
 	VT09016 = errorWithState("VT09016", vtrpcpb.Code_FAILED_PRECONDITION, RowIsReferenced2, "Cannot delete or update a parent row: a foreign key constraint fails", "SET DEFAULT is not supported by InnoDB")
+	VT09017 = errorWithoutState("VT09017", vtrpcpb.Code_FAILED_PRECONDITION, "%s", "Invalid syntax for the statement type.")
+	VT09018 = errorWithoutState("VT09018", vtrpcpb.Code_FAILED_PRECONDITION, "%s", "Invalid syntax for the vindex function statement.")
+	VT09019 = errorWithoutState("VT09019", vtrpcpb.Code_FAILED_PRECONDITION, "%s has cyclic foreign keys", "Vitess doesn't support cyclic foreign keys.")
 
 	VT10001 = errorWithoutState("VT10001", vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed", "Foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.")
 
@@ -119,6 +123,7 @@ var (
 		VT03023,
 		VT03024,
 		VT03025,
+		VT03026,
 		VT05001,
 		VT05002,
 		VT05003,
@@ -144,6 +149,8 @@ var (
 		VT09014,
 		VT09015,
 		VT09016,
+		VT09017,
+		VT09018,
 		VT10001,
 		VT12001,
 		VT12002,

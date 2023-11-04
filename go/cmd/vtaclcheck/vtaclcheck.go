@@ -19,52 +19,21 @@ package main
 import (
 	"fmt"
 
-	"github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/cmd/vtaclcheck/cli"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtaclcheck"
 )
-
-var aclFile, staticAuthFile string
 
 func init() {
 	logger := logutil.NewConsoleLogger()
-	servenv.OnParse(func(fs *pflag.FlagSet) {
-		fs.StringVar(&aclFile, "acl-file", aclFile, "The path of the JSON ACL file to check")
-		fs.StringVar(&staticAuthFile, "static-auth-file", staticAuthFile, "The path of the auth_server_static JSON file to check")
-
-		acl.RegisterFlags(fs)
-
-		fs.SetOutput(logutil.NewLoggerWriter(logger))
-	})
+	cli.Main.SetOutput(logutil.NewLoggerWriter(logger))
 }
 
 func main() {
 	defer exit.RecoverAll()
-	defer logutil.Flush()
 
-	servenv.ParseFlags("vtaclcheck")
-	servenv.Init()
-
-	err := run()
-	if err != nil {
+	if err := cli.Main.Execute(); err != nil {
 		fmt.Printf("ERROR: %s\n", err)
 		exit.Return(1)
 	}
-}
-
-func run() error {
-	opts := &vtaclcheck.Options{
-		ACLFile:        aclFile,
-		StaticAuthFile: staticAuthFile,
-	}
-
-	if err := vtaclcheck.Init(opts); err != nil {
-		return err
-	}
-
-	return vtaclcheck.Run()
 }

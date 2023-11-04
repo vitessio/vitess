@@ -28,8 +28,6 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -57,7 +55,7 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		WhereClause: p.WhereClause,
 	}
 	if p.NextCount != nil {
-		mplan.NextCount = evalengine.FormatExpr(p.NextCount)
+		mplan.NextCount = sqlparser.String(p.NextCount)
 	}
 	if p.NeedsReservedConn {
 		mplan.NeedsReservedConn = true
@@ -195,7 +193,12 @@ func TestCustom(t *testing.T) {
 func TestStreamPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("stream_cases.txt") {
-		plan, err := BuildStreaming(tcase.input, testSchema)
+		var plan *Plan
+		var err error
+		statement, err := sqlparser.Parse(tcase.input)
+		if err == nil {
+			plan, err = BuildStreaming(statement, testSchema)
+		}
 		var out string
 		if err != nil {
 			out = err.Error()

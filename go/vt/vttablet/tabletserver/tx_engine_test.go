@@ -218,7 +218,7 @@ func TestTxEngineRenewFails(t *testing.T) {
 	_, _, err = te.Commit(ctx, connID)
 	require.Error(t, err)
 	assert.True(t, conn.IsClosed(), "connection was not closed")
-	assert.True(t, dbConn.IsClosed(), "underlying connection was not closed")
+	assert.True(t, dbConn.Conn.IsClosed(), "underlying connection was not closed")
 }
 
 type TxType int

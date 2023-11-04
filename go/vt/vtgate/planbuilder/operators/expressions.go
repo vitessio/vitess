@@ -18,7 +18,6 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -31,28 +30,20 @@ func BreakExpressionInLHSandRHS(
 	lhs semantics.TableSet,
 ) (col JoinColumn, err error) {
 	rewrittenExpr := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-		node := cursor.Node()
-		reservedName := getReservedBVName(node)
-		if reservedName == "" {
+		nodeExpr, ok := cursor.Node().(sqlparser.Expr)
+		if !ok || !fetchByOffset(nodeExpr) {
 			return
 		}
-		nodeExpr := node.(sqlparser.Expr)
 		deps := ctx.SemTable.RecursiveDeps(nodeExpr)
-		if deps.IsEmpty() {
-			err = vterrors.VT13001("unknown column. has the AST been copied?")
-			cursor.StopTreeWalk()
-			return
-		}
 		if !deps.IsSolvedBy(lhs) {
 			return
 		}
 
-		col.LHSExprs = append(col.LHSExprs, nodeExpr)
-		bvName := ctx.GetArgumentFor(nodeExpr, func() string {
-			return ctx.ReservedVars.ReserveVariable(reservedName)
+		bvName := ctx.GetReservedArgumentFor(nodeExpr)
+		col.LHSExprs = append(col.LHSExprs, BindVarExpr{
+			Name: bvName,
+			Expr: nodeExpr,
 		})
-
-		col.BvNames = append(col.BvNames, bvName)
 		arg := sqlparser.NewArgument(bvName)
 		// we are replacing one of the sides of the comparison with an argument,
 		// but we don't want to lose the type information we have, so we copy it over
@@ -66,15 +57,4 @@ func BreakExpressionInLHSandRHS(
 	ctx.JoinPredicates[expr] = append(ctx.JoinPredicates[expr], rewrittenExpr)
 	col.RHSExpr = rewrittenExpr
 	return
-}
-
-func getReservedBVName(node sqlparser.SQLNode) string {
-	switch node := node.(type) {
-	case *sqlparser.ColName:
-		node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
-		return node.CompliantName()
-	case sqlparser.AggrFunc:
-		return sqlparser.CompliantString(node)
-	}
-	return ""
 }

@@ -154,7 +154,6 @@ func TestMain(m *testing.M) {
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
-			"--queryserver-config-schema-change-signal-interval", "0.1",
 			"--watch_replication_stream",
 			// The next flags are deprecated, and we incldue them to verify that they are nonetheless still allowed.
 			// The values are irrelevant. Just the fact that the flags are allowed in what's important.

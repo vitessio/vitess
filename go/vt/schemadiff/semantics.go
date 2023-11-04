@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -53,6 +54,14 @@ func (si *declarativeSchemaInformation) FindTableOrVindex(tablename sqlparser.Ta
 
 func (si *declarativeSchemaInformation) ConnCollation() collations.ID {
 	return 45
+}
+
+func (si *declarativeSchemaInformation) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
+	return vschemapb.Keyspace_unmanaged, nil
+}
+
+func (si *declarativeSchemaInformation) KeyspaceError(keyspace string) error {
+	return nil
 }
 
 // addTable adds a fake table with an empty column list

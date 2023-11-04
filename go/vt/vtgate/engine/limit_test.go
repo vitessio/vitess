@@ -130,7 +130,7 @@ func TestLimitExecute(t *testing.T) {
 		results: []*sqltypes.Result{inputResult},
 	}
 	l = &Limit{
-		Count: evalengine.NewBindVar("l", sqltypes.Int64, collations.CollationBinaryID),
+		Count: evalengine.NewBindVar("l", evalengine.Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}),
 		Input: fp,
 	}
 
@@ -343,8 +343,8 @@ func TestLimitOffsetExecute(t *testing.T) {
 	}
 
 	l = &Limit{
-		Count:  evalengine.NewBindVar("l", sqltypes.Int64, collations.CollationBinaryID),
-		Offset: evalengine.NewBindVar("o", sqltypes.Int64, collations.CollationBinaryID),
+		Count:  evalengine.NewBindVar("l", evalengine.Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}),
+		Offset: evalengine.NewBindVar("o", evalengine.Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}),
 		Input:  fp,
 	}
 	result, err = l.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(1), "o": sqltypes.Int64BindVariable(1)}, false)
@@ -396,7 +396,7 @@ func TestLimitStreamExecute(t *testing.T) {
 
 	// Test with bind vars.
 	fp.rewind()
-	l.Count = evalengine.NewBindVar("l", sqltypes.Int64, collations.CollationBinaryID)
+	l.Count = evalengine.NewBindVar("l", evalengine.Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID})
 	results = nil
 	err = l.TryStreamExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
@@ -540,7 +540,7 @@ func TestLimitInputFail(t *testing.T) {
 
 func TestLimitInvalidCount(t *testing.T) {
 	l := &Limit{
-		Count: evalengine.NewBindVar("l", sqltypes.Int64, collations.CollationBinaryID),
+		Count: evalengine.NewBindVar("l", evalengine.Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}),
 	}
 	_, _, err := l.getCountAndOffset(context.Background(), &noopVCursor{}, nil)
 	assert.EqualError(t, err, "query arguments missing for l")

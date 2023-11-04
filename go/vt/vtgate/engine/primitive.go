@@ -119,6 +119,15 @@ type (
 
 		// ReleaseLock releases all the held advisory locks.
 		ReleaseLock(ctx context.Context) error
+
+		// GetWarmingReadsPercent gets the percentage of queries to clone to replicas for bufferpool warming
+		GetWarmingReadsPercent() int
+
+		// GetWarmingReadsChannel returns the channel for executing warming reads against replicas
+		GetWarmingReadsChannel() chan bool
+
+		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas
+		CloneForReplicaWarming(ctx context.Context) VCursor
 	}
 
 	// SessionActions gives primitives ability to interact with the session state
@@ -203,6 +212,8 @@ type (
 		// InTransaction returns true if the session has already opened transaction or
 		// will start a transaction on the query execution.
 		InTransaction() bool
+
+		Commit(ctx context.Context) error
 	}
 
 	// Match is used to check if a Primitive matches

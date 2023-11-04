@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -250,17 +251,19 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 
 func verifyHealthStreamSchemaChangeSignals(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, viewsEnabled bool) {
 	var streamErr error
-	wg := sync.WaitGroup{}
+	var wg sync.WaitGroup
+	var ranOnce atomic.Bool
+	var finished atomic.Bool
+
 	wg.Add(1)
-	ranOnce := false
-	finished := false
 	ch := make(chan *querypb.StreamHealthResponse)
+
 	go func() {
 		defer wg.Done()
 		streamErr = clusterInstance.StreamTabletHealthUntil(context.Background(), primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
-			ranOnce = true
+			ranOnce.Store(true)
 			// If we are finished, then close the channel and end the stream.
-			if finished {
+			if finished.Load() {
 				close(ch)
 				return true
 			}
@@ -272,11 +275,12 @@ func verifyHealthStreamSchemaChangeSignals(t *testing.T, vtgateConn *mysql.Conn,
 	// The test becomes flaky if we run the DDL immediately after starting the above go routine because the client for the Stream
 	// sometimes isn't registered by the time DDL runs, and it misses the update we get. To prevent this situation, we wait for one Stream packet
 	// to have returned. Once we know we received a Stream packet, then we know that we are registered for the health stream and can execute the DDL.
-	for i := 0; i < 30; i++ {
-		if ranOnce {
-			break
-		}
+	for i := 0; i < 30 && !ranOnce.Load(); i++ {
 		time.Sleep(1 * time.Second)
+	}
+
+	if !ranOnce.Load() {
+		t.Fatalf("HealthCheck did not ran?")
 	}
 
 	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "CREATE TABLE `area` (`id` int NOT NULL, `country` varchar(30), PRIMARY KEY (`id`))", "area")
@@ -288,7 +292,7 @@ func verifyHealthStreamSchemaChangeSignals(t *testing.T, vtgateConn *mysql.Conn,
 	verifyViewDDLSchemaChangeSignal(t, vtgateConn, ch, "DROP VIEW v2", viewsEnabled)
 	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "DROP TABLE `area`", "area")
 
-	finished = true
+	finished.Store(true)
 	wg.Wait()
 	require.NoError(t, streamErr)
 }

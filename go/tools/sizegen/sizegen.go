@@ -115,7 +115,8 @@ func isPod(tt types.Type) bool {
 func (sizegen *sizegen) getKnownType(named *types.Named) *typeState {
 	ts := sizegen.known[named]
 	if ts == nil {
-		local := strings.HasPrefix(named.Obj().Pkg().Path(), sizegen.mod.Path)
+		pkg := named.Obj().Pkg()
+		local := pkg != nil && strings.HasPrefix(pkg.Path(), sizegen.mod.Path)
 		ts = &typeState{
 			local: local,
 			pod:   isPod(named.Underlying()),
@@ -487,7 +488,7 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 }
 
 var defaultGenTypes = []string{
-	"vitess.io/vitess/go/pools.Setting",
+	"vitess.io/vitess/go/pools/smartconnpool.Setting",
 	"vitess.io/vitess/go/vt/schema.DDLStrategySetting",
 	"vitess.io/vitess/go/vt/vtgate/engine.Plan",
 	"vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan",

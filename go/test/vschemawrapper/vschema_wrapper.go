@@ -67,6 +67,11 @@ func (vw *VSchemaWrapper) GetPrepareData(stmtName string) *vtgatepb.PrepareData 
 			PrepareStatement: "select 1 from user",
 			ParamsCount:      0,
 		}
+	case "prep_delete":
+		return &vtgatepb.PrepareData{
+			PrepareStatement: "delete from tbl5 where id = :v1",
+			ParamsCount:      1,
+		}
 	}
 	return nil
 }
@@ -124,11 +129,15 @@ func (vw *VSchemaWrapper) PlannerWarning(_ string) {
 }
 
 func (vw *VSchemaWrapper) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
-	defaultFkMode := vschemapb.Keyspace_FK_UNMANAGED
-	if vw.V.Keyspaces[keyspace] != nil && vw.V.Keyspaces[keyspace].ForeignKeyMode != vschemapb.Keyspace_FK_DEFAULT {
+	defaultFkMode := vschemapb.Keyspace_unmanaged
+	if vw.V.Keyspaces[keyspace] != nil && vw.V.Keyspaces[keyspace].ForeignKeyMode != vschemapb.Keyspace_unspecified {
 		return vw.V.Keyspaces[keyspace].ForeignKeyMode, nil
 	}
 	return defaultFkMode, nil
+}
+
+func (vw *VSchemaWrapper) KeyspaceError(keyspace string) error {
+	return nil
 }
 
 func (vw *VSchemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {

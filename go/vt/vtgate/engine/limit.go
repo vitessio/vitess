@@ -22,6 +22,7 @@ import (
 	"io"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -204,10 +205,10 @@ func (l *Limit) description() PrimitiveDescription {
 	other := map[string]any{}
 
 	if l.Count != nil {
-		other["Count"] = evalengine.FormatExpr(l.Count)
+		other["Count"] = sqlparser.String(l.Count)
 	}
 	if l.Offset != nil {
-		other["Offset"] = evalengine.FormatExpr(l.Offset)
+		other["Offset"] = sqlparser.String(l.Offset)
 	}
 
 	return PrimitiveDescription{

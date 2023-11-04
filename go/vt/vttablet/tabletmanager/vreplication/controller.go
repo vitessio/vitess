@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -227,6 +229,12 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		if _, err := dbClient.ExecuteFetch("set names 'binary'", 10000); err != nil {
 			return err
 		}
+		if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout), 10000); err != nil {
+			return err
+		}
+		if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout), 10000); err != nil {
+			return err
+		}
 		// We must apply AUTO_INCREMENT values precisely as we got them. This include the 0 value, which is not recommended in AUTO_INCREMENT, and yet is valid.
 		if _, err := dbClient.ExecuteFetch("set @@session.sql_mode = CONCAT(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')", 10000); err != nil {
 			return err
@@ -251,18 +259,20 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		err = vr.Replicate(ctx)
 		ct.lastWorkflowError.Record(err)
 
-		// If this is a mysql error that we know needs manual intervention OR
-		// we cannot identify this as non-recoverable, but it has persisted
-		// beyond the retry limit (maxTimeToRetryError).
-		// In addition, we cannot restart a workflow started with AtomicCopy which has _any_ error.
+		// If this is a MySQL error that we know needs manual intervention or
+		// it's a FAILED_PRECONDITION vterror, OR we cannot identify this as
+		// non-recoverable BUT it has persisted beyond the retry limit
+		// (maxTimeToRetryError). In addition, we cannot restart a workflow
+		// started with AtomicCopy which has _any_ error.
 		if (err != nil && vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy)) ||
-			isUnrecoverableError(err) || !ct.lastWorkflowError.ShouldRetry() {
+			isUnrecoverableError(err) ||
+			!ct.lastWorkflowError.ShouldRetry() {
 
-			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)
 			if errSetState := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); errSetState != nil {
-				log.Errorf("INTERNAL: unable to setState() in controller. Attempting to set error text: [%v]; setState() error is: %v", err, errSetState)
+				log.Errorf("INTERNAL: unable to setState() in controller: %v. Could not set error text to: %v.", errSetState, err)
 				return err // yes, err and not errSetState.
 			}
+			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)
 			return nil // this will cause vreplicate to quit the workflow
 		}
 		return err

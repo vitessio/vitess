@@ -20,6 +20,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 type (
@@ -33,7 +34,7 @@ type (
 	dependency struct {
 		direct    TableSet
 		recursive TableSet
-		typ       *Type
+		typ       evalengine.Type
 	}
 	nothing struct{}
 	certain struct {
@@ -48,14 +49,15 @@ type (
 
 var ambigousErr = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous")
 
-func createCertain(direct TableSet, recursive TableSet, qt *Type) *certain {
+func createCertain(direct TableSet, recursive TableSet, qt evalengine.Type) *certain {
 	c := &certain{
 		dependency: dependency{
 			direct:    direct,
 			recursive: recursive,
+			typ:       evalengine.UnknownType(),
 		},
 	}
-	if qt != nil && qt.Type != querypb.Type_NULL_TYPE {
+	if qt.Type != querypb.Type_NULL_TYPE {
 		c.typ = qt
 	}
 	return c

@@ -36,7 +36,7 @@
     "comment": "Analyze statement",
     "query": "analyze table t1",
     "plan": {
-      "QueryType": "OTHER",
+      "QueryType": "ANALYZE",
       "Original": "analyze table t1",
       "Instructions": {
         "OperatorType": "Send",
@@ -44,10 +44,12 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetDestination": "AnyShard()",
-        "Query": "analyze table t1",
-        "SingleShardOnly": true
-      }
+        "TargetDestination": "AllShards()",
+        "Query": "analyze table t1"
+      },
+      "TablesUsed": [
+        "t1"
+      ]
     }
   },
   {

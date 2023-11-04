@@ -1,5 +1,9 @@
 ## v16.0
 The dedicated team for this release can be found [here](team.md).
+* **[16.0.5](16.0.5)**
+	* [Changelog](16.0.5/changelog.md)
+	* [Release Notes](16.0.5/release_notes.md)
+
 * **[16.0.4](16.0.4)**
 	* [Changelog](16.0.4/changelog.md)
 	* [Release Notes](16.0.4/release_notes.md)

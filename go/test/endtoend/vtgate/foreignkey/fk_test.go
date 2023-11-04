@@ -362,18 +362,7 @@ func drainEvents(t *testing.T, ch chan *binlogdatapb.VEvent, count int) []string
 */
 func TestFkScenarios(t *testing.T) {
 	// Wait for schema-tracking to be complete.
-	err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, shardedKs, "fk_t1", "col")
-	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, shardedKs, "fk_t18", "col")
-	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, shardedKs, "fk_t11", "col")
-	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedKs, "fk_t1", "col")
-	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedKs, "fk_t18", "col")
-	require.NoError(t, err)
-	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedKs, "fk_t11", "col")
-	require.NoError(t, err)
+	waitForSchemaTrackingForFkTables(t)
 
 	testcases := []struct {
 		name             string
@@ -745,7 +734,7 @@ func TestFkScenarios(t *testing.T) {
 			mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
 
 			// Update that fails
-			_, err = mcmp.ExecAllowAndCompareError("UPDATE fk_t10 SET col = 15 WHERE id = 1")
+			_, err := mcmp.ExecAllowAndCompareError("UPDATE fk_t10 SET col = 15 WHERE id = 1")
 			require.Error(t, err)
 
 			// Verify the results
@@ -786,10 +775,25 @@ func TestFkScenarios(t *testing.T) {
 	}
 }
 
-// getTestName prepends whether the test is for a sharded keyspace or not to the test name.
-func getTestName(testName string, testSharded bool) string {
-	if testSharded {
-		return "Sharded - " + testName
-	}
-	return "Unsharded - " + testName
+func TestCyclicFks(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+	_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
+
+	// Create a cyclic foreign key constraint.
+	utils.Exec(t, mcmp.VtConn, "alter table fk_t10 add constraint test_cyclic_fks foreign key (col) references fk_t12 (col) on delete cascade on update cascade")
+	defer func() {
+		utils.Exec(t, mcmp.VtConn, "alter table fk_t10 drop foreign key test_cyclic_fks")
+	}()
+
+	// Wait for schema-tracking to be complete.
+	ksErr := utils.WaitForKsError(t, clusterInstance.VtgateProcess, unshardedKs)
+	// Make sure Vschema has the error for cyclic foreign keys.
+	assert.Contains(t, ksErr, "VT09019: uks has cyclic foreign keys")
+
+	// Ensure that the Vitess database is originally empty
+	ensureDatabaseState(t, mcmp.VtConn, true)
+
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, "insert into fk_t10(id, col) values (1, 1)")
+	require.ErrorContains(t, err, "VT09019: uks has cyclic foreign keys")
 }

@@ -563,6 +563,15 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
+		"vtgate_queries_no_scatter": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/no_scatter"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_queries_orderby": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/orderby", "-timeout", "20m"],
@@ -856,8 +865,17 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/foreignkey"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vtgate_gen4",
-			"RetryMax": 2,
+			"Shard": "vtgate_foreignkey_stress",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vtgate_foreignkey_stress": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/foreignkey/stress", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_foreignkey_stress",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_gen4": {
@@ -1004,6 +1022,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vreplication_vtctldclient_materialize": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMaterializeVtctldClient"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_multicell",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vreplication_cellalias": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "CellAlias"],
@@ -1051,7 +1078,7 @@
 		},
 		"vreplication_basic": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
@@ -1060,7 +1087,7 @@
 		},
 		"vreplication_copy_parallel": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyParallel"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyParallel", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
@@ -1195,16 +1222,25 @@
 		},
                 "vreplication_mariadb_to_mysql": {
                         "File": "unused.go",
-                        "Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesMariaDBToMySQL", "-timeout", "10m"],
+                        "Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesMariaDBToMySQL", "-timeout", "20m"],
                         "Command": [],
                         "Manual": false,
                         "Shard": "vreplication_across_db_versions",
                         "RetryMax": 1,
                         "Tags": []
                 },
-		"vreplication_migrate": {
+		"vreplication_vtctl_migrate": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMigrate"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctlMigrate", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_vtctld_migrate": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctldMigrate", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_migrate_vdiff2_convert_tz",
@@ -1213,7 +1249,7 @@
 		},
 		"vdiff2": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVDiff2"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVDiff2", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_migrate_vdiff2_convert_tz",

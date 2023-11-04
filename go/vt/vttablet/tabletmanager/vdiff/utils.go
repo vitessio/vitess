@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 
@@ -40,11 +42,14 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	for i, cpk := range comparePKs {
 		weightStringCol := -1
 		// if the collation is nil or unknown, use binary collation to compare as bytes
-		if cpk.collation == collations.Unknown {
-			ob[i] = engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: sqltypes.Unknown, CollationID: collations.CollationBinaryID}
-		} else {
-			ob[i] = engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: sqltypes.Unknown, CollationID: cpk.collation}
+		t := evalengine.Type{
+			Type: sqltypes.Unknown,
+			Coll: collations.CollationBinaryID,
 		}
+		if cpk.collation != collations.Unknown {
+			t.Coll = cpk.collation
+		}
+		ob[i] = engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: t}
 	}
 	return &engine.MergeSort{
 		Primitives: prims,
@@ -52,7 +57,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	}
 }
 
-//-----------------------------------------------------------------
+// -----------------------------------------------------------------
 // Utility functions
 
 func encodeString(in string) string {
@@ -64,7 +69,7 @@ func encodeString(in string) string {
 func pkColsToGroupByParams(pkCols []int) []*engine.GroupByParams {
 	var res []*engine.GroupByParams
 	for _, col := range pkCols {
-		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1, Type: sqltypes.Unknown})
+		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1, Type: evalengine.UnknownType()})
 	}
 	return res
 }

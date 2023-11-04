@@ -20,5 +20,5 @@
 source ../common/env.sh
 
 for shard in "customer/-80" "customer/80-" "commerce/0"; do
-	vtctlclient BackupShard "${shard}" || fail "Failed to backup shard: ${shard}"
+	vtctldclient BackupShard "${shard}" || fail "Failed to backup shard: ${shard}"
 done

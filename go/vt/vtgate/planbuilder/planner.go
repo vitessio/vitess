@@ -44,32 +44,28 @@ func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVers
 	}
 }
 
-func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) logicalPlan {
+// setCommentDirectivesOnPlan adds comments to queries
+func setCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) {
 	var directives *sqlparser.CommentDirectives
 	cmt, ok := stmt.(sqlparser.Commented)
-	if ok {
-		directives = cmt.GetParsedComments().Directives()
-		scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
-		timeout := queryTimeout(directives)
-		multiShardAutoCommit := directives.IsSet(sqlparser.DirectiveMultiShardAutocommit)
-
-		if scatterAsWarns || timeout > 0 || multiShardAutoCommit {
-			_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
-				switch plan := logicalPlan.(type) {
-				case *route:
-					plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
-					plan.eroute.QueryTimeout = timeout
-				case *primitiveWrapper:
-					setDirective(plan.prim, multiShardAutoCommit, timeout)
-				case *insert:
-					setDirective(plan.eInsert, multiShardAutoCommit, timeout)
-				}
-				return true, logicalPlan, nil
-			})
-		}
+	if !ok {
+		return
 	}
 
-	return plan
+	directives = cmt.GetParsedComments().Directives()
+	scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
+	timeout := queryTimeout(directives)
+	multiShardAutoCommit := directives.IsSet(sqlparser.DirectiveMultiShardAutocommit)
+
+	switch plan := plan.(type) {
+	case *route:
+		plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
+		plan.eroute.QueryTimeout = timeout
+	case *primitiveWrapper:
+		setDirective(plan.prim, multiShardAutoCommit, timeout)
+	case *insert:
+		setDirective(plan.eInsert, multiShardAutoCommit, timeout)
+	}
 }
 
 func setDirective(prim engine.Primitive, msac bool, timeout int) {

@@ -23,14 +23,16 @@ import (
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type frame func(env *ExpressionEnv) int
 
 type compiler struct {
-	cfg *Config
-	asm assembler
+	collation    collations.ID
+	dynamicTypes []ctype
+	asm          assembler
 }
 
 type CompilerLog interface {
@@ -50,6 +52,16 @@ type ctype struct {
 	Col  collations.TypedCollation
 }
 
+type Type struct {
+	Type     sqltypes.Type
+	Coll     collations.ID
+	Nullable bool
+}
+
+func UnknownType() Type {
+	return Type{Type: sqltypes.Unknown, Coll: collations.Unknown}
+}
+
 func (ct ctype) nullable() bool {
 	return ct.Flag&flagNullable != 0
 }
@@ -62,28 +74,40 @@ func (ct ctype) isHexOrBitLiteral() bool {
 	return ct.Flag&flagBit != 0 || ct.Flag&flagHex != 0
 }
 
-func (c *compiler) unsupported(expr Expr) error {
-	return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "unsupported compilation for expression '%s'", FormatExpr(expr))
+func (c *compiler) unsupported(expr IR) error {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	expr.format(buf)
+	return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "unsupported compilation for IR '%s'", buf.String())
 }
 
-func (c *compiler) compile(expr Expr) (ctype, error) {
+func (c *compiler) compile(expr IR) (*CompiledExpr, error) {
 	ct, err := expr.compile(c)
 	if err != nil {
-		return ctype{}, err
+		return nil, err
 	}
 	if c.asm.stack.cur != 1 {
-		return ctype{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "bad compilation: stack pointer at %d after compilation", c.asm.stack.cur)
+		sql := sqlparser.NewTrackedBuffer(nil)
+		expr.format(sql)
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL,
+			"bad compilation: stack pointer at %d after compilation (expr: %s)",
+			c.asm.stack.cur, sql.String())
 	}
-	return ct, nil
+	return &CompiledExpr{code: c.asm.ins, ir: expr, stack: c.asm.stack.max, typed: ct}, nil
 }
 
 func (c *compiler) compileToNumeric(ct ctype, offset int, fallback sqltypes.Type, preciseDatetime bool) ctype {
 	if sqltypes.IsNumber(ct.Type) {
 		return ct
 	}
-	if ct.Type == sqltypes.VarBinary && (ct.Flag&flagHex) != 0 {
-		c.asm.Convert_hex(offset)
-		return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+	if ct.Type == sqltypes.VarBinary {
+		if (ct.Flag & flagHex) != 0 {
+			c.asm.Convert_hex(offset)
+			return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+		}
+		if (ct.Flag & flagBit) != 0 {
+			c.asm.Convert_bit(offset)
+			return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+		}
 	}
 
 	if sqltypes.IsDateOrTime(ct.Type) {
@@ -449,11 +473,11 @@ func (c *compiler) compileToJSONKey(key ctype) error {
 	if key.Type == sqltypes.VarBinary {
 		return nil
 	}
-	c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
+	c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, 0, false)
 	return nil
 }
 
-func (c *compiler) jsonExtractPath(expr Expr) (*json.Path, error) {
+func (c *compiler) jsonExtractPath(expr IR) (*json.Path, error) {
 	path, ok := expr.(*Literal)
 	if !ok {
 		return nil, errJSONPath
@@ -466,7 +490,7 @@ func (c *compiler) jsonExtractPath(expr Expr) (*json.Path, error) {
 	return parser.ParseBytes(pathBytes.bytes)
 }
 
-func (c *compiler) jsonExtractOneOrAll(fname string, expr Expr) (jsonMatch, error) {
+func (c *compiler) jsonExtractOneOrAll(fname string, expr IR) (jsonMatch, error) {
 	lit, ok := expr.(*Literal)
 	if !ok {
 		return jsonMatchInvalid, errOneOrAll(fname)

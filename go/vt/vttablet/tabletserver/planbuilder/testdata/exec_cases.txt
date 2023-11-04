@@ -143,7 +143,7 @@
       "Role": 0
     }
   ],
-  "NextCount": "INT64(1)"
+  "NextCount": "1"
 }
 
 # sequence with number
@@ -157,7 +157,7 @@
       "Role": 0
     }
   ],
-  "NextCount": "INT64(10)"
+  "NextCount": "10"
 }
 
 
@@ -186,7 +186,7 @@
       "Role": 0
     }
   ],
-  "NextCount": "DECIMAL(12345667852342342342323423423)"
+  "NextCount": "12345667852342342342323423423"
 }
 
 # nextval on non-sequence table
@@ -621,7 +621,7 @@ options:PassthroughDMLs
       "Role": 2
     }
   ],
-  "FullQuery":"alter table b add index a (id)"
+  "FullQuery":"alter table b add key a (id)"
 }
 
 # create view
@@ -764,7 +764,13 @@ options:PassthroughDMLs
 "analyze table a"
 {
   "PlanID": "OtherRead",
-  "TableName": ""
+  "TableName": "",
+  "Permissions": [
+      {
+        "TableName": "a",
+        "Role": 1
+      }
+  ]
 }
 
 # show

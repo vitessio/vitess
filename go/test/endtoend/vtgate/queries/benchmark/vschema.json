@@ -1,0 +1,18 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "xxhash": {
+      "type": "xxhash"
+    }
+  },
+  "tables": {
+    "tbl_no_lkp_vdx": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ]
+    }
+  }
+}

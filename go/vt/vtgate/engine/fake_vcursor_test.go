@@ -49,6 +49,11 @@ var _ SessionActions = (*noopVCursor)(nil)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
+	inTx bool
+}
+
+func (t *noopVCursor) Commit(ctx context.Context) error {
+	return nil
 }
 
 func (t *noopVCursor) GetUDV(key string) *querypb.BindVariable {
@@ -57,7 +62,7 @@ func (t *noopVCursor) GetUDV(key string) *querypb.BindVariable {
 }
 
 func (t *noopVCursor) InTransaction() bool {
-	return false
+	return t.inTx
 }
 
 func (t *noopVCursor) SetCommitOrder(co vtgatepb.CommitOrder) {
@@ -86,6 +91,18 @@ func (t *noopVCursor) RemoveAdvisoryLock(name string) {
 
 func (t *noopVCursor) ReleaseLock(context.Context) error {
 	// TODO implement me
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetWarmingReadsPercent() int {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetWarmingReadsChannel() chan bool {
+	panic("implement me")
+}
+
+func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	panic("implement me")
 }
 
@@ -156,7 +173,7 @@ func (t *noopVCursor) SetDDLStrategy(strategy string) {
 }
 
 func (t *noopVCursor) GetDDLStrategy() string {
-	panic("implement me")
+	return ""
 }
 
 func (t *noopVCursor) SetMigrationContext(migrationContext string) {
@@ -389,6 +406,15 @@ type loggingVCursor struct {
 	shardSession []*srvtopo.ResolvedShard
 }
 
+func (f *loggingVCursor) HasCreatedTempTable() {
+	f.log = append(f.log, "temp table getting created")
+}
+
+func (f *loggingVCursor) Commit(_ context.Context) error {
+	f.log = append(f.log, "commit")
+	return nil
+}
+
 func (f *loggingVCursor) GetUDV(key string) *querypb.BindVariable {
 	// TODO implement me
 	panic("implement me")
@@ -479,6 +505,18 @@ func (f *loggingVCursor) GetKeyspace() string {
 
 func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {
 	f.warnings = append(f.warnings, warning)
+}
+
+func (f *loggingVCursor) GetWarmingReadsPercent() int {
+	return 0
+}
+
+func (f *loggingVCursor) GetWarmingReadsChannel() chan bool {
+	return make(chan bool)
+}
+
+func (f *loggingVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
+	return f
 }
 
 func (f *loggingVCursor) Execute(ctx context.Context, method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {

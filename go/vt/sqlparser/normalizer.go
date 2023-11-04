@@ -18,10 +18,8 @@ package sqlparser
 
 import (
 	"bytes"
-	"math/big"
 
 	"vitess.io/vitess/go/mysql/datetime"
-	"vitess.io/vitess/go/mysql/hex"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -80,7 +78,7 @@ func (nz *normalizer) walkStatementUp(cursor *Cursor) bool {
 func (nz *normalizer) walkStatementDown(node, parent SQLNode) bool {
 	switch node := node.(type) {
 	// no need to normalize the statement types
-	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, DDLStatement, *SRollback, *Release, *OtherAdmin, *OtherRead:
+	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, DDLStatement, *SRollback, *Release, *OtherAdmin, *Analyze:
 		return false
 	case *Select:
 		_, isDerived := parent.(*DerivedTable)
@@ -365,19 +363,11 @@ func SQLToBindvar(node SQLNode) *querypb.BindVariable {
 			buf = append(buf, bytes.ToUpper(node.Bytes())...)
 			buf = append(buf, '\'')
 			v, err = sqltypes.NewValue(sqltypes.HexVal, buf)
-		case BitVal:
-			// Convert bit value to hex number in parameterized query format
-			var i big.Int
-			_, ok := i.SetString(string(node.Bytes()), 2)
-			if !ok {
-				return nil
-			}
-
-			buf := i.Bytes()
-			out := make([]byte, 0, (len(buf)*2)+2)
-			out = append(out, '0', 'x')
-			out = append(out, hex.EncodeBytes(buf)...)
-			v, err = sqltypes.NewValue(sqltypes.HexNum, out)
+		case BitNum:
+			out := make([]byte, 0, len(node.Bytes())+2)
+			out = append(out, '0', 'b')
+			out = append(out, node.Bytes()[2:]...)
+			v, err = sqltypes.NewValue(sqltypes.BitNum, out)
 		case DateVal:
 			v, err = sqltypes.NewValue(sqltypes.Date, node.Bytes())
 		case TimeVal:

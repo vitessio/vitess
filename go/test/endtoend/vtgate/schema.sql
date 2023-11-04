@@ -143,6 +143,9 @@ create table t10
 (
     id           bigint,
     sharding_key bigint,
+    col1 varchar(50),
+    col2 int,
+    col3 int,
     primary key (id)
 ) Engine = InnoDB;
 

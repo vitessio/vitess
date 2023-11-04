@@ -134,9 +134,19 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 }
 
 func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer) error {
+	defer func() {
+		if td.shardStreamsCancel != nil {
+			td.shardStreamsCancel()
+		}
+		// Wait for all the shard streams to finish before returning.
+		td.wgShardStreamers.Wait()
+	}()
+
 	select {
 	case <-ctx.Done():
 		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+	case <-wd.ct.done:
+		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
 	default:
 	}
 
@@ -184,6 +194,8 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+	case <-wd.ct.done:
+		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
 	default:
 	}
 
@@ -203,6 +215,8 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		case <-wd.ct.done:
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
 		default:
 		}
 		query, err := sqlparser.ParseAndBind(sqlGetVDiffTable,

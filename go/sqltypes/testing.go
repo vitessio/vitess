@@ -143,6 +143,15 @@ func TestValue(typ querypb.Type, val string) Value {
 	return MakeTrusted(typ, []byte(val))
 }
 
+// TestTuple builds a tuple Value from a list of Values.
+// This function should only be used for testing.
+func TestTuple(vals ...Value) Value {
+	return Value{
+		typ: Tuple,
+		val: encodeTuple(vals),
+	}
+}
+
 // PrintResults prints []*Results into a string.
 // This function should only be used for testing.
 func PrintResults(results []*Result) string {

@@ -31,8 +31,10 @@ var _ Primitive = (*ExecStmt)(nil)
 type ExecStmt struct {
 	Params []*sqlparser.Variable
 	Input  Primitive
+}
 
-	noTxNeeded
+func (e *ExecStmt) NeedsTransaction() bool {
+	return e.Input.NeedsTransaction()
 }
 
 func (e *ExecStmt) RouteType() string {

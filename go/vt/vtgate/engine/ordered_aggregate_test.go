@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -905,7 +907,7 @@ func TestOrderedAggregateCollate(t *testing.T) {
 	collationID, _ := collationEnv.LookupID("utf8mb4_0900_ai_ci")
 	oa := &OrderedAggregate{
 		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "")},
-		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0, Type: evalengine.Type{Coll: collationID}}},
 		Input:       fp,
 	}
 
@@ -943,7 +945,7 @@ func TestOrderedAggregateCollateAS(t *testing.T) {
 	collationID, _ := collationEnv.LookupID("utf8mb4_0900_as_ci")
 	oa := &OrderedAggregate{
 		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "")},
-		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0, Type: evalengine.Type{Coll: collationID}}},
 		Input:       fp,
 	}
 
@@ -983,7 +985,7 @@ func TestOrderedAggregateCollateKS(t *testing.T) {
 	collationID, _ := collationEnv.LookupID("utf8mb4_ja_0900_as_cs_ks")
 	oa := &OrderedAggregate{
 		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "")},
-		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0, Type: evalengine.Type{Coll: collationID}}},
 		Input:       fp,
 	}
 

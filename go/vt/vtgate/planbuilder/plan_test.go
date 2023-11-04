@@ -77,6 +77,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "select_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "symtab_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "unsupported_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "unknown_schema_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "vindex_func_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "wireup_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "memory_sort_cases.json", testOutputTempDir, vschemaWrapper, false)
@@ -95,6 +96,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "reference_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "vexplain_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "misc_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "cte_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 // TestForeignKeyPlanning tests the planning of foreign keys in a managed mode by Vitess.
@@ -102,7 +104,8 @@ func TestForeignKeyPlanning(t *testing.T) {
 	vschema := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, vschema)
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
-		V: vschema,
+		V:           vschema,
+		TestBuilder: TestBuilder,
 	}
 
 	testOutputTempDir := makeTestOutput(t)
@@ -212,7 +215,8 @@ func TestOne(t *testing.T) {
 	lv := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, lv)
 	vschema := &vschemawrapper.VSchemaWrapper{
-		V: lv,
+		V:           lv,
+		TestBuilder: TestBuilder,
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)
@@ -263,6 +267,8 @@ func TestOneWithUserAsDefault(t *testing.T) {
 }
 
 func TestOneWithTPCHVSchema(t *testing.T) {
+	reset := oprewriters.EnableDebugPrinting()
+	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/tpch_schema.json", true),
 		SysVarEnabled: true,
@@ -525,6 +531,7 @@ type (
 		Comment string          `json:"comment,omitempty"`
 		Query   string          `json:"query,omitempty"`
 		Plan    json.RawMessage `json:"plan,omitempty"`
+		Skip    bool            `json:"skip,omitempty"`
 	}
 )
 
@@ -555,7 +562,14 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemawrapper.VS
 			t.Run(testName, func(t *testing.T) {
 				compare, s := jsondiff.Compare(tcase.Plan, []byte(out), &opts)
 				if compare != jsondiff.FullMatch {
-					t.Errorf("%s\nDiff:\n%s\n[%s] \n[%s]", filename, s, tcase.Plan, out)
+					message := fmt.Sprintf("%s\nDiff:\n%s\n[%s] \n[%s]", filename, s, tcase.Plan, out)
+					if tcase.Skip {
+						t.Skip(message)
+					} else {
+						t.Errorf(message)
+					}
+				} else if tcase.Skip {
+					t.Errorf("query is correct even though it is skipped:\n %s", tcase.Query)
 				}
 				current.Plan = []byte(out)
 			})

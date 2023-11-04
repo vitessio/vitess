@@ -53,42 +53,35 @@ func (o *Ordering) SetInputs(operators []ops.Operator) {
 	o.Source = operators[0]
 }
 
-func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := o.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	o.Source = newSrc
-	return o, nil
+func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	o.Source = o.Source.AddPredicate(ctx, expr)
+	return o
 }
 
-func (o *Ordering) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
-	return o.Source.AddColumns(ctx, reuse, addToGroupBy, exprs)
+func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
+	return o.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
-func (o *Ordering) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+func (o *Ordering) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return o.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (o *Ordering) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+func (o *Ordering) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return o.Source.GetColumns(ctx)
 }
 
-func (o *Ordering) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+func (o *Ordering) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
 	return o.Source.GetSelectExprs(ctx)
 }
 
-func (o *Ordering) GetOrdering() ([]ops.OrderBy, error) {
-	return o.Order, nil
+func (o *Ordering) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+	return o.Order
 }
 
-func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
+func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) {
 	for _, order := range o.Order {
-		offsets, err := o.Source.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(order.SimplifiedExpr)})
-		if err != nil {
-			return err
-		}
-		o.Offset = append(o.Offset, offsets[0])
+		offset := o.Source.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
+		o.Offset = append(o.Offset, offset)
 
 		if !ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
 			o.WOffset = append(o.WOffset, -1)
@@ -96,19 +89,14 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 
 		wsExpr := &sqlparser.WeightStringFuncExpr{Expr: order.SimplifiedExpr}
-		offsets, err = o.Source.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(wsExpr)})
-		if err != nil {
-			return err
-		}
-		o.WOffset = append(o.WOffset, offsets[0])
+		offset = o.Source.AddColumn(ctx, true, false, aeWrap(wsExpr))
+		o.WOffset = append(o.WOffset, offset)
 	}
-
-	return nil
 }
 
 func (o *Ordering) ShortDescription() string {
 	ordering := slice.Map(o.Order, func(o ops.OrderBy) string {
-		return sqlparser.String(o.Inner)
+		return sqlparser.String(o.SimplifiedExpr)
 	})
 	return strings.Join(ordering, ", ")
 }

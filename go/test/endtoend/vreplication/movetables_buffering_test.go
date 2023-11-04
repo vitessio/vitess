@@ -33,7 +33,7 @@ func TestMoveTablesBuffering(t *testing.T) {
 
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
-	vdiff1(t, ksWorkflow, "")
+	vdiffSideBySide(t, ksWorkflow, "")
 	waitForLowLag(t, "customer", workflowName)
 	tstWorkflowSwitchReads(t, "", "")
 	tstWorkflowSwitchWrites(t)

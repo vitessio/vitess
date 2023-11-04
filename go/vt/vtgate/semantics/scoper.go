@@ -20,9 +20,8 @@ import (
 	"reflect"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -37,6 +36,7 @@ type (
 
 		// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
 		specialExprScopes map[*sqlparser.Literal]*scope
+		statementIDs      map[sqlparser.Statement]TableSet
 	}
 
 	scope struct {
@@ -46,6 +46,7 @@ type (
 		isUnion   bool
 		joinUsing map[string]TableSet
 		stmtScope bool
+		ctes      map[string]*sqlparser.CommonTableExpr
 	}
 )
 
@@ -54,6 +55,7 @@ func newScoper() *scoper {
 		rScope:            map[*sqlparser.Select]*scope{},
 		wScope:            map[*sqlparser.Select]*scope{},
 		specialExprScopes: map[*sqlparser.Literal]*scope{},
+		statementIDs:      map[sqlparser.Statement]TableSet{},
 	}
 }
 
@@ -64,6 +66,8 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 		s.pushDMLScope(node)
 	case *sqlparser.Select:
 		s.pushSelectScope(node)
+	case *sqlparser.Union:
+		s.pushUnionScope(node)
 	case sqlparser.TableExpr:
 		s.enterJoinScope(cursor)
 	case sqlparser.SelectExprs:
@@ -73,12 +77,19 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 	case sqlparser.GroupBy:
 		return s.addColumnInfoForGroupBy(cursor, node)
 	case *sqlparser.Where:
-		if node.Type != sqlparser.HavingClause {
-			break
+		if node.Type == sqlparser.HavingClause {
+			return s.createSpecialScopePostProjection(cursor.Parent())
 		}
-		return s.createSpecialScopePostProjection(cursor.Parent())
 	}
 	return nil
+}
+
+func (s *scoper) pushUnionScope(union *sqlparser.Union) {
+	currentScope := s.currentScope()
+	currScope := newScope(currentScope)
+	currScope.stmtScope = true
+	currScope.stmt = union
+	s.push(currScope)
 }
 
 func (s *scoper) addColumnInfoForGroupBy(cursor *sqlparser.Cursor, node sqlparser.GroupBy) error {
@@ -132,7 +143,13 @@ func (s *scoper) enterJoinScope(cursor *sqlparser.Cursor) {
 		// can only see the two tables involved in the JOIN, and no other tables of that select statement.
 		// They are allowed to see the tables of the outer select query.
 		// To create this special context, we will find the parent scope of the select statement involved.
-		nScope := newScope(s.currentScope().findParentScopeOfStatement())
+		currScope := s.currentScope()
+		stmtScope := currScope.findParentScopeOfStatement()
+		nScope := newScope(stmtScope)
+		if stmtScope == nil {
+			// TODO: this feels hacky. revisit with a better plan
+			nScope.ctes = currScope.ctes
+		}
 		nScope.stmt = cursor.Parent().(*sqlparser.Select)
 		s.push(nScope)
 	}
@@ -180,7 +197,13 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 		if isParentSelectStatement(cursor) {
 			s.popScope()
 		}
-	case *sqlparser.Select, sqlparser.GroupBy, *sqlparser.Update, *sqlparser.Delete, *sqlparser.Insert:
+	case *sqlparser.Select, sqlparser.GroupBy, *sqlparser.Update, *sqlparser.Delete, *sqlparser.Insert, *sqlparser.Union:
+		id := EmptyTableSet()
+		for _, tableInfo := range s.currentScope().tables {
+			set := tableInfo.getTableSet(s.org)
+			id = id.Merge(set)
+		}
+		s.statementIDs[s.currentScope().stmt] = id
 		s.popScope()
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {
@@ -276,7 +299,37 @@ func newScope(parent *scope) *scope {
 	return &scope{
 		parent:    parent,
 		joinUsing: map[string]TableSet{},
+		ctes:      map[string]*sqlparser.CommonTableExpr{},
 	}
+}
+
+func (s *scope) addCTE(cte *sqlparser.CommonTableExpr) error {
+	name := cte.ID.String()
+	_, exists := s.ctes[name]
+	if exists {
+		return vterrors.VT03013(name)
+	}
+	if err := checkForInvalidAliasUse(cte, name); err != nil {
+		return err
+	}
+	s.ctes[name] = cte
+	return nil
+}
+
+func checkForInvalidAliasUse(cte *sqlparser.CommonTableExpr, name string) (err error) {
+	// TODO I'm sure there is a better. way, but we need to do this to stop infinite loops from occurring
+	down := func(node sqlparser.SQLNode, parent sqlparser.SQLNode) bool {
+		tbl, ok := node.(sqlparser.TableName)
+		if !ok || !tbl.Qualifier.IsEmpty() {
+			return err == nil
+		}
+		if tbl.Name.String() == name {
+			err = vterrors.VT12001("do not support CTE that use the CTE alias inside the CTE query")
+		}
+		return err == nil
+	}
+	_ = sqlparser.CopyOnRewrite(cte.Subquery.Select, down, nil, nil)
+	return err
 }
 
 func (s *scope) addTable(info TableInfo) error {
@@ -323,4 +376,15 @@ func (s *scope) findParentScopeOfStatement() *scope {
 		return nil
 	}
 	return s.parent.findParentScopeOfStatement()
+}
+
+// findCTE will search in this scope, and then recursively search the parents
+func (s *scope) findCTE(name string) *sqlparser.CommonTableExpr {
+	cte, found := s.ctes[name]
+	if found || s.parent == nil {
+		// if we don't have a parent, we'll return
+		// whatever we have, even if it happens to be nil
+		return cte
+	}
+	return s.parent.findCTE(name)
 }

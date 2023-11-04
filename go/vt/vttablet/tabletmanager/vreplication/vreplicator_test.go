@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -90,30 +89,34 @@ func TestRecalculatePKColsInfoByColumnNames(t *testing.T) {
 func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
-		name    string
-		table   string
-		ddl     string
-		want    []string
-		wantErr bool
+		name      string
+		table     string
+		ddl       string
+		wantCols  []string
+		wantIndex string
+		wantErr   bool
 	}{
 		{
 			name:  "WITHPK",
 			table: "withpk_t",
 			ddl: `CREATE TABLE withpk_t (pkid INT NOT NULL AUTO_INCREMENT, col1 VARCHAR(25),
 				PRIMARY KEY (pkid))`,
-			want: []string{"pkid"},
+			wantCols:  []string{"pkid"},
+			wantIndex: "PRIMARY",
 		},
 		{
-			name:  "0PKE",
-			table: "zeropke_t",
-			ddl:   `CREATE TABLE zeropke_t (id INT NULL, col1 VARCHAR(25), UNIQUE KEY (id))`,
-			want:  []string{},
+			name:      "0PKE",
+			table:     "zeropke_t",
+			ddl:       `CREATE TABLE zeropke_t (id INT NULL, col1 VARCHAR(25), UNIQUE KEY (id))`,
+			wantCols:  []string{},
+			wantIndex: "",
 		},
 		{
-			name:  "1PKE",
-			table: "onepke_t",
-			ddl:   `CREATE TABLE onepke_t (id INT NOT NULL, col1 VARCHAR(25), UNIQUE KEY (id))`,
-			want:  []string{"id"},
+			name:      "1PKE",
+			table:     "onepke_t",
+			ddl:       `CREATE TABLE onepke_t (id INT NOT NULL, col1 VARCHAR(25), UNIQUE KEY (id))`,
+			wantCols:  []string{"id"},
+			wantIndex: "id",
 		},
 		{
 			name:  "3MULTICOL1PKE",
@@ -122,7 +125,8 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 					col3 VARCHAR(25) NOT NULL, col4 VARCHAR(25), UNIQUE KEY c4_c2_c1 (col4, col2, col1),
 					UNIQUE KEY c1_c2 (col1, col2), UNIQUE KEY c1_c2_c4 (col1, col2, col4),
 					KEY nc1_nc2 (col1, col2))`,
-			want: []string{"col1", "col2"},
+			wantCols:  []string{"col1", "col2"},
+			wantIndex: "c1_c2",
 		},
 		{
 			name:  "3MULTICOL2PKE",
@@ -130,7 +134,8 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			ddl: `CREATE TABLE twomcpke_t (col1 VARCHAR(25) NOT NULL, col2 VARCHAR(25) NOT NULL,
 					col3 VARCHAR(25) NOT NULL, col4 VARCHAR(25), UNIQUE KEY (col4), UNIQUE KEY c4_c2_c1 (col4, col2, col1),
 					UNIQUE KEY c1_c2_c3 (col1, col2, col3), UNIQUE KEY c1_c2 (col1, col2))`,
-			want: []string{"col1", "col2"},
+			wantCols:  []string{"col1", "col2"},
+			wantIndex: "c1_c2",
 		},
 		{
 			name:  "1INTPKE1CHARPKE",
@@ -138,48 +143,52 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			ddl: `CREATE TABLE oneintpke1charpke_t (col1 VARCHAR(25) NOT NULL, col2 VARCHAR(25) NOT NULL,
 					col3 VARCHAR(25) NOT NULL, id1 INT NOT NULL, id2 INT NOT NULL, 
 					UNIQUE KEY c1_c2 (col1, col2), UNIQUE KEY id1_id2 (id1, id2))`,
-			want: []string{"id1", "id2"},
+			wantCols:  []string{"id1", "id2"},
+			wantIndex: "id1_id2",
 		},
 		{
 			name:  "INTINTVSVCHAR",
 			table: "twointvsvcharpke_t",
 			ddl: `CREATE TABLE twointvsvcharpke_t (col1 VARCHAR(25) NOT NULL, id1 INT NOT NULL, id2 INT NOT NULL, 
 					UNIQUE KEY c1 (col1), UNIQUE KEY id1_id2 (id1, id2))`,
-			want: []string{"id1", "id2"},
+			wantCols:  []string{"id1", "id2"},
+			wantIndex: "id1_id2",
 		},
 		{
 			name:  "TINYINTVSBIGINT",
 			table: "tinyintvsbigint_t",
 			ddl: `CREATE TABLE tinyintvsbigint_t (tid1 TINYINT NOT NULL, id1 INT NOT NULL, 
 					UNIQUE KEY tid1 (tid1), UNIQUE KEY id1 (id1))`,
-			want: []string{"tid1"},
+			wantCols:  []string{"tid1"},
+			wantIndex: "tid1",
 		},
 		{
 			name:  "VCHARINTVSINT2VARCHAR",
 			table: "vcharintvsinttwovchar_t",
 			ddl: `CREATE TABLE vcharintvsinttwovchar_t (id1 INT NOT NULL, col1 VARCHAR(25) NOT NULL, col2 VARCHAR(25) NOT NULL,
 					UNIQUE KEY col1_id1 (col1, id1), UNIQUE KEY id1_col1_col2 (id1, col1, col2))`,
-			want: []string{"col1", "id1"},
+			wantCols:  []string{"col1", "id1"},
+			wantIndex: "col1_id1",
 		},
 		{
 			name:  "VCHARVSINT3",
 			table: "vcharvsintthree_t",
 			ddl: `CREATE TABLE vcharvsintthree_t (id1 INT NOT NULL, id2 INT NOT NULL, id3 INT NOT NULL, col1 VARCHAR(50) NOT NULL,
 					UNIQUE KEY col1 (col1), UNIQUE KEY id1_id2_id3 (id1, id2, id3))`,
-			want: []string{"id1", "id2", "id3"},
+			wantCols:  []string{"id1", "id2", "id3"},
+			wantIndex: "id1_id2_id3",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, tt.ddl))
-			got, err := env.Mysqld.GetPrimaryKeyEquivalentColumns(ctx, env.Dbcfgs.DBName, tt.table)
+			cols, indexName, err := env.Mysqld.GetPrimaryKeyEquivalentColumns(ctx, env.Dbcfgs.DBName, tt.table)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Mysqld.GetPrimaryKeyEquivalentColumns() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Mysqld.GetPrimaryKeyEquivalentColumns() = %v, want %v", got, tt.want)
-			}
+			require.Equalf(t, cols, tt.wantCols, "Mysqld.GetPrimaryKeyEquivalentColumns() columns = %v, want %v", cols, tt.wantCols)
+			require.Equalf(t, indexName, tt.wantIndex, "Mysqld.GetPrimaryKeyEquivalentColumns() index = %v, want %v", indexName, tt.wantIndex)
 		})
 	}
 }
@@ -383,7 +392,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			tableName:             "t1",
 			initialDDL:            "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), key c1 (c1), key c2 (c2))",
 			strippedDDL:           "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id))",
-			intermediateDDL:       "alter table %s.t1 add unique key c1_c2 (c1,c2), add key c2 (c2), add key c1 (c1)",
+			intermediateDDL:       "alter table %s.t1 add unique index c1_c2 (c1,c2), add key c2 (c2), add key c1 (c1)",
 			actionDDL:             "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
 			WorkflowType:          int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 			expectFinalSchemaDiff: true,
@@ -569,7 +578,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	getActionsSQLf := "select action from _vt.post_copy_action where vrepl_id=%d and table_name='%s'"
 
 	tableName := "t1"
-	ddl := fmt.Sprintf("create table %s.t1 (id int not null, c1 int default null, c2 int default null, primary key(id), key c1 (c1), key c2 (c2))", dbName)
+	ddl := fmt.Sprintf("create table %s.t1 (id int not null, c1 int default null, c2 int default null, primary key(id), index c1 (c1), index c2 (c2))", dbName)
 	withoutPKs := "create table t1 (id int not null, c1 int default null, c2 int default null, primary key(id))"
 	alter := fmt.Sprintf("alter table %s.t1 add key c1 (c1), add key c2 (c2)", dbName)
 

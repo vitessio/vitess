@@ -27,6 +27,8 @@ import (
 	"strconv"
 	"strings"
 
+	"google.golang.org/protobuf/encoding/protowire"
+
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/decimal"
@@ -63,9 +65,8 @@ type (
 	// an integral type, the bytes are always stored as a canonical
 	// representation that matches how MySQL returns such values.
 	Value struct {
-		typ    querypb.Type
-		val    []byte
-		values []Value
+		typ querypb.Type
+		val []byte
 	}
 
 	Row = []Value
@@ -110,19 +111,10 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 // comments. Other packages can also use the function to create
 // VarBinary or VarChar values.
 func MakeTrusted(typ querypb.Type, val []byte) Value {
-	return MakeTrustedValues(typ, val, nil)
-}
-
-func MakeTrustedValues(typ querypb.Type, val []byte, values []*querypb.Value) Value {
 	if typ == Null {
 		return NULL
 	}
-	var sqlValues []Value
-	for _, v := range values {
-		sqlValues = append(sqlValues,
-			MakeTrustedValues(v.Type, v.Value, v.Values))
-	}
-	return Value{typ: typ, val: val, values: sqlValues}
+	return Value{typ: typ, val: val}
 }
 
 // NewHexNum builds an Hex Value.
@@ -454,12 +446,14 @@ func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
 		encodeBytesSQLBits(v.val, b)
 	case v.typ == Tuple:
 		b.WriteByte('(')
-		for i, bv := range v.values {
-			if i != 0 {
+		var i int
+		_ = v.ForEachValue(func(bv Value) {
+			if i > 0 {
 				b.WriteString(", ")
 			}
 			bv.EncodeSQLStringBuilder(b)
-		}
+			i++
+		})
 		b.WriteByte(')')
 	default:
 		b.Write(v.val)
@@ -656,6 +650,51 @@ func (v *Value) decodeBitNum() ([]byte, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid bit number: %v", v.val)
 	}
 	return i.Bytes(), nil
+}
+
+var ErrBadTupleEncoding = errors.New("bad tuple encoding in sqltypes.Value")
+
+func encodeTuple(tuple []Value) []byte {
+	var total int
+	for _, v := range tuple {
+		total += len(v.val) + 3
+	}
+
+	buf := make([]byte, 0, total)
+	for _, v := range tuple {
+		buf = protowire.AppendVarint(buf, uint64(v.typ))
+		buf = protowire.AppendVarint(buf, uint64(len(v.val)))
+		buf = append(buf, v.val...)
+	}
+	return buf
+}
+
+func (v *Value) ForEachValue(each func(bv Value)) error {
+	if v.typ != Tuple {
+		panic("Value.ForEachValue on non-tuple")
+	}
+
+	var sz, ty uint64
+	var varlen int
+	buf := v.val
+	for len(buf) > 0 {
+		ty, varlen = protowire.ConsumeVarint(buf)
+		if varlen < 0 {
+			return ErrBadTupleEncoding
+		}
+
+		buf = buf[varlen:]
+		sz, varlen = protowire.ConsumeVarint(buf)
+		if varlen < 0 {
+			return ErrBadTupleEncoding
+		}
+
+		buf = buf[varlen:]
+		each(Value{val: buf[:sz], typ: Type(ty)})
+
+		buf = buf[sz:]
+	}
+	return nil
 }
 
 func encodeBytesSQL(val []byte, b BinWriter) {

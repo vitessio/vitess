@@ -26,10 +26,13 @@ import (
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // This file contains just the builders for ReplicatorPlan and TablePlan.
@@ -425,9 +428,28 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		references: make(map[string]bool),
 	}
 	if expr, ok := aliased.Expr.(*sqlparser.ConvertUsingExpr); ok {
+		// Here we find the actual column name in the convert, in case
+		// this is a column rename and the AS is the new column.
+		// For example, in convert(c1 using utf8mb4) as c2, we want to find
+		// c1, because c1 exists in the current table whereas c2 is the renamed column
+		// in the desired table.
+		var colName sqlparser.IdentifierCI
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				if !node.Qualifier.IsEmpty() {
+					return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
+				}
+				colName = node.Name
+			}
+			return true, nil
+		}, aliased.Expr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find column name for convert using expression: %v, %v", sqlparser.String(aliased.Expr), err)
+		}
 		selExpr := &sqlparser.ConvertUsingExpr{
 			Type: "utf8mb4",
-			Expr: &sqlparser.ColName{Name: as},
+			Expr: &sqlparser.ColName{Name: colName},
 		}
 		cexpr.expr = expr
 		cexpr.operation = opExpr
@@ -610,7 +632,7 @@ func (tpb *tablePlanBuilder) analyzeExtraSourcePkCols(colInfos []*ColumnInfo, so
 			if !col.IsGenerated {
 				// We shouldn't get here in any normal scenario. If a column is part of colInfos,
 				// then it must also exist in tpb.colExprs.
-				return fmt.Errorf("column %s not found in table expressions", col.Name)
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "column %s not found in table expressions", col.Name)
 			}
 		}
 	}

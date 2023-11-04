@@ -20,7 +20,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -73,13 +72,15 @@ type (
 	}
 )
 
-var _ Expr = (*CollateExpr)(nil)
+var _ IR = (*CollateExpr)(nil)
 
 func (c *CollateExpr) eval(env *ExpressionEnv) (eval, error) {
 	e, err := c.Inner.eval(env)
 	if err != nil {
 		return nil, err
 	}
+
+	var b *evalBytes
 	switch e := e.(type) {
 	case nil:
 		return nil, nil
@@ -87,15 +88,16 @@ func (c *CollateExpr) eval(env *ExpressionEnv) (eval, error) {
 		if err := collations.Local().EnsureCollate(e.col.Collation, c.TypedCollation.Collation); err != nil {
 			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 		}
-		return e.withCollation(c.TypedCollation), nil
+		b = e.withCollation(c.TypedCollation)
 	default:
-		return evalToVarchar(e, c.TypedCollation.Collation, true)
+		b, err = evalToVarchar(e, c.TypedCollation.Collation, true)
+		if err != nil {
+			return nil, err
+		}
 	}
-}
 
-func (c *CollateExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	t, f := c.Inner.typeof(env, fields)
-	return t, f | flagExplicitCollation
+	b.flag |= flagExplicitCollation
+	return b, nil
 }
 
 func (expr *CollateExpr) compile(c *compiler) (ctype, error) {
@@ -215,24 +217,25 @@ func (ca *collationAggregation) result() collations.TypedCollation {
 	return ca.cur
 }
 
-var _ Expr = (*IntroducerExpr)(nil)
+var _ IR = (*IntroducerExpr)(nil)
 
 func (expr *IntroducerExpr) eval(env *ExpressionEnv) (eval, error) {
 	e, err := expr.Inner.eval(env)
 	if err != nil {
 		return nil, err
 	}
-	if expr.TypedCollation.Collation == collations.CollationBinaryID {
-		return evalToBinary(e), nil
-	}
-	return evalToVarchar(e, expr.TypedCollation.Collation, false)
-}
 
-func (expr *IntroducerExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	var b *evalBytes
 	if expr.TypedCollation.Collation == collations.CollationBinaryID {
-		return sqltypes.VarBinary, flagExplicitCollation
+		b = evalToBinary(e)
+	} else {
+		b, err = evalToVarchar(e, expr.TypedCollation.Collation, false)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return sqltypes.VarChar, flagExplicitCollation
+	b.flag |= flagExplicitCollation
+	return b, nil
 }
 
 func (expr *IntroducerExpr) compile(c *compiler) (ctype, error) {

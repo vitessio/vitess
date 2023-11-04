@@ -180,7 +180,7 @@ func (r *heartbeatReader) fetchMostRecentHeartbeat(ctx context.Context) (*sqltyp
 	if err != nil {
 		return nil, err
 	}
-	return conn.Exec(ctx, sel, 1, false)
+	return conn.Conn.Exec(ctx, sel, 1, false)
 }
 
 // bindHeartbeatFetch takes a heartbeat read and adds the necessary

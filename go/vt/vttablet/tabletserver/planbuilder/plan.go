@@ -233,7 +233,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbNam
 		plan, err = &Plan{PlanID: PlanShowThrottlerStatus, FullStmt: stmt}, nil
 	case *sqlparser.Show:
 		plan, err = analyzeShow(stmt, dbName)
-	case *sqlparser.OtherRead, sqlparser.Explain:
+	case *sqlparser.Analyze, sqlparser.Explain:
 		plan, err = &Plan{PlanID: PlanOtherRead}, nil
 	case *sqlparser.OtherAdmin:
 		plan, err = &Plan{PlanID: PlanOtherAdmin}, nil
@@ -260,12 +260,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbNam
 }
 
 // BuildStreaming builds a streaming plan based on the schema.
-func BuildStreaming(sql string, tables map[string]*schema.Table) (*Plan, error) {
-	statement, err := sqlparser.Parse(sql)
-	if err != nil {
-		return nil, err
-	}
-
+func BuildStreaming(statement sqlparser.Statement, tables map[string]*schema.Table) (*Plan, error) {
 	plan := &Plan{
 		PlanID:      PlanSelectStream,
 		FullQuery:   GenerateFullQuery(statement),
@@ -278,8 +273,9 @@ func BuildStreaming(sql string, tables map[string]*schema.Table) (*Plan, error) 
 			plan.NeedsReservedConn = true
 		}
 		plan.Table, plan.AllTables = lookupTables(stmt.From, tables)
-	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
-		// pass
+	case *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
+	case *sqlparser.Analyze:
+		plan.PlanID = PlanOtherRead
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed for streaming", sqlparser.ASTToStatementType(statement))
 	}

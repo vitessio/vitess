@@ -214,6 +214,20 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, alterVschema *sqlpar
 
 		return ks, nil
 
+	case sqlparser.DropSequenceDDLAction:
+		if ks.Sharded {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "drop sequence table: unsupported on sharded keyspace %s", ksName)
+		}
+
+		name := alterVschema.Table.Name.String()
+		if _, ok := ks.Tables[name]; !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema does not contain sequence %s in keyspace %s", name, ksName)
+		}
+
+		delete(ks.Tables, name)
+
+		return ks, nil
+
 	case sqlparser.AddAutoIncDDLAction:
 		name := alterVschema.Table.Name.String()
 		table := ks.Tables[name]
@@ -229,6 +243,21 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, alterVschema *sqlpar
 			Column:   alterVschema.AutoIncSpec.Column.String(),
 			Sequence: sqlparser.String(alterVschema.AutoIncSpec.Sequence),
 		}
+
+		return ks, nil
+
+	case sqlparser.DropAutoIncDDLAction:
+		name := alterVschema.Table.Name.String()
+		table := ks.Tables[name]
+		if table == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema does not contain table %s in keyspace %s", name, ksName)
+		}
+
+		if table.AutoIncrement == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema does not contain auto increment %v on table %s in keyspace %s", table.AutoIncrement, name, ksName)
+		}
+
+		table.AutoIncrement = nil
 
 		return ks, nil
 	}

@@ -19,7 +19,6 @@ package operators
 import (
 	"fmt"
 
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -62,8 +61,8 @@ func (d *Delete) TablesUsed() []string {
 	return nil
 }
 
-func (d *Delete) GetOrdering() ([]ops.OrderBy, error) {
-	return nil, nil
+func (d *Delete) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+	return nil
 }
 
 func (d *Delete) ShortDescription() string {
@@ -92,18 +91,14 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return nil, err
 	}
 
-	// Now we check for the foreign key mode and make changes if required.
-	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
-	if err != nil {
-		return nil, err
+	if deleteStmt.Comments != nil {
+		delOp = &LockAndComment{
+			Source:   delOp,
+			Comments: deleteStmt.Comments,
+		}
 	}
 
-	// Unmanaged foreign-key-mode, we don't need to do anything.
-	if ksMode != vschemapb.Keyspace_FK_MANAGED {
-		return delOp, nil
-	}
-
-	childFks := vindexTable.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.DeleteAction)
+	childFks := ctx.SemTable.GetChildForeignKeysList()
 	// If there are no foreign key constraints, then we don't need to do anything.
 	if len(childFks) == 0 {
 		return delOp, nil
@@ -136,7 +131,7 @@ func createDeleteOperator(
 		return route, nil
 	}
 
-	primaryVindex, vindexAndPredicates, err := getVindexInformation(qt.ID, qt.Predicates, vindexTable)
+	primaryVindex, vindexAndPredicates, err := getVindexInformation(qt.ID, vindexTable)
 	if err != nil {
 		return nil, err
 	}
@@ -154,9 +149,14 @@ func createDeleteOperator(
 
 	del.OwnedVindexQuery = ovq
 
+	sqc := &SubQueryBuilder{}
 	for _, predicate := range qt.Predicates {
-		var err error
-		route.Routing, err = UpdateRoutingLogic(ctx, predicate, route.Routing)
+		if subq, err := sqc.handleSubquery(ctx, predicate, qt.ID); err != nil {
+			return nil, err
+		} else if subq != nil {
+			continue
+		}
+		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
 		if err != nil {
 			return nil, err
 		}
@@ -167,15 +167,7 @@ func createDeleteOperator(
 		return nil, vterrors.VT12001("multi shard DELETE with LIMIT")
 	}
 
-	subq, err := createSubqueryFromStatement(ctx, deleteStmt)
-	if err != nil {
-		return nil, err
-	}
-	if subq == nil {
-		return route, nil
-	}
-	subq.Outer = route
-	return subq, nil
+	return sqc.getRootOperator(route, nil), nil
 }
 
 func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo) (ops.Operator, error) {
@@ -211,7 +203,7 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.O
 }
 
 func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, cols []int) (*FkChild, error) {
-	bvName := ctx.ReservedVars.ReserveVariable(foriegnKeyContraintValues)
+	bvName := ctx.ReservedVars.ReserveVariable(foreignKeyConstraintValues)
 
 	var childStmt sqlparser.Statement
 	switch fk.OnDelete {

@@ -36,6 +36,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/client"
@@ -48,6 +49,7 @@ import (
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -170,7 +172,8 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 			u.PartSize = partSizeBytes
 		})
 		object := objName(bh.dir, bh.name, filename)
-
+		sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
+		// Using UploadWithContext breaks uploading to Minio and Ceph https://github.com/vitessio/vitess/issues/14188
 		_, err := uploader.Upload(&s3manager.UploadInput{
 			Bucket:               &bucket,
 			Key:                  object,
@@ -179,7 +182,11 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 			SSECustomerAlgorithm: bh.bs.s3SSE.customerAlg,
 			SSECustomerKey:       bh.bs.s3SSE.customerKey,
 			SSECustomerKeyMD5:    bh.bs.s3SSE.customerMd5,
-		})
+		}, s3manager.WithUploaderRequestOptions(func(r *request.Request) {
+			r.Handlers.CompleteAttempt.PushBack(func(r *request.Request) {
+				sendStats.TimedIncrement(time.Since(r.AttemptTime))
+			})
+		}))
 		if err != nil {
 			reader.CloseWithError(err)
 			bh.RecordError(err)
@@ -212,12 +219,17 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
 	object := objName(bh.dir, bh.name, filename)
-	out, err := bh.client.GetObject(&s3.GetObjectInput{
+	sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
+	out, err := bh.client.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket:               &bucket,
 		Key:                  object,
 		SSECustomerAlgorithm: bh.bs.s3SSE.customerAlg,
 		SSECustomerKey:       bh.bs.s3SSE.customerKey,
 		SSECustomerKeyMD5:    bh.bs.s3SSE.customerMd5,
+	}, func(r *request.Request) {
+		r.Handlers.CompleteAttempt.PushBack(func(r *request.Request) {
+			sendStats.TimedIncrement(time.Since(r.AttemptTime))
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -272,6 +284,7 @@ type S3BackupStorage struct {
 	_client *s3.S3
 	mu      sync.Mutex
 	s3SSE   S3ServerSideEncryption
+	params  backupstorage.Params
 }
 
 // ListBackups is part of the backupstorage.BackupStorage interface.
@@ -411,8 +424,7 @@ func (bs *S3BackupStorage) Close() error {
 }
 
 func (bs *S3BackupStorage) WithParams(params backupstorage.Params) backupstorage.BackupStorage {
-	// TODO(maxeng): return a new S3BackupStorage that uses params.
-	return bs
+	return &S3BackupStorage{params: params}
 }
 
 var _ backupstorage.BackupStorage = (*S3BackupStorage)(nil)
@@ -485,7 +497,7 @@ func objName(parts ...string) *string {
 }
 
 func init() {
-	backupstorage.BackupStorageMap["s3"] = &S3BackupStorage{}
+	backupstorage.BackupStorageMap["s3"] = &S3BackupStorage{params: backupstorage.NoParams()}
 
 	logNameMap = logNameToLogLevel{
 		"LogOff":                     aws.LogOff,

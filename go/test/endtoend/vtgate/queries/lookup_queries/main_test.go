@@ -69,7 +69,6 @@ func TestMain(m *testing.M) {
 			VSchema:   shardedVSchema,
 		}
 
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal-interval", "0.1"}
 		err = clusterInstance.StartKeyspace(*sKs, shardedKsShards, 0, false)
 		if err != nil {
 			return 1

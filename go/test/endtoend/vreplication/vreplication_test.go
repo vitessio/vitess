@@ -328,7 +328,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
-	materializeRollup(t)
+	materializeRollup(t, true)
 
 	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName, false)
 
@@ -343,11 +343,11 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		return
 	}
 
-	materializeProduct(t)
+	materializeProduct(t, true)
 
-	materializeMerchantOrders(t)
-	materializeSales(t)
-	materializeMerchantSales(t)
+	materializeMerchantOrders(t, true)
+	materializeSales(t, true)
+	materializeMerchantSales(t, true)
 
 	reshardMerchant2to3SplitMerge(t)
 	reshardMerchant3to1Merge(t)
@@ -369,8 +369,8 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		}
 	})
 
-	t.Run("Test CreateLookupVindex", func(t *testing.T) {
-		// CreateLookupVindex does not support noblob images.
+	t.Run("Test LookupVindex", func(t *testing.T) {
+		// LookupVindex does not support noblob images.
 		if strings.ToLower(binlogRowImage) == "noblob" {
 			return
 		}
@@ -385,10 +385,26 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		insert := "insert into customer (cid, name, typ, sport, meta) values (100, NULL, 'soho', 'football','{}'), (101, NULL, 'enterprise','baseball','{}')"
 		_, err = vtgateConn.ExecuteFetch(insert, -1, false)
 		require.NoError(t, err, "error executing %q: %v", insert, err)
-		err = vc.VtctlClient.ExecuteCommand("CreateLookupVindex", "--", "--tablet_types=PRIMARY", "customer", createLookupVindexVSchema)
-		require.NoError(t, err, "error executing CreateLookupVindex: %v", err)
-		waitForWorkflowState(t, vc, "product.customer_name_keyspace_id_vdx", binlogdatapb.VReplicationWorkflowState_Stopped.String())
-		waitForRowCount(t, vtgateConn, "product", "customer_name_keyspace_id", int(rows))
+
+		vindexName := "customer_name_keyspace_id"
+		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace=product", "create", "--keyspace=customer",
+			"--type=consistent_lookup", "--table-owner=customer", "--table-owner-columns=name,cid", "--ignore-nulls", "--tablet-types=PRIMARY")
+		require.NoError(t, err, "error executing LookupVindex create: %v", err)
+		waitForWorkflowState(t, vc, fmt.Sprintf("product.%s", vindexName), binlogdatapb.VReplicationWorkflowState_Running.String())
+		waitForRowCount(t, vtgateConn, "product", vindexName, int(rows))
+		customerVSchema, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", "customer")
+		require.NoError(t, err, "error executing GetVSchema: %v", err)
+		vdx := gjson.Get(customerVSchema, fmt.Sprintf("vindexes.%s", vindexName))
+		require.NotNil(t, vdx, "lookup vindex %s not found", vindexName)
+		require.Equal(t, "true", vdx.Get("params.write_only").String(), "expected write_only parameter to be true")
+
+		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace=product", "externalize", "--keyspace=customer")
+		require.NoError(t, err, "error executing LookupVindex externalize: %v", err)
+		customerVSchema, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", "customer")
+		require.NoError(t, err, "error executing GetVSchema: %v", err)
+		vdx = gjson.Get(customerVSchema, fmt.Sprintf("vindexes.%s", vindexName))
+		require.NotNil(t, vdx, "lookup vindex %s not found", vindexName)
+		require.NotEqual(t, "true", vdx.Get("params.write_only").String(), "did not expect write_only parameter to be true")
 	})
 }
 
@@ -806,7 +822,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 				execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("update `%s` set name='xyz'", tbl))
 			}
 		}
-		vdiff1(t, ksWorkflow, "")
+		vdiffSideBySide(t, ksWorkflow, "")
 		switchReadsDryRun(t, workflowType, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
 		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		assertQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query)
@@ -832,7 +848,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 		catchup(t, productTab, workflow, "MoveTables")
 
-		vdiff1(t, "product.p2c_reverse", "")
+		vdiffSideBySide(t, "product.p2c_reverse", "")
 		if withOpenTx {
 			execVtgateQuery(t, vtgateConn, "", deleteOpenTxQuery)
 		}
@@ -1061,7 +1077,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 				continue
 			}
 		}
-		vdiff1(t, ksWorkflow, "")
+		vdiffSideBySide(t, ksWorkflow, "")
 		if dryRunResultSwitchReads != nil {
 			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", allCellNames, "rdonly,replica", "--dry-run")
 		}
@@ -1097,7 +1113,7 @@ func shardOrders(t *testing.T) {
 		workflowType := "MoveTables"
 		catchup(t, customerTab1, workflow, workflowType)
 		catchup(t, customerTab2, workflow, workflowType)
-		vdiff1(t, ksWorkflow, "")
+		vdiffSideBySide(t, ksWorkflow, "")
 		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		switchWrites(t, workflowType, ksWorkflow, false)
 		moveTablesAction(t, "Complete", cell, workflow, sourceKs, targetKs, tables)
@@ -1109,7 +1125,7 @@ func shardOrders(t *testing.T) {
 
 func checkThatVDiffFails(t *testing.T, keyspace, workflow string) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
-	t.Run("check that vdiff1 won't run", func(t2 *testing.T) {
+	t.Run("check that vdiffSideBySide won't run", func(t2 *testing.T) {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", ksWorkflow)
 		require.Error(t, err)
 		require.Contains(t, output, "invalid VDiff run")
@@ -1145,7 +1161,7 @@ func shardMerchant(t *testing.T) {
 		catchup(t, merchantTab1, workflow, workflowType)
 		catchup(t, merchantTab2, workflow, workflowType)
 
-		vdiff1(t, fmt.Sprintf("%s.%s", merchantKeyspace, workflow), "")
+		vdiffSideBySide(t, fmt.Sprintf("%s.%s", merchantKeyspace, workflow), "")
 		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		switchWrites(t, workflowType, ksWorkflow, false)
 		printRoutingRules(t, vc, "After merchant movetables")
@@ -1164,20 +1180,43 @@ func shardMerchant(t *testing.T) {
 	})
 }
 
-func materialize(t *testing.T, spec string) {
-	t.Run("materialize", func(t *testing.T) {
-		err := vc.VtctlClient.ExecuteCommand("Materialize", spec)
-		require.NoError(t, err, "Materialize")
-	})
+func materialize(t *testing.T, spec string, useVtctldClient bool) {
+	if useVtctldClient {
+		t.Run("vtctldclient materialize", func(t *testing.T) {
+			// Split out the parameters from the JSON spec for
+			// use in the vtctldclient command flags.
+			// This allows us to test both clients with the same
+			// input.
+			sj := gjson.Parse(spec)
+			workflow := sj.Get("workflow").String()
+			require.NotEmpty(t, workflow, "workflow not found in spec: %s", spec)
+			sourceKeyspace := sj.Get("source_keyspace").String()
+			require.NotEmpty(t, sourceKeyspace, "source_keyspace not found in spec: %s", spec)
+			targetKeyspace := sj.Get("target_keyspace").String()
+			require.NotEmpty(t, targetKeyspace, "target_keyspace not found in spec: %s", spec)
+			tableSettings := sj.Get("table_settings").String()
+			require.NotEmpty(t, tableSettings, "table_settings not found in spec: %s", spec)
+			stopAfterCopy := sj.Get("stop-after-copy").Bool() // Optional
+			err := vc.VtctldClient.ExecuteCommand("materialize", "--workflow", workflow, "--target-keyspace", targetKeyspace,
+				"create", "--source-keyspace", sourceKeyspace, "--table-settings", tableSettings,
+				fmt.Sprintf("--stop-after-copy=%t", stopAfterCopy))
+			require.NoError(t, err, "Materialize")
+		})
+	} else {
+		t.Run("materialize", func(t *testing.T) {
+			err := vc.VtctlClient.ExecuteCommand("Materialize", spec)
+			require.NoError(t, err, "Materialize")
+		})
+	}
 }
 
-func materializeProduct(t *testing.T) {
+func materializeProduct(t *testing.T, useVtctldClient bool) {
 	t.Run("materializeProduct", func(t *testing.T) {
 		// materializing from "product" keyspace to "customer" keyspace
 		workflow := "cproduct"
 		keyspace := "customer"
 		applyVSchema(t, materializeProductVSchema, keyspace)
-		materialize(t, materializeProductSpec)
+		materialize(t, materializeProductSpec, useVtctldClient)
 		customerTablets := vc.getVttabletsInKeyspace(t, defaultCell, keyspace, "primary")
 		for _, tab := range customerTablets {
 			catchup(t, tab, workflow, "Materialize")
@@ -1252,13 +1291,13 @@ func materializeProduct(t *testing.T) {
 	})
 }
 
-func materializeRollup(t *testing.T) {
+func materializeRollup(t *testing.T, useVtctldClient bool) {
 	t.Run("materializeRollup", func(t *testing.T) {
 		keyspace := "product"
 		workflow := "rollup"
 		applyVSchema(t, materializeSalesVSchema, keyspace)
 		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
-		materialize(t, materializeRollupSpec)
+		materialize(t, materializeRollupSpec, useVtctldClient)
 		catchup(t, productTab, workflow, "Materialize")
 		waitForRowCount(t, vtgateConn, "product", "rollup", 1)
 		waitForQueryResult(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
@@ -1266,11 +1305,11 @@ func materializeRollup(t *testing.T) {
 	})
 }
 
-func materializeSales(t *testing.T) {
+func materializeSales(t *testing.T, useVtctldClient bool) {
 	t.Run("materializeSales", func(t *testing.T) {
 		keyspace := "product"
 		applyVSchema(t, materializeSalesVSchema, keyspace)
-		materialize(t, materializeSalesSpec)
+		materialize(t, materializeSalesSpec, useVtctldClient)
 		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 		catchup(t, productTab, "sales", "Materialize")
 		waitForRowCount(t, vtgateConn, "product", "sales", 2)
@@ -1279,10 +1318,10 @@ func materializeSales(t *testing.T) {
 	})
 }
 
-func materializeMerchantSales(t *testing.T) {
+func materializeMerchantSales(t *testing.T, useVtctldClient bool) {
 	t.Run("materializeMerchantSales", func(t *testing.T) {
 		workflow := "msales"
-		materialize(t, materializeMerchantSalesSpec)
+		materialize(t, materializeMerchantSalesSpec, useVtctldClient)
 		merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, merchantKeyspace, "primary")
 		for _, tab := range merchantTablets {
 			catchup(t, tab, workflow, "Materialize")
@@ -1293,12 +1332,12 @@ func materializeMerchantSales(t *testing.T) {
 	})
 }
 
-func materializeMerchantOrders(t *testing.T) {
+func materializeMerchantOrders(t *testing.T, useVtctldClient bool) {
 	t.Run("materializeMerchantOrders", func(t *testing.T) {
 		workflow := "morders"
 		keyspace := merchantKeyspace
 		applyVSchema(t, merchantOrdersVSchema, keyspace)
-		materialize(t, materializeMerchantOrdersSpec)
+		materialize(t, materializeMerchantOrdersSpec, useVtctldClient)
 		merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, merchantKeyspace, "primary")
 		for _, tab := range merchantTablets {
 			catchup(t, tab, workflow, "Materialize")
@@ -1313,7 +1352,7 @@ func checkVtgateHealth(t *testing.T, cell *Cell) {
 	for _, vtgate := range cell.Vtgates {
 		vtgateHealthURL := strings.Replace(vtgate.VerifyURL, "vars", "health", -1)
 		if !checkHealth(t, vtgateHealthURL) {
-			assert.Failf(t, "Vtgate not healthy: ", vtgateHealthURL)
+			assert.Fail(t, "Vtgate not healthy: ", vtgateHealthURL)
 		}
 	}
 }
@@ -1321,7 +1360,7 @@ func checkVtgateHealth(t *testing.T, cell *Cell) {
 func checkTabletHealth(t *testing.T, tablet *Tablet) {
 	vttabletHealthURL := strings.Replace(tablet.Vttablet.VerifyURL, "debug/vars", "healthz", -1)
 	if !checkHealth(t, vttabletHealthURL) {
-		assert.Failf(t, "Vttablet not healthy: ", vttabletHealthURL)
+		assert.Fail(t, "Vttablet not healthy: ", vttabletHealthURL)
 	}
 }
 

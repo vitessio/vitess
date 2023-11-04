@@ -69,7 +69,7 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, "")
 	catchup(t, targetTab1, workflowName, "Reshard")
 	catchup(t, targetTab2, workflowName, "Reshard")
-	vdiff1(t, ksWorkflow, "")
+	vdiffSideBySide(t, ksWorkflow, "")
 	return nil
 }
 
@@ -84,7 +84,7 @@ func createMoveTablesWorkflow(t *testing.T, tables string) {
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, tables)
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
-	vdiff1(t, ksWorkflow, "")
+	vdiffSideBySide(t, ksWorkflow, "")
 }
 
 func tstWorkflowAction(t *testing.T, action, tabletTypes, cells string) error {
@@ -399,10 +399,10 @@ func testReplicatingWithPKEnumCols(t *testing.T) {
 	insertQuery := "insert into customer(cid, name, typ, sport, meta) values(2, 'Paül','soho','cricket',convert(x'7b7d' using utf8mb4))"
 	execVtgateQuery(t, vtgateConn, sourceKs, deleteQuery)
 	waitForNoWorkflowLag(t, vc, targetKs, workflowName)
-	vdiff1(t, ksWorkflow, "")
+	vdiffSideBySide(t, ksWorkflow, "")
 	execVtgateQuery(t, vtgateConn, sourceKs, insertQuery)
 	waitForNoWorkflowLag(t, vc, targetKs, workflowName)
-	vdiff1(t, ksWorkflow, "")
+	vdiffSideBySide(t, ksWorkflow, "")
 }
 
 func testReshardV2Workflow(t *testing.T) {
@@ -733,7 +733,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 		catchup(t, targetTab1, workflow, workflowType)
 		catchup(t, targetTab2, workflow, workflowType)
-		vdiff1(t, ksWorkflow, "")
+		vdiffSideBySide(t, ksWorkflow, "")
 	}
 
 	var switchReadsFollowedBySwitchWrites = func() {

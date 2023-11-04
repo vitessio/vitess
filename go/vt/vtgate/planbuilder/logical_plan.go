@@ -17,73 +17,14 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
-
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // logicalPlan defines the interface that a primitive must
 // satisfy.
 type logicalPlan interface {
-
-	// Wireup does the wire up of primitive with the source.
-	Wireup(*plancontext.PlanningContext) error
-
 	// Primitive returns the underlying primitive.
-	// This function should only be called after Wireup is finished.
 	Primitive() engine.Primitive
-
-	// Inputs are the children of this plan
-	Inputs() []logicalPlan
-
-	// Rewrite replaces the inputs of this plan with the ones provided
-	Rewrite(inputs ...logicalPlan) error
-
-	// ContainsTables keeps track which query tables are being solved by this logical plan
-	// This is only applicable for plans that have been built with the Gen4 planner
-	ContainsTables() semantics.TableSet
-
-	// OutputColumns shows the columns that this plan will produce
-	OutputColumns() []sqlparser.SelectExpr
-}
-
-type planVisitor func(logicalPlan) (bool, logicalPlan, error)
-
-func visit(node logicalPlan, visitor planVisitor) (logicalPlan, error) {
-	if visitor != nil {
-		kontinue, newNode, err := visitor(node)
-		if err != nil {
-			return nil, err
-		}
-		if !kontinue {
-			return newNode, nil
-		}
-		node = newNode
-	}
-	inputs := node.Inputs()
-	rewrite := false
-	for i, input := range inputs {
-		newInput, err := visit(input, visitor)
-		if err != nil {
-			return nil, err
-		}
-		if newInput != input {
-			rewrite = true
-		}
-		inputs[i] = newInput
-	}
-	if rewrite {
-		err := node.Rewrite(inputs...)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return node, nil
 }
 
 // -------------------------------------------------------------------------
@@ -101,34 +42,6 @@ func newBuilderCommon(input logicalPlan) logicalPlanCommon {
 
 func (bc *logicalPlanCommon) Order() int {
 	return bc.order
-}
-
-func (bc *logicalPlanCommon) Wireup(ctx *plancontext.PlanningContext) error {
-	return bc.input.Wireup(ctx)
-}
-
-// Rewrite implements the logicalPlan interface
-func (bc *logicalPlanCommon) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 1 {
-		return vterrors.VT13001(fmt.Sprintf("builderCommon: wrong number of inputs, got: %d, expect: 1", len(inputs)))
-	}
-	bc.input = inputs[0]
-	return nil
-}
-
-// Inputs implements the logicalPlan interface
-func (bc *logicalPlanCommon) Inputs() []logicalPlan {
-	return []logicalPlan{bc.input}
-}
-
-// ContainsTables implements the logicalPlan interface
-func (bc *logicalPlanCommon) ContainsTables() semantics.TableSet {
-	return bc.input.ContainsTables()
-}
-
-// OutputColumns implements the logicalPlan interface
-func (bc *logicalPlanCommon) OutputColumns() []sqlparser.SelectExpr {
-	return bc.input.OutputColumns()
 }
 
 // -------------------------------------------------------------------------

@@ -17,13 +17,14 @@ limitations under the License.
 package streamtimeout
 
 import (
-	"fmt"
+	"context"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
@@ -31,8 +32,15 @@ import (
 // TestSchemaChangeTimedout ensures that the timeout functionality is working properly
 // to prevent queries from hanging up and causing a mutex to be locked forever.
 func TestSchemaChangeTimedout(t *testing.T) {
+	const TableName = "vitess_healthstream"
+
 	client := framework.NewClient()
 	reloadEstimatedTime := 2 * time.Second
+
+	err := cluster.SimulateMySQLHang()
+	require.NoError(t, err)
+
+	defer cluster.StopSimulateMySQLHang()
 
 	ch := make(chan []string, 100)
 	go func(ch chan []string) {
@@ -44,39 +52,22 @@ func TestSchemaChangeTimedout(t *testing.T) {
 		})
 	}(ch)
 
-	// We will set up the MySQLHang simulation.
-	// To avoid flakiness, we will retry the setup if the health_streamer sends a notification before the MySQLHang is simulated.
-	attempt := 1
-	var tableName string
-loop:
-	for {
-		tableName = fmt.Sprintf("vitess_sc%d", attempt)
+	// get a clean connection that skips toxyproxy to be able to change the schema in the underlying DB
+	cleanParams := cluster.MySQLCleanConnParams()
+	cleanConn, err := mysql.Connect(context.Background(), &cleanParams)
+	require.NoError(t, err)
+	defer cleanConn.Close()
 
-		// change the schema to trigger the health_streamer to send a notification at a later time.
-		_, err := client.Execute("create table "+tableName+"(id bigint primary key)", nil)
-		require.NoError(t, err)
+	// change the schema to trigger the health_streamer to send a notification at a later time.
+	_, err = cleanConn.ExecuteFetch("create table "+TableName+"(id bigint primary key)", -1, false)
+	require.NoError(t, err)
 
-		// start simulating a mysql stall until a query issued by the health_streamer would hang.
-		err = cluster.SimulateMySQLHang()
-		require.NoError(t, err)
-
-		select {
-		case <-ch: // get the schema notification
-			// The health_streamer can send a notification between the time the schema is changed and the mysql stall is simulated.
-			// In this rare case, we must retry the same setup again.
-			cluster.StopSimulateMySQLHang()
-			attempt++
-
-			if attempt > 5 {
-				t.Errorf("failed to setup MySQLHang even after several attempts")
-				return
-			}
-			t.Logf("retrying setup for attempt %d", attempt)
-		case <-time.After(reloadEstimatedTime):
-			break loop
-		}
+	select {
+	case <-ch: // get the schema notification
+		t.Fatalf("received an schema change event from the HealthStreamer (is toxyproxy working?)")
+	case <-time.After(reloadEstimatedTime):
+		// Good, continue
 	}
-	defer cluster.StopSimulateMySQLHang()
 
 	// We will wait for the health_streamer to attempt sending a notification.
 	// It's important to keep in mind that the total wait time after the simulation should be shorter than the reload timeout.
@@ -87,7 +78,7 @@ loop:
 	time.Sleep(reloadInterval)
 
 	// pause simulating the mysql stall to allow the health_streamer to resume.
-	err := cluster.PauseSimulateMySQLHang()
+	err = cluster.PauseSimulateMySQLHang()
 	require.NoError(t, err)
 
 	// wait for the health_streamer to complete retrying the notification.
@@ -97,7 +88,7 @@ loop:
 	for {
 		select {
 		case res := <-ch: // get the schema notification
-			if slices.Contains(res, tableName) {
+			if slices.Contains(res, TableName) {
 				return
 			}
 		case <-timeout:

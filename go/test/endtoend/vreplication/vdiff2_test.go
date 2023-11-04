@@ -104,8 +104,7 @@ var testCases = []*testCase{
 }
 
 func TestVDiff2(t *testing.T) {
-	allCellNames = "zone1"
-	defaultCellName := "zone1"
+	allCellNames = "zone5,zone1,zone2,zone3,zone4"
 	sourceKs := "product"
 	sourceShards := []string{"0"}
 	targetKs := "customer"
@@ -113,14 +112,19 @@ func TestVDiff2(t *testing.T) {
 	// This forces us to use multiple vstream packets even with small test tables
 	extraVTTabletArgs = []string{"--vstream_packet_size=1"}
 
-	vc = NewVitessCluster(t, "TestVDiff2", []string{allCellNames}, mainClusterConfig)
+	vc = NewVitessCluster(t, "TestVDiff2", strings.Split(allCellNames, ","), mainClusterConfig)
 	require.NotNil(t, vc)
-	defaultCell = vc.Cells[defaultCellName]
-	cells := []*Cell{defaultCell}
+	zone1 := vc.Cells["zone1"]
+	zone2 := vc.Cells["zone2"]
+	zone3 := vc.Cells["zone3"]
+	defaultCell = zone1
 
 	defer vc.TearDown(t)
 
-	vc.AddKeyspace(t, cells, sourceKs, strings.Join(sourceShards, ","), initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
+	// The primary tablet is only added in the first cell.
+	// We ONLY add primary tablets in this test.
+	_, err := vc.AddKeyspace(t, []*Cell{zone2, zone1, zone3}, sourceKs, strings.Join(sourceShards, ","), initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
+	require.NoError(t, err)
 
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
@@ -140,7 +144,9 @@ func TestVDiff2(t *testing.T) {
 
 	generateMoreCustomers(t, sourceKs, 100)
 
-	_, err := vc.AddKeyspace(t, cells, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
+	// The primary tablet is only added in the first cell.
+	// We ONLY add primary tablets in this test.
+	tks, err := vc.AddKeyspace(t, []*Cell{zone3, zone1, zone2}, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
 	require.NoError(t, err)
 	for _, shard := range targetShards {
 		require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, shard))
@@ -148,15 +154,15 @@ func TestVDiff2(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			testWorkflow(t, vc, tc, cells)
+			// Primary tablets for any new shards are added in the first cell.
+			testWorkflow(t, vc, tc, tks, []*Cell{zone3, zone2, zone1})
 		})
 	}
 }
 
-func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) {
+func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, cells []*Cell) {
 	arrTargetShards := strings.Split(tc.targetShards, ",")
 	if tc.typ == "Reshard" {
-		tks := vc.Cells[cells[0].Name].Keyspaces[tc.targetKs]
 		require.NoError(t, vc.AddShards(t, cells, tks, tc.targetShards, 0, 0, tc.tabletBaseID, targetKsOpts))
 		for _, shard := range arrTargetShards {
 			require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, tc.targetKs, shard))
@@ -169,6 +175,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 	if tc.typ == "Reshard" {
 		args = append(args, "--source_shards", tc.sourceShards, "--target_shards", tc.targetShards)
 	}
+	args = append(args, "--cells", allCellNames)
 	args = append(args, "--tables", tc.tables)
 	args = append(args, "Create")
 	args = append(args, ksWorkflow)
@@ -180,14 +187,14 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 		catchup(t, tab, tc.workflow, tc.typ)
 	}
 
-	vdiff(t, tc.targetKs, tc.workflow, cells[0].Name, true, true, nil)
+	vdiff(t, tc.targetKs, tc.workflow, allCellNames, true, true, nil)
 
 	if tc.autoRetryError {
-		testAutoRetryError(t, tc, cells[0].Name)
+		testAutoRetryError(t, tc, allCellNames)
 	}
 
 	if tc.resume {
-		testResume(t, tc, cells[0].Name)
+		testResume(t, tc, allCellNames)
 	}
 
 	// These are done here so that we have a valid workflow to test the commands against
@@ -205,8 +212,8 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 
 	// create another VDiff record to confirm it gets deleted when the workflow is completed
 	ts := time.Now()
-	uuid, _ := performVDiff2Action(t, ksWorkflow, allCellNames, "create", "", false)
-	waitForVDiff2ToComplete(t, ksWorkflow, allCellNames, uuid, ts)
+	uuid, _ := performVDiff2Action(t, false, ksWorkflow, allCellNames, "create", "", false)
+	waitForVDiff2ToComplete(t, false, ksWorkflow, allCellNames, uuid, ts)
 
 	err = vc.VtctlClient.ExecuteCommand(tc.typ, "--", "SwitchTraffic", ksWorkflow)
 	require.NoError(t, err)
@@ -219,16 +226,18 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 
 func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
 	t.Run("Client error handling", func(t *testing.T) {
-		_, output := performVDiff2Action(t, ksWorkflow, cells, "badcmd", "", true)
-		require.Contains(t, output, "usage:")
-		_, output = performVDiff2Action(t, ksWorkflow, cells, "create", "invalid_uuid", true)
-		require.Contains(t, output, "please provide a valid UUID")
-		_, output = performVDiff2Action(t, ksWorkflow, cells, "resume", "invalid_uuid", true)
-		require.Contains(t, output, "can only resume a specific vdiff, please provide a valid UUID")
-		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", "invalid_uuid", true)
-		require.Contains(t, output, "can only delete a specific vdiff, please provide a valid UUID")
-		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false)
-		_, output = performVDiff2Action(t, ksWorkflow, cells, "create", uuid, true)
+		_, output := performVDiff2Action(t, false, ksWorkflow, cells, "badcmd", "", true)
+		require.Contains(t, output, "Usage:")
+		_, output = performVDiff2Action(t, false, ksWorkflow, cells, "create", "invalid_uuid", true)
+		require.Contains(t, output, "invalid UUID provided")
+		_, output = performVDiff2Action(t, false, ksWorkflow, cells, "resume", "invalid_uuid", true)
+		require.Contains(t, output, "invalid UUID provided")
+		_, output = performVDiff2Action(t, false, ksWorkflow, cells, "delete", "invalid_uuid", true)
+		require.Contains(t, output, "invalid argument provided")
+		_, output = performVDiff2Action(t, false, ksWorkflow, cells, "show", "invalid_uuid", true)
+		require.Contains(t, output, "invalid argument provided")
+		uuid, _ := performVDiff2Action(t, false, ksWorkflow, cells, "show", "last", false)
+		_, output = performVDiff2Action(t, false, ksWorkflow, cells, "create", uuid, true)
 		require.Contains(t, output, "already exists")
 	})
 }
@@ -246,35 +255,35 @@ func testDelete(t *testing.T, ksWorkflow, cells string) {
 			}
 			return int64(len(seen))
 		}
-		_, output := performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
+		_, output := performVDiff2Action(t, false, ksWorkflow, cells, "show", "all", false)
 		initialVDiffCount := uuidCount(gjson.Get(output, "#.UUID").Array())
 		for ; initialVDiffCount < 3; initialVDiffCount++ {
-			_, _ = performVDiff2Action(t, ksWorkflow, cells, "create", "", false)
+			_, _ = performVDiff2Action(t, false, ksWorkflow, cells, "create", "", false)
 		}
 
 		// Now let's confirm that we have at least 3 unique VDiffs.
-		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
+		_, output = performVDiff2Action(t, false, ksWorkflow, cells, "show", "all", false)
 		require.GreaterOrEqual(t, uuidCount(gjson.Get(output, "#.UUID").Array()), int64(3))
 		// And that our initial count is what we expect.
 		require.Equal(t, initialVDiffCount, uuidCount(gjson.Get(output, "#.UUID").Array()))
 
 		// Test show last with verbose too as a side effect.
-		uuid, output := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false, "--verbose")
+		uuid, output := performVDiff2Action(t, false, ksWorkflow, cells, "show", "last", false, "--verbose")
 		// The TableSummary is only present with --verbose.
 		require.Contains(t, output, `"TableSummary":`)
 
 		// Now let's delete one of the VDiffs.
-		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", uuid, false)
+		_, output = performVDiff2Action(t, false, ksWorkflow, cells, "delete", uuid, false)
 		require.Equal(t, "completed", gjson.Get(output, "Status").String())
 		// And confirm that our unique VDiff count has only decreased by one.
-		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
+		_, output = performVDiff2Action(t, false, ksWorkflow, cells, "show", "all", false)
 		require.Equal(t, initialVDiffCount-1, uuidCount(gjson.Get(output, "#.UUID").Array()))
 
 		// Now let's delete all of them.
-		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", "all", false)
+		_, output = performVDiff2Action(t, false, ksWorkflow, cells, "delete", "all", false)
 		require.Equal(t, "completed", gjson.Get(output, "Status").String())
 		// And finally confirm that we have no more VDiffs.
-		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
+		_, output = performVDiff2Action(t, false, ksWorkflow, cells, "show", "all", false)
 		require.Equal(t, int64(0), gjson.Get(output, "#").Int())
 	})
 }
@@ -296,7 +305,7 @@ func testResume(t *testing.T, tc *testCase, cells string) {
 		ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
 
 		// confirm the last VDiff is in the expected completed state
-		uuid, output := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false)
+		uuid, output := performVDiff2Action(t, false, ksWorkflow, cells, "show", "last", false)
 		jsonOutput := getVDiffInfo(output)
 		require.Equal(t, "completed", jsonOutput.State)
 		// save the number of rows compared in previous runs
@@ -312,8 +321,8 @@ func testResume(t *testing.T, tc *testCase, cells string) {
 
 		// confirm that the VDiff was resumed, able to complete, and we compared the
 		// expected number of rows in total (original run and resume)
-		uuid, _ = performVDiff2Action(t, ksWorkflow, cells, "resume", uuid, false)
-		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, ogTime)
+		_, _ = performVDiff2Action(t, false, ksWorkflow, cells, "resume", uuid, false)
+		info := waitForVDiff2ToComplete(t, false, ksWorkflow, cells, uuid, ogTime)
 		require.False(t, info.HasMismatch)
 		require.Equal(t, expectedRows, info.RowsCompared)
 	})
@@ -322,10 +331,10 @@ func testResume(t *testing.T, tc *testCase, cells string) {
 func testStop(t *testing.T, ksWorkflow, cells string) {
 	t.Run("Stop", func(t *testing.T) {
 		// create a new VDiff and immediately stop it
-		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false)
-		_, _ = performVDiff2Action(t, ksWorkflow, cells, "stop", uuid, false)
+		uuid, _ := performVDiff2Action(t, false, ksWorkflow, cells, "create", "", false)
+		_, _ = performVDiff2Action(t, false, ksWorkflow, cells, "stop", uuid, false)
 		// confirm the VDiff is in the expected stopped state
-		_, output := performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
+		_, output := performVDiff2Action(t, false, ksWorkflow, cells, "show", uuid, false)
 		jsonOutput := getVDiffInfo(output)
 		require.Equal(t, "stopped", jsonOutput.State)
 		// confirm that the context cancelled error was also cleared
@@ -338,7 +347,7 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 		ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
 
 		// confirm the last VDiff is in the expected completed state
-		uuid, output := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false)
+		uuid, output := performVDiff2Action(t, false, ksWorkflow, cells, "show", "last", false)
 		jsonOutput := getVDiffInfo(output)
 		require.Equal(t, "completed", jsonOutput.State)
 		// save the number of rows compared in the first run
@@ -365,7 +374,7 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 
 		// confirm that the VDiff was retried, able to complete, and we compared the expected
 		// number of rows in total (original run and retry)
-		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, ogTime)
+		info := waitForVDiff2ToComplete(t, false, ksWorkflow, cells, uuid, ogTime)
 		require.False(t, info.HasMismatch)
 		require.Equal(t, expectedRows, info.RowsCompared)
 	})
@@ -375,7 +384,7 @@ func testCLICreateWait(t *testing.T, ksWorkflow string, cells string) {
 	t.Run("vtctl create and wait", func(t *testing.T) {
 		chCompleted := make(chan bool)
 		go func() {
-			_, output := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, "--wait", "--wait-update-interval=1s")
+			_, output := performVDiff2Action(t, false, ksWorkflow, cells, "create", "", false, "--wait", "--wait-update-interval=1s")
 			completed := false
 			// We don't try to parse the JSON output as it may contain a series of outputs
 			// that together do not form a valid JSON document. We can change this in the

@@ -76,7 +76,7 @@ func TestOrderedAggregateCollations(t *testing.T) {
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
 				oa, isOA := primitive.(*engine.OrderedAggregate)
 				require.True(t, isOA, "should be an OrderedAggregate")
-				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].CollationID)
+				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].Type.Coll)
 			},
 		},
 		{
@@ -85,7 +85,7 @@ func TestOrderedAggregateCollations(t *testing.T) {
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
 				distinct, isDistinct := primitive.(*engine.Distinct)
 				require.True(t, isDistinct, "should be a distinct")
-				require.Equal(t, collid(colls[0].collationName), distinct.CheckCols[0].Collation)
+				require.Equal(t, collid(colls[0].collationName), distinct.CheckCols[0].Type.Coll)
 			},
 		},
 		{
@@ -97,8 +97,8 @@ func TestOrderedAggregateCollations(t *testing.T) {
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
 				oa, isOA := primitive.(*engine.OrderedAggregate)
 				require.True(t, isOA, "should be an OrderedAggregate")
-				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].CollationID)
-				require.Equal(t, collid(colls[1].collationName), oa.GroupByKeys[1].CollationID)
+				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].Type.Coll)
+				require.Equal(t, collid(colls[1].collationName), oa.GroupByKeys[1].Type.Coll)
 			},
 		},
 		{
@@ -109,7 +109,7 @@ func TestOrderedAggregateCollations(t *testing.T) {
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
 				oa, isOA := primitive.(*engine.OrderedAggregate)
 				require.True(t, isOA, "should be an OrderedAggregate")
-				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].CollationID)
+				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].Type.Coll)
 			},
 		},
 		{
@@ -122,7 +122,7 @@ func TestOrderedAggregateCollations(t *testing.T) {
 				require.True(t, isMemSort, "should be a MemorySort")
 				oa, isOA := memSort.Input.(*engine.OrderedAggregate)
 				require.True(t, isOA, "should be an OrderedAggregate")
-				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].CollationID)
+				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].Type.Coll)
 			},
 		},
 	}

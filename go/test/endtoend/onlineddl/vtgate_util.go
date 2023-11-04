@@ -207,7 +207,7 @@ func CheckLaunchAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 }
 
 // CheckMigrationStatus verifies that the migration indicated by given UUID has the given expected status
-func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) {
+func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) bool {
 	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -229,7 +229,7 @@ func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 			}
 		}
 	}
-	assert.Equal(t, len(shards), count)
+	return assert.Equal(t, len(shards), count)
 }
 
 // WaitForMigrationStatus waits for a migration to reach either provided statuses (returns immediately), or eventually time out
@@ -247,9 +247,13 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 	for _, status := range expectStatuses {
 		statusesMap[string(status)] = true
 	}
-	startTime := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
 	lastKnownStatus := ""
-	for time.Since(startTime) < timeout {
+	for {
 		countMatchedShards := 0
 		r := VtgateExecQuery(t, vtParams, query, "")
 		for _, row := range r.Named().Rows {
@@ -266,9 +270,12 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 		if countMatchedShards == len(shards) {
 			return schema.OnlineDDLStatus(lastKnownStatus)
 		}
-		time.Sleep(1 * time.Second)
+		select {
+		case <-ctx.Done():
+			return schema.OnlineDDLStatus(lastKnownStatus)
+		case <-ticker.C:
+		}
 	}
-	return schema.OnlineDDLStatus(lastKnownStatus)
 }
 
 // CheckMigrationArtifacts verifies given migration exists, and checks if it has artifacts

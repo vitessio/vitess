@@ -37,7 +37,11 @@ import (
 // If postVisit returns true, the underlying nodes
 // are also visited. If it returns an error, walking
 // is interrupted, and the error is returned.
-func Walk(visit Visit, nodes ...SQLNode) error {
+func Walk(visit Visit, first SQLNode, nodes ...SQLNode) error {
+	err := VisitSQLNode(first, visit)
+	if err != nil {
+		return err
+	}
 	for _, node := range nodes {
 		err := VisitSQLNode(node, visit)
 		if err != nil {
@@ -59,7 +63,7 @@ func Append(buf *strings.Builder, node SQLNode) {
 		Builder: buf,
 		fast:    true,
 	}
-	node.formatFast(tbuf)
+	node.FormatFast(tbuf)
 }
 
 // IndexColumn describes a column or expression in an index definition with optional length (for column)
@@ -159,7 +163,7 @@ const (
 	FloatVal
 	HexNum
 	HexVal
-	BitVal
+	BitNum
 	DateVal
 	TimeVal
 	TimestampVal
@@ -511,9 +515,9 @@ func NewHexLiteral(in string) *Literal {
 	return &Literal{Type: HexVal, Val: in}
 }
 
-// NewBitLiteral builds a new BitVal containing a bit literal.
+// NewBitLiteral builds a new BitNum containing a bit literal.
 func NewBitLiteral(in string) *Literal {
-	return &Literal{Type: BitVal, Val: in}
+	return &Literal{Type: BitNum, Val: in}
 }
 
 // NewDateLiteral builds a new Date.
@@ -579,8 +583,8 @@ func (node *Literal) SQLType() sqltypes.Type {
 		return sqltypes.HexNum
 	case HexVal:
 		return sqltypes.HexVal
-	case BitVal:
-		return sqltypes.HexNum
+	case BitNum:
+		return sqltypes.BitNum
 	case DateVal:
 		return sqltypes.Date
 	case TimeVal:
@@ -1267,8 +1271,12 @@ func (action DDLAction) ToString() string {
 		return DropColVindexStr
 	case AddSequenceDDLAction:
 		return AddSequenceStr
+	case DropSequenceDDLAction:
+		return DropSequenceStr
 	case AddAutoIncDDLAction:
 		return AddAutoIncStr
+	case DropAutoIncDDLAction:
+		return DropAutoIncStr
 	default:
 		return "Unknown DDL Action"
 	}
@@ -2089,59 +2097,6 @@ func GetAllSelects(selStmt SelectStatement) []*Select {
 	panic("[BUG]: unknown type for SelectStatement")
 }
 
-// SetArgName sets argument name.
-func (es *ExtractedSubquery) SetArgName(n string) {
-	es.argName = n
-	es.updateAlternative()
-}
-
-// SetHasValuesArg sets has_values argument.
-func (es *ExtractedSubquery) SetHasValuesArg(n string) {
-	es.hasValuesArg = n
-	es.updateAlternative()
-}
-
-// GetArgName returns argument name.
-func (es *ExtractedSubquery) GetArgName() string {
-	return es.argName
-}
-
-// GetHasValuesArg returns has values argument.
-func (es *ExtractedSubquery) GetHasValuesArg() string {
-	return es.hasValuesArg
-
-}
-
-func (es *ExtractedSubquery) updateAlternative() {
-	switch original := es.Original.(type) {
-	case *ExistsExpr:
-		es.alternative = NewArgument(es.hasValuesArg)
-	case *Subquery:
-		es.alternative = NewArgument(es.argName)
-	case *ComparisonExpr:
-		// other_side = :__sq
-		cmp := &ComparisonExpr{
-			Left:     es.OtherSide,
-			Right:    NewArgument(es.argName),
-			Operator: original.Operator,
-		}
-		var expr Expr = cmp
-		switch original.Operator {
-		case InOp:
-			// :__sq_has_values = 1 and other_side in ::__sq
-			cmp.Right = NewListArg(es.argName)
-			hasValue := &ComparisonExpr{Left: NewArgument(es.hasValuesArg), Right: NewIntLiteral("1"), Operator: EqualOp}
-			expr = AndExpressions(hasValue, cmp)
-		case NotInOp:
-			// :__sq_has_values = 0 or other_side not in ::__sq
-			cmp.Right = NewListArg(es.argName)
-			hasValue := &ComparisonExpr{Left: NewArgument(es.hasValuesArg), Right: NewIntLiteral("0"), Operator: EqualOp}
-			expr = &OrExpr{hasValue, cmp}
-		}
-		es.alternative = expr
-	}
-}
-
 // ColumnName returns the alias if one was provided, otherwise prints the AST
 func (ae *AliasedExpr) ColumnName() string {
 	if !ae.As.IsEmpty() {
@@ -2540,4 +2495,8 @@ func IsLiteral(expr Expr) bool {
 	default:
 		return false
 	}
+}
+
+func (ct *ColumnType) Invisible() bool {
+	return ct.Options.Invisible != nil && *ct.Options.Invisible
 }

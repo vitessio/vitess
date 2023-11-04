@@ -80,7 +80,7 @@ func runCluster() {
 			VSchemaDDLAuthorizedUsers: "%",
 		},
 	}
-	env, err := vttest.NewLocalTestEnv("", 12345)
+	env, err := vttest.NewLocalTestEnv(12345)
 	if err != nil {
 		log.Exitf("Error: %v", err)
 	}

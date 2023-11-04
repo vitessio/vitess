@@ -703,11 +703,11 @@ load_statement:
 with_clause:
   WITH with_list
   {
-	$$ = &With{ctes: $2, Recursive: false}
+	$$ = &With{CTEs: $2, Recursive: false}
   }
 | WITH RECURSIVE with_list
   {
-	$$ = &With{ctes: $3, Recursive: true}
+	$$ = &With{CTEs: $3, Recursive: true}
   }
 
 with_clause_opt:
@@ -1248,22 +1248,22 @@ alter_table_prefix:
 create_index_prefix:
   CREATE comment_opt INDEX ci_identifier using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($3)}, Options:$5}}}}
+    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4}, Options:$5}}}}
     setDDL(yylex, $$)
   }
 | CREATE comment_opt FULLTEXT INDEX ci_identifier using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type:string($3)+" "+string($4), Fulltext:true}, Options:$6}}}}
+    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeFullText}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 | CREATE comment_opt SPATIAL INDEX ci_identifier using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type:string($3)+" "+string($4), Spatial:true}, Options:$6}}}}
+    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeSpatial}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 | CREATE comment_opt UNIQUE INDEX ci_identifier using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type:string($3)+" "+string($4), Unique:true}, Options:$6}}}}
+    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeUnique}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 
@@ -1689,11 +1689,11 @@ text_literal
   }
 | BITNUM
   {
-  	$$ = NewBitLiteral($1[2:])
+  	$$ = NewBitLiteral($1)
   }
 | BIT_LITERAL
   {
-	$$ = NewBitLiteral($1)
+	$$ = NewBitLiteral("0b" + $1)
   }
 | VALUE_ARG
   {
@@ -1701,7 +1701,7 @@ text_literal
   }
 | underscore_charsets BIT_LITERAL %prec UNARY
   {
-  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral("0b" + $2)}
   }
 | underscore_charsets HEXNUM %prec UNARY
   {
@@ -1709,7 +1709,7 @@ text_literal
   }
 | underscore_charsets BITNUM %prec UNARY
   {
-  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2[2:])}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
   }
 | underscore_charsets HEX %prec UNARY
   {
@@ -2417,23 +2417,23 @@ equal_opt:
 index_info:
   constraint_name_opt PRIMARY KEY name_opt
   {
-    $$ = &IndexInfo{Type: string($2) + " " + string($3), ConstraintName: NewIdentifierCI($1), Name: NewIdentifierCI("PRIMARY"), Primary: true, Unique: true}
+    $$ = &IndexInfo{Type: IndexTypePrimary, ConstraintName: NewIdentifierCI($1), Name: NewIdentifierCI("PRIMARY")}
   }
 | SPATIAL index_or_key_opt name_opt
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewIdentifierCI($3), Spatial: true, Unique: false}
+    $$ = &IndexInfo{Type: IndexTypeSpatial, Name: NewIdentifierCI($3)}
   }
 | FULLTEXT index_or_key_opt name_opt
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewIdentifierCI($3), Fulltext: true, Unique: false}
+    $$ = &IndexInfo{Type: IndexTypeFullText, Name: NewIdentifierCI($3)}
   }
 | constraint_name_opt UNIQUE index_or_key_opt name_opt
   {
-    $$ = &IndexInfo{Type: string($2) + " " + string($3), ConstraintName: NewIdentifierCI($1), Name: NewIdentifierCI($4), Unique: true}
+    $$ = &IndexInfo{Type: IndexTypeUnique, ConstraintName: NewIdentifierCI($1), Name: NewIdentifierCI($4)}
   }
 | index_or_key name_opt
   {
-    $$ = &IndexInfo{Type: string($1), Name: NewIdentifierCI($2), Unique: false}
+    $$ = &IndexInfo{Type: IndexTypeDefault, Name: NewIdentifierCI($2)}
   }
 
 constraint_name_opt:
@@ -2471,7 +2471,7 @@ from_or_in:
 
 index_or_key_opt:
   {
-    $$ = "key"
+    $$ = ""
   }
 | index_or_key
   {
@@ -3252,6 +3252,10 @@ alter_statement:
   {
     $$ = &AlterVschema{Action: AddSequenceDDLAction, Table: $6}
   }
+| ALTER comment_opt VSCHEMA DROP SEQUENCE table_name
+  {
+    $$ = &AlterVschema{Action: DropSequenceDDLAction, Table: $6}
+  }
 | ALTER comment_opt VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
   {
     $$ = &AlterVschema{
@@ -3261,6 +3265,13 @@ alter_statement:
             Column: $8,
             Sequence: $10,
         },
+    }
+  }
+| ALTER comment_opt VSCHEMA ON table_name DROP AUTO_INCREMENT
+  {
+    $$ = &AlterVschema{
+        Action: DropAutoIncDDLAction,
+        Table: $5,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING RETRY
@@ -3953,9 +3964,9 @@ truncate_statement:
   }
 
 analyze_statement:
-  ANALYZE TABLE table_name
+  ANALYZE local_opt TABLE table_name
   {
-    $$ = &OtherRead{}
+    $$ = &Analyze{IsLocal: $2, Table: $4}
   }
 
 purge_statement:

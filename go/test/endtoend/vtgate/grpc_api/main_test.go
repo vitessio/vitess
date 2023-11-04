@@ -111,6 +111,7 @@ func TestMain(m *testing.M) {
 			"--grpc_auth_static_password_file", grpcServerAuthStaticPath,
 			"--grpc_use_effective_callerid",
 			"--grpc-use-static-authentication-callerid",
+			"--grpc-send-session-in-streaming",
 		}
 
 		// Configure vttablet to use table ACL

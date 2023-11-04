@@ -53,6 +53,7 @@ func TestDownPrimary(t *testing.T) {
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
 	// find the replica and rdonly tablets
 	var replica, rdonly *cluster.Vttablet
@@ -99,6 +100,7 @@ func TestDownPrimary(t *testing.T) {
 	// also check that the replication is working correctly after failover
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica}, 10*time.Second)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 }
 
 // bring down primary before VTOrc has started, let vtorc repair.
@@ -154,6 +156,7 @@ func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 	// also check that the replication is working correctly after failover
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 }
 
 // delete the primary record and let vtorc repair.
@@ -168,6 +171,7 @@ func TestDeletedPrimaryTablet(t *testing.T) {
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
 	// find the replica and rdonly tablets
 	var replica, rdonly *cluster.Vttablet
@@ -239,6 +243,7 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
 	// find the replica and rdonly tablets
 	var replica, rdonly *cluster.Vttablet
@@ -275,6 +280,7 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	// also check that the replication is working correctly after failover
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica}, 10*time.Second)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
 	// Parse log file and find out how much time it took for DeadPrimary to recover.
 	logFile := path.Join(vtOrcProcess.LogDir, vtOrcProcess.LogFileName)

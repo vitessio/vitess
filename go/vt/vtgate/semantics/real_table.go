@@ -24,6 +24,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -42,7 +43,7 @@ func (r *RealTable) dependencies(colName string, org originable) (dependencies, 
 	ts := org.tableSetFor(r.ASTNode)
 	for _, info := range r.getColumns() {
 		if strings.EqualFold(info.Name, colName) {
-			return createCertain(ts, ts, &info.Type), nil
+			return createCertain(ts, ts, info.Type), nil
 		}
 	}
 
@@ -73,8 +74,28 @@ func (r *RealTable) getColumns() []ColumnInfo {
 }
 
 // GetExpr implements the TableInfo interface
-func (r *RealTable) GetExpr() *sqlparser.AliasedTableExpr {
+func (r *RealTable) getAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return r.ASTNode
+}
+
+func (r *RealTable) canShortCut() shortCut {
+	if r.Table == nil {
+		return cannotShortCut
+	}
+	if r.Table.Type != "" {
+		// A reference table is not an issue when seeing if a query is going to an unsharded keyspace
+		if r.Table.Type == vindexes.TypeReference {
+			return canShortCut
+		}
+		return cannotShortCut
+	}
+
+	name, ok := r.ASTNode.Expr.(sqlparser.TableName)
+	if !ok || name.Name.String() != r.Table.Name.String() {
+		return cannotShortCut
+	}
+
+	return dependsOnKeyspace
 }
 
 // GetVindexTable implements the TableInfo interface
@@ -114,10 +135,11 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 
 		cols = append(cols, ColumnInfo{
 			Name: col.Name.String(),
-			Type: Type{
-				Type:      col.Type,
-				Collation: collation,
+			Type: evalengine.Type{
+				Type: col.Type,
+				Coll: collation,
 			},
+			Invisible: col.Invisible,
 		})
 		nameMap[col.Name.String()] = nil
 	}

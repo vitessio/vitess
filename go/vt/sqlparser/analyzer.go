@@ -44,6 +44,7 @@ const (
 	StmtShow
 	StmtUse
 	StmtOther
+	StmtAnalyze
 	StmtUnknown
 	StmtComment
 	StmtPriv
@@ -88,8 +89,10 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtShowMigrationLogs
 	case *Use:
 		return StmtUse
-	case *OtherRead, *OtherAdmin, *Load:
+	case *OtherAdmin, *Load:
 		return StmtOther
+	case *Analyze:
+		return StmtAnalyze
 	case Explain, *VExplainStmt:
 		return StmtExplain
 	case *Begin:
@@ -142,22 +145,12 @@ func CanNormalize(stmt Statement) bool {
 
 // CachePlan takes Statement and returns true if the query plan should be cached
 func CachePlan(stmt Statement) bool {
-	var comments *ParsedComments
-	switch stmt := stmt.(type) {
-	case *Select:
-		comments = stmt.Comments
-	case *Insert:
-		comments = stmt.Comments
-	case *Update:
-		comments = stmt.Comments
-	case *Delete:
-		comments = stmt.Comments
-	case *Union, *Stream:
-		return true
+	switch stmt.(type) {
+	case *Select, *Insert, *Update, *Delete, *Union, *Stream:
+		return !checkDirective(stmt, DirectiveSkipQueryPlanCache)
 	default:
 		return false
 	}
-	return !comments.Directives().IsSet(DirectiveSkipQueryPlanCache)
 }
 
 // MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
@@ -245,8 +238,10 @@ func Preview(sql string) StatementType {
 		return StmtUse
 	case "describe", "desc", "explain":
 		return StmtExplain
-	case "analyze", "repair", "optimize":
+	case "repair", "optimize":
 		return StmtOther
+	case "analyze":
+		return StmtAnalyze
 	case "grant", "revoke":
 		return StmtPriv
 	case "release":
@@ -293,6 +288,8 @@ func (s StatementType) String() string {
 		return "USE"
 	case StmtOther:
 		return "OTHER"
+	case StmtAnalyze:
+		return "ANALYZE"
 	case StmtPriv:
 		return "PRIV"
 	case StmtExplain:

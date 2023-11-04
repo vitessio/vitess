@@ -25,8 +25,8 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -181,14 +181,6 @@ func TestBindingMultiTablePositive(t *testing.T) {
 		query:          "select case t.col when s.col then r.col else u.col end from t, s, r, w, u",
 		deps:           MergeTableSets(TS0, TS1, TS2, TS4),
 		numberOfTables: 4,
-		// }, {
-		// TODO: move to subquery
-		// make sure that we don't let sub-query dependencies leak out by mistake
-		// query: "select t.col + (select 42 from s) from t",
-		// deps:  TS0,
-		// }, {
-		// 	query: "select (select 42 from s where r.id = s.id) from r",
-		// 	deps:  TS0 | TS1,
 	}, {
 		query:          "select u1.a + u2.a from u1, u2",
 		deps:           MergeTableSets(TS0, TS1),
@@ -410,9 +402,9 @@ func TestUnknownColumnMap2(t *testing.T) {
 					} else {
 						require.NoError(t, err)
 						require.NoError(t, tbl.NotSingleRouteErr)
-						typ, _, found := tbl.TypeForExpr(expr)
+						typ, found := tbl.TypeForExpr(expr)
 						assert.True(t, found)
-						assert.Equal(t, test.typ, typ)
+						assert.Equal(t, test.typ, typ.Type)
 					}
 				})
 			}
@@ -521,94 +513,6 @@ func TestScopeForSubqueries(t *testing.T) {
 	}
 }
 
-func TestSubqueriesMappingWhereClause(t *testing.T) {
-	tcs := []struct {
-		sql           string
-		opCode        opcode.PulloutOpcode
-		otherSideName string
-	}{
-		{
-			sql:           "select id from t1 where id in (select uid from t2)",
-			opCode:        opcode.PulloutIn,
-			otherSideName: "id",
-		},
-		{
-			sql:           "select id from t1 where id not in (select uid from t2)",
-			opCode:        opcode.PulloutNotIn,
-			otherSideName: "id",
-		},
-		{
-			sql:           "select id from t where col1 = (select uid from t2 order by uid desc limit 1)",
-			opCode:        opcode.PulloutValue,
-			otherSideName: "col1",
-		},
-		{
-			sql:           "select id from t where exists (select uid from t2 where uid = 42)",
-			opCode:        opcode.PulloutExists,
-			otherSideName: "",
-		},
-		{
-			sql:           "select id from t where col1 >= (select uid from t2 where uid = 42)",
-			opCode:        opcode.PulloutValue,
-			otherSideName: "col1",
-		},
-	}
-
-	for i, tc := range tcs {
-		t.Run(fmt.Sprintf("%d_%s", i+1, tc.sql), func(t *testing.T) {
-			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
-			sel, _ := stmt.(*sqlparser.Select)
-
-			var subq *sqlparser.Subquery
-			switch whereExpr := sel.Where.Expr.(type) {
-			case *sqlparser.ComparisonExpr:
-				subq = whereExpr.Right.(*sqlparser.Subquery)
-			case *sqlparser.ExistsExpr:
-				subq = whereExpr.Subquery
-			}
-
-			extractedSubq := semTable.SubqueryRef[subq]
-			assert.True(t, sqlparser.Equals.Expr(extractedSubq.Subquery, subq))
-			assert.True(t, sqlparser.Equals.Expr(extractedSubq.Original, sel.Where.Expr))
-			assert.EqualValues(t, tc.opCode, extractedSubq.OpCode)
-			if tc.otherSideName == "" {
-				assert.Nil(t, extractedSubq.OtherSide)
-			} else {
-				assert.True(t, sqlparser.Equals.Expr(extractedSubq.OtherSide, sqlparser.NewColName(tc.otherSideName)))
-			}
-		})
-	}
-}
-
-func TestSubqueriesMappingSelectExprs(t *testing.T) {
-	tcs := []struct {
-		sql        string
-		selExprIdx int
-	}{
-		{
-			sql:        "select (select id from t1)",
-			selExprIdx: 0,
-		},
-		{
-			sql:        "select id, (select id from t1) from t1",
-			selExprIdx: 1,
-		},
-	}
-
-	for i, tc := range tcs {
-		t.Run(fmt.Sprintf("%d_%s", i+1, tc.sql), func(t *testing.T) {
-			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
-			sel, _ := stmt.(*sqlparser.Select)
-
-			subq := sel.SelectExprs[tc.selExprIdx].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery)
-			extractedSubq := semTable.SubqueryRef[subq]
-			assert.True(t, sqlparser.Equals.Expr(extractedSubq.Subquery, subq))
-			assert.True(t, sqlparser.Equals.Expr(extractedSubq.Original, subq))
-			assert.EqualValues(t, opcode.PulloutValue, extractedSubq.OpCode)
-		})
-	}
-}
-
 func TestSubqueryOrderByBinding(t *testing.T) {
 	queries := []struct {
 		query    string
@@ -701,6 +605,9 @@ func TestOrderByBindingTable(t *testing.T) {
 	}, {
 		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by id",
 		MergeTableSets(TS0, TS1, TS3),
+	}, {
+		"select * from (SELECT c1, c2 FROM a UNION SELECT c1, c2 FROM b) AS u ORDER BY u.c1",
+		MergeTableSets(TS0, TS1),
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
@@ -918,6 +825,21 @@ func TestInvalidQueries(t *testing.T) {
 	}, {
 		sql:             "select t1.does_not_exist from t1, t2",
 		notUnshardedErr: "column 't1.does_not_exist' not found",
+	}, {
+		sql:  "select 1 from t1 where id = (select 1, 2)",
+		serr: "Operand should contain 1 column(s)",
+	}, {
+		sql:  "select 1 from t1 where (id, id) in (select 1, 2, 3)",
+		serr: "Operand should contain 2 column(s)",
+	}, {
+		sql:  "WITH RECURSIVE cte (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte",
+		serr: "VT12001: unsupported: recursive common table expression",
+	}, {
+		sql:  "with x as (select 1), x as (select 1) select * from x",
+		serr: "VT03013: not unique table/alias: 'x'",
+	}, {
+		// should not fail, same name is valid as long as it's not in the same scope
+		sql: "with x as (with x as (select 1) select * from x) select * from x",
 	}}
 
 	for _, tc := range tcases {
@@ -1059,6 +981,108 @@ func TestScopingWDerivedTables(t *testing.T) {
 				sel := parse.(*sqlparser.Select)
 				assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(extract(sel, 0)), "RecursiveDeps")
 				assert.Equal(t, query.expectation, st.DirectDeps(extract(sel, 0)), "DirectDeps")
+			}
+		})
+	}
+}
+
+func TestScopingWithWITH(t *testing.T) {
+	queries := []struct {
+		query             string
+		errorMessage      string
+		recursive, direct TableSet
+	}{
+		{
+			query:     "with t as (select x as id from user) select id from t",
+			recursive: TS0,
+			direct:    TS1,
+		}, {
+			query:     "with t as (select foo as id from user) select id from t",
+			recursive: TS0,
+			direct:    TS1,
+		}, {
+			query:     "with c as (select x as foo from user), t as (select foo as id from c) select id from t",
+			recursive: TS0,
+			direct:    TS2,
+		}, {
+			query:     "with t as (select foo as id from user) select t.id from t",
+			recursive: TS0,
+			direct:    TS1,
+		}, {
+			query:        "select t.id2 from (select foo as id from user) as t",
+			errorMessage: "column 't.id2' not found",
+		}, {
+			query:     "with t as (select 42 as id) select id from t",
+			recursive: T0,
+			direct:    TS1,
+		}, {
+			query:     "with t as (select 42 as id) select t.id from t",
+			recursive: T0,
+			direct:    TS1,
+		}, {
+			query:        "with t as (select 42 as id) select ks.t.id from t",
+			errorMessage: "column 'ks.t.id' not found",
+		}, {
+			query:        "with t as (select id, id from user)  select * from t",
+			errorMessage: "Duplicate column name 'id'",
+		}, {
+			query:     "with t as (select id as baz from user) select t.baz = 1 from t",
+			direct:    TS1,
+			recursive: TS0,
+		}, {
+			query:     "with t as (select * from user, music) select t.id from  t",
+			direct:    TS2,
+			recursive: MergeTableSets(TS0, TS1),
+		}, {
+			query:     "with t as (select * from user, music) select t.id from t order by t.id",
+			direct:    TS2,
+			recursive: MergeTableSets(TS0, TS1),
+		}, {
+			query:     "with t as (select * from user) select t.id from t join user as u on t.id = u.id",
+			direct:    TS1,
+			recursive: TS0,
+		}, {
+			query:     "with t as (select t1.id, t1.col1 from t1 join t2) select t.col1 from t3 ua join t",
+			direct:    TS3,
+			recursive: TS1,
+		}, {
+			query:        "with uu as (select id from t1) select uu.test from uu",
+			errorMessage: "column 'uu.test' not found",
+		}, {
+			query:        "with uu as (select id as col from t1) select uu.id from uu",
+			errorMessage: "column 'uu.id' not found",
+		}, {
+			query:        "select uu.id from (select id as col from t1) uu",
+			errorMessage: "column 'uu.id' not found",
+		}, {
+			query:     "select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
+			direct:    TS1,
+			recursive: TS0,
+		}, {
+			query:     "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
+			direct:    T0,
+			recursive: T0,
+		}}
+	for _, query := range queries {
+		t.Run(query.query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query.query)
+			require.NoError(t, err)
+			st, err := Analyze(parse, "user", &FakeSI{
+				Tables: map[string]*vindexes.Table{
+					"t": {Name: sqlparser.NewIdentifierCS("t")},
+				},
+			})
+
+			switch {
+			case query.errorMessage != "" && err != nil:
+				require.EqualError(t, err, query.errorMessage)
+			case query.errorMessage != "":
+				require.EqualError(t, st.NotUnshardedErr, query.errorMessage)
+			default:
+				require.NoError(t, err)
+				sel := parse.(*sqlparser.Select)
+				assert.Equal(t, query.recursive, st.RecursiveDeps(extract(sel, 0)), "RecursiveDeps")
+				assert.Equal(t, query.direct, st.DirectDeps(extract(sel, 0)), "DirectDeps")
 			}
 		})
 	}
@@ -1602,4 +1626,556 @@ func fakeSchemaInfo() *FakeSI {
 		},
 	}
 	return si
+}
+
+var tbl = map[string]TableInfo{
+	"t0": &RealTable{
+		Table: &vindexes.Table{
+			Keyspace: &vindexes.Keyspace{Name: "ks"},
+			ChildForeignKeys: []vindexes.ChildFKInfo{
+				ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
+				ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+			},
+			ParentForeignKeys: []vindexes.ParentFKInfo{
+				pkInfo(nil, []string{"colb"}, []string{"colb"}),
+				pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
+			},
+		},
+	},
+	"t1": &RealTable{
+		Table: &vindexes.Table{
+			Keyspace: &vindexes.Keyspace{Name: "ks_unmanaged", Sharded: true},
+			ChildForeignKeys: []vindexes.ChildFKInfo{
+				ckInfo(nil, []string{"cola"}, []string{"cola"}, sqlparser.Restrict),
+				ckInfo(nil, []string{"cola1", "cola2"}, []string{"ccola1", "ccola2"}, sqlparser.SetNull),
+			},
+		},
+	},
+	"t2": &RealTable{
+		Table: &vindexes.Table{
+			Keyspace: &vindexes.Keyspace{Name: "ks"},
+		},
+	},
+	"t3": &RealTable{
+		Table: &vindexes.Table{
+			Keyspace: &vindexes.Keyspace{Name: "undefined_ks", Sharded: true},
+		},
+	},
+}
+
+// TestGetAllManagedForeignKeys tests the functionality of getAllManagedForeignKeys.
+func TestGetAllManagedForeignKeys(t *testing.T) {
+	tests := []struct {
+		name           string
+		analyzer       *analyzer
+		childFkWanted  map[TableSet][]vindexes.ChildFKInfo
+		parentFkWanted map[TableSet][]vindexes.ParentFKInfo
+		expectedErr    string
+	}{
+		{
+			name: "Collect all foreign key constraints",
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{tbl["t0"], tbl["t1"],
+						&DerivedTable{},
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks":           vschemapb.Keyspace_managed,
+							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
+						},
+					},
+				},
+			},
+			childFkWanted: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+				},
+			},
+			parentFkWanted: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(nil, []string{"colb"}, []string{"colb"}),
+					pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
+				},
+			},
+		},
+		{
+			name: "keyspace not found in schema information",
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						tbl["t2"],
+						tbl["t3"],
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks": vschemapb.Keyspace_managed,
+						},
+					},
+				},
+			},
+			expectedErr: "undefined_ks keyspace not found",
+		},
+		{
+			name: "Cyclic fk constraints error",
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						tbl["t0"], tbl["t1"],
+						&DerivedTable{},
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks":           vschemapb.Keyspace_managed,
+							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
+						},
+						KsError: map[string]error{
+							"ks": fmt.Errorf("VT09019: ks has cyclic foreign keys"),
+						},
+					},
+				},
+			},
+			expectedErr: "VT09019: ks has cyclic foreign keys",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			childFk, parentFk, err := tt.analyzer.getAllManagedForeignKeys()
+			if tt.expectedErr != "" {
+				require.EqualError(t, err, tt.expectedErr)
+				return
+			}
+			require.EqualValues(t, tt.childFkWanted, childFk)
+			require.EqualValues(t, tt.parentFkWanted, parentFk)
+		})
+	}
+}
+
+// TestFilterForeignKeysUsingUpdateExpressions tests the functionality of filterForeignKeysUsingUpdateExpressions.
+func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
+	cola := sqlparser.NewColName("cola")
+	colb := sqlparser.NewColName("colb")
+	colc := sqlparser.NewColName("colc")
+	cold := sqlparser.NewColName("cold")
+	a := &analyzer{
+		binder: &binder{
+			direct: map[sqlparser.Expr]TableSet{
+				cola: SingleTableSet(0),
+				colb: SingleTableSet(0),
+				colc: SingleTableSet(1),
+				cold: SingleTableSet(1),
+			},
+		},
+	}
+	updateExprs := sqlparser.UpdateExprs{
+		&sqlparser.UpdateExpr{Name: cola, Expr: sqlparser.NewIntLiteral("1")},
+		&sqlparser.UpdateExpr{Name: colb, Expr: &sqlparser.NullVal{}},
+		&sqlparser.UpdateExpr{Name: colc, Expr: sqlparser.NewIntLiteral("1")},
+		&sqlparser.UpdateExpr{Name: cold, Expr: &sqlparser.NullVal{}},
+	}
+	tests := []struct {
+		name            string
+		analyzer        *analyzer
+		allChildFks     map[TableSet][]vindexes.ChildFKInfo
+		allParentFks    map[TableSet][]vindexes.ParentFKInfo
+		updExprs        sqlparser.UpdateExprs
+		childFksWanted  map[TableSet][]vindexes.ChildFKInfo
+		parentFksWanted map[TableSet][]vindexes.ParentFKInfo
+	}{
+		{
+			name:         "Child Foreign Keys Filtering",
+			analyzer:     a,
+			allParentFks: nil,
+			allChildFks: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+				},
+				SingleTableSet(1): {
+					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
+					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+				},
+			},
+			updExprs: updateExprs,
+			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+				},
+				SingleTableSet(1): {
+					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
+				},
+			},
+			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{},
+		}, {
+			name:     "Parent Foreign Keys Filtering",
+			analyzer: a,
+			allParentFks: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(nil, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
+					pkInfo(nil, []string{"pcolc"}, []string{"colc"}),
+					pkInfo(nil, []string{"pcolb", "pcola"}, []string{"colb", "cola"}),
+					pkInfo(nil, []string{"pcolb"}, []string{"colb"}),
+					pkInfo(nil, []string{"pcola"}, []string{"cola"}),
+					pkInfo(nil, []string{"pcolb", "pcolx"}, []string{"colb", "colx"}),
+				},
+				SingleTableSet(1): {
+					pkInfo(nil, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
+					pkInfo(nil, []string{"pcola"}, []string{"cola"}),
+					pkInfo(nil, []string{"pcold", "pcolc"}, []string{"cold", "colc"}),
+					pkInfo(nil, []string{"pcold"}, []string{"cold"}),
+					pkInfo(nil, []string{"pcold", "pcolx"}, []string{"cold", "colx"}),
+				},
+			},
+			allChildFks:    nil,
+			updExprs:       updateExprs,
+			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{},
+			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(nil, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
+					pkInfo(nil, []string{"pcola"}, []string{"cola"}),
+				},
+				SingleTableSet(1): {
+					pkInfo(nil, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			childFks, parentFks := tt.analyzer.filterForeignKeysUsingUpdateExpressions(tt.allChildFks, tt.allParentFks, tt.updExprs)
+			require.EqualValues(t, tt.childFksWanted, childFks)
+			require.EqualValues(t, tt.parentFksWanted, parentFks)
+		})
+	}
+}
+
+// TestGetInvolvedForeignKeys tests the functionality of getInvolvedForeignKeys.
+func TestGetInvolvedForeignKeys(t *testing.T) {
+	cola := sqlparser.NewColName("cola")
+	colb := sqlparser.NewColName("colb")
+	colc := sqlparser.NewColName("colc")
+	cold := sqlparser.NewColName("cold")
+	tests := []struct {
+		name            string
+		stmt            sqlparser.Statement
+		analyzer        *analyzer
+		childFksWanted  map[TableSet][]vindexes.ChildFKInfo
+		parentFksWanted map[TableSet][]vindexes.ParentFKInfo
+		expectedErr     string
+	}{
+		{
+			name: "Delete Query",
+			stmt: &sqlparser.Delete{},
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						tbl["t0"],
+						tbl["t1"],
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks":           vschemapb.Keyspace_managed,
+							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
+						},
+					},
+				},
+			},
+			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+				},
+			},
+		},
+		{
+			name: "Update statement",
+			stmt: &sqlparser.Update{
+				Exprs: sqlparser.UpdateExprs{
+					&sqlparser.UpdateExpr{
+						Name: cola,
+						Expr: sqlparser.NewIntLiteral("1"),
+					},
+					&sqlparser.UpdateExpr{
+						Name: colb,
+						Expr: &sqlparser.NullVal{},
+					},
+					&sqlparser.UpdateExpr{
+						Name: colc,
+						Expr: sqlparser.NewIntLiteral("1"),
+					},
+					&sqlparser.UpdateExpr{
+						Name: cold,
+						Expr: &sqlparser.NullVal{},
+					},
+				},
+			},
+			analyzer: &analyzer{
+				binder: &binder{
+					direct: map[sqlparser.Expr]TableSet{
+						cola: SingleTableSet(0),
+						colb: SingleTableSet(0),
+						colc: SingleTableSet(1),
+						cold: SingleTableSet(1),
+					},
+				},
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						&RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks"},
+								ChildForeignKeys: []vindexes.ChildFKInfo{
+									ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+									ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+									ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+								},
+								ParentForeignKeys: []vindexes.ParentFKInfo{
+									pkInfo(nil, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
+									pkInfo(nil, []string{"pcolc"}, []string{"colc"}),
+									pkInfo(nil, []string{"pcolb", "pcola"}, []string{"colb", "cola"}),
+									pkInfo(nil, []string{"pcolb"}, []string{"colb"}),
+									pkInfo(nil, []string{"pcola"}, []string{"cola"}),
+									pkInfo(nil, []string{"pcolb", "pcolx"}, []string{"colb", "colx"}),
+								},
+							},
+						},
+						&RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks"},
+								ChildForeignKeys: []vindexes.ChildFKInfo{
+									ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
+									ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+								},
+								ParentForeignKeys: []vindexes.ParentFKInfo{
+									pkInfo(nil, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
+									pkInfo(nil, []string{"pcola"}, []string{"cola"}),
+									pkInfo(nil, []string{"pcold", "pcolc"}, []string{"cold", "colc"}),
+									pkInfo(nil, []string{"pcold"}, []string{"cold"}),
+									pkInfo(nil, []string{"pcold", "pcolx"}, []string{"cold", "colx"}),
+								},
+							},
+						},
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks": vschemapb.Keyspace_managed,
+						},
+					},
+				},
+			},
+			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+				},
+				SingleTableSet(1): {
+					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
+				},
+			},
+			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(nil, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
+					pkInfo(nil, []string{"pcola"}, []string{"cola"}),
+				},
+				SingleTableSet(1): {
+					pkInfo(nil, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
+				},
+			},
+		},
+		{
+			name: "Replace Query",
+			stmt: &sqlparser.Insert{
+				Action: sqlparser.ReplaceAct,
+			},
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						tbl["t0"],
+						tbl["t1"],
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks":           vschemapb.Keyspace_managed,
+							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
+						},
+					},
+				},
+			},
+			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+				},
+			},
+			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(nil, []string{"colb"}, []string{"colb"}),
+					pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
+				},
+			},
+		},
+		{
+			name: "Insert Query",
+			stmt: &sqlparser.Insert{
+				Action: sqlparser.InsertAct,
+			},
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						tbl["t0"],
+						tbl["t1"],
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks":           vschemapb.Keyspace_managed,
+							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
+						},
+					},
+				},
+			},
+			childFksWanted: nil,
+			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(nil, []string{"colb"}, []string{"colb"}),
+					pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
+				},
+			},
+		},
+		{
+			name: "Insert Query with On Duplicate",
+			stmt: &sqlparser.Insert{
+				Action: sqlparser.InsertAct,
+				OnDup: sqlparser.OnDup{
+					&sqlparser.UpdateExpr{
+						Name: cola,
+						Expr: sqlparser.NewIntLiteral("1"),
+					},
+					&sqlparser.UpdateExpr{
+						Name: colb,
+						Expr: &sqlparser.NullVal{},
+					},
+				},
+			},
+			analyzer: &analyzer{
+				binder: &binder{
+					direct: map[sqlparser.Expr]TableSet{
+						cola: SingleTableSet(0),
+						colb: SingleTableSet(0),
+					},
+				},
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						&RealTable{
+							Table: &vindexes.Table{
+								Keyspace: &vindexes.Keyspace{Name: "ks"},
+								ChildForeignKeys: []vindexes.ChildFKInfo{
+									ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
+									ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
+									ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+									ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
+									ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
+								},
+								ParentForeignKeys: []vindexes.ParentFKInfo{
+									pkInfo(nil, []string{"colb"}, []string{"colb"}),
+									pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
+								},
+							},
+						},
+						tbl["t1"],
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks":           vschemapb.Keyspace_managed,
+							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
+						},
+					},
+				},
+			},
+			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
+				SingleTableSet(0): {
+					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
+					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
+				},
+			},
+			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
+				SingleTableSet(0): {
+					pkInfo(nil, []string{"colb"}, []string{"colb"}),
+					pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
+				},
+			},
+		},
+		{
+			name: "Insert error",
+			stmt: &sqlparser.Insert{},
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						tbl["t2"],
+						tbl["t3"],
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks": vschemapb.Keyspace_managed,
+						},
+					},
+				},
+			},
+			expectedErr: "undefined_ks keyspace not found",
+		},
+		{
+			name: "Update error",
+			stmt: &sqlparser.Update{},
+			analyzer: &analyzer{
+				tables: &tableCollector{
+					Tables: []TableInfo{
+						tbl["t2"],
+						tbl["t3"],
+					},
+					si: &FakeSI{
+						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+							"ks": vschemapb.Keyspace_managed,
+						},
+					},
+				},
+			},
+			expectedErr: "undefined_ks keyspace not found",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			childFks, parentFks, err := tt.analyzer.getInvolvedForeignKeys(tt.stmt)
+			if tt.expectedErr != "" {
+				require.EqualError(t, err, tt.expectedErr)
+				return
+			}
+			require.EqualValues(t, tt.childFksWanted, childFks)
+			require.EqualValues(t, tt.parentFksWanted, parentFks)
+		})
+	}
+}
+
+func ckInfo(cTable *vindexes.Table, pCols []string, cCols []string, refAction sqlparser.ReferenceAction) vindexes.ChildFKInfo {
+	return vindexes.ChildFKInfo{
+		Table:         cTable,
+		ParentColumns: sqlparser.MakeColumns(pCols...),
+		ChildColumns:  sqlparser.MakeColumns(cCols...),
+		OnDelete:      refAction,
+	}
+}
+
+func pkInfo(parentTable *vindexes.Table, pCols []string, cCols []string) vindexes.ParentFKInfo {
+	return vindexes.ParentFKInfo{
+		Table:         parentTable,
+		ParentColumns: sqlparser.MakeColumns(pCols...),
+		ChildColumns:  sqlparser.MakeColumns(cCols...),
+	}
 }

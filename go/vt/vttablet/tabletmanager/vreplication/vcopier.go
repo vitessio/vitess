@@ -27,6 +27,8 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/pools"
@@ -393,7 +395,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return fmt.Errorf("plan not found for table: %s, current plans are: %#v", tableName, plan.TargetTables)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, copyPhaseDuration)
+	ctx, cancel := context.WithTimeout(ctx, vttablet.CopyPhaseDuration)
 	defer cancel()
 
 	var lastpkpb *querypb.QueryResult
@@ -756,7 +758,7 @@ func (vcq *vcopierCopyWorkQueue) enqueue(ctx context.Context, currT *vcopierCopy
 	}
 
 	// Get a handle on an unused worker.
-	poolH, err := vcq.workerPool.Get(ctx, nil)
+	poolH, err := vcq.workerPool.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get a worker from pool: %s", err.Error())
 	}
@@ -1016,11 +1018,6 @@ func (vts vcopierCopyTaskState) String() string {
 	return fmt.Sprintf("undefined(%d)", int(vts))
 }
 
-// ApplySetting implements pools.Resource.
-func (vbc *vcopierCopyWorker) ApplySetting(context.Context, *pools.Setting) error {
-	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] vcopierCopyWorker does not implement ApplySetting")
-}
-
 // Close implements pool.Resource.
 func (vbc *vcopierCopyWorker) Close() {
 	if !vbc.isOpen {
@@ -1036,21 +1033,6 @@ func (vbc *vcopierCopyWorker) Close() {
 // Expired implements pools.Resource.
 func (vbc *vcopierCopyWorker) Expired(time.Duration) bool {
 	return false
-}
-
-// IsSameSetting implements pools.Resource.
-func (vbc *vcopierCopyWorker) IsSameSetting(string) bool {
-	return true
-}
-
-// IsSettingApplied implements pools.Resource.
-func (vbc *vcopierCopyWorker) IsSettingApplied() bool {
-	return false
-}
-
-// ResetSetting implements pools.Resource.
-func (vbc *vcopierCopyWorker) ResetSetting(context.Context) error {
-	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] vcopierCopyWorker does not implement ResetSetting")
 }
 
 // execute advances a task through each state until it is done (= canceled,

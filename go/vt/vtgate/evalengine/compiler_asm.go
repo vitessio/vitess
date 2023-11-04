@@ -529,12 +529,12 @@ func (asm *assembler) CmpCase(cases int, hasElse bool, tt sqltypes.Type, cc coll
 		end := env.vm.sp - elseOffset
 		for sp := env.vm.sp - stackDepth; sp < end; sp += 2 {
 			if env.vm.stack[sp].(*evalInt64).i != 0 {
-				env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[sp+1], tt, cc.Collation)
+				env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[sp+1], tt, cc.Collation, env.now)
 				goto done
 			}
 		}
 		if elseOffset != 0 {
-			env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[env.vm.sp-1], tt, cc.Collation)
+			env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[env.vm.sp-1], tt, cc.Collation, env.now)
 		} else {
 			env.vm.stack[env.vm.sp-stackDepth] = nil
 		}
@@ -883,6 +883,17 @@ func (asm *assembler) Convert_hex(offset int) {
 	}, "CONV VARBINARY(SP-%d), HEX", offset)
 }
 
+func (asm *assembler) Convert_bit(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		var ok bool
+		env.vm.stack[env.vm.sp-offset], ok = env.vm.stack[env.vm.sp-offset].(*evalBytes).toNumericBit()
+		if !ok {
+			env.vm.err = errDeoptimize
+		}
+		return 1
+	}, "CONV VARBINARY(SP-%d), BIT", offset)
+}
+
 func (asm *assembler) Convert_Ti(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		v := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
@@ -1110,7 +1121,7 @@ func (asm *assembler) Convert_xD(offset int) {
 		// Need to explicitly check here or we otherwise
 		// store a nil wrapper in an interface vs. a direct
 		// nil.
-		d := evalToDate(env.vm.stack[env.vm.sp-offset])
+		d := evalToDate(env.vm.stack[env.vm.sp-offset], env.now)
 		if d == nil {
 			env.vm.stack[env.vm.sp-offset] = nil
 		} else {
@@ -1125,7 +1136,7 @@ func (asm *assembler) Convert_xD_nz(offset int) {
 		// Need to explicitly check here or we otherwise
 		// store a nil wrapper in an interface vs. a direct
 		// nil.
-		d := evalToDate(env.vm.stack[env.vm.sp-offset])
+		d := evalToDate(env.vm.stack[env.vm.sp-offset], env.now)
 		if d == nil || d.isZero() {
 			env.vm.stack[env.vm.sp-offset] = nil
 		} else {
@@ -1140,7 +1151,7 @@ func (asm *assembler) Convert_xDT(offset, prec int) {
 		// Need to explicitly check here or we otherwise
 		// store a nil wrapper in an interface vs. a direct
 		// nil.
-		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset], prec)
+		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset], prec, env.now)
 		if dt == nil {
 			env.vm.stack[env.vm.sp-offset] = nil
 		} else {
@@ -1155,7 +1166,7 @@ func (asm *assembler) Convert_xDT_nz(offset, prec int) {
 		// Need to explicitly check here or we otherwise
 		// store a nil wrapper in an interface vs. a direct
 		// nil.
-		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset], prec)
+		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset], prec, env.now)
 		if dt == nil || dt.isZero() {
 			env.vm.stack[env.vm.sp-offset] = nil
 		} else {
@@ -2042,6 +2053,7 @@ func (asm *assembler) Fn_FROM_BASE64(t sqltypes.Type) {
 		}
 		str.tt = int16(t)
 		str.bytes = decoded
+		str.col = collationBinary
 		return 1
 	}, "FN FROM_BASE64 VARCHAR(SP-1)")
 }
@@ -2840,112 +2852,6 @@ func (asm *assembler) Not_d() {
 	}, "NOT DECIMAL(SP-1)")
 }
 
-func (asm *assembler) LogicalLeft(opname string) *jump {
-	switch opname {
-	case "AND":
-		j := asm.jumpFrom()
-		asm.emit(func(env *ExpressionEnv) int {
-			left, ok := env.vm.stack[env.vm.sp-1].(*evalInt64)
-			if ok && left.i == 0 {
-				return j.offset()
-			}
-			return 1
-		}, "AND CHECK INT64(SP-1)")
-		return j
-	case "OR":
-		j := asm.jumpFrom()
-		asm.emit(func(env *ExpressionEnv) int {
-			left, ok := env.vm.stack[env.vm.sp-1].(*evalInt64)
-			if ok && left.i != 0 {
-				left.i = 1
-				return j.offset()
-			}
-			return 1
-		}, "OR CHECK INT64(SP-1)")
-		return j
-	case "XOR":
-		j := asm.jumpFrom()
-		asm.emit(func(env *ExpressionEnv) int {
-			if env.vm.stack[env.vm.sp-1] == nil {
-				return j.offset()
-			}
-			return 1
-		}, "XOR CHECK INT64(SP-1)")
-		return j
-	}
-	return nil
-}
-
-func (asm *assembler) LogicalRight(opname string) {
-	asm.adjustStack(-1)
-	switch opname {
-	case "AND":
-		asm.emit(func(env *ExpressionEnv) int {
-			left, lok := env.vm.stack[env.vm.sp-2].(*evalInt64)
-			right, rok := env.vm.stack[env.vm.sp-1].(*evalInt64)
-
-			isLeft := lok && left.i != 0
-			isRight := rok && right.i != 0
-
-			if isLeft && isRight {
-				left.i = 1
-			} else if rok && !isRight {
-				env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBool(false)
-			} else {
-				env.vm.stack[env.vm.sp-2] = nil
-			}
-			env.vm.sp--
-			return 1
-		}, "AND INT64(SP-2), INT64(SP-1)")
-	case "OR":
-		asm.emit(func(env *ExpressionEnv) int {
-			left, lok := env.vm.stack[env.vm.sp-2].(*evalInt64)
-			right, rok := env.vm.stack[env.vm.sp-1].(*evalInt64)
-
-			isLeft := lok && left.i != 0
-			isRight := rok && right.i != 0
-
-			switch {
-			case !lok:
-				if isRight {
-					env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBool(true)
-				}
-			case !rok:
-				env.vm.stack[env.vm.sp-2] = nil
-			default:
-				if isLeft || isRight {
-					left.i = 1
-				} else {
-					left.i = 0
-				}
-			}
-			env.vm.sp--
-			return 1
-		}, "OR INT64(SP-2), INT64(SP-1)")
-	case "XOR":
-		asm.emit(func(env *ExpressionEnv) int {
-			left := env.vm.stack[env.vm.sp-2].(*evalInt64)
-			right, rok := env.vm.stack[env.vm.sp-1].(*evalInt64)
-
-			isLeft := left.i != 0
-			isRight := rok && right.i != 0
-
-			switch {
-			case !rok:
-				env.vm.stack[env.vm.sp-2] = nil
-			default:
-				if isLeft != isRight {
-					left.i = 1
-				} else {
-					left.i = 0
-				}
-			}
-			env.vm.sp--
-			return 1
-		}, "XOR INT64(SP-2), INT64(SP-1)")
-	}
-}
-
 func (asm *assembler) Like_coerce(expr *LikeExpr, coercion *compiledCoercion) {
 	asm.adjustStack(-1)
 
@@ -3091,6 +2997,14 @@ func (asm *assembler) Neg_hex() {
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalFloat(-float64(arg.u))
 		return 1
 	}, "NEG HEX(SP-1)")
+}
+
+func (asm *assembler) Neg_bit() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalFloat(-float64(arg.i))
+		return 1
+	}, "NEG BIT(SP-1)")
 }
 
 func (asm *assembler) Neg_i() {
@@ -4251,7 +4165,7 @@ func (asm *assembler) Fn_DATEADD_D(unit datetime.IntervalType, sub bool) {
 		}
 
 		tmp := env.vm.stack[env.vm.sp-2].(*evalTemporal)
-		env.vm.stack[env.vm.sp-2] = tmp.addInterval(interval, collations.TypedCollation{})
+		env.vm.stack[env.vm.sp-2] = tmp.addInterval(interval, collations.TypedCollation{}, env.now)
 		env.vm.sp--
 		return 1
 	}, "FN DATEADD TEMPORAL(SP-2), INTERVAL(SP-1)")
@@ -4273,7 +4187,7 @@ func (asm *assembler) Fn_DATEADD_s(unit datetime.IntervalType, sub bool, col col
 			goto baddate
 		}
 
-		env.vm.stack[env.vm.sp-2] = tmp.addInterval(interval, col)
+		env.vm.stack[env.vm.sp-2] = tmp.addInterval(interval, col, env.now)
 		env.vm.sp--
 		return 1
 

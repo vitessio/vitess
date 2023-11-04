@@ -47,15 +47,16 @@ func commandGetWorkflows(cmd *cobra.Command, args []string) error {
 	ks := cmd.Flags().Arg(0)
 
 	resp, err := common.GetClient().GetWorkflows(common.GetCommandCtx(), &vtctldatapb.GetWorkflowsRequest{
-		Keyspace:   ks,
-		ActiveOnly: !getWorkflowsOptions.ShowAll,
+		Keyspace:    ks,
+		ActiveOnly:  !getWorkflowsOptions.ShowAll,
+		IncludeLogs: workflowShowOptions.IncludeLogs,
 	})
 
 	if err != nil {
 		return err
 	}
 
-	data, err := cli.MarshalJSON(resp)
+	data, err := cli.MarshalJSONPretty(resp)
 	if err != nil {
 		return err
 	}
@@ -63,8 +64,4 @@ func commandGetWorkflows(cmd *cobra.Command, args []string) error {
 	fmt.Printf("%s\n", data)
 
 	return nil
-}
-
-func addGetWorkflowsFlags(cmd *cobra.Command) {
-	cmd.Flags().BoolVarP(&getWorkflowsOptions.ShowAll, "show-all", "a", false, "Show all workflows instead of just active workflows.")
 }

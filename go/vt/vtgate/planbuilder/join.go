@@ -17,13 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*join)(nil)
@@ -50,15 +45,6 @@ type join struct {
 	LHSColumns []*sqlparser.ColName
 }
 
-// WireupGen4 implements the logicalPlan interface
-func (j *join) Wireup(ctx *plancontext.PlanningContext) error {
-	err := j.Left.Wireup(ctx)
-	if err != nil {
-		return err
-	}
-	return j.Right.Wireup(ctx)
-}
-
 // Primitive implements the logicalPlan interface
 func (j *join) Primitive() engine.Primitive {
 	return &engine.Join{
@@ -68,29 +54,4 @@ func (j *join) Primitive() engine.Primitive {
 		Vars:   j.Vars,
 		Opcode: j.Opcode,
 	}
-}
-
-// Inputs implements the logicalPlan interface
-func (j *join) Inputs() []logicalPlan {
-	return []logicalPlan{j.Left, j.Right}
-}
-
-// Rewrite implements the logicalPlan interface
-func (j *join) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 2 {
-		return vterrors.VT13001(fmt.Sprintf("wrong number of children in join rewrite, got: %d, expect: 2", len(inputs)))
-	}
-	j.Left = inputs[0]
-	j.Right = inputs[1]
-	return nil
-}
-
-// ContainsTables implements the logicalPlan interface
-func (j *join) ContainsTables() semantics.TableSet {
-	return j.Left.ContainsTables().Merge(j.Right.ContainsTables())
-}
-
-// OutputColumns implements the logicalPlan interface
-func (j *join) OutputColumns() []sqlparser.SelectExpr {
-	return getOutputColumnsFromJoin(j.Cols, j.Left.OutputColumns(), j.Right.OutputColumns())
 }

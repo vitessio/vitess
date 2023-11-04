@@ -97,7 +97,6 @@ func init() {
 	servenv.MoveFlagsToCobraCommand(Main)
 
 	logic.RegisterFlags(Main.Flags())
-	server.RegisterFlags(Main.Flags())
 	config.RegisterFlags(Main.Flags())
 	acl.RegisterFlags(Main.Flags())
 	Main.Flags().StringVar(&configFile, "config", "", "config file name")

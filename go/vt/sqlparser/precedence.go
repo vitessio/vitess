@@ -86,8 +86,6 @@ func precedenceFor(in Expr) Precendence {
 		case BangOp:
 			return P3
 		}
-	case *ExtractedSubquery:
-		return precedenceFor(node.alternative)
 	}
 
 	return Syntactic

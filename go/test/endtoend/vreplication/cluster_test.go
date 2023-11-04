@@ -248,19 +248,32 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 	if _, err := os.Stat(file); err == nil {
 		return nil
 	}
-	resp, err := client.Get(url)
-	if err != nil {
-		return fmt.Errorf("error downloading contents of %s to %s. Error: %v", url, file, err)
+	downloadFile := func() error {
+		resp, err := client.Get(url)
+		if err != nil {
+			return fmt.Errorf("error downloading contents of %s to %s. Error: %v", url, file, err)
+		}
+		defer resp.Body.Close()
+		out, err := os.Create(file)
+		if err != nil {
+			return fmt.Errorf("error creating file %s to save the contents of %s. Error: %v", file, url, err)
+		}
+		defer out.Close()
+		_, err = io.Copy(out, resp.Body)
+		if err != nil {
+			return fmt.Errorf("error saving contents of %s to %s. Error: %v", url, file, err)
+		}
+		return nil
 	}
-	defer resp.Body.Close()
-	out, err := os.Create(file)
-	if err != nil {
-		return fmt.Errorf("error creating file %s to save the contents of %s. Error: %v", file, url, err)
+	retries := 5
+	var dlerr error
+	for i := 0; i < retries; i++ {
+		if dlerr = downloadFile(); dlerr == nil {
+			break
+		}
 	}
-	defer out.Close()
-	_, err = io.Copy(out, resp.Body)
-	if err != nil {
-		return fmt.Errorf("error saving contents of %s to %s. Error: %v", url, file, err)
+	if dlerr != nil {
+		return dlerr
 	}
 
 	untarCmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("tar xvf %s -C %s --strip-components=1", file, path))
@@ -559,7 +572,43 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			for ind, proc := range dbProcesses {
 				log.Infof("Waiting for mysql process for tablet %s", tablets[ind].Name)
 				if err := proc.Wait(); err != nil {
-					t.Fatalf("%v :: Unable to start mysql server for %v", err, tablets[ind].Vttablet)
+					// Retry starting the database process before giving up.
+					t.Logf("%v :: Unable to start mysql server for %v. Will cleanup files and processes, then retry...", err, tablets[ind].Vttablet)
+					tablets[ind].DbServer.CleanupFiles(tablets[ind].Vttablet.TabletUID)
+					// Kill any process we own that's listening on the port we
+					// want to use as that is the most common problem.
+					tablets[ind].DbServer.Stop()
+					if _, err = exec.Command("fuser", "-n", "tcp", "-k", fmt.Sprintf("%d", tablets[ind].DbServer.MySQLPort)).Output(); err != nil {
+						log.Errorf("Failed to kill process listening on port %d: %v", tablets[ind].DbServer.MySQLPort, err)
+					}
+					// Sleep for the kernel's TCP TIME_WAIT timeout to avoid the
+					// port already in use error, which is the common cause for
+					// the process not starting. It's a long wait, but it's worth
+					// avoiding the test/workflow failure that otherwise occurs.
+					time.Sleep(60 * time.Second)
+					dbcmd, err := tablets[ind].DbServer.StartProcess()
+					require.NoError(t, err)
+					if err = dbcmd.Wait(); err != nil {
+						// Get logs to help understand why it failed...
+						vtdataroot := os.Getenv("VTDATAROOT")
+						mysqlctlLog := path.Join(vtdataroot, "/tmp/mysqlctl.INFO")
+						logBytes, ferr := os.ReadFile(mysqlctlLog)
+						if ferr == nil {
+							log.Errorf("mysqlctl log contents:\n%s", string(logBytes))
+						} else {
+							log.Errorf("Failed to read the mysqlctl log file %q: %v", mysqlctlLog, ferr)
+						}
+						mysqldLog := path.Join(vtdataroot, fmt.Sprintf("/vt_%010d/error.log", tablets[ind].Vttablet.TabletUID))
+						logBytes, ferr = os.ReadFile(mysqldLog)
+						if ferr == nil {
+							log.Errorf("mysqld error log contents:\n%s", string(logBytes))
+						} else {
+							log.Errorf("Failed to read the mysqld error log file %q: %v", mysqldLog, ferr)
+						}
+						output, _ := dbcmd.CombinedOutput()
+						t.Fatalf("%v :: Unable to start mysql server for %v; Output: %s", err,
+							tablets[ind].Vttablet, string(output))
+					}
 				}
 			}
 			for ind, tablet := range tablets {
@@ -666,7 +715,7 @@ func (vc *VitessCluster) teardown() {
 				go func(tablet2 *Tablet) {
 					defer wg.Done()
 					if tablet2.DbServer != nil && tablet2.DbServer.TabletUID > 0 {
-						if _, err := tablet2.DbServer.StopProcess(); err != nil {
+						if err := tablet2.DbServer.Stop(); err != nil {
 							log.Infof("Error stopping mysql process: %s", err.Error())
 						}
 					}
