@@ -55,7 +55,6 @@ This is demonstrated in the example usage below.`,
 
 func run(cmd *cobra.Command, args []string) error {
 	servenv.Init()
-	defer servenv.Close()
 
 	ts = topo.Open()
 	defer ts.Close()
