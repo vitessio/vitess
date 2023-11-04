@@ -37,12 +37,13 @@ import (
 
 // These constants represent values for various config parameters.
 const (
-	Enable       = "enable"
-	Disable      = "disable"
-	Dryrun       = "dryRun"
-	NotOnPrimary = "notOnPrimary"
-	Polling      = "polling"
-	Heartbeat    = "heartbeat"
+	Enable                    = "enable"
+	Disable                   = "disable"
+	Dryrun                    = "dryRun"
+	NotOnPrimary              = "notOnPrimary"
+	Polling                   = "polling"
+	Heartbeat                 = "heartbeat"
+	DefaultQueryTimeoutMethod = "vttablet"
 )
 
 var (
@@ -183,6 +184,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.Int64Var(&currentConfig.RowStreamer.MaxMySQLReplLagSecs, "vreplication_copy_phase_max_mysql_replication_lag", 43200, "The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
 
 	fs.BoolVar(&currentConfig.EnableViews, "queryserver-enable-views", false, "Enable views support in vttablet.")
+
+	fs.StringVar(&currentConfig.Oltp.QueryTimeoutMethod, "query-timeout-method", defaultConfig.Oltp.QueryTimeoutMethod, "The method to be used to kill MySQL queries, options: 'vttablet' and 'mysql'. 'vttablet' issues a MySQL KILL operation whereas 'mysql' pushes the kill to MySQL.")
 }
 
 var (
@@ -346,6 +349,7 @@ type OlapConfig struct {
 // OltpConfig contains the config for oltp settings.
 type OltpConfig struct {
 	QueryTimeoutSeconds Seconds `json:"queryTimeoutSeconds,omitempty"`
+	QueryTimeoutMethod  string  `json:"queryTimeoutMethod,omitempty"`
 	TxTimeoutSeconds    Seconds `json:"txTimeoutSeconds,omitempty"`
 	MaxRows             int     `json:"maxRows,omitempty"`
 	WarnRows            int     `json:"warnRows,omitempty"`
@@ -518,6 +522,7 @@ var defaultConfig = TabletConfig{
 	},
 	Oltp: OltpConfig{
 		QueryTimeoutSeconds: 30,
+		QueryTimeoutMethod:  DefaultQueryTimeoutMethod,
 		TxTimeoutSeconds:    30,
 		MaxRows:             10000,
 	},

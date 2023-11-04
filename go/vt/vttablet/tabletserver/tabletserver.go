@@ -159,7 +159,12 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		topoServer:             topoServer,
 		alias:                  proto.Clone(alias).(*topodatapb.TabletAlias),
 	}
-	tsv.QueryTimeout.Store(config.Oltp.QueryTimeoutSeconds.Get().Nanoseconds())
+
+	queryTimeoutNanos := config.Oltp.QueryTimeoutSeconds.Get().Nanoseconds()
+	if config.Oltp.QueryTimeoutMethod == "mysql" {
+		queryTimeoutNanos = queryTimeoutNanos + queryTimeoutMysqlMaxWait.Nanoseconds()
+	}
+	tsv.QueryTimeout.Store(queryTimeoutNanos)
 
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 

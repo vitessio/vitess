@@ -65,8 +65,9 @@ type QueryExecutor struct {
 }
 
 const (
-	streamRowsSize         = 256
-	maxQueryBufferDuration = 15 * time.Second
+	streamRowsSize           = 256
+	maxQueryBufferDuration   = 15 * time.Second
+	queryTimeoutMysqlMaxWait = time.Second
 )
 
 var (
@@ -918,6 +919,7 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	if err != nil {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
+	query = addMySQLOptimizerHints(qre.tsv.config, query)
 	if qre.tsv.config.AnnotateQueries {
 		username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
 		if username == "" {
@@ -934,10 +936,6 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 		buf.WriteString(qre.marginComments.Leading)
 		qre.marginComments.Leading = buf.String()
 	}
-	if qre.tsv.config.QueryTimeoutMethod == "mysql" {
-		timeout := qre.tsv.config.Oltp.QueryTimeout
-		query = addMySQLMaxExecutionTimeComment(query, qre.tsv.config.QueryTimeout)
-	}
 
 	if qre.marginComments.Leading == "" && qre.marginComments.Trailing == "" {
 		return query, query, nil
@@ -951,13 +949,27 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	return buf.String(), query, nil
 }
 
-func addMySQLMaxExecutionTimeComment(query string, queryTimeoutMs int64) string {
-	fields := strings.SplitN(query, " ", 2)
-	return strings.Join([]string{
-		fields[0],
-		fmt.Sprintf("/*+ MAX_EXECUTION_TIME(%d) */", queryTimeoutMs),
-		fields[1],
-	}, " ")
+func addMySQLOptimizerHints(config *tabletenv.TabletConfig, query string) string {
+	hints := make([]string, 0)
+
+	if config.Oltp.QueryTimeoutMethod == "mysql" && config.Oltp.QueryTimeoutSeconds > 0 {
+		// The MAX_EXECUTION_TIME(N) hint sets a statement execution timeout of N milliseconds.
+		// https://dev.mysql.com/doc/refman/8.0/en/optimizer-hints.html#optimizer-hints-execution-time
+		hints = append(hints,
+			fmt.Sprintf("MAX_EXECUTION_TIME(%d)", config.Oltp.QueryTimeoutSeconds.Get().Milliseconds()),
+		)
+	}
+
+	if len(hints) > 0 {
+		fields := strings.SplitN(query, " ", 2)
+		return strings.Join([]string{
+			fields[0],
+			"/*+ " + strings.Join(hints, " ") + " */",
+			fields[1],
+		}, " ")
+	}
+
+	return query
 }
 
 func rewriteOUTParamError(err error) error {

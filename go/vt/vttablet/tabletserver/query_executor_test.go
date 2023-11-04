@@ -1786,3 +1786,16 @@ func TestQueryExecSchemaReloadCount(t *testing.T) {
 		})
 	}
 }
+
+func TestAddMySQLOptimizerHints(t *testing.T) {
+	config := tabletenv.NewDefaultConfig()
+	{
+		config.Oltp.QueryTimeoutMethod = "vttablet"
+		t.Logf("sql: %v", addMySQLOptimizerHints(config, "select * from something"))
+	}
+	{
+		config.Oltp.QueryTimeoutMethod = "mysql"
+		config.Oltp.QueryTimeoutSeconds = tabletenv.Seconds(1)
+		t.Logf("sql: %v", addMySQLOptimizerHints(config, "select * from something"))
+	}
+}
