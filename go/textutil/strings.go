@@ -22,8 +22,8 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/proto/binlogdata"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -93,7 +93,7 @@ func ValueIsSimulatedNull(val any) bool {
 		return cval == SimulatedNullString
 	case []string:
 		return len(cval) == 1 && cval[0] == sqltypes.NULL.String()
-	case binlogdata.OnDDLAction:
+	case binlogdatapb.OnDDLAction:
 		return int32(cval) == int32(SimulatedNullInt)
 	case int:
 		return cval == SimulatedNullInt
@@ -103,6 +103,8 @@ func ValueIsSimulatedNull(val any) bool {
 		return int64(cval) == int64(SimulatedNullInt)
 	case []topodatapb.TabletType:
 		return len(cval) == 1 && cval[0] == topodatapb.TabletType(SimulatedNullInt)
+	case binlogdatapb.VReplicationWorkflowState:
+		return int32(cval) == int32(SimulatedNullInt)
 	default:
 		return false
 	}
