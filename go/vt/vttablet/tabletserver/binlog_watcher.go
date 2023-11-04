@@ -17,13 +17,13 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"sync"
 	"time"
 
-	"context"
-
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -31,7 +31,7 @@ import (
 // VStreamer defines  the functions of VStreamer
 // that the BinlogWatcher needs.
 type VStreamer interface {
-	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
+	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) error
 }
 
 // BinlogWatcher is a tabletserver service that watches the
@@ -91,7 +91,7 @@ func (blw *BinlogWatcher) process(ctx context.Context) {
 
 	for {
 		// VStreamer will reload the schema when it encounters a DDL.
-		err := blw.vs.Stream(ctx, "current", nil, filter, func(events []*binlogdatapb.VEvent) error {
+		err := blw.vs.Stream(ctx, "current", nil, filter, throttlerapp.BinlogWatcherName, func(events []*binlogdatapb.VEvent) error {
 			return nil
 		})
 		log.Infof("ReplicationWatcher VStream ended: %v, retrying in 5 seconds", err)

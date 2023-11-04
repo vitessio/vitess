@@ -5,23 +5,21 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
-	"vitess.io/vitess/go/vt/proto/vschema"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/topo"
-
-	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"github.com/stretchr/testify/require"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 var _ VSchemaOperator = (*fakeVSchemaOperator)(nil)
@@ -30,11 +28,11 @@ type fakeVSchemaOperator struct {
 	vschema *vindexes.VSchema
 }
 
-func (f fakeVSchemaOperator) GetCurrentSrvVschema() *vschema.SrvVSchema {
+func (f fakeVSchemaOperator) GetCurrentSrvVschema() *vschemapb.SrvVSchema {
 	panic("implement me")
 }
 
-func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, vschema *vschema.SrvVSchema) error {
+func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error {
 	panic("implement me")
 }
 
@@ -259,7 +257,7 @@ func TestSetTarget(t *testing.T) {
 	}
 }
 
-func TestPlanPrefixKey(t *testing.T) {
+func TestKeyForPlan(t *testing.T) {
 	type testCase struct {
 		vschema               *vindexes.VSchema
 		targetString          string
@@ -269,19 +267,19 @@ func TestPlanPrefixKey(t *testing.T) {
 	tests := []testCase{{
 		vschema:               vschemaWith1KS,
 		targetString:          "",
-		expectedPlanPrefixKey: "ks1@primary",
+		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1@replica",
-		expectedPlanPrefixKey: "ks1@replica",
+		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1:-80",
-		expectedPlanPrefixKey: "ks1@primaryDestinationShard(-80)",
+		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+DestinationShard(-80)+Query:SELECT 1",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1[deadbeef]",
-		expectedPlanPrefixKey: "ks1@primaryKsIDsResolved(80-)",
+		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+KsIDsResolved:80-+Query:SELECT 1",
 	}}
 
 	for i, tc := range tests {
@@ -291,7 +289,10 @@ func TestPlanPrefixKey(t *testing.T) {
 			vc, err := newVCursorImpl(ss, sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4)
 			require.NoError(t, err)
 			vc.vschema = tc.vschema
-			require.Equal(t, tc.expectedPlanPrefixKey, vc.planPrefixKey(context.Background()))
+
+			var buf strings.Builder
+			vc.keyForPlan(context.Background(), "SELECT 1", &buf)
+			require.Equal(t, tc.expectedPlanPrefixKey, buf.String())
 		})
 	}
 }

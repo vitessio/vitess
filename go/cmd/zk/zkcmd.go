@@ -478,19 +478,15 @@ func cmdTouch(ctx context.Context, subFlags *pflag.FlagSet, args []string) error
 
 func cmdRm(ctx context.Context, subFlags *pflag.FlagSet, args []string) error {
 	var (
-		force             bool
-		recursiveDelete   bool
-		forceAndRecursive bool
+		force           bool
+		recursiveDelete bool
 	)
 	subFlags.BoolVarP(&force, "force", "f", false, "no warning on nonexistent node")
 	subFlags.BoolVarP(&recursiveDelete, "recursivedelete", "r", false, "recursive delete")
-	subFlags.BoolVarP(&forceAndRecursive, "forceandrecursive", "rf", false, "shorthand for -r -f")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	force = force || forceAndRecursive
-	recursiveDelete = recursiveDelete || forceAndRecursive
 
 	if subFlags.NArg() == 0 {
 		return fmt.Errorf("rm: no path specified")

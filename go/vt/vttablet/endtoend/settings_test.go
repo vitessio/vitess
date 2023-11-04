@@ -27,11 +27,6 @@ import (
 )
 
 func TestSelectNoConnectionReservationOnSettings(t *testing.T) {
-	framework.Server.Config().EnableSettingsPool = true
-	defer func() {
-		framework.Server.Config().EnableSettingsPool = false
-	}()
-
 	client := framework.NewClient()
 	defer client.Release()
 
@@ -57,11 +52,6 @@ func TestSelectNoConnectionReservationOnSettings(t *testing.T) {
 }
 
 func TestSetttingsReuseConnWithSettings(t *testing.T) {
-	framework.Server.Config().EnableSettingsPool = true
-	defer func() {
-		framework.Server.Config().EnableSettingsPool = false
-	}()
-
 	resetTxConnPool(t)
 
 	client := framework.NewClient()
@@ -155,11 +145,6 @@ func resetTxConnPool(t *testing.T) {
 }
 
 func TestDDLNoConnectionReservationOnSettings(t *testing.T) {
-	framework.Server.Config().EnableSettingsPool = true
-	defer func() {
-		framework.Server.Config().EnableSettingsPool = false
-	}()
-
 	client := framework.NewClient()
 	defer client.Release()
 
@@ -179,11 +164,6 @@ func TestDDLNoConnectionReservationOnSettings(t *testing.T) {
 }
 
 func TestDMLNoConnectionReservationOnSettings(t *testing.T) {
-	framework.Server.Config().EnableSettingsPool = true
-	defer func() {
-		framework.Server.Config().EnableSettingsPool = false
-	}()
-
 	client := framework.NewClient()
 	defer client.Release()
 
@@ -217,11 +197,6 @@ func TestDMLNoConnectionReservationOnSettings(t *testing.T) {
 }
 
 func TestSelectNoConnectionReservationOnSettingsWithTx(t *testing.T) {
-	framework.Server.Config().EnableSettingsPool = true
-	defer func() {
-		framework.Server.Config().EnableSettingsPool = false
-	}()
-
 	client := framework.NewClient()
 
 	query := "select @@sql_mode"
@@ -243,11 +218,6 @@ func TestSelectNoConnectionReservationOnSettingsWithTx(t *testing.T) {
 }
 
 func TestDDLNoConnectionReservationOnSettingsWithTx(t *testing.T) {
-	framework.Server.Config().EnableSettingsPool = true
-	defer func() {
-		framework.Server.Config().EnableSettingsPool = false
-	}()
-
 	client := framework.NewClient()
 	defer client.Release()
 
@@ -261,11 +231,6 @@ func TestDDLNoConnectionReservationOnSettingsWithTx(t *testing.T) {
 }
 
 func TestDMLNoConnectionReservationOnSettingsWithTx(t *testing.T) {
-	framework.Server.Config().EnableSettingsPool = true
-	defer func() {
-		framework.Server.Config().EnableSettingsPool = false
-	}()
-
 	client := framework.NewClient()
 
 	_, err := client.Execute("create table temp(c_date datetime)", nil)
@@ -294,11 +259,6 @@ func TestDMLNoConnectionReservationOnSettingsWithTx(t *testing.T) {
 }
 
 func TestSetQueryOnReserveApis(t *testing.T) {
-	framework.Server.Config().EnableSettingsPool = true
-	defer func() {
-		framework.Server.Config().EnableSettingsPool = false
-	}()
-
 	client := framework.NewClient()
 	defer client.Release()
 
@@ -314,11 +274,6 @@ func TestSetQueryOnReserveApis(t *testing.T) {
 }
 
 func TestGetLockQueryOnReserveExecute(t *testing.T) {
-	framework.Server.Config().EnableSettingsPool = true
-	defer func() {
-		framework.Server.Config().EnableSettingsPool = false
-	}()
-
 	client := framework.NewClient()
 	defer client.Release()
 
@@ -340,11 +295,6 @@ func TestGetLockQueryOnReserveExecute(t *testing.T) {
 }
 
 func TestTempTableOnReserveExecute(t *testing.T) {
-	framework.Server.Config().EnableSettingsPool = true
-	defer func() {
-		framework.Server.Config().EnableSettingsPool = false
-	}()
-
 	client := framework.NewClient()
 	defer client.Release()
 	defer client.Execute("drop table if exists temp", nil)
@@ -391,11 +341,6 @@ func TestTempTableOnReserveExecute(t *testing.T) {
 }
 
 func TestInfiniteSessions(t *testing.T) {
-	framework.Server.Config().EnableSettingsPool = true
-	defer func() {
-		framework.Server.Config().EnableSettingsPool = false
-	}()
-
 	client := framework.NewClient()
 	qr, err := client.Execute("select @@max_connections", nil)
 	require.NoError(t, err)
@@ -423,6 +368,7 @@ func TestInfiniteSessions(t *testing.T) {
 }
 
 func TestSetQueriesMultipleWays(t *testing.T) {
+	framework.Server.Config().EnableSettingsPool = false
 	client := framework.NewClient()
 	defer client.Release()
 	_, err := client.ReserveExecute("select 1", []string{"set sql_safe_updates = 1"}, nil)
@@ -432,10 +378,6 @@ func TestSetQueriesMultipleWays(t *testing.T) {
 	require.NoError(t, err)
 
 	framework.Server.Config().EnableSettingsPool = true
-	defer func() {
-		framework.Server.Config().EnableSettingsPool = false
-	}()
-
 	client2 := framework.NewClient()
 	_, err = client2.ReserveExecute("select 1", []string{"set sql_safe_updates = 1"}, nil)
 	require.NoError(t, err)

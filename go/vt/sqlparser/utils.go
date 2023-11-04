@@ -113,3 +113,50 @@ func NormalizeAlphabetically(query string) (normalized string, err error) {
 	}
 	return String(stmt), nil
 }
+
+// ReplaceTableQualifiers takes a statement's table expressions and
+// replaces any cases of the provided database name with the
+// specified replacement name.
+// Note: both database names provided should be unescaped strings.
+func ReplaceTableQualifiers(query, olddb, newdb string) (string, error) {
+	if newdb == olddb {
+		// Nothing to do here.
+		return query, nil
+	}
+	in, err := Parse(query)
+	if err != nil {
+		return "", err
+	}
+
+	oldQualifier := NewIdentifierCS(olddb)
+	newQualifier := NewIdentifierCS(newdb)
+
+	modified := false
+	upd := Rewrite(in, func(cursor *Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case TableName:
+			if !node.Qualifier.IsEmpty() &&
+				node.Qualifier.String() == oldQualifier.String() {
+				node.Qualifier = newQualifier
+				cursor.Replace(node)
+				modified = true
+			}
+		case *ShowBasic: // for things like 'show tables from _vt'
+			if !node.DbName.IsEmpty() &&
+				node.DbName.String() == oldQualifier.String() {
+				node.DbName = newQualifier
+				cursor.Replace(node)
+				modified = true
+			}
+		}
+		return true
+	}, nil)
+	// If we didn't modify anything, return the original query.
+	// This is particularly helpful with unit tests that
+	// execute a query which slightly differs from the parsed
+	// version: e.g. 'where id=1' becomes 'where id = 1'.
+	if modified {
+		return String(upd), nil
+	}
+	return query, nil
+}

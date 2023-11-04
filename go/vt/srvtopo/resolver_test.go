@@ -17,11 +17,10 @@ limitations under the License.
 package srvtopo
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -34,11 +33,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func initResolver(t *testing.T, name string) *Resolver {
-	ctx := context.Background()
+func initResolver(t *testing.T, ctx context.Context, name string) *Resolver {
 	cell := "cell1"
-	ts := memorytopo.NewServer(cell)
-	rs := NewResilientServer(ts, name)
+	ts := memorytopo.NewServer(ctx, cell)
+	rs := NewResilientServer(ctx, ts, name)
 
 	// Create sharded keyspace and shards.
 	if err := ts.CreateKeyspace(ctx, "sks", &topodatapb.Keyspace{}); err != nil {
@@ -97,7 +95,9 @@ func initResolver(t *testing.T, name string) *Resolver {
 }
 
 func TestResolveDestinations(t *testing.T) {
-	resolver := initResolver(t, "TestResolveDestinations")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	resolver := initResolver(t, ctx, "TestResolveDestinations")
 
 	id1 := &querypb.Value{
 		Type:  sqltypes.VarChar,

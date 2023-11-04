@@ -2,9 +2,10 @@ package discovery
 
 import (
 	"fmt"
-	"html/template"
 	"sort"
-	"strings"
+
+	"github.com/google/safehtml"
+	"github.com/google/safehtml/template"
 
 	"google.golang.org/protobuf/proto"
 
@@ -54,8 +55,20 @@ func (tsl TabletStatsList) deepEqual(other TabletStatsList) bool {
 }
 
 // StatusAsHTML returns an HTML version of the status.
-func (tcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
-	tLinks := make([]string, 0, 1)
+func (tcs *TabletsCacheStatus) StatusAsHTML() safehtml.HTML {
+	linksTpl, err := template.New("tcs").Parse("{{ range . }}<a href=\"{{.Link}}\" style=\"{{.Color}}\">{{.Name}}</a>{{.Extra}}<br>{{ end }}")
+	if err != nil {
+		panic(err)
+	}
+
+	type link struct {
+		Link  string
+		Color safehtml.Style
+		Name  string
+		Extra string
+	}
+
+	var tLinks []link
 	if tcs.TabletsStats != nil {
 		sort.Sort(tcs.TabletsStats)
 	}
@@ -74,9 +87,18 @@ func (tcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
 			extra = fmt.Sprintf(" (RepLag: %v)", ts.Stats.ReplicationLagSeconds)
 		}
 		name := topoproto.TabletAliasString(ts.Tablet.Alias)
-		tLinks = append(tLinks, fmt.Sprintf(`<a href="%s" style="color:%v">%v</a>%v`, ts.getTabletDebugURL(), color, name, extra))
+		tLinks = append(tLinks, link{
+			Link:  ts.getTabletDebugURL(),
+			Name:  name,
+			Extra: extra,
+			Color: safehtml.StyleFromProperties(safehtml.StyleProperties{Color: color}),
+		})
 	}
-	return template.HTML(strings.Join(tLinks, "<br>"))
+	html, err := linksTpl.ExecuteToHTML(tLinks)
+	if err != nil {
+		panic(err)
+	}
+	return html
 }
 
 func (tcs *TabletsCacheStatus) deepEqual(otcs *TabletsCacheStatus) bool {

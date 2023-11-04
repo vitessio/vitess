@@ -20,6 +20,7 @@ import { Router } from 'react-router-dom';
 import { QueryParams } from '../util/queryString';
 
 import { useURLQuery, URLQueryOptions } from './useURLQuery';
+import { describe, it, expect, test, vi } from 'vitest';
 
 describe('useURLQuery', () => {
     describe('parsing', () => {
@@ -111,7 +112,7 @@ describe('useURLQuery', () => {
                 const history = createMemoryHistory({ initialEntries });
                 const initialPathname = history.location.pathname;
 
-                jest.spyOn(history, 'push');
+                vi.spyOn(history, 'push');
 
                 const { result } = renderHook(() => useURLQuery(), {
                     wrapper: ({ children }) => {
@@ -163,7 +164,7 @@ describe('useURLQuery', () => {
                 const history = createMemoryHistory({ initialEntries });
                 const initialPathname = history.location.pathname;
 
-                jest.spyOn(history, 'replace');
+                vi.spyOn(history, 'replace');
 
                 const { result } = renderHook(() => useURLQuery(), {
                     wrapper: ({ children }) => {
@@ -215,7 +216,7 @@ describe('useURLQuery', () => {
     it('memoizes the query object by search string', () => {
         const history = createMemoryHistory({ initialEntries: ['/test?hello=world'] });
 
-        jest.spyOn(history, 'push');
+        vi.spyOn(history, 'push');
 
         const { result } = renderHook(() => useURLQuery(), {
             wrapper: ({ children }) => {

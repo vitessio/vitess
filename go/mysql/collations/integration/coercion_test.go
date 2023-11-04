@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations/colldata"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/remote"
 	"vitess.io/vitess/go/sqltypes"
@@ -33,18 +35,18 @@ import (
 
 type TextWithCollation struct {
 	Text      []byte
-	Collation collations.Collation
+	Collation collations.ID
 }
 
 type RemoteCoercionResult struct {
 	Expr         sqltypes.Value
-	Collation    collations.Collation
+	Collation    collations.ID
 	Coercibility collations.Coercibility
 }
 
 type RemoteCoercionTest interface {
 	Expression() string
-	Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coerce1, coerce2 collations.Coercion)
+	Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coerce1, coerce2 colldata.Coercion)
 }
 
 type testConcat struct {
@@ -52,15 +54,17 @@ type testConcat struct {
 }
 
 func (tc *testConcat) Expression() string {
+	env := collations.Local()
 	return fmt.Sprintf("CONCAT((_%s X'%x' COLLATE %q), (_%s X'%x' COLLATE %q))",
-		tc.left.Collation.Charset().Name(), tc.left.Text, tc.left.Collation.Name(),
-		tc.right.Collation.Charset().Name(), tc.right.Text, tc.right.Collation.Name(),
+		colldata.Lookup(tc.left.Collation).Charset().Name(), tc.left.Text, env.LookupName(tc.left.Collation),
+		colldata.Lookup(tc.right.Collation).Charset().Name(), tc.right.Text, env.LookupName(tc.right.Collation),
 	)
 }
 
-func (tc *testConcat) Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coercion1, coercion2 collations.Coercion) {
-	localCollation := local.Collation.Get()
-	assert.Equal(t, remote.Collation.Name(), localCollation.Name(), "bad collation resolved: local is %s, remote is %s", localCollation.Name(), remote.Collation.Name())
+func (tc *testConcat) Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coercion1, coercion2 colldata.Coercion) {
+	localCollation := colldata.Lookup(local.Collation)
+	remoteName := collations.Local().LookupName(remote.Collation)
+	assert.Equal(t, remoteName, localCollation.Name(), "bad collation resolved: local is %s, remote is %s", localCollation.Name(), remoteName)
 	assert.Equal(t, remote.Coercibility, local.Coercibility, "bad coercibility resolved: local is %d, remote is %d", local.Coercibility, remote.Coercibility)
 
 	leftText, err := coercion1(nil, tc.left.Text)
@@ -81,8 +85,8 @@ func (tc *testConcat) Test(t *testing.T, remote *RemoteCoercionResult, local col
 
 	rEBytes, err := remote.Expr.ToBytes()
 	require.NoError(t, err)
-	assert.True(t, bytes.Equal(concat.Bytes(), rEBytes), "failed to concatenate text;\n\tCONCAT(%v COLLATE %s, %v COLLATE %s) = \n\tCONCAT(%v, %v) COLLATE %s = \n\t\t%v\n\n\texpected: %v", tc.left.Text, tc.left.Collation.Name(),
-		tc.right.Text, tc.right.Collation.Name(), leftText, rightText, localCollation.Name(),
+	assert.True(t, bytes.Equal(concat.Bytes(), rEBytes), "failed to concatenate text;\n\tCONCAT(%v COLLATE %s, %v COLLATE %s) = \n\tCONCAT(%v, %v) COLLATE %s = \n\t\t%v\n\n\texpected: %v", tc.left.Text, collations.Local().LookupName(tc.left.Collation),
+		tc.right.Text, collations.Local().LookupName(tc.right.Collation), leftText, rightText, localCollation.Name(),
 		concat.Bytes(), rEBytes)
 
 }
@@ -92,14 +96,15 @@ type testComparison struct {
 }
 
 func (tc *testComparison) Expression() string {
+	env := collations.Local()
 	return fmt.Sprintf("(_%s X'%x' COLLATE %q) = (_%s X'%x' COLLATE %q)",
-		tc.left.Collation.Charset().Name(), tc.left.Text, tc.left.Collation.Name(),
-		tc.right.Collation.Charset().Name(), tc.right.Text, tc.right.Collation.Name(),
+		env.LookupCharsetName(tc.left.Collation), tc.left.Text, env.LookupName(tc.left.Collation),
+		env.LookupCharsetName(tc.right.Collation), tc.right.Text, env.LookupName(tc.right.Collation),
 	)
 }
 
-func (tc *testComparison) Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coerce1, coerce2 collations.Coercion) {
-	localCollation := local.Collation.Get()
+func (tc *testComparison) Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coerce1, coerce2 colldata.Coercion) {
+	localCollation := colldata.Lookup(local.Collation)
 	leftText, err := coerce1(nil, tc.left.Text)
 	if err != nil {
 		t.Errorf("failed to transcode left: %v", err)
@@ -130,12 +135,12 @@ func TestComparisonSemantics(t *testing.T) {
 		t.Skipf("The behavior of Coercion Semantics is not correct before 8.0.31")
 	}
 
-	for _, coll := range collations.Local().AllCollations() {
+	for _, coll := range colldata.All(collations.Local()) {
 		text := verifyTranscoding(t, coll, remote.NewCollation(conn, coll.Name()), []byte(BaseString))
-		testInputs = append(testInputs, &TextWithCollation{Text: text, Collation: coll})
+		testInputs = append(testInputs, &TextWithCollation{Text: text, Collation: coll.ID()})
 	}
 	sort.Slice(testInputs, func(i, j int) bool {
-		return testInputs[i].Collation.ID() < testInputs[j].Collation.ID()
+		return testInputs[i].Collation < testInputs[j].Collation
 	})
 
 	var testCases = []struct {
@@ -161,17 +166,17 @@ func TestComparisonSemantics(t *testing.T) {
 			for _, collA := range testInputs {
 				for _, collB := range testInputs {
 					left := collations.TypedCollation{
-						Collation:    collA.Collation.ID(),
+						Collation:    collA.Collation,
 						Coercibility: 0,
 						Repertoire:   collations.RepertoireASCII,
 					}
 					right := collations.TypedCollation{
-						Collation:    collB.Collation.ID(),
+						Collation:    collB.Collation,
 						Coercibility: 0,
 						Repertoire:   collations.RepertoireASCII,
 					}
-					resultLocal, coercionLocal1, coercionLocal2, errLocal := collations.Local().MergeCollations(left, right,
-						collations.CoercionOptions{
+					resultLocal, coercionLocal1, coercionLocal2, errLocal := colldata.Merge(collations.Local(), left, right,
+						colldata.CoercionOptions{
 							ConvertToSuperset:   true,
 							ConvertWithCoercion: true,
 						})
@@ -189,11 +194,12 @@ func TestComparisonSemantics(t *testing.T) {
 					query := fmt.Sprintf("SELECT CAST((%s) AS BINARY), COLLATION(%s), COERCIBILITY(%s)", expr, expr, expr)
 
 					resultRemote, errRemote := conn.ExecuteFetch(query, 1, false)
+					env := collations.Local()
 					if errRemote != nil {
 						require.True(t, strings.Contains(errRemote.Error(), "Illegal mix of collations"), "query %s failed: %v", query, errRemote)
 
 						if errLocal == nil {
-							t.Errorf("expected %s vs %s to fail coercion: %v", collA.Collation.Name(), collB.Collation.Name(), errRemote)
+							t.Errorf("expected %s vs %s to fail coercion: %v", env.LookupName(collA.Collation), env.LookupName(collB.Collation), errRemote)
 							continue
 						}
 						require.True(t, strings.HasPrefix(normalizeCollationInError(errRemote.Error()), normalizeCollationInError(errLocal.Error())), "bad error message: expected %q, got %q", errRemote, errLocal)
@@ -202,7 +208,7 @@ func TestComparisonSemantics(t *testing.T) {
 					}
 
 					if errLocal != nil {
-						t.Errorf("expected %s vs %s to coerce, but they failed: %v", collA.Collation.Name(), collB.Collation.Name(), errLocal)
+						t.Errorf("expected %s vs %s to coerce, but they failed: %v", env.LookupName(collA.Collation), env.LookupName(collB.Collation), errLocal)
 						continue
 					}
 

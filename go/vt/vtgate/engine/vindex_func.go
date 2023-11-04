@@ -111,16 +111,17 @@ func (vf *VindexFunc) GetFields(ctx context.Context, vcursor VCursor, bindVars m
 }
 
 func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	k, err := env.Evaluate(vf.Value)
 	if err != nil {
 		return nil, err
 	}
 	var values []sqltypes.Value
-	if k.Value().Type() == querypb.Type_TUPLE {
+	value := k.Value(vcursor.ConnCollation())
+	if value.Type() == querypb.Type_TUPLE {
 		values = k.TupleValues()
 	} else {
-		values = append(values, k.Value())
+		values = append(values, value)
 	}
 	result := &sqltypes.Result{
 		Fields: vf.Fields,
@@ -135,7 +136,7 @@ func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars m
 			len(values), len(destinations))
 	}
 	for i, value := range values {
-		vkey, err := evalengine.Cast(value, sqltypes.VarBinary)
+		vkey, err := sqltypes.Cast(value, sqltypes.VarBinary)
 		if err != nil {
 			return nil, err
 		}

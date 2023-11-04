@@ -72,3 +72,17 @@ create table nonunq_idx
     keyspace_id varbinary(20),
     primary key (nonunq_col, id)
 ) Engine = InnoDB;
+
+create table mixed_tbl
+(
+    lkp_key   bigint,
+    shard_key bigint,
+    primary key (lkp_key)
+) Engine = InnoDB;
+
+create table lkp_mixed_idx
+(
+    lkp_key     bigint,
+    keyspace_id varbinary(20),
+    primary key (lkp_key)
+) Engine = InnoDB;

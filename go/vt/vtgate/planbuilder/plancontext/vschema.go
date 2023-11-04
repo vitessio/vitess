@@ -1,10 +1,12 @@
 package plancontext
 
 import (
+	"context"
 	"strings"
 
-	"vitess.io/vitess/go/vt/log"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
@@ -53,13 +55,14 @@ type VSchema interface {
 	PlannerWarning(message string)
 
 	// ForeignKeyMode returns the foreign_key flag value
-	ForeignKeyMode() string
+	ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
 
 	// GetVSchema returns the latest cached vindexes.VSchema
 	GetVSchema() *vindexes.VSchema
 
 	// GetSrvVschema returns the latest cached vschema.SrvVSchema
 	GetSrvVschema() *vschemapb.SrvVSchema
+
 	// FindRoutedShard looks up shard routing rules for a shard
 	FindRoutedShard(keyspace, shard string) (string, error)
 
@@ -68,26 +71,32 @@ type VSchema interface {
 
 	// IsViewsEnabled returns true if Vitess manages the views.
 	IsViewsEnabled() bool
+
+	// GetUDV returns user defined value from the variable passed.
+	GetUDV(name string) *querypb.BindVariable
+
+	// PlanPrepareStatement plans the prepared statement.
+	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error)
+
+	// ClearPrepareData clears the prepared data from the session.
+	ClearPrepareData(stmtName string)
+
+	// GetPrepareData returns the prepared data for the statement from the session.
+	GetPrepareData(stmtName string) *vtgatepb.PrepareData
+
+	// StorePrepareData stores the prepared data in the session.
+	StorePrepareData(name string, v *vtgatepb.PrepareData)
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner
 func PlannerNameToVersion(s string) (PlannerVersion, bool) {
-	deprecationMessage := "The V3 planner is deprecated and will be removed in V17 of Vitess"
 	switch strings.ToLower(s) {
-	case "v3":
-		log.Warning(deprecationMessage)
-		return querypb.ExecuteOptions_V3, true
 	case "gen4":
 		return querypb.ExecuteOptions_Gen4, true
 	case "gen4greedy", "greedy":
 		return querypb.ExecuteOptions_Gen4Greedy, true
 	case "left2right":
 		return querypb.ExecuteOptions_Gen4Left2Right, true
-	case "gen4fallback":
-		return querypb.ExecuteOptions_Gen4WithFallback, true
-	case "gen4comparev3":
-		log.Warning(deprecationMessage)
-		return querypb.ExecuteOptions_Gen4CompareV3, true
 	}
 	return 0, false
 }

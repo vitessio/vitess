@@ -1,12 +1,12 @@
 ----------------------------------------------------------------------
 select * from user_region where regionId = 4611686018427387904 and userId = 100 /* exact shard */
 
-1 ks_sharded/40-80: select * from user_region where regionId = 4611686018427387904 and userId = 100 limit 10001 /* exact shard */
+1 ks_sharded/40-80: select * from user_region where regionId = 4611686018427387904 and userId = 100 limit 10001 /* INT64 */ /* exact shard */
 
 ----------------------------------------------------------------------
 select * from user_region where regionId = 4611686018427387904 /* subshard */
 
-1 ks_sharded/40-80: select * from user_region where regionId = 4611686018427387904 limit 10001 /* subshard */
+1 ks_sharded/40-80: select * from user_region where regionId = 4611686018427387904 limit 10001 /* INT64 */ /* subshard */
 
 ----------------------------------------------------------------------
 select * from user_region where regionId in (4611686018427387903, 4611686018427387904) /* subshard */
@@ -17,9 +17,9 @@ select * from user_region where regionId in (4611686018427387903, 46116860184273
 ----------------------------------------------------------------------
 select * from user_region where userId = 100 /* scatter, needs prefix columns for subshard routing */
 
-1 ks_sharded/-40: select * from user_region where userId = 100 limit 10001 /* scatter, needs prefix columns for subshard routing */
-1 ks_sharded/40-80: select * from user_region where userId = 100 limit 10001 /* scatter, needs prefix columns for subshard routing */
-1 ks_sharded/80-c0: select * from user_region where userId = 100 limit 10001 /* scatter, needs prefix columns for subshard routing */
-1 ks_sharded/c0-: select * from user_region where userId = 100 limit 10001 /* scatter, needs prefix columns for subshard routing */
+1 ks_sharded/-40: select * from user_region where userId = 100 limit 10001 /* INT64 */ /* scatter, needs prefix columns for subshard routing */
+1 ks_sharded/40-80: select * from user_region where userId = 100 limit 10001 /* INT64 */ /* scatter, needs prefix columns for subshard routing */
+1 ks_sharded/80-c0: select * from user_region where userId = 100 limit 10001 /* INT64 */ /* scatter, needs prefix columns for subshard routing */
+1 ks_sharded/c0-: select * from user_region where userId = 100 limit 10001 /* INT64 */ /* scatter, needs prefix columns for subshard routing */
 
 ----------------------------------------------------------------------

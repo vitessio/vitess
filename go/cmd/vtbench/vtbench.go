@@ -121,6 +121,7 @@ func main() {
 	})
 
 	servenv.ParseFlags("vtbench")
+	servenv.Init()
 
 	defer exit.Recover()
 

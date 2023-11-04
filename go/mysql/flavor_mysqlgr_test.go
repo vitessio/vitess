@@ -20,12 +20,14 @@ import (
 
 	"gotest.tools/assert"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestMysqlGRParsePrimaryGroupMember(t *testing.T) {
-	res := ReplicationStatus{}
+	res := replication.ReplicationStatus{}
 	rows := []sqltypes.Value{
 		sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("host1")),
 		sqltypes.MakeTrusted(querypb.Type_INT32, []byte("10")),
@@ -33,12 +35,12 @@ func TestMysqlGRParsePrimaryGroupMember(t *testing.T) {
 	parsePrimaryGroupMember(&res, rows)
 	assert.Equal(t, "host1", res.SourceHost)
 	assert.Equal(t, int32(10), res.SourcePort)
-	assert.Equal(t, ReplicationStateUnknown, res.IOState)
-	assert.Equal(t, ReplicationStateUnknown, res.SQLState)
+	assert.Equal(t, replication.ReplicationStateUnknown, res.IOState)
+	assert.Equal(t, replication.ReplicationStateUnknown, res.SQLState)
 }
 
 func TestMysqlGRReplicationApplierLagParse(t *testing.T) {
-	res := ReplicationStatus{}
+	res := replication.ReplicationStatus{}
 	row := []sqltypes.Value{
 		sqltypes.MakeTrusted(querypb.Type_INT32, []byte("NULL")),
 	}

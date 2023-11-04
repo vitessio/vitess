@@ -17,10 +17,10 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"path"
 
-	"context"
-
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/event"
@@ -50,6 +50,12 @@ func (ki *KeyspaceInfo) KeyspaceName() string {
 // SetKeyspaceName sets the keyspace name
 func (ki *KeyspaceInfo) SetKeyspaceName(name string) {
 	ki.keyspace = name
+}
+
+// ValidateKeyspaceName checks if the provided name is a valid name for a
+// keyspace.
+func ValidateKeyspaceName(name string) error {
+	return validateObjectName(name)
 }
 
 // GetServedFrom returns a Keyspace_ServedFrom record if it exists.
@@ -159,6 +165,10 @@ func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) []*topodatapb.SrvKeys
 // CreateKeyspace wraps the underlying Conn.Create
 // and dispatches the event.
 func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
+	if err := ValidateKeyspaceName(keyspace); err != nil {
+		return vterrors.Wrapf(err, "CreateKeyspace: %s", err)
+	}
+
 	data, err := value.MarshalVT()
 	if err != nil {
 		return err
@@ -179,6 +189,10 @@ func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *to
 
 // GetKeyspace reads the given keyspace and returns it
 func (ts *Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceInfo, error) {
+	if err := ValidateKeyspaceName(keyspace); err != nil {
+		return nil, vterrors.Wrapf(err, "GetKeyspace: %s", err)
+	}
+
 	keyspacePath := path.Join(KeyspacesPath, keyspace, KeyspaceFile)
 	data, version, err := ts.globalCell.Get(ctx, keyspacePath)
 	if err != nil {
@@ -209,6 +223,17 @@ func (ts *Server) GetKeyspaceDurability(ctx context.Context, keyspace string) (s
 		return keyspaceInfo.GetDurabilityPolicy(), nil
 	}
 	return "none", nil
+}
+
+func (ts *Server) GetSidecarDBName(ctx context.Context, keyspace string) (string, error) {
+	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return "", err
+	}
+	if keyspaceInfo.SidecarDbName != "" {
+		return keyspaceInfo.SidecarDbName, nil
+	}
+	return sidecar.DefaultName, nil
 }
 
 func (ts *Server) GetThrottlerConfig(ctx context.Context, keyspace string) (*topodatapb.ThrottlerConfig, error) {

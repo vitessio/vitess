@@ -95,6 +95,7 @@ func TestMain(m *testing.M) {
 		// List of users authorized to execute vschema ddl operations
 		clusterInstance.VtGateExtraArgs = []string{
 			"--vschema_ddl_authorized_users=%",
+			"--enable-views",
 			"--discovery_low_replication_lag", tabletUnhealthyThreshold.String(),
 		}
 		// Set extra tablet args for lock timeout

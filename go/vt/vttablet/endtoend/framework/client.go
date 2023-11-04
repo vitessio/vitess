@@ -19,9 +19,8 @@ package framework
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
-
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -40,6 +39,7 @@ type QueryClient struct {
 	target              *querypb.Target
 	server              *tabletserver.TabletServer
 	transactionID       int64
+	reservedIDMu        sync.Mutex
 	reservedID          int64
 	sessionStateChanges string
 }
@@ -59,7 +59,7 @@ func NewClient() *QueryClient {
 
 // NewClientWithTabletType creates a new client for Server with the provided tablet type.
 func NewClientWithTabletType(tabletType topodatapb.TabletType) *QueryClient {
-	targetCopy := proto.Clone(Target).(*querypb.Target)
+	targetCopy := Target.CloneVT()
 	targetCopy.TabletType = tabletType
 	return &QueryClient{
 		ctx: callerid.NewContext(
@@ -114,6 +114,8 @@ func (client *QueryClient) Commit() error {
 func (client *QueryClient) Rollback() error {
 	defer func() { client.transactionID = 0 }()
 	rID, err := client.server.Rollback(client.ctx, client.target, client.transactionID)
+	client.reservedIDMu.Lock()
+	defer client.reservedIDMu.Unlock()
 	client.reservedID = rID
 	if err != nil {
 		return err
@@ -293,6 +295,8 @@ func (client *QueryClient) MessageAck(name string, ids []string) (int64, error) 
 
 // ReserveExecute performs a ReserveExecute.
 func (client *QueryClient) ReserveExecute(query string, preQueries []string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	client.reservedIDMu.Lock()
+	defer client.reservedIDMu.Unlock()
 	if client.reservedID != 0 {
 		return nil, errors.New("already reserved a connection")
 	}
@@ -405,14 +409,21 @@ func (client *QueryClient) StreamHealth(sendFunc func(*querypb.StreamHealthRespo
 	return client.server.StreamHealth(client.ctx, sendFunc)
 }
 
+// StreamHealthWithContext receives the health response
+func (client *QueryClient) StreamHealthWithContext(ctx context.Context, sendFunc func(*querypb.StreamHealthResponse) error) error {
+	return client.server.StreamHealth(ctx, sendFunc)
+}
+
 func (client *QueryClient) UpdateContext(ctx context.Context) {
 	client.ctx = ctx
 }
 
 func (client *QueryClient) GetSchema(tableType querypb.SchemaTableType, tableNames ...string) (map[string]string, error) {
-	schemaDef := map[string]string{}
+	schemaDef := make(map[string]string)
 	err := client.server.GetSchema(client.ctx, client.target, tableType, tableNames, func(schemaRes *querypb.GetSchemaResponse) error {
-		schemaDef = schemaRes.TableDefinition
+		for tableName, schemaDefinition := range schemaRes.TableDefinition {
+			schemaDef[tableName] = schemaDefinition
+		}
 		return nil
 	})
 	if err != nil {

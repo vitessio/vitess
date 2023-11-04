@@ -60,10 +60,10 @@ type testWranglerEnv struct {
 //----------------------------------------------
 // testWranglerEnv
 
-func newWranglerTestEnv(t testing.TB, sourceShards, targetShards []string, query string, positions map[string]string, timeUpdated int64) *testWranglerEnv {
+func newWranglerTestEnv(t testing.TB, ctx context.Context, sourceShards, targetShards []string, query string, positions map[string]string, timeUpdated int64) *testWranglerEnv {
 	env := &testWranglerEnv{
 		workflow:   "wrWorkflow",
-		topoServ:   memorytopo.NewServer("zone1"),
+		topoServ:   memorytopo.NewServer(ctx, "zone1"),
 		cell:       "zone1",
 		tabletType: topodatapb.TabletType_REPLICA,
 		tmc:        newTestWranglerTMClient(),

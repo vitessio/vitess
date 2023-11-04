@@ -89,16 +89,17 @@ const KeyspaceActions: React.FC<KeyspaceActionsProps> = ({ keyspace, clusterID }
                             validateSchemaKeyspaceMutation.data.results.length === 0 && (
                                 <div className="text-sm">No schema validation errors found.</div>
                             )}
-                        {validateSchemaKeyspaceMutation.data && validateSchemaKeyspaceMutation.data.results.length > 0 && (
-                            <ul>
-                                {validateSchemaKeyspaceMutation.data &&
-                                    validateSchemaKeyspaceMutation.data.results.map((res, i) => (
-                                        <li className="text-sm" key={`schema_keyspace_validation_result_${i}`}>
-                                            • {res}
-                                        </li>
-                                    ))}
-                            </ul>
-                        )}
+                        {validateSchemaKeyspaceMutation.data &&
+                            validateSchemaKeyspaceMutation.data.results.length > 0 && (
+                                <ul>
+                                    {validateSchemaKeyspaceMutation.data &&
+                                        validateSchemaKeyspaceMutation.data.results.map((res, i) => (
+                                            <li className="text-sm" key={`schema_keyspace_validation_result_${i}`}>
+                                                • {res}
+                                            </li>
+                                        ))}
+                                </ul>
+                            )}
                     </div>
                 }
             />

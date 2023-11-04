@@ -41,6 +41,7 @@ func FuzzTabletManagerExecuteFetchAsDba(data []byte) int {
 	ctx := context.Background()
 	cp := mysql.ConnParams{}
 	db := fakesqldb.New(t)
+	defer db.Close()
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 	daemon := mysqlctl.NewFakeMysqlDaemon(db)
 

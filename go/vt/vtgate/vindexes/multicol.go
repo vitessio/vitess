@@ -29,7 +29,9 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var _ MultiColumn = (*MultiCol)(nil)
+var (
+	_ MultiColumn = (*MultiCol)(nil)
+)
 
 type MultiCol struct {
 	name        string
@@ -46,8 +48,8 @@ const (
 	defaultVindex     = "hash"
 )
 
-// NewMultiCol creates a new MultiCol.
-func NewMultiCol(name string, m map[string]string) (Vindex, error) {
+// newMultiCol creates a new MultiCol.
+func newMultiCol(name string, m map[string]string) (Vindex, error) {
 	colCount, err := getColumnCount(m)
 	if err != nil {
 		return nil, err
@@ -150,7 +152,7 @@ func (m *MultiCol) mapKsid(colValues []sqltypes.Value) (bool, []byte, error) {
 }
 
 func init() {
-	Register("multicol", NewMultiCol)
+	Register("multicol", newMultiCol)
 }
 
 func getColumnVindex(m map[string]string, colCount int) (map[int]Hashing, int, error) {
@@ -164,6 +166,15 @@ func getColumnVindex(m map[string]string, colCount int) (map[int]Hashing, int, e
 	}
 	columnVdx := make(map[int]Hashing, colCount)
 	vindexCost := 0
+	subParams := make(map[string]string)
+	for k, v := range m {
+		if k == paramColumnCount ||
+			k == paramColumnBytes ||
+			k == paramColumnVindex {
+			continue
+		}
+		subParams[k] = v
+	}
 	for i := 0; i < colCount; i++ {
 		selVdx := defaultVindex
 		if len(colVdxs) > i {
@@ -173,7 +184,7 @@ func getColumnVindex(m map[string]string, colCount int) (map[int]Hashing, int, e
 			}
 		}
 		// TODO: reuse vindex. avoid creating same vindex.
-		vdx, err := CreateVindex(selVdx, selVdx, m)
+		vdx, err := CreateVindex(selVdx, selVdx, subParams)
 		if err != nil {
 			return nil, 0, err
 		}

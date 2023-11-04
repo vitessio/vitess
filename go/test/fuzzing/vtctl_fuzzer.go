@@ -189,6 +189,6 @@ func Fuzz(data []byte) int {
 }
 
 func createTopo(ctx context.Context) (*topo.Server, error) {
-	ts := memorytopo.NewServer("zone1", "zone2", "zone3")
+	ts := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
 	return ts, nil
 }

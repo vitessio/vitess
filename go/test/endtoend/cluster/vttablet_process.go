@@ -35,10 +35,14 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+const vttabletStateTimeout = 60 * time.Second
 
 // VttabletProcess is a generic handle for a running vttablet .
 // It can be spawned manually
@@ -67,6 +71,7 @@ type VttabletProcess struct {
 	QueryzURL                   string
 	StatusDetailsURL            string
 	SupportsBackup              bool
+	ExplicitServingStatus       bool
 	ServingStatus               string
 	DbPassword                  string
 	DbPort                      int
@@ -75,7 +80,7 @@ type VttabletProcess struct {
 	Charset                     string
 	ConsolidationsURL           string
 
-	//Extra Args to be set before starting the vttablet process
+	// Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
 	proc *exec.Cmd
@@ -84,7 +89,6 @@ type VttabletProcess struct {
 
 // Setup starts vttablet process with required arguements
 func (vttablet *VttabletProcess) Setup() (err error) {
-
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
 		"--topo_implementation", vttablet.CommonArg.TopoImplementation,
@@ -129,6 +133,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	vttablet.proc.Stderr = errFile
 
 	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
+	vttablet.proc.Env = append(vttablet.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Running vttablet with command: %v", strings.Join(vttablet.proc.Args, " "))
 
@@ -146,7 +151,15 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	}()
 
 	if vttablet.ServingStatus != "" {
-		if err = vttablet.WaitForTabletStatus(vttablet.ServingStatus); err != nil {
+		// If the tablet has an explicit serving status we use the serving status
+		// otherwise we wait for any serving status to show up in the healthcheck.
+		var servingStatus []string
+		if vttablet.ExplicitServingStatus {
+			servingStatus = append(servingStatus, vttablet.ServingStatus)
+		} else {
+			servingStatus = append(servingStatus, "SERVING", "NOT_SERVING")
+		}
+		if err = vttablet.WaitForTabletStatuses(servingStatus); err != nil {
 			errFileContent, _ := os.ReadFile(fname)
 			if errFileContent != nil {
 				log.Infof("vttablet error:\n%s\n", string(errFileContent))
@@ -268,19 +281,19 @@ func (vttablet *VttabletProcess) GetTabletType() string {
 	return ""
 }
 
-// WaitForTabletStatus waits for 10 second till expected status is reached
+// WaitForTabletStatus waits for one of the expected statuses to be reached
 func (vttablet *VttabletProcess) WaitForTabletStatus(expectedStatus string) error {
-	return vttablet.WaitForTabletStatusesForTimeout([]string{expectedStatus}, 10*time.Second)
+	return vttablet.WaitForTabletStatusesForTimeout([]string{expectedStatus}, vttabletStateTimeout)
 }
 
-// WaitForTabletStatuses waits for 10 second till one of expected statuses is reached
+// WaitForTabletStatuses waits for one of expected statuses is reached
 func (vttablet *VttabletProcess) WaitForTabletStatuses(expectedStatuses []string) error {
-	return vttablet.WaitForTabletStatusesForTimeout(expectedStatuses, 10*time.Second)
+	return vttablet.WaitForTabletStatusesForTimeout(expectedStatuses, vttabletStateTimeout)
 }
 
-// WaitForTabletTypes waits for 10 second till one of expected statuses is reached
+// WaitForTabletTypes waits for one of expected statuses is reached
 func (vttablet *VttabletProcess) WaitForTabletTypes(expectedTypes []string) error {
-	return vttablet.WaitForTabletTypesForTimeout(expectedTypes, 10*time.Second)
+	return vttablet.WaitForTabletTypesForTimeout(expectedTypes, vttabletStateTimeout)
 }
 
 // WaitForTabletStatusesForTimeout waits till the tablet reaches to any of the provided statuses
@@ -334,7 +347,7 @@ func contains(arr []string, str string) bool {
 
 // WaitForBinLogPlayerCount waits till binlog player count var matches
 func (vttablet *VttabletProcess) WaitForBinLogPlayerCount(expectedCount int) error {
-	timeout := time.Now().Add(10 * time.Second)
+	timeout := time.Now().Add(vttabletStateTimeout)
 	for time.Now().Before(timeout) {
 		if vttablet.getVReplStreamCount() == fmt.Sprintf("%d", expectedCount) {
 			return nil
@@ -351,19 +364,23 @@ func (vttablet *VttabletProcess) WaitForBinLogPlayerCount(expectedCount int) err
 
 // WaitForBinlogServerState wait for the tablet's binlog server to be in the provided state.
 func (vttablet *VttabletProcess) WaitForBinlogServerState(expectedStatus string) error {
-	timeout := time.Now().Add(10 * time.Second)
-	for time.Now().Before(timeout) {
+	ctx, cancel := context.WithTimeout(context.Background(), vttabletStateTimeout)
+	defer cancel()
+	t := time.NewTicker(300 * time.Millisecond)
+	defer t.Stop()
+	for {
 		if vttablet.getVarValue("UpdateStreamState") == expectedStatus {
 			return nil
 		}
 		select {
 		case err := <-vttablet.exit:
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
-		default:
-			time.Sleep(300 * time.Millisecond)
+		case <-ctx.Done():
+			return fmt.Errorf("vttablet %s, expected status of %s not reached before timeout of %v",
+				vttablet.TabletPath, expectedStatus, vttabletStateTimeout)
+		case <-t.C:
 		}
 	}
-	return fmt.Errorf("vttablet %s, expected status not reached", vttablet.TabletPath)
 }
 
 func (vttablet *VttabletProcess) getVReplStreamCount() string {
@@ -376,9 +393,20 @@ func (vttablet *VttabletProcess) getVarValue(keyname string) string {
 	return fmt.Sprintf("%v", object)
 }
 
-// TearDown shuts down the running vttablet service and fails after 10 seconds
+// TearDown shuts down the running vttablet service and fails after a timeout
 func (vttablet *VttabletProcess) TearDown() error {
-	return vttablet.TearDownWithTimeout(10 * time.Second)
+	return vttablet.TearDownWithTimeout(vttabletStateTimeout)
+}
+
+// Kill shuts down the running vttablet service immediately.
+func (vttablet *VttabletProcess) Kill() error {
+	if vttablet.proc == nil || vttablet.exit == nil {
+		return nil
+	}
+	vttablet.proc.Process.Kill()
+	err := <-vttablet.exit
+	vttablet.proc = nil
+	return err
 }
 
 // TearDownWithTimeout shuts down the running vttablet service and fails once the given
@@ -396,10 +424,7 @@ func (vttablet *VttabletProcess) TearDownWithTimeout(timeout time.Duration) erro
 		return nil
 
 	case <-time.After(timeout):
-		vttablet.proc.Process.Kill()
-		err := <-vttablet.exit
-		vttablet.proc = nil
-		return err
+		return vttablet.Kill()
 	}
 }
 
@@ -502,11 +527,19 @@ func (vttablet *VttabletProcess) ToggleProfiling() error {
 }
 
 // WaitForVReplicationToCatchup waits for "workflow" to finish copying
-func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, duration time.Duration) {
+func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, sidecarDBName string, duration time.Duration) {
+	if sidecarDBName == "" {
+		sidecarDBName = sidecar.DefaultName
+	}
+	// Escape it if/as needed
+	ics := sqlparser.NewIdentifierCS(sidecarDBName)
+	sdbi := sqlparser.String(ics)
 	queries := [3]string{
-		fmt.Sprintf(`select count(*) from _vt.vreplication where workflow = "%s" and db_name = "%s" and pos = ''`, workflow, database),
-		"select count(*) from information_schema.tables where table_schema='_vt' and table_name='copy_state' limit 1;",
-		fmt.Sprintf(`select count(*) from _vt.copy_state where vrepl_id in (select id from _vt.vreplication where workflow = "%s" and db_name = "%s" )`, workflow, database),
+		sqlparser.BuildParsedQuery(`select count(*) from %s.vreplication where workflow = "%s" and db_name = "%s" and pos = ''`,
+			sdbi, workflow, database).Query,
+		sqlparser.BuildParsedQuery("select count(*) from information_schema.tables where table_schema='%s' and table_name='copy_state' limit 1", sidecarDBName).Query,
+		sqlparser.BuildParsedQuery(`select count(*) from %s.copy_state where vrepl_id in (select id from %s.vreplication where workflow = "%s" and db_name = "%s" )`,
+			sdbi, sdbi, workflow, database).Query,
 	}
 	results := [3]string{"[INT64(0)]", "[INT64(1)]", "[INT64(0)]"}
 

@@ -17,11 +17,11 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -44,7 +44,7 @@ func (tm *TabletManager) ReloadSchema(ctx context.Context, waitPosition string) 
 	}
 
 	if waitPosition != "" {
-		pos, err := mysql.DecodePosition(waitPosition)
+		pos, err := replication.DecodePosition(waitPosition)
 		if err != nil {
 			return vterrors.Wrapf(err, "ReloadSchema: can't parse wait position (%q)", waitPosition)
 		}
@@ -56,6 +56,11 @@ func (tm *TabletManager) ReloadSchema(ctx context.Context, waitPosition string) 
 
 	log.Infof("ReloadSchema requested via RPC")
 	return tm.QueryServiceControl.ReloadSchema(ctx)
+}
+
+// ResetSequences will reset the auto-inc counters on the specified tables.
+func (tm *TabletManager) ResetSequences(ctx context.Context, tables []string) error {
+	return tm.QueryServiceControl.SchemaEngine().ResetSequences(tables)
 }
 
 // PreflightSchema will try out the schema changes in "changes".

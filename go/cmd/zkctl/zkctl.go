@@ -18,9 +18,6 @@ limitations under the License.
 package main
 
 import (
-	"bufio"
-	"os"
-
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/exit"
@@ -37,10 +34,9 @@ Commands:
 `
 
 var (
-	// Reason for nolint : Used in line 54 (stdin = bufio.NewReader(os.Stdin)) in the init function
-	stdin *bufio.Reader //nolint
-	zkCfg = "6@<hostname>:3801:3802:3803"
-	myID  uint
+	zkCfg   = "6@<hostname>:3801:3802:3803"
+	myID    uint
+	zkExtra []string
 )
 
 func registerZkctlFlags(fs *pflag.FlagSet) {
@@ -48,11 +44,12 @@ func registerZkctlFlags(fs *pflag.FlagSet) {
 		"zkid@server1:leaderPort1:electionPort1:clientPort1,...)")
 	fs.UintVar(&myID, "zk.myid", myID,
 		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
-
+	fs.StringArrayVar(&zkExtra, "zk.extra", zkExtra,
+		"extra config line(s) to append verbatim to config (flag can be specified more than once)")
 }
+
 func init() {
 	servenv.OnParse(registerZkctlFlags)
-	stdin = bufio.NewReader(os.Stdin)
 }
 
 func main() {
@@ -65,6 +62,7 @@ func main() {
 	args := servenv.ParseFlagsWithArgs("zkctl")
 
 	zkConfig := zkctl.MakeZkConfigFromString(zkCfg, uint32(myID))
+	zkConfig.Extra = zkExtra
 	zkd := zkctl.NewZkd(zkConfig)
 
 	action := args[0]

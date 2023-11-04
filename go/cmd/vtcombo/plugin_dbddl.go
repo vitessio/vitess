@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"sync"
 
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -29,7 +30,9 @@ var globalCreateDb func(ctx context.Context, ks *vttestpb.Keyspace) error
 var globalDropDb func(ctx context.Context, ksName string) error
 
 // DBDDL doesn't need to store any state - we use the global variables above instead
-type DBDDL struct{}
+type DBDDL struct {
+	mu sync.Mutex
+}
 
 // CreateDatabase implements the engine.DBDDLPlugin interface
 func (plugin *DBDDL) CreateDatabase(ctx context.Context, name string) error {
@@ -39,6 +42,8 @@ func (plugin *DBDDL) CreateDatabase(ctx context.Context, name string) error {
 			Name: "0",
 		}},
 	}
+	plugin.mu.Lock()
+	defer plugin.mu.Unlock()
 	return globalCreateDb(ctx, ks)
 }
 

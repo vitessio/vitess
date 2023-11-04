@@ -17,28 +17,7 @@
   {
     "comment": "vexplain queries",
     "query": "vexplain QUERIES select * from user",
-    "v3-plan": {
-      "QueryType": "EXPLAIN",
-      "Original": "vexplain QUERIES select * from user",
-      "Instructions": {
-        "OperatorType": "VEXPLAIN",
-        "Type": "queries",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user`",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "EXPLAIN",
       "Original": "vexplain QUERIES select * from user",
       "Instructions": {
@@ -66,28 +45,7 @@
   {
     "comment": "vexplain table",
     "query": "vexplain ALL select * from user",
-    "v3-plan": {
-      "QueryType": "EXPLAIN",
-      "Original": "vexplain ALL select * from user",
-      "Instructions": {
-        "OperatorType": "VEXPLAIN",
-        "Type": "all",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user`",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "EXPLAIN",
       "Original": "vexplain ALL select * from user",
       "Instructions": {

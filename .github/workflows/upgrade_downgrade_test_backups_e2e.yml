@@ -7,11 +7,13 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing - Backups - E2E')
   cancel-in-progress: true
 
+permissions: read-all
+
 jobs:
   get_previous_release:
     if: always()
     name: Get Previous Release - Backups - E2E
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-16cores-1
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
 
@@ -32,7 +34,7 @@ jobs:
     timeout-minutes: 60
     if: always() && needs.get_previous_release.result == 'success'
     name: Run Upgrade Downgrade Test - Backups - E2E
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-16cores-1
     needs:
       - get_previous_release
 
@@ -81,9 +83,9 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.20.1
+        go-version: 1.21.1
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -112,7 +114,7 @@ jobs:
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
+        sudo apt-get install -y percona-xtrabackup-24
 
     # Checkout to the last release of Vitess
     - name: Check out other version's code (${{ needs.get_previous_release.outputs.previous_release }})
@@ -131,7 +133,7 @@ jobs:
       timeout-minutes: 10
       run: |
         source build.env
-        make build
+        NOVTADMINBUILD=1 make build
         mkdir -p /tmp/vitess-build-other/
         cp -R bin /tmp/vitess-build-other/
         rm -Rf bin/*
@@ -151,7 +153,7 @@ jobs:
       timeout-minutes: 10
       run: |
         source build.env
-        make build
+        NOVTADMINBUILD=1 make build
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
 
@@ -161,8 +163,10 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vttablet
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
         vttablet --version
 
     # Run test with VTTablet at version N-1 and VTBackup at version N
@@ -181,9 +185,11 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vtbackup $PWD/bin/vttablet
+        rm -f $PWD/bin/vtbackup $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-current/bin/vtbackup $PWD/bin/vtbackup
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
         vtbackup --version
         vttablet --version
 

@@ -27,9 +27,8 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -120,6 +119,10 @@ func IsShardUsingRangeBasedSharding(shard string) bool {
 // ValidateShardName takes a shard name and sanitizes it, and also returns
 // the KeyRange.
 func ValidateShardName(shard string) (string, *topodatapb.KeyRange, error) {
+	if err := validateObjectName(shard); err != nil {
+		return "", nil, err
+	}
+
 	if !IsShardUsingRangeBasedSharding(shard) {
 		return shard, nil, nil
 	}
@@ -184,17 +187,25 @@ func (si *ShardInfo) HasPrimary() bool {
 
 // GetPrimaryTermStartTime returns the shard's primary term start time as a Time value.
 func (si *ShardInfo) GetPrimaryTermStartTime() time.Time {
-	return logutil.ProtoToTime(si.Shard.PrimaryTermStartTime)
+	return protoutil.TimeFromProto(si.Shard.PrimaryTermStartTime).UTC()
 }
 
 // SetPrimaryTermStartTime sets the shard's primary term start time as a Time value.
 func (si *ShardInfo) SetPrimaryTermStartTime(t time.Time) {
-	si.Shard.PrimaryTermStartTime = logutil.TimeToProto(t)
+	si.Shard.PrimaryTermStartTime = protoutil.TimeToProto(t)
 }
 
 // GetShard is a high level function to read shard data.
 // It generates trace spans.
 func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardInfo, error) {
+	if err := ValidateKeyspaceName(keyspace); err != nil {
+		return nil, err
+	}
+
+	if _, _, err := ValidateShardName(shard); err != nil {
+		return nil, err
+	}
+
 	span, ctx := trace.NewSpan(ctx, "TopoServer.GetShard")
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("shard", shard)
@@ -279,18 +290,22 @@ func (ts *Server) UpdateShardFields(ctx context.Context, keyspace, shard string,
 // This will lock the Keyspace, as we may be looking at other shard servedTypes.
 // Using GetOrCreateShard is probably a better idea for most use cases.
 func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err error) {
-	// Lock the keyspace, because we'll be looking at ServedTypes.
-	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "CreateShard")
-	if lockErr != nil {
-		return lockErr
+	if err := ValidateKeyspaceName(keyspace); err != nil {
+		return err
 	}
-	defer unlock(&err)
 
 	// validate parameters
 	_, keyRange, err := ValidateShardName(shard)
 	if err != nil {
 		return err
 	}
+
+	// Lock the keyspace, because we'll be looking at ServedTypes.
+	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "CreateShard")
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
 
 	value := &topodatapb.Shard{
 		KeyRange: keyRange,
@@ -304,7 +319,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 		return err
 	}
 	for _, si := range sis {
-		if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
+		if si.KeyRange == nil || key.KeyRangeIntersect(si.KeyRange, keyRange) {
 			value.IsPrimaryServing = false
 			break
 		}
@@ -339,8 +354,17 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 		return
 	}
 
-	// create the keyspace, maybe it already exists
-	if err = ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && !IsErrType(err, NodeExists) {
+	// Create the keyspace, if it does not already exist.
+	// We store the sidecar database name in the keyspace record.
+	// If not already set, then it is set to the default (_vt) by
+	// the first tablet to start in the keyspace and is from
+	// then on immutable. Any other tablets that try to come up in
+	// this keyspace will be able to serve queries but will fail to
+	// fully initialize and perform certain operations (e.g.
+	// OnlineDDL or VReplication workflows) if they are using a
+	// different sidecar database name.
+	ksi := topodatapb.Keyspace{SidecarDbName: sidecar.GetName()}
+	if err = ts.CreateKeyspace(ctx, keyspace, &ksi); err != nil && !IsErrType(err, NodeExists) {
 		return nil, vterrors.Wrapf(err, "CreateKeyspace(%v) failed", keyspace)
 	}
 
@@ -386,7 +410,7 @@ func (si *ShardInfo) GetTabletControl(tabletType topodatapb.TabletType) *topodat
 	return nil
 }
 
-// UpdateSourceDeniedTables will add or remove the listed tables
+// UpdateDeniedTables will add or remove the listed tables
 // in the shard record's TabletControl structures. Note we don't
 // support a lot of the corner cases:
 //   - only support one table list per shard. If we encounter a different
@@ -395,7 +419,7 @@ func (si *ShardInfo) GetTabletControl(tabletType topodatapb.TabletType) *topodat
 //     because it's not used in the same context (vertical vs horizontal sharding)
 //
 // This function should be called while holding the keyspace lock.
-func (si *ShardInfo) UpdateSourceDeniedTables(ctx context.Context, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
+func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
 	if err := CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
 		return err
 	}
@@ -607,7 +631,7 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 	}
 
 	for _, a := range resultAsMap {
-		result = append(result, proto.Clone(a).(*topodatapb.TabletAlias))
+		result = append(result, a.CloneVT())
 	}
 	sort.Sort(topoproto.TabletAliasList(result))
 	return result, err

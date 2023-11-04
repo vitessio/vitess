@@ -19,7 +19,7 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -131,7 +131,7 @@ func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subq
 	if err != nil {
 		return err
 	}
-	if semTableSQ.GetArgName() != "" || engine.PulloutOpcode(semTableSQ.OpCode) != engine.PulloutValue {
+	if semTableSQ.GetArgName() != "" || popcode.PulloutOpcode(semTableSQ.OpCode) != popcode.PulloutValue {
 		return nil
 	}
 	r.inSubquery++

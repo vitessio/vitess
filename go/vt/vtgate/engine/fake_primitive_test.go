@@ -43,8 +43,8 @@ type fakePrimitive struct {
 	allResultsInOneCall bool
 }
 
-func (f *fakePrimitive) Inputs() []Primitive {
-	return []Primitive{}
+func (f *fakePrimitive) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{}, nil
 }
 
 var _ Primitive = (*fakePrimitive)(nil)

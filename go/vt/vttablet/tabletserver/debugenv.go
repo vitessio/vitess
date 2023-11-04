@@ -116,8 +116,6 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			setIntVal(tsv.SetStreamPoolSize)
 		case "TxPoolSize":
 			setIntVal(tsv.SetTxPoolSize)
-		case "QueryCacheCapacity":
-			setIntVal(tsv.SetQueryPlanCacheCap)
 		case "MaxResultSize":
 			setIntVal(tsv.SetMaxResultSize)
 		case "WarnResultSize":
@@ -127,7 +125,7 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 		case "RowStreamerMaxMySQLReplLagSecs":
 			setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxMySQLReplLagSecs = val })
 		case "UnhealthyThreshold":
-			setDurationVal(tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Set)
+			setDurationVal(func(d time.Duration) { _ = tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Set(d.String()) })
 			setDurationVal(tsv.hs.SetUnhealthyThreshold)
 			setDurationVal(tsv.sm.SetUnhealthyThreshold)
 		case "ThrottleMetricThreshold":

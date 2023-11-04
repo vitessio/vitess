@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { PaginationNav, Props } from './PaginationNav';
+import { describe, test, expect } from 'vitest';
 
 const formatLink = (page: number) => ({
     pathname: '/test',
@@ -90,11 +91,12 @@ describe('PaginationNav', () => {
                 expect(link).toHaveTextContent(`${e}`);
 
                 if (e === props.currentPage) {
-                    expect(link).toHaveClass('activeLink');
+                    expect(link?.className).toContain('activeLink');
                 } else {
-                    expect(link).not.toHaveClass('activeLink');
+                    expect(link?.className).not.toContain('activeLink');
                 }
             }
         });
+        cleanup();
     });
 });

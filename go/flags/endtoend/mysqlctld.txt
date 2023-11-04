@@ -3,6 +3,12 @@ Usage of mysqlctld:
       --app_idle_timeout duration                                        Idle timeout for app connections (default 1m0s)
       --app_pool_size int                                                Size of the connection pool for app connections (default 40)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
+      --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
+      --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
+      --config-name string                                               Name of the config file (without extension) to search for. (default "vtconfig")
+      --config-path strings                                              Paths to search for config files in. (default [{{ .Workdir }}])
+      --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
+      --config-type string                                               Config file type (omit to infer config type from file extension).
       --db-credentials-file string                                       db credentials file; send SIGHUP to reload this file
       --db-credentials-server string                                     db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation) (default "file")
       --db-credentials-vault-addr string                                 URL to Vault server

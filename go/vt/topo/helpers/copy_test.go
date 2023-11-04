@@ -17,11 +17,10 @@ limitations under the License.
 package helpers
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -34,8 +33,8 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 	// Create a source and destination TS. They will have
 	// different generations, so we test using the Version for
 	// both works as expected.
-	fromTS := memorytopo.NewServer("test_cell")
-	toTS := memorytopo.NewServer("test_cell")
+	fromTS := memorytopo.NewServer(ctx, "test_cell")
+	toTS := memorytopo.NewServer(ctx, "test_cell")
 
 	// create a keyspace and a couple tablets
 	if err := fromTS.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {

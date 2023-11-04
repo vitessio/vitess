@@ -21,15 +21,17 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestLastInsertId(t *testing.T) {
+	require.NoError(t,
+		utils.WaitForAuthoritative(t, "ks", "t1_last_insert_id", cluster.VTProcess().ReadVSchema))
+
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -37,7 +39,7 @@ func TestLastInsertId(t *testing.T) {
 
 	// figure out the last inserted id before we run change anything
 	qr := exec(t, conn, "select max(id) from t1_last_insert_id")
-	oldLastID, err := evalengine.ToUint64(qr.Rows[0][0])
+	oldLastID, err := qr.Rows[0][0].ToCastUint64()
 	require.NoError(t, err)
 
 	exec(t, conn, "insert into t1_last_insert_id(id1) values(42)")
@@ -53,6 +55,9 @@ func TestLastInsertId(t *testing.T) {
 }
 
 func TestLastInsertIdWithRollback(t *testing.T) {
+	require.NoError(t,
+		utils.WaitForAuthoritative(t, "ks", "t1_last_insert_id", cluster.VTProcess().ReadVSchema))
+
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -60,7 +65,7 @@ func TestLastInsertIdWithRollback(t *testing.T) {
 
 	// figure out the last inserted id before we run our tests
 	qr := exec(t, conn, "select max(id) from t1_last_insert_id")
-	oldLastID, err := evalengine.ToUint64(qr.Rows[0][0])
+	oldLastID, err := qr.Rows[0][0].ToCastUint64()
 	require.NoError(t, err)
 
 	// add row inside explicit transaction

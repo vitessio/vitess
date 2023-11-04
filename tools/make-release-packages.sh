@@ -41,7 +41,7 @@ done;
 
 # Copy remaining files, preserving date/permissions
 # But resolving symlinks
-cp -rpfL examples "${RELEASE_DIR}"
+cp -rpfL {web,examples} "${RELEASE_DIR}"
 
 echo "Follow the installation instructions at: https://vitess.io/docs/get-started/local/" > "${RELEASE_DIR}"/examples/README.md
 

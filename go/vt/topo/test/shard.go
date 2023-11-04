@@ -31,8 +31,7 @@ import (
 )
 
 // checkShard verifies the Shard operations work correctly
-func checkShard(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
+func checkShard(t *testing.T, ctx context.Context, ts *topo.Server) {
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
@@ -100,8 +99,7 @@ func checkShard(t *testing.T, ts *topo.Server) {
 // checkShardWithLock verifies that `TryLockShard` will keep failing with `NodeExists` error if there is
 // a lock already taken for given shard. Once we unlock that shard, then subsequent call to `TryLockShard`
 // should succeed.
-func checkShardWithLock(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
+func checkShardWithLock(t *testing.T, ctx context.Context, ts *topo.Server) {
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}

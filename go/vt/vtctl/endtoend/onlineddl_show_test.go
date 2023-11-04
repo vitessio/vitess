@@ -94,9 +94,11 @@ func TestShowOnlineDDL_Cancel(t *testing.T) {
 
 func onlineDDLTest(t *testing.T, args []string, expectedQuery string) {
 	t.Helper()
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	fakeTopo := memorytopo.NewServer("zone1", "zone2", "zone3")
+	fakeTopo := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
+	defer fakeTopo.Close()
 
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{

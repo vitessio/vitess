@@ -33,6 +33,11 @@ func (d *AlterViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// EntityName implements EntityDiff
+func (d *AlterViewEntityDiff) EntityName() string {
+	return d.from.Name()
+}
+
 // Entities implements EntityDiff
 func (d *AlterViewEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, d.to
@@ -86,6 +91,12 @@ type CreateViewEntityDiff struct {
 // IsEmpty implements EntityDiff
 func (d *CreateViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
+}
+
+// EntityName implements EntityDiff
+func (d *CreateViewEntityDiff) EntityName() string {
+	_, to := d.Entities()
+	return to.Name()
 }
 
 // Entities implements EntityDiff
@@ -142,6 +153,11 @@ type DropViewEntityDiff struct {
 // IsEmpty implements EntityDiff
 func (d *DropViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
+}
+
+// EntityName implements EntityDiff
+func (d *DropViewEntityDiff) EntityName() string {
+	return d.from.Name()
 }
 
 // Entities implements EntityDiff

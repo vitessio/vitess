@@ -18,12 +18,13 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
 
-	"context"
-
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -41,7 +42,7 @@ var _ flavor = (*mariadbFlavor101)(nil)
 var _ flavor = (*mariadbFlavor102)(nil)
 
 // primaryGTIDSet is part of the Flavor interface.
-func (mariadbFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
+func (mariadbFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {
 	qr, err := c.ExecuteFetch("SELECT @@GLOBAL.gtid_binlog_pos", 1, false)
 	if err != nil {
 		return nil, err
@@ -50,11 +51,11 @@ func (mariadbFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_binlog_pos: %#v", qr)
 	}
 
-	return parseMariadbGTIDSet(qr.Rows[0][0].ToString())
+	return replication.ParseMariadbGTIDSet(qr.Rows[0][0].ToString())
 }
 
 // purgedGTIDSet is part of the Flavor interface.
-func (mariadbFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
+func (mariadbFlavor) purgedGTIDSet(c *Conn) (replication.GTIDSet, error) {
 	return nil, nil
 }
 
@@ -68,11 +69,11 @@ func (mariadbFlavor) gtidMode(c *Conn) (string, error) {
 	return "", nil
 }
 
-func (mariadbFlavor) startReplicationUntilAfter(pos Position) string {
+func (mariadbFlavor) startReplicationUntilAfter(pos replication.Position) string {
 	return fmt.Sprintf("START SLAVE UNTIL master_gtid_pos = \"%s\"", pos)
 }
 
-func (mariadbFlavor) startSQLThreadUntilAfter(pos Position) string {
+func (mariadbFlavor) startSQLThreadUntilAfter(pos replication.Position) string {
 	return fmt.Sprintf("START SLAVE SQL_THREAD UNTIL master_gtid_pos = \"%s\"", pos)
 }
 
@@ -105,7 +106,7 @@ func (mariadbFlavor) startSQLThreadCommand() string {
 }
 
 // sendBinlogDumpCommand is part of the Flavor interface.
-func (mariadbFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos Position) error {
+func (mariadbFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos replication.Position) error {
 	// Tell the server that we understand GTIDs by setting
 	// mariadb_slave_capability to MARIA_SLAVE_CAPABILITY_GTID = 4 (MariaDB >= 10.0.1).
 	if _, err := c.ExecuteFetch("SET @mariadb_slave_capability=4", 0, false); err != nil {
@@ -154,7 +155,7 @@ func (mariadbFlavor) resetReplicationParametersCommands(c *Conn) []string {
 }
 
 // setReplicationPositionCommands is part of the Flavor interface.
-func (mariadbFlavor) setReplicationPositionCommands(pos Position) []string {
+func (mariadbFlavor) setReplicationPositionCommands(pos replication.Position) []string {
 	return []string{
 		// RESET MASTER will clear out gtid_binlog_pos,
 		// which then guarantees that gtid_current_pos = gtid_slave_pos,
@@ -182,54 +183,42 @@ func (mariadbFlavor) changeReplicationSourceArg() string {
 }
 
 // status is part of the Flavor interface.
-func (mariadbFlavor) status(c *Conn) (ReplicationStatus, error) {
+func (mariadbFlavor) status(c *Conn) (replication.ReplicationStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW ALL SLAVES STATUS", 100, true /* wantfields */)
 	if err != nil {
-		return ReplicationStatus{}, err
+		return replication.ReplicationStatus{}, err
 	}
 	if len(qr.Rows) == 0 {
 		// The query returned no data, meaning the server
 		// is not configured as a replica.
-		return ReplicationStatus{}, ErrNotReplica
+		return replication.ReplicationStatus{}, ErrNotReplica
 	}
 
 	resultMap, err := resultToMap(qr)
 	if err != nil {
-		return ReplicationStatus{}, err
+		return replication.ReplicationStatus{}, err
 	}
 
-	return parseMariadbReplicationStatus(resultMap)
-}
-
-func parseMariadbReplicationStatus(resultMap map[string]string) (ReplicationStatus, error) {
-	status := parseReplicationStatus(resultMap)
-
-	var err error
-	status.Position.GTIDSet, err = parseMariadbGTIDSet(resultMap["Gtid_Slave_Pos"])
-	if err != nil {
-		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v)", resultMap["Gtid_Slave_Pos"])
-	}
-
-	return status, nil
+	return replication.ParseMariadbReplicationStatus(resultMap)
 }
 
 // primaryStatus is part of the Flavor interface.
-func (m mariadbFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
+func (m mariadbFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
-		return PrimaryStatus{}, err
+		return replication.PrimaryStatus{}, err
 	}
 	if len(qr.Rows) == 0 {
 		// The query returned no data. We don't know how this could happen.
-		return PrimaryStatus{}, ErrNoPrimaryStatus
+		return replication.PrimaryStatus{}, ErrNoPrimaryStatus
 	}
 
 	resultMap, err := resultToMap(qr)
 	if err != nil {
-		return PrimaryStatus{}, err
+		return replication.PrimaryStatus{}, err
 	}
 
-	status := parsePrimaryStatus(resultMap)
+	status := replication.ParsePrimaryStatus(resultMap)
 	status.Position.GTIDSet, err = m.primaryGTIDSet(c)
 	return status, err
 }
@@ -238,7 +227,7 @@ func (m mariadbFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 //
 // Note: Unlike MASTER_POS_WAIT(), MASTER_GTID_WAIT() will continue waiting even
 // if the sql thread stops. If that is a problem, we'll have to change this.
-func (mariadbFlavor) waitUntilPositionCommand(ctx context.Context, pos Position) (string, error) {
+func (mariadbFlavor) waitUntilPositionCommand(ctx context.Context, pos replication.Position) (string, error) {
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := time.Until(deadline)
 		if timeout <= 0 {
@@ -260,7 +249,7 @@ func (mariadbFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	}
 	switch result[0] {
 	case EOFPacket:
-		return nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", io.EOF)
+		return nil, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", io.EOF)
 	case ErrPacket:
 		return nil, ParseErrorPacket(result)
 	}

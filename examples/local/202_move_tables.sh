@@ -19,4 +19,7 @@
 
 source ../common/env.sh
 
-vtctlclient MoveTables -- --source commerce --tables 'customer,corder' Create customer.commerce2customer
+vtctldclient MoveTables --workflow commerce2customer --target-keyspace customer create --source-keyspace commerce --tables "customer,corder"
+
+# Wait for the workflow to reach the running state.
+wait_for_workflow_running customer commerce2customer

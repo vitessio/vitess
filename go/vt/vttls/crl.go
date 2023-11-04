@@ -33,7 +33,7 @@ func certIsRevoked(cert *x509.Certificate, crl *x509.RevocationList) bool {
 		log.Warningf("The current Certificate Revocation List (CRL) is past expiry date and must be updated. Revoked certificates will still be rejected in this state.")
 	}
 
-	for _, revoked := range crl.RevokedCertificates {
+	for _, revoked := range crl.RevokedCertificateEntries {
 		if cert.SerialNumber.Cmp(revoked.SerialNumber) == 0 {
 			return true
 		}

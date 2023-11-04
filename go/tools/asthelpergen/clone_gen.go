@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"go/types"
 	"log"
+	"slices"
 	"strings"
 
 	"github.com/dave/jennifer/jen"
-	"golang.org/x/exp/slices"
 )
 
 type CloneOptions struct {

@@ -37,25 +37,25 @@ func (k *srvKeyspaceKey) String() string {
 	return k.cell + "." + k.keyspace
 }
 
-func NewSrvKeyspaceWatcher(topoServer *topo.Server, counts *stats.CountersWithSingleLabel, cacheRefresh, cacheTTL time.Duration) *SrvKeyspaceWatcher {
+func NewSrvKeyspaceWatcher(ctx context.Context, topoServer *topo.Server, counts *stats.CountersWithSingleLabel, cacheRefresh, cacheTTL time.Duration) *SrvKeyspaceWatcher {
 	watch := func(entry *watchEntry) {
 		key := entry.key.(*srvKeyspaceKey)
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		requestCtx, requestCancel := context.WithCancel(context.Background())
+		defer requestCancel()
 
-		current, changes, err := topoServer.WatchSrvKeyspace(ctx, key.cell, key.keyspace)
+		current, changes, err := topoServer.WatchSrvKeyspace(requestCtx, key.cell, key.keyspace)
 		if err != nil {
-			entry.update(nil, err, true)
+			entry.update(ctx, nil, err, true)
 			return
 		}
 
-		entry.update(current.Value, current.Err, true)
+		entry.update(ctx, current.Value, current.Err, true)
 		if current.Err != nil {
 			return
 		}
 
 		for c := range changes {
-			entry.update(c.Value, c.Err, false)
+			entry.update(ctx, c.Value, c.Err, false)
 			if c.Err != nil {
 				return
 			}

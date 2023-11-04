@@ -322,14 +322,6 @@ func TestNewOnlineDDLs(t *testing.T) {
 }
 
 func TestNewOnlineDDLsForeignKeys(t *testing.T) {
-	type expect struct {
-		sqls            []string
-		notDDL          bool
-		parseError      bool
-		isError         bool
-		expectErrorText string
-		isView          bool
-	}
 	queries := []string{
 		"alter table corder add FOREIGN KEY my_fk(customer_id) references customer(customer_id)",
 		"create table t1 (id int primary key, i int, foreign key (i) references parent(id))",
@@ -397,6 +389,33 @@ func TestOnlineDDLFromCommentedStatement(t *testing.T) {
 			assert.Equal(t, "t", o2.Table)
 			assert.Equal(t, strategySetting.Strategy, o2.Strategy)
 			assert.Equal(t, strategySetting.Options, o2.Options)
+		})
+	}
+}
+
+func TestValidateMigrationContext(t *testing.T) {
+	tcases := []struct {
+		m           string
+		expectError bool
+	}{
+		{"", false},
+		{"abc", false},
+		{"abc-def", false},
+		{"abc-DEF", false},
+		{"abc-def-123", false},
+		{"under_score:abc-DEF-123", false},
+		{"~", true},
+		{",", true},
+		{"abc^def", true},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.m, func(t *testing.T) {
+			err := ValidateMigrationContext(tcase.m)
+			if tcase.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

@@ -17,25 +17,25 @@ select /* ; */ 1 from user
 ----------------------------------------------------------------------
 select 1 from user where x=';'
 
-1 ks_sharded/-40: select 1 from `user` where x = ';' limit 10001
-1 ks_sharded/40-80: select 1 from `user` where x = ';' limit 10001
-1 ks_sharded/80-c0: select 1 from `user` where x = ';' limit 10001
-1 ks_sharded/c0-: select 1 from `user` where x = ';' limit 10001
+1 ks_sharded/-40: select 1 from `user` where x = ';' limit 10001 /* VARCHAR */
+1 ks_sharded/40-80: select 1 from `user` where x = ';' limit 10001 /* VARCHAR */
+1 ks_sharded/80-c0: select 1 from `user` where x = ';' limit 10001 /* VARCHAR */
+1 ks_sharded/c0-: select 1 from `user` where x = ';' limit 10001 /* VARCHAR */
 
 ----------------------------------------------------------------------
 select 1 from user where x='/* hello */'
 
-1 ks_sharded/-40: select 1 from `user` where x = '/* hello */' limit 10001
-1 ks_sharded/40-80: select 1 from `user` where x = '/* hello */' limit 10001
-1 ks_sharded/80-c0: select 1 from `user` where x = '/* hello */' limit 10001
-1 ks_sharded/c0-: select 1 from `user` where x = '/* hello */' limit 10001
+1 ks_sharded/-40: select 1 from `user` where x = '/* hello */' limit 10001 /* VARCHAR */
+1 ks_sharded/40-80: select 1 from `user` where x = '/* hello */' limit 10001 /* VARCHAR */
+1 ks_sharded/80-c0: select 1 from `user` where x = '/* hello */' limit 10001 /* VARCHAR */
+1 ks_sharded/c0-: select 1 from `user` where x = '/* hello */' limit 10001 /* VARCHAR */
 
 ----------------------------------------------------------------------
 select 1 from user where x='/* ; */'
 
-1 ks_sharded/-40: select 1 from `user` where x = '/* ; */' limit 10001
-1 ks_sharded/40-80: select 1 from `user` where x = '/* ; */' limit 10001
-1 ks_sharded/80-c0: select 1 from `user` where x = '/* ; */' limit 10001
-1 ks_sharded/c0-: select 1 from `user` where x = '/* ; */' limit 10001
+1 ks_sharded/-40: select 1 from `user` where x = '/* ; */' limit 10001 /* VARCHAR */
+1 ks_sharded/40-80: select 1 from `user` where x = '/* ; */' limit 10001 /* VARCHAR */
+1 ks_sharded/80-c0: select 1 from `user` where x = '/* ; */' limit 10001 /* VARCHAR */
+1 ks_sharded/c0-: select 1 from `user` where x = '/* ; */' limit 10001 /* VARCHAR */
 
 ----------------------------------------------------------------------

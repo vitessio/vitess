@@ -102,8 +102,12 @@ func (jn *SemiJoin) GetFields(ctx context.Context, vcursor VCursor, bindVars map
 }
 
 // Inputs returns the input primitives for this SemiJoin
-func (jn *SemiJoin) Inputs() []Primitive {
-	return []Primitive{jn.Left, jn.Right}
+func (jn *SemiJoin) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{jn.Left, jn.Right}, []map[string]any{{
+		inputName: "Outer",
+	}, {
+		inputName: "SubQuery",
+	}}
 }
 
 // RouteType returns a description of the query routing type used by the primitive

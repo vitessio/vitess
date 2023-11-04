@@ -19,12 +19,13 @@ package servenv
 import (
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"testing"
+
+	"vitess.io/vitess/go/vt/servenv/testutils"
 )
 
 func TestLivenessHandler(t *testing.T) {
-	server := httptest.NewServer(nil)
+	server := testutils.HTTPTestServer()
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/debug/liveness")

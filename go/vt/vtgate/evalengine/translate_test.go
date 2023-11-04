@@ -17,9 +17,11 @@ limitations under the License.
 package evalengine
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -85,8 +87,8 @@ func TestTranslateSimplification(t *testing.T) {
 		{"coalesce(NULL, 2, NULL, 4)", ok("COALESCE(NULL, INT64(2), NULL, INT64(4))"), ok("INT64(2)")},
 		{"coalesce(NULL, NULL)", ok("COALESCE(NULL, NULL)"), ok("NULL")},
 		{"coalesce(NULL)", ok("COALESCE(NULL)"), ok("NULL")},
-		{"weight_string('foobar')", ok(`WEIGHT_STRING(VARCHAR("foobar"))`), ok(`VARBINARY("\x00F\x00O\x00O\x00B\x00A\x00R")`)},
-		{"weight_string('foobar' as char(12))", ok(`WEIGHT_STRING(VARCHAR("foobar") AS CHAR(12))`), ok(`VARBINARY("\x00F\x00O\x00O\x00B\x00A\x00R\x00 \x00 \x00 \x00 \x00 \x00 ")`)},
+		{"weight_string('foobar')", ok(`WEIGHT_STRING(VARCHAR("foobar"))`), ok("VARBINARY(\"\\x1c\\xe5\\x1d\\xdd\\x1d\\xdd\\x1c`\\x1cG\\x1e3\")")},
+		{"weight_string('foobar' as char(12))", ok(`WEIGHT_STRING(VARCHAR("foobar") AS CHAR(12))`), ok("VARBINARY(\"\\x1c\\xe5\\x1d\\xdd\\x1d\\xdd\\x1c`\\x1cG\\x1e3\")")},
 		{"case when 1 = 1 then 2 else 3 end", ok("CASE WHEN INT64(1) = INT64(1) THEN INT64(2) ELSE INT64(3)"), ok("INT64(2)")},
 		{"case when null then 2 when 12 = 4 then 'ohnoes' else 42 end", ok(`CASE WHEN NULL THEN INT64(2) WHEN INT64(12) = INT64(4) THEN VARCHAR("ohnoes") ELSE INT64(42)`), ok(`VARCHAR("42")`)},
 		{"convert('a', char(2) character set utf8mb4)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET utf8mb4_0900_ai_ci)`), ok(`VARCHAR("a")`)},
@@ -96,9 +98,9 @@ func TestTranslateSimplification(t *testing.T) {
 		{"date'2022-10-03'", ok(`DATE("2022-10-03")`), ok(`DATE("2022-10-03")`)},
 		{"time'12:34:45'", ok(`TIME("12:34:45")`), ok(`TIME("12:34:45")`)},
 		{"timestamp'2022-10-03 12:34:45'", ok(`DATETIME("2022-10-03 12:34:45")`), ok(`DATETIME("2022-10-03 12:34:45")`)},
-		{"date'2022'", err(`incorrect DATE value: '2022'`), err(`incorrect DATE value: '2022'`)},
-		{"time'2022-10-03'", err(`incorrect TIME value: '2022-10-03'`), err(`incorrect TIME value: '2022-10-03'`)},
-		{"timestamp'2022-10-03'", err(`incorrect DATETIME value: '2022-10-03'`), err(`incorrect DATETIME value: '2022-10-03'`)},
+		{"date'2022'", err(`Incorrect DATE value: '2022'`), err(`Incorrect DATE value: '2022'`)},
+		{"time'2022-10-03'", err(`Incorrect TIME value: '2022-10-03'`), err(`Incorrect TIME value: '2022-10-03'`)},
+		{"timestamp'2022-10-03'", err(`Incorrect DATETIME value: '2022-10-03'`), err(`Incorrect DATETIME value: '2022-10-03'`)},
 		{"ifnull(12, 23)", ok(`CASE WHEN INT64(12) IS NULL THEN INT64(23) ELSE INT64(12)`), ok(`INT64(12)`)},
 		{"ifnull(null, 23)", ok(`CASE WHEN NULL IS NULL THEN INT64(23) ELSE NULL`), ok(`INT64(23)`)},
 		{"nullif(1, 1)", ok(`CASE WHEN INT64(1) = INT64(1) THEN NULL ELSE INT64(1)`), ok(`NULL`)},
@@ -106,8 +108,8 @@ func TestTranslateSimplification(t *testing.T) {
 		{"12 between 5 and 20", ok("(INT64(12) >= INT64(5)) AND (INT64(12) <= INT64(20))"), ok(`INT64(1)`)},
 		{"12 not between 5 and 20", ok("(INT64(12) < INT64(5)) OR (INT64(12) > INT64(20))"), ok(`INT64(0)`)},
 		{"2 not between 5 and 20", ok("(INT64(2) < INT64(5)) OR (INT64(2) > INT64(20))"), ok(`INT64(1)`)},
-		{"column0->\"$.c\"", ok("JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\"))"), ok("JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\"))")},
-		{"column0->>\"$.c\"", ok("JSON_UNQUOTE(JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\")))"), ok("JSON_UNQUOTE(JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\")))")},
+		{"json->\"$.c\"", ok("JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\"))"), ok("JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\"))")},
+		{"json->>\"$.c\"", ok("JSON_UNQUOTE(JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\")))"), ok("JSON_UNQUOTE(JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\")))")},
 	}
 
 	for _, tc := range testCases {
@@ -117,8 +119,18 @@ func TestTranslateSimplification(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			fields := FieldResolver([]*querypb.Field{
+				{Name: "json", Type: sqltypes.TypeJSON, Charset: collations.CollationUtf8mb4ID},
+			})
+
+			cfg := &Config{
+				ResolveColumn: fields.Column,
+				Collation:     collations.Default(),
+				Optimization:  OptimizationLevelNone,
+			}
+
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			converted, err := TranslateEx(astExpr, &LookupIntegrationTest{45}, false)
+			converted, err := Translate(astExpr, cfg)
 			if err != nil {
 				if tc.converted.err == "" {
 					t.Fatalf("failed to Convert (simplify=false): %v", err)
@@ -130,7 +142,8 @@ func TestTranslateSimplification(t *testing.T) {
 			}
 			assert.Equal(t, tc.converted.literal, FormatExpr(converted))
 
-			simplified, err := TranslateEx(astExpr, &LookupIntegrationTest{45}, true)
+			cfg.Optimization = OptimizationLevelSimplify
+			simplified, err := Translate(astExpr, cfg)
 			if err != nil {
 				if tc.simplified.err == "" {
 					t.Fatalf("failed to Convert (simplify=true): %v", err)
@@ -287,25 +300,24 @@ func TestEvaluate(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Translate(astExpr, LookupDefaultCollation(45))
+			sqltypesExpr, err := Translate(astExpr, &Config{Collation: collations.Default()})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
-			env := EnvWithBindVars(
-				map[string]*querypb.BindVariable{
-					"exp":                  sqltypes.Int64BindVariable(66),
-					"string_bind_variable": sqltypes.StringBindVariable("bar"),
-					"int32_bind_variable":  sqltypes.Int32BindVariable(20),
-					"uint32_bind_variable": sqltypes.Uint32BindVariable(21),
-					"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
-					"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
-				}, 0)
+			env := NewExpressionEnv(context.Background(), map[string]*querypb.BindVariable{
+				"exp":                  sqltypes.Int64BindVariable(66),
+				"string_bind_variable": sqltypes.StringBindVariable("bar"),
+				"int32_bind_variable":  sqltypes.Int32BindVariable(20),
+				"uint32_bind_variable": sqltypes.Uint32BindVariable(21),
+				"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
+				"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
+			}, nil)
 
 			// When
 			r, err := env.Evaluate(sqltypesExpr)
 
 			// Then
 			require.NoError(t, err)
-			assert.Equal(t, test.expected, r.Value(), "expected %s", test.expected.String())
+			assert.Equal(t, test.expected, r.Value(collations.Default()), "expected %s", test.expected.String())
 		})
 	}
 }
@@ -333,7 +345,7 @@ func TestEvaluateTuple(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Translate(astExpr, LookupDefaultCollation(45))
+			sqltypesExpr, err := Translate(astExpr, &Config{Collation: collations.Default()})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 
@@ -356,12 +368,6 @@ func TestTranslationFailures(t *testing.T) {
 		expectedErr string
 	}{
 		{
-			expression:  "cast('2023-01-07 12:34:56' as date)",
-			expectedErr: "Unsupported type conversion: DATE",
-		}, {
-			expression:  "cast('2023-01-07 12:34:56' as datetime(5))",
-			expectedErr: "Unsupported type conversion: DATETIME(5)",
-		}, {
 			expression:  "cast('3.4' as FLOAT)",
 			expectedErr: "Unsupported type conversion: FLOAT",
 		}, {
@@ -376,7 +382,7 @@ func TestTranslationFailures(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + testcase.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			_, err = Translate(astExpr, LookupDefaultCollation(45))
+			_, err = Translate(astExpr, &Config{Collation: collations.Default()})
 			require.EqualError(t, err, testcase.expectedErr)
 		})
 	}
@@ -412,7 +418,7 @@ func TestCardinalityWithBindVariables(t *testing.T) {
 				}
 
 				astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-				_, err = Translate(astExpr, LookupDefaultCollation(45))
+				_, err = Translate(astExpr, &Config{Collation: collations.Default()})
 				return err
 			}()
 

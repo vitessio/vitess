@@ -17,15 +17,16 @@ limitations under the License.
 package binlog
 
 import (
+	"context"
 	crand "crypto/rand"
 	"fmt"
 	"math"
 	"math/big"
 	"sync"
 
-	"context"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -99,12 +100,12 @@ func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
 
 // StartBinlogDumpFromCurrent requests a replication binlog dump from
 // the current position.
-func (bc *BinlogConnection) StartBinlogDumpFromCurrent(ctx context.Context) (mysql.Position, <-chan mysql.BinlogEvent, <-chan error, error) {
+func (bc *BinlogConnection) StartBinlogDumpFromCurrent(ctx context.Context) (replication.Position, <-chan mysql.BinlogEvent, <-chan error, error) {
 	ctx, bc.cancel = context.WithCancel(ctx)
 
 	position, err := bc.Conn.PrimaryPosition()
 	if err != nil {
-		return mysql.Position{}, nil, nil, fmt.Errorf("failed to get primary position: %v", err)
+		return replication.Position{}, nil, nil, fmt.Errorf("failed to get primary position: %v", err)
 	}
 
 	c, e, err := bc.StartBinlogDumpFromPosition(ctx, "", position)
@@ -120,7 +121,7 @@ func (bc *BinlogConnection) StartBinlogDumpFromCurrent(ctx context.Context) (mys
 // by canceling the context.
 //
 // Note the context is valid and used until eventChan is closed.
-func (bc *BinlogConnection) StartBinlogDumpFromPosition(ctx context.Context, binlogFilename string, startPos mysql.Position) (<-chan mysql.BinlogEvent, <-chan error, error) {
+func (bc *BinlogConnection) StartBinlogDumpFromPosition(ctx context.Context, binlogFilename string, startPos replication.Position) (<-chan mysql.BinlogEvent, <-chan error, error) {
 	ctx, bc.cancel = context.WithCancel(ctx)
 
 	log.Infof("sending binlog dump command: startPos=%v, serverID=%v", startPos, bc.serverID)
@@ -156,7 +157,7 @@ func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.Binlog
 				case errChan <- err:
 				case <-ctx.Done():
 				}
-				if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.CRServerLost {
+				if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.CRServerLost {
 					// CRServerLost = Lost connection to MySQL server during query
 					// This is not necessarily an error. It could just be that we closed
 					// the connection from outside.

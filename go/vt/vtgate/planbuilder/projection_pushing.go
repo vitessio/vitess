@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -39,11 +40,11 @@ func pushProjection(
 		// All of these either push to the single source, or push to the LHS
 		src := node.Inputs()[0]
 		return pushProjection(ctx, expr, src, inner, reuseCol, hasAggregation)
-	case *routeGen4:
+	case *route:
 		return addExpressionToRoute(ctx, node, expr, reuseCol)
 	case *hashJoin:
 		return pushProjectionIntoHashJoin(ctx, expr, node, reuseCol, inner, hasAggregation)
-	case *joinGen4:
+	case *join:
 		return pushProjectionIntoJoin(ctx, expr, node, reuseCol, inner, hasAggregation)
 	case *simpleProjection:
 		return pushProjectionIntoSimpleProj(ctx, expr, node, inner, hasAggregation, reuseCol)
@@ -53,7 +54,7 @@ func pushProjection(
 		return pushProjectionIntoVindexFunc(node, expr, reuseCol)
 	case *semiJoin:
 		return pushProjectionIntoSemiJoin(ctx, expr, reuseCol, node, inner, hasAggregation)
-	case *concatenateGen4:
+	case *concatenate:
 		return pushProjectionIntoConcatenate(ctx, expr, hasAggregation, node, inner, reuseCol)
 	default:
 		return 0, false, vterrors.VT13001(fmt.Sprintf("push projection does not yet support: %T", node))
@@ -69,7 +70,7 @@ func pushProjectionIntoVindexFunc(node *vindexFunc, expr *sqlparser.AliasedExpr,
 	return i /* col added */, len(node.eVindexFunc.Cols) > colsBefore, nil
 }
 
-func pushProjectionIntoConcatenate(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, hasAggregation bool, node *concatenateGen4, inner bool, reuseCol bool) (int, bool, error) {
+func pushProjectionIntoConcatenate(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, hasAggregation bool, node *concatenate, inner bool, reuseCol bool) (int, bool, error) {
 	if hasAggregation {
 		return 0, false, vterrors.VT12001("aggregation on UNIONs")
 	}
@@ -137,13 +138,10 @@ func pushProjectionIntoOA(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 	if err != nil {
 		return 0, false, err
 	}
-	node.aggregates = append(node.aggregates, &engine.AggregateParams{
-		Opcode:   engine.AggregateRandom,
-		Col:      offset,
-		Alias:    expr.ColumnName(),
-		Expr:     expr.Expr,
-		Original: expr,
-	})
+	aggr := engine.NewAggregateParam(popcode.AggregateAnyValue, offset, expr.ColumnName())
+	aggr.Expr = expr.Expr
+	aggr.Original = expr
+	node.aggregates = append(node.aggregates, aggr)
 	return offset, true, nil
 }
 
@@ -171,7 +169,7 @@ func pushProjectionIntoSimpleProj(
 func pushProjectionIntoJoin(
 	ctx *plancontext.PlanningContext,
 	expr *sqlparser.AliasedExpr,
-	node *joinGen4,
+	node *join,
 	reuseCol, inner, hasAggregation bool,
 ) (int, bool, error) {
 	lhsSolves := node.Left.ContainsTables()
@@ -206,22 +204,22 @@ func pushProjectionIntoJoin(
 			return 0, false, vterrors.VT12001("cross-shard query with aggregates")
 		}
 		// now we break the expression into left and right side dependencies and rewrite the left ones to bind variables
-		bvName, cols, rewrittenExpr, err := operators.BreakExpressionInLHSandRHS(ctx, expr.Expr, lhsSolves)
+		joinCol, err := operators.BreakExpressionInLHSandRHS(ctx, expr.Expr, lhsSolves)
 		if err != nil {
 			return 0, false, err
 		}
 		// go over all the columns coming from the left side of the tree and push them down. While at it, also update the bind variable map.
 		// It is okay to reuse the columns on the left side since
 		// the final expression which will be selected will be pushed into the right side.
-		for i, col := range cols {
+		for i, col := range joinCol.LHSExprs {
 			colOffset, _, err := pushProjection(ctx, &sqlparser.AliasedExpr{Expr: col}, node.Left, inner, true, false)
 			if err != nil {
 				return 0, false, err
 			}
-			node.Vars[bvName[i]] = colOffset
+			node.Vars[joinCol.BvNames[i]] = colOffset
 		}
 		// push the rewritten expression on the right side of the tree. Here we should take care whether we want to reuse the expression or not.
-		expr.Expr = rewrittenExpr
+		expr.Expr = joinCol.RHSExpr
 		offset, added, err := pushProjection(ctx, expr, node.Right, inner && node.Opcode != engine.LeftJoin, passDownReuseCol, false)
 		if err != nil {
 			return 0, false, err
@@ -294,7 +292,7 @@ func pushProjectionIntoHashJoin(
 	return len(node.Cols) - 1, true, nil
 }
 
-func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *routeGen4, expr *sqlparser.AliasedExpr, reuseCol bool) (int, bool, error) {
+func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *route, expr *sqlparser.AliasedExpr, reuseCol bool) (int, bool, error) {
 	if reuseCol {
 		if i := checkIfAlreadyExists(expr, rb.Select, ctx.SemTable); i != -1 {
 			return i, false, nil

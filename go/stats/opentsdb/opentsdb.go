@@ -113,7 +113,7 @@ func InitWithoutServenv(prefix string) {
 
 	stats.RegisterPushBackend("opentsdb", backend)
 
-	http.HandleFunc("/debug/opentsdb", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/opentsdb", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		dataPoints := (*backend).getDataPoints()
 		sort.Sort(byMetric(dataPoints))

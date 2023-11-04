@@ -24,6 +24,8 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 func insertInitialDataIntoExternalCluster(t *testing.T, conn *mysql.Conn) {
@@ -109,7 +111,7 @@ func TestMigrate(t *testing.T) {
 			"--source=ext1.rating", "create", ksWorkflow); err != nil {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
 		}
-		waitForWorkflowState(t, vc, ksWorkflow, workflowStateRunning)
+		waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)
 		waitForRowCount(t, vtgateConn, "product:0", "rating", 2)
 		waitForRowCount(t, vtgateConn, "product:0", "review", 3)

@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
-	"time"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tableaclpb "vitess.io/vitess/go/vt/proto/tableacl"
@@ -126,8 +125,4 @@ func checkAccess(config *tableaclpb.Config, tableName string, role tableacl.Role
 		return fmt.Errorf("got %v, want %v", got, want)
 	}
 	return nil
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }

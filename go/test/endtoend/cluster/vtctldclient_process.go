@@ -92,3 +92,41 @@ func VtctldClientProcessInstance(hostname string, grpcPort int, tmpDirectory str
 	}
 	return vtctldclient
 }
+
+// PlannedReparentShard executes vtctlclient command to make specified tablet the primary for the shard.
+func (vtctldclient *VtctldClientProcess) PlannedReparentShard(Keyspace string, Shard string, alias string) (err error) {
+	output, err := vtctldclient.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		fmt.Sprintf("%s/%s", Keyspace, Shard),
+		"--new-primary", alias)
+	if err != nil {
+		log.Errorf("error in PlannedReparentShard output %s, err %s", output, err.Error())
+	}
+	return err
+}
+
+// CreateKeyspace executes the vtctl command to create a keyspace
+func (vtctldclient *VtctldClientProcess) CreateKeyspace(keyspaceName string, sidecarDBName string) (err error) {
+	var output string
+	// For upgrade/downgrade tests where an older version is also used.
+	if vtctldclient.VtctldClientMajorVersion < 17 {
+		log.Errorf("CreateKeyspace does not support the --sidecar-db-name flag in vtctl version %d; ignoring...", vtctldclient.VtctldClientMajorVersion)
+		output, err = vtctldclient.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName)
+	} else {
+		output, err = vtctldclient.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName, "--sidecar-db-name", sidecarDBName)
+	}
+	if err != nil {
+		log.Errorf("CreateKeyspace returned err: %s, output: %s", err, output)
+	}
+	return err
+}
+
+// OnlineDDLShowRecent responds with recent schema migration list
+func (vtctldclient *VtctldClientProcess) OnlineDDLShowRecent(Keyspace string) (result string, err error) {
+	return vtctldclient.ExecuteCommandWithOutput(
+		"OnlineDDL",
+		"show",
+		Keyspace,
+		"recent",
+	)
+}

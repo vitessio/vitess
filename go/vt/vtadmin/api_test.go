@@ -803,8 +803,7 @@ func TestFindSchema(t *testing.T) {
 
 		if schema != nil {
 			// Clone so our mutation below doesn't trip the race detector.
-			schema = proto.Clone(schema).(*vtadminpb.Schema)
-
+			schema = schema.CloneVT()
 			for _, td := range schema.TableDefinitions {
 				// Zero these out because they're non-deterministic and also not
 				// relevant to the final result.
@@ -1050,19 +1049,19 @@ func TestGetKeyspace(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			topos := make([]*topo.Server, len(tt.clusterShards))
 			vtctlds := make([]vtctlservicepb.VtctldServer, len(tt.clusterShards))
 
 			for i, shards := range tt.clusterShards {
-				ts := memorytopo.NewServer("cell1")
+				ts := memorytopo.NewServer(ctx, "cell1")
 				testutil.AddShards(ctx, t, ts, shards...)
 				topos[i] = ts
 				vtctlds[i] = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -1282,20 +1281,20 @@ func TestGetKeyspaces(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			// Note that these test cases were written prior to the existence of
 			// WithTestServers, so they are all written with the assumption that
 			// there are exactly 2 clusters.
 			topos := []*topo.Server{
-				memorytopo.NewServer("c0_cell1"),
-				memorytopo.NewServer("c1_cell1"),
+				memorytopo.NewServer(ctx, "c0_cell1"),
+				memorytopo.NewServer(ctx, "c1_cell1"),
 			}
 
 			for cdx, cks := range tt.clusterKeyspaces {
@@ -1346,7 +1345,8 @@ func TestGetKeyspaces(t *testing.T) {
 }
 
 func TestGetSchema(t *testing.T) {
-	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	tests := []struct {
 		name      string
@@ -1361,7 +1361,7 @@ func TestGetSchema(t *testing.T) {
 		{
 			name:      "success",
 			clusterID: 1,
-			ts:        memorytopo.NewServer("zone1"),
+			ts:        memorytopo.NewServer(ctx, "zone1"),
 			tmc: &testutil.TabletManagerClient{
 				GetSchemaResults: map[string]struct {
 					Schema *tabletmanagerdatapb.SchemaDefinition
@@ -1416,7 +1416,7 @@ func TestGetSchema(t *testing.T) {
 		{
 			name:      "cluster not found",
 			clusterID: 1, // results in clusterId == "c1"
-			ts:        memorytopo.NewServer("zone1"),
+			ts:        memorytopo.NewServer(ctx, "zone1"),
 			tablets:   nil,
 			req: &vtadminpb.GetSchemaRequest{
 				ClusterId: "c2",
@@ -1429,7 +1429,7 @@ func TestGetSchema(t *testing.T) {
 		{
 			name:      "tablet not found for keyspace",
 			clusterID: 1,
-			ts:        memorytopo.NewServer("zone1"),
+			ts:        memorytopo.NewServer(ctx, "zone1"),
 			tablets: []*vtadminpb.Tablet{
 				{
 					Cluster: &vtadminpb.Cluster{
@@ -1457,7 +1457,7 @@ func TestGetSchema(t *testing.T) {
 		{
 			name:      "no serving tablet found for keyspace",
 			clusterID: 1,
-			ts:        memorytopo.NewServer("zone1"),
+			ts:        memorytopo.NewServer(ctx, "zone1"),
 			tablets: []*vtadminpb.Tablet{
 				{
 					Cluster: &vtadminpb.Cluster{
@@ -1485,7 +1485,7 @@ func TestGetSchema(t *testing.T) {
 		{
 			name:      "error in GetSchema call",
 			clusterID: 1,
-			ts:        memorytopo.NewServer("zone1"),
+			ts:        memorytopo.NewServer(ctx, "zone1"),
 			tmc: &testutil.TabletManagerClient{
 				GetSchemaResults: map[string]struct {
 					Schema *tabletmanagerdatapb.SchemaDefinition
@@ -1535,13 +1535,13 @@ func TestGetSchema(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return grpcvtctldserver.NewVtctldServer(ts)
@@ -1570,7 +1570,7 @@ func TestGetSchema(t *testing.T) {
 
 				if resp != nil {
 					// Clone so our mutation below doesn't trip the race detector.
-					resp = proto.Clone(resp).(*vtadminpb.Schema)
+					resp = resp.CloneVT()
 				}
 
 				assert.NoError(t, err)
@@ -1580,8 +1580,6 @@ func TestGetSchema(t *testing.T) {
 	}
 
 	t.Run("size aggregation", func(t *testing.T) {
-		t.Parallel()
-
 		c1pb := &vtadminpb.Cluster{
 			Id:   "c1",
 			Name: "cluster1",
@@ -1730,8 +1728,7 @@ func TestGetSchema(t *testing.T) {
 
 		if schema != nil {
 			// Clone so our mutation below doesn't trip the race detector.
-			schema = proto.Clone(schema).(*vtadminpb.Schema)
-
+			schema = schema.CloneVT()
 			for _, td := range schema.TableDefinitions {
 				// Zero these out because they're non-deterministic and also not
 				// relevant to the final result.
@@ -2176,8 +2173,6 @@ func TestGetSchemas(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		// Note that these test cases were written prior to the existence of
 		// WithTestServers, so they are all written with the assumption that
@@ -2186,10 +2181,12 @@ func TestGetSchemas(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
 			topos := []*topo.Server{
-				memorytopo.NewServer("c0_cell1"),
-				memorytopo.NewServer("c1_cell1"),
+				memorytopo.NewServer(ctx, "c0_cell1"),
+				memorytopo.NewServer(ctx, "c1_cell1"),
 			}
 
 			tmc := testutil.TabletManagerClient{
@@ -2469,7 +2466,7 @@ func TestGetSchemas(t *testing.T) {
 		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
 		defer api.Close()
 
-		resp, err := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{
+		resp, err := api.GetSchemas(context.Background(), &vtadminpb.GetSchemasRequest{
 			TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 				AggregateSizes: true,
 			},
@@ -2539,8 +2536,7 @@ func TestGetSchemas(t *testing.T) {
 			// Clone schemas so our mutations below don't trip the race detector.
 			schemas := make([]*vtadminpb.Schema, len(resp.Schemas))
 			for i, schema := range resp.Schemas {
-				schema := proto.Clone(schema).(*vtadminpb.Schema)
-
+				schema := schema.CloneVT()
 				for _, td := range schema.TableDefinitions {
 					// Zero these out because they're non-deterministic and also not
 					// relevant to the final result.
@@ -2557,6 +2553,288 @@ func TestGetSchemas(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Truef(t, proto.Equal(expected, resp), "expected: %v, got: %v", expected, resp)
 	})
+}
+
+func TestGetSrvKeyspace(t *testing.T) {
+	t.Parallel()
+
+	clusterID := "c0"
+	clusterName := "cluster0"
+
+	tests := []struct {
+		name             string
+		cells            []string
+		keyspace         string
+		cellSrvKeyspaces map[string]*topodatapb.SrvKeyspace
+		req              *vtadminpb.GetSrvKeyspaceRequest
+		expected         *vtctldatapb.GetSrvKeyspacesResponse
+		shouldErr        bool
+	}{
+		{
+			name:     "success",
+			cells:    []string{"zone0"},
+			keyspace: "testkeyspace",
+			cellSrvKeyspaces: map[string]*topodatapb.SrvKeyspace{
+				"zone0": {
+					Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+						{
+							ServedType: topodatapb.TabletType_REPLICA,
+							ShardTabletControls: []*topodatapb.ShardTabletControl{
+								{
+									Name:                 "-",
+									QueryServiceDisabled: false,
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetSrvKeyspaceRequest{
+				ClusterId: clusterID,
+				Keyspace:  "testkeyspace",
+				Cells:     []string{"zone0"},
+			},
+			expected: &vtctldatapb.GetSrvKeyspacesResponse{
+				SrvKeyspaces: map[string]*topodatapb.SrvKeyspace{
+					"zone0": {
+						Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+							{
+								ServedType: topodatapb.TabletType_REPLICA,
+								ShardTabletControls: []*topodatapb.ShardTabletControl{
+									{
+										Name:                 "-",
+										QueryServiceDisabled: false,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "cluster doesn't exist",
+			req: &vtadminpb.GetSrvKeyspaceRequest{
+				Cells:     []string{"doesnt-matter"},
+				ClusterId: "doesnt-exist",
+				Keyspace:  "doesnt-matter",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			tmc := testutil.TabletManagerClient{}
+
+			toposerver := memorytopo.NewServer(ctx, tt.cells...)
+
+			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return grpcvtctldserver.NewVtctldServer(ts)
+			})
+
+			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
+				for cell, sks := range tt.cellSrvKeyspaces {
+					err := toposerver.UpdateSrvKeyspace(ctx, cell, tt.keyspace, sks)
+					require.NoError(t, err)
+				}
+
+				clusters := []*cluster.Cluster{
+					vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
+						Cluster: &vtadminpb.Cluster{
+							Id:   clusterID,
+							Name: clusterName,
+						},
+						VtctldClient: vtctldClient,
+					}),
+				}
+
+				api := NewAPI(clusters, Options{})
+				resp, err := api.GetSrvKeyspace(ctx, tt.req)
+
+				if tt.shouldErr {
+					assert.Error(t, err)
+					return
+				}
+
+				require.NoError(t, err)
+				assert.Truef(t, proto.Equal(tt.expected, resp), "expected %v, got %v", tt.expected, resp)
+			})
+		})
+	}
+}
+
+func TestGetSrvKeyspaces(t *testing.T) {
+	t.Parallel()
+
+	clusterID := "c0"
+	clusterName := "cluster0"
+
+	tests := []struct {
+		name             string
+		cells            []string
+		keyspaces        []*vtctldatapb.Keyspace
+		cellSrvKeyspaces map[string]map[string]*topodatapb.SrvKeyspace
+		req              *vtadminpb.GetSrvKeyspacesRequest
+		expected         *vtadminpb.GetSrvKeyspacesResponse
+		shouldErr        bool
+	}{
+		{
+			name:  "success",
+			cells: []string{"zone0"},
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "keyspace0",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+				{
+					Name:     "keyspace1",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			cellSrvKeyspaces: map[string]map[string]*topodatapb.SrvKeyspace{
+				"keyspace0": {
+					"zone0": {
+						Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+							{
+								ServedType: topodatapb.TabletType_REPLICA,
+								ShardTabletControls: []*topodatapb.ShardTabletControl{
+									{
+										Name:                 "-",
+										QueryServiceDisabled: false,
+									},
+								},
+							},
+						},
+					},
+				},
+				"keyspace1": {
+					"zone0": {
+						Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+							{
+								ServedType: topodatapb.TabletType_REPLICA,
+								ShardTabletControls: []*topodatapb.ShardTabletControl{
+									{
+										Name:                 "-",
+										QueryServiceDisabled: false,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetSrvKeyspacesRequest{
+				ClusterIds: []string{clusterID},
+				Cells:      []string{"zone0"},
+			},
+			expected: &vtadminpb.GetSrvKeyspacesResponse{
+				SrvKeyspaces: map[string]*vtctldatapb.GetSrvKeyspacesResponse{
+					"keyspace0": {
+						SrvKeyspaces: map[string]*topodatapb.SrvKeyspace{
+							"zone0": {
+								Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+									{
+										ServedType: topodatapb.TabletType_REPLICA,
+										ShardTabletControls: []*topodatapb.ShardTabletControl{
+											{
+												Name:                 "-",
+												QueryServiceDisabled: false,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					"keyspace1": {
+						SrvKeyspaces: map[string]*topodatapb.SrvKeyspace{
+							"zone0": {
+								Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+									{
+										ServedType: topodatapb.TabletType_REPLICA,
+										ShardTabletControls: []*topodatapb.ShardTabletControl{
+											{
+												Name:                 "-",
+												QueryServiceDisabled: false,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "cluster doesn't exist",
+			req: &vtadminpb.GetSrvKeyspacesRequest{
+				Cells:      []string{"doesnt-matter"},
+				ClusterIds: []string{"doesnt-exist"},
+			},
+			expected: &vtadminpb.GetSrvKeyspacesResponse{},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			tmc := testutil.TabletManagerClient{}
+
+			toposerver := memorytopo.NewServer(ctx, tt.cells...)
+
+			for _, ks := range tt.keyspaces {
+				testutil.AddKeyspace(ctx, t, toposerver, ks)
+			}
+
+			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return grpcvtctldserver.NewVtctldServer(ts)
+			})
+
+			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
+				for keyspace, sks := range tt.cellSrvKeyspaces {
+					for cell, sk := range sks {
+						err := toposerver.UpdateSrvKeyspace(ctx, cell, keyspace, sk)
+						require.NoError(t, err)
+					}
+				}
+
+				clusters := []*cluster.Cluster{
+					vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
+						Cluster: &vtadminpb.Cluster{
+							Id:   clusterID,
+							Name: clusterName,
+						},
+						VtctldClient: vtctldClient,
+					}),
+				}
+
+				api := NewAPI(clusters, Options{})
+				resp, err := api.GetSrvKeyspaces(ctx, tt.req)
+
+				if tt.shouldErr {
+					assert.Error(t, err)
+					return
+				}
+
+				require.NoError(t, err)
+				assert.Truef(t, proto.Equal(tt.expected, resp), "expected %v, got %v", tt.expected, resp)
+			})
+		})
+	}
 }
 
 func TestGetSrvVSchema(t *testing.T) {
@@ -2675,17 +2953,17 @@ func TestGetSrvVSchema(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
 			tmc := testutil.TabletManagerClient{}
 
-			toposerver := memorytopo.NewServer(tt.cells...)
+			toposerver := memorytopo.NewServer(ctx, tt.cells...)
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return grpcvtctldserver.NewVtctldServer(ts)
@@ -2969,17 +3247,17 @@ func TestGetSrvVSchemas(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
 			tmc := testutil.TabletManagerClient{}
 
-			toposerver := memorytopo.NewServer(tt.cells...)
+			toposerver := memorytopo.NewServer(ctx, tt.cells...)
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return grpcvtctldserver.NewVtctldServer(ts)
@@ -4601,8 +4879,6 @@ func TestGetWorkflows(t *testing.T) {
 }
 
 func TestVTExplain(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
 		name          string
 		keyspaces     []*vtctldatapb.Keyspace
@@ -4820,15 +5096,13 @@ func TestVTExplain(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			toposerver := memorytopo.NewServer("c0_cell1")
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			toposerver := memorytopo.NewServer(ctx, "c0_cell1")
 
 			tmc := testutil.TabletManagerClient{
 				GetSchemaResults: map[string]struct {
@@ -4925,6 +5199,7 @@ func TestServeHTTP(t *testing.T) {
 			},
 		},
 	}.Cluster(context.Background())
+	defer testCluster.Close()
 
 	tests := []struct {
 		name                  string

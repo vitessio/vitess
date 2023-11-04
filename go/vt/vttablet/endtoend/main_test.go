@@ -17,6 +17,7 @@ limitations under the License.
 package endtoend
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -84,7 +85,9 @@ func TestMain(m *testing.M) {
 
 		connParams = cluster.MySQLConnParams()
 		connAppDebugParams = cluster.MySQLAppDebugConnParams()
-		err = framework.StartServer(connParams, connAppDebugParams, cluster.DbName())
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		err = framework.StartServer(ctx, connParams, connAppDebugParams, cluster.DbName())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
@@ -208,7 +211,7 @@ var tableACLConfig = `{
     },
     {
       "name": "vitess",
-      "table_names_or_prefixes": ["vitess_a", "vitess_b", "vitess_c", "dual", "vitess_d", "vitess_temp", "vitess_e", "vitess_f", "vitess_mixed_case", "upsert_test", "vitess_strings", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_bit_default", "vitess_big", "vitess_stress", "vitess_view", "vitess_json", "vitess_bool", "vitess_autoinc_seq"],
+      "table_names_or_prefixes": ["vitess_a", "vitess_b", "vitess_c", "dual", "vitess_d", "vitess_temp", "vitess_temp1", "vitess_temp2", "vitess_temp3", "vitess_e", "vitess_f", "vitess_mixed_case", "upsert_test", "vitess_strings", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_bit_default", "vitess_big", "vitess_stress", "vitess_view", "vitess_json", "vitess_bool", "vitess_autoinc_seq"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
@@ -311,7 +314,7 @@ var tableACLConfig = `{
     },
     {
       "name": "vitess_healthstream",
-      "table_names_or_prefixes": ["vitess_sc1", "vitess_sc2"],
+      "table_names_or_prefixes": ["vitess_sc1", "vitess_sc2", "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]

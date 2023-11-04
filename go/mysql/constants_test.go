@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/mysql/sqlerror"
 )
 
 func TestIsConnErr(t *testing.T) {
@@ -31,23 +33,23 @@ func TestIsConnErr(t *testing.T) {
 		in:   errors.New("t"),
 		want: false,
 	}, {
-		in:   NewSQLError(5, "", ""),
+		in:   sqlerror.NewSQLError(5, "", ""),
 		want: false,
 	}, {
-		in:   NewSQLError(CRServerGone, "", ""),
+		in:   sqlerror.NewSQLError(sqlerror.CRServerGone, "", ""),
 		want: true,
 	}, {
-		in:   NewSQLError(CRServerLost, "", ""),
+		in:   sqlerror.NewSQLError(sqlerror.CRServerLost, "", ""),
 		want: true,
 	}, {
-		in:   NewSQLError(ERQueryInterrupted, "", ""),
+		in:   sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, "", ""),
 		want: true,
 	}, {
-		in:   NewSQLError(CRCantReadCharset, "", ""),
+		in:   sqlerror.NewSQLError(sqlerror.CRCantReadCharset, "", ""),
 		want: false,
 	}}
 	for _, tcase := range testcases {
-		got := IsConnErr(tcase.in)
+		got := sqlerror.IsConnErr(tcase.in)
 		assert.Equal(t, tcase.want, got, "IsConnErr(%#v): %v, want %v", tcase.in, got, tcase.want)
 
 	}
@@ -61,23 +63,23 @@ func TestIsConnLostDuringQuery(t *testing.T) {
 		in:   errors.New("t"),
 		want: false,
 	}, {
-		in:   NewSQLError(5, "", ""),
+		in:   sqlerror.NewSQLError(5, "", ""),
 		want: false,
 	}, {
-		in:   NewSQLError(CRServerGone, "", ""),
+		in:   sqlerror.NewSQLError(sqlerror.CRServerGone, "", ""),
 		want: false,
 	}, {
-		in:   NewSQLError(CRServerLost, "", ""),
+		in:   sqlerror.NewSQLError(sqlerror.CRServerLost, "", ""),
 		want: true,
 	}, {
-		in:   NewSQLError(ERQueryInterrupted, "", ""),
+		in:   sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, "", ""),
 		want: false,
 	}, {
-		in:   NewSQLError(CRCantReadCharset, "", ""),
+		in:   sqlerror.NewSQLError(sqlerror.CRCantReadCharset, "", ""),
 		want: false,
 	}}
 	for _, tcase := range testcases {
-		got := IsConnLostDuringQuery(tcase.in)
+		got := sqlerror.IsConnLostDuringQuery(tcase.in)
 		assert.Equal(t, tcase.want, got, "IsConnLostDuringQuery(%#v): %v, want %v", tcase.in, got, tcase.want)
 
 	}

@@ -23,3 +23,6 @@ sql_mode = STRICT_TRANS_TABLES
 
 # set a short heartbeat interval in order to detect failures quickly
 slave_net_timeout = 4
+# Disabling `super-read-only`. `test-suite` is mainly used for `vttestserver`. Since `vttestserver` uses a single MySQL for primary and replicas,
+# so it is not possible to run it with `super-read-only`. Therefore, we are disabling it.
+super-read-only = false

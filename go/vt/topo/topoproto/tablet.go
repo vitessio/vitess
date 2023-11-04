@@ -186,6 +186,9 @@ func ParseTabletType(param string) (topodatapb.TabletType, error) {
 // ParseTabletTypes parses a comma separated list of tablet types and returns a slice with the respective enums.
 func ParseTabletTypes(param string) ([]topodatapb.TabletType, error) {
 	var tabletTypes []topodatapb.TabletType
+	if param == "" {
+		return tabletTypes, nil
+	}
 	for _, typeStr := range strings.Split(param, ",") {
 		t, err := ParseTabletType(typeStr)
 		if err != nil {
@@ -222,6 +225,40 @@ func MakeStringTypeList(types []topodatapb.TabletType) []string {
 	strs := make([]string, len(types))
 	for i, t := range types {
 		strs[i] = strings.ToLower(t.String())
+	}
+	sort.Strings(strs)
+	return strs
+}
+
+// MakeStringTypeUnsortedList returns a list of strings that match the input
+// without modifying the order in the list.
+func MakeStringTypeUnsortedList(types []topodatapb.TabletType) []string {
+	strs := make([]string, len(types))
+	for i, t := range types {
+		strs[i] = strings.ToLower(t.String())
+	}
+	return strs
+}
+
+// MakeStringTypeCSV returns the tablet types in CSV format.
+func MakeStringTypeCSV(types []topodatapb.TabletType) string {
+	return strings.Join(MakeStringTypeUnsortedList(types), ",")
+}
+
+// MakeUniqueStringTypeList returns a unique list of strings that match
+// the input list -- with duplicate types removed.
+// This is needed as some types are aliases for others, like BATCH and
+// RDONLY, so e.g. rdonly shows up twice in the list when using
+// AllTabletTypes.
+func MakeUniqueStringTypeList(types []topodatapb.TabletType) []string {
+	strs := make([]string, 0, len(types))
+	seen := make(map[string]struct{})
+	for _, t := range types {
+		if _, exists := seen[t.String()]; exists {
+			continue
+		}
+		strs = append(strs, strings.ToLower(t.String()))
+		seen[t.String()] = struct{}{}
 	}
 	sort.Strings(strs)
 	return strs

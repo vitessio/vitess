@@ -28,10 +28,13 @@ func CheckErrors(loaded []*packages.Package, skip func(fileName string) bool) er
 	var errors []string
 	for _, l := range loaded {
 		for _, e := range l.Errors {
-			idx := strings.Index(e.Pos, ":")
-			filePath := e.Pos[:idx]
-			_, fileName := path.Split(filePath)
-			if !skip(fileName) {
+			if idx := strings.Index(e.Pos, ":"); idx >= 0 {
+				filePath := e.Pos[:idx]
+				_, fileName := path.Split(filePath)
+				if !skip(fileName) {
+					errors = append(errors, e.Error())
+				}
+			} else {
 				errors = append(errors, e.Error())
 			}
 		}

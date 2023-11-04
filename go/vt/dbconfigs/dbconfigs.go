@@ -216,12 +216,12 @@ func (dbcfgs *DBConfigs) AppDebugWithDB() Connector {
 	return dbcfgs.makeParams(&dbcfgs.appdebugParams, true)
 }
 
-// AllPrivsConnector returns connection parameters for appdebug with no dbname set.
+// AllPrivsConnector returns connection parameters for allprivs with no dbname set.
 func (dbcfgs *DBConfigs) AllPrivsConnector() Connector {
 	return dbcfgs.makeParams(&dbcfgs.allprivsParams, false)
 }
 
-// AllPrivsWithDB returns connection parameters for appdebug with dbname set.
+// AllPrivsWithDB returns connection parameters for allprivs with dbname set.
 func (dbcfgs *DBConfigs) AllPrivsWithDB() Connector {
 	return dbcfgs.makeParams(&dbcfgs.allprivsParams, true)
 }
@@ -416,6 +416,6 @@ func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbname string)
 		replParams:         genParams,
 		externalReplParams: genParams,
 		DBName:             dbname,
-		Charset:            "utf8mb4_general_ci",
+		Charset:            "",
 	}
 }

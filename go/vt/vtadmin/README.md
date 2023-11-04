@@ -58,7 +58,7 @@ npm install
 
 # This should be the address you passed to `./vtadmin --addr`. For example,
 # "http://127.0.0.1:14200".
-export REACT_APP_VTADMIN_API_ADDRESS="${vtadmin_api_addr}"
-export REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS="true"
+export VITE_VTADMIN_API_ADDRESS="${vtadmin_api_addr}"
+export VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS="true"
 npm run start
 ```

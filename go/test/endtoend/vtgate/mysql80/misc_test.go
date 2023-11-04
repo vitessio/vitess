@@ -65,8 +65,8 @@ ts12 TIMESTAMP DEFAULT LOCALTIME()
 )`)
 	utils.Exec(t, conn, "drop table function_default")
 
-	// this query works because utc_timestamp will get parenthesised before reaching MySQL. However, this syntax is not supported in MySQL 8.0
-	utils.Exec(t, conn, `create table function_default (ts TIMESTAMP DEFAULT UTC_TIMESTAMP)`)
+	// this query works only as an expression.
+	utils.Exec(t, conn, `create table function_default (ts TIMESTAMP DEFAULT (UTC_TIMESTAMP))`)
 	utils.Exec(t, conn, "drop table function_default")
 
 	utils.Exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)

@@ -17,15 +17,16 @@ limitations under the License.
 package servenv
 
 import (
-	"html/template"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/google/safehtml/template"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/servenv/testutils"
 )
 
 func init() {
@@ -43,7 +44,7 @@ func init() {
 }
 
 func TestStatus(t *testing.T) {
-	server := httptest.NewServer(nil)
+	server := testutils.HTTPTestServer()
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + StatusURLPath())
@@ -68,7 +69,7 @@ func TestStatus(t *testing.T) {
 }
 
 func TestNamedStatus(t *testing.T) {
-	server := httptest.NewServer(nil)
+	server := testutils.HTTPTestServer()
 	defer server.Close()
 
 	name := "test"

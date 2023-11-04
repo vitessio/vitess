@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"testing"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -655,7 +656,7 @@ var TestStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
 	},
 	Serving: true,
 
-	TabletExternallyReparentedTimestamp: 1234589,
+	PrimaryTermStartTimestamp: 1234589,
 
 	RealtimeStats: &querypb.RealtimeStats{
 		CpuUsage:                      1.0,
@@ -681,7 +682,7 @@ func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*quer
 	if shr == nil {
 		shr = TestStreamHealthStreamHealthResponse
 	}
-	if err := callback(shr); err != nil {
+	if err := callback(shr); err != nil && err != io.EOF {
 		f.t.Logf("StreamHealth callback failed: %v", err)
 	}
 	return nil
@@ -697,6 +698,11 @@ func (f *FakeQueryService) VStreamRows(ctx context.Context, request *binlogdatap
 	panic("not implemented")
 }
 
+// VStreamTables is part of the QueryService interface.
+func (f *FakeQueryService) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(*binlogdatapb.VStreamTablesResponse) error) error {
+	panic("not implemented")
+}
+
 // VStreamResults is part of the QueryService interface.
 func (f *FakeQueryService) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	panic("not implemented")
@@ -704,6 +710,11 @@ func (f *FakeQueryService) VStreamResults(ctx context.Context, target *querypb.T
 
 // QueryServiceByAlias satisfies the Gateway interface
 func (f *FakeQueryService) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
+	panic("not implemented")
+}
+
+// GetServingKeyspaces returns list of serving keyspaces.
+func (f *FakeQueryService) GetServingKeyspaces() []string {
 	panic("not implemented")
 }
 

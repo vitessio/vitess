@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/collations/remote"
 )
 
@@ -78,7 +79,7 @@ func TestRemoteWildcardMatches(t *testing.T) {
 		{"Ǎḅeçd", "a%bd"},
 	}
 
-	for _, local := range collations.Local().AllCollations() {
+	for _, local := range colldata.All(collations.Local()) {
 		t.Run(local.Name(), func(t *testing.T) {
 			var remote = remote.NewCollation(conn, local.Name())
 			var err error

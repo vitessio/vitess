@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"io"
 
+	"vitess.io/vitess/go/mysql/replication"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -51,7 +52,7 @@ func (c *Conn) parseComBinlogDump(data []byte) (logFile string, binlogPos uint32
 	return logFile, binlogPos, nil
 }
 
-func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint64, position Position, err error) {
+func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint64, position replication.Position, err error) {
 	// see https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html
 	pos := 1
 
@@ -80,7 +81,7 @@ func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint6
 			return logFile, logPos, position, readPacketErr
 		}
 		if gtid := string(data[pos : pos+int(dataSize)]); gtid != "" {
-			position, err = DecodePosition(gtid)
+			position, err = replication.DecodePosition(gtid)
 			if err != nil {
 				return logFile, logPos, position, err
 			}

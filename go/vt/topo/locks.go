@@ -332,7 +332,7 @@ func (ts *Server) TryLockShard(ctx context.Context, keyspace, shard, action stri
 	return ts.internalLockShard(ctx, keyspace, shard, action, false)
 }
 
-// isBlocking is used to indicate whether the call should fail-fast or not.
+// internalLockShard is used to indicate whether the call should fail-fast or not.
 func (ts *Server) internalLockShard(ctx context.Context, keyspace, shard, action string, isBlocking bool) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {

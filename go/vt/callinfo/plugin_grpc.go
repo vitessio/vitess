@@ -19,11 +19,11 @@ package callinfo
 // This file implements the CallInfo interface for gRPC contexts.
 
 import (
-	"fmt"
-	"html/template"
-
 	"context"
+	"fmt"
 
+	"github.com/google/safehtml"
+	"github.com/google/safehtml/template"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 )
@@ -64,6 +64,18 @@ func (gci *gRPCCallInfoImpl) Text() string {
 	return fmt.Sprintf("%s:%s(gRPC)", gci.remoteAddr, gci.method)
 }
 
-func (gci *gRPCCallInfoImpl) HTML() template.HTML {
-	return template.HTML("<b>Method:</b> " + gci.method + " <b>Remote Addr:</b> " + gci.remoteAddr)
+var grpcTmpl = template.Must(template.New("tcs").Parse("<b>Method:</b> {{.Method}} <b>Remote Addr:</b> {{.RemoteAddr}}"))
+
+func (gci *gRPCCallInfoImpl) HTML() safehtml.HTML {
+	html, err := grpcTmpl.ExecuteToHTML(struct {
+		Method     string
+		RemoteAddr string
+	}{
+		Method:     gci.method,
+		RemoteAddr: gci.remoteAddr,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return html
 }

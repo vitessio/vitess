@@ -165,23 +165,23 @@ func TestNewValue(t *testing.T) {
 	}, {
 		inType: Int64,
 		inVal:  InvalidNeg,
-		outErr: "out of range",
+		outErr: `cannot parse int64 from "-9223372036854775809": overflow`,
 	}, {
 		inType: Int64,
 		inVal:  InvalidPos,
-		outErr: "out of range",
+		outErr: `cannot parse int64 from "18446744073709551616": overflow`,
 	}, {
 		inType: Uint64,
 		inVal:  "-1",
-		outErr: "invalid syntax",
+		outErr: `cannot parse uint64 from "-1"`,
 	}, {
 		inType: Uint64,
 		inVal:  InvalidPos,
-		outErr: "out of range",
+		outErr: `cannot parse uint64 from "18446744073709551616": overflow`,
 	}, {
 		inType: Float64,
 		inVal:  "a",
-		outErr: "invalid syntax",
+		outErr: `unparsed tail left after parsing float64 from "a"`,
 	}, {
 		inType: Expression,
 		inVal:  "a",

@@ -23,6 +23,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
+
+	"vitess.io/vitess/go/mysql/binlog"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -148,7 +151,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 	s.ServerID = 0x87654321
 
 	// With built-in begin.
-	event := NewMariaDBGTIDEvent(f, s, MariadbGTID{Domain: 0, Sequence: 0x123456789abcdef0}, true)
+	event := NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0x123456789abcdef0}, true)
 	require.True(t, event.IsValid(), "NewMariaDBGTIDEvent().IsValid() is false")
 	require.True(t, event.IsGTID(), "NewMariaDBGTIDEvent().IsGTID() if false")
 
@@ -159,7 +162,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 	require.NoError(t, err, "NewMariaDBGTIDEvent().GTID() returned error: %v", err)
 	require.True(t, hasBegin, "NewMariaDBGTIDEvent() didn't store hasBegin properly.")
 
-	mgtid, ok := gtid.(MariadbGTID)
+	mgtid, ok := gtid.(replication.MariadbGTID)
 	require.True(t, ok, "NewMariaDBGTIDEvent().GTID() returned a non-MariaDBGTID GTID")
 
 	if mgtid.Domain != 0 || mgtid.Server != 0x87654321 || mgtid.Sequence != 0x123456789abcdef0 {
@@ -167,7 +170,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 	}
 
 	// Without built-in begin.
-	event = NewMariaDBGTIDEvent(f, s, MariadbGTID{Domain: 0, Sequence: 0x123456789abcdef0}, false)
+	event = NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0x123456789abcdef0}, false)
 	require.True(t, event.IsValid(), "NewMariaDBGTIDEvent().IsValid() is false")
 	require.True(t, event.IsGTID(), "NewMariaDBGTIDEvent().IsGTID() if false")
 
@@ -178,7 +181,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 	require.NoError(t, err, "NewMariaDBGTIDEvent().GTID() returned error: %v", err)
 	require.False(t, hasBegin, "NewMariaDBGTIDEvent() didn't store hasBegin properly.")
 
-	mgtid, ok = gtid.(MariadbGTID)
+	mgtid, ok = gtid.(replication.MariadbGTID)
 	require.True(t, ok, "NewMariaDBGTIDEvent().GTID() returned a non-MariaDBGTID GTID")
 
 	if mgtid.Domain != 0 || mgtid.Server != 0x87654321 || mgtid.Sequence != 0x123456789abcdef0 {
@@ -195,16 +198,16 @@ func TestTableMapEvent(t *testing.T) {
 		Database: "my_database",
 		Name:     "my_table",
 		Types: []byte{
-			TypeLongLong,
-			TypeLongLong,
-			TypeLongLong,
-			TypeLongLong,
-			TypeLongLong,
-			TypeTime,
-			TypeLongLong,
-			TypeLongLong,
-			TypeLongLong,
-			TypeVarchar,
+			binlog.TypeLongLong,
+			binlog.TypeLongLong,
+			binlog.TypeLongLong,
+			binlog.TypeLongLong,
+			binlog.TypeLongLong,
+			binlog.TypeTime,
+			binlog.TypeLongLong,
+			binlog.TypeLongLong,
+			binlog.TypeLongLong,
+			binlog.TypeVarchar,
 		},
 		CanBeNull: NewServerBitmap(10),
 		Metadata: []uint16{
@@ -250,7 +253,7 @@ func TestLargeTableMapEvent(t *testing.T) {
 	metadata := make([]uint16, 0, colLen)
 
 	for i := 0; i < colLen; i++ {
-		types = append(types, TypeLongLong)
+		types = append(types, binlog.TypeLongLong)
 		metadata = append(metadata, 0)
 	}
 
@@ -302,8 +305,8 @@ func TestRowsEvent(t *testing.T) {
 		Database: "my_database",
 		Name:     "my_table",
 		Types: []byte{
-			TypeLong,
-			TypeVarchar,
+			binlog.TypeLong,
+			binlog.TypeVarchar,
 		},
 		CanBeNull: NewServerBitmap(2),
 		Metadata: []uint16{
@@ -424,7 +427,7 @@ func TestLargeRowsEvent(t *testing.T) {
 	metadata := make([]uint16, 0, colLen)
 
 	for i := 0; i < colLen; i++ {
-		types = append(types, TypeLong)
+		types = append(types, binlog.TypeLong)
 		metadata = append(metadata, 0)
 	}
 

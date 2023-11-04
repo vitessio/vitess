@@ -156,7 +156,16 @@ type streamExecuteAdapter struct {
 }
 
 func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
-	qr, err := a.recv()
+	var qr *querypb.QueryResult
+	var err error
+	for {
+		qr, err = a.recv()
+		if qr != nil || err != nil {
+			break
+		}
+		// we reach here, only when it is the last packet.
+		// as in the last packet we receive the session and there is no result
+	}
 	if err != nil {
 		return nil, vterrors.FromGRPC(err)
 	}
@@ -166,7 +175,7 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 	return sqltypes.CustomProto3ToResult(a.fields, qr), nil
 }
 
-func (conn *vtgateConn) StreamExecute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable) (sqltypes.ResultStream, error) {
+func (conn *vtgateConn) StreamExecute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, processResponse func(response *vtgatepb.StreamExecuteResponse)) (sqltypes.ResultStream, error) {
 	req := &vtgatepb.StreamExecuteRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		Query: &querypb.BoundQuery{
@@ -185,6 +194,7 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, session *vtgatepb.Ses
 			if err != nil {
 				return nil, err
 			}
+			processResponse(ser)
 			return ser.Result, nil
 		},
 	}, nil

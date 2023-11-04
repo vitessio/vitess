@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/safehtml/testconversions"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -204,12 +206,12 @@ func TestLogStatsFormatQuerySources(t *testing.T) {
 func TestLogStatsContextHTML(t *testing.T) {
 	html := "HtmlContext"
 	callInfo := &fakecallinfo.FakeCallInfo{
-		Html: html,
+		Html: testconversions.MakeHTMLForTest(html),
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	logStats := NewLogStats(ctx, "test")
-	if string(logStats.ContextHTML()) != html {
-		t.Fatalf("expect to get html: %s, but got: %s", html, string(logStats.ContextHTML()))
+	if logStats.ContextHTML().String() != html {
+		t.Fatalf("expect to get html: %s, but got: %s", html, logStats.ContextHTML().String())
 	}
 }
 

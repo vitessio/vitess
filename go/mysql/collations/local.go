@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -45,4 +46,15 @@ func Local() *Environment {
 // MySQL version for this Vitess deployment.
 func Default() ID {
 	return ID(Local().DefaultConnectionCharset())
+}
+
+func DefaultCollationForType(t sqltypes.Type) ID {
+	switch {
+	case sqltypes.IsText(t):
+		return Default()
+	case t == sqltypes.TypeJSON:
+		return CollationUtf8mb4ID
+	default:
+		return CollationBinaryID
+	}
 }

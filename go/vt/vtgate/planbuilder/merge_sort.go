@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -37,15 +36,6 @@ type mergeSort struct {
 	truncateColumnCount int
 }
 
-// newMergeSort builds a new mergeSort.
-func newMergeSort(rb *route) *mergeSort {
-	ms := &mergeSort{
-		resultsBuilder: newResultsBuilder(rb, nil),
-	}
-	ms.truncater = ms
-	return ms
-}
-
 // SetTruncateColumnCount satisfies the truncater interface.
 // This function records the truncate column count and sets
 // it later on the eroute during wire-up phase.
@@ -58,35 +48,8 @@ func (ms *mergeSort) Primitive() engine.Primitive {
 	return ms.input.Primitive()
 }
 
-// Wireup implements the logicalPlan interface
-func (ms *mergeSort) Wireup(plan logicalPlan, jt *jointab) error {
-	// If the route has to do the ordering, and if any columns are Text,
-	// we have to request the corresponding weight_string from mysql
-	// and use that value instead. This is because we cannot mimic
-	// mysql's collation behavior yet.
-	rb := ms.input.(*route)
-	for i, orderby := range rb.eroute.OrderBy {
-		rc := ms.resultColumns[orderby.Col]
-		// Add a weight_string column if we know that the column is a textual column or if its type is unknown
-		if sqltypes.IsText(rc.column.typ) || rc.column.typ == sqltypes.Null {
-			var err error
-			rb.eroute.OrderBy[i].WeightStringCol, err = rb.SupplyWeightString(orderby.Col, orderby.FromGroupBy)
-			if err != nil {
-				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
-				if isUnsupportedErr {
-					continue
-				}
-				return err
-			}
-			ms.truncateColumnCount = len(ms.resultColumns)
-		}
-	}
-	rb.eroute.TruncateColumnCount = ms.truncateColumnCount
-	return ms.input.Wireup(plan, jt)
-}
-
-func (ms *mergeSort) WireupGen4(ctx *plancontext.PlanningContext) error {
-	return ms.input.WireupGen4(ctx)
+func (ms *mergeSort) Wireup(ctx *plancontext.PlanningContext) error {
+	return ms.input.Wireup(ctx)
 }
 
 // OutputColumns implements the logicalPlan interface

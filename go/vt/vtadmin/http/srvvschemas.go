@@ -40,7 +40,7 @@ func GetSrvVSchemas(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	svs, err := api.server.GetSrvVSchemas(ctx, &vtadminpb.GetSrvVSchemasRequest{
 		Cells:      query["cell"],
-		ClusterIds: query["cluster"],
+		ClusterIds: query["cluster_id"],
 	})
 
 	return NewJSONResponse(svs, err)

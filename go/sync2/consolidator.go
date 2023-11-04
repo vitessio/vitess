@@ -21,47 +21,65 @@ import (
 	"sync/atomic"
 
 	"vitess.io/vitess/go/cache"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 // Consolidator consolidates duplicate queries from executing simulaneously
 // and shares results between them.
-type Consolidator struct {
+type Consolidator interface {
+	Create(string) (PendingResult, bool)
+	Items() []ConsolidatorCacheItem
+	Record(query string)
+}
+
+// PendingResult is a wrapper for result of a query.
+type PendingResult interface {
+	Broadcast()
+	Err() error
+	SetErr(error)
+	SetResult(*sqltypes.Result)
+	Result() *sqltypes.Result
+	Wait()
+}
+
+type consolidator struct {
 	*ConsolidatorCache
 
 	mu      sync.Mutex
-	queries map[string]*Result
+	queries map[string]*pendingResult
 }
 
 // NewConsolidator creates a new Consolidator
-func NewConsolidator() *Consolidator {
-	return &Consolidator{
-		queries:           make(map[string]*Result),
+func NewConsolidator() Consolidator {
+	return &consolidator{
 		ConsolidatorCache: NewConsolidatorCache(1000),
+		queries:           make(map[string]*pendingResult),
 	}
 }
 
-// Result is a wrapper for result of a query.
-type Result struct {
+// pendingResult is a wrapper for result of a query.
+type pendingResult struct {
 	// executing is used to block additional requests.
 	// The original request holds a write lock while additional ones are blocked
 	// on acquiring a read lock (see Wait() below.)
 	executing    sync.RWMutex
-	consolidator *Consolidator
+	consolidator *consolidator
 	query        string
-	Result       any
-	Err          error
+	result       *sqltypes.Result
+	err          error
 }
 
 // Create adds a query to currently executing queries and acquires a
 // lock on its Result if it is not already present. If the query is
 // a duplicate, Create returns false.
-func (co *Consolidator) Create(query string) (r *Result, created bool) {
+func (co *consolidator) Create(query string) (PendingResult, bool) {
 	co.mu.Lock()
 	defer co.mu.Unlock()
+	var r *pendingResult
 	if r, ok := co.queries[query]; ok {
 		return r, false
 	}
-	r = &Result{consolidator: co, query: query}
+	r = &pendingResult{consolidator: co, query: query}
 	r.executing.Lock()
 	co.queries[query] = r
 	return r, true
@@ -70,16 +88,36 @@ func (co *Consolidator) Create(query string) (r *Result, created bool) {
 // Broadcast removes the entry from current queries and releases the
 // lock on its Result. Broadcast should be invoked when original
 // query completes execution.
-func (rs *Result) Broadcast() {
+func (rs *pendingResult) Broadcast() {
 	rs.consolidator.mu.Lock()
 	defer rs.consolidator.mu.Unlock()
 	delete(rs.consolidator.queries, rs.query)
 	rs.executing.Unlock()
 }
 
+// Err returns any error returned by the query.
+func (rs *pendingResult) Err() error {
+	return rs.err
+}
+
+// Result returns any result returned by the query.
+func (rs *pendingResult) Result() *sqltypes.Result {
+	return rs.result
+}
+
+// SetErr sets any error returned by the query.
+func (rs *pendingResult) SetErr(err error) {
+	rs.err = err
+}
+
+// SetResult sets any result returned by the query.
+func (rs *pendingResult) SetResult(res *sqltypes.Result) {
+	rs.result = res
+}
+
 // Wait waits for the original query to complete execution. Wait should
 // be invoked for duplicate queries.
-func (rs *Result) Wait() {
+func (rs *pendingResult) Wait() {
 	rs.consolidator.Record(rs.query)
 	rs.executing.RLock()
 }

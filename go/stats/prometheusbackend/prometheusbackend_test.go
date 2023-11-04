@@ -240,10 +240,33 @@ func TestPrometheusCountersFuncWithMultiLabels(t *testing.T) {
 	checkHandlerForMetricWithMultiLabels(t, name, labels, []string{"bar", "baz"}, 1)
 }
 
+func TestPrometheusStringMapFuncWithMultiLabels(t *testing.T) {
+	name := "blah_stringmapfuncwithmultilabels"
+	keyLabels := []string{"label1", "label2"}
+	valueLabel := "label3"
+
+	stats.NewStringMapFuncWithMultiLabels(name, "help", keyLabels, valueLabel, func() map[string]string {
+		m := make(map[string]string)
+		m["foo.bar"] = "hello"
+		m["bar.baz"] = "world"
+		return m
+	})
+
+	allLabels := append(keyLabels, valueLabel)
+
+	checkHandlerForMetricWithMultiLabels(t, name, allLabels, []string{"foo", "bar", "hello"}, 1)
+	checkHandlerForMetricWithMultiLabels(t, name, allLabels, []string{"bar", "baz", "world"}, 1)
+}
+
 func checkHandlerForMetricWithMultiLabels(t *testing.T, metric string, labels []string, labelValues []string, value int64) {
 	response := testMetricsHandler(t)
 
-	expected := fmt.Sprintf("%s_%s{%s=\"%s\",%s=\"%s\"} %d", namespace, metric, labels[0], labelValues[0], labels[1], labelValues[1], value)
+	kvPairs := make([]string, 0)
+	for i := 0; i < len(labels); i++ {
+		kvPairs = append(kvPairs, fmt.Sprintf("%s=\"%s\"", labels[i], labelValues[i]))
+	}
+
+	expected := fmt.Sprintf("%s_%s{%s} %d", namespace, metric, strings.Join(kvPairs, ","), value)
 
 	if !strings.Contains(response.Body.String(), expected) {
 		t.Fatalf("Expected %s got %s", expected, response.Body.String())

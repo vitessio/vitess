@@ -74,8 +74,8 @@ func parseISOTime(tstr string, loc *time.Location, minLen, maxLen int) (t time.T
 	return time.ParseInLocation(isoTimeFormat[:tlen], tstr, loc)
 }
 
-// DatetimeToNative converts a Datetime Value into a time.Time
-func DatetimeToNative(v sqltypes.Value, loc *time.Location) (time.Time, error) {
+// datetimeToNative converts a Datetime Value into a time.Time
+func datetimeToNative(v sqltypes.Value, loc *time.Location) (time.Time, error) {
 	// Valid format string offsets for a DATETIME
 	//  |DATETIME          |19+
 	//  |------------------|------|
@@ -83,11 +83,11 @@ func DatetimeToNative(v sqltypes.Value, loc *time.Location) (time.Time, error) {
 	return parseISOTime(v.ToString(), loc, 19, isoTimeLength)
 }
 
-// DateToNative converts a Date Value into a time.Time.
+// dateToNative converts a Date Value into a time.Time.
 // Note that there's no specific type in the Go stdlib to represent
 // dates without time components, so the returned Time will have
 // their hours/mins/seconds zeroed out.
-func DateToNative(v sqltypes.Value, loc *time.Location) (time.Time, error) {
+func dateToNative(v sqltypes.Value, loc *time.Location) (time.Time, error) {
 	// Valid format string offsets for a DATE
 	//  |DATE     |10
 	//  |---------|

@@ -24,12 +24,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -130,10 +130,10 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 		case err == nil:
 			// Success.
 			return r, nil
-		case mysql.IsConnLostDuringQuery(err):
+		case sqlerror.IsConnLostDuringQuery(err):
 			// Query probably killed. Don't retry.
 			return nil, err
-		case !mysql.IsConnErr(err):
+		case !sqlerror.IsConnErr(err):
 			// Not a connection error. Don't retry.
 			return nil, err
 		case attempt == 2:
@@ -233,10 +233,10 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 		case err == nil:
 			// Success.
 			return nil
-		case mysql.IsConnLostDuringQuery(err):
+		case sqlerror.IsConnLostDuringQuery(err):
 			// Query probably killed. Don't retry.
 			return err
-		case !mysql.IsConnErr(err):
+		case !sqlerror.IsConnErr(err):
 			// Not a connection error. Don't retry.
 			return err
 		case attempt == 2:

@@ -86,7 +86,6 @@ func (tmc *reloadSchemaTMC) ReloadSchema(ctx context.Context, tablet *topodatapb
 
 func TestReloadShard(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	tests := []struct {
 		name    string
@@ -330,7 +329,10 @@ func TestReloadShard(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ts := memorytopo.NewServer(tt.cells...)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, tt.cells...)
+			defer ts.Close()
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
 				AlsoSetShardPrimary: true,
 			}, tt.tablets...)

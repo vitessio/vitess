@@ -79,8 +79,8 @@ func (sc *SimpleProjection) GetFields(ctx context.Context, vcursor VCursor, bind
 }
 
 // Inputs returns the input to this primitive
-func (sc *SimpleProjection) Inputs() []Primitive {
-	return []Primitive{sc.Input}
+func (sc *SimpleProjection) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{sc.Input}, nil
 }
 
 // buildResult builds a new result by pulling the necessary columns from

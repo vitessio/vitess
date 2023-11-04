@@ -31,6 +31,8 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 func TestEngineOpen(t *testing.T) {
@@ -383,12 +385,12 @@ func TestWaitForPos(t *testing.T) {
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
-		sqltypes.NewVarBinary("Running"),
+		sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()),
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1084"),
-		sqltypes.NewVarBinary("Running"),
+		sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()),
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
 	start := time.Now()
@@ -451,7 +453,7 @@ func TestWaitForPosCancel(t *testing.T) {
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
-		sqltypes.NewVarBinary("Running"),
+		sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()),
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -469,7 +471,7 @@ func TestWaitForPosCancel(t *testing.T) {
 	}()
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
-		sqltypes.NewVarBinary("Running"),
+		sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()),
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")

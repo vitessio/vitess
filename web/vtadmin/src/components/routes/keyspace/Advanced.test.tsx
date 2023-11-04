@@ -21,11 +21,13 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { Advanced } from './Advanced';
 import { vtadmin } from '../../../proto/vtadmin';
+import { describe, it, expect, vi } from 'vitest';
+import { Response } from 'cross-fetch';
 
-const ORIGINAL_PROCESS_ENV = process.env;
+const ORIGINAL_PROCESS_ENV = import.meta.env;
 const TEST_PROCESS_ENV = {
-    ...process.env,
-    REACT_APP_VTADMIN_API_ADDRESS: '',
+    ...import.meta.env,
+    VITE_VTADMIN_API_ADDRESS: '',
 };
 
 describe('Advanced keyspace actions', () => {
@@ -50,23 +52,26 @@ describe('Advanced keyspace actions', () => {
     });
 
     beforeAll(() => {
-        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        import.meta.env = { ...TEST_PROCESS_ENV } as Vite.ImportMetaEnv;
         server.listen();
     });
 
     beforeEach(() => {
-        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
-        jest.clearAllMocks();
+        import.meta.env = { ...TEST_PROCESS_ENV } as Vite.ImportMetaEnv;
+        vi.clearAllMocks();
     });
 
     afterAll(() => {
-        process.env = { ...ORIGINAL_PROCESS_ENV };
+        import.meta.env = { ...ORIGINAL_PROCESS_ENV };
         server.close();
     });
 
     describe('Reload Schema', () => {
         it('reloads the schema', async () => {
-            jest.spyOn(global, 'fetch');
+            const response: Promise<Response> = new Promise((resolve) =>
+                resolve(new Response('{"ok": "true", "result": {}}', { status: 200 }))
+            );
+            vi.spyOn(global, 'fetch').mockReturnValue(response);
 
             render(
                 <QueryClientProvider client={queryClient}>
@@ -85,7 +90,7 @@ describe('Advanced keyspace actions', () => {
                 credentials: undefined,
             });
 
-            jest.clearAllMocks();
+            vi.clearAllMocks();
 
             const container = screen.getByTitle('Reload Schema');
             const button = within(container).getByRole('button');

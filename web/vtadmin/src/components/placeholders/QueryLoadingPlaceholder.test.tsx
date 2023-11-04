@@ -22,8 +22,9 @@ import * as httpAPI from '../../api/http';
 
 import { useClusters } from '../../hooks/api';
 import { QueryLoadingPlaceholder } from './QueryLoadingPlaceholder';
+import { describe, it, expect, vi } from 'vitest';
 
-jest.mock('../../api/http');
+vi.mock('../../api/http');
 
 const queryHelper = () => {
     const queryClient = new QueryClient({
@@ -39,7 +40,7 @@ const queryHelper = () => {
 
 describe('QueryLoadingPlaceholder', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     it('renders only when loading', async () => {

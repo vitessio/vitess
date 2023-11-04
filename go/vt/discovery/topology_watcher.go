@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"hash/crc32"
 	"sort"
@@ -28,8 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/key"
-
-	"context"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
@@ -134,6 +133,7 @@ func (tw *TopologyWatcher) Start() {
 			select {
 			case <-t.ctx.Done():
 				return
+			case <-tw.healthcheck.GetLoadTabletsTrigger():
 			case <-ticker.C:
 			}
 		}
@@ -362,7 +362,7 @@ func (fbs *FilterByShard) IsIncluded(tablet *topodata.Tablet) bool {
 			// Exact match (probably a non-sharded keyspace).
 			return true
 		}
-		if kr != nil && c.keyRange != nil && key.KeyRangeIncludes(c.keyRange, kr) {
+		if kr != nil && c.keyRange != nil && key.KeyRangeContainsKeyRange(c.keyRange, kr) {
 			// Our filter's KeyRange includes the provided KeyRange
 			return true
 		}

@@ -8,7 +8,7 @@ import (
 	reflect "reflect"
 	time "time"
 
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 
 	discovery "vitess.io/vitess/go/vt/discovery"
 	throttlerdata "vitess.io/vitess/go/vt/proto/throttlerdata"

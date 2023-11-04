@@ -29,8 +29,6 @@ import (
 	"time"
 )
 
-var _ Cache = &LRUCache{}
-
 // LRUCache is a typical LRU cache implementation.  If the cache
 // reaches the capacity, the least recently used item is deleted from
 // the cache. Note the capacity is not the number of items, but the
@@ -249,4 +247,8 @@ func (lru *LRUCache) checkCapacity() {
 		lru.size -= delValue.size
 		lru.evictions++
 	}
+}
+
+func (lru *LRUCache) Close() {
+	lru.Clear()
 }

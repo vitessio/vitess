@@ -26,11 +26,12 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 func TestTracker(t *testing.T) {
 	initialSchemaInserted := false
-	se, db, cancel := getTestSchemaEngine(t)
+	se, db, cancel := getTestSchemaEngine(t, 0)
 	defer cancel()
 	gtid1 := "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10"
 	ddl1 := "create table tracker_test (id int)"
@@ -91,7 +92,7 @@ func TestTracker(t *testing.T) {
 
 func TestTrackerShouldNotInsertInitialSchema(t *testing.T) {
 	initialSchemaInserted := false
-	se, db, cancel := getTestSchemaEngine(t)
+	se, db, cancel := getTestSchemaEngine(t, 0)
 	gtid1 := "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10"
 
 	defer cancel()
@@ -137,7 +138,7 @@ type fakeVstreamer struct {
 	events [][]*binlogdatapb.VEvent
 }
 
-func (f *fakeVstreamer) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (f *fakeVstreamer) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) error {
 	for _, events := range f.events {
 		err := send(events)
 		if err != nil {

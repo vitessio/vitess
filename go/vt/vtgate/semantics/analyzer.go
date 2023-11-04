@@ -18,10 +18,8 @@ package semantics
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // analyzer controls the flow of the analysis.
@@ -80,11 +78,32 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	return semTable, nil
 }
 
+// AnalyzeStrict analyzes the parsed query, and fails the analysis for any possible errors
+func AnalyzeStrict(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
+	st, err := Analyze(statement, currentDb, si)
+	if err != nil {
+		return nil, err
+	}
+
+	if st.NotUnshardedErr != nil {
+		return nil, st.NotUnshardedErr
+	}
+	if st.NotSingleRouteErr != nil {
+		return nil, st.NotSingleRouteErr
+	}
+
+	return st, nil
+}
+
 func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID) *SemTable {
 	var comments *sqlparser.ParsedComments
 	commentedStmt, isCommented := statement.(sqlparser.Commented)
 	if isCommented {
 		comments = commentedStmt.GetParsedComments()
+	}
+	columns := map[*sqlparser.Union]sqlparser.SelectExprs{}
+	for union, info := range a.tables.unionInfo {
+		columns[union] = info.exprs
 	}
 
 	return &SemTable{
@@ -92,7 +111,6 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		Direct:            a.binder.direct,
 		ExprTypes:         a.typer.exprTypes,
 		Tables:            a.tables.Tables,
-		selectScope:       a.scoper.rScope,
 		NotSingleRouteErr: a.projErr,
 		NotUnshardedErr:   a.unshardedErr,
 		Warning:           a.warning,
@@ -102,6 +120,7 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
 		Collation:         coll,
 		ExpandedColumns:   a.rewriter.expandedColumns,
+		columns:           columns,
 	}
 }
 
@@ -109,7 +128,7 @@ func (a *analyzer) setError(err error) {
 	switch err := err.(type) {
 	case ProjError:
 		a.projErr = err.Inner
-	case UnshardedError:
+	case ShardedError:
 		a.unshardedErr = err.Inner
 	default:
 		if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
@@ -154,11 +173,6 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		return false
 	}
 
-	if err := a.binder.up(cursor); err != nil {
-		a.setError(err)
-		return true
-	}
-
 	if err := a.scoper.up(cursor); err != nil {
 		a.setError(err)
 		return false
@@ -167,9 +181,20 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		a.setError(err)
 		return false
 	}
+
+	if err := a.binder.up(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+
 	if err := a.typer.up(cursor); err != nil {
 		a.setError(err)
 		return false
+	}
+
+	if err := a.rewriter.up(cursor); err != nil {
+		a.setError(err)
+		return true
 	}
 
 	a.leaveProjection(cursor)
@@ -193,15 +218,14 @@ func checkUnionColumns(union *sqlparser.Union) error {
 		// we'll fail it at run time instead
 		return nil
 	}
-	count := len(firstProj)
 
 	secondProj := sqlparser.GetFirstSelect(union.Right).SelectExprs
 	if containsStar(secondProj) {
 		return nil
 	}
 
-	if len(secondProj) != count {
-		return NewError(UnionColumnsDoNotMatch)
+	if len(secondProj) != len(firstProj) {
+		return &UnionColumnsDoNotMatchError{FirstProj: len(firstProj), SecondProj: len(secondProj)}
 	}
 
 	return nil
@@ -256,89 +280,6 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 	return a.err
 }
 
-func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
-	switch node := cursor.Node().(type) {
-	case *sqlparser.Update:
-		if len(node.TableExprs) != 1 {
-			return UnshardedError{Inner: NewError(UnsupportedMultiTablesInUpdate)}
-		}
-		alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
-		if !isAlias {
-			return UnshardedError{Inner: NewError(UnsupportedMultiTablesInUpdate)}
-		}
-		_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
-		if isDerived {
-			return NewError(TableNotUpdatable, alias.As.String())
-		}
-	case *sqlparser.Select:
-		parent := cursor.Parent()
-		if _, isUnion := parent.(*sqlparser.Union); isUnion && node.SQLCalcFoundRows {
-			return NewError(UnionWithSQLCalcFoundRows)
-		}
-		if _, isRoot := parent.(*sqlparser.RootNode); !isRoot && node.SQLCalcFoundRows {
-			return NewError(SQLCalcFoundRowsUsage)
-		}
-		errMsg := "INTO"
-		nextVal := false
-		if len(node.SelectExprs) == 1 {
-			if _, isNextVal := node.SelectExprs[0].(*sqlparser.Nextval); isNextVal {
-				nextVal = true
-				errMsg = "NEXT"
-			}
-		}
-		if !nextVal && node.Into == nil {
-			return nil
-		}
-		if a.scoper.currentScope().parent != nil {
-			return NewError(CantUseOptionHere, errMsg)
-		}
-	case *sqlparser.Nextval:
-		currScope := a.scoper.currentScope()
-		if currScope.parent != nil {
-			return NewError(CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
-		}
-		if len(currScope.tables) != 1 {
-			return NewError(NextWithMultipleTables)
-		}
-		vindexTbl := currScope.tables[0].GetVindexTable()
-		if vindexTbl == nil {
-			return NewError(MissingInVSchema)
-		}
-		if vindexTbl.Type != vindexes.TypeSequence {
-			return NewError(NotSequenceTable)
-		}
-	case *sqlparser.JoinTableExpr:
-		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
-			return NewError(UnsupportedNaturalJoin, node.Join.ToString())
-		}
-	case *sqlparser.LockingFunc:
-		return NewError(LockOnlyWithDual, node)
-	case *sqlparser.Union:
-		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			switch node := node.(type) {
-			case *sqlparser.ColName:
-				if !node.Qualifier.IsEmpty() {
-					return false, NewError(QualifiedOrderInUnion, node.Qualifier.Name)
-				}
-			case *sqlparser.Subquery:
-				return false, nil
-			}
-			return true, nil
-		}, node.OrderBy)
-		if err != nil {
-			return err
-		}
-		err = checkUnionColumns(node)
-		if err != nil {
-			return err
-		}
-	case *sqlparser.JSONTableExpr:
-		return NewError(JSONTables)
-	}
-
-	return nil
-}
-
 func (a *analyzer) shouldContinue() bool {
 	return a.err == nil
 }
@@ -357,12 +298,12 @@ func (p ProjError) Error() string {
 	return p.Inner.Error()
 }
 
-// UnshardedError is used to mark an error as something that should only be returned
+// ShardedError is used to mark an error as something that should only be returned
 // if the query is not unsharded
-type UnshardedError struct {
+type ShardedError struct {
 	Inner error
 }
 
-func (p UnshardedError) Error() string {
+func (p ShardedError) Error() string {
 	return p.Inner.Error()
 }

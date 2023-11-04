@@ -28,6 +28,20 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+const (
+	cfcParamHash    = "hash"
+	cfcParamOffsets = "offsets"
+)
+
+var (
+	_ ParamValidating = (*CFC)(nil)
+
+	cfcParams = []string{
+		cfcParamHash,
+		cfcParamOffsets,
+	}
+)
+
 // CFC is Concatenated Fixed-width Composite Vindex.
 //
 // The purpose of this vindex is to shard the rows based on the prefix of
@@ -94,15 +108,17 @@ type CFC struct {
 }
 
 type cfcCommon struct {
-	name    string
-	hash    func([]byte) []byte
-	offsets []int
+	name          string
+	hash          func([]byte) []byte
+	offsets       []int
+	unknownParams []string
 }
 
-// NewCFC creates a new CFC vindex
-func NewCFC(name string, params map[string]string) (Vindex, error) {
+// newCFC creates a new CFC vindex
+func newCFC(name string, params map[string]string) (Vindex, error) {
 	ss := &cfcCommon{
-		name: name,
+		name:          name,
+		unknownParams: FindUnknownParams(params, cfcParams),
 	}
 	cfc := &CFC{
 		cfcCommon: ss,
@@ -113,7 +129,7 @@ func NewCFC(name string, params map[string]string) (Vindex, error) {
 		return cfc, nil
 	}
 
-	switch h := params["hash"]; h {
+	switch h := params[cfcParamHash]; h {
 	case "":
 		return cfc, nil
 	case "md5":
@@ -125,7 +141,7 @@ func NewCFC(name string, params map[string]string) (Vindex, error) {
 	}
 
 	var offsets []int
-	if p := params["offsets"]; p == "" {
+	if p := params[cfcParamOffsets]; p == "" {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "CFC vindex requires offsets when hash is defined")
 	} else if err := json.Unmarshal([]byte(p), &offsets); err != nil || !validOffsets(offsets) {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid offsets %s to CFC vindex %s. expected sorted positive ints in brackets", p, name)
@@ -229,6 +245,11 @@ func (vind *cfcCommon) verify(ids []sqltypes.Value, ksids [][]byte) ([]bool, err
 		out[i] = bytes.Equal(v, ksids[i])
 	}
 	return out, nil
+}
+
+// UnknownParams implements the ParamValidating interface.
+func (vind *cfcCommon) UnknownParams() []string {
+	return vind.unknownParams
 }
 
 // Verify returns true if ids maps to ksids.
@@ -406,5 +427,5 @@ func xxhash64(in []byte) []byte {
 }
 
 func init() {
-	Register("cfc", NewCFC)
+	Register("cfc", newCFC)
 }

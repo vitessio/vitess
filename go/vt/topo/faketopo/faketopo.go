@@ -340,13 +340,13 @@ func (f *FakeConn) Close() {
 }
 
 // NewFakeTopoServer creates a new fake topo server
-func NewFakeTopoServer(factory *FakeFactory) *topo.Server {
+func NewFakeTopoServer(ctx context.Context, factory *FakeFactory) *topo.Server {
 	ts, err := topo.NewWithFactory(factory, "" /*serverAddress*/, "" /*root*/)
 	if err != nil {
 		log.Exitf("topo.NewWithFactory() failed: %v", err)
 	}
 	for cell := range factory.cells {
-		if err := ts.CreateCellInfo(context.Background(), cell, &topodatapb.CellInfo{}); err != nil {
+		if err := ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{}); err != nil {
 			log.Exitf("ts.CreateCellInfo(%v) failed: %v", cell, err)
 		}
 	}

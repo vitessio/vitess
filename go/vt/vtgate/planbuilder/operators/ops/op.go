@@ -29,22 +29,38 @@ type (
 	// In some situation we go straight to the physical operator - when there are no options to consider,
 	// we can go straight to the end result.
 	Operator interface {
+		// Clone will return a copy of this operator, protected so changed to the original will not impact the clone
 		Clone(inputs []Operator) Operator
+
+		// Inputs returns the inputs for this operator
 		Inputs() []Operator
+
+		// SetInputs changes the inputs for this op
+		SetInputs([]Operator)
 
 		// AddPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
 		// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
 		// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
+		// TODO: we should remove this and replace it with rewriters
 		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error)
 
-		// AddColumn tells an operator to also output an additional column specified.
-		// The offset to the column is returned.
-		AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error)
+		AddColumns(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error)
+
+		FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error)
+
+		GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error)
+		GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error)
+
+		ShortDescription() string
+
+		GetOrdering() ([]OrderBy, error)
 	}
 
-	// PhysicalOperator means that this operator is ready to be turned into a logical plan
-	PhysicalOperator interface {
-		Operator
-		IPhysical()
+	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
+	OrderBy struct {
+		Inner *sqlparser.Order
+
+		// See GroupBy#SimplifiedExpr for more details about this
+		SimplifiedExpr sqlparser.Expr
 	}
 )

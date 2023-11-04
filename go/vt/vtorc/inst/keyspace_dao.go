@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
@@ -30,6 +31,10 @@ var ErrKeyspaceNotFound = errors.New("keyspace not found")
 
 // ReadKeyspace reads the vitess keyspace record.
 func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
+	if err := topo.ValidateKeyspaceName(keyspaceName); err != nil {
+		return nil, err
+	}
+
 	query := `
 		select
 			keyspace_type,
@@ -72,4 +77,13 @@ func SaveKeyspace(keyspace *topo.KeyspaceInfo) error {
 		keyspace.GetDurabilityPolicy(),
 	)
 	return err
+}
+
+// GetDurabilityPolicy gets the durability policy for the given keyspace.
+func GetDurabilityPolicy(keyspace string) (reparentutil.Durabler, error) {
+	ki, err := ReadKeyspace(keyspace)
+	if err != nil {
+		return nil, err
+	}
+	return reparentutil.GetDurabilityPolicy(ki.DurabilityPolicy)
 }

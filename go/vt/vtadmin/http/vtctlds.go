@@ -22,10 +22,10 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
-// GetVtctlds implements the http wrapper for /vtctlds[?cluster=[&cluster=]].
+// GetVtctlds implements the http wrapper for /vtctlds[?cluster_id=[&cluster_id=]].
 func GetVtctlds(ctx context.Context, r Request, api *API) *JSONResponse {
 	vtctlds, err := api.server.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(vtctlds, err)

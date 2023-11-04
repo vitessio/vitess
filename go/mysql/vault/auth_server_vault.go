@@ -30,6 +30,8 @@ import (
 	vaultapi "github.com/aquarapid/vaultlib"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
@@ -186,14 +188,14 @@ func (a *AuthServerVault) UserEntryWithHash(conn *mysql.Conn, salt []byte, user 
 	a.mu.Unlock()
 
 	if !ok {
-		return &mysql.StaticUserData{}, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &mysql.StaticUserData{}, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	for _, entry := range userEntries {
 		if entry.MysqlNativePassword != "" {
 			hash, err := mysql.DecodeMysqlNativePasswordHex(entry.MysqlNativePassword)
 			if err != nil {
-				return &mysql.StaticUserData{Username: entry.UserData, Groups: entry.Groups}, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", user)
+				return &mysql.StaticUserData{Username: entry.UserData, Groups: entry.Groups}, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 			}
 			isPass := mysql.VerifyHashedMysqlNativePassword(authResponse, salt, hash)
 			if mysql.MatchSourceHost(remoteAddr, entry.SourceHost) && isPass {
@@ -207,7 +209,7 @@ func (a *AuthServerVault) UserEntryWithHash(conn *mysql.Conn, salt []byte, user 
 			}
 		}
 	}
-	return &mysql.StaticUserData{}, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", user)
+	return &mysql.StaticUserData{}, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 }
 
 func (a *AuthServerVault) setTTLTicker(ttl time.Duration) {

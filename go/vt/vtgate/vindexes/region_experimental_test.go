@@ -22,6 +22,8 @@ import (
 	"testing"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,6 +31,88 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
+
+func regionExperimentalCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectUnknownParams []string,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "region_experimental",
+		vindexName:   "region_experimental",
+		vindexParams: vindexParams,
+
+		expectCost:          1,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "region_experimental",
+		expectUnknownParams: expectUnknownParams,
+	}
+}
+
+func TestRegionExperimentalCreateVindex(t *testing.T) {
+	cases := []createVindexTestCase{
+		regionExperimentalCreateVindexTestCase(
+			"no params invalid: region_bytes required",
+			nil,
+			vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "region_experimental missing region_bytes param"),
+			nil,
+		),
+		regionExperimentalCreateVindexTestCase(
+			"empty params invalid: region_bytes required",
+			map[string]string{},
+			vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "region_experimental missing region_bytes param"),
+			nil,
+		),
+		regionExperimentalCreateVindexTestCase(
+			"region_bytes may not be 0",
+			map[string]string{
+				"region_bytes": "0",
+			},
+			vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "region_bytes must be 1 or 2: 0"),
+			nil,
+		),
+		regionExperimentalCreateVindexTestCase(
+			"region_bytes may be 1",
+			map[string]string{
+				"region_bytes": "1",
+			},
+			nil,
+			nil,
+		),
+		regionExperimentalCreateVindexTestCase(
+			"region_bytes may be 2",
+			map[string]string{
+				"region_bytes": "2",
+			},
+			nil,
+			nil,
+		),
+		regionExperimentalCreateVindexTestCase(
+			"region_bytes may not be 3",
+			map[string]string{
+				"region_bytes": "3",
+			},
+			vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "region_bytes must be 1 or 2: 3"),
+			nil,
+		),
+		regionExperimentalCreateVindexTestCase(
+			"unknown params",
+			map[string]string{
+				"region_bytes": "1",
+				"hello":        "world",
+			},
+			nil,
+			[]string{"hello"},
+		),
+	}
+
+	testCreateVindexes(t, cases)
+}
 
 func TestRegionExperimentalMisc(t *testing.T) {
 	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
@@ -122,18 +206,8 @@ func TestRegionExperimentalVerifyMulti(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
-func TestRegionExperimentalCreateErrors(t *testing.T) {
-	_, err := createRegionVindex(t, "region_experimental", "f1,f2", 3)
-	assert.EqualError(t, err, "region_bits must be 1 or 2: 3")
-	_, err = CreateVindex("region_experimental", "region_experimental", nil)
-	assert.EqualError(t, err, "region_experimental missing region_bytes param")
-}
-
 func createRegionVindex(t *testing.T, name, from string, rb int) (Vindex, error) {
 	return CreateVindex(name, name, map[string]string{
 		"region_bytes": strconv.Itoa(rb),
-		"table":        "t",
-		"from":         from,
-		"to":           "toc",
 	})
 }

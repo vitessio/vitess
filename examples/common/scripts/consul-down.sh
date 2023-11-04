@@ -18,5 +18,5 @@
 
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
-echo "Stopping consul..."
-kill -9 `cat $VTDATAROOT/tmp/consul.pid` 
+stop_process "consul" "$VTDATAROOT/tmp/consul.pid"
+

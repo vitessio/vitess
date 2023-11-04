@@ -61,7 +61,6 @@ const ActionPanel: React.FC<ActionPanelProps> = ({
 
     const isDisabled =
         !!disabled || mutation.isLoading || (requiresConfirmation && typedConfirmation !== confirmationValue);
-
     return (
         <div
             className={`p-9 pb-12 last:border-b border ${

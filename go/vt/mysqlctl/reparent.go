@@ -21,41 +21,43 @@ This file contains the reparenting methods for mysqlctl.
 */
 
 import (
-	"fmt"
+	"context"
 	"time"
 
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/sqlparser"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
-
-	"context"
 )
 
-// GenerateInitialBinlogEntry is used to create a binlog entry when a primary comes up and we need to get a
-// MySQL position so that we can set it as the starting position for replicas to do MySQL Replication from.
+// GenerateInitialBinlogEntry is used to create a binlog entry when
+// a primary comes up and we need to get a MySQL position so that we
+// can set it as the starting position for replicas to start MySQL
+// Replication from.
 func GenerateInitialBinlogEntry() string {
-	return sidecardb.CreateSidecarDatabaseQuery
+	return sidecar.GetCreateQuery()
 }
 
 // PopulateReparentJournal returns the SQL command to use to populate
-// the _vt.reparent_journal table, as well as the time_created_ns
+// the reparent_journal table, as well as the time_created_ns
 // value used.
-func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias string, pos mysql.Position) string {
-	posStr := mysql.EncodePosition(pos)
-	if len(posStr) > mysql.MaximumPositionSize {
-		posStr = posStr[:mysql.MaximumPositionSize]
+func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias string, pos replication.Position) string {
+	posStr := replication.EncodePosition(pos)
+	if len(posStr) > replication.MaximumPositionSize {
+		posStr = posStr[:replication.MaximumPositionSize]
 	}
-	return fmt.Sprintf("INSERT INTO _vt.reparent_journal "+
+	return sqlparser.BuildParsedQuery("INSERT INTO %s.reparent_journal "+
 		"(time_created_ns, action_name, primary_alias, replication_position) "+
-		"VALUES (%v, '%v', '%v', '%v')",
-		timeCreatedNS, actionName, primaryAlias, posStr)
+		"VALUES (%d, '%s', '%s', '%s')", sidecar.GetIdentifier(),
+		timeCreatedNS, actionName, primaryAlias, posStr).Query
 }
 
 // queryReparentJournal returns the SQL query to use to query the database
 // for a reparent_journal row.
 func queryReparentJournal(timeCreatedNS int64) string {
-	return fmt.Sprintf("SELECT action_name, primary_alias, replication_position FROM _vt.reparent_journal WHERE time_created_ns=%v", timeCreatedNS)
+	return sqlparser.BuildParsedQuery("SELECT action_name, primary_alias, replication_position FROM %s.reparent_journal WHERE time_created_ns=%d",
+		sidecar.GetIdentifier(), timeCreatedNS).Query
 }
 
 // WaitForReparentJournal will wait until the context is done for
@@ -83,11 +85,11 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 }
 
 // Promote will promote this server to be the new primary.
-func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (mysql.Position, error) {
+func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (replication.Position, error) {
 	ctx := context.TODO()
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
-		return mysql.Position{}, err
+		return replication.Position{}, err
 	}
 	defer conn.Recycle()
 
@@ -104,7 +106,7 @@ func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (mysql.Position, e
 	}
 
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, cmds); err != nil {
-		return mysql.Position{}, err
+		return replication.Position{}, err
 	}
 	return conn.PrimaryPosition()
 }

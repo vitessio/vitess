@@ -1,6 +1,7 @@
 package backupstats
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 )
 
 func TestBackupStats(t *testing.T) {
+	require.Nil(t, backupBytes)
 	require.Nil(t, backupCount)
 	require.Nil(t, backupDurationNs)
 	require.Nil(t, restoreCount)
@@ -19,13 +21,16 @@ func TestBackupStats(t *testing.T) {
 	BackupStats()
 	defer resetStats()
 
+	require.NotNil(t, backupBytes)
 	require.NotNil(t, backupCount)
 	require.NotNil(t, backupDurationNs)
+	require.Nil(t, restoreBytes)
 	require.Nil(t, restoreCount)
 	require.Nil(t, restoreDurationNs)
 }
 
 func TestRestoreStats(t *testing.T) {
+	require.Nil(t, backupBytes)
 	require.Nil(t, backupCount)
 	require.Nil(t, backupDurationNs)
 	require.Nil(t, restoreCount)
@@ -34,8 +39,10 @@ func TestRestoreStats(t *testing.T) {
 	RestoreStats()
 	defer resetStats()
 
+	require.Nil(t, backupBytes)
 	require.Nil(t, backupCount)
 	require.Nil(t, backupDurationNs)
+	require.NotNil(t, restoreBytes)
 	require.NotNil(t, restoreCount)
 	require.NotNil(t, restoreDurationNs)
 }
@@ -94,16 +101,18 @@ func TestScope(t *testing.T) {
 }
 
 func TestStatsAreNotInitializedByDefault(t *testing.T) {
+	require.Nil(t, backupBytes)
 	require.Nil(t, backupCount)
 	require.Nil(t, backupDurationNs)
+	require.Nil(t, restoreBytes)
 	require.Nil(t, restoreCount)
 	require.Nil(t, restoreDurationNs)
 }
 
 func TestTimedIncrement(t *testing.T) {
-	bytes := stats.NewCountersWithMultiLabels("test_timed_increment_bytes", "", labels)
-	count := stats.NewCountersWithMultiLabels("test_timed_increment_count", "", labels)
-	durationNs := stats.NewCountersWithMultiLabels("test_timed_increment_duration_ns", "", labels)
+	bytes := stats.NewCountersWithMultiLabels(fmt.Sprintf("%s_test_timed_increment_bytes", t.Name()), "", labels)
+	count := stats.NewCountersWithMultiLabels(fmt.Sprintf("%s_test_timed_increment_count", t.Name()), "", labels)
+	durationNs := stats.NewCountersWithMultiLabels(fmt.Sprintf("%s_test_timed_increment_duration_ns", t.Name()), "", labels)
 
 	stats := newScopedStats(bytes, count, durationNs, nil)
 
@@ -111,6 +120,8 @@ func TestTimedIncrement(t *testing.T) {
 	path := strings.Join([]string{unscoped, unscoped, unscoped}, ".")
 
 	stats.TimedIncrement(duration)
+
+	require.Equal(t, 0, len(bytes.Counts()))
 
 	require.Equal(t, 1, len(count.Counts()))
 	require.Equal(t, int64(1), count.Counts()[path])
@@ -120,6 +131,8 @@ func TestTimedIncrement(t *testing.T) {
 
 	stats.TimedIncrement(duration)
 
+	require.Equal(t, 0, len(bytes.Counts()))
+
 	require.Equal(t, 1, len(count.Counts()))
 	require.Equal(t, int64(2), count.Counts()[path])
 
@@ -127,9 +140,43 @@ func TestTimedIncrement(t *testing.T) {
 	require.Equal(t, 2*duration.Nanoseconds(), durationNs.Counts()[path])
 }
 
+func TestTimedIncrementBytes(t *testing.T) {
+	bytes := stats.NewCountersWithMultiLabels(fmt.Sprintf("%s_test_timed_increment_bytes", t.Name()), "", labels)
+	count := stats.NewCountersWithMultiLabels(fmt.Sprintf("%s_test_timed_increment_count", t.Name()), "", labels)
+	durationNs := stats.NewCountersWithMultiLabels(fmt.Sprintf("%s_test_timed_increment_duration_ns", t.Name()), "", labels)
+
+	stats := newScopedStats(bytes, count, durationNs, nil)
+
+	incBytes := 1024
+	duration := 10 * time.Second
+	path := strings.Join([]string{unscoped, unscoped, unscoped}, ".")
+
+	stats.TimedIncrementBytes(incBytes, duration)
+
+	require.Equal(t, 1, len(bytes.Counts()))
+	require.Equal(t, int64(incBytes), bytes.Counts()[path])
+
+	require.Equal(t, 0, len(count.Counts()))
+
+	require.Equal(t, 1, len(durationNs.Counts()))
+	require.Equal(t, duration.Nanoseconds(), durationNs.Counts()[path])
+
+	stats.TimedIncrementBytes(incBytes, duration)
+
+	require.Equal(t, 1, len(bytes.Counts()))
+	require.Equal(t, int64(2*incBytes), bytes.Counts()[path])
+
+	require.Equal(t, 0, len(count.Counts()))
+
+	require.Equal(t, 1, len(durationNs.Counts()))
+	require.Equal(t, 2*duration.Nanoseconds(), durationNs.Counts()[path])
+}
+
 func resetStats() {
+	backupBytes = nil
 	backupCount = nil
 	backupDurationNs = nil
+	restoreBytes = nil
 	restoreCount = nil
 	restoreDurationNs = nil
 }

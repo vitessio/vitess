@@ -17,52 +17,12 @@ limitations under the License.
 package main
 
 import (
-	"github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vtctld"
-)
-
-func init() {
-	servenv.RegisterDefaultFlags()
-	servenv.RegisterFlags()
-	servenv.RegisterGRPCServerFlags()
-	servenv.RegisterGRPCServerAuthFlags()
-	servenv.RegisterServiceMapFlag()
-
-	servenv.OnParse(func(fs *pflag.FlagSet) {
-		acl.RegisterFlags(fs)
-	})
-}
-
-// used at runtime by plug-ins
-var (
-	ts *topo.Server
+	"vitess.io/vitess/go/cmd/vtctld/cli"
+	"vitess.io/vitess/go/vt/log"
 )
 
 func main() {
-	servenv.ParseFlags("vtctld")
-	servenv.Init()
-	defer servenv.Close()
-
-	ts = topo.Open()
-	defer ts.Close()
-
-	// Init the vtctld core
-	err := vtctld.InitVtctld(ts)
-	if err != nil {
-		exit.Return(1)
+	if err := cli.Main.Execute(); err != nil {
+		log.Fatal(err)
 	}
-
-	// Register http debug/health
-	vtctld.RegisterDebugHealthHandler(ts)
-
-	// Start schema manager service.
-	initSchema()
-
-	// And run the server.
-	servenv.RunDefault()
 }

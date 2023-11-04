@@ -73,7 +73,10 @@ var (
 	QueryTimeout                = SystemVariable{Name: "query_timeout"}
 
 	// Online DDL
-	DDLStrategy    = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
+	DDLStrategy      = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
+	MigrationContext = SystemVariable{Name: "migration_context", IdentifierAsString: true}
+
+	// Version
 	Version        = SystemVariable{Name: "version"}
 	VersionComment = SystemVariable{Name: "version_comment"}
 
@@ -95,6 +98,7 @@ var (
 		Charset,
 		Names,
 		SessionUUID,
+		MigrationContext,
 		SessionEnableSystemSettings,
 		ReadAfterWriteGTID,
 		ReadAfterWriteTimeOut,

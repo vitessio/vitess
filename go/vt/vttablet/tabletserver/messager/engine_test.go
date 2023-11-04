@@ -24,68 +24,76 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-var meTable = &schema.Table{
-	Type:        schema.Message,
-	MessageInfo: newMMTable().MessageInfo,
-}
+var (
+	meTableT1 = &schema.Table{
+		Name:        sqlparser.NewIdentifierCS("t1"),
+		Type:        schema.Message,
+		MessageInfo: newMMTable().MessageInfo,
+	}
+	meTableT2 = &schema.Table{
+		Name:        sqlparser.NewIdentifierCS("t2"),
+		Type:        schema.Message,
+		MessageInfo: newMMTable().MessageInfo,
+	}
+	meTableT3 = &schema.Table{
+		Name:        sqlparser.NewIdentifierCS("t3"),
+		Type:        schema.Message,
+		MessageInfo: newMMTable().MessageInfo,
+	}
+	meTableT4 = &schema.Table{
+		Name:        sqlparser.NewIdentifierCS("t4"),
+		Type:        schema.Message,
+		MessageInfo: newMMTable().MessageInfo,
+	}
+
+	tableT2 = &schema.Table{
+		Name: sqlparser.NewIdentifierCS("t2"),
+		Type: schema.NoType,
+	}
+	tableT4 = &schema.Table{
+		Name: sqlparser.NewIdentifierCS("t4"),
+		Type: schema.NoType,
+	}
+	tableT5 = &schema.Table{
+		Name: sqlparser.NewIdentifierCS("t5"),
+		Type: schema.NoType,
+	}
+)
 
 func TestEngineSchemaChanged(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	engine := newTestEngine(db)
 	defer engine.Close()
-	tables := map[string]*schema.Table{
-		"t1": meTable,
-		"t2": {
-			Type: schema.NoType,
-		},
-	}
-	engine.schemaChanged(tables, []string{"t1", "t2"}, nil, nil)
+
+	engine.schemaChanged(nil, []*schema.Table{meTableT1, tableT2}, nil, nil)
 	got := extractManagerNames(engine.managers)
 	want := map[string]bool{"t1": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
-	tables = map[string]*schema.Table{
-		"t1": meTable,
-		"t2": {
-			Type: schema.NoType,
-		},
-		"t3": meTable,
-	}
-	engine.schemaChanged(tables, []string{"t3"}, nil, nil)
+
+	engine.schemaChanged(nil, []*schema.Table{meTableT3}, nil, nil)
 	got = extractManagerNames(engine.managers)
 	want = map[string]bool{"t1": true, "t3": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
-	tables = map[string]*schema.Table{
-		"t1": meTable,
-		"t2": {
-			Type: schema.NoType,
-		},
-		"t4": meTable,
-	}
-	engine.schemaChanged(tables, []string{"t4"}, nil, []string{"t3", "t5"})
+
+	engine.schemaChanged(nil, []*schema.Table{meTableT4}, nil, []*schema.Table{meTableT3, tableT5})
 	got = extractManagerNames(engine.managers)
 	want = map[string]bool{"t1": true, "t4": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
 	// Test update
-	tables = map[string]*schema.Table{
-		"t1": meTable,
-		"t2": meTable,
-		"t4": {
-			Type: schema.NoType,
-		},
-	}
-	engine.schemaChanged(tables, nil, []string{"t2", "t4"}, nil)
+	engine.schemaChanged(nil, nil, []*schema.Table{meTableT2, tableT4}, nil)
 	got = extractManagerNames(engine.managers)
 	want = map[string]bool{"t1": true, "t2": true}
 	if !reflect.DeepEqual(got, want) {
@@ -105,11 +113,7 @@ func TestSubscribe(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	engine := newTestEngine(db)
-	tables := map[string]*schema.Table{
-		"t1": meTable,
-		"t2": meTable,
-	}
-	engine.schemaChanged(tables, []string{"t1", "t2"}, nil, nil)
+	engine.schemaChanged(nil, []*schema.Table{meTableT1, meTableT2}, nil, nil)
 	f1, ch1 := newEngineReceiver()
 	f2, ch2 := newEngineReceiver()
 	// Each receiver is subscribed to different managers.
@@ -142,9 +146,7 @@ func TestEngineGenerate(t *testing.T) {
 	defer db.Close()
 	engine := newTestEngine(db)
 	defer engine.Close()
-	engine.schemaChanged(map[string]*schema.Table{
-		"t1": meTable,
-	}, []string{"t1"}, nil, nil)
+	engine.schemaChanged(nil, []*schema.Table{meTableT1}, nil, nil)
 
 	if _, err := engine.GetGenerator("t1"); err != nil {
 		t.Error(err)

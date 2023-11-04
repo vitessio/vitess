@@ -71,7 +71,7 @@ func TestTopoCustomRule(t *testing.T) {
 	require.Nil(t, err, "error should be Nil")
 
 	// Start Vttablet
-	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = clusterInstance.StartVttablet(rTablet, false, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.Nil(t, err, "error should be Nil")
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
@@ -119,5 +119,5 @@ func TestTopoCustomRule(t *testing.T) {
 	// Reset the VtTabletExtraArgs
 	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes
-	killTablets(t, rTablet)
+	killTablets(rTablet)
 }

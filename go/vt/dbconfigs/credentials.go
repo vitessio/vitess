@@ -61,7 +61,6 @@ var (
 		"mysqlctld",
 		"vtbackup",
 		"vtcombo",
-		"vtgr",
 		"vttablet",
 	}
 )

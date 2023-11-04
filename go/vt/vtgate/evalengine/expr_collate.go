@@ -17,13 +17,11 @@ limitations under the License.
 package evalengine
 
 import (
-	"strconv"
-	"strings"
-
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -47,12 +45,29 @@ var collationBinary = collations.TypedCollation{
 
 var collationJSON = collations.TypedCollation{
 	Collation:    46, // utf8mb4_bin
+	Coercibility: collations.CoerceImplicit,
+	Repertoire:   collations.RepertoireUnicode,
+}
+
+var collationUtf8mb3 = collations.TypedCollation{
+	Collation:    collations.CollationUtf8mb3ID,
 	Coercibility: collations.CoerceCoercible,
 	Repertoire:   collations.RepertoireUnicode,
 }
 
+var collationRegexpFallback = collations.TypedCollation{
+	Collation:    collations.CollationLatin1Swedish,
+	Coercibility: collations.CoerceCoercible,
+	Repertoire:   collations.RepertoireASCII,
+}
+
 type (
 	CollateExpr struct {
+		UnaryExpr
+		TypedCollation collations.TypedCollation
+	}
+
+	IntroducerExpr struct {
 		UnaryExpr
 		TypedCollation collations.TypedCollation
 	}
@@ -78,50 +93,43 @@ func (c *CollateExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (c *CollateExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	t, f := c.Inner.typeof(env)
+func (c *CollateExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	t, f := c.Inner.typeof(env, fields)
 	return t, f | flagExplicitCollation
 }
 
-type LookupDefaultCollation collations.ID
-
-func (d LookupDefaultCollation) ColumnLookup(_ *sqlparser.ColName) (int, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
-}
-
-func (d LookupDefaultCollation) CollationForExpr(_ sqlparser.Expr) collations.ID {
-	return collations.Unknown
-}
-
-func (d LookupDefaultCollation) DefaultCollation() collations.ID {
-	return collations.ID(d)
-}
-
-type LookupIntegrationTest struct {
-	Collation collations.ID
-}
-
-func (*LookupIntegrationTest) ColumnLookup(name *sqlparser.ColName) (int, error) {
-	n := name.CompliantName()
-	if strings.HasPrefix(n, "column") {
-		return strconv.Atoi(n[len("column"):])
+func (expr *CollateExpr) compile(c *compiler) (ctype, error) {
+	ct, err := expr.Inner.compile(c)
+	if err != nil {
+		return ctype{}, err
 	}
-	return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown column: %q", n)
-}
 
-func (tl *LookupIntegrationTest) CollationForExpr(_ sqlparser.Expr) collations.ID {
-	return tl.Collation
-}
+	skip := c.compileNullCheck1(ct)
 
-func (tl *LookupIntegrationTest) DefaultCollation() collations.ID {
-	return tl.Collation
+	switch ct.Type {
+	case sqltypes.VarChar:
+		if err := collations.Local().EnsureCollate(ct.Col.Collation, expr.TypedCollation.Collation); err != nil {
+			return ctype{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
+		}
+		fallthrough
+	case sqltypes.VarBinary:
+		c.asm.Collate(expr.TypedCollation.Collation)
+	default:
+		return ctype{}, c.unsupported(expr)
+	}
+
+	c.asm.jumpDestination(skip)
+
+	ct.Col = expr.TypedCollation
+	ct.Flag |= flagExplicitCollation | flagNullable
+	return ct, nil
 }
 
 func evalCollation(e eval) collations.TypedCollation {
 	switch e := e.(type) {
 	case nil:
 		return collationNull
-	case evalNumeric:
+	case evalNumeric, *evalTemporal:
 		return collationNumeric
 	case *evalJSON:
 		return collationJSON
@@ -132,50 +140,58 @@ func evalCollation(e eval) collations.TypedCollation {
 	}
 }
 
-func mergeCollations(left, right eval) (eval, eval, collations.ID, error) {
-	lc := evalCollation(left)
-	rc := evalCollation(right)
-	if lc.Collation == rc.Collation {
-		return left, right, lc.Collation, nil
+func mergeCollations(c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type) (collations.TypedCollation, colldata.Coercion, colldata.Coercion, error) {
+	if c1.Collation == c2.Collation {
+		return c1, nil, nil, nil
 	}
 
-	lt := typeIsTextual(left.SQLType())
-	rt := typeIsTextual(right.SQLType())
+	lt := sqltypes.IsText(t1) || sqltypes.IsBinary(t1)
+	rt := sqltypes.IsText(t2) || sqltypes.IsBinary(t2)
 	if !lt || !rt {
 		if lt {
-			return left, right, lc.Collation, nil
+			return c1, nil, nil, nil
 		}
 		if rt {
-			return left, right, rc.Collation, nil
+			return c2, nil, nil, nil
 		}
-		return left, right, collations.CollationBinaryID, nil
+		return collationBinary, nil, nil, nil
 	}
 
 	env := collations.Local()
-	mc, coerceLeft, coerceRight, err := env.MergeCollations(lc, rc, collations.CoercionOptions{
+	return colldata.Merge(env, c1, c2, colldata.CoercionOptions{
 		ConvertToSuperset:   true,
 		ConvertWithCoercion: true,
 	})
+}
+
+func mergeAndCoerceCollations(left, right eval) (eval, eval, collations.TypedCollation, error) {
+	lt := left.SQLType()
+	rt := right.SQLType()
+
+	mc, coerceLeft, coerceRight, err := mergeCollations(evalCollation(left), evalCollation(right), lt, rt)
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, nil, collations.TypedCollation{}, err
+	}
+	if coerceLeft == nil && coerceRight == nil {
+		return left, right, mc, nil
 	}
 
-	left1 := newEvalRaw(left.SQLType(), left.(*evalBytes).bytes, mc)
-	right1 := newEvalRaw(right.SQLType(), right.(*evalBytes).bytes, mc)
+	left1 := newEvalRaw(lt, left.(*evalBytes).bytes, mc)
+	right1 := newEvalRaw(rt, right.(*evalBytes).bytes, mc)
 
 	if coerceLeft != nil {
 		left1.bytes, err = coerceLeft(nil, left1.bytes)
 		if err != nil {
-			return nil, nil, 0, err
+			return nil, nil, collations.TypedCollation{}, err
 		}
 	}
 	if coerceRight != nil {
 		right1.bytes, err = coerceRight(nil, right1.bytes)
 		if err != nil {
-			return nil, nil, 0, err
+			return nil, nil, collations.TypedCollation{}, err
 		}
 	}
-	return left1, right1, mc.Collation, nil
+	return left1, right1, mc, nil
 }
 
 type collationAggregation struct {
@@ -187,7 +203,7 @@ func (ca *collationAggregation) add(env *collations.Environment, tc collations.T
 		ca.cur = tc
 	} else {
 		var err error
-		ca.cur, _, _, err = env.MergeCollations(ca.cur, tc, collations.CoercionOptions{ConvertToSuperset: true, ConvertWithCoercion: true})
+		ca.cur, _, _, err = colldata.Merge(env, ca.cur, tc, colldata.CoercionOptions{ConvertToSuperset: true, ConvertWithCoercion: true})
 		if err != nil {
 			return err
 		}
@@ -197,4 +213,41 @@ func (ca *collationAggregation) add(env *collations.Environment, tc collations.T
 
 func (ca *collationAggregation) result() collations.TypedCollation {
 	return ca.cur
+}
+
+var _ Expr = (*IntroducerExpr)(nil)
+
+func (expr *IntroducerExpr) eval(env *ExpressionEnv) (eval, error) {
+	e, err := expr.Inner.eval(env)
+	if err != nil {
+		return nil, err
+	}
+	if expr.TypedCollation.Collation == collations.CollationBinaryID {
+		return evalToBinary(e), nil
+	}
+	return evalToVarchar(e, expr.TypedCollation.Collation, false)
+}
+
+func (expr *IntroducerExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	if expr.TypedCollation.Collation == collations.CollationBinaryID {
+		return sqltypes.VarBinary, flagExplicitCollation
+	}
+	return sqltypes.VarChar, flagExplicitCollation
+}
+
+func (expr *IntroducerExpr) compile(c *compiler) (ctype, error) {
+	_, err := expr.Inner.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	var ct ctype
+	ct.Type = sqltypes.VarChar
+	if expr.TypedCollation.Collation == collations.CollationBinaryID {
+		ct.Type = sqltypes.VarBinary
+	}
+	c.asm.Introduce(1, ct.Type, expr.TypedCollation)
+	ct.Col = expr.TypedCollation
+	ct.Flag = flagExplicitCollation
+	return ct, nil
 }

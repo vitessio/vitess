@@ -113,15 +113,15 @@ func TestDatetimeToNative(t *testing.T) {
 	}}
 
 	for _, tcase := range tcases {
-		got, err := DatetimeToNative(tcase.val, tcase.loc)
+		got, err := datetimeToNative(tcase.val, tcase.loc)
 		if tcase.err && err == nil {
-			t.Errorf("DatetimeToNative(%v, %#v) succeeded; expected error", tcase.val, tcase.loc)
+			t.Errorf("datetimeToNative(%v, %#v) succeeded; expected error", tcase.val, tcase.loc)
 		}
 		if !tcase.err && err != nil {
-			t.Errorf("DatetimeToNative(%v, %#v) failed: %v", tcase.val, tcase.loc, err)
+			t.Errorf("datetimeToNative(%v, %#v) failed: %v", tcase.val, tcase.loc, err)
 		}
 		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("DatetimeToNative(%v, %#v): %v, want %v", tcase.val, tcase.loc, got, tcase.out)
+			t.Errorf("datetimeToNative(%v, %#v): %v, want %v", tcase.val, tcase.loc, got, tcase.out)
 		}
 	}
 }
@@ -161,15 +161,15 @@ func TestDateToNative(t *testing.T) {
 	}}
 
 	for _, tcase := range tcases {
-		got, err := DateToNative(tcase.val, tcase.loc)
+		got, err := dateToNative(tcase.val, tcase.loc)
 		if tcase.err && err == nil {
-			t.Errorf("DateToNative(%v, %#v) succeeded; expected error", tcase.val, tcase.loc)
+			t.Errorf("dateToNative(%v, %#v) succeeded; expected error", tcase.val, tcase.loc)
 		}
 		if !tcase.err && err != nil {
-			t.Errorf("DateToNative(%v, %#v) failed: %v", tcase.val, tcase.loc, err)
+			t.Errorf("dateToNative(%v, %#v) failed: %v", tcase.val, tcase.loc, err)
 		}
 		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("DateToNative(%v, %#v): %v, want %v", tcase.val, tcase.loc, got, tcase.out)
+			t.Errorf("dateToNative(%v, %#v): %v, want %v", tcase.val, tcase.loc, got, tcase.out)
 		}
 	}
 }

@@ -20,19 +20,18 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/binlogdata"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -72,7 +71,7 @@ func (wr *Wrangler) validateNewWorkflow(ctx context.Context, keyspace, workflow 
 				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and workflow=%s", encodeString(primary.DbName()), encodeString(workflow)),
 				fmt.Sprintf("workflow %s already exists in keyspace %s on tablet %d", workflow, keyspace, primary.Alias.Uid),
 			}, {
-				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and message='FROZEN' and workflow_sub_type != %d", encodeString(primary.DbName()), binlogdata.VReplicationWorkflowSubType_Partial),
+				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and message='FROZEN' and workflow_sub_type != %d", encodeString(primary.DbName()), binlogdatapb.VReplicationWorkflowSubType_Partial),
 				fmt.Sprintf("found previous frozen workflow on tablet %d, please review and delete it first before creating a new workflow",
 					primary.Alias.Uid),
 			}}
@@ -91,112 +90,6 @@ func (wr *Wrangler) validateNewWorkflow(ctx context.Context, keyspace, workflow 
 	}
 	wg.Wait()
 	return allErrors.AggrError(vterrors.Aggregate)
-}
-
-func (wr *Wrangler) printShards(ctx context.Context, si []*topo.ShardInfo) error {
-	for _, si := range si {
-		wr.Logger().Printf("    Shard: %v\n", si.ShardName())
-		if len(si.SourceShards) != 0 {
-			wr.Logger().Printf("      Source Shards: %v\n", si.SourceShards)
-		}
-		ti, err := wr.ts.GetTablet(ctx, si.PrimaryAlias)
-		if err != nil {
-			return err
-		}
-		qr, err := wr.tmc.VReplicationExec(ctx, ti.Tablet, fmt.Sprintf("select * from _vt.vreplication where db_name=%v", encodeString(ti.DbName())))
-		if err != nil {
-			return err
-		}
-		res := sqltypes.Proto3ToResult(qr)
-		if len(res.Rows) != 0 {
-			wr.Logger().Printf("      VReplication:\n")
-			for _, row := range res.Rows {
-				wr.Logger().Printf("        %v\n", row)
-			}
-		}
-		wr.Logger().Printf("      Is Primary Serving: %v\n", si.IsPrimaryServing)
-		if len(si.TabletControls) != 0 {
-			wr.Logger().Printf("      Tablet Controls: %v\n", si.TabletControls)
-		}
-	}
-	return nil
-}
-
-func (wr *Wrangler) getPrimaryPositions(ctx context.Context, shards []*topo.ShardInfo) (map[*topo.ShardInfo]string, error) {
-	mu := sync.Mutex{}
-	result := make(map[*topo.ShardInfo]string)
-
-	wg := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
-	for _, si := range shards {
-		wg.Add(1)
-		go func(si *topo.ShardInfo) {
-			defer wg.Done()
-			wr.Logger().Infof("Gathering primary position for %v", topoproto.TabletAliasString(si.PrimaryAlias))
-			ti, err := wr.ts.GetTablet(ctx, si.PrimaryAlias)
-			if err != nil {
-				rec.RecordError(err)
-				return
-			}
-
-			pos, err := wr.tmc.PrimaryPosition(ctx, ti.Tablet)
-			if err != nil {
-				rec.RecordError(err)
-				return
-			}
-
-			wr.Logger().Infof("Got primary position for %v", topoproto.TabletAliasString(si.PrimaryAlias))
-			mu.Lock()
-			result[si] = pos
-			mu.Unlock()
-		}(si)
-	}
-	wg.Wait()
-	return result, rec.Error()
-}
-
-func (wr *Wrangler) waitForFilteredReplication(ctx context.Context, sourcePositions map[*topo.ShardInfo]string, destinationShards []*topo.ShardInfo, waitTime time.Duration) error {
-	wg := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
-	for _, si := range destinationShards {
-		wg.Add(1)
-		go func(si *topo.ShardInfo) {
-			defer wg.Done()
-			ctx, cancel := context.WithTimeout(ctx, waitTime)
-			defer cancel()
-
-			var pos string
-			for _, sourceShard := range si.SourceShards {
-				// find the position it should be at
-				for s, sp := range sourcePositions {
-					if s.Keyspace() == sourceShard.Keyspace && s.ShardName() == sourceShard.Shard {
-						pos = sp
-						break
-					}
-				}
-
-				// and wait for it
-				wr.Logger().Infof("Waiting for %v to catch up", topoproto.TabletAliasString(si.PrimaryAlias))
-				ti, err := wr.ts.GetTablet(ctx, si.PrimaryAlias)
-				if err != nil {
-					rec.RecordError(err)
-					return
-				}
-
-				if err := wr.tmc.VReplicationWaitForPos(ctx, ti.Tablet, sourceShard.Uid, pos); err != nil {
-					if strings.Contains(err.Error(), "not found") {
-						wr.Logger().Infof("%v stream %d was not found. Skipping wait.", topoproto.TabletAliasString(si.PrimaryAlias), sourceShard.Uid)
-					} else {
-						rec.RecordError(err)
-					}
-				} else {
-					wr.Logger().Infof("%v caught up", topoproto.TabletAliasString(si.PrimaryAlias))
-				}
-			}
-		}(si)
-	}
-	wg.Wait()
-	return rec.Error()
 }
 
 // refreshPrimaryTablets will just RPC-ping all the primary tablets with RefreshState
@@ -228,33 +121,6 @@ func (wr *Wrangler) refreshPrimaryTablets(ctx context.Context, shards []*topo.Sh
 // updateShardRecords updates the shard records based on 'from' or 'to' direction.
 func (wr *Wrangler) updateShardRecords(ctx context.Context, keyspace string, shards []*topo.ShardInfo, cells []string, servedType topodatapb.TabletType, isFrom bool, clearSourceShards bool) (err error) {
 	return topotools.UpdateShardRecords(ctx, wr.ts, wr.tmc, keyspace, shards, cells, servedType, isFrom, clearSourceShards, wr.Logger())
-}
-
-// updateFrozenFlag sets or unsets the Frozen flag for primary migration. This is performed
-// for all primary tablet control records.
-func (wr *Wrangler) updateFrozenFlag(ctx context.Context, shards []*topo.ShardInfo, value bool) (err error) {
-	for i, si := range shards {
-		updatedShard, err := wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
-			tc := si.GetTabletControl(topodatapb.TabletType_PRIMARY)
-			if tc != nil {
-				tc.Frozen = value
-				return nil
-			}
-			// This shard does not have a tablet control record, adding one to set frozen flag
-			tc = &topodatapb.Shard_TabletControl{
-				TabletType: topodatapb.TabletType_PRIMARY,
-				Frozen:     value,
-			}
-			si.TabletControls = append(si.TabletControls, tc)
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-
-		shards[i] = updatedShard
-	}
-	return nil
 }
 
 func encodeString(in string) string {

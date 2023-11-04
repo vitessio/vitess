@@ -18,37 +18,43 @@ package vtctlbackup
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/replication"
+
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 // constants for test variants
 const (
 	XtraBackup = iota
-	Backup
+	BuiltinBackup
 	Mysqlctld
-	timeout = time.Duration(60 * time.Second)
+	timeout                = time.Duration(60 * time.Second)
+	topoConsistencyTimeout = 20 * time.Second
 )
 
 var (
@@ -78,18 +84,20 @@ var (
 	}
 
 	vtInsertTest = `
-					create table vt_insert_test (
-					  id bigint auto_increment,
-					  msg varchar(64),
-					  primary key (id)
-					  ) Engine=InnoDB`
+		create table vt_insert_test (
+			id bigint auto_increment,
+			msg varchar(64),
+			primary key (id)
+			) Engine=InnoDB
+		`
 )
 
 type CompressionDetails struct {
-	CompressorEngineName    string
-	ExternalCompressorCmd   string
-	ExternalCompressorExt   string
-	ExternalDecompressorCmd string
+	CompressorEngineName            string
+	ExternalCompressorCmd           string
+	ExternalCompressorExt           string
+	ExternalDecompressorCmd         string
+	ManifestExternalDecompressorCmd string
 }
 
 // LaunchCluster : starts the cluster as per given params.
@@ -115,11 +123,18 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	}
 	shard := &localCluster.Keyspaces[0].Shards[0]
 
+	// Create a new init_db.sql file that sets up passwords for all users.
+	// Then we use a db-credentials-file with the passwords.
+	// TODO: We could have operated with empty password here. Create a separate test for --db-credentials-file functionality (@rsajwani)
 	dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 	initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 	sql := string(initDb)
+	// The original init_db.sql does not have any passwords. Here we update the init file with passwords
+	sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(localCluster), "")
+	if err != nil {
+		return 1, err
+	}
 	newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-	sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
 	err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 	if err != nil {
 		return 1, err
@@ -142,7 +157,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 
 		// if streamMode is xbstream, add some additional args to test other xtrabackup flags
 		if streamMode == "xbstream" {
-			xtrabackupArgs = append(xtrabackupArgs, "--xtrabackup_prepare_flags", fmt.Sprintf("--use-memory=100M")) //nolint
+			xtrabackupArgs = append(xtrabackupArgs, "--xtrabackup_prepare_flags", "--use-memory=100M")
 		}
 
 		commonTabletArg = append(commonTabletArg, xtrabackupArgs...)
@@ -151,11 +166,13 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	commonTabletArg = append(commonTabletArg, getCompressorArgs(cDetails)...)
 
 	var mysqlProcs []*exec.Cmd
+	tabletTypes := map[int]string{
+		0: "primary",
+		1: "replica",
+		2: "rdonly",
+	}
 	for i := 0; i < 3; i++ {
-		tabletType := "replica"
-		if i == 0 {
-			tabletType = "primary"
-		}
+		tabletType := tabletTypes[i]
 		tablet := localCluster.NewVttabletInstance(tabletType, 0, cell)
 		tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
 		tablet.VttabletProcess.DbPassword = dbPassword
@@ -163,7 +180,11 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		tablet.VttabletProcess.SupportsBackup = true
 
 		if setupType == Mysqlctld {
-			tablet.MysqlctldProcess = *cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+			mysqlctldProcess, err := cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+			if err != nil {
+				return 1, err
+			}
+			tablet.MysqlctldProcess = *mysqlctldProcess
 			tablet.MysqlctldProcess.InitDBFile = newInitDBFile
 			tablet.MysqlctldProcess.ExtraArgs = extraArgs
 			tablet.MysqlctldProcess.Password = tablet.VttabletProcess.DbPassword
@@ -174,7 +195,11 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 			continue
 		}
 
-		tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+		mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+		if err != nil {
+			return 1, err
+		}
+		tablet.MysqlctlProcess = *mysqlctlProcess
 		tablet.MysqlctlProcess.InitDBFile = newInitDBFile
 		tablet.MysqlctlProcess.ExtraArgs = extraArgs
 		proc, err := tablet.MysqlctlProcess.StartProcess()
@@ -200,16 +225,16 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	if err := localCluster.VtctlclientProcess.InitTablet(replica1, cell, keyspaceName, hostname, shard.Name); err != nil {
 		return 1, err
 	}
+	if err := localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shard.Name); err != nil {
+		return 1, err
+	}
 	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
 	_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	if err != nil {
 		return 1, err
 	}
 
-	for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
-		if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
-			return 1, err
-		}
+	for _, tablet := range []*cluster.Vttablet{primary, replica1, replica2} {
 		if err := tablet.VttabletProcess.Setup(); err != nil {
 			return 1, err
 		}
@@ -245,9 +270,11 @@ func getCompressorArgs(cDetails *CompressionDetails) []string {
 	if cDetails.ExternalDecompressorCmd != "" {
 		args = append(args, fmt.Sprintf("--external-decompressor=%s", cDetails.ExternalDecompressorCmd))
 	}
+	if cDetails.ManifestExternalDecompressorCmd != "" {
+		args = append(args, fmt.Sprintf("--manifest-external-decompressor=%s", cDetails.ManifestExternalDecompressorCmd))
+	}
 
 	return args
-
 }
 
 // update arguments with new values of compressionDetail.
@@ -338,6 +365,10 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 			name:   "TestTerminatedRestore",
 			method: terminatedRestore,
 		}, //
+		{
+			name:   "DoNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup",
+			method: doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup,
+		}, //
 	}
 
 	defer cluster.PanicHandler(t)
@@ -351,6 +382,10 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 	// Run all the backup tests
 	for _, test := range testMethods {
 		if len(runSpecific) > 0 && !isRegistered(test.name, runSpecific) {
+			continue
+		}
+		// don't run this one unless specified
+		if len(runSpecific) == 0 && test.name == "DoNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup" {
 			continue
 		}
 		if retVal := t.Run(test.name, test.method); !retVal {
@@ -387,6 +422,14 @@ type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
 //  13. verify that don't have the data added after the first backup
 //  14. remove the backups
 func primaryBackup(t *testing.T) {
+	// Having the VTOrc in this test causes a lot of flakiness. For example when we delete the tablet `replica2` which
+	// is the current primary and then try to restore from backup the old primary (`primary.Alias`), but before that sometimes the VTOrc
+	// promotes the `replica1` to primary right after we delete the replica2 (current primary).
+	// This can result in unexpected behavior. Therefore, disabling the VTOrc in this test to remove flakiness.
+	localCluster.DisableVTOrcRecoveries(t)
+	defer func() {
+		localCluster.EnableVTOrcRecoveries(t)
+	}()
 	verifyInitialReplication(t)
 
 	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", primary.Alias)
@@ -421,6 +464,8 @@ func primaryBackup(t *testing.T) {
 	backups = localCluster.VerifyBackupCount(t, shardKsName, 2)
 	assert.Contains(t, backups[1], primary.Alias)
 
+	verifyTabletBackupStats(t, primary.VttabletProcess.GetVars())
+
 	// Perform PRS to demote the primary tablet (primary) so that we can do a restore there and verify we don't have the
 	// data from after the older/first backup
 	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--",
@@ -438,6 +483,8 @@ func primaryBackup(t *testing.T) {
 	// Restore the older/first backup -- using the timestamp we saved -- on the original primary tablet (primary)
 	err = localCluster.VtctlclientProcess.ExecuteCommand("RestoreFromBackup", "--", "--backup_timestamp", firstBackupTimestamp, primary.Alias)
 	require.Nil(t, err)
+
+	verifyTabletRestoreStats(t, primary.VttabletProcess.GetVars())
 
 	// Re-init the shard -- making the original primary tablet (primary) primary again -- for subsequent tests
 	err = localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
@@ -464,6 +511,8 @@ func primaryReplicaSameBackup(t *testing.T) {
 	// backup the replica
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
+
+	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
 
 	//  insert more data on the primary
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
@@ -531,6 +580,8 @@ func primaryReplicaSameBackupModifiedCompressionEngine(t *testing.T) {
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
 
+	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
+
 	//  insert more data on the primary
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	require.Nil(t, err)
@@ -583,6 +634,8 @@ func primaryReplicaSameBackupModifiedCompressionEngine(t *testing.T) {
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica2.Alias)
 	require.Nil(t, err)
 
+	verifyTabletBackupStats(t, replica2.VttabletProcess.GetVars())
+
 	// Force replica2 to restore from backup.
 	verifyRestoreTablet(t, replica2, "SERVING")
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 4)
@@ -621,6 +674,8 @@ func testRestoreOldPrimary(t *testing.T, method restoreMethod) {
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
 
+	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
+
 	//  insert more data on the primary
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	require.Nil(t, err)
@@ -640,6 +695,8 @@ func testRestoreOldPrimary(t *testing.T, method restoreMethod) {
 
 	// wait for it to catch up.
 	cluster.VerifyRowsInTablet(t, primary, keyspaceName, 3)
+
+	verifyTabletRestoreStats(t, primary.VttabletProcess.GetVars())
 
 	// teardown
 	restartPrimaryAndReplica(t)
@@ -679,8 +736,6 @@ func restartPrimaryAndReplica(t *testing.T) {
 	for _, tablet := range []*cluster.Vttablet{primary, replica1} {
 		err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shardName)
 		require.Nil(t, err)
-		err = tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.Nil(t, err)
 		err = tablet.VttabletProcess.Setup()
 		require.Nil(t, err)
 	}
@@ -718,9 +773,17 @@ func terminatedRestore(t *testing.T) {
 	// previous test to complete (suspicion: MySQL does not fully start)
 	time.Sleep(5 * time.Second)
 
+	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
+	terminateBackup(t, replica1.Alias)
+	// If backup fails then the tablet type goes back to original type.
+	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
+
 	// backup the replica
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
+	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
+
+	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
 
 	//  insert more data on the primary
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
@@ -736,24 +799,78 @@ func terminatedRestore(t *testing.T) {
 	_, err = replica1.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test3')", keyspaceName, true)
 	require.Nil(t, err)
 
+	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
 	terminateRestore(t)
+	// If restore fails then the tablet type goes back to original type.
+	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("RestoreFromBackup", primary.Alias)
 	require.Nil(t, err)
-
-	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", primary.Alias)
-	require.Nil(t, err)
-
-	var tabletPB topodata.Tablet
-	err = json.Unmarshal([]byte(output), &tabletPB)
-	require.Nil(t, err)
-	assert.Equal(t, tabletPB.Type, topodata.TabletType_REPLICA)
+	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
 
 	_, err = os.Stat(path.Join(primary.VttabletProcess.Directory, "restore_in_progress"))
 	assert.True(t, os.IsNotExist(err))
 
 	cluster.VerifyRowsInTablet(t, primary, keyspaceName, 3)
+
+	verifyTabletRestoreStats(t, primary.VttabletProcess.GetVars())
+
 	stopAllTablets()
+}
+
+func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType) {
+	t.Helper()
+	// for loop for 15 seconds to check if tablet type is correct
+	for i := 0; i < 15; i++ {
+		output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetTablet", alias)
+		require.Nil(t, err)
+		var tabletPB topodata.Tablet
+		err = json2.Unmarshal([]byte(output), &tabletPB)
+		require.NoError(t, err)
+		if tabletType == tabletPB.Type {
+			return
+		}
+		time.Sleep(1 * time.Second)
+	}
+	require.Failf(t, "checkTabletType failed.", "Tablet type is not correct. Expected: %v", tabletType)
+}
+
+func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Start the backup on a replica
+	go func() {
+		defer wg.Done()
+		// ensure this is a primary first
+		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
+
+		// now backup
+		err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+		require.Nil(t, err)
+	}()
+
+	// Perform a graceful reparent operation
+	go func() {
+		defer wg.Done()
+		// ensure this is a primary first
+		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
+
+		// now reparent
+		_, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput(
+			"PlannedReparentShard", "--",
+			"--keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName),
+			"--new_primary", replica1.Alias)
+		require.Nil(t, err)
+
+		// check that we reparented
+		checkTabletType(t, replica1.Alias, topodata.TabletType_PRIMARY)
+	}()
+
+	wg.Wait()
+
+	// check that this is still a primary
+	checkTabletType(t, replica1.Alias, topodata.TabletType_PRIMARY)
 }
 
 // test_backup will:
@@ -770,15 +887,9 @@ func terminatedRestore(t *testing.T) {
 // Args:
 // tablet_type: 'replica' or 'rdonly'.
 func vtctlBackup(t *testing.T, tabletType string) {
-	// Start vtorc before running backups
-	vtorcProcess := localCluster.NewVTOrcProcess(cluster.VTOrcConfiguration{})
-	err := vtorcProcess.Setup()
-	require.NoError(t, err)
-	localCluster.VTOrcProcesses = append(localCluster.VTOrcProcesses, vtorcProcess)
-
 	// StopReplication on replica1. We verify that the replication works fine later in
 	// verifyInitialReplication. So this will also check that VTOrc is running.
-	err = localCluster.VtctlclientProcess.ExecuteCommand("StopReplication", replica1.Alias)
+	err := localCluster.VtctlclientProcess.ExecuteCommand("StopReplication", replica1.Alias)
 	require.Nil(t, err)
 
 	verifyInitialReplication(t)
@@ -789,6 +900,8 @@ func vtctlBackup(t *testing.T, tabletType string) {
 
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
 
+	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
+
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	require.Nil(t, err)
 
@@ -797,12 +910,6 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
-
-	// Stop VTOrc
-	err = localCluster.VTOrcProcesses[0].TearDown()
-	localCluster.VTOrcProcesses = nil
-	require.NoError(t, err)
-
 	err = replica2.VttabletProcess.TearDown()
 	require.Nil(t, err)
 
@@ -810,7 +917,6 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	require.Nil(t, err)
 	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
 	require.Nil(t, err)
-
 }
 
 func InitTestTable(t *testing.T) {
@@ -900,11 +1006,48 @@ func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStat
 	assert.Equal(t, status, expectedStatus)
 }
 
+func terminateBackup(t *testing.T, alias string) {
+	stopBackupMsg := "Done taking Backup"
+	if useXtrabackup {
+		stopBackupMsg = "Starting backup with"
+		useXtrabackup = false
+		defer func() {
+			useXtrabackup = true
+		}()
+	}
+
+	args := append([]string{"--server", localCluster.VtctlclientProcess.Server, "--alsologtostderr"}, "Backup", "--", alias)
+	tmpProcess := exec.Command(
+		"vtctlclient",
+		args...,
+	)
+
+	reader, _ := tmpProcess.StderrPipe()
+	err := tmpProcess.Start()
+	require.Nil(t, err)
+	found := false
+
+	scanner := bufio.NewScanner(reader)
+
+	for scanner.Scan() {
+		text := scanner.Text()
+		if strings.Contains(text, stopBackupMsg) {
+			tmpProcess.Process.Signal(syscall.SIGTERM)
+			found = true //nolint
+			return
+		}
+	}
+	assert.True(t, found, "backup message not found")
+}
+
 func terminateRestore(t *testing.T) {
 	stopRestoreMsg := "Copying file 10"
 	if useXtrabackup {
 		stopRestoreMsg = "Restore: Preparing"
 		useXtrabackup = false
+		defer func() {
+			useXtrabackup = true
+		}()
 	}
 
 	args := append([]string{"--server", localCluster.VtctlclientProcess.Server, "--alsologtostderr"}, "RestoreFromBackup", "--", primary.Alias)
@@ -927,45 +1070,38 @@ func terminateRestore(t *testing.T) {
 				assert.Fail(t, "restore in progress file missing")
 			}
 			tmpProcess.Process.Signal(syscall.SIGTERM)
-			found = true //nolint
-			return
+			found = true
+			break
 		}
 	}
 	assert.True(t, found, "Restore message not found")
 }
 
-func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, tabletType string) (backups []string, destroy func(t *testing.T)) {
-	restoreWaitForBackup(t, tabletType, nil, true)
-	verifyInitialReplication(t)
+func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, replicaIndex int) (backups []string) {
+	replica := getReplica(t, replicaIndex)
+	numBackups := len(waitForNumBackups(t, -1))
 
-	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica.Alias)
 	require.Nil(t, err)
 
-	backups = localCluster.VerifyBackupCount(t, shardKsName, 1)
+	backups = waitForNumBackups(t, numBackups+1)
+	require.NotEmpty(t, backups)
 
-	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
-	require.Nil(t, err)
+	verifyTabletBackupStats(t, replica.VttabletProcess.GetVars())
 
-	err = replica2.VttabletProcess.TearDown()
-	require.Nil(t, err)
-
-	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", replica2.Alias)
-	require.Nil(t, err)
-
-	destroy = func(t *testing.T) {
-		verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
-	}
-	return backups, destroy
+	return backups
 }
 
-func GetReplicaPosition(t *testing.T) string {
-	pos, _ := cluster.GetPrimaryPosition(t, *replica1, hostname)
+func GetReplicaPosition(t *testing.T, replicaIndex int) string {
+	replica := getReplica(t, replicaIndex)
+	pos, _ := cluster.GetPrimaryPosition(t, *replica, hostname)
 	return pos
 }
 
-func GetReplicaGtidPurged(t *testing.T) string {
+func GetReplicaGtidPurged(t *testing.T, replicaIndex int) string {
+	replica := getReplica(t, replicaIndex)
 	query := "select @@global.gtid_purged as gtid_purged"
-	rs, err := replica1.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	rs, err := replica.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.NoError(t, err)
 	row := rs.Named().Row()
 	require.NotNil(t, row)
@@ -998,13 +1134,62 @@ func ReadRowsFromPrimary(t *testing.T) (msgs []string) {
 	return ReadRowsFromTablet(t, primary)
 }
 
-func ReadRowsFromReplica(t *testing.T) (msgs []string) {
-	return ReadRowsFromTablet(t, replica1)
+func getReplica(t *testing.T, replicaIndex int) *cluster.Vttablet {
+	switch replicaIndex {
+	case 0:
+		return replica1
+	case 1:
+		return replica2
+	default:
+		assert.Failf(t, "invalid replica index", "index=%d", replicaIndex)
+		return nil
+	}
+}
+
+func ReadRowsFromReplica(t *testing.T, replicaIndex int) (msgs []string) {
+	return ReadRowsFromTablet(t, getReplica(t, replicaIndex))
+}
+
+// FlushBinaryLogsOnReplica issues `FLUSH BINARY LOGS` <count> times
+func FlushBinaryLogsOnReplica(t *testing.T, replicaIndex int, count int) {
+	replica := getReplica(t, replicaIndex)
+	query := "flush binary logs"
+	for i := 0; i < count; i++ {
+		_, err := replica.VttabletProcess.QueryTablet(query, keyspaceName, true)
+		require.NoError(t, err)
+	}
+}
+
+// FlushAndPurgeBinaryLogsOnReplica intentionally loses all existing binary logs. It flushes into a new binary log
+// and immediately purges all previous logs.
+// This is used to lose information.
+func FlushAndPurgeBinaryLogsOnReplica(t *testing.T, replicaIndex int) (lastBinlog string) {
+	FlushBinaryLogsOnReplica(t, replicaIndex, 1)
+
+	replica := getReplica(t, replicaIndex)
+	{
+		query := "show binary logs"
+		rs, err := replica.VttabletProcess.QueryTablet(query, keyspaceName, true)
+		require.NoError(t, err)
+		require.NotEmpty(t, rs.Rows)
+		for _, row := range rs.Rows {
+			// binlog file name is first column
+			lastBinlog = row[0].ToString()
+		}
+	}
+	{
+		query, err := sqlparser.ParseAndBind("purge binary logs to %a", sqltypes.StringBindVariable(lastBinlog))
+		require.NoError(t, err)
+		_, err = replica.VttabletProcess.QueryTablet(query, keyspaceName, true)
+		require.NoError(t, err)
+	}
+	return lastBinlog
 }
 
 func readManifestFile(t *testing.T, backupLocation string) (manifest *mysqlctl.BackupManifest) {
 	// reading manifest
-	data, err := os.ReadFile(backupLocation + "/MANIFEST")
+	fullPath := backupLocation + "/MANIFEST"
+	data, err := os.ReadFile(fullPath)
 	require.NoErrorf(t, err, "error while reading MANIFEST %v", err)
 
 	// parsing manifest
@@ -1014,19 +1199,50 @@ func readManifestFile(t *testing.T, backupLocation string) (manifest *mysqlctl.B
 	return manifest
 }
 
-func TestReplicaFullBackup(t *testing.T) (manifest *mysqlctl.BackupManifest, destroy func(t *testing.T)) {
-	backups, destroy := vtctlBackupReplicaNoDestroyNoWrites(t, "replica")
+func TestReplicaFullBackup(t *testing.T, replicaIndex int) (manifest *mysqlctl.BackupManifest) {
+	backups := vtctlBackupReplicaNoDestroyNoWrites(t, replicaIndex)
 
 	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backups[len(backups)-1]
-	return readManifestFile(t, backupLocation), destroy
+	return readManifestFile(t, backupLocation)
 }
 
-func TestReplicaIncrementalBackup(t *testing.T, incrementalFromPos mysql.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+// waitForNumBackups waits for GetBackups to list exactly the given expected number.
+// If expectNumBackups < 0 then any response is considered valid
+func waitForNumBackups(t *testing.T, expectNumBackups int) []string {
+	ctx, cancel := context.WithTimeout(context.Background(), topoConsistencyTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		backups, err := localCluster.ListBackups(shardKsName)
+		require.NoError(t, err)
+		if expectNumBackups < 0 {
+			// any result is valid
+			return backups
+		}
+		if len(backups) == expectNumBackups {
+			// what we waited for
+			return backups
+		}
+		assert.Less(t, len(backups), expectNumBackups)
+		select {
+		case <-ctx.Done():
+			assert.Failf(t, ctx.Err().Error(), "expected %d backups, got %d", expectNumBackups, len(backups))
+			return nil
+		case <-ticker.C:
+		}
+	}
+}
+
+func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos replication.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+	numBackups := len(waitForNumBackups(t, -1))
 	incrementalFromPosArg := "auto"
 	if !incrementalFromPos.IsZero() {
-		incrementalFromPosArg = mysql.EncodePosition(incrementalFromPos)
+		incrementalFromPosArg = replication.EncodePosition(incrementalFromPos)
 	}
-	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", "--", "--incremental_from_pos", incrementalFromPosArg, replica1.Alias)
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", "--incremental-from-pos", incrementalFromPosArg, replica.Alias)
 	if expectError != "" {
 		require.Errorf(t, err, "expected: %v", expectError)
 		require.Contains(t, output, expectError)
@@ -1034,21 +1250,159 @@ func TestReplicaIncrementalBackup(t *testing.T, incrementalFromPos mysql.Positio
 	}
 	require.NoErrorf(t, err, "output: %v", output)
 
-	backups, err := localCluster.ListBackups(shardKsName)
-	require.NoError(t, err)
+	backups := waitForNumBackups(t, numBackups+1)
+	require.NotEmptyf(t, backups, "output: %v", output)
+
+	verifyTabletBackupStats(t, replica.VttabletProcess.GetVars())
 	backupName = backups[len(backups)-1]
 	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backupName
 	return readManifestFile(t, backupLocation), backupName
 }
 
-func TestReplicaRestoreToPos(t *testing.T, restoreToPos mysql.Position, expectError string) {
-	require.False(t, restoreToPos.IsZero())
-	restoreToPosArg := mysql.EncodePosition(restoreToPos)
-	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("RestoreFromBackup", "--", "--restore_to_pos", restoreToPosArg, replica1.Alias)
+func TestReplicaIncrementalBackup(t *testing.T, replicaIndex int, incrementalFromPos replication.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+	replica := getReplica(t, replicaIndex)
+	return testReplicaIncrementalBackup(t, replica, incrementalFromPos, expectError)
+}
+
+func TestReplicaFullRestore(t *testing.T, replicaIndex int, expectError string) {
+	replica := getReplica(t, replicaIndex)
+
+	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("RestoreFromBackup", replica.Alias)
 	if expectError != "" {
 		require.Errorf(t, err, "expected: %v", expectError)
 		require.Contains(t, output, expectError)
 		return
 	}
 	require.NoErrorf(t, err, "output: %v", output)
+	verifyTabletRestoreStats(t, replica.VttabletProcess.GetVars())
+}
+
+func TestReplicaRestoreToPos(t *testing.T, replicaIndex int, restoreToPos replication.Position, expectError string) {
+	replica := getReplica(t, replicaIndex)
+
+	require.False(t, restoreToPos.IsZero())
+	restoreToPosArg := replication.EncodePosition(restoreToPos)
+	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("RestoreFromBackup", "--", "--restore_to_pos", restoreToPosArg, replica.Alias)
+	if expectError != "" {
+		require.Errorf(t, err, "expected: %v", expectError)
+		require.Contains(t, output, expectError)
+		return
+	}
+	require.NoErrorf(t, err, "output: %v", output)
+	verifyTabletRestoreStats(t, replica.VttabletProcess.GetVars())
+}
+
+func TestReplicaRestoreToTimestamp(t *testing.T, restoreToTimestamp time.Time, expectError string) {
+	require.False(t, restoreToTimestamp.IsZero())
+	restoreToTimestampArg := mysqlctl.FormatRFC3339(restoreToTimestamp)
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("RestoreFromBackup", "--restore-to-timestamp", restoreToTimestampArg, replica1.Alias)
+	if expectError != "" {
+		require.Errorf(t, err, "expected: %v", expectError)
+		require.Contains(t, output, expectError)
+		return
+	}
+	require.NoErrorf(t, err, "output: %v", output)
+	verifyTabletRestoreStats(t, replica1.VttabletProcess.GetVars())
+}
+
+func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
+	// Currently only the builtin backup engine instruments bytes-processed
+	// counts.
+	if !useXtrabackup {
+		require.Contains(t, vars, "BackupBytes")
+		bb := vars["BackupBytes"].(map[string]any)
+		require.Contains(t, bb, "BackupEngine.Builtin.Compressor:Write")
+		require.Contains(t, bb, "BackupEngine.Builtin.Destination:Write")
+		require.Contains(t, bb, "BackupEngine.Builtin.Source:Read")
+		if backupstorage.BackupStorageImplementation == "file" {
+			require.Contains(t, bb, "BackupStorage.File.File:Write")
+		}
+	}
+
+	require.Contains(t, vars, "BackupCount")
+	bc := vars["BackupCount"].(map[string]any)
+	require.Contains(t, bc, "-.-.Backup")
+	// Currently only the builtin backup engine implements operation counts.
+	if !useXtrabackup {
+		require.Contains(t, bc, "BackupEngine.Builtin.Compressor:Close")
+		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Close")
+		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Open")
+		require.Contains(t, bc, "BackupEngine.Builtin.Source:Close")
+		require.Contains(t, bc, "BackupEngine.Builtin.Source:Open")
+	}
+
+	require.Contains(t, vars, "BackupDurationNanoseconds")
+	bd := vars["BackupDurationNanoseconds"]
+	require.Contains(t, bd, "-.-.Backup")
+	// Currently only the builtin backup engine emits timings.
+	if !useXtrabackup {
+		require.Contains(t, bd, "BackupEngine.Builtin.Compressor:Close")
+		require.Contains(t, bd, "BackupEngine.Builtin.Compressor:Write")
+		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Close")
+		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Open")
+		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Write")
+		require.Contains(t, bd, "BackupEngine.Builtin.Source:Close")
+		require.Contains(t, bd, "BackupEngine.Builtin.Source:Open")
+		require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
+	}
+	if backupstorage.BackupStorageImplementation == "file" {
+		require.Contains(t, bd, "BackupStorage.File.File:Write")
+	}
+
+}
+
+func verifyRestorePositionAndTimeStats(t *testing.T, vars map[string]any) {
+	backupPosition := vars["RestorePosition"].(string)
+	backupTime := vars["RestoredBackupTime"].(string)
+	require.Contains(t, vars, "RestoredBackupTime")
+	require.Contains(t, vars, "RestorePosition")
+	require.NotEqual(t, "", backupPosition)
+	require.NotEqual(t, "", backupTime)
+	rp, err := replication.DecodePosition(backupPosition)
+	require.NoError(t, err)
+	require.False(t, rp.IsZero())
+}
+
+func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
+	// Currently only the builtin backup engine instruments bytes-processed
+	// counts.
+
+	verifyRestorePositionAndTimeStats(t, vars)
+
+	if !useXtrabackup {
+		require.Contains(t, vars, "RestoreBytes")
+		bb := vars["RestoreBytes"].(map[string]any)
+		require.Contains(t, bb, "BackupEngine.Builtin.Decompressor:Read")
+		require.Contains(t, bb, "BackupEngine.Builtin.Destination:Write")
+		require.Contains(t, bb, "BackupEngine.Builtin.Source:Read")
+		require.Contains(t, bb, "BackupStorage.File.File:Read")
+	}
+
+	require.Contains(t, vars, "RestoreCount")
+	bc := vars["RestoreCount"].(map[string]any)
+	require.Contains(t, bc, "-.-.Restore")
+	// Currently only the builtin backup engine emits operation counts.
+	if !useXtrabackup {
+		require.Contains(t, bc, "BackupEngine.Builtin.Decompressor:Close")
+		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Close")
+		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Open")
+		require.Contains(t, bc, "BackupEngine.Builtin.Source:Close")
+		require.Contains(t, bc, "BackupEngine.Builtin.Source:Open")
+	}
+
+	require.Contains(t, vars, "RestoreDurationNanoseconds")
+	bd := vars["RestoreDurationNanoseconds"]
+	require.Contains(t, bd, "-.-.Restore")
+	// Currently only the builtin backup engine emits timings.
+	if !useXtrabackup {
+		require.Contains(t, bd, "BackupEngine.Builtin.Decompressor:Close")
+		require.Contains(t, bd, "BackupEngine.Builtin.Decompressor:Read")
+		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Close")
+		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Open")
+		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Write")
+		require.Contains(t, bd, "BackupEngine.Builtin.Source:Close")
+		require.Contains(t, bd, "BackupEngine.Builtin.Source:Open")
+		require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
+	}
+	require.Contains(t, bd, "BackupStorage.File.File:Read")
 }

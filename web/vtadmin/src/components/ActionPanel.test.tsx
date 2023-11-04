@@ -17,24 +17,12 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { rest } from 'msw';
-import { setupServer } from 'msw/node';
 import { QueryClient, QueryClientProvider, useMutation } from 'react-query';
+import { describe, it, expect, vi } from 'vitest';
 
 import ActionPanel, { ActionPanelProps } from './ActionPanel';
 
-const ORIGINAL_PROCESS_ENV = process.env;
-const TEST_PROCESS_ENV = {
-    ...process.env,
-    REACT_APP_VTADMIN_API_ADDRESS: '',
-};
-
 describe('ActionPanel', () => {
-    const server = setupServer(
-        rest.post('/api/test', (req, res, ctx) => {
-            return res(ctx.json({ ok: true }));
-        })
-    );
-
     const queryClient = new QueryClient({
         defaultOptions: { queries: { retry: false } },
     });
@@ -44,32 +32,29 @@ describe('ActionPanel', () => {
      * that is _within_ the context of a QueryClientProvider. This Wrapper component
      * provides such a function and should be `render`ed in the context QueryClientProvider.
      */
-    const Wrapper: React.FC<Omit<ActionPanelProps, 'mutation'>> = (props) => {
-        const mutation = useMutation(() => fetch('/api/test', { method: 'post' }));
+    const Wrapper: React.FC<ActionPanelProps & { url: string }> = (props) => {
+        const mutation = useMutation(() => fetch(new URL(props['url']), { method: 'post' }), {
+            onError: (error) => {
+                console.log('ERROR: ', error);
+            },
+        });
         return <ActionPanel {...props} mutation={mutation as any} />;
     };
 
-    beforeAll(() => {
-        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
-        server.listen();
-    });
-
-    afterEach(() => {
-        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
-        jest.clearAllMocks();
-    });
-
-    afterAll(() => {
-        process.env = { ...ORIGINAL_PROCESS_ENV };
-        server.close();
-    });
-
     it('initiates the mutation', async () => {
-        jest.spyOn(global, 'fetch');
+        vi.spyOn(global, 'fetch');
+
+        const url = `${import.meta.env.VITE_VTADMIN_API_ADDRESS}/api/test`;
+        global.server.use(
+            rest.post(url, (req, res, ctx) => {
+                return res(ctx.json({ ok: true }));
+            })
+        );
 
         render(
             <QueryClientProvider client={queryClient}>
                 <Wrapper
+                    url={url}
                     confirmationValue="zone1-101"
                     description="Do an action."
                     documentationLink="https://test.com"
@@ -95,7 +80,7 @@ describe('ActionPanel', () => {
         expect(button).toHaveTextContent('Doing Action...');
 
         expect(global.fetch).toHaveBeenCalledTimes(1);
-        expect(global.fetch).toHaveBeenCalledWith('/api/test', { method: 'post' });
+        expect(global.fetch).toHaveBeenCalledWith(new URL(url), { method: 'post' });
 
         // Wait for API request to complete
         await waitFor(() => expect(button).toHaveTextContent('Do Action'));

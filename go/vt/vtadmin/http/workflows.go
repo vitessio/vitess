@@ -48,7 +48,7 @@ func GetWorkflow(ctx context.Context, r Request, api *API) *JSONResponse {
 // method.
 //
 // Its route is /workflows, with query params:
-// - cluster: repeated, cluster IDs
+// - cluster_id: repeated, cluster IDs
 // - active_only
 // - keyspace: repeated
 // - ignore_keyspace: repeated
@@ -61,7 +61,7 @@ func GetWorkflows(ctx context.Context, r Request, api *API) *JSONResponse {
 	}
 
 	workflows, err := api.server.GetWorkflows(ctx, &vtadminpb.GetWorkflowsRequest{
-		ClusterIds:      query["cluster"],
+		ClusterIds:      query["cluster_id"],
 		Keyspaces:       query["keyspace"],
 		IgnoreKeyspaces: query["ignore_keyspace"],
 		ActiveOnly:      activeOnly,

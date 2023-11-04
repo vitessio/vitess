@@ -19,9 +19,13 @@ package loadkeyspace
 import (
 	"os"
 	"path"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
@@ -68,7 +72,7 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 		Name:      keyspaceName,
 		SchemaSQL: sqlSchema,
 	}
-	clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal"}
+	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
 	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
 	require.NoError(t, err)
 
@@ -76,18 +80,23 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
 		err = vttablet.VttabletProcess.TearDown()
 		require.NoError(t, err)
+		utils.TimeoutAction(t, 1*time.Minute, "timeout - teardown of VTTablet", func() bool {
+			return vttablet.VttabletProcess.GetStatus() == ""
+		})
 	}
 
 	// Start vtgate with the schema_change_signal flag
-	clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema_change_signal")
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
 
-	// check warning logs
-	logDir := clusterInstance.VtgateProcess.LogDir
-	all, err := os.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
-	require.NoError(t, err)
-	require.Contains(t, string(all), "Unable to get initial schema reload")
+	// After starting VTGate we need to leave enough time for resolveAndLoadKeyspace to reach
+	// the schema tracking timeout (5 seconds).
+	utils.TimeoutAction(t, 5*time.Minute, "timeout - could not find 'Unable to get initial schema reload' in 'vtgate-stderr.txt'", func() bool {
+		logDir := clusterInstance.VtgateProcess.LogDir
+		all, _ := os.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
+		return strings.Contains(string(all), "Unable to get initial schema reload")
+	})
 }
 
 func TestNoInitialKeyspace(t *testing.T) {

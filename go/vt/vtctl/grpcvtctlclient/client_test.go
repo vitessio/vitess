@@ -17,6 +17,7 @@ limitations under the License.
 package grpcvtctlclient
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -38,7 +39,9 @@ import (
 // the test here creates a fake server implementation, a fake client
 // implementation, and runs the test suite against the setup.
 func TestVtctlServer(t *testing.T) {
-	ts := vtctlclienttest.CreateTopoServer(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := vtctlclienttest.CreateTopoServer(t, ctx)
 
 	// Listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -65,7 +68,9 @@ func TestVtctlServer(t *testing.T) {
 // the test here creates a fake server implementation, a fake client with auth
 // implementation, and runs the test suite against the setup.
 func TestVtctlAuthClient(t *testing.T) {
-	ts := vtctlclienttest.CreateTopoServer(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := vtctlclienttest.CreateTopoServer(t, ctx)
 
 	// Listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

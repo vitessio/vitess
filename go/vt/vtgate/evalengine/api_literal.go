@@ -17,15 +17,17 @@ limitations under the License.
 package evalengine
 
 import (
-	"encoding/hex"
+	"errors"
 	"math"
-	"strconv"
+	"math/big"
 	"unicode/utf8"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
+	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/fastparse"
+	"vitess.io/vitess/go/mysql/hex"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 // NullExpr is just what you are lead to believe
@@ -38,9 +40,9 @@ func NewLiteralIntegralFromBytes(val []byte) (*Literal, error) {
 		panic("NewLiteralIntegralFromBytes: negative value")
 	}
 
-	uval, err := strconv.ParseUint(string(val), 10, 64)
+	uval, err := fastparse.ParseUint64(hack.String(val), 10)
 	if err != nil {
-		if numError, ok := err.(*strconv.NumError); ok && numError.Err == strconv.ErrRange {
+		if errors.Is(err, fastparse.ErrOverflow) {
 			return NewLiteralDecimalFromBytes(val)
 		}
 		return nil, err
@@ -72,7 +74,7 @@ func NewLiteralFloat(val float64) *Literal {
 
 // NewLiteralFloatFromBytes returns a float literal expression from a slice of bytes
 func NewLiteralFloatFromBytes(val []byte) (*Literal, error) {
-	fval, err := strconv.ParseFloat(string(val), 64)
+	fval, err := fastparse.ParseFloat64(hack.String(val))
 	if err != nil {
 		return nil, err
 	}
@@ -101,36 +103,36 @@ func NewLiteralString(val []byte, collation collations.TypedCollation) *Literal 
 
 // NewLiteralDateFromBytes returns a literal expression.
 func NewLiteralDateFromBytes(val []byte) (*Literal, error) {
-	_, err := sqlparser.ParseDate(string(val))
+	t, err := parseDate(val)
 	if err != nil {
 		return nil, err
 	}
-	return &Literal{newEvalRaw(querypb.Type_DATE, val, collationNumeric)}, nil
+	return &Literal{t}, nil
 }
 
 // NewLiteralTimeFromBytes returns a literal expression.
 // it validates the time by parsing it and checking the error.
 func NewLiteralTimeFromBytes(val []byte) (*Literal, error) {
-	_, err := sqlparser.ParseTime(string(val))
+	t, err := parseTime(val)
 	if err != nil {
 		return nil, err
 	}
-	return &Literal{newEvalRaw(querypb.Type_TIME, val, collationNumeric)}, nil
+	return &Literal{t}, nil
 }
 
 // NewLiteralDatetimeFromBytes returns a literal expression.
 // it validates the datetime by parsing it and checking the error.
 func NewLiteralDatetimeFromBytes(val []byte) (*Literal, error) {
-	_, err := sqlparser.ParseDateTime(string(val))
+	t, err := parseDateTime(val)
 	if err != nil {
 		return nil, err
 	}
-	return &Literal{newEvalRaw(querypb.Type_DATETIME, val, collationNumeric)}, nil
+	return &Literal{t}, nil
 }
 
 func parseHexLiteral(val []byte) ([]byte, error) {
-	raw := make([]byte, hex.DecodedLen(len(val)))
-	if _, err := hex.Decode(raw, val); err != nil {
+	raw := make([]byte, hex.DecodedLen(val))
+	if err := hex.DecodeBytes(raw, val); err != nil {
 		return nil, err
 	}
 	return raw, nil
@@ -154,6 +156,15 @@ func parseHexNumber(val []byte) ([]byte, error) {
 	return parseHexLiteral(val[1:])
 }
 
+func parseBitLiteral(val []byte) ([]byte, error) {
+	var i big.Int
+	_, ok := i.SetString(string(val), 2)
+	if !ok {
+		panic("malformed bit literal from parser")
+	}
+	return i.Bytes(), nil
+}
+
 func NewLiteralBinary(val []byte) *Literal {
 	return &Literal{newEvalBinary(val)}
 }
@@ -174,29 +185,38 @@ func NewLiteralBinaryFromHexNum(val []byte) (*Literal, error) {
 	return &Literal{newEvalBytesHex(raw)}, nil
 }
 
+func NewLiteralBinaryFromBit(val []byte) (*Literal, error) {
+	raw, err := parseBitLiteral(val)
+	if err != nil {
+		return nil, err
+	}
+	return &Literal{newEvalBytesBit(raw)}, nil
+}
+
 // NewBindVar returns a bind variable
-func NewBindVar(key string, collation collations.TypedCollation) Expr {
+func NewBindVar(key string, typ sqltypes.Type, col collations.ID) *BindVariable {
 	return &BindVariable{
-		Key:    key,
-		col:    collation,
-		coerce: -1,
+		Key:       key,
+		Type:      typ,
+		Collation: defaultCoercionCollation(col),
 	}
 }
 
 // NewBindVarTuple returns a bind variable containing a tuple
-func NewBindVarTuple(key string) Expr {
+func NewBindVarTuple(key string, col collations.ID) *BindVariable {
 	return &BindVariable{
-		Key:    key,
-		tuple:  true,
-		coerce: -1,
+		Key:       key,
+		Type:      sqltypes.Tuple,
+		Collation: defaultCoercionCollation(col),
 	}
 }
 
 // NewColumn returns a column expression
-func NewColumn(offset int, collation collations.TypedCollation) Expr {
+func NewColumn(offset int, typ sqltypes.Type, col collations.ID) *Column {
 	return &Column{
-		Offset: offset,
-		coll:   collation,
+		Offset:    offset,
+		Type:      typ,
+		Collation: defaultCoercionCollation(col),
 	}
 }
 

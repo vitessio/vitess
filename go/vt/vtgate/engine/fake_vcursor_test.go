@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -50,12 +51,17 @@ var _ SessionActions = (*noopVCursor)(nil)
 type noopVCursor struct {
 }
 
+func (t *noopVCursor) GetUDV(key string) *querypb.BindVariable {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (t *noopVCursor) InTransaction() bool {
 	return false
 }
 
 func (t *noopVCursor) SetCommitOrder(co vtgatepb.CommitOrder) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -87,6 +93,10 @@ func (t *noopVCursor) SetExec(ctx context.Context, name string, value string) er
 	panic("implement me")
 }
 
+func (t *noopVCursor) ThrottleApp(ctx context.Context, throttleAppRule *topodatapb.ThrottledAppRule) error {
+	panic("implement me")
+}
+
 func (t *noopVCursor) ShowExec(ctx context.Context, command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
 	panic("implement me")
 }
@@ -98,7 +108,11 @@ func (t *noopVCursor) SetContextWithValue(key, value interface{}) func() {
 
 // ConnCollation implements VCursor
 func (t *noopVCursor) ConnCollation() collations.ID {
-	return collations.CollationUtf8mb4ID
+	return collations.Default()
+}
+
+func (t *noopVCursor) TimeZone() *time.Location {
+	return nil
 }
 
 func (t *noopVCursor) ExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -142,6 +156,14 @@ func (t *noopVCursor) SetDDLStrategy(strategy string) {
 }
 
 func (t *noopVCursor) GetDDLStrategy() string {
+	panic("implement me")
+}
+
+func (t *noopVCursor) SetMigrationContext(migrationContext string) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetMigrationContext() string {
 	panic("implement me")
 }
 
@@ -255,7 +277,15 @@ func (t *noopVCursor) SetWorkload(querypb.ExecuteOptions_Workload) {
 	panic("implement me")
 }
 
+func (t *noopVCursor) SetWorkloadName(string) {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) SetPriority(string) {
 	panic("implement me")
 }
 
@@ -357,6 +387,11 @@ type loggingVCursor struct {
 	ksShardMap map[string][]string
 
 	shardSession []*srvtopo.ResolvedShard
+}
+
+func (f *loggingVCursor) GetUDV(key string) *querypb.BindVariable {
+	// TODO implement me
+	panic("implement me")
 }
 
 type tableRoutes struct {
@@ -682,7 +717,15 @@ func (f *loggingVCursor) SetWorkload(querypb.ExecuteOptions_Workload) {
 	panic("implement me")
 }
 
+func (f *loggingVCursor) SetWorkloadName(string) {
+	panic("implement me")
+}
+
 func (f *loggingVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion) {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetPriority(string) {
 	panic("implement me")
 }
 

@@ -22,10 +22,9 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
+	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -54,8 +53,11 @@ type EmergencyReparenter struct {
 // EmergencyReparentShard operations. Options are passed by value, so it is safe
 // for callers to mutate and reuse options structs for multiple calls.
 type EmergencyReparentOptions struct {
-	NewPrimaryAlias           *topodatapb.TabletAlias
-	IgnoreReplicas            sets.Set[string]
+	NewPrimaryAlias *topodatapb.TabletAlias
+	IgnoreReplicas  sets.Set[string]
+	// WaitAllTablets is used to specify whether ERS should wait for all the tablets to return and not proceed
+	// further after n-1 tablets have returned.
+	WaitAllTablets            bool
 	WaitReplicasTimeout       time.Duration
 	PreventCrossCellPromotion bool
 
@@ -97,10 +99,10 @@ func NewEmergencyReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, l
 // keyspace and shard.
 func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace string, shard string, opts EmergencyReparentOptions) (*events.Reparent, error) {
 	var err error
+	opts.lockAction = erp.getLockAction(opts.NewPrimaryAlias)
 	// First step is to lock the shard for the given operation, if not already locked
 	if err = topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		var unlock func(*error)
-		opts.lockAction = erp.getLockAction(opts.NewPrimaryAlias)
 		ctx, unlock, err = erp.ts.LockShard(ctx, keyspace, shard, opts.lockAction)
 		if err != nil {
 			return nil, err
@@ -147,7 +149,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		shardInfo                  *topo.ShardInfo
 		prevPrimary                *topodatapb.Tablet
 		tabletMap                  map[string]*topo.TabletInfo
-		validCandidates            map[string]mysql.Position
+		validCandidates            map[string]replication.Position
 		intermediateSource         *topodatapb.Tablet
 		validCandidateTablets      []*topodatapb.Tablet
 		validReplacementCandidates []*topodatapb.Tablet
@@ -191,7 +193,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Stop replication on all the tablets and build their status map
-	stoppedReplicationSnapshot, err = stopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, topo.RemoteOperationTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, opts.durability, erp.logger)
+	stoppedReplicationSnapshot, err = stopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, topo.RemoteOperationTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, opts.durability, opts.WaitAllTablets, erp.logger)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
@@ -298,14 +300,13 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if err != nil {
 		return err
 	}
-
-	ev.NewPrimary = proto.Clone(newPrimary).(*topodatapb.Tablet)
+	ev.NewPrimary = newPrimary.CloneVT()
 	return err
 }
 
 func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	ctx context.Context,
-	validCandidates map[string]mysql.Position,
+	validCandidates map[string]replication.Position,
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	waitReplicasTimeout time.Duration,
@@ -371,7 +372,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 
 // findMostAdvanced finds the intermediate source for ERS. We always choose the most advanced one from our valid candidates list. Further ties are broken by looking at the promotion rules.
 func (erp *EmergencyReparenter) findMostAdvanced(
-	validCandidates map[string]mysql.Position,
+	validCandidates map[string]replication.Position,
 	tabletMap map[string]*topo.TabletInfo,
 	opts EmergencyReparentOptions,
 ) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {

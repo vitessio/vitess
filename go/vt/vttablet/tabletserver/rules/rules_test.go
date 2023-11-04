@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -542,21 +543,23 @@ func TestAction(t *testing.T) {
 		Trailing: "other trailing comments",
 	}
 
-	action, cancelCtx, desc := qrs.GetAction("123", "user1", bv, mc)
+	action, cancelCtx, timeout, desc := qrs.GetAction("123", "user1", bv, mc)
 	assert.Equalf(t, action, QRFail, "expected fail, got %v", action)
+	assert.Equalf(t, timeout, time.Duration(0), "expected zero timeout")
 	assert.Equalf(t, desc, "rule 1", "want rule 1, got %s", desc)
 	assert.Nil(t, cancelCtx)
 
-	action, cancelCtx, desc = qrs.GetAction("1234", "user", bv, mc)
+	action, cancelCtx, timeout, desc = qrs.GetAction("1234", "user", bv, mc)
 	assert.Equalf(t, action, QRFailRetry, "want fail_retry, got: %s", action)
+	assert.Equalf(t, timeout, time.Duration(0), "expected zero timeout")
 	assert.Equalf(t, desc, "rule 2", "want rule 2, got %s", desc)
 	assert.Nil(t, cancelCtx)
 
-	action, _, _ = qrs.GetAction("1234", "user1", bv, mc)
+	action, _, _, _ = qrs.GetAction("1234", "user1", bv, mc)
 	assert.Equalf(t, action, QRContinue, "want continue, got %s", action)
 
 	bv["a"] = sqltypes.Uint64BindVariable(1)
-	action, _, desc = qrs.GetAction("1234", "user1", bv, mc)
+	action, _, _, desc = qrs.GetAction("1234", "user1", bv, mc)
 	assert.Equalf(t, action, QRFail, "want fail, got %s", action)
 	assert.Equalf(t, desc, "rule 3", "want rule 3, got %s", desc)
 
@@ -569,7 +572,7 @@ func TestAction(t *testing.T) {
 	newQrs := qrs.Copy()
 	newQrs.Add(qr4)
 
-	action, _, desc = newQrs.GetAction("1234", "user1", bv, mc)
+	action, _, _, desc = newQrs.GetAction("1234", "user1", bv, mc)
 	assert.Equalf(t, action, QRFail, "want fail, got %s", action)
 	assert.Equalf(t, desc, "rule 4", "want rule 4, got %s", desc)
 
@@ -578,7 +581,7 @@ func TestAction(t *testing.T) {
 
 	newQrs = qrs.Copy()
 	newQrs.Add(qr5)
-	action, _, desc = newQrs.GetAction("1234", "user1", bv, mc)
+	action, _, _, desc = newQrs.GetAction("1234", "user1", bv, mc)
 	assert.Equalf(t, action, QRFail, "want fail, got %s", action)
 	assert.Equalf(t, desc, "rule 5", "want rule 5, got %s", desc)
 }

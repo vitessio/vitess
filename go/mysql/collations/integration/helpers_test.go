@@ -27,6 +27,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations/colldata"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -52,7 +54,7 @@ func testRemoteWeights(t *testing.T, golden io.Writer, cases []testweight) {
 		t.Run(tc.collation, func(t *testing.T) {
 			local := collations.Local().LookupByName(tc.collation)
 			remote := remote.NewCollation(conn, tc.collation)
-			localResult := local.WeightString(nil, tc.input, 0)
+			localResult := colldata.Lookup(local).WeightString(nil, tc.input, 0)
 			remoteResult := remote.WeightString(nil, tc.input, 0)
 
 			if err := remote.LastError(); err != nil {
@@ -85,7 +87,7 @@ func testRemoteComparison(t *testing.T, golden io.Writer, cases []testcmp) {
 		t.Run(tc.collation, func(t *testing.T) {
 			local := collations.Local().LookupByName(tc.collation)
 			remote := remote.NewCollation(conn, tc.collation)
-			localResult := normalizecmp(local.Collate(tc.left, tc.right, false))
+			localResult := normalizecmp(colldata.Lookup(local).Collate(tc.left, tc.right, false))
 			remoteResult := remote.Collate(tc.left, tc.right, false)
 
 			if err := remote.LastError(); err != nil {
@@ -101,7 +103,7 @@ func testRemoteComparison(t *testing.T, golden io.Writer, cases []testcmp) {
 	}
 }
 
-func verifyTranscoding(t *testing.T, local collations.Collation, remote *remote.Collation, text []byte) []byte {
+func verifyTranscoding(t *testing.T, local colldata.Collation, remote *remote.Collation, text []byte) []byte {
 	transRemote, err := charset.ConvertFromUTF8(nil, remote.Charset(), text)
 	require.NoError(t, err, "remote transcoding failed: %v", err)
 
@@ -112,7 +114,7 @@ func verifyTranscoding(t *testing.T, local collations.Collation, remote *remote.
 	return transLocal
 }
 
-func verifyWeightString(t *testing.T, local collations.Collation, remote *remote.Collation, text []byte) {
+func verifyWeightString(t *testing.T, local colldata.Collation, remote *remote.Collation, text []byte) {
 	localResult := local.WeightString(nil, text, 0)
 	remoteResult := remote.WeightString(nil, text, 0)
 

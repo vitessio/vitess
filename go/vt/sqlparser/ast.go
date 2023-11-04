@@ -16,6 +16,11 @@ limitations under the License.
 
 package sqlparser
 
+import (
+	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/sqltypes"
+)
+
 /*
 This is the Vitess AST. This file should only contain pure struct declarations,
 or methods used to mark a struct as implementing an interface. All other methods
@@ -58,6 +63,7 @@ type (
 		GetOrderBy() OrderBy
 		GetLimit() *Limit
 		SetLimit(*Limit)
+		GetLock() Lock
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
 		SetWith(with *With)
@@ -65,6 +71,7 @@ type (
 		GetColumnCount() int
 		GetColumns() SelectExprs
 		Commented
+		IsDistinct() bool
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -132,10 +139,11 @@ type (
 
 	// AlterColumn is used to add or drop defaults & visibility to columns in alter table command
 	AlterColumn struct {
-		Column      *ColName
-		DropDefault bool
-		DefaultVal  Expr
-		Invisible   *bool
+		Column         *ColName
+		DropDefault    bool
+		DefaultVal     Expr
+		DefaultLiteral bool
+		Invisible      *bool
 	}
 
 	// With contains the lists of common table expression and specifies if it is recursive or not
@@ -320,10 +328,12 @@ type (
 	// of the implications the deletion part may have on vindexes.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Insert struct {
-		Action     InsertAction
-		Comments   *ParsedComments
-		Ignore     Ignore
-		Table      TableName
+		Action   InsertAction
+		Comments *ParsedComments
+		Ignore   Ignore
+		// The Insert as syntax still take TableName.
+		// The change is made for semantic analyzer as it takes AliasedTableExpr to provide TableInfo
+		Table      *AliasedTableExpr
 		Partitions Partitions
 		Columns    Columns
 		Rows       InsertRows
@@ -552,6 +562,12 @@ type (
 	Load struct {
 	}
 
+	// PurgeBinaryLogs represents a PURGE BINARY LOGS statement
+	PurgeBinaryLogs struct {
+		To     string
+		Before string
+	}
+
 	// Show represents a show statement.
 	Show struct {
 		Internal ShowInternal
@@ -662,16 +678,9 @@ type (
 	// DeallocateStmt represents a Deallocate Statement
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/deallocate-prepare.html
 	DeallocateStmt struct {
-		Type     DeallocateStmtType
 		Comments *ParsedComments
 		Name     IdentifierCI
 	}
-
-	// DeallocateStmtType is an enum to get types of deallocate
-	DeallocateStmtType int8
-
-	// IntervalTypes is an enum to get types of intervals
-	IntervalTypes int8
 
 	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
 	// It should be used only as an indicator. It does not contain
@@ -687,6 +696,15 @@ type (
 	// CommentOnly represents a query which only has comments
 	CommentOnly struct {
 		Comments []string
+	}
+
+	// KillType is an enum for Kill.Type
+	KillType int8
+
+	// Kill represents a kill statement
+	Kill struct {
+		Type          KillType
+		ProcesslistID uint64
 	}
 )
 
@@ -739,6 +757,8 @@ func (*ExplainTab) iStatement()          {}
 func (*PrepareStmt) iStatement()         {}
 func (*ExecuteStmt) iStatement()         {}
 func (*DeallocateStmt) iStatement()      {}
+func (*PurgeBinaryLogs) iStatement()     {}
+func (*Kill) iStatement()                {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -1817,14 +1837,15 @@ type ColumnTypeOptions struct {
 	The complexity arises from the fact that we do not know whether the column will be nullable or not if nothing is specified.
 	Therefore we do not know whether the column is nullable or not in case 3.
 	*/
-	Null          *bool
-	Autoincrement bool
-	Default       Expr
-	OnUpdate      Expr
-	As            Expr
-	Comment       *Literal
-	Storage       ColumnStorage
-	Collate       string
+	Null           *bool
+	Autoincrement  bool
+	Default        Expr
+	DefaultLiteral bool
+	OnUpdate       Expr
+	As             Expr
+	Comment        *Literal
+	Storage        ColumnStorage
+	Collate        string
 	// Reference stores a foreign key constraint for the given column
 	Reference *ReferenceDefinition
 
@@ -2036,7 +2057,7 @@ type (
 		SQLNode
 	}
 
-	// TableName represents a table  name.
+	// TableName represents a table name.
 	// Qualifier, if specified, represents a database or keyspace.
 	// TableName is a value struct whose fields are case sensitive.
 	// This means two TableName vars can be compared for equality
@@ -2149,6 +2170,7 @@ type (
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
 	FramePoint struct {
 		Type FramePointType
+		Unit IntervalType
 		Expr Expr
 	}
 
@@ -2256,6 +2278,11 @@ type (
 		Subquery *Subquery
 	}
 
+	// AssignmentExpr represents an expression of type @value := x.
+	AssignmentExpr struct {
+		Left, Right Expr
+	}
+
 	// Literal represents a fixed value.
 	Literal struct {
 		Type ValType
@@ -2263,7 +2290,10 @@ type (
 	}
 
 	// Argument represents bindvariable expression
-	Argument string
+	Argument struct {
+		Name string
+		Type sqltypes.Type
+	}
 
 	// NullVal represents a NULL value.
 	NullVal struct{}
@@ -2273,11 +2303,6 @@ type (
 
 	// ColName represents a column name.
 	ColName struct {
-		// Metadata is not populated by the parser.
-		// It's a placeholder for analyzers to store
-		// additional data, typically info about which
-		// table or column this node references.
-		Metadata  any
 		Name      IdentifierCI
 		Qualifier TableName
 	}
@@ -2327,24 +2352,17 @@ type (
 		Expr         Expr
 	}
 
-	// IntervalExpr represents a date-time INTERVAL expression.
-	IntervalExpr struct {
-		Expr Expr
-		Unit string
-	}
-
-	// TimestampFuncExpr represents the function and arguments for TIMESTAMP{ADD,DIFF} functions.
-	TimestampFuncExpr struct {
-		Name  string
+	// TimestampDiffExpr represents the function and arguments for TIMESTAMPDIFF functions.
+	TimestampDiffExpr struct {
 		Expr1 Expr
 		Expr2 Expr
-		Unit  string
+		Unit  IntervalType
 	}
 
 	// ExtractFuncExpr represents the function and arguments for EXTRACT(YEAR FROM '2019-07-02') type functions.
 	ExtractFuncExpr struct {
-		IntervalTypes IntervalTypes
-		Expr          Expr
+		IntervalType IntervalType
+		Expr         Expr
 	}
 
 	// CollateExpr represents dynamic collate operator.
@@ -2463,7 +2481,7 @@ type (
 	// supported functions are documented in the grammar
 	CurTimeFuncExpr struct {
 		Name IdentifierCI
-		Fsp  Expr // fractional seconds precision, integer from 0 to 6 or an Argument
+		Fsp  int // fractional seconds precision, integer from 0 to 6 or an Argument
 	}
 
 	// ExtractedSubquery is a subquery that has been extracted from the original AST
@@ -2503,7 +2521,7 @@ type (
 	// it is the column offset from the incoming result stream
 	Offset struct {
 		V        int
-		Original string
+		Original Expr
 	}
 
 	// JSONArrayExpr represents JSON_ARRAY()
@@ -2704,28 +2722,153 @@ type (
 		JSONValue Expr
 	}
 
-	//PointExpr represents POINT(x,y) expression
+	// PointExpr represents POINT(x,y) expression
 	PointExpr struct {
 		XCordinate Expr
 		YCordinate Expr
 	}
 
-	//LineString represents LineString(POINT(x,y), POINT(x,y), ..) expression
+	// LineString represents LineString(POINT(x,y), POINT(x,y), ..) expression
 	LineStringExpr struct {
 		PointParams Exprs
 	}
 
-	//PolygonExpr represents Polygon(LineString(POINT(x,y), POINT(x,y), ..)) expressions
+	// PolygonExpr represents Polygon(LineString(POINT(x,y), POINT(x,y), ..)) expressions
 	PolygonExpr struct {
 		LinestringParams Exprs
 	}
 
+	// MultiPoint represents a geometry collection for points
+	MultiPointExpr struct {
+		PointParams Exprs
+	}
+
+	// MultiPoint represents a geometry collection for linestrings
+	MultiLinestringExpr struct {
+		LinestringParams Exprs
+	}
+
+	// MultiPolygon represents a geometry collection for polygons
+	MultiPolygonExpr struct {
+		PolygonParams Exprs
+	}
+
+	// GeomFromWktType is an enum to get the types of wkt functions with possible values: GeometryFromText GeometryCollectionFromText PointFromText LineStringFromText PolygonFromText MultiPointFromText MultiPolygonFromText MultiLinestringFromText
+	GeomFromWktType int8
+
+	GeomFromTextExpr struct {
+		Type         GeomFromWktType
+		WktText      Expr
+		Srid         Expr
+		AxisOrderOpt Expr
+	}
+
+	// GeomFromWkbType is an enum to get the types of wkb functions with possible values: GeometryFromWKB GeometryCollectionFromWKB PointFromWKB LineStringFromWKB PolygonFromWKB MultiPointFromWKB MultiPolygonFromWKB MultiLinestringFromWKB
+	GeomFromWkbType int8
+
+	GeomFromWKBExpr struct {
+		Type         GeomFromWkbType
+		WkbBlob      Expr
+		Srid         Expr
+		AxisOrderOpt Expr
+	}
+
+	// GeomFormatType is an enum to get the types of geom format functions with possible values: BinaryFormat TextFormat
+	GeomFormatType int8
+
+	GeomFormatExpr struct {
+		FormatType   GeomFormatType
+		Geom         Expr
+		AxisOrderOpt Expr
+	}
+
+	// GeomPropertyType is an enum to get the types of geom property functions with possible values: Dimension Envelope IsSimple IsEmpty GeometryType
+	GeomPropertyType int8
+
+	GeomPropertyFuncExpr struct {
+		Property GeomPropertyType
+		Geom     Expr
+	}
+
+	// PointPropertyType is an that enumerates the kind of point property functions: XCordinate YCordinate Latitude Longitude
+	PointPropertyType int8
+
+	PointPropertyFuncExpr struct {
+		Property   PointPropertyType
+		Point      Expr
+		ValueToSet Expr
+	}
+
+	// LinestrPropType is an enum that enumerates the kind of line string property functions: EndPoint IsClosed Length NumPoints PointN StartPoint
+	LinestrPropType int8
+
+	LinestrPropertyFuncExpr struct {
+		Property       LinestrPropType
+		Linestring     Expr
+		PropertyDefArg Expr
+	}
+
+	// PolygonPropType is an enum that enumerates the kind of polygon property functions: Area Centroid ExteriorRing InteriorRingN NumInteriorRing
+	PolygonPropType int8
+
+	PolygonPropertyFuncExpr struct {
+		Property       PolygonPropType
+		Polygon        Expr
+		PropertyDefArg Expr
+	}
+
+	// GeomCollPropType is an enumthat enumerates the kind of geom coll property functions with possible values: GeometryN NumGeometries
+	GeomCollPropType int8
+
+	GeomCollPropertyFuncExpr struct {
+		Property       GeomCollPropType
+		GeomColl       Expr
+		PropertyDefArg Expr
+	}
+
+	GeoHashFromLatLongExpr struct {
+		Latitude  Expr
+		Longitude Expr
+		MaxLength Expr
+	}
+
+	GeoHashFromPointExpr struct {
+		Point     Expr
+		MaxLength Expr
+	}
+
+	// GeomFromHashType is an enum that determines what kind geom being retireived from hash
+	GeomFromHashType int8
+
+	GeomFromGeoHashExpr struct {
+		GeomType GeomFromHashType
+		GeoHash  Expr
+		SridOpt  Expr
+	}
+
+	GeoJSONFromGeomExpr struct {
+		Geom             Expr
+		MaxDecimalDigits Expr
+		Bitmask          Expr
+	}
+
+	GeomFromGeoJSONExpr struct {
+		GeoJSON             Expr
+		HigherDimHandlerOpt Expr // This value determine how the higher dimensions are handled while converting json to geometry
+		Srid                Expr
+	}
+
 	AggrFunc interface {
 		Expr
-		AggrName() string
 		GetArg() Expr
-		IsDistinct() bool
 		GetArgs() Exprs
+		// AggrName returns the lower case string representing this aggregation function
+		AggrName() string
+	}
+
+	DistinctableAggr interface {
+		IsDistinct() bool
+		SetDistinct(bool)
 	}
 
 	Count struct {
@@ -2734,6 +2877,33 @@ type (
 	}
 
 	CountStar struct {
+		_ bool
+		// TL;DR; This makes sure that reference equality checks works as expected
+		//
+		// You're correct that this might seem a bit strange at first glance.
+		// It's a quirk of Go's handling of empty structs. In Go, two instances of an empty struct are considered
+		// identical, which can be problematic when using these as keys in maps.
+		// They would be treated as the same key and potentially lead to incorrect map behavior.
+		//
+		// Here's a brief example:
+		//
+		// ```golang
+		// func TestWeirdGo(t *testing.T) {
+		// 	type CountStar struct{}
+		//
+		// 	cs1 := &CountStar{}
+		// 	cs2 := &CountStar{}
+		//  if cs1 == cs2 {
+		// 	  panic("what the what!?")
+		//  }
+		// }
+		// ```
+		//
+		// In the above code, cs1 and cs2, despite being distinct variables, would be treated as the same object.
+		//
+		// The solution we employed was to add a dummy field `_ bool` to the otherwise empty struct `CountStar`.
+		// This ensures that each instance of `CountStar` is treated as a separate object,
+		// even in the context of out semantic state which uses these objects as map keys.
 	}
 
 	Avg struct {
@@ -2805,8 +2975,15 @@ type (
 		Limit     *Limit
 	}
 
+	// AnyValue is an aggregation function in Vitess, even if the MySQL manual explicitly says it's not
+	// It's just simpler to treat it as one
+	// see https://dev.mysql.com/doc/refman/8.0/en/miscellaneous-functions.html#function_any-value
+	AnyValue struct {
+		Arg Expr
+	}
+
 	// RegexpInstrExpr represents REGEXP_INSTR()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
 	RegexpInstrExpr struct {
 		Expr         Expr
 		Pattern      Expr
@@ -2817,7 +2994,7 @@ type (
 	}
 
 	// RegexpLikeExpr represents REGEXP_LIKE()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
 	RegexpLikeExpr struct {
 		Expr      Expr
 		Pattern   Expr
@@ -2825,7 +3002,7 @@ type (
 	}
 
 	// RegexpReplaceExpr represents REGEXP_REPLACE()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
 	RegexpReplaceExpr struct {
 		Expr       Expr
 		Pattern    Expr
@@ -2836,13 +3013,23 @@ type (
 	}
 
 	// RegexpSubstrExpr represents REGEXP_SUBSTR()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
 	RegexpSubstrExpr struct {
 		Expr       Expr
 		Pattern    Expr
 		Occurrence Expr
 		Position   Expr
 		MatchType  Expr
+	}
+
+	IntervalType = datetime.IntervalType
+
+	// IntervalDateExpr represents ADDDATE(), DATE_ADD()
+	IntervalDateExpr struct {
+		Syntax   IntervalExprSyntax
+		Date     Expr
+		Interval Expr
+		Unit     IntervalType
 	}
 
 	// ArgumentLessWindowExpr stands for the following window_functions: CUME_DIST, DENSE_RANK, PERCENT_RANK, RANK, ROW_NUMBER
@@ -2959,8 +3146,9 @@ func (*ComparisonExpr) iExpr()                     {}
 func (*BetweenExpr) iExpr()                        {}
 func (*IsExpr) iExpr()                             {}
 func (*ExistsExpr) iExpr()                         {}
+func (*AssignmentExpr) iExpr()                     {}
 func (*Literal) iExpr()                            {}
-func (Argument) iExpr()                            {}
+func (*Argument) iExpr()                           {}
 func (*NullVal) iExpr()                            {}
 func (BoolVal) iExpr()                             {}
 func (*ColName) iExpr()                            {}
@@ -2970,10 +3158,9 @@ func (ListArg) iExpr()                             {}
 func (*BinaryExpr) iExpr()                         {}
 func (*UnaryExpr) iExpr()                          {}
 func (*IntroducerExpr) iExpr()                     {}
-func (*IntervalExpr) iExpr()                       {}
 func (*CollateExpr) iExpr()                        {}
 func (*FuncExpr) iExpr()                           {}
-func (*TimestampFuncExpr) iExpr()                  {}
+func (*TimestampDiffExpr) iExpr()                  {}
 func (*ExtractFuncExpr) iExpr()                    {}
 func (*WeightStringFuncExpr) iExpr()               {}
 func (*CurTimeFuncExpr) iExpr()                    {}
@@ -3017,6 +3204,7 @@ func (*RegexpInstrExpr) iExpr()                    {}
 func (*RegexpLikeExpr) iExpr()                     {}
 func (*RegexpReplaceExpr) iExpr()                  {}
 func (*RegexpSubstrExpr) iExpr()                   {}
+func (*IntervalDateExpr) iExpr()                   {}
 func (*ArgumentLessWindowExpr) iExpr()             {}
 func (*FirstOrLastValueExpr) iExpr()               {}
 func (*NtileExpr) iExpr()                          {}
@@ -3035,6 +3223,7 @@ func (*Avg) iExpr()                                {}
 func (*CountStar) iExpr()                          {}
 func (*Count) iExpr()                              {}
 func (*GroupConcatExpr) iExpr()                    {}
+func (*AnyValue) iExpr()                           {}
 func (*BitAnd) iExpr()                             {}
 func (*BitOr) iExpr()                              {}
 func (*BitXor) iExpr()                             {}
@@ -3049,10 +3238,26 @@ func (*Variable) iExpr()                           {}
 func (*PointExpr) iExpr()                          {}
 func (*LineStringExpr) iExpr()                     {}
 func (*PolygonExpr) iExpr()                        {}
+func (*MultiPolygonExpr) iExpr()                   {}
+func (*MultiPointExpr) iExpr()                     {}
+func (*MultiLinestringExpr) iExpr()                {}
+func (*GeomFromTextExpr) iExpr()                   {}
+func (*GeomFromWKBExpr) iExpr()                    {}
+func (*GeomFormatExpr) iExpr()                     {}
+func (*GeomPropertyFuncExpr) iExpr()               {}
+func (*PointPropertyFuncExpr) iExpr()              {}
+func (*LinestrPropertyFuncExpr) iExpr()            {}
+func (*PolygonPropertyFuncExpr) iExpr()            {}
+func (*GeomCollPropertyFuncExpr) iExpr()           {}
+func (*GeoHashFromLatLongExpr) iExpr()             {}
+func (*GeoHashFromPointExpr) iExpr()               {}
+func (*GeomFromGeoHashExpr) iExpr()                {}
+func (*GeoJSONFromGeomExpr) iExpr()                {}
+func (*GeomFromGeoJSONExpr) iExpr()                {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
-func (*TimestampFuncExpr) iCallable()                  {}
+func (*TimestampDiffExpr) iCallable()                  {}
 func (*ExtractFuncExpr) iCallable()                    {}
 func (*WeightStringFuncExpr) iCallable()               {}
 func (*CurTimeFuncExpr) iCallable()                    {}
@@ -3067,6 +3272,7 @@ func (*CharExpr) iCallable()                           {}
 func (*ConvertUsingExpr) iCallable()                   {}
 func (*MatchExpr) iCallable()                          {}
 func (*GroupConcatExpr) iCallable()                    {}
+func (*AnyValue) iCallable()                           {}
 func (*JSONSchemaValidFuncExpr) iCallable()            {}
 func (*JSONSchemaValidationReportFuncExpr) iCallable() {}
 func (*JSONPrettyExpr) iCallable()                     {}
@@ -3092,6 +3298,7 @@ func (*RegexpInstrExpr) iCallable()                    {}
 func (*RegexpLikeExpr) iCallable()                     {}
 func (*RegexpReplaceExpr) iCallable()                  {}
 func (*RegexpSubstrExpr) iCallable()                   {}
+func (*IntervalDateExpr) iCallable()                   {}
 func (*ArgumentLessWindowExpr) iCallable()             {}
 func (*FirstOrLastValueExpr) iCallable()               {}
 func (*NtileExpr) iCallable()                          {}
@@ -3105,6 +3312,22 @@ func (*GTIDFuncExpr) iCallable()                       {}
 func (*PointExpr) iCallable()                          {}
 func (*LineStringExpr) iCallable()                     {}
 func (*PolygonExpr) iCallable()                        {}
+func (*MultiPolygonExpr) iCallable()                   {}
+func (*MultiPointExpr) iCallable()                     {}
+func (*MultiLinestringExpr) iCallable()                {}
+func (*GeomFromTextExpr) iCallable()                   {}
+func (*GeomFromWKBExpr) iCallable()                    {}
+func (*GeomFormatExpr) iCallable()                     {}
+func (*GeomPropertyFuncExpr) iCallable()               {}
+func (*PointPropertyFuncExpr) iCallable()              {}
+func (*LinestrPropertyFuncExpr) iCallable()            {}
+func (*PolygonPropertyFuncExpr) iCallable()            {}
+func (*GeomCollPropertyFuncExpr) iCallable()           {}
+func (*GeoHashFromLatLongExpr) iCallable()             {}
+func (*GeoHashFromPointExpr) iCallable()               {}
+func (*GeomFromGeoHashExpr) iCallable()                {}
+func (*GeoJSONFromGeomExpr) iCallable()                {}
+func (*GeomFromGeoJSONExpr) iCallable()                {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}
@@ -3130,6 +3353,7 @@ func (stdS *StdSamp) GetArg() Expr              { return stdS.Arg }
 func (varP *VarPop) GetArg() Expr               { return varP.Arg }
 func (varS *VarSamp) GetArg() Expr              { return varS.Arg }
 func (variance *Variance) GetArg() Expr         { return variance.Arg }
+func (av *AnyValue) GetArg() Expr               { return av.Arg }
 
 func (sum *Sum) GetArgs() Exprs                   { return Exprs{sum.Arg} }
 func (min *Min) GetArgs() Exprs                   { return Exprs{min.Arg} }
@@ -3148,42 +3372,40 @@ func (stdS *StdSamp) GetArgs() Exprs              { return Exprs{stdS.Arg} }
 func (varP *VarPop) GetArgs() Exprs               { return Exprs{varP.Arg} }
 func (varS *VarSamp) GetArgs() Exprs              { return Exprs{varS.Arg} }
 func (variance *Variance) GetArgs() Exprs         { return Exprs{variance.Arg} }
+func (av *AnyValue) GetArgs() Exprs               { return Exprs{av.Arg} }
 
 func (sum *Sum) IsDistinct() bool                   { return sum.Distinct }
 func (min *Min) IsDistinct() bool                   { return min.Distinct }
 func (max *Max) IsDistinct() bool                   { return max.Distinct }
 func (avg *Avg) IsDistinct() bool                   { return avg.Distinct }
-func (cStar *CountStar) IsDistinct() bool           { return false }
 func (count *Count) IsDistinct() bool               { return count.Distinct }
 func (grpConcat *GroupConcatExpr) IsDistinct() bool { return grpConcat.Distinct }
-func (bAnd *BitAnd) IsDistinct() bool               { return false }
-func (bOr *BitOr) IsDistinct() bool                 { return false }
-func (bXor *BitXor) IsDistinct() bool               { return false }
-func (std *Std) IsDistinct() bool                   { return false }
-func (stdD *StdDev) IsDistinct() bool               { return false }
-func (stdP *StdPop) IsDistinct() bool               { return false }
-func (stdS *StdSamp) IsDistinct() bool              { return false }
-func (varP *VarPop) IsDistinct() bool               { return false }
-func (varS *VarSamp) IsDistinct() bool              { return false }
-func (variance *Variance) IsDistinct() bool         { return false }
 
-func (sum *Sum) AggrName() string                   { return "sum" }
-func (min *Min) AggrName() string                   { return "min" }
-func (max *Max) AggrName() string                   { return "max" }
-func (avg *Avg) AggrName() string                   { return "avg" }
-func (cStar *CountStar) AggrName() string           { return "count" }
-func (count *Count) AggrName() string               { return "count" }
-func (grpConcat *GroupConcatExpr) AggrName() string { return "group_concat" }
-func (bAnd *BitAnd) AggrName() string               { return "bit_and" }
-func (bOr *BitOr) AggrName() string                 { return "bit_or" }
-func (bXor *BitXor) AggrName() string               { return "bit_xor" }
-func (std *Std) AggrName() string                   { return "std" }
-func (stdD *StdDev) AggrName() string               { return "stddev" }
-func (stdP *StdPop) AggrName() string               { return "stddev_pop" }
-func (stdS *StdSamp) AggrName() string              { return "stddev_samp" }
-func (varP *VarPop) AggrName() string               { return "var_pop" }
-func (varS *VarSamp) AggrName() string              { return "var_samp" }
-func (variance *Variance) AggrName() string         { return "variance" }
+func (sum *Sum) SetDistinct(distinct bool)                   { sum.Distinct = distinct }
+func (min *Min) SetDistinct(distinct bool)                   { min.Distinct = distinct }
+func (max *Max) SetDistinct(distinct bool)                   { max.Distinct = distinct }
+func (avg *Avg) SetDistinct(distinct bool)                   { avg.Distinct = distinct }
+func (count *Count) SetDistinct(distinct bool)               { count.Distinct = distinct }
+func (grpConcat *GroupConcatExpr) SetDistinct(distinct bool) { grpConcat.Distinct = distinct }
+
+func (*Sum) AggrName() string             { return "sum" }
+func (*Min) AggrName() string             { return "min" }
+func (*Max) AggrName() string             { return "max" }
+func (*Avg) AggrName() string             { return "avg" }
+func (*CountStar) AggrName() string       { return "count" }
+func (*Count) AggrName() string           { return "count" }
+func (*GroupConcatExpr) AggrName() string { return "group_concat" }
+func (*BitAnd) AggrName() string          { return "bit_and" }
+func (*BitOr) AggrName() string           { return "bit_or" }
+func (*BitXor) AggrName() string          { return "bit_xor" }
+func (*Std) AggrName() string             { return "std" }
+func (*StdDev) AggrName() string          { return "stddev" }
+func (*StdPop) AggrName() string          { return "stddev_pop" }
+func (*StdSamp) AggrName() string         { return "stddev_samp" }
+func (*VarPop) AggrName() string          { return "var_pop" }
+func (*VarSamp) AggrName() string         { return "var_samp" }
+func (*Variance) AggrName() string        { return "variance" }
+func (*AnyValue) AggrName() string        { return "any_value" }
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

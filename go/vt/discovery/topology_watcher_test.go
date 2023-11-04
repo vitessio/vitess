@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -56,8 +58,12 @@ func checkChecksum(t *testing.T, tw *TopologyWatcher, want uint32) {
 }
 
 func TestStartAndCloseTopoWatcher(t *testing.T) {
-	ts := memorytopo.NewServer("aa")
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "aa")
+	defer ts.Close()
 	fhc := NewFakeHealthCheck(nil)
+	defer fhc.Close()
 	topologyWatcherOperations.ZeroAll()
 	tw := NewCellTabletsWatcher(context.Background(), ts, fhc, nil, "aa", 100*time.Microsecond, true, 5)
 
@@ -110,8 +116,12 @@ func TestCellTabletsWatcherNoRefreshKnown(t *testing.T) {
 }
 
 func checkWatcher(t *testing.T, refreshKnownTablets bool) {
-	ts := memorytopo.NewServer("aa")
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "aa")
+	defer ts.Close()
 	fhc := NewFakeHealthCheck(nil)
+	defer fhc.Close()
 	logger := logutil.NewMemoryLogger()
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
@@ -197,7 +207,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	// if refreshKnownTablets is disabled, this case is *not*
 	// detected and the tablet remains in the topo using the
 	// old key
-	origTablet := proto.Clone(tablet).(*topodatapb.Tablet)
+	origTablet := tablet.CloneVT()
 	origKey := TabletToMapKey(tablet)
 	tablet.PortMap["vt"] = 456
 	if _, err := ts.UpdateTabletFields(context.Background(), tablet.Alias, func(t *topodatapb.Tablet) error {
@@ -236,9 +246,8 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	// tablet2 happens to land on the host:port that tablet 1 used to be on.
 	// This can only be tested when we refresh known tablets.
 	if refreshKnownTablets {
-		origTablet := proto.Clone(tablet).(*topodatapb.Tablet)
-		origTablet2 := proto.Clone(tablet2).(*topodatapb.Tablet)
-
+		origTablet := tablet.CloneVT()
+		origTablet2 := tablet2.CloneVT()
 		if _, err := ts.UpdateTabletFields(context.Background(), tablet2.Alias, func(t *topodatapb.Tablet) error {
 			t.Hostname = tablet.Hostname
 			t.PortMap = tablet.PortMap
@@ -429,9 +438,12 @@ var (
 )
 
 func TestFilterByKeyspace(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	hc := NewFakeHealthCheck(nil)
 	f := NewFilterByKeyspace(testKeyspacesToWatch)
-	ts := memorytopo.NewServer(testCell)
+	ts := memorytopo.NewServer(ctx, testCell)
+	defer ts.Close()
 	tw := NewCellTabletsWatcher(context.Background(), ts, hc, f, testCell, 10*time.Minute, true, 5)
 
 	for _, test := range testFilterByKeyspace {
@@ -509,8 +521,12 @@ func TestFilterByKeyspace(t *testing.T) {
 //   - does not continuosly call GetTablets for tablets that do not satisfy the filter
 //   - does not add or remove these filtered out tablets from the its healtcheck
 func TestFilterByKeypsaceSkipsIgnoredTablets(t *testing.T) {
-	ts := memorytopo.NewServer("aa")
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "aa")
+	defer ts.Close()
 	fhc := NewFakeHealthCheck(nil)
+	defer fhc.Close()
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
 	f := NewFilterByKeyspace(testKeyspacesToWatch)
@@ -590,7 +606,7 @@ func TestFilterByKeypsaceSkipsIgnoredTablets(t *testing.T) {
 	allTablets = fhc.GetAllTablets()
 	assert.Len(t, allTablets, 1)
 	origKey := TabletToMapKey(tablet)
-	tabletWithNewPort := proto.Clone(tablet).(*topodatapb.Tablet)
+	tabletWithNewPort := tablet.CloneVT()
 	tabletWithNewPort.PortMap["vt"] = 456
 	keyWithNewPort := TabletToMapKey(tabletWithNewPort)
 	assert.Contains(t, allTablets, origKey)

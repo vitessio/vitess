@@ -15,7 +15,7 @@ It is split in the following subdirectories (Maven modules):
 
 **Note:** The `artifactId` for each module listed above has the prefix `vitess-` i.e. you will have to look for `vitess-jdbc` and not `jdbc`.
 
-TODO(mberlin): Mention Maven Central once we started publishing artifacts there.
+Published artifacts can be found on [Maven Central](https://mvnrepository.com/artifact/io.vitess).
 
 # Adding new Dependencies
 

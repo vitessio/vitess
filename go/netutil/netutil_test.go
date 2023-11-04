@@ -24,7 +24,7 @@ import (
 	"testing"
 )
 
-func checkDistribution(t *testing.T, data []*net.SRV, margin float64) {
+func checkDistribution(t *testing.T, rand *rand.Rand, data []*net.SRV, margin float64) {
 	sum := 0
 	for _, srv := range data {
 		sum += int(srv.Weight)
@@ -36,7 +36,7 @@ func checkDistribution(t *testing.T, data []*net.SRV, margin float64) {
 	for j := 0; j < count; j++ {
 		d := make([]*net.SRV, len(data))
 		copy(d, data)
-		byPriorityWeight(d).shuffleByWeight()
+		byPriorityWeight(d).shuffleByWeight(rand)
 		key := d[0].Target
 		results[key] = results[key] + 1
 	}
@@ -54,12 +54,11 @@ func checkDistribution(t *testing.T, data []*net.SRV, margin float64) {
 }
 
 func testUniformity(t *testing.T, size int, margin float64) {
-	rand.Seed(1)
 	data := make([]*net.SRV, size)
 	for i := 0; i < size; i++ {
 		data[i] = &net.SRV{Target: fmt.Sprintf("%c", 'a'+i), Weight: 1}
 	}
-	checkDistribution(t, data, margin)
+	checkDistribution(t, rand.New(rand.NewSource(1)), data, margin)
 }
 
 func TestUniformity(t *testing.T) {
@@ -70,13 +69,12 @@ func TestUniformity(t *testing.T) {
 }
 
 func testWeighting(t *testing.T, margin float64) {
-	rand.Seed(1)
 	data := []*net.SRV{
 		{Target: "a", Weight: 60},
 		{Target: "b", Weight: 30},
 		{Target: "c", Weight: 10},
 	}
-	checkDistribution(t, data, margin)
+	checkDistribution(t, rand.New(rand.NewSource(1)), data, margin)
 }
 
 func TestWeighting(t *testing.T) {

@@ -7,11 +7,13 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing - Backups - Manual - Next Release')
   cancel-in-progress: true
 
+permissions: read-all
+
 jobs:
   get_next_release:
     if: always()
     name: Get Previous Release - Backups - Manual - Next Release
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-16cores-1
     outputs:
       next_release: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
 
@@ -33,7 +35,7 @@ jobs:
     timeout-minutes: 40
     if: always() && (needs.get_next_release.result == 'success')
     name: Run Upgrade Downgrade Test - Backups - Manual - Next Release
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-16cores-1
     needs:
       - get_next_release
 
@@ -86,9 +88,9 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.20.1
+        go-version: 1.21.1
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -98,13 +100,6 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
-
-    # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
-    - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
-    # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
 
     - name: Get base dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -142,7 +137,7 @@ jobs:
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
+        sudo apt-get install -y percona-xtrabackup-24
 
     # Checkout to the next release of Vitess
     - name: Checkout to the other version's code (${{ needs.get_next_release.outputs.next_release }})
@@ -161,7 +156,7 @@ jobs:
       timeout-minutes: 5
       run: |
         source build.env
-        make build
+        NOVTADMINBUILD=1 make build
         mkdir -p /tmp/vitess-build-other/
         cp -R bin /tmp/vitess-build-other/
         rm -Rf bin/*
@@ -186,7 +181,7 @@ jobs:
       timeout-minutes: 5
       run: |
         source build.env
-        make build
+        NOVTADMINBUILD=1 make build
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
 
@@ -237,8 +232,10 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vttablet
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
         vttablet --version
 
     # Starting the tablets again, they will automatically start restoring the last backup.
@@ -279,22 +276,16 @@ jobs:
         source build.env ; cd examples/backups
         ./take_backups.sh
 
-    # Stopping the tablets so we can perform the upgrade.
-    - name: Stop tablets
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 10
-      run: |
-        source build.env ; cd examples/backups
-        ./stop_tablets.sh
-
     # We upgrade: we swap binaries and use the version N of the tablet.
     - name: Upgrade - Swap binaries, use VTTablet N
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
-        rm -f $PWD/bin/vttablet
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-current/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-current/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-current/bin/mysqlctld $PWD/bin/mysqlctld
         vttablet --version
 
     # Starting the tablets again and restoring the next backup.
@@ -303,9 +294,7 @@ jobs:
       timeout-minutes: 10
       run: |
         source build.env ; cd examples/backups
-        ./restart_tablets.sh
-        # give enough time to the tablets to restore the backup
-        sleep 90
+        ./upgrade_cluster.sh
 
     # We count the number of rows in every table to check that the restore step was successful.
     - name: Assert the number of rows in every table

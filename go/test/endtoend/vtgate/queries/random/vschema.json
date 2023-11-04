@@ -1,0 +1,26 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    }
+  },
+  "tables": {
+    "emp": {
+      "column_vindexes": [
+        {
+          "column": "deptno",
+          "name": "hash"
+        }
+      ]
+    },
+    "dept": {
+      "column_vindexes": [
+        {
+          "column": "deptno",
+          "name": "hash"
+        }
+      ]
+    }
+  }
+}

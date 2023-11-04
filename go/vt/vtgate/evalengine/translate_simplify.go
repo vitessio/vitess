@@ -16,11 +16,7 @@ limitations under the License.
 
 package evalengine
 
-import (
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vthash"
-)
+import "vitess.io/vitess/go/mysql/collations/colldata"
 
 func (expr *Literal) constant() bool {
 	return true
@@ -84,7 +80,7 @@ func (expr *LikeExpr) simplify(env *ExpressionEnv) error {
 	if lit, ok := expr.Right.(*Literal); ok {
 		if b, ok := lit.inner.(*evalBytes); ok && (b.isVarChar() || b.isBinary()) {
 			expr.MatchCollation = b.col.Collation
-			coll := expr.MatchCollation.Get()
+			coll := colldata.Lookup(expr.MatchCollation)
 			expr.Match = coll.Wildcard(b.bytes, 0, 0, 0)
 		}
 	}
@@ -96,54 +92,10 @@ func (inexpr *InExpr) simplify(env *ExpressionEnv) error {
 		return err
 	}
 
-	tuple, ok := inexpr.Right.(TupleExpr)
-	if !ok {
-		return nil
+	if err := inexpr.Right.simplify(env); err != nil {
+		return err
 	}
 
-	var (
-		collation collations.ID
-		typ       sqltypes.Type
-		optimize  = true
-	)
-
-	for i, expr := range tuple {
-		if lit, ok := expr.(*Literal); ok {
-			thisColl := evalCollation(lit.inner).Collation
-			thisTyp := lit.inner.SQLType()
-			if i == 0 {
-				collation = thisColl
-				typ = thisTyp
-				continue
-			}
-			if collation == thisColl && typ == thisTyp {
-				continue
-			}
-		}
-		optimize = false
-		break
-	}
-
-	if optimize {
-		inexpr.Hashed = make(map[vthash.Hash]int)
-		hasher := vthash.New()
-		for i, expr := range tuple {
-			lit := expr.(*Literal)
-			inner, ok := lit.inner.(hashable)
-			if !ok {
-				inexpr.Hashed = nil
-				break
-			}
-
-			inner.Hash(&hasher)
-			hash := hasher.Sum128()
-			hasher.Reset()
-
-			if _, found := inexpr.Hashed[hash]; !found {
-				inexpr.Hashed[hash] = i
-			}
-		}
-	}
 	return nil
 }
 
@@ -173,12 +125,12 @@ func (c *CallExpr) simplify(env *ExpressionEnv) error {
 }
 
 func (c *builtinWeightString) constant() bool {
-	return c.String.constant()
+	return c.Expr.constant()
 }
 
 func (c *builtinWeightString) simplify(env *ExpressionEnv) error {
 	var err error
-	c.String, err = simplifyExpr(env, c.String)
+	c.Expr, err = simplifyExpr(env, c.Expr)
 	return err
 }
 

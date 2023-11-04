@@ -29,10 +29,12 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func TestBuildPlanSuccess(t *testing.T) {
@@ -61,11 +63,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), true, "c1"}, {1, collations.Collation(nil), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Collation(nil), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -80,11 +83,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where in_keyrange('-80') order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), true, "c1"}, {1, collations.Collation(nil), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Collation(nil), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -99,11 +103,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), true, "c1"}, {1, collations.Collation(nil), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Collation(nil), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -118,11 +123,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c2, c1 from t1 order by c1 asc",
 			targetQuery: "select c2, c1 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), false, "c2"}, {1, collations.Collation(nil), true, "c1"}},
-			comparePKs:  []compareColInfo{{1, collations.Collation(nil), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			comparePKs:  []compareColInfo{{1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{1},
 			selectPks:   []int{1},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -137,11 +143,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c0 as c1, c2 from t2 order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), true, "c1"}, {1, collations.Collation(nil), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Collation(nil), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -157,11 +164,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "nonpktext",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["nonpktext"]],
 			sourceQuery: "select c1, textcol from nonpktext order by c1 asc",
 			targetQuery: "select c1, textcol from nonpktext order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), true, "c1"}, {1, collations.Collation(nil), false, "textcol"}},
-			comparePKs:  []compareColInfo{{0, collations.Collation(nil), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "textcol"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -177,11 +185,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "nonpktext",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["nonpktext"]],
 			sourceQuery: "select textcol, c1 from nonpktext order by c1 asc",
 			targetQuery: "select textcol, c1 from nonpktext order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), false, "textcol"}, {1, collations.Collation(nil), true, "c1"}},
-			comparePKs:  []compareColInfo{{1, collations.Collation(nil), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), false, "textcol"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			comparePKs:  []compareColInfo{{1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{1},
 			selectPks:   []int{1},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -197,11 +206,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "pktext",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["pktext"]],
 			sourceQuery: "select textcol, c2 from pktext order by textcol asc",
 			targetQuery: "select textcol, c2 from pktext order by textcol asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), true, "textcol"}, {1, collations.Collation(nil), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Collation(nil), true, "textcol"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "textcol"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -217,11 +227,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "pktext",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["pktext"]],
 			sourceQuery: "select c2, textcol from pktext order by textcol asc",
 			targetQuery: "select c2, textcol from pktext order by textcol asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), false, "c2"}, {1, collations.Collation(nil), true, "textcol"}},
-			comparePKs:  []compareColInfo{{1, collations.Collation(nil), true, "textcol"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
+			comparePKs:  []compareColInfo{{1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
 			pkCols:      []int{1},
 			selectPks:   []int{1},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -237,11 +248,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "pktext",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["pktext"]],
 			sourceQuery: "select c2, a + b as textcol from pktext order by textcol asc",
 			targetQuery: "select c2, textcol from pktext order by textcol asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), false, "c2"}, {1, collations.Collation(nil), true, "textcol"}},
-			comparePKs:  []compareColInfo{{1, collations.Collation(nil), true, "textcol"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
+			comparePKs:  []compareColInfo{{1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
 			pkCols:      []int{1},
 			selectPks:   []int{1},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -256,11 +268,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "multipk",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["multipk"]],
 			sourceQuery: "select c1, c2 from multipk order by c1 asc, c2 asc",
 			targetQuery: "select c1, c2 from multipk order by c1 asc, c2 asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), true, "c1"}, {1, collations.Collation(nil), true, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Collation(nil), true, "c1"}, {1, collations.Collation(nil), true, "c2"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c2"}},
 			pkCols:      []int{0, 1},
 			selectPks:   []int{0, 1},
 			orderBy: sqlparser.OrderBy{
@@ -282,11 +295,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where in_keyrange('-80') order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), true, "c1"}, {1, collations.Collation(nil), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Collation(nil), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -303,11 +317,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where c2 = 2 and in_keyrange('-80') order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), true, "c1"}, {1, collations.Collation(nil), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Collation(nil), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -324,11 +339,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where in_keyrange('-80') and c2 = 2 order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), true, "c1"}, {1, collations.Collation(nil), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Collation(nil), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -345,11 +361,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where c2 = 2 and c1 = 1 and in_keyrange('-80') order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), true, "c1"}, {1, collations.Collation(nil), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Collation(nil), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -366,11 +383,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where c2 = 2 and in_keyrange('-80') order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), true, "c1"}, {1, collations.Collation(nil), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Collation(nil), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -386,11 +404,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 group by c1 order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), true, "c1"}, {1, collations.Collation(nil), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Collation(nil), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -406,24 +425,22 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "aggr",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["aggr"]],
 			sourceQuery: "select c1, c2, count(*) as c3, sum(c4) as c4 from t1 group by c1 order by c1 asc",
 			targetQuery: "select c1, c2, c3, c4 from aggr order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), true, "c1"}, {1, collations.Collation(nil), false, "c2"}, {2, collations.Collation(nil), false, "c3"}, {3, collations.Collation(nil), false, "c4"}},
-			comparePKs:  []compareColInfo{{0, collations.Collation(nil), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}, {2, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c3"}, {3, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c4"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
 				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")},
 				Direction: sqlparser.AscOrder,
 			}},
-			aggregates: []*engine.AggregateParams{{
-				Opcode: engine.AggregateSum,
-				Col:    2,
-			}, {
-				Opcode: engine.AggregateSum,
-				Col:    3,
-			}},
+			aggregates: []*engine.AggregateParams{
+				engine.NewAggregateParam(opcode.AggregateSum, 2, ""),
+				engine.NewAggregateParam(opcode.AggregateSum, 3, ""),
+			},
 		},
 	}, {
 		// date conversion on import.
@@ -433,11 +450,12 @@ func TestBuildPlanSuccess(t *testing.T) {
 		sourceTimeZone: "US/Pacific",
 		table:          "datze",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["datze"]],
 			sourceQuery: "select id, dt from datze order by id asc",
 			targetQuery: "select id, convert_tz(dt, 'UTC', 'US/Pacific') as dt from datze order by id asc",
-			compareCols: []compareColInfo{{0, collations.Collation(nil), true, "id"}, {1, collations.Collation(nil), false, "dt"}},
-			comparePKs:  []compareColInfo{{0, collations.Collation(nil), true, "id"}},
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "id"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "dt"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "id"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -463,6 +481,31 @@ func TestBuildPlanSuccess(t *testing.T) {
 			wd, err := newWorkflowDiffer(ct, vdiffenv.opts)
 			require.NoError(t, err)
 			dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
+			columnList := make([]string, len(tcase.tablePlan.comparePKs))
+			collationList := make([]string, len(tcase.tablePlan.comparePKs))
+			env := collations.Local()
+			for i := range tcase.tablePlan.comparePKs {
+				columnList[i] = tcase.tablePlan.comparePKs[i].colName
+				if tcase.tablePlan.comparePKs[i].collation != collations.Unknown {
+					collationList[i] = env.LookupName(tcase.tablePlan.comparePKs[i].collation)
+				} else {
+					collationList[i] = sqltypes.NULL.String()
+				}
+			}
+			columnBV, err := sqltypes.BuildBindVariable(columnList)
+			require.NoError(t, err)
+			query, err := sqlparser.ParseAndBind(sqlSelectColumnCollations,
+				sqltypes.StringBindVariable(vdiffDBName),
+				sqltypes.StringBindVariable(tcase.tablePlan.table.Name),
+				columnBV,
+			)
+			require.NoError(t, err)
+			dbc.ExpectRequest(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"collation_name",
+				"varchar",
+			),
+				collationList...,
+			), nil)
 			err = wd.buildPlan(dbc, filter, testSchema)
 			require.NoError(t, err, tcase.input)
 			require.Equal(t, 1, len(wd.tableDiffers), tcase.input)
@@ -541,6 +584,12 @@ func TestBuildPlanInclude(t *testing.T) {
 						from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 						where vdt.vdiff_id = 1 and vdt.table_name = '%s'`, table)
 			dbc.ExpectRequest(query, noResults, nil)
+			dbc.ExpectRequestRE("select column_name as column_name, collation_name as collation_name from information_schema.columns .*", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"collation_name",
+				"varchar",
+			),
+				"NULL",
+			), nil)
 		}
 		err = wd.buildPlan(dbc, filter, schm)
 		require.NoError(t, err)

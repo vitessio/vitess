@@ -25,6 +25,8 @@ import (
 
 	golcs "github.com/yudai/golcs"
 
+	"vitess.io/vitess/go/mysql/collations/colldata"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -40,6 +42,11 @@ type AlterTableEntityDiff struct {
 // IsEmpty implements EntityDiff
 func (d *AlterTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
+}
+
+// EntityName implements EntityDiff
+func (d *AlterTableEntityDiff) EntityName() string {
+	return d.from.Name()
 }
 
 // Entities implements EntityDiff
@@ -118,6 +125,11 @@ func (d *CreateTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// EntityName implements EntityDiff
+func (d *CreateTableEntityDiff) EntityName() string {
+	return d.to.Name()
+}
+
 // Entities implements EntityDiff
 func (d *CreateTableEntityDiff) Entities() (from Entity, to Entity) {
 	return nil, &CreateTableEntity{CreateTable: d.createTable}
@@ -172,6 +184,11 @@ type DropTableEntityDiff struct {
 // IsEmpty implements EntityDiff
 func (d *DropTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
+}
+
+// EntityName implements EntityDiff
+func (d *DropTableEntityDiff) EntityName() string {
+	return d.from.Name()
 }
 
 // Entities implements EntityDiff
@@ -229,6 +246,11 @@ type RenameTableEntityDiff struct {
 // IsEmpty implements EntityDiff
 func (d *RenameTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
+}
+
+// EntityName implements EntityDiff
+func (d *RenameTableEntityDiff) EntityName() string {
+	return d.from.Name()
 }
 
 // Entities implements EntityDiff
@@ -332,6 +354,36 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 	}
 }
 
+// GetCharset returns the explicit character set name specified
+// in the CREATE TABLE statement (if any).
+func (c *CreateTableEntity) GetCharset() string {
+	for _, opt := range c.CreateTable.TableSpec.Options {
+		if strings.ToLower(opt.Name) == "charset" {
+			opt.String = strings.ToLower(opt.String)
+			if charsetName, ok := collationEnv.CharsetAlias(opt.String); ok {
+				return charsetName
+			}
+			return opt.String
+		}
+	}
+	return ""
+}
+
+// GetCollation returns the explicit collation name specified
+// in the CREATE TABLE statement (if any).
+func (c *CreateTableEntity) GetCollation() string {
+	for _, opt := range c.CreateTable.TableSpec.Options {
+		if strings.ToLower(opt.Name) == "collate" {
+			opt.String = strings.ToLower(opt.String)
+			if collationName, ok := collationEnv.CollationAlias(opt.String); ok {
+				return collationName
+			}
+			return opt.String
+		}
+	}
+	return ""
+}
+
 func (c *CreateTableEntity) Clone() Entity {
 	return &CreateTableEntity{CreateTable: sqlparser.CloneRefOfCreateTable(c.CreateTable)}
 }
@@ -342,7 +394,7 @@ const mysqlCollationVersion = "8.0.0"
 var collationEnv = collations.NewEnvironment(mysqlCollationVersion)
 
 func defaultCharset() string {
-	collation := collations.ID(collationEnv.DefaultConnectionCharset()).Get()
+	collation := colldata.Lookup(collations.ID(collationEnv.DefaultConnectionCharset()))
 	if collation == nil {
 		return ""
 	}
@@ -351,10 +403,10 @@ func defaultCharset() string {
 
 func defaultCharsetCollation(charset string) string {
 	collation := collationEnv.DefaultCollationForCharset(charset)
-	if collation == nil {
+	if collation == collations.Unknown {
 		return ""
 	}
-	return collation.Name()
+	return collationEnv.LookupName(collation)
 }
 
 func (c *CreateTableEntity) normalizeColumnOptions() {
@@ -407,6 +459,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			// See also https://dev.mysql.com/doc/refman/8.0/en/data-type-defaults.html
 			if _, ok := col.Type.Options.Default.(*sqlparser.NullVal); ok {
 				col.Type.Options.Default = nil
+				col.Type.Options.DefaultLiteral = false
 			}
 		}
 
@@ -457,6 +510,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 						Type: sqlparser.StrVal,
 						Val:  defaultVal,
 					}
+					col.Type.Options.DefaultLiteral = true
 				} else {
 					col.Type.Options.Default = nil
 				}
@@ -728,6 +782,7 @@ func (c *CreateTableEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, er
 	if err != nil {
 		return nil, err
 	}
+
 	return d, nil
 }
 
@@ -826,7 +881,6 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	}
 	if tableSpecHasChanged {
 		parentAlterTableEntityDiff = newAlterTableEntityDiff(alterTable)
-
 	}
 	for _, superfluousFulltextKey := range superfluousFulltextKeys {
 		alterTable := &sqlparser.AlterTable{
@@ -850,6 +904,8 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 			parentAlterTableEntityDiff.addSubsequentDiff(diff)
 		}
 	}
+	sortAlterOptions(parentAlterTableEntityDiff)
+
 	return parentAlterTableEntityDiff, nil
 }
 
@@ -1668,24 +1724,30 @@ func (c *CreateTableEntity) Drop() EntityDiff {
 }
 
 func sortAlterOptions(diff *AlterTableEntityDiff) {
+	if diff == nil {
+		return
+	}
 	optionOrder := func(opt sqlparser.AlterOption) int {
-		switch opt.(type) {
+		switch opt := opt.(type) {
 		case *sqlparser.DropKey:
-			return 1
-		case *sqlparser.DropColumn:
+			if opt.Type == sqlparser.ForeignKeyType {
+				return 1
+			}
 			return 2
-		case *sqlparser.ModifyColumn:
+		case *sqlparser.DropColumn:
 			return 3
-		case *sqlparser.RenameColumn:
+		case *sqlparser.ModifyColumn:
 			return 4
-		case *sqlparser.AddColumns:
+		case *sqlparser.RenameColumn:
 			return 5
-		case *sqlparser.AddIndexDefinition:
+		case *sqlparser.AddColumns:
 			return 6
-		case *sqlparser.AddConstraintDefinition:
+		case *sqlparser.AddIndexDefinition:
 			return 7
-		case sqlparser.TableOptions, *sqlparser.TableOptions:
+		case *sqlparser.AddConstraintDefinition:
 			return 8
+		case sqlparser.TableOptions, *sqlparser.TableOptions:
+			return 9
 		default:
 			return math.MaxInt
 		}
@@ -1988,8 +2050,10 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					found = true
 					if opt.DropDefault {
 						col.Type.Options.Default = nil
+						col.Type.Options.DefaultLiteral = false
 					} else if opt.DefaultVal != nil {
 						col.Type.Options.Default = opt.DefaultVal
+						col.Type.Options.DefaultLiteral = opt.DefaultLiteral
 					}
 					col.Type.Options.Invisible = opt.Invisible
 					break

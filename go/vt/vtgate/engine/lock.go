@@ -87,7 +87,7 @@ func (l *Lock) execLock(ctx context.Context, vcursor VCursor, bindVars map[strin
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "lock query can be routed to single shard only: %v", rss)
 	}
 
-	env := &evalengine.ExpressionEnv{BindVars: bindVars}
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	var fields []*querypb.Field
 	var rrow sqltypes.Row
 	for _, lf := range l.LockFunctions {
@@ -97,7 +97,7 @@ func (l *Lock) execLock(ctx context.Context, vcursor VCursor, bindVars map[strin
 			if err != nil {
 				return nil, err
 			}
-			lName = er.Value().ToString()
+			lName = er.Value(vcursor.ConnCollation()).ToString()
 		}
 		qr, err := lf.execLock(ctx, vcursor, bindVars, rss[0])
 		if err != nil {

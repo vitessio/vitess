@@ -25,6 +25,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -73,9 +75,9 @@ func TestKill(t *testing.T) {
 	// will differ.
 	err = <-errChan
 	if strings.Contains(err.Error(), "EOF") {
-		assertSQLError(t, err, mysql.CRServerLost, mysql.SSUnknownSQLState, "EOF", "select sleep(10) from dual")
+		assertSQLError(t, err, sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "EOF", "select sleep(10) from dual")
 	} else {
-		assertSQLError(t, err, mysql.CRServerLost, mysql.SSUnknownSQLState, "", "connection reset by peer")
+		assertSQLError(t, err, sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "", "connection reset by peer")
 	}
 }
 
@@ -104,7 +106,7 @@ func TestKill2006(t *testing.T) {
 	// unix socket, we will get a broken pipe when the server
 	// closes the connection and we are trying to write the command.
 	_, err = conn.ExecuteFetch("select sleep(10) from dual", 1000, false)
-	assertSQLError(t, err, mysql.CRServerGone, mysql.SSUnknownSQLState, "broken pipe", "select sleep(10) from dual")
+	assertSQLError(t, err, sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "broken pipe", "select sleep(10) from dual")
 }
 
 // TestDupEntry tests a duplicate key is properly raised.
@@ -123,7 +125,7 @@ func TestDupEntry(t *testing.T) {
 		t.Fatalf("first insert failed: %v", err)
 	}
 	_, err = conn.ExecuteFetch("insert into dup_entry(id, name) values(2, 10)", 0, false)
-	assertSQLError(t, err, mysql.ERDupEntry, mysql.SSConstraintViolation, "Duplicate entry", "insert into dup_entry(id, name) values(2, 10)")
+	assertSQLError(t, err, sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry", "insert into dup_entry(id, name) values(2, 10)")
 }
 
 // TestClientFoundRows tests if the CLIENT_FOUND_ROWS flag works.

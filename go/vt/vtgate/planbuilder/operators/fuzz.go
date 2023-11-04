@@ -17,10 +17,10 @@ limitations under the License.
 package operators
 
 import (
+	fuzz "github.com/AdaLogics/go-fuzz-headers"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
-
-	fuzz "github.com/AdaLogics/go-fuzz-headers"
 )
 
 // FuzzAnalyse implements the fuzzer

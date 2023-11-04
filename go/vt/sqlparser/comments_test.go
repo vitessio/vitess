@@ -496,3 +496,68 @@ func TestConsolidator(t *testing.T) {
 		})
 	}
 }
+
+func TestGetPriorityFromStatement(t *testing.T) {
+	testCases := []struct {
+		query            string
+		expectedPriority string
+		expectedError    error
+	}{
+		{
+			query:            "select * from a_table",
+			expectedPriority: "",
+			expectedError:    nil,
+		},
+		{
+			query:            "select /*vt+ ANOTHER_DIRECTIVE=324 */ * from another_table",
+			expectedPriority: "",
+			expectedError:    nil,
+		},
+		{
+			query:            "select /*vt+ PRIORITY=33 */ * from another_table",
+			expectedPriority: "33",
+			expectedError:    nil,
+		},
+		{
+			query:            "select /*vt+ PRIORITY=200 */ * from another_table",
+			expectedPriority: "",
+			expectedError:    ErrInvalidPriority,
+		},
+		{
+			query:            "select /*vt+ PRIORITY=-1 */ * from another_table",
+			expectedPriority: "",
+			expectedError:    ErrInvalidPriority,
+		},
+		{
+			query:            "select /*vt+ PRIORITY=some_text */ * from another_table",
+			expectedPriority: "",
+			expectedError:    ErrInvalidPriority,
+		},
+		{
+			query:            "select /*vt+ PRIORITY=0 */ * from another_table",
+			expectedPriority: "0",
+			expectedError:    nil,
+		},
+		{
+			query:            "select /*vt+ PRIORITY=100 */ * from another_table",
+			expectedPriority: "100",
+			expectedError:    nil,
+		},
+	}
+
+	for _, testCase := range testCases {
+		theThestCase := testCase
+		t.Run(theThestCase.query, func(t *testing.T) {
+			t.Parallel()
+			stmt, err := Parse(theThestCase.query)
+			assert.NoError(t, err)
+			actualPriority, actualError := GetPriorityFromStatement(stmt)
+			if theThestCase.expectedError != nil {
+				assert.ErrorIs(t, actualError, theThestCase.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, theThestCase.expectedPriority, actualPriority)
+			}
+		})
+	}
+}

@@ -17,11 +17,10 @@ limitations under the License.
 package test
 
 import (
+	"context"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 
@@ -29,9 +28,7 @@ import (
 )
 
 // checkTablet verifies the topo server API is correct for managing tablets.
-func checkTablet(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
-
+func checkTablet(t *testing.T, ctx context.Context, ts *topo.Server) {
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: LocalCellName,

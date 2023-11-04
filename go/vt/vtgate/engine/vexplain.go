@@ -170,11 +170,22 @@ func primitiveToPlanDescriptionWithSQLResults(in Primitive, res map[Primitive]st
 		this.Other["mysql_explain_json"] = json.RawMessage(v)
 	}
 
-	for _, input := range in.Inputs() {
-		this.Inputs = append(this.Inputs, primitiveToPlanDescriptionWithSQLResults(input, res))
+	inputs, infos := in.Inputs()
+	for idx, input := range inputs {
+		pd := primitiveToPlanDescriptionWithSQLResults(input, res)
+		if infos != nil {
+			for k, v := range infos[idx] {
+				if k == inputName {
+					pd.InputName = v.(string)
+					continue
+				}
+				pd.Other[k] = v
+			}
+		}
+		this.Inputs = append(this.Inputs, pd)
 	}
 
-	if len(in.Inputs()) == 0 {
+	if len(inputs) == 0 {
 		this.Inputs = []PrimitiveDescription{}
 	}
 
@@ -206,8 +217,8 @@ func convertToVExplainQueriesResult(logs []ExecuteEntry) *sqltypes.Result {
 }
 
 // Inputs implements the Primitive interface
-func (v *VExplain) Inputs() []Primitive {
-	return []Primitive{v.Input}
+func (v *VExplain) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{v.Input}, nil
 }
 
 func (v *VExplain) description() PrimitiveDescription {

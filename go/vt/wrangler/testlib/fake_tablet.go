@@ -245,7 +245,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 // StopActionLoop will stop the Action Loop for the given FakeTablet
 func (ft *FakeTablet) StopActionLoop(t *testing.T) {
 	if ft.TM == nil {
-		t.Fatalf("TM for %v is not running", ft.Tablet.Alias)
+		return
 	}
 	if ft.StartHTTPServer {
 		ft.HTTPListener.Close()

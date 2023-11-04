@@ -589,7 +589,7 @@ func (rp *ResourcePool) IdleClosed() int64 {
 	return rp.idleClosed.Load()
 }
 
-// extendedLifetimeTimeout returns random duration within range [maxLifetime, 2*maxLifetime)
+// extendedMaxLifetime returns random duration within range [maxLifetime, 2*maxLifetime)
 func (rp *ResourcePool) extendedMaxLifetime() time.Duration {
 	maxLifetime := rp.maxLifetime.Load()
 	if maxLifetime == 0 {

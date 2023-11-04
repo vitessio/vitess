@@ -22,11 +22,11 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -755,13 +755,13 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 }
 
 func wasConnectionClosed(err error) bool {
-	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+	sqlErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 	message := sqlErr.Error()
 
 	switch sqlErr.Number() {
-	case mysql.CRServerGone, mysql.CRServerLost:
+	case sqlerror.CRServerGone, sqlerror.CRServerLost:
 		return true
-	case mysql.ERQueryInterrupted:
+	case sqlerror.ERQueryInterrupted:
 		return vterrors.TxClosed.MatchString(message)
 	default:
 		return false

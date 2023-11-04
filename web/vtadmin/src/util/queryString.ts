@@ -16,7 +16,7 @@
 import { merge } from 'lodash-es';
 import qs from 'query-string';
 
-export type QueryParams = ParsedQuery<string | number | boolean>;
+export type QueryParams = ParsedQuery<string | number | boolean | null | undefined>;
 
 export interface ParsedQuery<T = string> {
     [key: string]: T | T[] | null | undefined;
@@ -48,5 +48,7 @@ const DEFAULT_STRINGIFY_OPTIONS: qs.StringifyOptions = {
  * `stringify` is a simple wrapper around query-string's `stringify` function, specifying
  * VTAdmin's query stringification defaults. See https://github.com/sindresorhus/query-string.
  */
-export const stringify = (query: ParsedQuery<string | number | boolean>, opts: qs.StringifyOptions = {}) =>
-    qs.stringify(query, merge({}, DEFAULT_STRINGIFY_OPTIONS, opts));
+export const stringify = (
+    query: ParsedQuery<string | number | boolean | null | undefined>,
+    opts: qs.StringifyOptions = {}
+) => qs.stringify(query, merge({}, DEFAULT_STRINGIFY_OPTIONS, opts));

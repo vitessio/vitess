@@ -31,11 +31,12 @@ type VSchemaStats struct {
 // VSchemaKeyspaceStats contains a rollup of the VSchema stats for a keyspace.
 // It is used to display a table with the information in the status page.
 type VSchemaKeyspaceStats struct {
-	Keyspace    string
-	Sharded     bool
-	TableCount  int
-	VindexCount int
-	Error       string
+	Keyspace                 string
+	Sharded                  bool
+	TableCount               int
+	VindexCount              int
+	VindexUnknownParamsCount int
+	Error                    string
 }
 
 // NewVSchemaStats returns a new VSchemaStats from a VSchema.
@@ -53,6 +54,11 @@ func NewVSchemaStats(vschema *vindexes.VSchema, errorMessage string) *VSchemaSta
 			s.TableCount += len(k.Tables)
 			for _, t := range k.Tables {
 				s.VindexCount += len(t.ColumnVindexes) + len(t.Ordered) + len(t.Owned)
+			}
+			for _, vdx := range k.Vindexes {
+				if pv, ok := vdx.(vindexes.ParamValidating); ok {
+					s.VindexUnknownParamsCount += len(pv.UnknownParams())
+				}
 			}
 		}
 		if k.Error != nil {
@@ -95,6 +101,7 @@ const (
     <th>Sharded</th>
     <th>Table Count</th>
     <th>Vindex Count</th>
+    <th>Vindex Unknown Parameters Count</th>
     <th>Error</th>
   </tr>
 {{range $i, $ks := .Keyspaces}}  <tr>
@@ -102,6 +109,7 @@ const (
     <td>{{if $ks.Sharded}}Yes{{else}}No{{end}}</td>
     <td>{{$ks.TableCount}}</td>
     <td>{{$ks.VindexCount}}</td>
+    <td>{{$ks.VindexUnknownParamsCount}}</td>
     <td style="color:red">{{$ks.Error}}</td>
   </tr>{{end}}
 </table>

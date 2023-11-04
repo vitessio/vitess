@@ -107,7 +107,7 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
 
     return (
         <div className="mt-12 mb-16">
-            {env().REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
+            {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
                 <>
                     <h3 className="my-8">Stream VReplication Lag</h3>
                     <WorkflowStreamsLagChart clusterID={clusterID} keyspace={keyspace} workflowName={name} />

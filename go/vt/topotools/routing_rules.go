@@ -27,6 +27,19 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
+//region routing rules
+
+func GetRoutingRulesMap(rules *vschemapb.RoutingRules) map[string][]string {
+	if rules == nil {
+		return nil
+	}
+	rulesMap := make(map[string][]string, len(rules.Rules))
+	for _, rr := range rules.Rules {
+		rulesMap[rr.FromTable] = rr.ToTables
+	}
+	return rulesMap
+}
+
 // GetRoutingRules fetches routing rules from the topology server and returns a
 // mapping of fromTable=>[]toTables.
 func GetRoutingRules(ctx context.Context, ts *topo.Server) (map[string][]string, error) {
@@ -35,10 +48,7 @@ func GetRoutingRules(ctx context.Context, ts *topo.Server) (map[string][]string,
 		return nil, err
 	}
 
-	rules := make(map[string][]string, len(rrs.Rules))
-	for _, rr := range rrs.Rules {
-		rules[rr.FromTable] = rr.ToTables
-	}
+	rules := GetRoutingRulesMap(rrs)
 
 	return rules, nil
 }
@@ -59,6 +69,29 @@ func SaveRoutingRules(ctx context.Context, ts *topo.Server, rules map[string][]s
 	return ts.SaveRoutingRules(ctx, rrs)
 }
 
+//endregion
+
+//region shard routing rules
+
+func GetShardRoutingRuleKey(fromKeyspace, shard string) string {
+	return fmt.Sprintf("%s.%s", fromKeyspace, shard)
+}
+func ParseShardRoutingRuleKey(key string) (string, string) {
+	arr := strings.Split(key, ".")
+	return arr[0], arr[1]
+}
+
+func GetShardRoutingRulesMap(rules *vschemapb.ShardRoutingRules) map[string]string {
+	if rules == nil {
+		return nil
+	}
+	rulesMap := make(map[string]string, len(rules.Rules))
+	for _, rr := range rules.Rules {
+		rulesMap[GetShardRoutingRuleKey(rr.FromKeyspace, rr.Shard)] = rr.ToKeyspace
+	}
+	return rulesMap
+}
+
 // GetShardRoutingRules fetches shard routing rules from the topology server and returns a
 // mapping of fromKeyspace.Shard=>toKeyspace.
 func GetShardRoutingRules(ctx context.Context, ts *topo.Server) (map[string]string, error) {
@@ -67,10 +100,7 @@ func GetShardRoutingRules(ctx context.Context, ts *topo.Server) (map[string]stri
 		return nil, err
 	}
 
-	rules := make(map[string]string, len(rrs.Rules))
-	for _, rr := range rrs.Rules {
-		rules[fmt.Sprintf("%s.%s", rr.FromKeyspace, rr.Shard)] = rr.ToKeyspace
-	}
+	rules := GetShardRoutingRulesMap(rrs)
 
 	return rules, nil
 }
@@ -82,9 +112,7 @@ func SaveShardRoutingRules(ctx context.Context, ts *topo.Server, srr map[string]
 
 	srs := &vschemapb.ShardRoutingRules{Rules: make([]*vschemapb.ShardRoutingRule, 0, len(srr))}
 	for from, to := range srr {
-		arr := strings.Split(from, ".")
-		fromKeyspace := arr[0]
-		shard := arr[1]
+		fromKeyspace, shard := ParseShardRoutingRuleKey(from)
 		srs.Rules = append(srs.Rules, &vschemapb.ShardRoutingRule{
 			FromKeyspace: fromKeyspace,
 			ToKeyspace:   to,

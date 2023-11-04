@@ -32,14 +32,16 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex)
 		return nil, vterrors.VT12001("multi-column vindexes not supported")
 	}
 
-	expr, err := evalengine.Translate(op.Value, ctx.SemTable)
+	expr, err := evalengine.Translate(op.Value, &evalengine.Config{
+		Collation:   ctx.SemTable.Collation,
+		ResolveType: ctx.SemTable.TypeForExpr,
+	})
 	if err != nil {
 		return nil, err
 	}
 	plan := &vindexFunc{
-		order:         1,
-		tableID:       op.Solved,
-		resultColumns: nil,
+		order:   1,
+		tableID: op.Solved,
 		eVindexFunc: &engine.VindexFunc{
 			Opcode: op.OpCode,
 			Vindex: single,

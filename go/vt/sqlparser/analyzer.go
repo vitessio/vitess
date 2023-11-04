@@ -59,6 +59,10 @@ const (
 	StmtRevert
 	StmtShowMigrationLogs
 	StmtCommentOnly
+	StmtPrepare
+	StmtExecute
+	StmtDeallocate
+	StmtKill
 )
 
 // ASTToStatementType returns a StatementType from an AST stmt
@@ -114,6 +118,14 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtVStream
 	case *CommentOnly:
 		return StmtCommentOnly
+	case *PrepareStmt:
+		return StmtPrepare
+	case *ExecuteStmt:
+		return StmtExecute
+	case *DeallocateStmt:
+		return StmtDeallocate
+	case *Kill:
+		return StmtKill
 	default:
 		return StmtUnknown
 	}
@@ -241,6 +253,8 @@ func Preview(sql string) StatementType {
 		return StmtRelease
 	case "rollback":
 		return StmtSRollback
+	case "kill":
+		return StmtKill
 	}
 	return StmtUnknown
 }
@@ -299,6 +313,14 @@ func (s StatementType) String() string {
 		return "CALL_PROC"
 	case StmtCommentOnly:
 		return "COMMENT_ONLY"
+	case StmtPrepare:
+		return "PREPARE"
+	case StmtExecute:
+		return "EXECUTE"
+	case StmtDeallocate:
+		return "DEALLOCATE PREPARE"
+	case StmtKill:
+		return "KILL"
 	default:
 		return "UNKNOWN"
 	}
@@ -368,7 +390,7 @@ func IsColName(node Expr) bool {
 // NULL is not considered to be a value.
 func IsValue(node Expr) bool {
 	switch v := node.(type) {
-	case Argument:
+	case *Argument:
 		return true
 	case *Literal:
 		switch v.Type {

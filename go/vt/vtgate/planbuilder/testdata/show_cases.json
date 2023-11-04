@@ -165,9 +165,9 @@
           "Charset": "VARCHAR",
           "Default collation": "VARCHAR",
           "Description": "VARCHAR",
-          "Maxlen": "INT32"
+          "Maxlen": "UINT32"
         },
-        "RowCount": 2
+        "RowCount": 37
       }
     }
   },
@@ -535,7 +535,7 @@
           "Sharded": true
         },
         "TargetDestination": "AllShards()",
-        "Query": "SELECT * FROM _vt.schema_migrations where migration_uuid LIKE '%format' OR migration_context LIKE '%format' OR migration_status LIKE '%format'"
+        "Query": "show vitess_migrations from `user` like '%format'"
       }
     }
   },
@@ -552,7 +552,7 @@
           "Sharded": true
         },
         "TargetDestination": "AllShards()",
-        "Query": "SELECT * FROM _vt.schema_migrations where id = 5"
+        "Query": "show vitess_migrations from `user` where id = 5"
       }
     }
   },
@@ -716,7 +716,7 @@
         "Fields": {
           "Tables": "VARCHAR"
         },
-        "RowCount": 10
+        "RowCount": 11
       }
     }
   },

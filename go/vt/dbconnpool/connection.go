@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 )
@@ -112,7 +113,7 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 }
 
 func (dbc *DBConnection) handleError(err error) {
-	if mysql.IsConnErr(err) {
+	if sqlerror.IsConnErr(err) {
 		dbc.Close()
 	}
 }

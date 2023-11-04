@@ -17,9 +17,8 @@ limitations under the License.
 package vtgateconn
 
 import (
-	"testing"
-
 	"context"
+	"testing"
 )
 
 func TestRegisterDialer(t *testing.T) {

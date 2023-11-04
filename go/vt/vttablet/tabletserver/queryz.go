@@ -18,10 +18,11 @@ package tabletserver
 
 import (
 	"fmt"
-	"html/template"
 	"net/http"
 	"sort"
 	"time"
+
+	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
@@ -151,8 +152,7 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 			return row1.timePQ() > row2.timePQ()
 		},
 	}
-	qe.plans.ForEach(func(value any) bool {
-		plan := value.(*TabletPlan)
+	qe.ForEachPlan(func(plan *TabletPlan) bool {
 		if plan == nil {
 			return true
 		}

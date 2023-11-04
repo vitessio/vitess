@@ -30,28 +30,39 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
 )
 
 var (
 	debugMode = false // set to true for local debugging: this uses the local env vtdataroot and does not teardown clusters
 
-	originalVtdataroot    string
-	vtdataroot            string
+	originalVtdataroot string
+	vtdataroot         string
+	// If you query the sidecar database directly against mysqld then you will need to specify the
+	// sidecarDBIdentifier
+	sidecarDBName         = "__vt_e2e-test" // test a non-default sidecar database name that also needs to be escaped
+	sidecarDBIdentifier   = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
-	extraVTGateArgs       = []string{"--tablet_refresh_interval", "10ms"}
-	extraVtctldArgs       = []string{"--remote_operation_timeout", "600s", "--topo_etcd_lease_ttl", "120"}
+	extraVTGateArgs       = []string{"--tablet_refresh_interval", "10ms", "--enable_buffer", "--buffer_window", loadTestBufferingWindowDurationStr,
+		"--buffer_size", "100000", "--buffer_min_time_between_failovers", "0s", "--buffer_max_failover_duration", loadTestBufferingWindowDurationStr}
+	extraVtctldArgs = []string{"--remote_operation_timeout", "600s", "--topo_etcd_lease_ttl", "120"}
 	// This variable can be used within specific tests to alter vttablet behavior
 	extraVTTabletArgs = []string{}
 
 	parallelInsertWorkers = "--vreplication-parallel-insert-workers=4"
+
+	throttlerConfig = throttler.Config{Threshold: 15}
 )
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
@@ -78,6 +89,7 @@ type ClusterConfig struct {
 
 // VitessCluster represents all components within the test cluster
 type VitessCluster struct {
+	t             *testing.T
 	ClusterConfig *ClusterConfig
 	Name          string
 	Cells         map[string]*Cell
@@ -98,10 +110,11 @@ type Cell struct {
 
 // Keyspace represents a Vitess keyspace contained by a cell within the test cluster
 type Keyspace struct {
-	Name    string
-	Shards  map[string]*Shard
-	VSchema string
-	Schema  string
+	Name          string
+	Shards        map[string]*Shard
+	VSchema       string
+	Schema        string
+	SidecarDBName string
 }
 
 // Shard represents a Vitess shard in a keyspace
@@ -172,35 +185,8 @@ func setVtMySQLRoot(mysqlRoot string) error {
 	return nil
 }
 
-// setDBFlavor sets the MYSQL_FLAVOR OS env var.
-// You should call this after calling setVtMySQLRoot() to ensure that the
-// correct flavor is used by mysqlctl based on the current mysqld version
-// in the path. If you don't do this then mysqlctl will use the incorrect
-// config/mycnf/<flavor>.cnf file and mysqld may fail to start.
-func setDBFlavor() error {
-	versionStr, err := mysqlctl.GetVersionString()
-	if err != nil {
-		return err
-	}
-	f, v, err := mysqlctl.ParseVersionString(versionStr)
-	if err != nil {
-		return err
-	}
-	flavor := fmt.Sprintf("%s%d%d", f, v.Major, v.Minor)
-	err = os.Setenv("MYSQL_FLAVOR", string(flavor))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("MYSQL_FLAVOR is %s\n", string(flavor))
-	return nil
-}
-
 func unsetVtMySQLRoot() {
 	_ = os.Unsetenv("VT_MYSQL_ROOT")
-}
-
-func unsetDBFlavor() {
-	_ = os.Unsetenv("MYSQL_FLAVOR")
 }
 
 // getDBTypeVersionInUse checks the major DB version of the mysqld binary
@@ -322,7 +308,6 @@ func init() {
 	if os.Getenv("VREPLICATION_E2E_DEBUG") != "" {
 		debugMode = true
 	}
-	rand.Seed(time.Now().UTC().UnixNano())
 	originalVtdataroot = os.Getenv("VTDATAROOT")
 	var mainVtDataRoot string
 	if debugMode {
@@ -336,8 +321,11 @@ func init() {
 
 // NewVitessCluster starts a basic cluster with vtgate, vtctld and the topo
 func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConfig *ClusterConfig) *VitessCluster {
-	vc := &VitessCluster{Name: name, Cells: make(map[string]*Cell), ClusterConfig: clusterConfig}
+	vc := &VitessCluster{t: t, Name: name, Cells: make(map[string]*Cell), ClusterConfig: clusterConfig}
 	require.NotNil(t, vc)
+
+	vc.CleanupDataroot(t, true)
+
 	topo := cluster.TopoProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.topoPort+1, vc.ClusterConfig.hostname, "etcd2", "global")
 
 	require.NotNil(t, topo)
@@ -373,17 +361,43 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 	return vc
 }
 
+// CleanupDataroot deletes the vtdataroot directory. Since we run multiple tests sequentially in a single CI test shard,
+// we can run out of disk space due to all the leftover artifacts from previous tests.
+func (vc *VitessCluster) CleanupDataroot(t *testing.T, recreate bool) {
+	// This is always set to "true" on GitHub Actions runners:
+	// https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables
+	ci, ok := os.LookupEnv("CI")
+	if !ok || strings.ToLower(ci) != "true" {
+		// Leave the directory in place to support local debugging.
+		return
+	}
+	dir := vc.ClusterConfig.vtdataroot
+	log.Infof("Deleting vtdataroot %s", dir)
+	err := os.RemoveAll(dir)
+	require.NoError(t, err)
+	if recreate {
+		err = os.Mkdir(dir, 0700)
+		require.NoError(t, err)
+	}
+}
+
 // AddKeyspace creates a keyspace with specified shard keys and number of replica/read-only tablets.
 // You can pass optional key value pairs (opts) if you want conditional behavior.
 func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string, shards string, vschema string, schema string, numReplicas int, numRdonly int, tabletIDBase int, opts map[string]string) (*Keyspace, error) {
 	keyspace := &Keyspace{
-		Name:   ksName,
-		Shards: make(map[string]*Shard),
+		Name:          ksName,
+		Shards:        make(map[string]*Shard),
+		SidecarDBName: sidecarDBName,
 	}
 
-	if err := vc.Vtctl.CreateKeyspace(keyspace.Name); err != nil {
+	if err := vc.VtctldClient.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName); err != nil {
 		t.Fatalf(err.Error())
 	}
+
+	log.Infof("Applying throttler config for keyspace %s", keyspace.Name)
+	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, true, false, throttlerConfig.Threshold, throttlerConfig.Query, nil)
+	require.NoError(t, err, res)
+
 	cellsToWatch := ""
 	for i, cell := range cells {
 		if i > 0 {
@@ -412,7 +426,9 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 			vc.StartVtgate(t, cell, cellsToWatch)
 		}
 	}
-	_ = vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", ksName)
+
+	err = vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", ksName)
+	require.NoError(t, err)
 	return keyspace, nil
 }
 
@@ -422,8 +438,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 
 	options := []string{
 		"--queryserver-config-schema-reload-time", "5",
-		"--enable-lag-throttler",
-		"--heartbeat_enable",
+		"--heartbeat_on_demand_duration", "5s",
 		"--heartbeat_interval", "250ms",
 	} // FIXME: for multi-cell initial schema doesn't seem to load without "--queryserver-config-schema-reload-time"
 	options = append(options, extraVTTabletArgs...)
@@ -450,7 +465,9 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	require.NotNil(t, vttablet)
 	vttablet.SupportsBackup = false
 
-	tablet.DbServer = cluster.MysqlCtlProcessInstance(tabletID, vc.ClusterConfig.tabletMysqlPortBase+tabletID, vc.ClusterConfig.tmpDir)
+	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tabletID, vc.ClusterConfig.tabletMysqlPortBase+tabletID, vc.ClusterConfig.tmpDir)
+	require.NoError(t, err)
+	tablet.DbServer = mysqlctlProcess
 	require.NotNil(t, tablet.DbServer)
 	tablet.DbServer.InitMysql = true
 	proc, err := tablet.DbServer.StartProcess()
@@ -555,8 +572,25 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
 		log.Infof("InitializeShard and make %d primary", primaryTabletUID)
 		require.NoError(t, vc.VtctlClient.InitializeShard(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
+
 		log.Infof("Finished creating shard %s", shard.Name)
 	}
+
+	err := vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", keyspace.Name)
+	require.NoError(t, err)
+
+	log.Infof("Waiting for throttler config to be applied on all shards")
+	for _, shard := range keyspace.Shards {
+		for _, tablet := range shard.Tablets {
+			clusterTablet := &cluster.Vttablet{
+				Alias:    tablet.Name,
+				HTTPPort: tablet.Vttablet.Port,
+			}
+			log.Infof("+ Waiting for throttler config to be applied on %s, type=%v", tablet.Name, tablet.Vttablet.TabletType)
+			throttler.WaitForThrottlerStatusEnabled(t, clusterTablet, true, nil, time.Minute)
+		}
+	}
+	log.Infof("Throttler config applied on all shards")
 
 	return nil
 }
@@ -605,7 +639,7 @@ func (vc *VitessCluster) AddCell(t testing.TB, name string) (*Cell, error) {
 	return cell, nil
 }
 
-func (vc *VitessCluster) teardown(t testing.TB) {
+func (vc *VitessCluster) teardown() {
 	for _, cell := range vc.Cells {
 		for _, vtgate := range cell.Vtgates {
 			if err := vtgate.TearDown(); err != nil {
@@ -668,13 +702,13 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 }
 
 // TearDown brings down a cluster, deleting processes, removing topo keys
-func (vc *VitessCluster) TearDown(t testing.TB) {
+func (vc *VitessCluster) TearDown(t *testing.T) {
 	if debugMode {
 		return
 	}
 	done := make(chan bool)
 	go func() {
-		vc.teardown(t)
+		vc.teardown()
 		done <- true
 	}()
 	select {
@@ -685,6 +719,7 @@ func (vc *VitessCluster) TearDown(t testing.TB) {
 	}
 	// some processes seem to hang around for a bit
 	time.Sleep(5 * time.Second)
+	vc.CleanupDataroot(t, false)
 }
 
 func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName string, tabletType string) map[string]*cluster.VttabletProcess {
@@ -720,6 +755,10 @@ func (vc *VitessCluster) getPrimaryTablet(t *testing.T, ksName, shardName string
 	}
 	require.FailNow(t, "no primary found for %s:%s", ksName, shardName)
 	return nil
+}
+
+func (vc *VitessCluster) GetVTGateConn(t *testing.T) *mysql.Conn {
+	return getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 }
 
 func (vc *VitessCluster) startQuery(t *testing.T, query string) (func(t *testing.T), func(t *testing.T)) {
@@ -772,12 +811,7 @@ func setupDBTypeVersion(t *testing.T, value string) func() {
 	if err := downloadDBTypeVersion(dbType, majorVersion, path); err != nil {
 		t.Fatalf("Could not download %s, error: %v", majorVersion, err)
 	}
-	// Set the MYSQL_FLAVOR OS ENV var for mysqlctl to use the correct config file
-	if err := setDBFlavor(); err != nil {
-		t.Fatalf("Could not set MYSQL_FLAVOR: %v", err)
-	}
 	return func() {
-		unsetDBFlavor()
 		unsetVtMySQLRoot()
 	}
 }

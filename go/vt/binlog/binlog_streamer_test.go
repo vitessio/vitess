@@ -17,6 +17,7 @@ limitations under the License.
 package binlog
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -26,7 +27,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"context"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/mysql"
 
@@ -85,7 +87,7 @@ func TestStreamerParseEventsXID(t *testing.T) {
 	input := []mysql.BinlogEvent{
 		mysql.NewRotateEvent(f, s, 0, ""),
 		mysql.NewFormatDescriptionEvent(f, s),
-		mysql.NewMariaDBGTIDEvent(f, s, mysql.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}),
@@ -106,9 +108,9 @@ func TestStreamerParseEventsXID(t *testing.T) {
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
-				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTIDSet{
-						0: mysql.MariadbGTID{
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -126,7 +128,7 @@ func TestStreamerParseEventsXID(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
@@ -147,7 +149,7 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 	input := []mysql.BinlogEvent{
 		mysql.NewRotateEvent(f, s, 0, ""),
 		mysql.NewFormatDescriptionEvent(f, s),
-		mysql.NewMariaDBGTIDEvent(f, s, mysql.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}),
@@ -170,9 +172,9 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
-				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTIDSet{
-						0: mysql.MariadbGTID{
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -189,7 +191,7 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 	dbcfgs := dbconfigs.New(mcp)
 
 	var got binlogStatements
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
@@ -216,7 +218,7 @@ func TestStreamerStop(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, sendTransaction)
 
 	// Start parseEvents(), but don't send it anything, so it just waits.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -269,7 +271,7 @@ func TestStreamerParseEventsClientEOF(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
@@ -294,7 +296,7 @@ func TestStreamerParseEventsServerEOF(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, sendTransaction)
 	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err != want {
 		t.Errorf("wrong error, got %#v, want %#v", err, want)
@@ -308,7 +310,7 @@ func TestStreamerParseEventsServerEOF(t *testing.T) {
 func TestStreamerParseEventsGTIDPurged(t *testing.T) {
 	events := make(chan mysql.BinlogEvent)
 	errs := make(chan error)
-	expectedStreamErr := mysql.NewSQLError(mysql.ERMasterFatalReadingBinlog, mysql.SSUnknownSQLState,
+	expectedStreamErr := sqlerror.NewSQLError(sqlerror.ERMasterFatalReadingBinlog, sqlerror.SSUnknownSQLState,
 		"Cannot replicate because the master purged required binary logs.")
 
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
@@ -330,13 +332,13 @@ func TestStreamerParseEventsGTIDPurged(t *testing.T) {
 		}
 	}()
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, sendTransaction)
 	_, err := bls.parseEvents(context.Background(), events, errs)
 	require.Error(t, err)
-	sqlErr, ok := err.(*mysql.SQLError)
+	sqlErr, ok := err.(*sqlerror.SQLError)
 	require.True(t, ok, "expected SQLError, got %T", err)
-	require.True(t, sqlErr.Num == mysql.ERMasterFatalReadingBinlog, "expected ERMasterFatalReadingBinlog (%d), got %d",
-		mysql.ERMasterFatalReadingBinlog, sqlErr.Num)
+	require.True(t, sqlErr.Num == sqlerror.ERMasterFatalReadingBinlog, "expected ERMasterFatalReadingBinlog (%d), got %d",
+		sqlerror.ERMasterFatalReadingBinlog, sqlErr.Num)
 }
 
 func TestStreamerParseEventsSendErrorXID(t *testing.T) {
@@ -369,7 +371,7 @@ func TestStreamerParseEventsSendErrorXID(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 
@@ -415,7 +417,7 @@ func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
@@ -456,7 +458,7 @@ func TestStreamerParseEventsInvalid(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
@@ -499,7 +501,7 @@ func TestStreamerParseEventsInvalidFormat(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
@@ -542,7 +544,7 @@ func TestStreamerParseEventsNoFormat(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
@@ -583,7 +585,7 @@ func TestStreamerParseEventsInvalidQuery(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
@@ -604,7 +606,7 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 	input := []mysql.BinlogEvent{
 		mysql.NewRotateEvent(f, s, 0, ""),
 		mysql.NewFormatDescriptionEvent(f, s),
-		mysql.NewMariaDBGTIDEvent(f, s, mysql.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}),
@@ -634,9 +636,9 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 			Statements: nil,
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
-				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTIDSet{
-						0: mysql.MariadbGTID{
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -652,9 +654,9 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
-				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTIDSet{
-						0: mysql.MariadbGTID{
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -671,7 +673,7 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
@@ -691,7 +693,7 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	input := []mysql.BinlogEvent{
 		mysql.NewRotateEvent(f, s, 0, ""),
 		mysql.NewFormatDescriptionEvent(f, s),
-		mysql.NewMariaDBGTIDEvent(f, s, mysql.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
@@ -709,9 +711,9 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
-				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTIDSet{
-						0: mysql.MariadbGTID{
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -724,9 +726,9 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 			Statements: nil,
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
-				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTIDSet{
-						0: mysql.MariadbGTID{
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -744,7 +746,7 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
@@ -764,7 +766,7 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	input := []mysql.BinlogEvent{
 		mysql.NewRotateEvent(f, s, 0, ""),
 		mysql.NewFormatDescriptionEvent(f, s),
-		mysql.NewMariaDBGTIDEvent(f, s, mysql.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
@@ -785,9 +787,9 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
-				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTIDSet{
-						0: mysql.MariadbGTID{
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -800,9 +802,9 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 			Statements: nil,
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
-				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTIDSet{
-						0: mysql.MariadbGTID{
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -820,7 +822,7 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
@@ -840,7 +842,7 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 	input := []mysql.BinlogEvent{
 		mysql.NewRotateEvent(f, s, 0, ""),
 		mysql.NewFormatDescriptionEvent(f, s),
-		mysql.NewMariaDBGTIDEvent(f, s, mysql.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}),
@@ -863,9 +865,9 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
-				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTIDSet{
-						0: mysql.MariadbGTID{
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -882,7 +884,7 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
@@ -924,7 +926,7 @@ func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
@@ -945,7 +947,7 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 	input := []mysql.BinlogEvent{
 		mysql.NewRotateEvent(f, s, 0, ""),
 		mysql.NewFormatDescriptionEvent(f, s),
-		mysql.NewMariaDBGTIDEvent(f, s, mysql.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}),
@@ -969,9 +971,9 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
-				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTIDSet{
-						0: mysql.MariadbGTID{
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -988,7 +990,7 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
@@ -1008,7 +1010,7 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 	input := []mysql.BinlogEvent{
 		mysql.NewRotateEvent(f, s, 0, ""),
 		mysql.NewFormatDescriptionEvent(f, s),
-		mysql.NewMariaDBGTIDEvent(f, s, mysql.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "other",
 			SQL:      "BEGIN"}), // Check that this doesn't get filtered out.
@@ -1032,9 +1034,9 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
-				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTIDSet{
-						0: mysql.MariadbGTID{
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -1051,7 +1053,7 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
@@ -1093,7 +1095,7 @@ func TestStreamerParseEventsBeginAgain(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, sendTransaction)
 	before := binlogStreamerErrors.Counts()["ParseEvents"]
 
 	go sendTestEvents(events, input)
@@ -1117,7 +1119,7 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 	input := []mysql.BinlogEvent{
 		mysql.NewRotateEvent(f, s, 4, "filename.0001"),
 		mysql.NewFormatDescriptionEvent(f, s),
-		mysql.NewMariaDBGTIDEvent(f, s, mysql.MariadbGTID{Domain: 0, Sequence: 10}, true /* hasBegin */),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 10}, true /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Charset: &binlogdatapb.Charset{Client: 33, Conn: 33, Server: 33},
 			SQL:     "insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */",
@@ -1144,9 +1146,9 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1409892744,
-				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTIDSet{
-						0: mysql.MariadbGTID{
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 10,
@@ -1163,7 +1165,7 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
@@ -1186,7 +1188,7 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 	input := []mysql.BinlogEvent{
 		mysql.NewRotateEvent(f, s, 4, "filename.0001"),
 		mysql.NewFormatDescriptionEvent(f, s),
-		mysql.NewMariaDBGTIDEvent(f, s, mysql.MariadbGTID{Domain: 0, Sequence: 9}, false /* hasBegin */),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 9}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Charset: &binlogdatapb.Charset{Client: 8, Conn: 8, Server: 33},
 			SQL:     "create table if not exists vt_insert_test (\nid bigint auto_increment,\nmsg varchar(64),\nprimary key (id)\n) Engine=InnoDB",
@@ -1204,9 +1206,9 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1409892744,
-				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTIDSet{
-						0: mysql.MariadbGTID{
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 9,
@@ -1223,7 +1225,7 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {

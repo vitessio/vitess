@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -73,7 +74,7 @@ func TestStateManagerServePrimary(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, false, sm.lameduck)
-	assert.Equal(t, testNow, sm.terTimestamp)
+	assert.Equal(t, testNow, sm.ptsTimestamp)
 
 	verifySubcomponent(t, 1, sm.watcher, testStateClosed)
 
@@ -516,10 +517,11 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 }
 
 func TestStateManagerValidations(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	sm := newTestStateManager(t)
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	sm.target = proto.Clone(target).(*querypb.Target)
-
+	sm.target = target.CloneVT()
 	err := sm.StartRequest(ctx, target, false)
 	assert.Contains(t, err.Error(), "operation not allowed")
 
@@ -578,6 +580,8 @@ func TestStateManagerValidations(t *testing.T) {
 }
 
 func TestStateManagerWaitForRequests(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	sm := newTestStateManager(t)
 	defer sm.StopService()
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
@@ -705,7 +709,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 		statelessql: NewQueryList("stateless"),
 		statefulql:  NewQueryList("stateful"),
 		olapql:      NewQueryList("olap"),
-		hs:          newHealthStreamer(env, &topodatapb.TabletAlias{}),
+		hs:          newHealthStreamer(env, &topodatapb.TabletAlias{}, schema.NewEngine(env)),
 		se:          &testSchemaEngine{},
 		rt:          &testReplTracker{lag: 1 * time.Second},
 		vstreamer:   &testSubcomponent{},
@@ -788,6 +792,10 @@ func (te *testSchemaEngine) Open() error {
 
 func (te *testSchemaEngine) MakeNonPrimary() {
 	te.nonPrimary = true
+}
+
+func (te *testSchemaEngine) MakePrimary(serving bool) {
+	te.nonPrimary = false
 }
 
 func (te *testSchemaEngine) Close() {

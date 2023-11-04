@@ -43,17 +43,24 @@ type MysqlctldProcess struct {
 	process            *exec.Cmd
 	exit               chan error
 	InitMysql          bool
+	SocketFile         string
 	exitSignalReceived bool
 }
 
 // InitDb executes mysqlctld command to add cell info
 func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
-	tmpProcess := exec.Command(
-		mysqlctld.Binary,
+	args := []string{
 		"--log_dir", mysqlctld.LogDirectory,
 		"--tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
 		"--mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
 		"--init_db_sql_file", mysqlctld.InitDBFile,
+	}
+	if mysqlctld.SocketFile != "" {
+		args = append(args, "--socket_file", mysqlctld.SocketFile)
+	}
+	tmpProcess := exec.Command(
+		mysqlctld.Binary,
+		args...,
 	)
 	return tmpProcess.Run()
 }
@@ -64,11 +71,17 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 		return fmt.Errorf("process is already running")
 	}
 	_ = createDirectory(mysqlctld.LogDirectory, 0700)
-	tempProcess := exec.Command(
-		mysqlctld.Binary,
+	args := []string{
 		"--log_dir", mysqlctld.LogDirectory,
 		"--tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
 		"--mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
+	}
+	if mysqlctld.SocketFile != "" {
+		args = append(args, "--socket_file", mysqlctld.SocketFile)
+	}
+	tempProcess := exec.Command(
+		mysqlctld.Binary,
+		args...,
 	)
 
 	tempProcess.Args = append(tempProcess.Args, mysqlctld.ExtraArgs...)
@@ -82,6 +95,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	tempProcess.Stderr = errFile
 
 	tempProcess.Env = append(tempProcess.Env, os.Environ()...)
+	tempProcess.Env = append(tempProcess.Env, DefaultVttestEnv)
 	tempProcess.Stdout = os.Stdout
 	tempProcess.Stderr = os.Stderr
 
@@ -144,17 +158,21 @@ func (mysqlctld *MysqlctldProcess) CleanupFiles(tabletUID int) {
 
 // MysqlCtldProcessInstance returns a Mysqlctld handle for mysqlctld process
 // configured with the given Config.
-func MysqlCtldProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) *MysqlctldProcess {
+func MysqlCtldProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) (*MysqlctldProcess, error) {
+	initFile, err := getInitDBFileUsed()
+	if err != nil {
+		return nil, err
+	}
 	mysqlctld := &MysqlctldProcess{
 		Name:         "mysqlctld",
 		Binary:       "mysqlctld",
 		LogDirectory: tmpDirectory,
-		InitDBFile:   path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"),
+		InitDBFile:   initFile,
 	}
 	mysqlctld.MySQLPort = mySQLPort
 	mysqlctld.TabletUID = tabletUID
 	mysqlctld.InitMysql = true
-	return mysqlctld
+	return mysqlctld, nil
 }
 
 // IsHealthy gives the health status of mysql.
@@ -163,4 +181,25 @@ func (mysqlctld *MysqlctldProcess) IsHealthy() bool {
 	params := NewConnParams(0, mysqlctld.Password, socketFile, "")
 	_, err := mysql.Connect(context.Background(), &params)
 	return err == nil
+}
+
+// HasShutdown checks if the process has been set to nil
+func (mysqlctld *MysqlctldProcess) hasShutdown() bool {
+	return mysqlctld.process == nil
+}
+
+func (mysqlctld *MysqlctldProcess) WaitForMysqlCtldShutdown() bool {
+	tmr := time.NewTimer(defaultOperationTimeout)
+	defer tmr.Stop()
+	for {
+		if mysqlctld.hasShutdown() {
+			return true
+		}
+		select {
+		case <-tmr.C:
+			return false
+		default:
+		}
+		time.Sleep(defaultRetryDelay)
+	}
 }

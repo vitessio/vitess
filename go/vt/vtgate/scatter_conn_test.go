@@ -19,11 +19,11 @@ package vtgate
 import (
 	"testing"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/key"
 
 	"vitess.io/vitess/go/test/utils"
@@ -42,10 +42,11 @@ import (
 // This file uses the sandbox_test framework.
 
 func TestExecuteFailOnAutocommit(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 
 	createSandbox("TestExecuteFailOnAutocommit")
 	hc := discovery.NewFakeHealthCheck(nil)
-	sc := newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestExecuteFailOnAutocommit", "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestExecuteFailOnAutocommit", "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
@@ -105,10 +106,12 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 }
 
 func TestReservedOnMultiReplica(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	keyspace := "keyspace"
 	createSandbox(keyspace)
 	hc := discovery.NewFakeHealthCheck(nil)
-	sc := newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	sbc0_1 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc0_2 := hc.AddTestTablet("aa", "2", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	//	sbc1 := hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
@@ -117,18 +120,20 @@ func TestReservedOnMultiReplica(t *testing.T) {
 	sbc0_1.SetResults([]*sqltypes.Result{{}})
 	sbc0_2.SetResults([]*sqltypes.Result{{}})
 
-	res := srvtopo.NewResolver(newSandboxForCells([]string{"aa"}), sc.gateway, "aa")
+	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
 	destinations := []key.Destination{key.DestinationShard("0")}
 	for i := 0; i < 10; i++ {
-		executeOnShards(t, res, keyspace, sc, session, destinations)
+		executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
 		assert.EqualValues(t, 1, sbc0_1.ReserveCount.Load()+sbc0_2.ReserveCount.Load(), "sbc0 reserve count")
 		assert.EqualValues(t, 0, sbc0_1.BeginCount.Load()+sbc0_2.BeginCount.Load(), "sbc0 begin count")
 	}
 }
 
 func TestReservedBeginTableDriven(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	type testAction struct {
 		transaction, reserved    bool
 		shards                   []string
@@ -253,7 +258,7 @@ func TestReservedBeginTableDriven(t *testing.T) {
 		keyspace := "keyspace"
 		createSandbox(keyspace)
 		hc := discovery.NewFakeHealthCheck(nil)
-		sc := newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+		sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 		sbc0 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 		sbc1 := hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 
@@ -261,7 +266,7 @@ func TestReservedBeginTableDriven(t *testing.T) {
 		sbc0.SetResults([]*sqltypes.Result{{}})
 		sbc1.SetResults([]*sqltypes.Result{{}})
 
-		res := srvtopo.NewResolver(newSandboxForCells([]string{"aa"}), sc.gateway, "aa")
+		res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 
 		t.Run(test.name, func(t *testing.T) {
 			session := NewSafeSession(&vtgatepb.Session{})
@@ -272,7 +277,7 @@ func TestReservedBeginTableDriven(t *testing.T) {
 				for _, shard := range action.shards {
 					destinations = append(destinations, key.DestinationShard(shard))
 				}
-				executeOnShards(t, res, keyspace, sc, session, destinations)
+				executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
 				assert.EqualValues(t, action.sbc0Reserve, sbc0.ReserveCount.Load(), "sbc0 reserve count")
 				assert.EqualValues(t, action.sbc0Begin, sbc0.BeginCount.Load(), "sbc0 begin count")
 				assert.EqualValues(t, action.sbc1Reserve, sbc1.ReserveCount.Load(), "sbc1 reserve count")
@@ -287,47 +292,49 @@ func TestReservedBeginTableDriven(t *testing.T) {
 }
 
 func TestReservedConnFail(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
 	keyspace := "keyspace"
 	createSandbox(keyspace)
 	hc := discovery.NewFakeHealthCheck(nil)
-	sc := newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	_ = hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
-	res := srvtopo.NewResolver(newSandboxForCells([]string{"aa"}), sc.gateway, "aa")
+	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
 	destinations := []key.Destination{key.DestinationShard("0")}
 
-	executeOnShards(t, res, keyspace, sc, session, destinations)
+	executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 1, len(session.ShardSessions))
 	oldRId := session.Session.ShardSessions[0].ReservedId
 
-	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.CRServerGone, mysql.SSUnknownSQLState, "lost connection")
-	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	sbc0.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "lost connection")
+	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 3, len(sbc0.Queries), "1 for the successful run, one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
-	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 123 not found")
-	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	sbc0.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction 123 not found")
+	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
-	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 123 ended at 2020-01-20")
-	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	sbc0.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction 123 ended at 2020-01-20")
+	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
-	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 123 in use: for tx killer rollback")
-	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	sbc0.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction 123 in use: for tx killer rollback")
+	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
@@ -335,7 +342,7 @@ func TestReservedConnFail(t *testing.T) {
 
 	sbc0.Queries = nil
 	sbc0.EphemeralShardErr = vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, "operation not allowed in state NOT_SERVING during query: query1")
-	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
@@ -343,7 +350,7 @@ func TestReservedConnFail(t *testing.T) {
 
 	sbc0.Queries = nil
 	sbc0.EphemeralShardErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: REPLICA, want: PRIMARY")
-	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
@@ -364,7 +371,7 @@ func TestReservedConnFail(t *testing.T) {
 
 	sbc0.Queries = nil
 	sbc0.ExecCount.Store(0)
-	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
 	assert.EqualValues(t, 1, sbc0.ExecCount.Load(), "first attempt should be made on original tablet")
 	assert.EqualValues(t, 0, len(sbc0.Queries), "no query should be executed on it")
 	assert.Equal(t, 1, len(sbc0Rep.Queries), "this attempt on new healthy tablet should pass")
@@ -394,7 +401,7 @@ func TestReservedConnFail(t *testing.T) {
 
 	sbc0Rep.Queries = nil
 	sbc0Rep.ExecCount.Store(0)
-	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	_ = executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations)
 	assert.EqualValues(t, 1, sbc0Rep.ExecCount.Load(), "first attempt should be made on the changed tablet type")
 	assert.EqualValues(t, 0, len(sbc0Rep.Queries), "no query should be executed on it")
 	assert.Equal(t, 1, len(sbc0.Queries), "this attempt should pass as it is on new healthy tablet and matches the target")
@@ -410,27 +417,27 @@ func TestIsConnClosed(t *testing.T) {
 		conClosed bool
 	}{{
 		"server gone",
-		mysql.NewSQLError(mysql.CRServerGone, mysql.SSNetError, ""),
+		sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSNetError, ""),
 		true,
 	}, {
 		"connection lost",
-		mysql.NewSQLError(mysql.CRServerLost, mysql.SSNetError, ""),
+		sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSNetError, ""),
 		true,
 	}, {
 		"tx ended",
-		mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 111 ended at ..."),
+		sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction 111 ended at ..."),
 		true,
 	}, {
 		"tx not found",
-		mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 111 not found ..."),
+		sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction 111 not found ..."),
 		true,
 	}, {
 		"tx not found missing tx id",
-		mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction not found"),
+		sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction not found"),
 		false,
 	}, {
 		"tx getting killed by tx killer",
-		mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 111 in use: for tx killer rollback"),
+		sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSUnknownSQLState, "transaction 111 in use: for tx killer rollback"),
 		true,
 	}}
 

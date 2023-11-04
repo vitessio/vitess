@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
@@ -559,7 +561,7 @@ func TestFindPositionForTablet(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			posString := mysql.EncodePosition(pos)
+			posString := replication.EncodePosition(pos)
 			require.Equal(t, test.expectedPosition, posString)
 		})
 	}
@@ -736,41 +738,41 @@ func TestFindCurrentPrimary(t *testing.T) {
 }
 
 func TestGetValidCandidatesAndPositionsAsList(t *testing.T) {
-	sid1 := mysql.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	mysqlGTID1 := mysql.Mysql56GTID{
+	sid1 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	mysqlGTID1 := replication.Mysql56GTID{
 		Server:   sid1,
 		Sequence: 9,
 	}
-	mysqlGTID2 := mysql.Mysql56GTID{
+	mysqlGTID2 := replication.Mysql56GTID{
 		Server:   sid1,
 		Sequence: 10,
 	}
-	mysqlGTID3 := mysql.Mysql56GTID{
+	mysqlGTID3 := replication.Mysql56GTID{
 		Server:   sid1,
 		Sequence: 11,
 	}
 
-	positionMostAdvanced := mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}
+	positionMostAdvanced := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
 	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID1)
 	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID2)
 	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID3)
 
-	positionIntermediate1 := mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}
+	positionIntermediate1 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
 	positionIntermediate1.GTIDSet = positionIntermediate1.GTIDSet.AddGTID(mysqlGTID1)
 
-	positionIntermediate2 := mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}
+	positionIntermediate2 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
 	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID1)
 	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID2)
 
 	tests := []struct {
 		name            string
-		validCandidates map[string]mysql.Position
+		validCandidates map[string]replication.Position
 		tabletMap       map[string]*topo.TabletInfo
 		tabletRes       []*topodatapb.Tablet
 	}{
 		{
 			name: "test conversion",
-			validCandidates: map[string]mysql.Position{
+			validCandidates: map[string]replication.Position{
 				"zone1-0000000100": positionMostAdvanced,
 				"zone1-0000000101": positionIntermediate1,
 				"zone1-0000000102": positionIntermediate2,
@@ -968,13 +970,13 @@ func TestWaitForCatchUp(t *testing.T) {
 func TestRestrictValidCandidates(t *testing.T) {
 	tests := []struct {
 		name            string
-		validCandidates map[string]mysql.Position
+		validCandidates map[string]replication.Position
 		tabletMap       map[string]*topo.TabletInfo
-		result          map[string]mysql.Position
+		result          map[string]replication.Position
 	}{
 		{
 			name: "remove invalid tablets",
-			validCandidates: map[string]mysql.Position{
+			validCandidates: map[string]replication.Position{
 				"zone1-0000000100": {},
 				"zone1-0000000101": {},
 				"zone1-0000000102": {},
@@ -1038,7 +1040,7 @@ func TestRestrictValidCandidates(t *testing.T) {
 					},
 				},
 			},
-			result: map[string]mysql.Position{
+			result: map[string]replication.Position{
 				"zone1-0000000100": {},
 				"zone1-0000000101": {},
 				"zone1-0000000104": {},

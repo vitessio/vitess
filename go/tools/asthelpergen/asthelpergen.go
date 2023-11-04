@@ -26,6 +26,8 @@ import (
 	"strings"
 
 	"github.com/dave/jennifer/jen"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"golang.org/x/tools/go/packages"
 
 	"vitess.io/vitess/go/tools/codegen"
@@ -304,7 +306,7 @@ func printableTypeName(t types.Type) string {
 	case *types.Named:
 		return t.Obj().Name()
 	case *types.Basic:
-		return strings.Title(t.Name()) // nolint
+		return cases.Title(language.AmericanEnglish).String(t.Name())
 	case *types.Interface:
 		return t.String()
 	default:

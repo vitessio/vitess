@@ -24,7 +24,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -35,6 +34,7 @@ var (
 	onlineDdlUUIDRegexp               = regexp.MustCompile(`^[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}$`)
 	onlineDDLGeneratedTableNameRegexp = regexp.MustCompile(`^_[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}_([0-9]{14})_(gho|ghc|del|new|vrepl)$`)
 	ptOSCGeneratedTableNameRegexp     = regexp.MustCompile(`^_.*_old$`)
+	migrationContextValidatorRegexp   = regexp.MustCompile(`^[\w:-]*$`)
 )
 
 var (
@@ -52,6 +52,14 @@ const (
 	SchemaMigrationsTableName = "schema_migrations"
 	RevertActionStr           = "revert"
 )
+
+// ValidateMigrationContext validates that the given migration context only uses valid characters
+func ValidateMigrationContext(migrationContext string) error {
+	if migrationContextValidatorRegexp.MatchString(migrationContext) {
+		return nil
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid characters in migration_context %v. Use alphanumeric, dash, underscore and colon only", migrationContext)
+}
 
 // when validateWalk returns true, then the child nodes are also visited
 func validateWalk(node sqlparser.SQLNode, allowForeignKeys bool) (kontinue bool, err error) {
@@ -84,19 +92,20 @@ const (
 
 // OnlineDDL encapsulates the relevant information in an online schema change request
 type OnlineDDL struct {
-	Keyspace         string          `json:"keyspace,omitempty"`
-	Table            string          `json:"table,omitempty"`
-	Schema           string          `json:"schema,omitempty"`
-	SQL              string          `json:"sql,omitempty"`
-	UUID             string          `json:"uuid,omitempty"`
-	Strategy         DDLStrategy     `json:"strategy,omitempty"`
-	Options          string          `json:"options,omitempty"`
-	RequestTime      int64           `json:"time_created,omitempty"`
-	MigrationContext string          `json:"context,omitempty"`
-	Status           OnlineDDLStatus `json:"status,omitempty"`
-	TabletAlias      string          `json:"tablet,omitempty"`
-	Retries          int64           `json:"retries,omitempty"`
-	ReadyToComplete  int64           `json:"ready_to_complete,omitempty"`
+	Keyspace string      `json:"keyspace,omitempty"`
+	Table    string      `json:"table,omitempty"`
+	Schema   string      `json:"schema,omitempty"`
+	SQL      string      `json:"sql,omitempty"`
+	UUID     string      `json:"uuid,omitempty"`
+	Strategy DDLStrategy `json:"strategy,omitempty"`
+	Options  string      `json:"options,omitempty"`
+	// Stateful fields:
+	MigrationContext   string          `json:"context,omitempty"`
+	Status             OnlineDDLStatus `json:"status,omitempty"`
+	TabletAlias        string          `json:"tablet,omitempty"`
+	Retries            int64           `json:"retries,omitempty"`
+	ReadyToComplete    int64           `json:"ready_to_complete,omitempty"`
+	WasReadyToComplete int64           `json:"was_ready_to_complete,omitempty"`
 }
 
 // FromJSON creates an OnlineDDL from json
@@ -249,7 +258,6 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 		UUID:             onlineDDLUUID,
 		Strategy:         ddlStrategySetting.Strategy,
 		Options:          ddlStrategySetting.Options,
-		RequestTime:      time.Now().UnixNano(),
 		MigrationContext: migrationContext,
 		Status:           OnlineDDLStatusRequested,
 	}, nil
@@ -274,6 +282,11 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement for Online DDL: %v", sqlparser.String(stmt))
 	}
+	// We clone the comments because they will end up being cached by the query planner. Then, the Directive() function actually modifies the comments.
+	// If comments are shared in cache, and Directive() modifies it, then we have a concurrency issue when someone else wants to read the comments.
+	// By cloning the comments we remove the concurrency problem.
+	comments = sqlparser.CloneRefOfParsedComments(comments)
+	comments.ResetDirectives()
 
 	if comments.Length() == 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no comments found in statement: %v", sqlparser.String(stmt))
@@ -326,11 +339,6 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 // StrategySetting returns the ddl strategy setting associated with this online DDL
 func (onlineDDL *OnlineDDL) StrategySetting() *DDLStrategySetting {
 	return NewDDLStrategySetting(onlineDDL.Strategy, onlineDDL.Options)
-}
-
-// RequestTimeSeconds converts request time to seconds (losing nano precision)
-func (onlineDDL *OnlineDDL) RequestTimeSeconds() int64 {
-	return onlineDDL.RequestTime / int64(time.Second)
 }
 
 // ToJSON exports this onlineDDL to JSON

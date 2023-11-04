@@ -27,10 +27,9 @@ import (
 // primitiveWrapper is used when only need a logical plan that supports plan.Primitive() and nothing else
 type primitiveWrapper struct {
 	prim engine.Primitive
-	gen4Plan
 }
 
-func (p *primitiveWrapper) WireupGen4(*plancontext.PlanningContext) error {
+func (p *primitiveWrapper) Wireup(*plancontext.PlanningContext) error {
 	return nil
 }
 

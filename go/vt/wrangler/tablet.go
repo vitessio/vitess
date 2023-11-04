@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -105,7 +103,7 @@ func (wr *Wrangler) ChangeTabletType(ctx context.Context, tabletAlias *topodatap
 
 	// We should clone the tablet and change its type to the expected type before checking the durability rules
 	// Since we want to check the durability rules for the desired state and not before we make that change
-	expectedTablet := proto.Clone(ti.Tablet).(*topodatapb.Tablet)
+	expectedTablet := ti.Tablet.CloneVT()
 	expectedTablet.Type = tabletType
 	semiSync, err := wr.shouldSendSemiSyncAck(ctx, expectedTablet)
 	if err != nil {

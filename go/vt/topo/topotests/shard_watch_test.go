@@ -56,8 +56,10 @@ func waitForInitialShard(t *testing.T, ts *topo.Server, keyspace, shard string) 
 func TestWatchShardNoNode(t *testing.T) {
 	keyspace := "ks1"
 	shard := "0"
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	defer ts.Close()
 
 	// No Shard -> ErrNoNode
 	_, _, err := ts.WatchShard(ctx, keyspace, shard)
@@ -70,8 +72,10 @@ func TestWatchShard(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	shard := "0"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell)
+	defer ts.Close()
 
 	// Create keyspace
 	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
@@ -205,8 +209,10 @@ func TestWatchShardCancel(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	shard := "0"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell)
+	defer ts.Close()
 
 	// No Shard -> ErrNoNode
 	_, _, err := ts.WatchShard(ctx, keyspace, shard)

@@ -8,12 +8,15 @@ package mysql
 
 import (
 	"fmt"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // Probe is the minimal configuration required to connect to a MySQL server
 type Probe struct {
 	Key             InstanceKey
 	MetricQuery     string
+	Tablet          *topodatapb.Tablet
 	TabletHost      string
 	TabletPort      int
 	CacheMillis     int

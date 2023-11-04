@@ -21,7 +21,6 @@ package consultopo
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -90,7 +89,7 @@ func getClientCreds() (creds map[string]*ClientAuthCred, err error) {
 	}
 
 	if err := json.Unmarshal(data, &creds); err != nil {
-		err = vterrors.Wrapf(err, fmt.Sprintf("Error parsing consul_auth_static_file")) //nolint
+		err = vterrors.Wrapf(err, "Error parsing consul_auth_static_file")
 		return creds, err
 	}
 	return creds, nil

@@ -28,7 +28,222 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func TestKey(t *testing.T) {
+func TestNormalize(t *testing.T) {
+	type args struct {
+		id []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want []byte
+	}{
+		{
+			"empty should empty",
+			args{[]byte{}},
+			[]byte{},
+		},
+		{
+			"one zero should be empty",
+			args{[]byte{0x00}},
+			[]byte{},
+		},
+		{
+			"any number of zeroes should be empty",
+			args{[]byte{0x00, 0x00, 0x00}},
+			[]byte{},
+		},
+		{
+			"one non-zero byte should be left alone",
+			args{[]byte{0x11}},
+			[]byte{0x11},
+		},
+		{
+			"multiple non-zero bytes should be left alone",
+			args{[]byte{0x11, 0x22, 0x33}},
+			[]byte{0x11, 0x22, 0x33},
+		},
+		{
+			"zeroes that aren't trailing should be left alone",
+			args{[]byte{0x11, 0x00, 0x22, 0x00, 0x33, 0x00}},
+			[]byte{0x11, 0x00, 0x22, 0x00, 0x33},
+		},
+		{
+			"excess zero bytes should be removed after a non-zero byte",
+			args{[]byte{0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
+			[]byte{0x11},
+		},
+		{
+			"excess zero bytes should be removed after multiple non-zero bytes",
+			args{[]byte{0x11, 0x22, 0x00, 0x00, 0x00}},
+			[]byte{0x11, 0x22},
+		},
+		{
+			"values longer than eight bytes should be supported",
+			args{[]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0x00}},
+			[]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, Normalize(tt.args.id), "Normalize(%v)", tt.args.id)
+		})
+	}
+}
+
+func TestCompare(t *testing.T) {
+	type args struct {
+		a []byte
+		b []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want int
+	}{
+		{
+			"empty ids are equal",
+			args{[]byte{}, []byte{}},
+			0,
+		},
+		{
+			"equal full id values are equal",
+			args{
+				[]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88},
+				[]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88},
+			},
+			0,
+		},
+		{
+			"equal partial id values are equal",
+			args{
+				[]byte{0x11, 0x22},
+				[]byte{0x11, 0x22},
+			},
+			0,
+		},
+		{
+			"equal full and partial id values are equal",
+			args{[]byte{0x11, 0x22, 0x33, 0x44}, []byte{0x11, 0x22, 0x33, 0x44, 0x00, 0x00, 0x00, 0x00}},
+			0,
+		},
+		{
+			"equal partial and full id values are equal",
+			args{[]byte{0x11, 0x22, 0x33, 0x44, 0x00, 0x00, 0x00, 0x00}, []byte{0x11, 0x22, 0x33, 0x44}},
+			0,
+		},
+		{"a less than b", args{[]byte{0x01}, []byte{0x02}}, -1},
+		{"a greater than b", args{[]byte{0x02}, []byte{0x01}}, +1},
+		{
+			"equal partial a and b with different lengths",
+			args{[]byte{0x30, 0x00}, []byte{0x20}},
+			1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, Compare(tt.args.a, tt.args.b), "Compare(%v, %v)", tt.args.a, tt.args.b)
+		})
+	}
+}
+
+func TestLess(t *testing.T) {
+	type args struct {
+		a []byte
+		b []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		// Less uses Compare which is already robustly tested, so we're just aiming to ensure that the result
+		// of the Compare is used correctly in context and not e.g. reversed, so test a few obvious cases.
+		{
+			"a is less than b",
+			args{[]byte{0x01}, []byte{0x02}},
+			true,
+		},
+		{
+			"a is equal to b",
+			args{[]byte{0x01}, []byte{0x01}},
+			false,
+		},
+		{
+			"a is greater than b",
+			args{[]byte{0x02}, []byte{0x01}},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, Less(tt.args.a, tt.args.b), "Less(%v, %v)", tt.args.a, tt.args.b)
+		})
+	}
+}
+
+func TestEqual(t *testing.T) {
+	type args struct {
+		a []byte
+		b []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		// Equal uses Compare which is already robustly tested, so we're just aiming to ensure that the result
+		// of the Compare is used correctly in context and not e.g. reversed, so test a few obvious cases.
+		{
+			"a is less than b",
+			args{[]byte{0x01}, []byte{0x02}},
+			false,
+		},
+		{
+			"a is equal to b",
+			args{[]byte{0x01}, []byte{0x01}},
+			true,
+		},
+		{
+			"a is greater than b",
+			args{[]byte{0x02}, []byte{0x01}},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, Equal(tt.args.a, tt.args.b), "Equal(%v, %v)", tt.args.a, tt.args.b)
+		})
+	}
+}
+
+func TestEmpty(t *testing.T) {
+	type args struct {
+		id []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			"empty",
+			args{[]byte{}},
+			true,
+		},
+		{
+			"not empty",
+			args{[]byte{0x11, 0x22, 0x33}},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, Empty(tt.args.id), "Empty(%v)", tt.args.id)
+		})
+	}
+}
+
+func TestUint64Key(t *testing.T) {
 	k0 := Uint64Key(0)
 	k1 := Uint64Key(1)
 	k2 := Uint64Key(0x7FFFFFFFFFFFFFFF)
@@ -362,7 +577,7 @@ func TestKeyRangeContiguous(t *testing.T) {
 	}, {
 		first:  "-",
 		second: "-40",
-		out:    true,
+		out:    false,
 	}, {
 		first:  "40-80",
 		second: "c0-",
@@ -460,7 +675,398 @@ func TestParseShardingSpec(t *testing.T) {
 	}
 }
 
-func TestContains(t *testing.T) {
+func TestKeyRangeComparisons(t *testing.T) {
+	type args struct {
+		a *topodatapb.KeyRange
+		b *topodatapb.KeyRange
+	}
+	type wants struct {
+		wantStartCompare int
+		wantStartEqual   bool
+		wantEndCompare   int
+		wantEndEqual     bool
+		wantCompare      int
+		wantEqual        bool
+	}
+	tests := []struct {
+		name  string
+		args  args
+		wants wants
+	}{
+		{
+			name: "a and b are both full range",
+			args: args{
+				a: stringToKeyRange("-"),
+				b: stringToKeyRange("-"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a is equal to b",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("10-30"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, end only) but equal to b (2 digits, end only)",
+			args: args{
+				a: stringToKeyRange("-80"),
+				b: stringToKeyRange("-80"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, end only) but equal to b (4 digits, end only)",
+			args: args{
+				a: stringToKeyRange("-80"),
+				b: stringToKeyRange("-8000"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, end only) but equal to b (6 digits, end only)",
+			args: args{
+				a: stringToKeyRange("-80"),
+				b: stringToKeyRange("-800000"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, end only) but equal to b (8 digits, end only)",
+			args: args{
+				a: stringToKeyRange("-80"),
+				b: stringToKeyRange("-80000000"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, start only) but equal to b (2 digits, start only)",
+			args: args{
+				stringToKeyRange("80-"),
+				stringToKeyRange("80-"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, start only) but equal to b (4 digits, start only)",
+			args: args{
+				a: stringToKeyRange("80-"),
+				b: stringToKeyRange("8000-"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, start only) but equal to b (6 digits, start only)",
+			args: args{
+				a: stringToKeyRange("80-"),
+				b: stringToKeyRange("800000-"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, start only) but equal to b (8 digits, start only)",
+			args: args{
+				a: stringToKeyRange("80-"),
+				b: stringToKeyRange("80000000-"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (4 digits) but equal to b (2 digits)",
+			args: args{
+				a: stringToKeyRange("1000-3000"),
+				b: stringToKeyRange("10-30"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (8 digits) but equal to b (4 digits)",
+			args: args{
+				a: stringToKeyRange("10000000-30000000"),
+				b: stringToKeyRange("1000-3000"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "b (4 digits) but equal to a (2 digits)",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("1000-3000"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "b (8 digits) but equal to a (4 digits)",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("10000000-30000000"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a is full range, b is not",
+			args: args{
+				a: stringToKeyRange("-"),
+				b: stringToKeyRange("20-30"),
+			},
+			wants: wants{
+				wantStartCompare: -1,
+				wantStartEqual:   false,
+				wantEndCompare:   1,
+				wantEndEqual:     false,
+				wantCompare:      -1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "b is full range, a is not",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("-"),
+			},
+			wants: wants{
+				wantStartCompare: 1,
+				wantStartEqual:   false,
+				wantEndCompare:   -1,
+				wantEndEqual:     false,
+				wantCompare:      1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "a start is greater than b start",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("20-30"),
+			},
+			wants: wants{
+				wantStartCompare: -1,
+				wantStartEqual:   false,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      -1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "b start is greater than a start",
+			args: args{
+				a: stringToKeyRange("20-30"),
+				b: stringToKeyRange("10-30"),
+			},
+			wants: wants{
+				wantStartCompare: 1,
+				wantStartEqual:   false,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "a start is empty, b start is not",
+			args: args{
+				a: stringToKeyRange("-30"),
+				b: stringToKeyRange("10-30"),
+			},
+			wants: wants{
+				wantStartCompare: -1,
+				wantStartEqual:   false,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      -1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "b start is empty, a start is not",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("-30"),
+			},
+			wants: wants{
+				wantStartCompare: 1,
+				wantStartEqual:   false,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "a end is greater than b end",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("10-20"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   1,
+				wantEndEqual:     false,
+				wantCompare:      1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "b end is greater than a end",
+			args: args{
+				a: stringToKeyRange("10-20"),
+				b: stringToKeyRange("10-30"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   -1,
+				wantEndEqual:     false,
+				wantCompare:      -1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "a end is empty, b end is not",
+			args: args{
+				a: stringToKeyRange("10-"),
+				b: stringToKeyRange("10-30"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   1,
+				wantEndEqual:     false,
+				wantCompare:      1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "b end is empty, a end is not",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("10-"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   -1,
+				wantEndEqual:     false,
+				wantCompare:      -1,
+				wantEqual:        false,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.wants.wantStartCompare, KeyRangeStartCompare(tt.args.a, tt.args.b), "KeyRangeStartCompare(%v, %v)", tt.args.a, tt.args.b)
+			assert.Equalf(t, tt.wants.wantStartEqual, KeyRangeStartEqual(tt.args.a, tt.args.b), "KeyRangeStartEqual(%v, %v)", tt.args.a, tt.args.b)
+			assert.Equalf(t, tt.wants.wantEndCompare, KeyRangeEndCompare(tt.args.a, tt.args.b), "KeyRangeEndCompare(%v, %v)", tt.args.a, tt.args.b)
+			assert.Equalf(t, tt.wants.wantEndEqual, KeyRangeEndEqual(tt.args.a, tt.args.b), "KeyRangeEndEqual(%v, %v)", tt.args.a, tt.args.b)
+			assert.Equalf(t, tt.wants.wantCompare, KeyRangeCompare(tt.args.a, tt.args.b), "KeyRangeCompare(%v, %v)", tt.args.a, tt.args.b)
+			assert.Equalf(t, tt.wants.wantEqual, KeyRangeEqual(tt.args.a, tt.args.b), "KeyRangeEqual(%v, %v)", tt.args.a, tt.args.b)
+		})
+	}
+}
+
+func TestKeyRangeContains(t *testing.T) {
 	var table = []struct {
 		kid       string
 		start     string
@@ -499,120 +1105,321 @@ func TestContains(t *testing.T) {
 	}
 }
 
-func TestIntersectOverlap(t *testing.T) {
-	var table = []struct {
-		a          string
-		b          string
-		c          string
-		d          string
-		intersects bool
-		overlap    string
-	}{
-		{a: "40", b: "80", c: "c0", d: "d0", intersects: false},
-		{a: "", b: "80", c: "80", d: "", intersects: false},
-		{a: "", b: "80", c: "", d: "40", intersects: true, overlap: "-40"},
-		{a: "80", b: "", c: "c0", d: "", intersects: true, overlap: "c0-"},
-		{a: "", b: "80", c: "40", d: "80", intersects: true, overlap: "40-80"},
-		{a: "40", b: "80", c: "60", d: "a0", intersects: true, overlap: "60-80"},
-		{a: "40", b: "80", c: "50", d: "60", intersects: true, overlap: "50-60"},
-		{a: "40", b: "80", c: "10", d: "50", intersects: true, overlap: "40-50"},
-		{a: "40", b: "80", c: "40", d: "80", intersects: true, overlap: "40-80"},
-		{a: "", b: "80", c: "", d: "80", intersects: true, overlap: "-80"},
-		{a: "40", b: "", c: "40", d: "", intersects: true, overlap: "40-"},
-		{a: "40", b: "80", c: "20", d: "40", intersects: false},
-		{a: "80", b: "", c: "80", d: "c0", intersects: true, overlap: "80-c0"},
-		{a: "", b: "", c: "c0", d: "d0", intersects: true, overlap: "c0-d0"},
+func TestKeyRangeIntersect(t *testing.T) {
+	type args struct {
+		a *topodatapb.KeyRange
+		b *topodatapb.KeyRange
 	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		// non-intersecting cases
+		{
+			name: "typical half-range split, ascending order",
+			args: args{a: stringToKeyRange("-80"), b: stringToKeyRange("80-")},
+			want: false,
+		},
+		{
+			name: "typical half-range split, descending order",
+			args: args{a: stringToKeyRange("80-"), b: stringToKeyRange("-80")},
+			want: false,
+		},
+		{
+			name: "partial ranges, ascending order",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("c0-d0")},
+			want: false,
+		},
+		{
+			name: "partial ranges, descending order",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("20-40")},
+			want: false,
+		},
+		{
+			name: "partial ranges, different key lengths",
+			args: args{a: stringToKeyRange("4000-8000"), b: stringToKeyRange("20-40")},
+			want: false,
+		},
 
-	for _, el := range table {
-		a, err := hex.DecodeString(el.a)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		b, err := hex.DecodeString(el.b)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		left := &topodatapb.KeyRange{Start: a, End: b}
-		c, err := hex.DecodeString(el.c)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		d, err := hex.DecodeString(el.d)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		right := &topodatapb.KeyRange{Start: c, End: d}
-		if c := KeyRangesIntersect(left, right); c != el.intersects {
-			t.Errorf("Unexpected result: KeyRangesIntersect for %v and %v yields %v.", left, right, c)
-		}
-		overlap, err := KeyRangesOverlap(left, right)
-		if el.intersects {
-			if err != nil {
-				t.Errorf("Unexpected result: KeyRangesOverlap for overlapping %v and %v returned an error: %v", left, right, err)
-			} else {
-				got := hex.EncodeToString(overlap.Start) + "-" + hex.EncodeToString(overlap.End)
-				if got != el.overlap {
-					t.Errorf("Unexpected result: KeyRangesOverlap for overlapping %v and %v should have returned: %v but got: %v", left, right, el.overlap, got)
-				}
-			}
-		} else {
-			if err == nil {
-				t.Errorf("Unexpected result: KeyRangesOverlap for non-overlapping %v and %v should have returned an error", left, right)
-			}
-		}
+		// intersecting cases with a full range
+		{
+			name: "full range with full range",
+			args: args{a: stringToKeyRange("-"), b: stringToKeyRange("-")},
+			want: true,
+		},
+		{
+			name: "full range with maximum key partial range",
+			args: args{a: stringToKeyRange("-"), b: stringToKeyRange("80-")},
+			want: true,
+		},
+		{
+			name: "full range with partial range",
+			args: args{a: stringToKeyRange("-"), b: stringToKeyRange("c0-d0")},
+			want: true,
+		},
+		{
+			name: "minimum key partial range with full range",
+			args: args{a: stringToKeyRange("-80"), b: stringToKeyRange("-")},
+			want: true,
+		},
+		{
+			name: "partial range with full range",
+			args: args{a: stringToKeyRange("a0-b0"), b: stringToKeyRange("-")},
+			want: true,
+		},
+
+		// intersecting cases with only partial ranges
+		{
+			name: "the same range, both from minimum key",
+			args: args{a: stringToKeyRange("-80"), b: stringToKeyRange("-80")},
+			want: true,
+		},
+		{
+			name: "the same range, both from minimum key, different key lengths",
+			args: args{a: stringToKeyRange("-8000"), b: stringToKeyRange("-80")},
+			want: true,
+		},
+		{
+			name: "the same range, both to maximum key",
+			args: args{a: stringToKeyRange("40-"), b: stringToKeyRange("40-")},
+			want: true,
+		},
+		{
+			name: "the same range, both to maximum key, different key lengths",
+			args: args{a: stringToKeyRange("4000-"), b: stringToKeyRange("40-")},
+			want: true,
+		},
+		{
+			name: "the same range, both with mid-range keys",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("40-80")},
+			want: true,
+		},
+		{
+			name: "the same range, both with mid-range keys, different key lengths",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("4000-8000")},
+			want: true,
+		},
+		{
+			name: "different-sized partial ranges, both from minimum key",
+			args: args{a: stringToKeyRange("-80"), b: stringToKeyRange("-40")},
+			want: true,
+		},
+		{
+			name: "different-sized partial ranges, both to maximum key",
+			args: args{a: stringToKeyRange("80-"), b: stringToKeyRange("c0-")},
+			want: true,
+		},
+		{
+			name: "different-sized partial ranges, from minimum key with mid-range key",
+			args: args{a: stringToKeyRange("-80"), b: stringToKeyRange("40-80")},
+			want: true,
+		},
+		{
+			name: "different-sized partial ranges, from minimum key with mid-range key, different key lengths",
+			args: args{a: stringToKeyRange("-80"), b: stringToKeyRange("4000-8000")},
+			want: true,
+		},
+		{
+			name: "different-sized partial ranges, to maximum key with mid-range key",
+			args: args{a: stringToKeyRange("80-"), b: stringToKeyRange("80-c0")},
+			want: true,
+		},
+		{
+			name: "different-sized partial ranges, to maximum key with mid-range key, different key lengths",
+			args: args{a: stringToKeyRange("80-"), b: stringToKeyRange("8000-c000")},
+			want: true,
+		},
+		{
+			name: "partially overlapping ranges, in ascending order",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("60-a0")},
+			want: true,
+		},
+		{
+			name: "partially overlapping ranges, in descending order",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("10-50")},
+			want: true,
+		},
+		{
+			name: "partially overlapping ranges, one fully containing the other, in ascending order",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("50-60")},
+			want: true,
+		},
+		{
+			name: "partially overlapping ranges, one fully containing the other, in descending order",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("30-90")},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, KeyRangeIntersect(tt.args.a, tt.args.b), "KeyRangeIntersect(%v, %v)", tt.args.a, tt.args.b)
+		})
 	}
 }
 
-func TestKeyRangeIncludes(t *testing.T) {
-	var table = []struct {
-		name     string
-		big      string
-		small    string
-		expected bool
+func TestKeyRangeContainsKeyRange(t *testing.T) {
+	type args struct {
+		a *topodatapb.KeyRange
+		b *topodatapb.KeyRange
+	}
+	var tests = []struct {
+		name string
+		args args
+		want bool
 	}{
-		{"big nil, small nil", "nil", "nil", true},
-		{"big nil, small non nil, fully partial", "nil", "80-c0", true},
-		{"big nil, small non nil, full start", "nil", "-c0", true},
-		{"big nil, small non nil, full end", "nil", "80-", true},
-		{"big non-nil, fully partial, small nil", "80-c0", "nil", false},
-		{"big non-nil, full start, small nil", "-c0", "nil", false},
-		{"big non-nil, full end, small nil", "80-", "nil", false},
-		{"big full, small full", "-", "-", true},
-		{"big full, small partial", "-", "40-60", true},
-		{"big partial, small full", "40-60", "-", false},
+		// full range contains itself
+		{
+			name: "both full range",
+			args: args{a: stringToKeyRange("-"), b: stringToKeyRange("-")},
+			want: true,
+		},
 
-		{"big partial, small to the end", "40-60", "40-", false},
-		{"big partial, small bigger to the right", "40-60", "40-80", false},
-		{"big partial, small equal", "40-60", "40-60", true},
-		{"big partial, small smaller right", "40-60", "40-50", true},
+		// full range always contains a partial range
+		{
+			name: "full range, partial range from minimum key",
+			args: args{a: stringToKeyRange("-"), b: stringToKeyRange("-c0")},
+			want: true,
+		},
+		{
+			name: "full range, partial range to maximum key",
+			args: args{a: stringToKeyRange("-"), b: stringToKeyRange("80-")},
+			want: true,
+		},
+		{
+			name: "full range, partial mid-key range",
+			args: args{a: stringToKeyRange("-"), b: stringToKeyRange("80-c0")},
+			want: true,
+		},
 
-		{"big partial, small to the beginning", "40-60", "-60", false},
-		{"big partial, small smaller to the left", "40-60", "20-60", false},
-		{"big partial, small bigger left", "40-60", "50-60", true},
+		// equal partial ranges contain each other
+		{
+			name: "equal partial ranges",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("40-60")},
+			want: true,
+		},
+		{
+			name: "equal partial ranges, different size keys",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("4000-6000")},
+			want: true,
+		},
+		{
+			name: "equal partial ranges, different size keys",
+			args: args{a: stringToKeyRange("4000-6000"), b: stringToKeyRange("40-60")},
+			want: true,
+		},
+
+		// partial ranges may contain smaller partial ranges
+		{
+			name: "partial range, partial touching start",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("40-50")},
+			want: true,
+		},
+		{
+			name: "partial range, partial touching start, different size keys",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("4000-5000")},
+			want: true,
+		},
+		{
+			name: "partial range, partial touching start, different size keys",
+			args: args{a: stringToKeyRange("4000-8000"), b: stringToKeyRange("40-50")},
+			want: true,
+		},
+		{
+			name: "partial range, partial touching end",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("70-80")},
+			want: true,
+		},
+		{
+			name: "partial range, partial touching end, different size keys",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("7000-8000")},
+			want: true,
+		},
+		{
+			name: "partial range, partial touching end, different size keys",
+			args: args{a: stringToKeyRange("4000-8000"), b: stringToKeyRange("70-80")},
+			want: true,
+		},
+		{
+			name: "partial range, partial in the middle",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("50-70")},
+			want: true,
+		},
+		{
+			name: "partial range, partial in the middle, different size keys",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("5000-7000")},
+			want: true,
+		},
+		{
+			name: "partial range, partial in the middle, different size keys",
+			args: args{a: stringToKeyRange("4000-8000"), b: stringToKeyRange("50-70")},
+			want: true,
+		},
+
+		// partial ranges do not contain the full range
+		{
+			name: "partial range from minimum key, full range",
+			args: args{a: stringToKeyRange("-c0"), b: stringToKeyRange("-")},
+			want: false,
+		},
+		{
+			name: "partial range to maximum key, full range",
+			args: args{a: stringToKeyRange("80-"), b: stringToKeyRange("-")},
+			want: false,
+		},
+		{
+			name: "partial mid-key range, full range",
+			args: args{a: stringToKeyRange("80-c0"), b: stringToKeyRange("-")},
+			want: false,
+		},
+
+		// partial ranges do not contain overlapping but boundary-crossing partial ranges
+		{
+			name: "partial range mid-key range, overlapping partial range to maximum key",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("50-")},
+			want: false,
+		},
+		{
+			name: "partial range mid-key range, overlapping partial range to maximum key",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("5000-")},
+			want: false,
+		},
+		{
+			name: "partial range mid-key range, overlapping partial range to maximum key, different size keys",
+			args: args{a: stringToKeyRange("4000-6000"), b: stringToKeyRange("50-")},
+			want: false,
+		},
+		{
+			name: "partial range mid-key range, overlapping partial range to maximum key, different size keys",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("5000-")},
+			want: false,
+		},
+		{
+			name: "partial range mid-key range, overlapping partial range from minimum key",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("-50")},
+			want: false,
+		},
+		{
+			name: "partial range mid-key range, overlapping partial range from minimum key",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("-5000")},
+			want: false,
+		},
+		{
+			name: "partial range mid-key range, overlapping partial range from minimum key, different size keys",
+			args: args{a: stringToKeyRange("4000-6000"), b: stringToKeyRange("-50")},
+			want: false,
+		},
+		{
+			name: "partial range mid-key range, overlapping partial range from minimum key, different size keys",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("-5000")},
+			want: false,
+		},
 	}
 
-	var err error
-	for _, tc := range table {
-		var big, small *topodatapb.KeyRange
-		if tc.big != "nil" {
-			parts := strings.Split(tc.big, "-")
-			big, err = ParseKeyRangeParts(parts[0], parts[1])
-			if err != nil {
-				t.Fatalf("test data error in %v: %v", tc.big, err)
-			}
-		}
-		if tc.small != "nil" {
-			parts := strings.Split(tc.small, "-")
-			small, err = ParseKeyRangeParts(parts[0], parts[1])
-			if err != nil {
-				t.Fatalf("test data error in %v: %v", tc.small, err)
-			}
-		}
-		got := KeyRangeIncludes(big, small)
-		if got != tc.expected {
-			t.Errorf("KeyRangeIncludes for test case '%v' returned %v but expected %v", tc.name, got, tc.expected)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, KeyRangeContainsKeyRange(tt.args.a, tt.args.b), "KeyRangeContainsKeyRange(%v, %v)", tt.args.a, tt.args.b)
+		})
 	}
 }
 
@@ -671,65 +1478,40 @@ func BenchmarkKeyRangesIntersect(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		KeyRangesIntersect(kr1, kr2)
+		KeyRangeIntersect(kr1, kr2)
 	}
 }
 
-func BenchmarkKeyRangesOverlap(b *testing.B) {
-	kr1 := &topodatapb.KeyRange{
-		Start: []byte{0x40, 0, 0, 0, 0, 0, 0, 0},
-		End:   []byte{0x80, 0, 0, 0, 0, 0, 0, 0},
-	}
-	kr2 := &topodatapb.KeyRange{
-		Start: []byte{0x30, 0, 0, 0, 0, 0, 0, 0},
-		End:   []byte{0x50, 0, 0, 0, 0, 0, 0, 0},
-	}
+func TestIsValidKeyRange(t *testing.T) {
+	tests := []struct {
+		arg  string
+		want bool
+	}{
+		// normal cases
+		{"-", true},
+		{"00-", true},
+		{"-80", true},
+		{"40-80", true},
+		{"80-", true},
+		{"a0-", true},
+		{"-A0", true},
 
-	for i := 0; i < b.N; i++ {
-		if _, err := KeyRangesOverlap(kr1, kr2); err != nil {
-			b.Fatal(err)
-		}
+		// special cases
+		{"0", true}, // equal to "-"
+
+		// invalid cases
+		{"", false},       // empty is not allowed
+		{"11", false},     // no hyphen
+		{"-1", false},     // odd number of digits
+		{"-111", false},   // odd number of digits
+		{"1-2", false},    // odd number of digits
+		{"x-80", false},   // invalid character
+		{"-80x", false},   // invalid character
+		{"select", false}, // nonsense
+		{"+", false},      // nonsense
 	}
-}
-
-func TestIsKeyRange(t *testing.T) {
-	testcases := []struct {
-		in  string
-		out bool
-	}{{
-		in:  "-",
-		out: true,
-	}, {
-		in:  "-80",
-		out: true,
-	}, {
-		in:  "40-80",
-		out: true,
-	}, {
-		in:  "80-",
-		out: true,
-	}, {
-		in:  "a0-",
-		out: true,
-	}, {
-		in:  "-A0",
-		out: true,
-	}, {
-		in:  "",
-		out: false,
-	}, {
-		in:  "x-80",
-		out: false,
-	}, {
-		in:  "-80x",
-		out: false,
-	}, {
-		in:  "select",
-		out: false,
-	}}
-
-	for _, tcase := range testcases {
-		assert.Equal(t, IsKeyRange(tcase.in), tcase.out, tcase.in)
+	for _, tt := range tests {
+		assert.Equalf(t, tt.want, IsValidKeyRange(tt.arg), "IsValidKeyRange(%v)", tt.arg)
 	}
 }
 

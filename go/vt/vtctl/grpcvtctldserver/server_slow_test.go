@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -43,7 +45,6 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		ts      *topo.Server
 		tmc     tmclient.TabletManagerClient
 		tablets []*topodatapb.Tablet
 
@@ -62,7 +63,6 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 			// concurrently, so the total time is only around 30 seconds, but
 			// that's still a long time for a unit test!
 			name: "nil WaitReplicasTimeout and request takes 29 seconds is ok",
-			ts:   memorytopo.NewServer("zone1"),
 			tablets: []*topodatapb.Tablet{
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -140,7 +140,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 					},
 					"zone1-0000000200": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
@@ -180,7 +180,6 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 		},
 		{
 			name: "nil WaitReplicasTimeout and request takes 31 seconds is error",
-			ts:   memorytopo.NewServer("zone1"),
 			tablets: []*topodatapb.Tablet{
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -258,7 +257,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 					},
 					"zone1-0000000200": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
@@ -290,8 +289,6 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
@@ -302,13 +299,17 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 				t.Skip("tt.EmergencyReparentShardRequest = nil implies test not ready to run")
 			}
 
-			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, "zone1")
+
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
 				AlsoSetShardPrimary:  true,
 				ForceSetShardPrimary: true,
 				SkipShardCreation:    false,
 			}, tt.tablets...)
 
-			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(ts)
 			})
 			resp, err := vtctld.EmergencyReparentShard(ctx, tt.req)
@@ -343,7 +344,6 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		ts      *topo.Server
 		tmc     tmclient.TabletManagerClient
 		tablets []*topodatapb.Tablet
 
@@ -357,7 +357,6 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 			// nil WaitReplicasTimeout in the request results in a default 30
 			// second WaitReplicasTimeout.
 			name: "nil WaitReplicasTimeout and request takes 29 seconds is ok",
-			ts:   memorytopo.NewServer("zone1"),
 			tablets: []*topodatapb.Tablet{
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -400,6 +399,21 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 							Position: "primary-demotion position",
 						},
 						Error: nil,
+					},
+				},
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000101": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
 					},
 				},
 				PrimaryPositionResults: map[string]struct {
@@ -460,7 +474,6 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 		},
 		{
 			name: "nil WaitReplicasTimeout and request takes 31 seconds is error",
-			ts:   memorytopo.NewServer("zone1"),
 			tablets: []*topodatapb.Tablet{
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -503,6 +516,21 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 							Position: "primary-demotion position",
 						},
 						Error: nil,
+					},
+				},
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000101": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
 					},
 				},
 				PrimaryPositionResults: map[string]struct {
@@ -563,21 +591,23 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ts := memorytopo.NewServer(ctx, "zone1")
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
 				AlsoSetShardPrimary:  true,
 				ForceSetShardPrimary: true,
 				SkipShardCreation:    false,
 			}, tt.tablets...)
 
-			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(ts)
 			})
 			resp, err := vtctld.PlannedReparentShard(ctx, tt.req)
@@ -610,8 +640,10 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 func TestSleepTablet(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
-	ts := memorytopo.NewServer("zone1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts := memorytopo.NewServer(ctx, "zone1")
 	testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "zone1",
@@ -704,10 +736,7 @@ func TestSleepTablet(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(ts)
 			})

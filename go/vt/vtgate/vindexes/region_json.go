@@ -25,19 +25,27 @@ import (
 	"os"
 	"strconv"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 )
 
+const (
+	regionJSONParamRegionBytes = "region_bytes"
+	regionJSONParamRegionMap   = "region_map"
+)
+
 var (
 	_ MultiColumn = (*RegionJSON)(nil)
+
+	regionJSONParams = []string{
+		regionJSONParamRegionBytes,
+		regionJSONParamRegionMap,
+	}
 )
 
 func init() {
-	Register("region_json", NewRegionJSON)
+	Register("region_json", newRegionJSON)
 }
 
 // RegionMap is used to store mapping of country to region
@@ -49,17 +57,18 @@ type RegionMap map[string]uint64
 // RegionJson can be used for geo-partitioning because the first column can denote a region,
 // and it will dictate the shard range for that region.
 type RegionJSON struct {
-	name        string
-	regionMap   RegionMap
-	regionBytes int
+	name          string
+	regionMap     RegionMap
+	regionBytes   int
+	unknownParams []string
 }
 
-// NewRegionJSON creates a RegionJson vindex.
+// newRegionJSON creates a RegionJson vindex.
 // The supplied map requires all the fields of "RegionExperimental".
 // Additionally, it requires a region_map argument representing the path to a json file
 // containing a map of country to region.
-func NewRegionJSON(name string, m map[string]string) (Vindex, error) {
-	rmPath := m["region_map"]
+func newRegionJSON(name string, m map[string]string) (Vindex, error) {
+	rmPath := m[regionJSONParamRegionMap]
 	rmap := make(map[string]uint64)
 	data, err := os.ReadFile(rmPath)
 	if err != nil {
@@ -70,7 +79,7 @@ func NewRegionJSON(name string, m map[string]string) (Vindex, error) {
 	if err != nil {
 		return nil, err
 	}
-	rb, err := strconv.Atoi(m["region_bytes"])
+	rb, err := strconv.Atoi(m[regionJSONParamRegionBytes])
 	if err != nil {
 		return nil, err
 	}
@@ -81,9 +90,10 @@ func NewRegionJSON(name string, m map[string]string) (Vindex, error) {
 	}
 
 	return &RegionJSON{
-		name:        name,
-		regionMap:   rmap,
-		regionBytes: rb,
+		name:          name,
+		regionMap:     rmap,
+		regionBytes:   rb,
+		unknownParams: FindUnknownParams(m, regionJSONParams),
 	}, nil
 }
 
@@ -116,7 +126,7 @@ func (rv *RegionJSON) Map(ctx context.Context, vcursor VCursor, rowsColValues []
 			continue
 		}
 		// Compute hash.
-		hn, err := evalengine.ToUint64(row[0])
+		hn, err := row[0].ToCastUint64()
 		if err != nil {
 			destinations = append(destinations, key.DestinationNone{})
 			continue
@@ -157,4 +167,9 @@ func (rv *RegionJSON) Verify(ctx context.Context, vcursor VCursor, rowsColValues
 
 func (rv *RegionJSON) PartialVindex() bool {
 	return false
+}
+
+// UnknownParams implements the ParamValidating interface.
+func (rv *RegionJSON) UnknownParams() []string {
+	return rv.unknownParams
 }

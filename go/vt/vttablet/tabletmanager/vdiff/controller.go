@@ -23,12 +23,13 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
@@ -149,7 +150,7 @@ type migrationSource struct {
 	*shardStreamer
 
 	vrID     int32
-	position mysql.Position
+	position replication.Position
 }
 
 func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffState, err error) error {
@@ -165,8 +166,13 @@ func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffSta
 		// Clear out any previous error for the vdiff on this shard
 		err = errors.New("")
 	}
-	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(string(state)), encodeString(err.Error()), extraCols, ct.id)
-	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+	query := sqlparser.BuildParsedQuery(sqlUpdateVDiffState,
+		encodeString(string(state)),
+		encodeString(err.Error()),
+		extraCols,
+		ct.id,
+	)
+	if _, err := dbClient.ExecuteFetch(query.Query, 1); err != nil {
 		return err
 	}
 	insertVDiffLog(ct.vde.ctx, dbClient, ct.id, fmt.Sprintf("State changed to: %s", state))
@@ -179,9 +185,10 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 	default:
 	}
-	ct.workflowFilter = fmt.Sprintf("where workflow = %s and db_name = %s", encodeString(ct.workflow), encodeString(ct.vde.dbName))
-	query := fmt.Sprintf(sqlGetVReplicationEntry, ct.workflowFilter)
-	qr, err := dbClient.ExecuteFetch(query, -1)
+	ct.workflowFilter = fmt.Sprintf("where workflow = %s and db_name = %s", encodeString(ct.workflow),
+		encodeString(ct.vde.dbName))
+	query := sqlparser.BuildParsedQuery(sqlGetVReplicationEntry, ct.workflowFilter)
+	qr, err := dbClient.ExecuteFetch(query.Query, -1)
 	if err != nil {
 		return err
 	}
@@ -248,15 +255,17 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 func (ct *controller) markStoppedByRequest() error {
 	dbClient := ct.vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
-		return fmt.Errorf("encountered an error marking vdiff %s as stopped: %v", ct.uuid, err)
+		return err
 	}
 	defer dbClient.Close()
 
-	query := fmt.Sprintf(sqlUpdateVDiffStopped, ct.id)
+	query, err := sqlparser.ParseAndBind(sqlUpdateVDiffStopped, sqltypes.Int64BindVariable(ct.id))
+	if err != nil {
+		return err
+	}
 	var res *sqltypes.Result
-	var err error
 	if res, err = dbClient.ExecuteFetch(query, 1); err != nil {
-		return fmt.Errorf("encountered an error marking vdiff %s as stopped: %v", ct.uuid, err)
+		return err
 	}
 	// We don't mark it as stopped if it's already completed
 	if res.RowsAffected > 0 {

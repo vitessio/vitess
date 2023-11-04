@@ -62,7 +62,7 @@ type VTGateConn struct {
 	impl Impl
 }
 
-// Session returns a VTGateSession that can be used to access V3 functions.
+// Session returns a VTGateSession that can be used to access execution functions.
 func (conn *VTGateConn) Session(targetString string, options *querypb.ExecuteOptions) *VTGateSession {
 	return &VTGateSession{
 		session: &vtgatepb.Session{
@@ -111,7 +111,7 @@ func (conn *VTGateConn) VStream(ctx context.Context, tabletType topodatapb.Table
 	return conn.impl.VStream(ctx, tabletType, vgtid, filter, flags)
 }
 
-// VTGateSession exposes the V3 API to the clients.
+// VTGateSession exposes the Vitess Execution API to the clients.
 // The object maintains client-side state and is comparable to a native MySQL connection.
 // For example, if you enable autocommit on a Session object, all subsequent calls will respect this.
 // Functions within an object must not be called concurrently.
@@ -141,10 +141,12 @@ func (sn *VTGateSession) ExecuteBatch(ctx context.Context, query []string, bindV
 // error. Then you can pull values from the ResultStream until io.EOF,
 // or another error.
 func (sn *VTGateSession) StreamExecute(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable) (sqltypes.ResultStream, error) {
-	// StreamExecute is only used for SELECT queries that don't change
-	// the session. So, the protocol doesn't return an updated session.
-	// This may change in the future.
-	return sn.impl.StreamExecute(ctx, sn.session, query, bindVars)
+	// passing in the function that will update the session when received on the stream.
+	return sn.impl.StreamExecute(ctx, sn.session, query, bindVars, func(response *vtgatepb.StreamExecuteResponse) {
+		if response.Session != nil {
+			sn.session = response.Session
+		}
+	})
 }
 
 // Prepare performs a VTGate Prepare.
@@ -161,14 +163,14 @@ func (sn *VTGateSession) Prepare(ctx context.Context, query string, bindVars map
 // Impl defines the interface for a vtgate client protocol
 // implementation. It can be used concurrently across goroutines.
 type Impl interface {
-	// Execute executes a non-streaming query on vtgate. This is a V3 function.
+	// Execute executes a non-streaming query on vtgate.
 	Execute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error)
 
-	// ExecuteBatch executes a non-streaming queries on vtgate. This is a V3 function.
+	// ExecuteBatch executes a non-streaming queries on vtgate.
 	ExecuteBatch(ctx context.Context, session *vtgatepb.Session, queryList []string, bindVarsList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error)
 
-	// StreamExecute executes a streaming query on vtgate. This is a V3 function.
-	StreamExecute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable) (sqltypes.ResultStream, error)
+	// StreamExecute executes a streaming query on vtgate.
+	StreamExecute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, processResponse func(*vtgatepb.StreamExecuteResponse)) (sqltypes.ResultStream, error)
 
 	// Prepare returns the fields information for the query as part of supporting prepare statements.
 	Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error)

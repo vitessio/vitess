@@ -50,16 +50,9 @@ func toBitset(words []byte) Bitset {
 	return *(*Bitset)(unsafe.Pointer(&words))
 }
 
-func minlen(a, b Bitset) int {
-	if len(a) < len(b) {
-		return len(a)
-	}
-	return len(b)
-}
-
 // Overlaps returns whether this Bitset and the input have any bits in common
 func (bs Bitset) Overlaps(b2 Bitset) bool {
-	min := minlen(bs, b2)
+	min := min(len(bs), len(b2))
 	for i := 0; i < min; i++ {
 		if bs[i]&b2[i] != 0 {
 			return true
@@ -126,7 +119,7 @@ func (bs Bitset) And(b2 Bitset) Bitset {
 		return ""
 	}
 
-	merged := make([]byte, minlen(bs, b2))
+	merged := make([]byte, min(len(bs), len(b2)))
 	m := 0
 
 	for m = 0; m < len(merged); m++ {

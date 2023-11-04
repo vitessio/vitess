@@ -17,6 +17,7 @@ limitations under the License.
 package vtexplain
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -67,7 +68,9 @@ create table t2 (
 		NumShards:       2,
 	}
 
-	vte, err := Init(testVSchema, testSchema, "", opts)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vte, err := Init(ctx, testVSchema, testSchema, "", opts)
 	require.NoError(t, err)
 	defer vte.Stop()
 
@@ -119,12 +122,16 @@ create table test_partitioned (
 	if err != nil {
 		t.Fatalf("parseSchema: %v", err)
 	}
-	vte := initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	vte := initTest(ctx, ModeMulti, defaultTestOpts(), &testopts{}, t)
+	defer vte.Stop()
 
 	tabletEnv, _ := newTabletEnvironment(ddls, defaultTestOpts())
 	vte.setGlobalTabletEnv(tabletEnv)
 
-	tablet := vte.newTablet(defaultTestOpts(), &topodatapb.Tablet{
+	tablet := vte.newTablet(ctx, defaultTestOpts(), &topodatapb.Tablet{
 		Keyspace: "test_keyspace",
 		Shard:    "-80",
 		Alias:    &topodatapb.TabletAlias{},
@@ -135,7 +142,7 @@ create table test_partitioned (
 	t1 := tables["t1"]
 	require.NotNil(t, t1, "table t1 wasn't parsed properly")
 
-	wantCols := `[{"name":"id","type":778},{"name":"val","type":6165}]`
+	wantCols := `[{"name":"id","type":778,"charset":33,"flags":32800},{"name":"val","type":6165,"charset":33}]`
 	got, _ := json.Marshal(t1.Fields)
 	assert.Equal(t, wantCols, string(got))
 
@@ -143,14 +150,14 @@ create table test_partitioned (
 		t.Errorf("expected HasPrimary && t1.PKColumns == [0] got %v", t1.PKColumns)
 	}
 	pkCol := t1.GetPKColumn(0)
-	if pkCol == nil || pkCol.String() != `name:"id" type:UINT64` {
+	if pkCol == nil || pkCol.String() != `name:"id" type:UINT64 charset:33 flags:32800` {
 		t.Errorf("expected pkCol[0] == id, got %v", pkCol)
 	}
 
 	t2 := tables["t2"]
 	require.NotNil(t, t2, "table t2 wasn't parsed properly")
 
-	wantCols = `[{"name":"val","type":6163}]`
+	wantCols = `[{"name":"val","type":6163,"charset":33}]`
 	got, _ = json.Marshal(t2.Fields)
 	assert.Equal(t, wantCols, string(got))
 

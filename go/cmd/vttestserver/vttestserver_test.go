@@ -81,8 +81,14 @@ func TestPersistentMode(t *testing.T) {
 	cluster, err := startPersistentCluster(dir)
 	assert.NoError(t, err)
 
-	// basic sanity checks similar to TestRunsVschemaMigrations
+	// Add a new "ad-hoc" vindex via vtgate once the cluster is up, to later make sure it is persisted across teardowns
+	err = addColumnVindex(cluster, "test_keyspace", "alter vschema on persistence_test add vindex my_vdx(id)")
+	assert.NoError(t, err)
+
+	// Basic sanity checks similar to TestRunsVschemaMigrations
+	// See go/cmd/vttestserver/data/schema/app_customer/* and go/cmd/vttestserver/data/schema/test_keyspace/*
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
+	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "persistence_test", vindex: "my_vdx", vindexType: "hash", column: "id"})
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "app_customer", table: "customers", vindex: "hash", vindexType: "hash", column: "id"})
 
 	// insert some data to ensure persistence across teardowns
@@ -108,11 +114,15 @@ func TestPersistentMode(t *testing.T) {
 	// reboot the persistent cluster
 	cluster.TearDown()
 	cluster, err = startPersistentCluster(dir)
-	defer cluster.TearDown()
+	defer func() {
+		cluster.PersistentMode = false // Cleanup the tmpdir as we're done
+		cluster.TearDown()
+	}()
 	assert.NoError(t, err)
 
-	// rerun our sanity checks to make sure vschema migrations are run during every startup
+	// rerun our sanity checks to make sure vschema is persisted correctly
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
+	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "persistence_test", vindex: "my_vdx", vindexType: "hash", column: "id"})
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "app_customer", table: "customers", vindex: "hash", vindexType: "hash", column: "id"})
 
 	// ensure previous data was successfully persisted
@@ -249,7 +259,10 @@ func TestMtlsAuth(t *testing.T) {
 		fmt.Sprintf("--vtctld_grpc_ca=%s", caCert),
 		fmt.Sprintf("--grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
 	assert.NoError(t, err)
-	defer cluster.TearDown()
+	defer func() {
+		cluster.PersistentMode = false // Cleanup the tmpdir as we're done
+		cluster.TearDown()
+	}()
 
 	// startCluster will apply vschema migrations using vtctl grpc and the clientCert.
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
@@ -316,7 +329,8 @@ func startCluster(flags ...string) (vttest.LocalCluster, error) {
 	keyspaceArg := "--keyspaces=" + strings.Join(clusterKeyspaces, ",")
 	numShardsArg := "--num_shards=2,2"
 	vschemaDDLAuthorizedUsers := "--vschema_ddl_authorized_users=%"
-	os.Args = append(os.Args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers}...)
+	alsoLogToStderr := "--alsologtostderr" // better debugging
+	os.Args = append(os.Args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers, alsoLogToStderr}...)
 	os.Args = append(os.Args, flags...)
 	return runCluster()
 }

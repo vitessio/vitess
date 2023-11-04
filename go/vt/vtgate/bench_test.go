@@ -21,9 +21,6 @@ import (
 	"fmt"
 	"testing"
 
-	"context"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
@@ -61,16 +58,12 @@ func init() {
 }
 
 func BenchmarkWithNormalizer(b *testing.B) {
-	createSandbox(KsTestUnsharded)
-	hcVTGateTest.Reset()
-	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	saved := rpcVTGate.executor.normalize
-	rpcVTGate.executor.normalize = true
-	defer func() { rpcVTGate.executor.normalize = saved }()
+	vtgateInst, _, ctx := createVtgateEnv(b)
 
 	for i := 0; i < b.N; i++ {
-		_, _, err := rpcVTGate.Execute(
-			context.Background(),
+		_, _, err := vtgateInst.Execute(
+			ctx,
+			nil,
 			&vtgatepb.Session{
 				TargetString: "@primary",
 				Options:      executeOptions,
@@ -85,16 +78,14 @@ func BenchmarkWithNormalizer(b *testing.B) {
 }
 
 func BenchmarkWithoutNormalizer(b *testing.B) {
-	createSandbox(KsTestUnsharded)
-	hcVTGateTest.Reset()
-	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	saved := rpcVTGate.executor.normalize
-	rpcVTGate.executor.normalize = false
-	defer func() { rpcVTGate.executor.normalize = saved }()
+	vtgateInst, _, ctx := createVtgateEnv(b)
+
+	vtgateInst.executor.normalize = false
 
 	for i := 0; i < b.N; i++ {
-		_, _, err := rpcVTGate.Execute(
-			context.Background(),
+		_, _, err := vtgateInst.Execute(
+			ctx,
+			nil,
 			&vtgatepb.Session{
 				TargetString: "@primary",
 				Options:      executeOptions,

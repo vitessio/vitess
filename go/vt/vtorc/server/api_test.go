@@ -17,6 +17,9 @@ func TestGetACLPermissionLevelForAPI(t *testing.T) {
 			apiEndpoint: problemsAPI,
 			want:        acl.MONITORING,
 		}, {
+			apiEndpoint: errantGTIDsAPI,
+			want:        acl.MONITORING,
+		}, {
 			apiEndpoint: disableGlobalRecoveriesAPI,
 			want:        acl.ADMIN,
 		}, {

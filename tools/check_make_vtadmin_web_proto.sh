@@ -11,6 +11,7 @@ second_output=$(git status --porcelain)
 diff=$(diff <( echo "$first_output") <( echo "$second_output"))
 
 if [[ "$diff" != "" ]]; then
+  git diff
   echo "ERROR: Regenerated vtadmin web proto files do not match the current version."
   echo -e "List of files containing differences:\n$diff"
   exit 1

@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -29,24 +28,54 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+func lookupHashUniqueCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectUnknownParams []string,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "lookup_hash_unique",
+		vindexName:   "lookup_hash_unique",
+		vindexParams: vindexParams,
+
+		expectCost:          10,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  true,
+		expectString:        "lookup_hash_unique",
+		expectUnknownParams: expectUnknownParams,
+	}
+}
+
+func TestLookupHashUniqueCreateVindex(t *testing.T) {
+	testLookupCreateVindexCommonCases(t, lookupHashUniqueCreateVindexTestCase)
+}
+
 func TestLookupHashUniqueNew(t *testing.T) {
 	l := createLookup(t, "lookup_hash_unique", false /* writeOnly */)
 	if want, got := l.(*LookupHashUnique).writeOnly, false; got != want {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	vindex, _ := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
+	vindex, err := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"write_only": "true",
 	})
+	unknownParams := vindex.(ParamValidating).UnknownParams()
+	require.Empty(t, unknownParams)
+	require.NoError(t, err)
+
 	l = vindex.(SingleColumn)
 	if want, got := l.(*LookupHashUnique).writeOnly, true; got != want {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	_, err := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
+	vdx, err := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -56,14 +85,10 @@ func TestLookupHashUniqueNew(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
 	}
-}
-
-func TestLookupHashUniqueInfo(t *testing.T) {
-	lhu := createLookup(t, "lookup_hash_unique", false /* writeOnly */)
-	assert.Equal(t, 10, lhu.Cost())
-	assert.Equal(t, "lookup_hash_unique", lhu.String())
-	assert.True(t, lhu.IsUnique())
-	assert.True(t, lhu.NeedsVCursor())
+	if err == nil {
+		unknownParams = vdx.(ParamValidating).UnknownParams()
+		require.Empty(t, unknownParams)
+	}
 }
 
 func TestLookupHashUniqueMap(t *testing.T) {

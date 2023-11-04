@@ -1,4 +1,5 @@
 import { filterNouns } from './filterNouns';
+import { describe, expect, test } from 'vitest';
 
 describe('filterNouns', () => {
     const tests: {

@@ -1049,7 +1049,7 @@ func SetProtocol(name string, protocol string) {
 
 		tabletconn.RegisterFlags(fs)
 	})
-	servenv.ParseFlags(name)
+	servenv.ParseFlagsForTests(name)
 
 	if err := pflag.Set(tabletProtocolFlagName, protocol); err != nil {
 		msg := "failed to set flag %q to %q: %v"

@@ -19,8 +19,6 @@ package servenv
 import (
 	"bytes"
 	"fmt"
-	"html"
-	"html/template"
 	"io"
 	"net"
 	"net/http"
@@ -31,6 +29,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/safehtml"
+	"github.com/google/safehtml/template"
+	"github.com/google/safehtml/template/uncheckedconversions"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
@@ -165,12 +167,12 @@ func newStatusPage(name string) *statusPage {
 	}
 	sp.tmpl = template.Must(sp.reparse(nil))
 	if name == "" {
-		http.HandleFunc(StatusURLPath(), sp.statusHandler)
+		HTTPHandleFunc(StatusURLPath(), sp.statusHandler)
 		// Debug profiles are only supported for the top level status page.
 		registerDebugBlockProfileRate()
 		registerDebugMutexProfileFraction()
 	} else {
-		http.HandleFunc("/"+name+StatusURLPath(), sp.statusHandler)
+		HTTPHandleFunc("/"+name+StatusURLPath(), sp.statusHandler)
 	}
 	return sp
 }
@@ -260,7 +262,7 @@ func (sp *statusPage) reparse(sections []section) (*template.Template, error) {
 	io.WriteString(&buf, statusHTML)
 
 	for i, sec := range sections {
-		fmt.Fprintf(&buf, "<h1>%s</h1>\n", html.EscapeString(sec.Banner))
+		fmt.Fprintf(&buf, "<h1>%s</h1>\n", safehtml.HTMLEscaped(sec.Banner))
 		fmt.Fprintf(&buf, "{{$sec := index .Sections %d}}\n", i)
 		fmt.Fprintf(&buf, `{{template "sec-%d" call $sec.F}}`+"\n", i)
 	}
@@ -270,12 +272,12 @@ func (sp *statusPage) reparse(sections []section) (*template.Template, error) {
 	for i, sec := range sections {
 		fmt.Fprintf(&buf, `{{define "sec-%d"}}%s{{end}}\n`, i, sec.Fragment)
 	}
-	return template.New("").Funcs(sp.funcMap).Parse(buf.String())
+	return template.New("").Funcs(sp.funcMap).ParseFromTrustedTemplate(uncheckedconversions.TrustedTemplateFromStringKnownToSatisfyTypeContract(buf.String()))
 }
 
 // Toggle the block profile rate to/from 100%, unless specific rate is passed in
 func registerDebugBlockProfileRate() {
-	http.HandleFunc("/debug/blockprofilerate", func(w http.ResponseWriter, r *http.Request) {
+	HTTPHandleFunc("/debug/blockprofilerate", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 			acl.SendError(w, err)
 			return
@@ -305,7 +307,7 @@ func registerDebugBlockProfileRate() {
 
 // Toggle the mutex profiling fraction to/from 100%, unless specific fraction is passed in
 func registerDebugMutexProfileFraction() {
-	http.HandleFunc("/debug/mutexprofilefraction", func(w http.ResponseWriter, r *http.Request) {
+	HTTPHandleFunc("/debug/mutexprofilefraction", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 			acl.SendError(w, err)
 			return

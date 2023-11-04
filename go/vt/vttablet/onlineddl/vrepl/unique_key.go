@@ -32,6 +32,12 @@ func UniqueKeyValidForIteration(uniqueKey *UniqueKey) bool {
 		// Thus, we cannot use this unique key for iteration.
 		return false
 	}
+	if uniqueKey.HasSubpart {
+		// vreplication does not fully support indexes on column prefixes such as:
+		//   UNIQUE KEY `name_idx` (`name`(15))
+		// "HasSubpart" means some column covered by the index has a key length spec.
+		return false
+	}
 	if uniqueKey.HasFloat {
 		// float & double data types are imprecise and we cannot use them while iterating unique keys
 		return false

@@ -22,6 +22,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/replication"
 )
 
 // sample event data
@@ -99,7 +101,7 @@ func TestMariadbStandaloneBinlogEventGTID(t *testing.T) {
 	}
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
-	want := MariadbGTID{Domain: 0, Server: 62344, Sequence: 9}
+	want := replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 9}
 	got, hasBegin, err := input.GTID(f)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.False(t, hasBegin, "unexpected hasBegin")
@@ -115,7 +117,7 @@ func TestMariadbBinlogEventGTID(t *testing.T) {
 	}
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
-	want := MariadbGTID{Domain: 0, Server: 62344, Sequence: 10}
+	want := replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 10}
 	got, hasBegin, err := input.GTID(f)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, hasBegin, "unexpected !hasBegin")

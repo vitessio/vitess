@@ -96,7 +96,7 @@ export const Tablets = () => {
                     </DataCell>
 
                     <DataCell>
-                        <ExternalTabletLink fqdn={`//${t._raw.FQDN}`}>{t.hostname}</ExternalTabletLink>
+                        <ExternalTabletLink fqdn={`${t._raw.FQDN}`}>{t.hostname}</ExternalTabletLink>
                     </DataCell>
 
                     <ReadOnlyGate>

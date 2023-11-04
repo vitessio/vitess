@@ -41,6 +41,16 @@
         "ignore_nulls": "true"
       },
       "owner": "auto_tbl"
+    },
+    "lkp_map_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "lkp_mixed_idx",
+        "from": "lkp_key",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "mixed_tbl"
     }
   },
   "tables": {
@@ -151,6 +161,30 @@
       "column_vindexes": [
         {
           "column": "nonunq_col",
+          "name": "hash"
+        }
+      ]
+    },
+    "mixed_tbl": {
+      "auto_increment": {
+        "column": "lkp_key",
+        "sequence": "uks.mixed_seq"
+      },
+      "column_vindexes": [
+        {
+          "column": "shard_key",
+          "name": "hash"
+        },
+        {
+          "column": "lkp_key",
+          "name": "lkp_map_vdx"
+        }
+      ]
+    },
+    "lkp_mixed_idx": {
+      "column_vindexes": [
+        {
+          "column": "lkp_key",
           "name": "hash"
         }
       ]

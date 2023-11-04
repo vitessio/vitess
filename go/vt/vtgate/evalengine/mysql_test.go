@@ -17,11 +17,12 @@ limitations under the License.
 package evalengine
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -49,11 +50,19 @@ var errKnownBadQuery = errors.New("this query is known to give bad results in My
 func convert(t *testing.T, query string, simplify bool) (Expr, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("failed to parse '%s': %v", query, err)
+	}
+
+	cfg := &Config{
+		Collation:    collations.CollationUtf8mb4ID,
+		Optimization: OptimizationLevelNone,
+	}
+	if simplify {
+		cfg.Optimization = OptimizationLevelSimplify
 	}
 
 	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-	converted, err := TranslateEx(astExpr, &LookupIntegrationTest{collations.CollationUtf8mb4ID}, simplify)
+	converted, err := Translate(astExpr, cfg)
 	if err == nil {
 		if knownBadQuery(converted) {
 			return nil, errKnownBadQuery
@@ -68,11 +77,17 @@ func testSingle(t *testing.T, query string) (EvalResult, error) {
 	if err != nil {
 		return EvalResult{}, err
 	}
-	return EnvWithBindVars(nil, collations.CollationUtf8mb4ID).Evaluate(converted)
+	return NewExpressionEnv(context.Background(), nil, nil).Evaluate(converted)
 }
 
 func TestMySQLGolden(t *testing.T) {
+	const Target = 0
+
+	var testcount int
+
 	golden, _ := filepath.Glob("integration/testdata/*.json")
+	slices.Sort(golden)
+
 	for _, gld := range golden {
 		t.Run(filepath.Base(gld), func(t *testing.T) {
 			var testcases []struct {
@@ -93,7 +108,11 @@ func TestMySQLGolden(t *testing.T) {
 			var ok int
 
 			for _, tc := range testcases {
-				debug := fmt.Sprintf("\n// Debug\neval, err := testSingle(t, `%s`)\nt.Logf(\"eval=%%s err=%%v\", eval.Value(), err) // want value=%q\n", tc.Query, tc.Value)
+				testcount++
+				if Target != 0 && Target != testcount {
+					continue
+				}
+
 				eval, err := testSingle(t, tc.Query)
 				if err == errKnownBadQuery {
 					ok++
@@ -101,20 +120,20 @@ func TestMySQLGolden(t *testing.T) {
 				}
 				if err != nil {
 					if tc.Error == "" {
-						t.Errorf("query: %s\nmysql val: %s\nvitess err: %s\n%s", tc.Query, tc.Value, err.Error(), debug)
+						t.Errorf("query %d: %s\nmysql val:  %s\nvitess err: %s", testcount, tc.Query, tc.Value, err.Error())
 					} else if !strings.HasPrefix(tc.Error, err.Error()) {
-						t.Errorf("query: %s\nmysql err: %s\nvitess err: %s\n%s", tc.Query, tc.Error, err.Error(), debug)
+						t.Errorf("query %d: %s\nmysql err:  %s\nvitess err: %s", testcount, tc.Query, tc.Error, err.Error())
 					} else {
 						ok++
 					}
 					continue
 				}
 				if tc.Error != "" {
-					t.Errorf("query: %s\nmysql err: %s\nvitess val: %s\n%s", tc.Query, tc.Error, eval.Value(), debug)
+					t.Errorf("query %d: %s\nmysql err:  %s\nvitess val: %s", testcount, tc.Query, tc.Error, eval.Value(collations.Default()))
 					continue
 				}
-				if eval.Value().String() != tc.Value {
-					t.Errorf("query: %s\nmysql val: %s\nvitess val: %s\n%s", tc.Query, tc.Value, eval.Value(), debug)
+				if eval.String() != tc.Value {
+					t.Errorf("query %d: %s\nmysql val:  %s\nvitess val: %s", testcount, tc.Query, tc.Value, eval.Value(collations.Default()))
 					continue
 				}
 				ok++
@@ -127,6 +146,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `SELECT 12.0 * 0`)
-	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, eval.Collation().Get().Name())
+	eval, err := testSingle(t, `SELECT  _latin1 0xFF regexp _latin1 '[[:lower:]]' COLLATE latin1_bin`)
+	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, collations.Local().LookupName(eval.Collation()))
 }

@@ -43,7 +43,12 @@ func TestHandleFunc(t *testing.T) {
 	}
 	defer listener.Close()
 	port := listener.Addr().(*net.TCPAddr).Port
-	go http.Serve(listener, nil)
+	go func() {
+		err := HTTPServe(listener)
+		if err != nil {
+			t.Errorf("HTTPServe returned: %v", err)
+		}
+	}()
 
 	ebd := NewExporter("", "")
 	ebd.HandleFunc("/path", func(w http.ResponseWriter, r *http.Request) {

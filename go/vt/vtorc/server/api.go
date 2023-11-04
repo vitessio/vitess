@@ -21,9 +21,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"time"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtorc/collection"
+	"vitess.io/vitess/go/vt/vtorc/discovery"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 	"vitess.io/vitess/go/vt/vtorc/process"
@@ -36,30 +40,34 @@ import (
 type vtorcAPI struct{}
 
 const (
-	problemsAPI                = "/api/problems"
-	disableGlobalRecoveriesAPI = "/api/disable-global-recoveries"
-	enableGlobalRecoveriesAPI  = "/api/enable-global-recoveries"
-	replicationAnalysisAPI     = "/api/replication-analysis"
-	healthAPI                  = "/debug/health"
+	problemsAPI                   = "/api/problems"
+	errantGTIDsAPI                = "/api/errant-gtids"
+	disableGlobalRecoveriesAPI    = "/api/disable-global-recoveries"
+	enableGlobalRecoveriesAPI     = "/api/enable-global-recoveries"
+	replicationAnalysisAPI        = "/api/replication-analysis"
+	healthAPI                     = "/debug/health"
+	AggregatedDiscoveryMetricsAPI = "/api/aggregated-discovery-metrics"
 
 	shardWithoutKeyspaceFilteringErrorStr = "Filtering by shard without keyspace isn't supported"
+	notAValidValueForSeconds              = "Invalid value for seconds"
 )
 
 var (
 	apiHandler    = &vtorcAPI{}
 	vtorcAPIPaths = []string{
 		problemsAPI,
+		errantGTIDsAPI,
 		disableGlobalRecoveriesAPI,
 		enableGlobalRecoveriesAPI,
 		replicationAnalysisAPI,
 		healthAPI,
+		AggregatedDiscoveryMetricsAPI,
 	}
 )
 
 // ServeHTTP implements the http.Handler interface. This is the entry point for all the api commands of VTOrc
 func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	apiPath := request.URL.Path
-	log.Infof("HTTP API Request received: %v", apiPath)
 	if err := acl.CheckAccessHTTP(request, getACLPermissionLevelForAPI(apiPath)); err != nil {
 		acl.SendError(response, err)
 		return
@@ -74,8 +82,12 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 		healthAPIHandler(response, request)
 	case problemsAPI:
 		problemsAPIHandler(response, request)
+	case errantGTIDsAPI:
+		errantGTIDsAPIHandler(response, request)
 	case replicationAnalysisAPI:
 		replicationAnalysisAPIHandler(response, request)
+	case AggregatedDiscoveryMetricsAPI:
+		AggregatedDiscoveryMetricsAPIHandler(response, request)
 	default:
 		// This should be unreachable. Any endpoint which isn't registered is automatically redirected to /debug/status.
 		// This code will only be reachable if we register an API but don't handle it here. That will be a bug.
@@ -86,7 +98,7 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 // getACLPermissionLevelForAPI returns the acl permission level that is required to run a given API
 func getACLPermissionLevelForAPI(apiEndpoint string) string {
 	switch apiEndpoint {
-	case problemsAPI:
+	case problemsAPI, errantGTIDsAPI:
 		return acl.MONITORING
 	case disableGlobalRecoveriesAPI, enableGlobalRecoveriesAPI:
 		return acl.ADMIN
@@ -101,7 +113,7 @@ func getACLPermissionLevelForAPI(apiEndpoint string) string {
 // RegisterVTOrcAPIEndpoints is used to register the VTOrc API endpoints
 func RegisterVTOrcAPIEndpoints() {
 	for _, apiPath := range vtorcAPIPaths {
-		http.Handle(apiPath, apiHandler)
+		servenv.HTTPHandle(apiPath, apiHandler)
 	}
 }
 
@@ -134,6 +146,49 @@ func problemsAPIHandler(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	returnAsJSON(response, http.StatusOK, instances)
+}
+
+// errantGTIDsAPIHandler is the handler for the errantGTIDsAPI endpoint
+func errantGTIDsAPIHandler(response http.ResponseWriter, request *http.Request) {
+	// This api also supports filtering by shard and keyspace provided.
+	shard := request.URL.Query().Get("shard")
+	keyspace := request.URL.Query().Get("keyspace")
+	if shard != "" && keyspace == "" {
+		http.Error(response, shardWithoutKeyspaceFilteringErrorStr, http.StatusBadRequest)
+		return
+	}
+
+	instances, err := inst.ReadInstancesWithErrantGTIds(keyspace, shard)
+	if err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	returnAsJSON(response, http.StatusOK, instances)
+}
+
+// AggregatedDiscoveryMetricsAPIHandler is the handler for the discovery metrics endpoint
+func AggregatedDiscoveryMetricsAPIHandler(response http.ResponseWriter, request *http.Request) {
+	// return metrics for last x seconds
+	qSeconds := request.URL.Query().Get("seconds")
+	// default to 60 seconds
+	seconds := 60
+	var err error
+	if qSeconds != "" {
+		seconds, err = strconv.Atoi(qSeconds)
+		if err != nil {
+			http.Error(response, notAValidValueForSeconds, http.StatusBadRequest)
+			return
+		}
+	}
+	c := collection.CreateOrReturnCollection(logic.DiscoveryMetricsName)
+	now := time.Now()
+	then := now.Add(time.Duration(-1*seconds) * time.Second)
+	metric, err := discovery.AggregatedSince(c, then)
+	if err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	returnAsJSON(response, http.StatusOK, metric)
 }
 
 // disableGlobalRecoveriesAPIHandler is the handler for the disableGlobalRecoveriesAPI endpoint
@@ -184,7 +239,8 @@ func healthAPIHandler(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	code := http.StatusOK
-	if !health.Healthy {
+	// If the process isn't healthy, or if the first discovery cycle hasn't completed, we return an internal server error.
+	if !health.Healthy || !health.DiscoveredOnce {
 		code = http.StatusInternalServerError
 	}
 	returnAsJSON(response, code, health)

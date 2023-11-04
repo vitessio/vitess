@@ -46,7 +46,7 @@ func getVindexInformation(
 	var vindexesAndPredicates []*VindexPlusPredicates
 	for _, colVindex := range table.Ordered {
 		if lu, isLu := colVindex.Vindex.(vindexes.LookupBackfill); isLu && lu.IsBackfilling() {
-			// Checking if the Vindex is currently backfilling or not, if it isn't we can read from the vindex table
+			// Checking if the Vindex is currently backfilling or not, if it isn't we can read from the vindex table,
 			// and we will be able to do a delete equal. Otherwise, we continue to look for next best vindex.
 			continue
 		}
@@ -156,7 +156,7 @@ func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (evalengine.Expr, error) 
 		expr = sqlparser.NewArgument(sq.GetArgName())
 	}
 
-	pv, err := evalengine.Translate(expr, semantics.EmptySemTable())
+	pv, err := evalengine.Translate(expr, nil)
 	if err != nil || sqlparser.IsSimpleTuple(expr) {
 		return nil, invalidUpdateExpr(upd, expr)
 	}

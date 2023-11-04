@@ -46,8 +46,8 @@ func TestTxEngineClose(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
 	config.TxPool.Size = 10
-	config.Oltp.TxTimeoutSeconds = 0.1
-	config.GracePeriods.ShutdownSeconds = 0
+	_ = config.Oltp.TxTimeoutSeconds.Set("100ms")
+	_ = config.GracePeriods.ShutdownSeconds.Set("0s")
 	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
 
 	// Normal close.
@@ -144,6 +144,8 @@ func TestTxEngineClose(t *testing.T) {
 }
 
 func TestTxEngineBegin(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	db.AddQueryPattern(".*", &sqltypes.Result{})
@@ -188,6 +190,8 @@ func TestTxEngineBegin(t *testing.T) {
 }
 
 func TestTxEngineRenewFails(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	db.AddQueryPattern(".*", &sqltypes.Result{})
@@ -529,8 +533,8 @@ func setupTxEngine(db *fakesqldb.DB) *TxEngine {
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
 	config.TxPool.Size = 10
-	config.Oltp.TxTimeoutSeconds = 0.1
-	config.GracePeriods.ShutdownSeconds = 0
+	config.Oltp.TxTimeoutSeconds.Set("100ms")
+	_ = config.GracePeriods.ShutdownSeconds.Set("0s")
 	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
 	return te
 }
@@ -556,6 +560,8 @@ func startTx(te *TxEngine, writeTransaction bool) error {
 }
 
 func TestTxEngineFailReserve(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	db.AddQueryPattern(".*", &sqltypes.Result{})

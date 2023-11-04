@@ -27,7 +27,7 @@ import (
 )
 
 // FindSchema implements the http wrapper for the
-// /schema/{table}[?cluster=[&cluster=]] route.
+// /schema/{table}[?cluster_id=[&cluster_id=]] route.
 func FindSchema(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := r.Vars()
 	query := r.URL.Query()
@@ -39,7 +39,7 @@ func FindSchema(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	schema, err := api.server.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
 		Table:            vars["table"],
-		ClusterIds:       query["cluster"],
+		ClusterIds:       query["cluster_id"],
 		TableSizeOptions: sizeOpts,
 	})
 
@@ -66,7 +66,7 @@ func GetSchema(ctx context.Context, r Request, api *API) *JSONResponse {
 	return NewJSONResponse(schema, err)
 }
 
-// GetSchemas implements the http wrapper for the /schemas[?cluster=[&cluster=]
+// GetSchemas implements the http wrapper for the /schemas[?cluster_id=[&cluster_id=]
 // route.
 func GetSchemas(ctx context.Context, r Request, api *API) *JSONResponse {
 	sizeOpts, err := getTableSizeOpts(r)
@@ -75,7 +75,7 @@ func GetSchemas(ctx context.Context, r Request, api *API) *JSONResponse {
 	}
 
 	schemas, err := api.server.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{
-		ClusterIds:       r.URL.Query()["cluster"],
+		ClusterIds:       r.URL.Query()["cluster_id"],
 		TableSizeOptions: sizeOpts,
 	})
 
@@ -134,14 +134,14 @@ func ReloadSchemas(ctx context.Context, r Request, api *API) *JSONResponse {
 		Concurrency:    concurrency,
 		IncludePrimary: includePrimary,
 		WaitPosition:   q.Get("wait_position"),
-		ClusterIds:     q["cluster"],
+		ClusterIds:     q["cluster_id"],
 	})
 	return NewJSONResponse(resp, err)
 }
 
 // ReloadTabletSchema implements the http wrapper for /tablets/{tablet}/reload_schema.
 //
-// Note that all query parameters that apply to ReloadSchemas, except for `cluster`,
+// Note that all query parameters that apply to ReloadSchemas, except for `cluster_id`,
 // are ignored.
 func ReloadTabletSchema(ctx context.Context, r Request, api *API) *JSONResponse {
 	alias, err := r.Vars().GetTabletAlias("tablet")
@@ -151,7 +151,7 @@ func ReloadTabletSchema(ctx context.Context, r Request, api *API) *JSONResponse 
 
 	resp, err := api.server.ReloadSchemas(ctx, &vtadminpb.ReloadSchemasRequest{
 		Tablets:    []*topodatapb.TabletAlias{alias},
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 	return NewJSONResponse(resp, err)
 }

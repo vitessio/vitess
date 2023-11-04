@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -55,6 +56,11 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) {
 		vs, err := fromTS.GetVSchema(ctx, keyspace)
 		switch {
 		case err == nil:
+			_, err = vindexes.BuildKeyspace(vs)
+			if err != nil {
+				log.Errorf("BuildKeyspace(%v): %v", keyspace, err)
+				break
+			}
 			if err := toTS.SaveVSchema(ctx, keyspace, vs); err != nil {
 				log.Errorf("SaveVSchema(%v): %v", keyspace, err)
 			}
@@ -95,7 +101,7 @@ func CopyShards(ctx context.Context, fromTS, toTS *topo.Server) {
 				}
 			}
 			if _, err := toTS.UpdateShardFields(ctx, keyspace, shard, func(toSI *topo.ShardInfo) error {
-				toSI.Shard = proto.Clone(si.Shard).(*topodatapb.Shard)
+				toSI.Shard = si.Shard.CloneVT()
 				return nil
 			}); err != nil {
 				log.Fatalf("UpdateShardFields(%v, %v): %v", keyspace, shard, err)

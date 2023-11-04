@@ -19,5 +19,6 @@ This is an alphabetical list of known adopters of Vitess. Some have already gone
 * [Square](https://square.com)
 * [Stitch Labs](https://stitchlabs.com)
 * [Twitter](https://twitter.com)
+* [Vinted](https://www.vinted.com/)
 * [Weave](https://www.getweave.com)
 * [YouTube](https://youtube.com)

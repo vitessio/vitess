@@ -17,13 +17,11 @@ limitations under the License.
 package semantics
 
 import (
-	"strings"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 // typer is responsible for setting the type for expressions
@@ -44,31 +42,28 @@ func newTyper() *typer {
 	}
 }
 
-var typeInt32 = Type{Type: sqltypes.Int32}
-var decimal = Type{Type: sqltypes.Decimal}
-var floatval = Type{Type: sqltypes.Float64}
-
 func (t *typer) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Literal:
-		switch node.Type {
-		case sqlparser.IntVal:
-			t.exprTypes[node] = typeInt32
-		case sqlparser.StrVal:
-			t.exprTypes[node] = Type{Type: sqltypes.VarChar} // TODO - add system default collation name
-		case sqlparser.DecimalVal:
-			t.exprTypes[node] = decimal
-		case sqlparser.FloatVal:
-			t.exprTypes[node] = floatval
+		t.exprTypes[node] = Type{Type: node.SQLType(), Collation: collations.DefaultCollationForType(node.SQLType())}
+	case *sqlparser.Argument:
+		if node.Type >= 0 {
+			t.exprTypes[node] = Type{Type: node.Type, Collation: collations.DefaultCollationForType(node.Type)}
 		}
 	case sqlparser.AggrFunc:
-		code, ok := engine.SupportedAggregates[strings.ToLower(node.AggrName())]
-		if ok {
-			typ, ok := engine.OpcodeType[code]
+		code, ok := opcode.SupportedAggregates[node.AggrName()]
+		if !ok {
+			return nil
+		}
+		var inputType sqltypes.Type
+		if arg := node.GetArg(); arg != nil {
+			t, ok := t.exprTypes[arg]
 			if ok {
-				t.exprTypes[node] = Type{Type: typ}
+				inputType = t.Type
 			}
 		}
+		type_ := code.Type(inputType)
+		t.exprTypes[node] = Type{Type: type_, Collation: collations.DefaultCollationForType(type_)}
 	}
 	return nil
 }

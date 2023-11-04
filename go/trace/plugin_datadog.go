@@ -3,40 +3,58 @@ package trace
 import (
 	"fmt"
 	"io"
+	"net"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/spf13/pflag"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
 	ddtracer "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
+
+	"vitess.io/vitess/go/viperutil"
 )
 
 var (
-	dataDogHost string
-	dataDogPort string
+	dataDogConfigKey = viperutil.KeyPrefixFunc(configKey("datadog"))
+
+	dataDogHost = viperutil.Configure(
+		dataDogConfigKey("agent.host"),
+		viperutil.Options[string]{
+			FlagName: "datadog-agent-host",
+		},
+	)
+	dataDogPort = viperutil.Configure(
+		dataDogConfigKey("agent.port"),
+		viperutil.Options[string]{
+			FlagName: "datadog-agent-port",
+		},
+	)
 )
 
 func init() {
 	// If compiled with plugin_datadaog, ensure that trace.RegisterFlags
 	// includes datadaog tracing flags.
 	pluginFlags = append(pluginFlags, func(fs *pflag.FlagSet) {
-		fs.StringVar(&dataDogHost, "datadog-agent-host", "", "host to send spans to. if empty, no tracing will be done")
-		fs.StringVar(&dataDogPort, "datadog-agent-port", "", "port to send spans to. if empty, no tracing will be done")
+		fs.String("datadog-agent-host", "", "host to send spans to. if empty, no tracing will be done")
+		fs.String("datadog-agent-port", "", "port to send spans to. if empty, no tracing will be done")
+
+		viperutil.BindFlags(fs, dataDogHost, dataDogPort)
 	})
 }
 
 func newDatadogTracer(serviceName string) (tracingService, io.Closer, error) {
-	if dataDogHost == "" || dataDogPort == "" {
+	host, port := dataDogHost.Get(), dataDogPort.Get()
+	if host == "" || port == "" {
 		return nil, nil, fmt.Errorf("need host and port to datadog agent to use datadog tracing")
 	}
 
 	opts := []ddtracer.StartOption{
-		ddtracer.WithAgentAddr(dataDogHost + ":" + dataDogPort),
+		ddtracer.WithAgentAddr(net.JoinHostPort(host, port)),
 		ddtracer.WithServiceName(serviceName),
 		ddtracer.WithDebugMode(true),
 		ddtracer.WithSampler(ddtracer.NewRateSampler(samplingRate.Get())),
 	}
 
-	if enableLogging {
+	if enableLogging.Get() {
 		opts = append(opts, ddtracer.WithLogger(&traceLogger{}))
 	}
 

@@ -17,7 +17,10 @@ limitations under the License.
 package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
+	"reflect"
 	"testing"
 	"time"
 
@@ -28,17 +31,27 @@ import (
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 )
 
-// make an api call to /api/problems endpoint
-// and verify the output
-func TestProblemsAPI(t *testing.T) {
+// TestAPIEndpoints tests the various API endpoints that VTOrc offers.
+func TestAPIEndpoints(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 		RecoveryPeriodBlockSeconds:            5,
+		// The default topo refresh time is 3 seconds. We are intentionally making it slower for the test, so that we have time to verify
+		// the /debug/health output before and after the first refresh runs.
+		TopologyRefreshSeconds: 10,
 	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	// Call API with retry to ensure VTOrc is up
+	status, resp := utils.MakeAPICallRetry(t, vtorc, "/debug/health", func(code int, response string) bool {
+		return code == 0
+	})
+	// When VTOrc is up and hasn't run the topo-refresh, is should be healthy but HasDiscovered should be false.
+	assert.Equal(t, 500, status)
+	assert.Contains(t, resp, `"Healthy": true,`)
+	assert.Contains(t, resp, `"DiscoveredOnce": false`)
 
 	// find primary from topo
 	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
@@ -63,26 +76,30 @@ func TestProblemsAPI(t *testing.T) {
 
 	t.Run("Health API", func(t *testing.T) {
 		// Check that VTOrc is healthy
-		status, resp := utils.MakeAPICall(t, vtorc, "/debug/health")
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/debug/health")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status)
 		assert.Contains(t, resp, `"Healthy": true,`)
+		assert.Contains(t, resp, `"DiscoveredOnce": true`)
 	})
 
 	t.Run("Liveness API", func(t *testing.T) {
 		// Check that VTOrc is live
-		status, resp := utils.MakeAPICall(t, vtorc, "/debug/liveness")
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/debug/liveness")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status)
 		assert.Empty(t, resp)
 	})
 
 	// Before we disable recoveries, let us wait until VTOrc has fixed all the issues (if any).
 	_, _ = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
-		return response != "[]"
+		return response != "null"
 	})
 
 	t.Run("Disable Recoveries API", func(t *testing.T) {
 		// Disable recoveries of VTOrc
-		status, resp := utils.MakeAPICall(t, vtorc, "/api/disable-global-recoveries")
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/disable-global-recoveries")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status)
 		assert.Equal(t, "Global recoveries disabled\n", resp)
 	})
@@ -96,36 +113,41 @@ func TestProblemsAPI(t *testing.T) {
 		// Wait until VTOrc picks up on this issue and verify
 		// that we see a not null result on the api/replication-analysis page
 		status, resp := utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
-			return response == "[]"
+			return response == "null"
 		})
 		assert.Equal(t, 200, status, resp)
-		assert.Contains(t, resp, fmt.Sprintf(`"Port": %d`, replica.MySQLPort))
+		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
 		assert.Contains(t, resp, `"Analysis": "ReplicationStopped"`)
 
 		// Verify that filtering also works in the API as intended
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=0")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=0")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
-		assert.Contains(t, resp, fmt.Sprintf(`"Port": %d`, replica.MySQLPort))
+		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
 
 		// Verify that filtering by keyspace also works in the API as intended
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
-		assert.Contains(t, resp, fmt.Sprintf(`"Port": %d`, replica.MySQLPort))
+		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
 
 		// Check that filtering using keyspace and shard works
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=80-")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=80-")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
-		assert.Equal(t, "[]", resp)
+		assert.Equal(t, "null", resp)
 
 		// Check that filtering using just the shard fails
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?shard=0")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?shard=0")
+		require.NoError(t, err)
 		assert.Equal(t, 400, status, resp)
 		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)
 	})
 
 	t.Run("Enable Recoveries API", func(t *testing.T) {
 		// Enable recoveries of VTOrc
-		status, resp := utils.MakeAPICall(t, vtorc, "/api/enable-global-recoveries")
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/enable-global-recoveries")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status)
 		assert.Equal(t, "Global recoveries enabled\n", resp)
 
@@ -156,23 +178,82 @@ func TestProblemsAPI(t *testing.T) {
 		assert.Contains(t, resp, fmt.Sprintf(`"InstanceAlias": "%v"`, replica.Alias))
 
 		// Check that filtering using keyspace and shard works
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/problems?keyspace=ks&shard=0")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/problems?keyspace=ks&shard=0")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"InstanceAlias": "%v"`, replica.Alias))
 
 		// Check that filtering using keyspace works
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/problems?keyspace=ks")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/problems?keyspace=ks")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"InstanceAlias": "%v"`, replica.Alias))
 
 		// Check that filtering using keyspace and shard works
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/problems?keyspace=ks&shard=80-")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/problems?keyspace=ks&shard=80-")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Equal(t, "null", resp)
 
 		// Check that filtering using just the shard fails
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/problems?shard=0")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/problems?shard=0")
+		require.NoError(t, err)
 		assert.Equal(t, 400, status, resp)
 		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)
+
+		// Also verify that we see the tablet in the errant GTIDs API call
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/errant-gtids")
+		require.NoError(t, err)
+		assert.Equal(t, 200, status, resp)
+		assert.Contains(t, resp, fmt.Sprintf(`"InstanceAlias": "%v"`, replica.Alias))
+
+		// Check that filtering using keyspace and shard works
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/errant-gtids?keyspace=ks&shard=0")
+		require.NoError(t, err)
+		assert.Equal(t, 200, status, resp)
+		assert.Contains(t, resp, fmt.Sprintf(`"InstanceAlias": "%v"`, replica.Alias))
+
+		// Check that filtering using keyspace works
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/errant-gtids?keyspace=ks")
+		require.NoError(t, err)
+		assert.Equal(t, 200, status, resp)
+		assert.Contains(t, resp, fmt.Sprintf(`"InstanceAlias": "%v"`, replica.Alias))
+
+		// Check that filtering using keyspace and shard works
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/errant-gtids?keyspace=ks&shard=80-")
+		require.NoError(t, err)
+		assert.Equal(t, 200, status, resp)
+		assert.Equal(t, "null", resp)
+
+		// Check that filtering using just the shard fails
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/errant-gtids?shard=0")
+		require.NoError(t, err)
+		assert.Equal(t, 400, status, resp)
+		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)
+
+		// Also verify that the metric for errant GTIDs is reporting the correct count.
+		waitForErrantGTIDCount(t, vtorc, 1)
 	})
+}
+
+func waitForErrantGTIDCount(t *testing.T, vtorc *cluster.VTOrcProcess, errantGTIDCountWanted int) {
+	timeout := time.After(15 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("Timed out waiting for errant gtid count in the metrics to be %v", errantGTIDCountWanted)
+			return
+		default:
+			_, resp, err := utils.MakeAPICall(t, vtorc, "/debug/vars")
+			require.NoError(t, err)
+			resultMap := make(map[string]any)
+			err = json.Unmarshal([]byte(resp), &resultMap)
+			require.NoError(t, err)
+			errantGTIDTabletsCount := reflect.ValueOf(resultMap["ErrantGtidTabletCount"])
+			if int(math.Round(errantGTIDTabletsCount.Float())) == errantGTIDCountWanted {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
 }

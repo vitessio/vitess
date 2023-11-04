@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-CREATE TABLE IF NOT EXISTS _vt.post_copy_action(
+CREATE TABLE IF NOT EXISTS post_copy_action(
   id BIGINT NOT NULL auto_increment,
   vrepl_id INT NOT NULL,
   table_name VARBINARY(128) NOT NULL,

@@ -14,8 +14,9 @@ import (
 )
 
 func TestVitessCluster(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("zone1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1")
 	tmc := newTestWranglerTMClient()
 	wr := New(logutil.NewConsoleLogger(), ts, tmc)
 	name, topoType, topoServer, topoRoot := "c1", "x", "y", "z"

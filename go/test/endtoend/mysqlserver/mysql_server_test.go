@@ -32,6 +32,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -116,9 +118,9 @@ func TestTimeout(t *testing.T) {
 
 	_, err = conn.ExecuteFetch("SELECT SLEEP(5);", 1, false)
 	require.NotNilf(t, err, "quiry timeout error expected")
-	mysqlErr, ok := err.(*mysql.SQLError)
+	mysqlErr, ok := err.(*sqlerror.SQLError)
 	require.Truef(t, ok, "invalid error type")
-	assert.Equal(t, mysql.ERQueryInterrupted, mysqlErr.Number(), err)
+	assert.Equal(t, sqlerror.ERQueryInterrupted, mysqlErr.Number(), err)
 }
 
 // TestInvalidField tries to fetch invalid column and verifies the error.
@@ -132,9 +134,9 @@ func TestInvalidField(t *testing.T) {
 
 	_, err = conn.ExecuteFetch("SELECT invalid_field from vt_insert_test;", 1, false)
 	require.NotNil(t, err, "invalid field error expected")
-	mysqlErr, ok := err.(*mysql.SQLError)
+	mysqlErr, ok := err.(*sqlerror.SQLError)
 	require.Truef(t, ok, "invalid error type")
-	assert.Equal(t, mysql.ERBadFieldError, mysqlErr.Number(), err)
+	assert.Equal(t, sqlerror.ERBadFieldError, mysqlErr.Number(), err)
 }
 
 // TestWarnings validates the behaviour of SHOW WARNINGS.

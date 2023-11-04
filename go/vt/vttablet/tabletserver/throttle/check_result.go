@@ -14,11 +14,12 @@ import (
 
 // CheckResult is the result for an app inquiring on a metric. It also exports as JSON via the API
 type CheckResult struct {
-	StatusCode int     `json:"StatusCode"`
-	Value      float64 `json:"Value"`
-	Threshold  float64 `json:"Threshold"`
-	Error      error   `json:"-"`
-	Message    string  `json:"Message"`
+	StatusCode      int     `json:"StatusCode"`
+	Value           float64 `json:"Value"`
+	Threshold       float64 `json:"Threshold"`
+	Error           error   `json:"-"`
+	Message         string  `json:"Message"`
+	RecentlyChecked bool    `json:"RecentlyChecked"`
 }
 
 // NewCheckResult returns a CheckResult

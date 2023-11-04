@@ -18,4 +18,4 @@
 
 source ../common/env.sh
 
-vtctlclient Reshard -- --tablet_types=rdonly,replica SwitchTraffic customer.cust2cust
+vtctldclient Reshard --workflow cust2cust --target-keyspace customer switchtraffic --tablet-types "rdonly,replica"

@@ -20,13 +20,14 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semantics.TableSet) (ops.Operator, rewrite.TreeIdentity, error) {
+func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semantics.TableSet) (ops.Operator, *rewrite.ApplyResult, error) {
 	var unmerged []*SubQueryOp
 
 	// first loop over the subqueries and try to merge them into the outer plan
@@ -43,7 +44,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 		}
 		merged, err := tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, newSubQueryMerge(ctx, newInner), ts)
 		if err != nil {
-			return nil, rewrite.SameTree, err
+			return nil, nil, err
 		}
 
 		if merged != nil {
@@ -61,23 +62,23 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 			continue
 		}
 
-		if inner.ExtractedSubquery.OpCode == int(engine.PulloutExists) {
+		if inner.ExtractedSubquery.OpCode == int(popcode.PulloutExists) {
 			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outer, preds, inner.ExtractedSubquery)
 			if err != nil {
-				return nil, rewrite.SameTree, err
+				return nil, nil, err
 			}
 			outer = correlatedTree
 			continue
 		}
 
-		return nil, rewrite.SameTree, vterrors.VT12001("cross-shard correlated subquery")
+		return nil, nil, vterrors.VT12001("cross-shard correlated subquery")
 	}
 
 	for _, tree := range unmerged {
 		tree.Outer = outer
 		outer = tree
 	}
-	return outer, rewrite.NewTree, nil
+	return outer, rewrite.NewTree("merged subqueries", outer), nil
 }
 
 func unresolvedAndSource(ctx *plancontext.PlanningContext, op ops.Operator) ([]sqlparser.Expr, ops.Operator) {
@@ -91,65 +92,6 @@ func unresolvedAndSource(ctx *plancontext.PlanningContext, op ops.Operator) ([]s
 	}
 
 	return preds, op
-}
-
-func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Route, subq *SubQueryInner, mergedRouting Routing) (*Route, error) {
-	subq.ExtractedSubquery.Merged = true
-
-	switch outerRouting := outer.Routing.(type) {
-	case *ShardedRouting:
-		return mergeSubQueryFromTableRouting(ctx, outer, inner, outerRouting, subq)
-	default:
-		outer.Routing = mergedRouting
-	}
-
-	outer.MergedWith = append(outer.MergedWith, inner)
-
-	return outer, nil
-}
-
-func mergeSubQueryFromTableRouting(
-	ctx *plancontext.PlanningContext,
-	outer, inner *Route,
-	outerRouting *ShardedRouting,
-	subq *SubQueryInner,
-) (*Route, error) {
-	// When merging an inner query with its outer query, we can remove the
-	// inner query from the list of predicates that can influence routing of
-	// the outer query.
-	//
-	// Note that not all inner queries necessarily are part of the routing
-	// predicates list, so this might be a no-op.
-	subQueryWasPredicate := false
-	for i, predicate := range outerRouting.SeenPredicates {
-		if ctx.SemTable.EqualsExpr(predicate, subq.ExtractedSubquery) {
-			outerRouting.SeenPredicates = append(outerRouting.SeenPredicates[:i], outerRouting.SeenPredicates[i+1:]...)
-
-			subQueryWasPredicate = true
-
-			// The `ExtractedSubquery` of an inner query is unique (due to the uniqueness of bind variable names)
-			// so we can stop after the first match.
-			break
-		}
-	}
-
-	err := outerRouting.resetRoutingSelections(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if subQueryWasPredicate {
-		if innerTR, isTR := inner.Routing.(*ShardedRouting); isTR {
-			// Copy Vindex predicates from the inner route to the upper route.
-			// If we can route based on some of these predicates, the routing can improve
-			outerRouting.VindexPreds = append(outerRouting.VindexPreds, innerTR.VindexPreds...)
-		}
-
-		if inner.Routing.OpCode() == engine.None {
-			outer.Routing = &NoneRouting{keyspace: outerRouting.keyspace}
-		}
-	}
-	return outer, nil
 }
 
 func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStatement, op ops.Operator) bool {
@@ -241,7 +183,7 @@ func tryMergeSubqueryWithRoute(
 		return nil, nil
 	}
 
-	merged, err := Merge(ctx, outerOp, subq, joinPredicates, merger)
+	merged, err := mergeJoinInputs(ctx, outerOp, subq, joinPredicates, merger)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +210,7 @@ func tryMergeSubqueryWithRoute(
 		if !ok {
 			return nil, nil
 		}
-		merged, err := merger.mergeTables(outerRouting, innerRouting, outerOp, subqueryRoute)
+		merged, err := merger.mergeShardedRouting(outerRouting, innerRouting, outerOp, subqueryRoute)
 		mergedRouting := merged.Routing.(*ShardedRouting)
 		mergedRouting.PickBestAvailableVindex()
 		return merged, err
@@ -284,7 +226,7 @@ func tryMergeSubqueryWithJoin(
 	merger merger,
 	subQueryInner *SubQueryInner,
 	lhs semantics.TableSet, // these are the tables made available because we are on the RHS of a join
-) (ops.PhysicalOperator, error) {
+) (ops.Operator, error) {
 	// Trying to merge the subquery with the left-hand or right-hand side of the join
 
 	if outerOp.LeftJoin {
@@ -336,7 +278,6 @@ func rewriteColumnsInSubqueryOpForJoin(
 	outerTree *ApplyJoin,
 	subQueryInner *SubQueryInner,
 ) (ops.Operator, error) {
-	resultInnerOp := innerOp
 	var rewriteError error
 	// go over the entire expression in the subquery
 	sqlparser.SafeRewrite(subQueryInner.ExtractedSubquery.Original, nil, func(cursor *sqlparser.Cursor) bool {
@@ -346,36 +287,39 @@ func rewriteColumnsInSubqueryOpForJoin(
 		}
 
 		// check whether the column name belongs to the other side of the join tree
-		if !ctx.SemTable.RecursiveDeps(node).IsSolvedBy(TableID(resultInnerOp)) {
+		if !ctx.SemTable.RecursiveDeps(node).IsSolvedBy(TableID(innerOp)) {
 			return true
 		}
 
 		// get the bindVariable for that column name and replace it in the subquery
-		bindVar := ctx.ReservedVars.ReserveColName(node)
-		cursor.Replace(sqlparser.NewArgument(bindVar))
+		typ, _, _ := ctx.SemTable.TypeForExpr(node)
+		bindVar := ctx.GetArgumentFor(node, func() string {
+			return ctx.ReservedVars.ReserveColName(node)
+		})
+		cursor.Replace(sqlparser.NewTypedArgument(bindVar, typ))
 		// check whether the bindVariable already exists in the joinVars of the other tree
 		_, alreadyExists := outerTree.Vars[bindVar]
 		if alreadyExists {
 			return true
 		}
 		// if it does not exist, then push this as an output column there and add it to the joinVars
-		offset, err := resultInnerOp.AddColumn(ctx, node)
+		offsets, err := innerOp.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(node)})
 		if err != nil {
 			rewriteError = err
 			return false
 		}
-		outerTree.Vars[bindVar] = offset
+		outerTree.Vars[bindVar] = offsets[0]
 		return true
 	})
 
 	// update the dependencies for the subquery by removing the dependencies from the innerOp
 	tableSet := ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
-	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(resultInnerOp))
+	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(innerOp))
 	tableSet = ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
-	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(resultInnerOp))
+	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(innerOp))
 
 	// return any error while rewriting
-	return resultInnerOp, rewriteError
+	return innerOp, rewriteError
 }
 
 func createCorrelatedSubqueryOp(
@@ -389,7 +333,6 @@ func createCorrelatedSubqueryOp(
 		return nil, vterrors.VT12001("EXISTS sub-queries are only supported with AND clause")
 	}
 
-	resultOuterOp := newOuter
 	vars := map[string]int{}
 	bindVars := map[*sqlparser.ColName]string{}
 	var lhsCols []*sqlparser.ColName
@@ -402,7 +345,7 @@ func createCorrelatedSubqueryOp(
 			}
 
 			nodeDeps := ctx.SemTable.RecursiveDeps(node)
-			if !nodeDeps.IsSolvedBy(TableID(resultOuterOp)) {
+			if !nodeDeps.IsSolvedBy(TableID(newOuter)) {
 				return true
 			}
 
@@ -410,26 +353,27 @@ func createCorrelatedSubqueryOp(
 			// we do so by checking that the column names are the same and their recursive dependencies are the same
 			// so the column names `user.a` and `a` would be considered equal as long as both are bound to the same table
 			for colName, bindVar := range bindVars {
-				if ctx.SemTable.EqualsExpr(node, colName) {
+				if ctx.SemTable.EqualsExprWithDeps(node, colName) {
 					cursor.Replace(sqlparser.NewArgument(bindVar))
 					return true
 				}
 			}
 
 			// get the bindVariable for that column name and replace it in the predicate
+			typ, _, _ := ctx.SemTable.TypeForExpr(node)
 			bindVar := ctx.ReservedVars.ReserveColName(node)
-			cursor.Replace(sqlparser.NewArgument(bindVar))
+			cursor.Replace(sqlparser.NewTypedArgument(bindVar, typ))
 			// store it in the map for future comparisons
 			bindVars[node] = bindVar
 
 			// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
-			offset, err := resultOuterOp.AddColumn(ctx, node)
+			offsets, err := newOuter.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(node)})
 			if err != nil {
 				rewriteError = err
 				return true
 			}
 			lhsCols = append(lhsCols, node)
-			vars[bindVar] = offset
+			vars[bindVar] = offsets[0]
 			return true
 		})
 		if rewriteError != nil {
@@ -442,7 +386,7 @@ func createCorrelatedSubqueryOp(
 		}
 	}
 	return &CorrelatedSubQueryOp{
-		Outer:      resultOuterOp,
+		Outer:      newOuter,
 		Inner:      innerOp,
 		Extracted:  extractedSubquery,
 		Vars:       vars,
@@ -456,7 +400,7 @@ func createCorrelatedSubqueryOp(
 func canMergeSubqueryOnColumnSelection(ctx *plancontext.PlanningContext, a, b *Route, predicate *sqlparser.ExtractedSubquery) bool {
 	left := predicate.OtherSide
 	opCode := predicate.OpCode
-	if opCode != int(engine.PulloutValue) && opCode != int(engine.PulloutIn) {
+	if opCode != int(popcode.PulloutValue) && opCode != int(popcode.PulloutIn) {
 		return false
 	}
 

@@ -80,10 +80,10 @@
   },
   {
     "comment": "set UDV to expression that can't be evaluated at vtgate",
-    "query": "set @foo = CONCAT('Any','Expression','Is','Valid')",
+    "query": "set @foo = SOUNDEX('Hello')",
     "plan": {
       "QueryType": "SET",
-      "Original": "set @foo = CONCAT('Any','Expression','Is','Valid')",
+      "Original": "set @foo = SOUNDEX('Hello')",
       "Instructions": {
         "OperatorType": "Set",
         "Ops": [
@@ -101,7 +101,7 @@
               "Sharded": false
             },
             "TargetDestination": "AnyShard()",
-            "Query": "select CONCAT('Any', 'Expression', 'Is', 'Valid') from dual",
+            "Query": "select SOUNDEX('Hello') from dual",
             "SingleShardOnly": true
           }
         ]

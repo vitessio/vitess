@@ -234,7 +234,7 @@ func TestSchemaDiff(t *testing.T) {
 	})
 
 	testDiff(t, sd4, sd5, "sd4", "sd5", []string{
-		fmt.Sprintf("schemas differ on table type for table table2:\nsd4: VIEW\n differs from:\nsd5: BASE TABLE"), //nolint
+		"schemas differ on table type for table table2:\nsd4: VIEW\n differs from:\nsd5: BASE TABLE",
 	})
 
 	sd1.DatabaseSchema = "CREATE DATABASE {{.DatabaseName}}"
@@ -549,23 +549,6 @@ func TestFilterTables(t *testing.T) {
 					basicTable1,
 					basicTable2,
 				},
-			},
-		},
-		{
-			desc: "update schema version hash when list of tables has changed",
-			input: &tabletmanagerdatapb.SchemaDefinition{
-				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-					basicTable1,
-					basicTable2,
-				},
-				Version: "dummy-version",
-			},
-			excludeTables: []string{basicTable1.Name},
-			want: &tabletmanagerdatapb.SchemaDefinition{
-				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-					basicTable2,
-				},
-				Version: "6d1d294def9febdb21b35dd19a1dd4c6",
 			},
 		},
 		{

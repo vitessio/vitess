@@ -29,7 +29,7 @@ func TestXtrabackup(t *testing.T) {
 	backup.TestBackup(t, backup.XtraBackup, "tar", 0, nil, nil)
 }
 
-func TestXtrabackWithZstdCompression(t *testing.T) {
+func TestXtrabackupWithZstdCompression(t *testing.T) {
 	defer setDefaultCompressionFlag()
 	cDetails := &backup.CompressionDetails{
 		CompressorEngineName:    "zstd",
@@ -41,9 +41,38 @@ func TestXtrabackWithZstdCompression(t *testing.T) {
 	backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails, []string{"TestReplicaBackup"})
 }
 
+func TestXtrabackupWithExternalZstdCompression(t *testing.T) {
+	defer setDefaultCompressionFlag()
+	cDetails := &backup.CompressionDetails{
+		CompressorEngineName:    "external",
+		ExternalCompressorCmd:   "zstd",
+		ExternalCompressorExt:   ".zst",
+		ExternalDecompressorCmd: "zstd -d",
+	}
+
+	backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails, []string{"TestReplicaBackup"})
+}
+
+func TestXtrabackupWithExternalZstdCompressionAndManifestedDecompressor(t *testing.T) {
+	defer setDefaultCompressionFlag()
+	cDetails := &backup.CompressionDetails{
+		CompressorEngineName:            "external",
+		ExternalCompressorCmd:           "zstd",
+		ExternalCompressorExt:           ".zst",
+		ManifestExternalDecompressorCmd: "zstd -d",
+	}
+
+	backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails, []string{"TestReplicaBackup"})
+}
+
+func TestDoNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
+	backup.TestBackup(t, backup.XtraBackup, "xbstream", 0, nil, []string{"DoNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup"})
+}
+
 func setDefaultCompressionFlag() {
 	mysqlctl.CompressionEngineName = "pgzip"
 	mysqlctl.ExternalCompressorCmd = ""
 	mysqlctl.ExternalCompressorExt = ""
 	mysqlctl.ExternalDecompressorCmd = ""
+	mysqlctl.ManifestExternalDecompressorCmd = ""
 }

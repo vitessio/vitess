@@ -29,10 +29,6 @@ import (
 	"time"
 )
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
 // byPriorityWeight sorts records by ascending priority and weight.
 type byPriorityWeight []*net.SRV
 
@@ -48,7 +44,7 @@ func (addrs byPriorityWeight) Less(i, j int) bool {
 // shuffleByWeight shuffles SRV records by weight using the algorithm
 // described in RFC 2782.
 // NOTE(msolo) This is disabled when the weights are zero.
-func (addrs byPriorityWeight) shuffleByWeight() {
+func (addrs byPriorityWeight) shuffleByWeight(rand *rand.Rand) {
 	sum := 0
 	for _, addr := range addrs {
 		sum += int(addr.Weight)
@@ -72,21 +68,21 @@ func (addrs byPriorityWeight) shuffleByWeight() {
 	}
 }
 
-func (addrs byPriorityWeight) sortRfc2782() {
+func (addrs byPriorityWeight) sortRfc2782(rand *rand.Rand) {
 	sort.Sort(addrs)
 	i := 0
 	for j := 1; j < len(addrs); j++ {
 		if addrs[i].Priority != addrs[j].Priority {
-			addrs[i:j].shuffleByWeight()
+			addrs[i:j].shuffleByWeight(rand)
 			i = j
 		}
 	}
-	addrs[i:].shuffleByWeight()
+	addrs[i:].shuffleByWeight(rand)
 }
 
 // SortRfc2782 reorders SRV records as specified in RFC 2782.
 func SortRfc2782(srvs []*net.SRV) {
-	byPriorityWeight(srvs).sortRfc2782()
+	byPriorityWeight(srvs).sortRfc2782(rand.New(rand.NewSource(time.Now().UTC().UnixNano())))
 }
 
 // SplitHostPort is an alternative to net.SplitHostPort that also parses the

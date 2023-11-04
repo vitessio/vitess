@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-CREATE TABLE IF NOT EXISTS _vt.resharding_journal
+CREATE TABLE IF NOT EXISTS resharding_journal
 (
     `id`      bigint NOT NULL,
     `db_name` varbinary(255) DEFAULT NULL,

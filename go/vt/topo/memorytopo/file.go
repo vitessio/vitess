@@ -262,7 +262,6 @@ func (c *Conn) Delete(ctx context.Context, filePath string, version topo.Version
 
 	// Check if it's a directory.
 	if n.isDirectory() {
-		//lint:ignore ST1005 Delete is a function name
 		return fmt.Errorf("delete(%v, %v) failed: it's a directory", c.cell, filePath)
 	}
 

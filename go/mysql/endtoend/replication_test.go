@@ -18,6 +18,7 @@ package endtoend
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -28,13 +29,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -72,7 +71,7 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 		t.Fatalf("SHOW MASTER STATUS returned unexpected result: %v", result)
 	}
 	file := result.Rows[0][0].ToString()
-	position, err := evalengine.ToUint64(result.Rows[0][1])
+	position, err := result.Rows[0][1].ToCastUint64()
 	require.NoError(t, err, "SHOW MASTER STATUS returned invalid position: %v", result.Rows[0][1])
 
 	// Tell the server that we understand the format of events
@@ -128,9 +127,9 @@ func TestReplicationConnectionClosing(t *testing.T) {
 		for {
 			data, err := conn.ReadPacket()
 			if err != nil {
-				serr, ok := err.(*mysql.SQLError)
-				assert.True(t, ok, "Got a non mysql.SQLError error: %v", err)
-				assert.Equal(t, mysql.CRServerLost, serr.Num, "Got an unexpected mysql.SQLError error: %v", serr)
+				serr, ok := err.(*sqlerror.SQLError)
+				assert.True(t, ok, "Got a non sqlerror.SQLError error: %v", err)
+				assert.Equal(t, sqlerror.CRServerLost, serr.Num, "Got an unexpected sqlerror.SQLError error: %v", serr)
 
 				// we got the right error, all good.
 				return
@@ -846,11 +845,9 @@ func TestRowReplicationTypes(t *testing.T) {
 			createType:  "JSON",
 			createValue: "'-2147483649'",
 		}, {
-			name:       "json19",
-			createType: "JSON",
-			// FIXME: was "'18446744073709551615'", unsigned int representation differs from MySQL's which saves this as select 1.8446744073709552e19
-			// probably need to replace the json library: "github.com/spyzhov/ajson"
-			createValue: "'18446744073709551616'",
+			name:        "json19",
+			createType:  "JSON",
+			createValue: "'18446744073709551615'",
 		}, {
 			name:        "json20",
 			createType:  "JSON",
@@ -1007,7 +1004,7 @@ func TestRowReplicationTypes(t *testing.T) {
 		if values[i+1].Type() != querypb.Type_EXPRESSION {
 			require.NoError(t, err)
 		}
-		if values[i+1].Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(valueBytes, mysql.ZeroTimestamp) {
+		if values[i+1].Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(valueBytes, binlog.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.
@@ -1075,7 +1072,7 @@ func valuesForTests(t *testing.T, rs *mysql.Rows, tm *mysql.TableMap, rowIndex i
 		}
 
 		// We have real data
-		value, l, err := mysql.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64})
+		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64})
 		if err != nil {
 			return nil, err
 		}

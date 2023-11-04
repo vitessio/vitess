@@ -1,5 +1,4 @@
-# This file is executed immediately after mysql_install_db,
-# to initialize a fresh data directory.
+# This file is executed immediately after initializing a fresh data directory.
 
 ###############################################################################
 # WARNING: This sql is *NOT* safe for production use,
@@ -11,6 +10,12 @@
 ###############################################################################
 # Equivalent of mysql_secure_installation
 ###############################################################################
+# We need to ensure that super_read_only is disabled so that we can execute
+# these commands. Note that disabling it does NOT disable read_only.
+# We save the current value so that we only re-enable it at the end if it was
+# enabled before.
+SET @original_super_read_only=IF(@@global.super_read_only=1, 'ON', 'OFF');
+SET GLOBAL super_read_only='OFF';
 
 # Changes during the init db should not make it to the binlog.
 # They could potentially create errant transactions on replicas.
@@ -77,3 +82,9 @@ FLUSH PRIVILEGES;
 
 RESET SLAVE ALL;
 RESET MASTER;
+
+# custom sql is used to add custom scripts like creating users/passwords. We use it in our tests
+# {{custom_sql}}
+
+# We need to set super_read_only back to what it was before
+SET GLOBAL super_read_only=IFNULL(@original_super_read_only, 'ON');

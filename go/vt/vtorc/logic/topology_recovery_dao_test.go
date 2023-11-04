@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
@@ -39,11 +38,8 @@ func TestTopologyRecovery(t *testing.T) {
 	}()
 
 	replicationAnalysis := inst.ReplicationAnalysis{
-		AnalyzedInstanceKey: inst.InstanceKey{
-			Hostname: hostname,
-			Port:     101,
-		},
-		TabletType: tab101.Type,
+		AnalyzedInstanceAlias: "zone1-0000000101",
+		TabletType:            tab101.Type,
 		ClusterDetails: inst.ClusterInfo{
 			Keyspace: keyspace,
 			Shard:    shard,
@@ -81,10 +77,7 @@ func TestBlockedRecoveryInsertion(t *testing.T) {
 	}()
 
 	analysisEntry := &inst.ReplicationAnalysis{
-		AnalyzedInstanceKey: inst.InstanceKey{
-			Hostname: "localhost",
-			Port:     100,
-		},
+		AnalyzedInstanceAlias: "zone1-0000000100",
 		ClusterDetails: inst.ClusterInfo{
 			Keyspace: "ks",
 			Shard:    "0",

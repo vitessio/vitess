@@ -19,6 +19,7 @@ package schemamanager
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,46 +37,35 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // TabletExecutor applies schema changes to all tablets.
 type TabletExecutor struct {
-	migrationContext     string
-	ts                   *topo.Server
-	tmc                  tmclient.TabletManagerClient
-	logger               logutil.Logger
-	tablets              []*topodatapb.Tablet
-	isClosed             bool
-	allowBigSchemaChange bool
-	keyspace             string
-	waitReplicasTimeout  time.Duration
-	ddlStrategySetting   *schema.DDLStrategySetting
-	uuids                []string
+	migrationContext    string
+	ts                  *topo.Server
+	tmc                 tmclient.TabletManagerClient
+	logger              logutil.Logger
+	tablets             []*topodatapb.Tablet
+	isClosed            bool
+	keyspace            string
+	waitReplicasTimeout time.Duration
+	ddlStrategySetting  *schema.DDLStrategySetting
+	uuids               []string
+	batchSize           int64
 }
 
 // NewTabletExecutor creates a new TabletExecutor instance
-func NewTabletExecutor(migrationContext string, ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger, waitReplicasTimeout time.Duration) *TabletExecutor {
+func NewTabletExecutor(migrationContext string, ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger, waitReplicasTimeout time.Duration, batchSize int64) *TabletExecutor {
 	return &TabletExecutor{
-		ts:                   ts,
-		tmc:                  tmc,
-		logger:               logger,
-		isClosed:             true,
-		allowBigSchemaChange: false,
-		waitReplicasTimeout:  waitReplicasTimeout,
-		migrationContext:     migrationContext,
+		ts:                  ts,
+		tmc:                 tmc,
+		logger:              logger,
+		isClosed:            true,
+		waitReplicasTimeout: waitReplicasTimeout,
+		migrationContext:    migrationContext,
+		batchSize:           batchSize,
 	}
-}
-
-// AllowBigSchemaChange changes TabletExecutor such that big schema changes
-// will no longer be rejected.
-func (exec *TabletExecutor) AllowBigSchemaChange() {
-	exec.allowBigSchemaChange = true
-}
-
-// DisallowBigSchemaChange enables the check for big schema changes such that
-// TabletExecutor will reject these.
-func (exec *TabletExecutor) DisallowBigSchemaChange() {
-	exec.allowBigSchemaChange = false
 }
 
 // SetDDLStrategy applies ddl_strategy from command line flags
@@ -147,58 +137,49 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 	if exec.isClosed {
 		return fmt.Errorf("executor is closed")
 	}
-
-	// We ignore DATABASE-level DDLs here because detectBigSchemaChanges doesn't
-	// look at them anyway.
-	parsedDDLs, _, _, _, err := exec.parseDDLs(sqls)
-	if err != nil {
+	if err := exec.parseDDLs(sqls); err != nil {
 		return err
 	}
 
-	bigSchemaChange, err := exec.detectBigSchemaChanges(ctx, parsedDDLs)
-	if bigSchemaChange && exec.allowBigSchemaChange {
-		exec.logger.Warningf("Processing big schema change. This may cause visible MySQL downtime.")
-		return nil
-	}
-	return err
+	return nil
 }
 
-func (exec *TabletExecutor) parseDDLs(sqls []string) ([]sqlparser.DDLStatement, []sqlparser.DBDDLStatement, [](*sqlparser.RevertMigration), [](*sqlparser.AlterMigration), error) {
-	parsedDDLs := make([]sqlparser.DDLStatement, 0)
-	parsedDBDDLs := make([]sqlparser.DBDDLStatement, 0)
-	revertStatements := make([](*sqlparser.RevertMigration), 0)
-	alterMigrationStatements := make([](*sqlparser.AlterMigration), 0)
+func (exec *TabletExecutor) parseDDLs(sqls []string) error {
 	for _, sql := range sqls {
 		stmt, err := sqlparser.Parse(sql)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
+			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "failed to parse sql: %s, got error: %v", sql, err)
 		}
-		switch stmt := stmt.(type) {
+		switch stmt.(type) {
 		case sqlparser.DDLStatement:
-			parsedDDLs = append(parsedDDLs, stmt)
 		case sqlparser.DBDDLStatement:
-			parsedDBDDLs = append(parsedDBDDLs, stmt)
 		case *sqlparser.RevertMigration:
-			revertStatements = append(revertStatements, stmt)
 		case *sqlparser.AlterMigration:
-			alterMigrationStatements = append(alterMigrationStatements, stmt)
 		default:
 			if len(exec.tablets) != 1 {
-				return nil, nil, nil, nil, fmt.Errorf("non-ddl statements can only be executed for single shard keyspaces: %s", sql)
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "non-ddl statements can only be executed for single shard keyspaces: %s", sql)
 			}
 		}
 	}
-	return parsedDDLs, parsedDBDDLs, revertStatements, alterMigrationStatements, nil
+	return nil
+}
+
+// isDirectStrategy returns 'true' when the ddl_strategy configuration implies 'direct'
+func (exec *TabletExecutor) isDirectStrategy() (isDirect bool) {
+	if exec.ddlStrategySetting == nil {
+		return true
+	}
+	if exec.ddlStrategySetting.Strategy.IsDirect() {
+		return true
+	}
+	return false
 }
 
 // IsOnlineSchemaDDL returns true if we expect to run a online schema change DDL
 func (exec *TabletExecutor) isOnlineSchemaDDL(stmt sqlparser.Statement) (isOnline bool) {
 	switch stmt := stmt.(type) {
 	case sqlparser.DDLStatement:
-		if exec.ddlStrategySetting == nil {
-			return false
-		}
-		if exec.ddlStrategySetting.Strategy.IsDirect() {
+		if exec.isDirectStrategy() {
 			return false
 		}
 		switch stmt.GetAction() {
@@ -211,62 +192,18 @@ func (exec *TabletExecutor) isOnlineSchemaDDL(stmt sqlparser.Statement) (isOnlin
 	return false
 }
 
-// a schema change that satisfies any following condition is considered
-// to be a big schema change and will be rejected.
-//  1. Alter more than 100,000 rows.
-//  2. Change a table with more than 2,000,000 rows (Drops are fine).
-func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDDLs []sqlparser.DDLStatement) (bool, error) {
-	// We want to avoid any overhead if possible. If all DDLs are online schema changes, then we want to
-	// skip GetSchema altogether.
-	foundAnyNonOnlineDDL := false
-	for _, ddl := range parsedDDLs {
-		if !exec.isOnlineSchemaDDL(ddl) {
-			foundAnyNonOnlineDDL = true
-		}
-	}
-	if !foundAnyNonOnlineDDL {
-		return false, nil
-	}
-	// exec.tablets is guaranteed to have at least one element;
-	// Otherwise, Open should fail and executor should fail.
-	primaryTabletInfo := exec.tablets[0]
-	// get database schema, excluding views.
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{}, ExcludeTables: []string{}, TableSchemaOnly: true}
-	dbSchema, err := exec.tmc.GetSchema(ctx, primaryTabletInfo, req)
-	if err != nil {
-		return false, fmt.Errorf("unable to get database schema, error: %v", err)
-	}
-	tableWithCount := make(map[string]uint64, len(dbSchema.TableDefinitions))
-	for _, tableSchema := range dbSchema.TableDefinitions {
-		tableWithCount[tableSchema.Name] = tableSchema.RowCount
-	}
-	for _, ddl := range parsedDDLs {
-		if exec.isOnlineSchemaDDL(ddl) {
-			// Since this is an online schema change, there is no need to worry about big changes
-			continue
-		}
-		switch ddl.GetAction() {
-		case sqlparser.DropDDLAction, sqlparser.CreateDDLAction, sqlparser.TruncateDDLAction, sqlparser.RenameDDLAction:
-			continue
-		}
-		tableName := ddl.GetTable().Name.String()
-		if rowCount, ok := tableWithCount[tableName]; ok {
-			if rowCount > 100000 && ddl.GetAction() == sqlparser.AlterDDLAction {
-				return true, fmt.Errorf(
-					"big schema change detected. Disable check with -allow_long_unavailability. ddl: %s alters a table with more than 100 thousand rows", sqlparser.String(ddl))
-			}
-			if rowCount > 2000000 {
-				return true, fmt.Errorf(
-					"big schema change detected. Disable check with -allow_long_unavailability. ddl: %s changes a table with more than 2 million rows", sqlparser.String(ddl))
-			}
-		}
-	}
-	return false, nil
-}
-
 // executeSQL executes a single SQL statement either as online DDL or synchronously on all tablets.
 // In online DDL case, the query may be exploded into multiple queries during
 func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, providedUUID string, execResult *ExecuteResult) (executedAsynchronously bool, err error) {
+	executeViaFetch := func() (bool, error) {
+		exec.executeOnAllTablets(ctx, execResult, sql, false)
+		return false, nil
+	}
+	if exec.batchSize > 1 {
+		// Batched writes only ever work with 'direct' strategy and appleid directly to the mysql servers
+		return executeViaFetch()
+	}
+	// Analyze what type of query this is:
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return false, err
@@ -303,17 +240,61 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 		exec.executeOnAllTablets(ctx, execResult, sql, true)
 		return true, nil
 	}
-	exec.executeOnAllTablets(ctx, execResult, sql, false)
-	return false, nil
+	// Got here? The statement needs to be executed directly.
+	return executeViaFetch()
+}
+
+// batchSQLs combines SQLs into batches, delimited by ';'
+func batchSQLs(sqls []string, batchSize int) (batchedSQLs []string) {
+	if batchSize <= 1 {
+		return sqls
+	}
+	for len(sqls) > 0 {
+		nextBatchSize := batchSize
+		if nextBatchSize > len(sqls) {
+			nextBatchSize = len(sqls)
+		}
+		nextBatch := sqls[0:nextBatchSize]
+		nextBatchSql := strings.Join(nextBatch, ";")
+		batchedSQLs = append(batchedSQLs, nextBatchSql)
+		sqls = sqls[nextBatchSize:]
+	}
+	return batchedSQLs
+}
+
+// allSQLsAreCreateQueries returns 'true' when all given queries are CREATE TABLE|VIEW
+// This function runs pretty fast even for thousands of tables (its overhead is insignificant compared with
+// the time it would take to apply the changes).
+func allSQLsAreCreateQueries(sqls []string) (bool, error) {
+	for _, sql := range sqls {
+		stmt, err := sqlparser.Parse(sql)
+		if err != nil {
+			return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "failed to parse sql: %s, got error: %v", sql, err)
+		}
+		switch stmt.(type) {
+		case *sqlparser.CreateTable, *sqlparser.CreateView:
+		default:
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // Execute applies schema changes
 func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *ExecuteResult {
 	execResult := ExecuteResult{}
+
+	// errorExecResult is a utility function that populates the execResult with the given error, and returns it. Used to quickly bail out of
+	// this function.
+	errorExecResult := func(err error) *ExecuteResult {
+		if err != nil {
+			execResult.ExecutorErr = err.Error()
+		}
+		return &execResult
+	}
 	execResult.Sqls = sqls
 	if exec.isClosed {
-		execResult.ExecutorErr = "executor is closed"
-		return &execResult
+		return errorExecResult(fmt.Errorf("executor is closed"))
 	}
 	startTime := time.Now()
 	defer func() { execResult.TotalTimeSpent = time.Since(startTime) }()
@@ -322,8 +303,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	// keyspace-wide operations like resharding migrations.
 	ctx, unlock, lockErr := exec.ts.LockKeyspace(ctx, exec.keyspace, "ApplySchemaKeyspace")
 	if lockErr != nil {
-		execResult.ExecutorErr = vterrors.Wrapf(lockErr, "lockErr in ApplySchemaKeyspace %v", exec.keyspace).Error()
-		return &execResult
+		return errorExecResult(vterrors.Wrapf(lockErr, "lockErr in ApplySchemaKeyspace %v", exec.keyspace))
 	}
 	defer func() {
 		// This is complicated because execResult.ExecutorErr
@@ -336,8 +316,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	}()
 
 	if exec.hasProvidedUUIDs() && len(exec.uuids) != len(sqls) {
-		execResult.ExecutorErr = fmt.Sprintf("provided %v UUIDs do not match number of DDLs %v", len(exec.uuids), len(sqls))
-		return &execResult
+		return errorExecResult(fmt.Errorf("provided %v UUIDs do not match number of DDLs %v", len(exec.uuids), len(sqls)))
 	}
 	providedUUID := ""
 
@@ -390,11 +369,28 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		wg.Wait()
 	}()
 
+	if exec.batchSize > 1 {
+		// Before we proceed to batch, we need to validate there's no conflicts.
+		if !exec.isDirectStrategy() {
+			return errorExecResult(fmt.Errorf("--batch-size requires 'direct' ddl-strategy"))
+		}
+		if exec.hasProvidedUUIDs() {
+			return errorExecResult(fmt.Errorf("--batch-size conflicts with --uuid-list. Batching does not support UUIDs."))
+		}
+		allSQLsAreCreate, err := allSQLsAreCreateQueries(sqls)
+		if err != nil {
+			return errorExecResult(err)
+		}
+		if !allSQLsAreCreate {
+			return errorExecResult(fmt.Errorf("--batch-size only allowed when all queries are CREATE TABLE|VIEW"))
+		}
+
+		sqls = batchSQLs(sqls, int(exec.batchSize))
+	}
 	for index, sql := range sqls {
 		// Attempt to renew lease:
 		if err := rl.Do(func() error { return topo.CheckKeyspaceLockedAndRenew(ctx, exec.keyspace) }); err != nil {
-			execResult.ExecutorErr = vterrors.Wrapf(err, "CheckKeyspaceLocked in ApplySchemaKeyspace %v", exec.keyspace).Error()
-			return &execResult
+			return errorExecResult(vterrors.Wrapf(err, "CheckKeyspaceLocked in ApplySchemaKeyspace %v", exec.keyspace))
 		}
 		execResult.CurSQLIndex = index
 		if exec.hasProvidedUUIDs() {
@@ -402,8 +398,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		}
 		executedAsynchronously, err := exec.executeSQL(ctx, sql, providedUUID, &execResult)
 		if err != nil {
-			execResult.ExecutorErr = err.Error()
-			return &execResult
+			return errorExecResult(err)
 		}
 		if !executedAsynchronously {
 			syncOperationExecuted = true
@@ -446,6 +441,33 @@ func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult 
 	}
 }
 
+// applyAllowZeroInDate takes a SQL string which may contain one or more statements,
+// and, assuming those are DDLs, adds a /*vt+ allowZeroInDate=true */ directive to all of them,
+// returning the result again as one long SQL.
+func applyAllowZeroInDate(sql string) (string, error) {
+	// sql may be a batch of multiple statements
+	sqls, err := sqlparser.SplitStatementToPieces(sql)
+	if err != nil {
+		return sql, err
+	}
+	var modifiedSqls []string
+	for _, singleSQL := range sqls {
+		// --allow-zero-in-date Applies to DDLs
+		stmt, err := sqlparser.Parse(singleSQL)
+		if err != nil {
+			return sql, err
+		}
+		if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
+			// Add comments directive to allow zero in date
+			const directive = `/*vt+ allowZeroInDate=true */`
+			ddlStmt.SetComments(ddlStmt.GetParsedComments().Prepend(directive))
+			singleSQL = sqlparser.String(ddlStmt)
+		}
+		modifiedSqls = append(modifiedSqls, singleSQL)
+	}
+	return strings.Join(modifiedSqls, ";"), err
+}
+
 func (exec *TabletExecutor) executeOneTablet(
 	ctx context.Context,
 	tablet *topodatapb.Tablet,
@@ -464,22 +486,17 @@ func (exec *TabletExecutor) executeOneTablet(
 	} else {
 		if exec.ddlStrategySetting != nil && exec.ddlStrategySetting.IsAllowZeroInDateFlag() {
 			// --allow-zero-in-date Applies to DDLs
-			stmt, err := sqlparser.Parse(string(sql))
+			sql, err = applyAllowZeroInDate(sql)
 			if err != nil {
 				errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
 				return
-			}
-			if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
-				// Add comments directive to allow zero in date
-				const directive = `/*vt+ allowZeroInDate=true */`
-				ddlStmt.SetComments(ddlStmt.GetParsedComments().Prepend(directive))
-				sql = sqlparser.String(ddlStmt)
 			}
 		}
 		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 			Query:   []byte(sql),
 			MaxRows: 10,
 		})
+
 	}
 	if err != nil {
 		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}

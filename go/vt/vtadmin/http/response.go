@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 )
 
@@ -44,6 +45,8 @@ type errorBody struct {
 // 500 unknown.
 func NewJSONResponse(value any, err error) *JSONResponse {
 	if err != nil {
+		log.Errorf(err.Error())
+
 		switch e := err.(type) {
 		case errors.TypedError:
 			return typedErrorJSONResponse(e)

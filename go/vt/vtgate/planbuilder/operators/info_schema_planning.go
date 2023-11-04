@@ -17,13 +17,9 @@ limitations under the License.
 package operators
 
 import (
+	"maps"
+	"slices"
 	"strings"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -32,7 +28,9 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // InfoSchemaRouting used for information_schema queries.
@@ -47,7 +45,10 @@ type InfoSchemaRouting struct {
 func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
 	rp.SysTableTableSchema = nil
 	for _, expr := range isr.SysTableTableSchema {
-		eexpr, err := evalengine.Translate(expr, &notImplementedSchemaInfoConverter{})
+		eexpr, err := evalengine.Translate(expr, &evalengine.Config{
+			Collation:     collations.SystemCollation.Collation,
+			ResolveColumn: NotImplementedSchemaInfoResolver,
+		})
 		if err != nil {
 			return err
 		}
@@ -56,7 +57,10 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext
 
 	rp.SysTableTableName = make(map[string]evalengine.Expr, len(isr.SysTableTableName))
 	for k, expr := range isr.SysTableTableName {
-		eexpr, err := evalengine.Translate(expr, &notImplementedSchemaInfoConverter{})
+		eexpr, err := evalengine.Translate(expr, &evalengine.Config{
+			Collation:     collations.SystemCollation.Collation,
+			ResolveColumn: NotImplementedSchemaInfoResolver,
+		})
 		if err != nil {
 			return err
 		}
@@ -127,7 +131,10 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 
 	// here we are just checking if this query can be translated to an evalengine expression
 	// we'll need to do this translation again later when building the engine.Route
-	_, err := evalengine.Translate(rhs, &notImplementedSchemaInfoConverter{})
+	_, err := evalengine.Translate(rhs, &evalengine.Config{
+		Collation:     collations.SystemCollation.Collation,
+		ResolveColumn: NotImplementedSchemaInfoResolver,
+	})
 	if err != nil {
 		// if we can't translate this to an evalengine expression,
 		// we are not going to be able to route based on this expression,
@@ -140,7 +147,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 	} else {
 		name = reservedVars.ReserveColName(col)
 	}
-	cmp.Right = sqlparser.NewArgument(name)
+	cmp.Right = sqlparser.NewTypedArgument(name, sqltypes.VarChar)
 	return isSchemaName, name, rhs
 }
 
@@ -306,16 +313,6 @@ func isTableNameCol(col *sqlparser.ColName) bool {
 	return col.Name.EqualString("table_name") || col.Name.EqualString("referenced_table_name")
 }
 
-type notImplementedSchemaInfoConverter struct{}
-
-func (f *notImplementedSchemaInfoConverter) ColumnLookup(*sqlparser.ColName) (int, error) {
+func NotImplementedSchemaInfoResolver(*sqlparser.ColName) (int, error) {
 	return 0, vterrors.VT12001("comparing table schema name with a column name")
-}
-
-func (f *notImplementedSchemaInfoConverter) CollationForExpr(sqlparser.Expr) collations.ID {
-	return collations.Unknown
-}
-
-func (f *notImplementedSchemaInfoConverter) DefaultCollation() collations.ID {
-	return collations.Default()
 }

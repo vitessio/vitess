@@ -1,8 +1,25 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package schemadiff
 
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/sqlescape"
 )
@@ -15,6 +32,28 @@ var (
 	ErrExpectedCreateTable            = errors.New("expected a CREATE TABLE statement")
 	ErrExpectedCreateView             = errors.New("expected a CREATE VIEW statement")
 )
+
+type ImpossibleApplyDiffOrderError struct {
+	UnorderedDiffs   []EntityDiff
+	ConflictingDiffs []EntityDiff
+}
+
+func (e *ImpossibleApplyDiffOrderError) Error() string {
+	var b strings.Builder
+	b.WriteString("no valid applicable order for diffs. Diffs found conflicting:")
+	for _, s := range e.ConflictingStatements() {
+		b.WriteString("\n")
+		b.WriteString(s)
+	}
+	return b.String()
+}
+
+func (e *ImpossibleApplyDiffOrderError) ConflictingStatements() (result []string) {
+	for _, diff := range e.ConflictingDiffs {
+		result = append(result, diff.CanonicalStatementString())
+	}
+	return result
+}
 
 type UnsupportedEntityError struct {
 	Entity    string
@@ -333,4 +372,33 @@ type ViewDependencyUnresolvedError struct {
 
 func (e *ViewDependencyUnresolvedError) Error() string {
 	return fmt.Sprintf("view %s has unresolved/loop dependencies", sqlescape.EscapeID(e.View))
+}
+
+type InvalidColumnReferencedInViewError struct {
+	View      string
+	Column    string
+	Ambiguous bool
+}
+
+func (e *InvalidColumnReferencedInViewError) Error() string {
+	if e.Ambiguous {
+		return fmt.Sprintf("view %s references unqualified but non unique column %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Column))
+	}
+	return fmt.Sprintf("view %s references unqualified but non-existent column %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Column))
+}
+
+type InvalidStarExprInViewError struct {
+	View string
+}
+
+func (e *InvalidStarExprInViewError) Error() string {
+	return fmt.Sprintf("view %s has invalid star expression", sqlescape.EscapeID(e.View))
+}
+
+type EntityNotFoundError struct {
+	Name string
+}
+
+func (e *EntityNotFoundError) Error() string {
+	return fmt.Sprintf("entity %s not found", sqlescape.EscapeID(e.Name))
 }

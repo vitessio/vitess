@@ -19,7 +19,9 @@ package vtgate
 import (
 	"reflect"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -62,5 +64,37 @@ func TestPrequeries(t *testing.T) {
 
 	if !reflect.DeepEqual(want, preQueries) {
 		t.Errorf("got %v but wanted %v", preQueries, want)
+	}
+}
+
+func TestTimeZone(t *testing.T) {
+	testCases := []struct {
+		tz   string
+		want string
+	}{
+		{
+			tz:   "Europe/Amsterdam",
+			want: "Europe/Amsterdam",
+		},
+		{
+			tz:   "+02:00",
+			want: "UTC+02:00",
+		},
+		{
+			tz:   "foo",
+			want: (*time.Location)(nil).String(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.tz, func(t *testing.T) {
+			session := NewSafeSession(&vtgatepb.Session{
+				SystemVariables: map[string]string{
+					"time_zone": tc.tz,
+				},
+			})
+
+			assert.Equal(t, tc.want, session.TimeZone().String())
+		})
 	}
 }

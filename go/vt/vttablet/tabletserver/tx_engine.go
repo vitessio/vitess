@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -213,7 +212,7 @@ func (te *TxEngine) isTxPoolAvailable(addToWaitGroup func(int)) error {
 
 	canOpenTransactions := te.state == AcceptingReadOnly || te.state == AcceptingReadAndWrite
 	if !canOpenTransactions {
-		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, vterrors.TxEngineClosed, te.state)
+		return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, vterrors.TxEngineClosed, te.state)
 	}
 	addToWaitGroup(1)
 	return nil

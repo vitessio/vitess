@@ -352,6 +352,16 @@ func (q *query) VStreamRows(request *binlogdatapb.VStreamRowsRequest, stream que
 	return vterrors.ToGRPC(err)
 }
 
+func (q *query) VStreamTables(request *binlogdatapb.VStreamTablesRequest, stream queryservicepb.Query_VStreamTablesServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	err = q.server.VStreamTables(ctx, request, stream.Send)
+	return vterrors.ToGRPC(err)
+}
+
 // VStreamResults is part of the queryservice.QueryServer interface
 func (q *query) VStreamResults(request *binlogdatapb.VStreamResultsRequest, stream queryservicepb.Query_VStreamResultsServer) (err error) {
 	defer q.server.HandlePanic(&err)
@@ -422,8 +432,8 @@ func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.Reserv
 	)
 	state, result, err := q.server.ReserveBeginExecute(ctx, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options)
 	if err != nil {
-		// if we have a valid reservedID, return the error in-band
-		if state.ReservedID != 0 {
+		// if we have a valid reservedID or transactionID, return the error in-band
+		if state.TransactionID != 0 || state.ReservedID != 0 {
 			return &querypb.ReserveBeginExecuteResponse{
 				Error:               vterrors.ToVTRPC(err),
 				TransactionId:       state.TransactionID,

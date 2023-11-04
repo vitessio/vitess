@@ -19,7 +19,6 @@ limitations under the License.
 package hack
 
 import (
-	"reflect"
 	"unsafe"
 )
 
@@ -35,8 +34,7 @@ func strhash(p unsafe.Pointer, h uintptr) uintptr
 // This is an optimal hash function which takes an input seed and is potentially implemented in hardware
 // for most architectures. This is the same hash function that the language's `map` uses.
 func RuntimeMemhash(b []byte, seed uint64) uint64 {
-	pstring := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-	return uint64(memhash(unsafe.Pointer(pstring.Data), uintptr(seed), uintptr(pstring.Len)))
+	return uint64(memhash(unsafe.Pointer(unsafe.SliceData(b)), uintptr(seed), uintptr(len(b))))
 }
 
 // RuntimeStrhash provides access to the Go runtime's default hash function for strings.

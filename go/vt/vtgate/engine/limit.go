@@ -55,7 +55,7 @@ func (l *Limit) GetTableName() string {
 
 // TryExecute satisfies the Primitive interface.
 func (l *Limit) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	count, offset, err := l.getCountAndOffset(vcursor, bindVars)
+	count, offset, err := l.getCountAndOffset(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (l *Limit) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 
 // TryStreamExecute satisfies the Primitive interface.
 func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	count, offset, err := l.getCountAndOffset(vcursor, bindVars)
+	count, offset, err := l.getCountAndOffset(ctx, vcursor, bindVars)
 	if err != nil {
 		return err
 	}
@@ -154,8 +154,8 @@ func (l *Limit) GetFields(ctx context.Context, vcursor VCursor, bindVars map[str
 }
 
 // Inputs returns the input to limit
-func (l *Limit) Inputs() []Primitive {
-	return []Primitive{l.Input}
+func (l *Limit) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{l.Input}, nil
 }
 
 // NeedsTransaction implements the Primitive interface.
@@ -163,20 +163,20 @@ func (l *Limit) NeedsTransaction() bool {
 	return l.Input.NeedsTransaction()
 }
 
-func (l *Limit) getCountAndOffset(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (count int, offset int, err error) {
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
-	count, err = getIntFrom(env, l.Count)
+func (l *Limit) getCountAndOffset(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (count int, offset int, err error) {
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
+	count, err = getIntFrom(env, vcursor, l.Count)
 	if err != nil {
 		return
 	}
-	offset, err = getIntFrom(env, l.Offset)
+	offset, err = getIntFrom(env, vcursor, l.Offset)
 	if err != nil {
 		return
 	}
 	return
 }
 
-func getIntFrom(env *evalengine.ExpressionEnv, expr evalengine.Expr) (int, error) {
+func getIntFrom(env *evalengine.ExpressionEnv, vcursor VCursor, expr evalengine.Expr) (int, error) {
 	if expr == nil {
 		return 0, nil
 	}
@@ -184,7 +184,7 @@ func getIntFrom(env *evalengine.ExpressionEnv, expr evalengine.Expr) (int, error
 	if err != nil {
 		return 0, err
 	}
-	value := evalResult.Value()
+	value := evalResult.Value(vcursor.ConnCollation())
 	if value.IsNull() {
 		return 0, nil
 	}

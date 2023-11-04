@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // TestMoveTablesTZ tests the conversion of datetime based on the source timezone passed to the MoveTables workflow
@@ -191,7 +192,8 @@ func TestMoveTablesTZ(t *testing.T) {
 	output, err = vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "--", "SwitchTraffic", ksWorkflow)
 	require.NoError(t, err, output)
 
-	qr, err := productTab.QueryTablet(fmt.Sprintf("select * from _vt.vreplication where workflow='%s_reverse'", workflow), "", false)
+	qr, err := productTab.QueryTablet(sqlparser.BuildParsedQuery("select * from %s.vreplication where workflow='%s_reverse'",
+		sidecarDBIdentifier, workflow).Query, "", false)
 	if err != nil {
 		return
 	}

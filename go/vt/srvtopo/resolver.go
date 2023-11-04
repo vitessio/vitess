@@ -17,11 +17,10 @@ limitations under the License.
 package srvtopo
 
 import (
+	"context"
 	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
-
-	"context"
 
 	"google.golang.org/protobuf/proto"
 
@@ -43,6 +42,9 @@ type Gateway interface {
 
 	// QueryServiceByAlias returns a QueryService
 	QueryServiceByAlias(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error)
+
+	// GetServingKeyspaces returns list of serving keyspaces.
+	GetServingKeyspaces() []string
 }
 
 // A Resolver can resolve keyspace ids and key ranges into ResolvedShard*

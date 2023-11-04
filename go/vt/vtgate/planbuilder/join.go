@@ -19,230 +19,78 @@ package planbuilder
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*join)(nil)
 
 // join is used to build a Join primitive.
-// It's used to build a normal join or a left join
-// operation.
+// It's used to build an inner join and only used by the Gen4 planner
 type join struct {
-	v3Plan
-	order         int
-	resultColumns []*resultColumn
-	weightStrings map[*resultColumn]int
-
-	// leftOrder stores the order number of the left node. This is
-	// used for a b-tree style traversal towards the target route.
-	// Let us assume the following execution tree:
-	//      J9
-	//     /  \
-	//    /    \
-	//   J3     J8
-	//  / \    /  \
-	// R1  R2  J6  R7
-	//        / \
-	//        R4 R5
-	//
-	// In the above trees, the suffix numbers indicate the
-	// execution order. The leftOrder for the joins will then
-	// be as follows:
-	// J3: 1
-	// J6: 4
-	// J8: 6
-	// J9: 3
-	//
-	// The route to R4 would be:
-	// Go right from J9->J8 because Left(J9)==3, which is <4.
-	// Go left from J8->J6 because Left(J8)==6, which is >=4.
-	// Go left from J6->R4 because Left(J6)==4, the destination.
-	// Look for 'isOnLeft' to see how these numbers are used.
-	leftOrder int
-
 	// Left and Right are the nodes for the join.
 	Left, Right logicalPlan
 
-	ejoin *engine.Join
+	// The Opcode tells us if this is an inner or outer join
+	Opcode engine.JoinOpcode
+
+	// These are the columns that will be produced by this plan.
+	// Negative offsets come from the LHS, and positive from the RHS
+	Cols []int
+
+	// Vars are the columns that will be sent from the LHS to the RHS
+	// the number is the offset on the LHS result, and the string is the bind variable name used in the RHS
+	Vars map[string]int
+
+	// LHSColumns are the columns from the LHS used for the join.
+	// These are the same columns pushed on the LHS that are now used in the Vars field
+	LHSColumns []*sqlparser.ColName
 }
 
-// newJoin makes a new join using the two planBuilder. ajoin can be nil
-// if the join is on a ',' operator. lpb will contain the resulting join.
-// rpb will be discarded.
-func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reservedVars *sqlparser.ReservedVars) error {
-	// This function converts ON clauses to WHERE clauses. The WHERE clause
-	// scope can see all tables, whereas the ON clause can only see the
-	// participants of the JOIN. However, since the ON clause doesn't allow
-	// external references, and the FROM clause doesn't allow duplicates,
-	// it's safe to perform this conversion and still expect the same behavior.
-
-	opcode := engine.InnerJoin
-	if ajoin != nil {
-		switch {
-		case ajoin.Join == sqlparser.LeftJoinType:
-			opcode = engine.LeftJoin
-
-			// For left joins, we have to push the ON clause into the RHS.
-			// We do this before creating the join primitive.
-			// However, variables of LHS need to be visible. To allow this,
-			// we mark the LHS symtab as outer scope to the RHS, just like
-			// a subquery. This make the RHS treat the LHS symbols as external.
-			// This will prevent constructs from escaping out of the rpb scope.
-			// At this point, the LHS symtab also contains symbols of the RHS.
-			// But the RHS will hide those, as intended.
-			rpb.st.Outer = lpb.st
-			if err := rpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr, reservedVars); err != nil {
-				return err
-			}
-		case ajoin.Condition.Using != nil:
-			return vterrors.VT12001("JOIN with USING(column_list) clause for complex queries")
-		}
-	}
-	lpb.plan = &join{
-		weightStrings: make(map[*resultColumn]int),
-		Left:          lpb.plan,
-		Right:         rpb.plan,
-		ejoin: &engine.Join{
-			Opcode: opcode,
-			Vars:   make(map[string]int),
-		},
-	}
-	lpb.plan.Reorder(0)
-	if ajoin == nil || opcode == engine.LeftJoin {
-		return nil
-	}
-	return lpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr, reservedVars)
-}
-
-// Order implements the logicalPlan interface
-func (jb *join) Order() int {
-	return jb.order
-}
-
-// Reorder implements the logicalPlan interface
-func (jb *join) Reorder(order int) {
-	jb.Left.Reorder(order)
-	jb.leftOrder = jb.Left.Order()
-	jb.Right.Reorder(jb.leftOrder)
-	jb.order = jb.Right.Order() + 1
-}
-
-// Primitive implements the logicalPlan interface
-func (jb *join) Primitive() engine.Primitive {
-	jb.ejoin.Left = jb.Left.Primitive()
-	jb.ejoin.Right = jb.Right.Primitive()
-	return jb.ejoin
-}
-
-// ResultColumns implements the logicalPlan interface
-func (jb *join) ResultColumns() []*resultColumn {
-	return jb.resultColumns
-}
-
-// Wireup implements the logicalPlan interface
-func (jb *join) Wireup(plan logicalPlan, jt *jointab) error {
-	err := jb.Right.Wireup(plan, jt)
+// WireupGen4 implements the logicalPlan interface
+func (j *join) Wireup(ctx *plancontext.PlanningContext) error {
+	err := j.Left.Wireup(ctx)
 	if err != nil {
 		return err
 	}
-	return jb.Left.Wireup(plan, jt)
+	return j.Right.Wireup(ctx)
 }
 
-// SupplyVar implements the logicalPlan interface
-func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	if !jb.isOnLeft(from) {
-		jb.Right.SupplyVar(from, to, col, varname)
-		return
+// Primitive implements the logicalPlan interface
+func (j *join) Primitive() engine.Primitive {
+	return &engine.Join{
+		Left:   j.Left.Primitive(),
+		Right:  j.Right.Primitive(),
+		Cols:   j.Cols,
+		Vars:   j.Vars,
+		Opcode: j.Opcode,
 	}
-	if jb.isOnLeft(to) {
-		jb.Left.SupplyVar(from, to, col, varname)
-		return
-	}
-	if _, ok := jb.ejoin.Vars[varname]; ok {
-		// Looks like somebody else already requested this.
-		return
-	}
-	c := col.Metadata.(*column)
-	for i, rc := range jb.resultColumns {
-		if jb.ejoin.Cols[i] > 0 {
-			continue
-		}
-		if rc.column == c {
-			jb.ejoin.Vars[varname] = -jb.ejoin.Cols[i] - 1
-			return
-		}
-	}
-	_, jb.ejoin.Vars[varname] = jb.Left.SupplyCol(col)
-}
-
-// SupplyCol implements the logicalPlan interface
-func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	c := col.Metadata.(*column)
-	for i, rc := range jb.resultColumns {
-		if rc.column == c {
-			return rc, i
-		}
-	}
-
-	routeNumber := c.Origin().Order()
-	var sourceCol int
-	if jb.isOnLeft(routeNumber) {
-		rc, sourceCol = jb.Left.SupplyCol(col)
-		jb.ejoin.Cols = append(jb.ejoin.Cols, -sourceCol-1)
-	} else {
-		rc, sourceCol = jb.Right.SupplyCol(col)
-		jb.ejoin.Cols = append(jb.ejoin.Cols, sourceCol+1)
-	}
-	jb.resultColumns = append(jb.resultColumns, rc)
-	return rc, len(jb.ejoin.Cols) - 1
-}
-
-// SupplyWeightString implements the logicalPlan interface
-func (jb *join) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
-	rc := jb.resultColumns[colNumber]
-	if weightcolNumber, ok := jb.weightStrings[rc]; ok {
-		return weightcolNumber, nil
-	}
-	routeNumber := rc.column.Origin().Order()
-	if jb.isOnLeft(routeNumber) {
-		sourceCol, err := jb.Left.SupplyWeightString(-jb.ejoin.Cols[colNumber]-1, alsoAddToGroupBy)
-		if err != nil {
-			return 0, err
-		}
-		jb.ejoin.Cols = append(jb.ejoin.Cols, -sourceCol-1)
-	} else {
-		sourceCol, err := jb.Right.SupplyWeightString(jb.ejoin.Cols[colNumber]-1, alsoAddToGroupBy)
-		if err != nil {
-			return 0, err
-		}
-		jb.ejoin.Cols = append(jb.ejoin.Cols, sourceCol+1)
-	}
-	jb.resultColumns = append(jb.resultColumns, rc)
-	jb.weightStrings[rc] = len(jb.ejoin.Cols) - 1
-	return len(jb.ejoin.Cols) - 1, nil
-}
-
-// Rewrite implements the logicalPlan interface
-func (jb *join) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 2 {
-		return vterrors.VT13001(fmt.Sprintf("join: wrong number of inputs, got: %d, expect: 2", len(inputs)))
-	}
-	jb.Left = inputs[0]
-	jb.Right = inputs[1]
-	return nil
 }
 
 // Inputs implements the logicalPlan interface
-func (jb *join) Inputs() []logicalPlan {
-	return []logicalPlan{jb.Left, jb.Right}
+func (j *join) Inputs() []logicalPlan {
+	return []logicalPlan{j.Left, j.Right}
 }
 
-// isOnLeft returns true if the specified route number
-// is on the left side of the join. If false, it means
-// the node is on the right.
-func (jb *join) isOnLeft(nodeNum int) bool {
-	return nodeNum <= jb.leftOrder
+// Rewrite implements the logicalPlan interface
+func (j *join) Rewrite(inputs ...logicalPlan) error {
+	if len(inputs) != 2 {
+		return vterrors.VT13001(fmt.Sprintf("wrong number of children in join rewrite, got: %d, expect: 2", len(inputs)))
+	}
+	j.Left = inputs[0]
+	j.Right = inputs[1]
+	return nil
+}
+
+// ContainsTables implements the logicalPlan interface
+func (j *join) ContainsTables() semantics.TableSet {
+	return j.Left.ContainsTables().Merge(j.Right.ContainsTables())
+}
+
+// OutputColumns implements the logicalPlan interface
+func (j *join) OutputColumns() []sqlparser.SelectExpr {
+	return getOutputColumnsFromJoin(j.Cols, j.Left.OutputColumns(), j.Right.OutputColumns())
 }

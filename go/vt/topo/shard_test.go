@@ -17,13 +17,14 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"context"
-
+	"vitess.io/vitess/go/test/utils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -105,14 +106,14 @@ func lockedKeyspaceContext(keyspace string) context.Context {
 }
 
 func addToDenyList(ctx context.Context, si *ShardInfo, tabletType topodatapb.TabletType, cells, tables []string) error {
-	if err := si.UpdateSourceDeniedTables(ctx, tabletType, cells, false, tables); err != nil {
+	if err := si.UpdateDeniedTables(ctx, tabletType, cells, false, tables); err != nil {
 		return err
 	}
 	return nil
 }
 
 func removeFromDenyList(ctx context.Context, si *ShardInfo, tabletType topodatapb.TabletType, cells, tables []string) error {
-	if err := si.UpdateSourceDeniedTables(ctx, tabletType, cells, true, tables); err != nil {
+	if err := si.UpdateDeniedTables(ctx, tabletType, cells, true, tables); err != nil {
 		return err
 	}
 	return nil
@@ -160,13 +161,13 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 
 	// check we enforce the keyspace lock
 	ctx := context.Background()
-	if err := si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_RDONLY, nil, false, nil); err == nil || err.Error() != "keyspace ks is not locked (no locksInfo)" {
+	if err := si.UpdateDeniedTables(ctx, topodatapb.TabletType_RDONLY, nil, false, nil); err == nil || err.Error() != "keyspace ks is not locked (no locksInfo)" {
 		t.Fatalf("unlocked keyspace produced wrong error: %v", err)
 	}
 	ctx = lockedKeyspaceContext("ks")
 
 	// add one cell
-	if err := si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"first"}, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+	if err := si.UpdateDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"first"}, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
 			TabletType:   topodatapb.TabletType_RDONLY,
 			Cells:        []string{"first"},
@@ -177,20 +178,20 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 	}
 
 	// remove that cell, going back
-	if err := si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"first"}, true, nil); err != nil || len(si.TabletControls) != 0 {
+	if err := si.UpdateDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"first"}, true, nil); err != nil || len(si.TabletControls) != 0 {
 		t.Fatalf("going back should have remove the record: %v", si)
 	}
 
 	// re-add a cell, then another with different table list to
 	// make sure it fails
-	if err := si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"first"}, false, []string{"t1", "t2"}); err != nil {
+	if err := si.UpdateDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"first"}, false, []string{"t1", "t2"}); err != nil {
 		t.Fatalf("one cell add failed: %v", si)
 	}
-	if err := si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"second"}, false, []string{"t2", "t3"}); err == nil || err.Error() != "trying to use two different sets of denied tables for shard ks/sh: [t1 t2] and [t2 t3]" {
+	if err := si.UpdateDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"second"}, false, []string{"t2", "t3"}); err == nil || err.Error() != "trying to use two different sets of denied tables for shard ks/sh: [t1 t2] and [t2 t3]" {
 		t.Fatalf("different table list should fail: %v", err)
 	}
 	// add another cell, see the list grow
-	if err := si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"second"}, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+	if err := si.UpdateDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"second"}, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
 			TabletType:   topodatapb.TabletType_RDONLY,
 			Cells:        []string{"first", "second"},
@@ -201,7 +202,7 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 	}
 
 	// add all cells, see the list grow to all
-	if err := si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"first", "second", "third"}, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+	if err := si.UpdateDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"first", "second", "third"}, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
 			TabletType:   topodatapb.TabletType_RDONLY,
 			Cells:        []string{"first", "second", "third"},
@@ -212,7 +213,7 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 	}
 
 	// remove one cell from the full list
-	if err := si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"second"}, true, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+	if err := si.UpdateDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"second"}, true, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
 			TabletType:   topodatapb.TabletType_RDONLY,
 			Cells:        []string{"first", "third"},
@@ -220,5 +221,60 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 		},
 	}) {
 		t.Fatalf("one cell removal from all failed: %v", si)
+	}
+}
+
+func TestValidateShardName(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name          string
+		expectedRange *topodatapb.KeyRange
+		valid         bool
+	}{
+		{
+			name:  "0",
+			valid: true,
+		},
+		{
+			name: "-80",
+			expectedRange: &topodatapb.KeyRange{
+				Start: nil,
+				End:   []byte{0x80},
+			},
+			valid: true,
+		},
+		{
+			name: "40-80",
+			expectedRange: &topodatapb.KeyRange{
+				Start: []byte{0x40},
+				End:   []byte{0x80},
+			},
+			valid: true,
+		},
+		{
+			name:  "foo-bar",
+			valid: false,
+		},
+		{
+			name:  "a/b",
+			valid: false,
+		},
+	}
+
+	for _, tcase := range cases {
+		tcase := tcase
+		t.Run(tcase.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, kr, err := ValidateShardName(tcase.name)
+			if !tcase.valid {
+				assert.Error(t, err, "expected %q to be an invalid shard name", tcase.name)
+				return
+			}
+
+			require.NoError(t, err, "expected %q to be a valid shard name, got error: %v", tcase.name, err)
+			utils.MustMatch(t, tcase.expectedRange, kr)
+		})
 	}
 }

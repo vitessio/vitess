@@ -18,10 +18,9 @@ package tabletserver
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"testing"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -55,7 +54,9 @@ func init() {
 }
 
 func BenchmarkExecuteVarBinary(b *testing.B) {
-	db, tsv := setupTabletServerTest(nil, "")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	db, tsv := setupTabletServerTest(b, ctx, "")
 	defer db.Close()
 	defer tsv.StopService()
 
@@ -68,16 +69,18 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 	}
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	db.AllowAll = true
+	db.SetAllowAll(true)
 	for i := 0; i < b.N; i++ {
-		if _, err := tsv.Execute(context.Background(), &target, benchQuery, bv, 0, 0, nil); err != nil {
+		if _, err := tsv.Execute(ctx, &target, benchQuery, bv, 0, 0, nil); err != nil {
 			panic(err)
 		}
 	}
 }
 
 func BenchmarkExecuteExpression(b *testing.B) {
-	db, tsv := setupTabletServerTest(nil, "")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	db, tsv := setupTabletServerTest(b, ctx, "")
 	defer db.Close()
 	defer tsv.StopService()
 
@@ -93,9 +96,9 @@ func BenchmarkExecuteExpression(b *testing.B) {
 	}
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	db.AllowAll = true
+	db.SetAllowAll(true)
 	for i := 0; i < b.N; i++ {
-		if _, err := tsv.Execute(context.Background(), &target, benchQuery, bv, 0, 0, nil); err != nil {
+		if _, err := tsv.Execute(ctx, &target, benchQuery, bv, 0, 0, nil); err != nil {
 			panic(err)
 		}
 	}

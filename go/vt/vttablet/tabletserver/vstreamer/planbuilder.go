@@ -23,8 +23,6 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -81,6 +79,8 @@ const (
 	GreaterThanEqual
 	// NotEqual is used to filter a comparable column if != specific value
 	NotEqual
+	// IsNotNull is used to filter a column if it is NULL
+	IsNotNull
 )
 
 // Filter contains opcodes for filtering.
@@ -137,7 +137,7 @@ func (ta *Table) FindColumn(name sqlparser.IdentifierCI) int {
 func (plan *Plan) fields() []*querypb.Field {
 	fields := make([]*querypb.Field, len(plan.ColExprs))
 	for i, ce := range plan.ColExprs {
-		fields[i] = ce.Field
+		fields[i] = ce.Field.CloneVT()
 	}
 	return fields
 }
@@ -224,6 +224,10 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 				return false, err
 			}
 			if !key.KeyRangeContains(filter.KeyRange, ksid) {
+				return false, nil
+			}
+		case IsNotNull:
+			if values[filter.ColNum].IsNull() {
 				return false, nil
 			}
 		default:
@@ -531,7 +535,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if val.Type != sqlparser.IntVal && val.Type != sqlparser.StrVal {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
-			pv, err := evalengine.Translate(val, semantics.EmptySemTable())
+			pv, err := evalengine.Translate(val, nil)
 			if err != nil {
 				return err
 			}
@@ -543,7 +547,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			plan.Filters = append(plan.Filters, Filter{
 				Opcode: opcode,
 				ColNum: colnum,
-				Value:  resolved.Value(),
+				Value:  resolved.Value(collations.Default()),
 			})
 		case *sqlparser.FuncExpr:
 			if !expr.Name.EqualString("in_keyrange") {
@@ -552,6 +556,25 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if err := plan.analyzeInKeyRange(vschema, expr.Exprs); err != nil {
 				return err
 			}
+		case *sqlparser.IsExpr: // Needed for CreateLookupVindex with ignore_nulls
+			if expr.Right != sqlparser.IsNotNullOp {
+				return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
+			}
+			qualifiedName, ok := expr.Left.(*sqlparser.ColName)
+			if !ok {
+				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			if !qualifiedName.Qualifier.IsEmpty() {
+				return fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(qualifiedName))
+			}
+			colnum, err := findColumn(plan.Table, qualifiedName.Name)
+			if err != nil {
+				return err
+			}
+			plan.Filters = append(plan.Filters, Filter{
+				Opcode: IsNotNull,
+				ColNum: colnum,
+			})
 		default:
 			return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
 		}
@@ -615,7 +638,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			Field:  plan.Table.Fields[colnum],
 		}, nil
 	case sqlparser.AggrFunc:
-		if strings.ToLower(inner.AggrName()) != "keyspace_id" {
+		if inner.AggrName() != "keyspace_id" {
 			return ColExpr{}, fmt.Errorf("unsupported function: %v", sqlparser.String(inner))
 		}
 		if len(inner.GetArgs()) != 0 {
@@ -631,8 +654,10 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 		}
 		return ColExpr{
 			Field: &querypb.Field{
-				Name: "keyspace_id",
-				Type: sqltypes.VarBinary,
+				Name:    "keyspace_id",
+				Type:    sqltypes.VarBinary,
+				Charset: collations.CollationBinaryID,
+				Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 			},
 			Vindex:        cv.Vindex,
 			VindexColumns: vindexColumns,
@@ -655,8 +680,10 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			}
 			return ColExpr{
 				Field: &querypb.Field{
-					Name: "keyspace_id",
-					Type: sqltypes.VarBinary,
+					Name:    "keyspace_id",
+					Type:    sqltypes.VarBinary,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 				Vindex:        cv.Vindex,
 				VindexColumns: vindexColumns,
@@ -691,8 +718,10 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 		}
 		return ColExpr{
 			Field: &querypb.Field{
-				Name: "1",
-				Type: querypb.Type_INT64,
+				Name:    "1",
+				Type:    querypb.Type_INT64,
+				Charset: collations.CollationBinaryID,
+				Flags:   uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG),
 			},
 			ColNum:     -1,
 			FixedValue: sqltypes.NewInt64(num),

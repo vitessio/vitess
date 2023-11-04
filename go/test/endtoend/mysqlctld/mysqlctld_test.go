@@ -17,12 +17,17 @@ limitations under the License.
 package mysqlctld
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
@@ -51,7 +56,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName); err != nil {
+		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName, sidecar.DefaultName); err != nil {
 			return 1
 		}
 
@@ -96,8 +101,13 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 				tablet.Type = "primary"
 			}
 			// Start Mysqlctld process
-			tablet.MysqlctldProcess = *cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			err := tablet.MysqlctldProcess.Start()
+			mysqlctldProcess, err := cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+			if err != nil {
+				return err
+			}
+			mysqlctldProcess.SocketFile = path.Join(clusterInstance.TmpDirectory, fmt.Sprintf("mysqlctld_%d.sock", tablet.TabletUID))
+			tablet.MysqlctldProcess = *mysqlctldProcess
+			err = tablet.MysqlctldProcess.Start()
 			if err != nil {
 				return err
 			}
@@ -133,6 +143,7 @@ func TestRestart(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	err := primaryTablet.MysqlctldProcess.Stop()
 	require.Nil(t, err)
+	require.Truef(t, primaryTablet.MysqlctldProcess.WaitForMysqlCtldShutdown(), "Mysqlctld has not stopped...")
 	primaryTablet.MysqlctldProcess.CleanupFiles(primaryTablet.TabletUID)
 	err = primaryTablet.MysqlctldProcess.Start()
 	require.Nil(t, err)
@@ -140,10 +151,6 @@ func TestRestart(t *testing.T) {
 
 func TestAutoDetect(t *testing.T) {
 	defer cluster.PanicHandler(t)
-
-	// Start up tablets with an empty MYSQL_FLAVOR, which means auto-detect
-	sqlFlavor := os.Getenv("MYSQL_FLAVOR")
-	os.Setenv("MYSQL_FLAVOR", "")
 
 	err := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.Setup()
 	require.Nil(t, err, "error should be nil")
@@ -153,8 +160,12 @@ func TestAutoDetect(t *testing.T) {
 	// Reparent tablets, which requires flavor detection
 	err = clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shardName, cell, primaryTablet.TabletUID)
 	require.Nil(t, err, "error should be nil")
+}
 
-	//Reset flavor
-	os.Setenv("MYSQL_FLAVOR", sqlFlavor)
-
+func TestVersionString(t *testing.T) {
+	client, err := mysqlctlclient.New("unix", primaryTablet.MysqlctldProcess.SocketFile)
+	require.NoError(t, err)
+	version, err := client.VersionString(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, version)
 }

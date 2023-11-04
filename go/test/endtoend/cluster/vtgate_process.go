@@ -65,7 +65,7 @@ type VtgateProcess struct {
 	exit chan error
 }
 
-const defaultVtGatePlannerVersion = planbuilder.Gen4CompareV3
+const defaultVtGatePlannerVersion = planbuilder.Gen4
 
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
@@ -127,6 +127,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	vtgate.proc.Stderr = errFile
 
 	vtgate.proc.Env = append(vtgate.proc.Env, os.Environ()...)
+	vtgate.proc.Env = append(vtgate.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Running vtgate with command: %v", strings.Join(vtgate.proc.Args, " "))
 
@@ -201,11 +202,11 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 
 // WaitForStatusOfTabletInShard function waits till status of a tablet in shard is 1
 // endPointsCount: how many endpoints to wait for
-func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string, endPointsCount int) error {
+func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string, endPointsCount int, timeout time.Duration) error {
 	log.Infof("Waiting for healthy status of %d %s tablets in cell %s",
 		endPointsCount, name, vtgate.Cell)
-	timeout := time.Now().Add(30 * time.Second)
-	for time.Now().Before(timeout) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
 		if vtgate.GetStatusForTabletOfShard(name, endPointsCount) {
 			return nil
 		}

@@ -34,13 +34,16 @@ func TestEnsureDB(t *testing.T) {
 
 	// Create new tablet
 	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
-	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-	err := tablet.MysqlctlProcess.Start()
+	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	require.NoError(t, err)
+
+	tablet.MysqlctlProcess = *mysqlctlProcess
+	err = tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
 
 	log.Info(fmt.Sprintf("Started vttablet %v", tablet))
 	// Start vttablet process as replica. It won't be able to serve because there's no db.
-	err = clusterInstance.StartVttablet(tablet, "NOT_SERVING", false, cell, "dbtest", hostname, "0")
+	err = clusterInstance.StartVttablet(tablet, false, "NOT_SERVING", false, cell, "dbtest", hostname, "0")
 	require.NoError(t, err)
 
 	// Make it the primary.
@@ -58,7 +61,7 @@ func TestEnsureDB(t *testing.T) {
 	require.NoError(t, err)
 	err = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
-	killTablets(t, tablet)
+	killTablets(tablet)
 }
 
 // TestResetReplicationParameters tests that the RPC ResetReplicationParameters works as intended.
@@ -67,13 +70,15 @@ func TestResetReplicationParameters(t *testing.T) {
 
 	// Create new tablet
 	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
-	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-	err := tablet.MysqlctlProcess.Start()
+	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	require.NoError(t, err)
+	tablet.MysqlctlProcess = *mysqlctlProcess
+	err = tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
 
 	log.Info(fmt.Sprintf("Started vttablet %v", tablet))
 	// Start vttablet process as replica. It won't be able to serve because there's no db.
-	err = clusterInstance.StartVttablet(tablet, "NOT_SERVING", false, cell, "dbtest", hostname, "0")
+	err = clusterInstance.StartVttablet(tablet, false, "NOT_SERVING", false, cell, "dbtest", hostname, "0")
 	require.NoError(t, err)
 
 	// Set a replication source on the tablet and start replication

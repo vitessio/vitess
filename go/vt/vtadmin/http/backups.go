@@ -25,7 +25,7 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-// GetBackups implements the http wrapper for /backups[?cluster=[&cluster=]].
+// GetBackups implements the http wrapper for /backups[?cluster_id=[&cluster_id=]].
 func GetBackups(ctx context.Context, r Request, api *API) *JSONResponse {
 	query := r.URL.Query()
 
@@ -51,7 +51,7 @@ func GetBackups(ctx context.Context, r Request, api *API) *JSONResponse {
 	}
 
 	backups, err := api.server.GetBackups(ctx, &vtadminpb.GetBackupsRequest{
-		ClusterIds:     query["cluster"],
+		ClusterIds:     query["cluster_id"],
 		Keyspaces:      query["keyspace"],
 		KeyspaceShards: query["keyspace_shard"],
 		RequestOptions: &vtctldatapb.GetBackupsRequest{

@@ -251,22 +251,7 @@
   {
     "comment": "create view with subquery in unsharded keyspace",
     "query": "create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
-    "v3-plan": {
-      "QueryType": "DDL",
-      "Original": "create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "Query": "create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a"
-      },
-      "TablesUsed": [
-        "main.view_a"
-      ]
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "DDL",
       "Original": "create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
       "Instructions": {
@@ -380,22 +365,7 @@
   {
     "comment": "Create View with authoritative column",
     "query": "create view user.tmp_view as select * from user.authoritative",
-    "v3-plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.tmp_view as select * from user.authoritative",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view tmp_view as select * from authoritative"
-      },
-      "TablesUsed": [
-        "user.tmp_view"
-      ]
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "DDL",
       "Original": "create view user.tmp_view as select * from user.authoritative",
       "Instructions": {

@@ -25,9 +25,11 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/log"
@@ -67,7 +69,7 @@ type DB struct {
 	acceptWG sync.WaitGroup
 
 	// orderMatters is set when the query order matters.
-	orderMatters bool
+	orderMatters atomic.Bool
 
 	// Fields set at runtime.
 
@@ -77,16 +79,16 @@ type DB struct {
 	// Use SetName() to change.
 	name string
 	// isConnFail trigger a panic in the connection handler.
-	isConnFail bool
+	isConnFail atomic.Bool
 	// connDelay causes a sleep in the connection handler
 	connDelay time.Duration
 	// shouldClose, if true, tells ComQuery() to close the connection when
 	// processing the next query. This will trigger a MySQL client error with
 	// errno 2013 ("server lost").
-	shouldClose bool
-	// AllowAll: if set to true, ComQuery returns an empty result
+	shouldClose atomic.Bool
+	// allowAll: if set to true, ComQuery returns an empty result
 	// for all queries. This flag is used for benchmarking.
-	AllowAll bool
+	allowAll atomic.Bool
 
 	// Handler: interface that allows a caller to override the query handling
 	// implementation. By default it points to the DB itself
@@ -122,7 +124,11 @@ type DB struct {
 
 	// if fakesqldb is asked to serve queries or query patterns that it has not been explicitly told about it will
 	// error out by default. However if you set this flag then any unmatched query results in an empty result
-	neverFail bool
+	neverFail atomic.Bool
+
+	// lastError stores the last error in returning a query result.
+	lastErrorMu sync.Mutex
+	lastError   error
 }
 
 // QueryHandler is the interface used by the DB to simulate executed queries
@@ -175,6 +181,7 @@ func New(t testing.TB) *DB {
 		connections:              make(map[uint32]*mysql.Conn),
 		queryPatternUserCallback: make(map[*regexp.Regexp]func(string)),
 		patternData:              make(map[string]exprResult),
+		lastErrorMu:              sync.Mutex{},
 	}
 
 	db.Handler = db
@@ -182,7 +189,7 @@ func New(t testing.TB) *DB {
 	authServer := mysql.NewAuthServerNone()
 
 	// Start listening.
-	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false)
+	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -216,12 +223,8 @@ func (db *DB) SetName(name string) *DB {
 }
 
 // OrderMatters sets the orderMatters flag.
-func (db *DB) OrderMatters() *DB {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	db.orderMatters = true
-	return db
+func (db *DB) OrderMatters() {
+	db.orderMatters.Store(true)
 }
 
 // Close closes the Listener and waits for it to stop accepting.
@@ -246,6 +249,13 @@ func (db *DB) CloseAllConnections() {
 	for _, c := range db.connections {
 		c.Close()
 	}
+}
+
+// LastError gives the last error the DB ran into
+func (db *DB) LastError() error {
+	db.lastErrorMu.Lock()
+	defer db.lastErrorMu.Unlock()
+	return db.lastError
 }
 
 // WaitForClose should be used after CloseAllConnections() is closed and
@@ -309,7 +319,7 @@ func (db *DB) NewConnection(c *mysql.Conn) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	if db.isConnFail {
+	if db.isConnFail.Load() {
 		panic(fmt.Errorf("simulating a connection failure"))
 	}
 
@@ -345,12 +355,19 @@ func (db *DB) WarningCount(c *mysql.Conn) uint16 {
 }
 
 // HandleQuery is the default implementation of the QueryHandler interface
-func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
-	if db.AllowAll {
+func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) (err error) {
+	defer func() {
+		if err != nil {
+			db.lastErrorMu.Lock()
+			db.lastError = err
+			db.lastErrorMu.Unlock()
+		}
+	}()
+	if db.allowAll.Load() {
 		return callback(&sqltypes.Result{})
 	}
 
-	if db.orderMatters {
+	if db.orderMatters.Load() {
 		result, err := db.comQueryOrdered(query)
 		if err != nil {
 			return err
@@ -363,10 +380,10 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	db.queryCalled[key]++
 	db.querylog = append(db.querylog, key)
 	// Check if we should close the connection and provoke errno 2013.
-	if db.shouldClose {
+	if db.shouldClose.Load() {
 		c.Close()
 
-		//log error
+		// log error
 		if err := callback(&sqltypes.Result{}); err != nil {
 			log.Errorf("callback failed : %v", err)
 		}
@@ -377,7 +394,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	// The driver may send this at connection time, and we don't want it to
 	// interfere.
 	if key == "set names utf8" || strings.HasPrefix(key, "set collation_connection = ") {
-		//log error
+		// log error
 		if err := callback(&sqltypes.Result{}); err != nil {
 			log.Errorf("callback failed : %v", err)
 		}
@@ -412,11 +429,11 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		}
 	}
 
-	if db.neverFail {
+	if db.neverFail.Load() {
 		return callback(&sqltypes.Result{})
 	}
 	// Nothing matched.
-	err := fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v",
+	err = fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v",
 		sqlparser.TruncateForUI(query), db.name)
 	log.Errorf("Query not found: %s", sqlparser.TruncateForUI(query))
 
@@ -450,10 +467,10 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 	index := db.expectedExecuteFetchIndex
 
 	if index >= len(db.expectedExecuteFetch) {
-		if db.neverFail {
+		if db.neverFail.Load() {
 			return &sqltypes.Result{}, nil
 		}
-		db.t.Errorf("%v: got unexpected out of bound fetch: %v >= %v", db.name, index, len(db.expectedExecuteFetch))
+		db.t.Errorf("%v: got unexpected out of bound fetch: %v >= %v (%s)", db.name, index, len(db.expectedExecuteFetch), query)
 		return nil, errors.New("unexpected out of bound fetch")
 	}
 
@@ -465,7 +482,7 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 
 	if strings.HasSuffix(expected, "*") {
 		if !strings.HasPrefix(query, expected[0:len(expected)-1]) {
-			if db.neverFail {
+			if db.neverFail.Load() {
 				return &sqltypes.Result{}, nil
 			}
 			db.t.Errorf("%v: got unexpected query start (index=%v): %v != %v", db.name, index, query, expected)
@@ -473,7 +490,7 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 		}
 	} else {
 		if query != expected {
-			if db.neverFail {
+			if db.neverFail.Load() {
 				return &sqltypes.Result{}, nil
 			}
 			db.t.Errorf("%v: got unexpected query (index=%v): %v != %v", db.name, index, query, expected)
@@ -511,7 +528,7 @@ func (db *DB) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos uint32) err
 }
 
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
-func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet mysql.GTIDSet) error {
+func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
 	return nil
 }
 
@@ -619,26 +636,26 @@ func (db *DB) GetQueryCalledNum(query string) int {
 
 // QueryLog returns the query log in a semicomma separated string
 func (db *DB) QueryLog() string {
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	return strings.Join(db.querylog, ";")
 }
 
 // ResetQueryLog resets the query log
 func (db *DB) ResetQueryLog() {
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	db.querylog = nil
 }
 
 // EnableConnFail makes connection to this fake DB fail.
 func (db *DB) EnableConnFail() {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	db.isConnFail = true
+	db.isConnFail.Store(true)
 }
 
 // DisableConnFail makes connection to this fake DB success.
 func (db *DB) DisableConnFail() {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	db.isConnFail = false
+	db.isConnFail.Store(false)
 }
 
 // SetConnDelay delays connections to this fake DB for the given duration
@@ -650,9 +667,7 @@ func (db *DB) SetConnDelay(d time.Duration) {
 
 // EnableShouldClose closes the connection when processing the next query.
 func (db *DB) EnableShouldClose() {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	db.shouldClose = true
+	db.shouldClose.Store(true)
 }
 
 //
@@ -757,8 +772,12 @@ func (db *DB) VerifyAllExecutedOrFail() {
 	}
 }
 
+func (db *DB) SetAllowAll(allowAll bool) {
+	db.allowAll.Store(allowAll)
+}
+
 func (db *DB) SetNeverFail(neverFail bool) {
-	db.neverFail = neverFail
+	db.neverFail.Store(neverFail)
 }
 
 func (db *DB) MockQueriesForTable(table string, result *sqltypes.Result) {
@@ -782,4 +801,41 @@ func (db *DB) MockQueriesForTable(table string, result *sqltypes.Result) {
 		),
 		cols...,
 	))
+}
+
+// GetRejectedQueryResult checks if we should reject the query.
+func (db *DB) GetRejectedQueryResult(key string) error {
+	if err, ok := db.rejectedData[key]; ok {
+		return err
+	}
+
+	return nil
+}
+
+// GetQueryResult checks for explicit queries add through AddQuery().
+func (db *DB) GetQueryResult(key string) *ExpectedResult {
+	result, ok := db.data[key]
+	if ok {
+		return result
+	}
+	return nil
+}
+
+// GetQueryPatternResult checks if a query matches any pattern previously added using AddQueryPattern().
+func (db *DB) GetQueryPatternResult(key string) (func(string), ExpectedResult, bool, error) {
+	for _, pat := range db.patternData {
+		if pat.expr.MatchString(key) {
+			userCallback, ok := db.queryPatternUserCallback[pat.expr]
+			if ok {
+				if pat.err != "" {
+					return userCallback, ExpectedResult{pat.result, nil}, true, fmt.Errorf(pat.err)
+				}
+				return userCallback, ExpectedResult{pat.result, nil}, true, nil
+			}
+
+			return nil, ExpectedResult{nil, nil}, false, nil
+		}
+	}
+
+	return nil, ExpectedResult{nil, nil}, false, nil
 }

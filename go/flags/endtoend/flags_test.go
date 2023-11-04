@@ -22,13 +22,16 @@ package flags
 
 import (
 	"bytes"
-	_ "embed"
+	"os"
 	"os/exec"
 	"testing"
+	"text/template"
 
-	"vitess.io/vitess/go/test/utils"
+	_ "embed"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
 )
 
 var (
@@ -46,9 +49,6 @@ var (
 
 	//go:embed vtgate.txt
 	vtgateTxt string
-
-	//go:embed vtgr.txt
-	vtgrTxt string
 
 	//go:embed vttablet.txt
 	vttabletTxt string
@@ -89,7 +89,6 @@ var (
 		"vtaclcheck":   vtaclcheckTxt,
 		"vtexplain":    vtexplainTxt,
 		"vtgate":       vtgateTxt,
-		"vtgr":         vtgrTxt,
 		"vttablet":     vttabletTxt,
 		"vttlstest":    vttlstestTxt,
 		"vtctld":       vtctldTxt,
@@ -105,16 +104,30 @@ var (
 )
 
 func TestHelpOutput(t *testing.T) {
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+
 	args := []string{"--help"}
 	for binary, helptext := range helpOutput {
 		t.Run(binary, func(t *testing.T) {
+			tmpl, err := template.New(binary).Parse(helptext)
+			require.NoError(t, err)
+
+			var buf bytes.Buffer
+			err = tmpl.Execute(&buf, struct {
+				Workdir string
+			}{
+				Workdir: wd,
+			})
+			require.NoError(t, err)
+
 			cmd := exec.Command(binary, args...)
 			output := bytes.Buffer{}
 			cmd.Stderr = &output
 			cmd.Stdout = &output
-			err := cmd.Run()
+			err = cmd.Run()
 			require.NoError(t, err)
-			utils.MustMatch(t, helptext, output.String())
+			utils.MustMatch(t, buf.String(), output.String())
 		})
 	}
 }

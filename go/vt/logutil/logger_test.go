@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/race"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
@@ -31,7 +32,7 @@ func TestLogEvent(t *testing.T) {
 	}{
 		{
 			event: &logutilpb.Event{
-				Time:  TimeToProto(time.Date(2014, time.November, 10, 23, 30, 12, 123456000, time.UTC)),
+				Time:  protoutil.TimeToProto(time.Date(2014, time.November, 10, 23, 30, 12, 123456000, time.UTC)),
 				Level: logutilpb.Level_INFO,
 				File:  "file.go",
 				Line:  123,
@@ -41,7 +42,7 @@ func TestLogEvent(t *testing.T) {
 		},
 		{
 			event: &logutilpb.Event{
-				Time:  TimeToProto(time.Date(2014, time.January, 20, 23, 30, 12, 0, time.UTC)),
+				Time:  protoutil.TimeToProto(time.Date(2014, time.January, 20, 23, 30, 12, 0, time.UTC)),
 				Level: logutilpb.Level_WARNING,
 				File:  "file2.go",
 				Line:  567,
@@ -51,7 +52,7 @@ func TestLogEvent(t *testing.T) {
 		},
 		{
 			event: &logutilpb.Event{
-				Time:  TimeToProto(time.Date(2014, time.January, 20, 23, 30, 12, 0, time.UTC)),
+				Time:  protoutil.TimeToProto(time.Date(2014, time.January, 20, 23, 30, 12, 0, time.UTC)),
 				Level: logutilpb.Level_ERROR,
 				File:  "file2.go",
 				Line:  567,
@@ -61,7 +62,7 @@ func TestLogEvent(t *testing.T) {
 		},
 		{
 			event: &logutilpb.Event{
-				Time:  TimeToProto(time.Date(2014, time.January, 20, 23, 30, 12, 0, time.UTC)),
+				Time:  protoutil.TimeToProto(time.Date(2014, time.January, 20, 23, 30, 12, 0, time.UTC)),
 				Level: logutilpb.Level_CONSOLE,
 				File:  "file2.go",
 				Line:  567,

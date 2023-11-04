@@ -20,18 +20,17 @@ package discovery
 
 import (
 	"time"
-
-	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 // Metric holds a set of information of instance discovery metrics
 type Metric struct {
-	Timestamp       time.Time        // time the collection was taken
-	InstanceKey     inst.InstanceKey // instance being monitored
-	BackendLatency  time.Duration    // time taken talking to the backend
-	InstanceLatency time.Duration    // time taken talking to the instance
-	TotalLatency    time.Duration    // total time taken doing the discovery
-	Err             error            // error (if applicable) doing the discovery process
+	Timestamp                        time.Time     // time the collection was taken
+	TabletAlias                      string        // instance being monitored
+	BackendLatency                   time.Duration // time taken talking to the backend
+	InstanceLatency                  time.Duration // time taken talking to the instance
+	TotalLatency                     time.Duration // total time taken doing the discovery
+	Err                              error         // error (if applicable) doing the discovery process
+	InstancePollSecondsDurationCount uint64        // total numbers of times discoverInstance exceeded InstancePollSeconds
 }
 
 // When did the metric happen

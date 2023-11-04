@@ -24,7 +24,10 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // Schema represents a database schema, which may contain entities such as tables and views.
@@ -67,10 +70,8 @@ func NewSchemaFromEntities(entities []Entity) (*Schema, error) {
 			return nil, &UnsupportedEntityError{Entity: c.Name(), Statement: c.Create().CanonicalStatementString()}
 		}
 	}
-	if err := schema.normalize(); err != nil {
-		return nil, err
-	}
-	return schema, nil
+	err := schema.normalize()
+	return schema, err
 }
 
 // NewSchemaFromStatements creates a valid and normalized schema based on list of valid statements
@@ -129,20 +130,20 @@ func NewSchemaFromSQL(sql string) (*Schema, error) {
 }
 
 // getForeignKeyParentTableNames analyzes a CREATE TABLE definition and extracts all referened foreign key tables names.
-// A table name may appear twice in the result output, it it is referenced by more than one foreign key
-func getForeignKeyParentTableNames(createTable *sqlparser.CreateTable) (names []string, err error) {
+// A table name may appear twice in the result output, if it is referenced by more than one foreign key
+func getForeignKeyParentTableNames(createTable *sqlparser.CreateTable) (names []string) {
 	for _, cs := range createTable.TableSpec.Constraints {
 		if check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
 			parentTableName := check.ReferenceDefinition.ReferencedTable.Name.String()
 			names = append(names, parentTableName)
 		}
 	}
-	return names, err
+	return names
 }
 
 // getViewDependentTableNames analyzes a CREATE VIEW definition and extracts all tables/views read by this view
-func getViewDependentTableNames(createView *sqlparser.CreateView) (names []string, err error) {
-	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+func getViewDependentTableNames(createView *sqlparser.CreateView) (names []string) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.TableName:
 			names = append(names, node.Name.String())
@@ -155,12 +156,14 @@ func getViewDependentTableNames(createView *sqlparser.CreateView) (names []strin
 		}
 		return true, nil
 	}, createView)
-	return names, err
+	return names
 }
 
 // normalize is called as part of Schema creation process. The user may only get a hold of normalized schema.
 // It validates some cross-entity constraints, and orders entity based on dependencies (e.g. tables, views that read from tables, 2nd level views, etc.)
 func (s *Schema) normalize() error {
+	var errs error
+
 	s.named = make(map[string]Entity, len(s.tables)+len(s.views))
 	s.sorted = make([]Entity, 0, len(s.tables)+len(s.views))
 	// Verify no two entities share same name
@@ -228,10 +231,7 @@ func (s *Schema) normalize() error {
 				continue
 			}
 			// Not handled. Is this view dependent on already handled objects?
-			referencedTableNames, err := getForeignKeyParentTableNames(t.CreateTable)
-			if err != nil {
-				return err
-			}
+			referencedTableNames := getForeignKeyParentTableNames(t.CreateTable)
 			if len(referencedTableNames) > 0 {
 				s.foreignKeyChildren = append(s.foreignKeyChildren, t)
 			}
@@ -281,10 +281,7 @@ func (s *Schema) normalize() error {
 				continue
 			}
 			// Not handled. Is this view dependent on already handled objects?
-			dependentNames, err := getViewDependentTableNames(v.CreateView)
-			if err != nil {
-				return err
-			}
+			dependentNames := getViewDependentTableNames(v.CreateView)
 			if allNamesFoundInLowerLevel(dependentNames, iterationLevel) {
 				s.sorted = append(s.sorted, v)
 				dependencyLevels[v.Name()] = iterationLevel
@@ -304,7 +301,7 @@ func (s *Schema) normalize() error {
 		// - two or more views have a circular dependency
 		for _, t := range s.tables {
 			if _, ok := dependencyLevels[t.Name()]; !ok {
-				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
+				// We _know_ that in this iteration, at least one foreign key is not found.
 				// We return the first one.
 				return &ForeignKeyDependencyUnresolvedError{Table: t.Name()}
 			}
@@ -312,16 +309,23 @@ func (s *Schema) normalize() error {
 		for _, v := range s.views {
 			if _, ok := dependencyLevels[v.Name()]; !ok {
 				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
-				// We return the first one.
-				return &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()}
+				// We gather all the errors.
+				errs = errors.Join(errs, &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()})
+				// We still add it so it shows up in the output if that is used for anything.
+				s.sorted = append(s.sorted, v)
 			}
 		}
+	}
+
+	// Validate views' referenced columns: do these columns actually exist in referenced tables/views?
+	if err := s.ValidateViewReferences(); err != nil {
+		errs = errors.Join(errs, err)
 	}
 
 	// Validate table definitions
 	for _, t := range s.tables {
 		if err := t.validate(); err != nil {
-			return err
+			return errors.Join(errs, err)
 		}
 	}
 	colTypeEqualForForeignKey := func(a, b *sqlparser.ColumnType) bool {
@@ -365,24 +369,24 @@ func (s *Schema) normalize() error {
 			for i, col := range check.Source {
 				coveredColumn, ok := tableColumns[col.Lowered()]
 				if !ok {
-					return &InvalidColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), Column: col.String()}
+					return errors.Join(errs, &InvalidColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), Column: col.String()})
 				}
 				referencedColumnName := check.ReferenceDefinition.ReferencedColumns[i].Lowered()
 				referencedColumn, ok := referencedColumns[referencedColumnName]
 				if !ok {
-					return &InvalidReferencedColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName}
+					return errors.Join(errs, &InvalidReferencedColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName})
 				}
 				if !colTypeEqualForForeignKey(coveredColumn.Type, referencedColumn.Type) {
-					return &ForeignKeyColumnTypeMismatchError{Table: t.Name(), Constraint: cs.Name.String(), Column: coveredColumn.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName}
+					return errors.Join(errs, &ForeignKeyColumnTypeMismatchError{Table: t.Name(), Constraint: cs.Name.String(), Column: coveredColumn.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName})
 				}
 			}
 
 			if !referencedTable.columnsCoveredByInOrderIndex(check.ReferenceDefinition.ReferencedColumns) {
-				return &MissingForeignKeyReferencedIndexError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName}
+				return errors.Join(errs, &MissingForeignKeyReferencedIndexError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName})
 			}
 		}
 	}
-	return nil
+	return errs
 }
 
 // Entities returns this schema's entities in good order (may be applied without error)
@@ -441,13 +445,17 @@ func (s *Schema) ViewNames() []string {
 
 // Diff compares this schema with another schema, and sees what it takes to make this schema look
 // like the other. It returns a list of diffs.
-func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err error) {
+func (s *Schema) diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err error) {
 	// dropped entities
 	var dropDiffs []EntityDiff
 	for _, e := range s.Entities() {
 		if _, ok := other.named[e.Name()]; !ok {
 			// other schema does not have the entity
-			dropDiffs = append(dropDiffs, e.Drop())
+			// Entities are sorted in foreign key CREATE TABLE valid order (create parents first, then children).
+			// When issuing DROPs, we want to reverse that order. We want to first frop children, then parents.
+			// Instead of analyzing all relationships again, we just reverse the entire order of DROPs, foreign key
+			// related or not.
+			dropDiffs = append([]EntityDiff{e.Drop()}, dropDiffs...)
 		}
 	}
 	// We iterate by order of "other" schema because we need to construct queries that will be valid
@@ -753,11 +761,248 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 // The operation does not modify this object. Instead, if successful, a new (modified) Schema is returned.
 func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 	dup := s.copy()
-	for k, v := range s.named {
-		dup.named[k] = v
-	}
 	if err := dup.apply(diffs); err != nil {
 		return nil, err
 	}
 	return dup, nil
+}
+
+// SchemaDiff calulates a rich diff between this schema and the given schema. It builds on top of diff():
+// on top of the list of diffs that can take this schema into the given schema, this function also
+// evaluates the dependencies between those diffs, if any, and the resulting SchemaDiff object offers OrderedDiffs(),
+// the safe ordering of diffs that, when appleid sequentially, does not produce any conflicts and keeps schema valid
+// at each step.
+func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error) {
+	diffs, err := s.diff(other, hints)
+	if err != nil {
+		return nil, err
+	}
+	schemaDiff := NewSchemaDiff(s)
+	schemaDiff.loadDiffs(diffs)
+
+	// Utility function to see whether the given diff has dependencies on diffs that operate on any of the given named entities,
+	// and if so, record that dependency
+	checkDependencies := func(diff EntityDiff, dependentNames []string) (dependentDiffs []EntityDiff, relationsMade bool) {
+		for _, dependentName := range dependentNames {
+			dependentDiffs = schemaDiff.diffsByEntityName(dependentName)
+			for _, dependentDiff := range dependentDiffs {
+				// 'diff' refers to an entity (call it "e") that has changed. But here we find that one of the
+				// entities that "e" depends on, has also changed.
+				relationsMade = true
+				schemaDiff.addDep(diff, dependentDiff, DiffDependencyOrderUnknown)
+			}
+		}
+		return dependentDiffs, relationsMade
+	}
+
+	for _, diff := range schemaDiff.UnorderedDiffs() {
+		switch diff := diff.(type) {
+		case *CreateViewEntityDiff:
+			checkDependencies(diff, getViewDependentTableNames(diff.createView))
+		case *AlterViewEntityDiff:
+			checkDependencies(diff, getViewDependentTableNames(diff.from.CreateView))
+			checkDependencies(diff, getViewDependentTableNames(diff.to.CreateView))
+		case *DropViewEntityDiff:
+			checkDependencies(diff, getViewDependentTableNames(diff.from.CreateView))
+		case *CreateTableEntityDiff:
+			checkDependencies(diff, getForeignKeyParentTableNames(diff.CreateTable()))
+		case *AlterTableEntityDiff:
+			_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node := node.(type) {
+				case *sqlparser.AddConstraintDefinition:
+					// Only interested in adding a foreign key
+					fk, ok := node.ConstraintDefinition.Details.(*sqlparser.ForeignKeyDefinition)
+					if !ok {
+						return true, nil
+					}
+					// We add a foreign key. Normally that's fine, expect for a couple specific scenarios
+					parentTableName := fk.ReferenceDefinition.ReferencedTable.Name.String()
+					dependentDiffs, ok := checkDependencies(diff, []string{parentTableName})
+					if !ok {
+						// No dependency. Not interesting
+						return true, nil
+					}
+					for _, parentDiff := range dependentDiffs {
+						switch parentDiff := parentDiff.(type) {
+						case *CreateTableEntityDiff:
+							// We add a foreign key constraint onto a new table... That table must therefore be first created,
+							// and only then can we proceed to add the FK
+							schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+						case *AlterTableEntityDiff:
+							// The current diff is ALTER TABLE ... ADD FOREIGN KEY
+							// and the parent table also has an ALTER TABLE.
+							// so if the parent's ALTER in any way modifies the referenced FK columns, that's
+							// a sequential execution dependency
+							referencedColumnNames := map[string]bool{}
+							for _, referencedColumn := range fk.ReferenceDefinition.ReferencedColumns {
+								referencedColumnNames[referencedColumn.Lowered()] = true
+							}
+							// Walk parentDiff.Statement()
+							_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+								switch node := node.(type) {
+								case *sqlparser.ModifyColumn:
+									if referencedColumnNames[node.NewColDefinition.Name.Lowered()] {
+										schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+									}
+								case *sqlparser.AddColumns:
+									for _, col := range node.Columns {
+										if referencedColumnNames[col.Name.Lowered()] {
+											schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+										}
+									}
+								case *sqlparser.DropColumn:
+									if referencedColumnNames[node.Name.Name.Lowered()] {
+										schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
+									}
+								}
+								return true, nil
+							}, parentDiff.Statement())
+						}
+					}
+
+				case *sqlparser.DropKey:
+					if node.Type != sqlparser.ForeignKeyType {
+						// Not interesting
+						return true, nil
+					}
+					// Dropping a foreign key; we need to understand which table this foreign key used to reference.
+					// The DropKey statement itself only _names_ the constraint, but does not have information
+					// about the parent, columns, etc. So we need to find the constraint in the CreateTable statement.
+					for _, cs := range diff.from.CreateTable.TableSpec.Constraints {
+						if strings.EqualFold(cs.Name.String(), node.Name.String()) {
+							if check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
+								parentTableName := check.ReferenceDefinition.ReferencedTable.Name.String()
+								checkDependencies(diff, []string{parentTableName})
+							}
+						}
+					}
+				}
+
+				return true, nil
+			}, diff.Statement())
+		case *DropTableEntityDiff:
+			// No need to handle. Any dependencies will be resolved by any of the other cases
+		}
+	}
+	return schemaDiff, nil
+}
+
+func (s *Schema) ValidateViewReferences() error {
+	var errs error
+	schemaInformation := newDeclarativeSchemaInformation()
+
+	// Remember that s.Entities() is already ordered by dependency. ie. tables first, then views
+	// that only depend on those tables (or on dual), then 2nd tier views, etc.
+	// Thus, the order of iteration below is valid and sufficient, to build
+	for _, e := range s.Entities() {
+		entityColumns, err := s.getEntityColumnNames(e.Name(), schemaInformation)
+		if err != nil {
+			errs = errors.Join(errs, err)
+			continue
+		}
+		schemaInformation.addTable(e.Name())
+		for _, col := range entityColumns {
+			schemaInformation.addColumn(e.Name(), col.Lowered())
+		}
+	}
+
+	// Add dual table with no explicit columns for dual style expressions in views.
+	schemaInformation.addTable("dual")
+
+	for _, view := range s.Views() {
+		sel := sqlparser.CloneSelectStatement(view.CreateView.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
+		_, err := semantics.AnalyzeStrict(sel, semanticKS.Name, schemaInformation)
+		formalizeErr := func(err error) error {
+			if err == nil {
+				return nil
+			}
+			switch e := err.(type) {
+			case *semantics.AmbiguousColumnError:
+				return &InvalidColumnReferencedInViewError{
+					View:      view.Name(),
+					Column:    e.Column,
+					Ambiguous: true,
+				}
+			case *semantics.ColumnNotFoundError:
+				return &InvalidColumnReferencedInViewError{
+					View:   view.Name(),
+					Column: e.Column.Name.String(),
+				}
+			}
+			return err
+		}
+		errs = errors.Join(errs, formalizeErr(err))
+	}
+	return errs
+}
+
+// getEntityColumnNames returns the names of columns in given entity (either a table or a view)
+func (s *Schema) getEntityColumnNames(entityName string, schemaInformation *declarativeSchemaInformation) (
+	columnNames []*sqlparser.IdentifierCI,
+	err error,
+) {
+	entity := s.Entity(entityName)
+	if entity == nil {
+		if strings.ToLower(entityName) == "dual" {
+			// this is fine. DUAL does not exist but is allowed
+			return nil, nil
+		}
+		return nil, &EntityNotFoundError{Name: entityName}
+	}
+	// The entity is either a table or a view
+	switch entity := entity.(type) {
+	case *CreateTableEntity:
+		return s.getTableColumnNames(entity), nil
+	case *CreateViewEntity:
+		return s.getViewColumnNames(entity, schemaInformation)
+	}
+	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected entity type for %v", entityName)
+}
+
+// getTableColumnNames returns the names of columns in given table.
+func (s *Schema) getTableColumnNames(t *CreateTableEntity) (columnNames []*sqlparser.IdentifierCI) {
+	for _, c := range t.TableSpec.Columns {
+		columnNames = append(columnNames, &c.Name)
+	}
+	return columnNames
+}
+
+// getViewColumnNames returns the names of aliased columns returned by a given view.
+func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *declarativeSchemaInformation) (
+	columnNames []*sqlparser.IdentifierCI,
+	err error,
+) {
+	for _, node := range v.Select.GetColumns() {
+		switch node := node.(type) {
+		case *sqlparser.StarExpr:
+			if tableName := node.TableName.Name.String(); tableName != "" {
+				for _, col := range schemaInformation.Tables[tableName].Columns {
+					name := sqlparser.CloneRefOfIdentifierCI(&col.Name)
+					columnNames = append(columnNames, name)
+				}
+			} else {
+				dependentNames := getViewDependentTableNames(v.CreateView)
+				// add all columns from all referenced tables and views
+				for _, entityName := range dependentNames {
+					if schemaInformation.Tables[entityName] != nil { // is nil for dual/DUAL
+						for _, col := range schemaInformation.Tables[entityName].Columns {
+							name := sqlparser.CloneRefOfIdentifierCI(&col.Name)
+							columnNames = append(columnNames, name)
+						}
+					}
+				}
+			}
+			if len(columnNames) == 0 {
+				return nil, &InvalidStarExprInViewError{View: v.Name()}
+			}
+		case *sqlparser.AliasedExpr:
+			ci := sqlparser.NewIdentifierCI(node.ColumnName())
+			columnNames = append(columnNames, &ci)
+		}
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	return columnNames, nil
 }

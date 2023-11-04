@@ -31,6 +31,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/text/encoding/unicode/utf32"
 
+	"vitess.io/vitess/go/mysql/collations/colldata"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/remote"
@@ -140,7 +142,7 @@ func (u *uca900CollationTest) Test(t *testing.T, result *sqltypes.Result) {
 			continue
 		}
 
-		weightString := coll.WeightString(make([]byte, 0, 128), utf8Input, 0)
+		weightString := colldata.Lookup(coll).WeightString(make([]byte, 0, 128), utf8Input, 0)
 		if !bytes.Equal(weightString, expectedWeightString) {
 			t.Errorf("[%s] mismatch for %s (%v): \n\twant: %v\n\tgot:  %v", u.collation, row[2].ToString(), utf8Input, expectedWeightString, weightString)
 			errors++
@@ -227,7 +229,7 @@ func TestCollationWithSpace(t *testing.T) {
 			remote := remote.NewCollation(conn, collName)
 
 			for _, size := range []int{0, codepoints, codepoints + 1, codepoints + 2, 20, 32} {
-				localWeight := local.WeightString(nil, []byte(ExampleString), size)
+				localWeight := colldata.Lookup(local).WeightString(nil, []byte(ExampleString), size)
 				remoteWeight := remote.WeightString(nil, []byte(ExampleString), size)
 				require.True(t, bytes.Equal(localWeight, remoteWeight), "mismatch at len=%d\ninput:    %#v\nexpected: %#v\nactual:   %#v", size, []byte(ExampleString), remoteWeight, localWeight)
 

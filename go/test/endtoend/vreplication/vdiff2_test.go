@@ -23,8 +23,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type testCase struct {
@@ -45,7 +47,7 @@ type testCase struct {
 }
 
 const (
-	sqlSimulateError = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.state = 'error', vdt.state = 'error', vd.completed_at = NULL,
+	sqlSimulateError = `update %s.vdiff as vd, %s.vdiff_table as vdt set vd.state = 'error', vdt.state = 'error', vd.completed_at = NULL,
 						vd.last_error = 'vttablet: rpc error: code = Unknown desc = (errno 1213) (sqlstate 40001): Deadlock found when trying to get lock; try restarting transaction'
 						where vd.vdiff_uuid = %s and vd.id = vdt.vdiff_id`
 	sqlAnalyzeTable = `analyze table %s`
@@ -63,9 +65,9 @@ var testCases = []*testCase{
 		tabletBaseID:      200,
 		tables:            "customer,Lead,Lead-1",
 		autoRetryError:    true,
-		retryInsert:       `insert into customer(cid, name, typ) values(91234, 'Testy McTester', 'soho')`,
+		retryInsert:       `insert into customer(cid, name, typ) values(1991234, 'Testy McTester', 'soho')`,
 		resume:            true,
-		resumeInsert:      `insert into customer(cid, name, typ) values(92234, 'Testy McTester (redux)', 'enterprise')`,
+		resumeInsert:      `insert into customer(cid, name, typ) values(1992234, 'Testy McTester (redux)', 'enterprise')`,
 		testCLIErrors:     true, // test for errors in the simplest workflow
 		testCLICreateWait: true, // test wait on create feature against simplest workflow
 	},
@@ -79,9 +81,9 @@ var testCases = []*testCase{
 		targetShards:   "-40,40-a0,a0-",
 		tabletBaseID:   400,
 		autoRetryError: true,
-		retryInsert:    `insert into customer(cid, name, typ) values(93234, 'Testy McTester Jr', 'enterprise'), (94234, 'Testy McTester II', 'enterprise')`,
+		retryInsert:    `insert into customer(cid, name, typ) values(1993234, 'Testy McTester Jr', 'enterprise'), (1993235, 'Testy McTester II', 'enterprise')`,
 		resume:         true,
-		resumeInsert:   `insert into customer(cid, name, typ) values(95234, 'Testy McTester III', 'enterprise')`,
+		resumeInsert:   `insert into customer(cid, name, typ) values(1994234, 'Testy McTester III', 'enterprise')`,
 		stop:           true,
 	},
 	{
@@ -94,9 +96,9 @@ var testCases = []*testCase{
 		targetShards:   "0",
 		tabletBaseID:   700,
 		autoRetryError: true,
-		retryInsert:    `insert into customer(cid, name, typ) values(96234, 'Testy McTester IV', 'enterprise')`,
+		retryInsert:    `insert into customer(cid, name, typ) values(1995234, 'Testy McTester IV', 'enterprise')`,
 		resume:         true,
-		resumeInsert:   `insert into customer(cid, name, typ) values(97234, 'Testy McTester V', 'enterprise'), (98234, 'Testy McTester VI', 'enterprise')`,
+		resumeInsert:   `insert into customer(cid, name, typ) values(1996234, 'Testy McTester V', 'enterprise'), (1996235, 'Testy McTester VI', 'enterprise')`,
 		stop:           true,
 	},
 }
@@ -176,7 +178,6 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 	for _, shard := range arrTargetShards {
 		tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
 		catchup(t, tab, tc.workflow, tc.typ)
-		updateTableStats(t, tab, tc.tables) // need to do this in order to test progress reports
 	}
 
 	vdiff(t, tc.targetKs, tc.workflow, cells[0].Name, true, true, nil)
@@ -234,23 +235,54 @@ func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
 
 func testDelete(t *testing.T, ksWorkflow, cells string) {
 	t.Run("Delete", func(t *testing.T) {
-		// test show verbose too as a side effect
-		uuid, output := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false, "--verbose")
-		// only present with --verbose
-		require.Contains(t, output, `"TableSummary":`)
-		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", uuid, false)
-		require.Contains(t, output, `"Status": "completed"`)
-		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", "all", false)
-		require.Contains(t, output, `"Status": "completed"`)
+		// Let's be sure that we have at least 3 unique VDiffs.
+		// We have one record in the SHOW output per VDiff, per
+		// shard. So we want to get a count of the unique VDiffs
+		// by UUID.
+		uuidCount := func(uuids []gjson.Result) int64 {
+			seen := make(map[string]struct{})
+			for _, uuid := range uuids {
+				seen[uuid.String()] = struct{}{}
+			}
+			return int64(len(seen))
+		}
+		_, output := performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
+		initialVDiffCount := uuidCount(gjson.Get(output, "#.UUID").Array())
+		for ; initialVDiffCount < 3; initialVDiffCount++ {
+			_, _ = performVDiff2Action(t, ksWorkflow, cells, "create", "", false)
+		}
+
+		// Now let's confirm that we have at least 3 unique VDiffs.
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
-		require.Equal(t, "[]\n", output)
+		require.GreaterOrEqual(t, uuidCount(gjson.Get(output, "#.UUID").Array()), int64(3))
+		// And that our initial count is what we expect.
+		require.Equal(t, initialVDiffCount, uuidCount(gjson.Get(output, "#.UUID").Array()))
+
+		// Test show last with verbose too as a side effect.
+		uuid, output := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false, "--verbose")
+		// The TableSummary is only present with --verbose.
+		require.Contains(t, output, `"TableSummary":`)
+
+		// Now let's delete one of the VDiffs.
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", uuid, false)
+		require.Equal(t, "completed", gjson.Get(output, "Status").String())
+		// And confirm that our unique VDiff count has only decreased by one.
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
+		require.Equal(t, initialVDiffCount-1, uuidCount(gjson.Get(output, "#.UUID").Array()))
+
+		// Now let's delete all of them.
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", "all", false)
+		require.Equal(t, "completed", gjson.Get(output, "Status").String())
+		// And finally confirm that we have no more VDiffs.
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
+		require.Equal(t, int64(0), gjson.Get(output, "#").Int())
 	})
 }
 
 func testNoOrphanedData(t *testing.T, keyspace, workflow string, shards []string) {
 	t.Run("No orphaned data", func(t *testing.T) {
-		query := fmt.Sprintf("select vd.id as vdiff_id, vdt.vdiff_id as vdiff_table_id, vdl.vdiff_id as vdiff_log_id from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id) inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id) where vd.keyspace = %s and vd.workflow = %s",
-			encodeString(keyspace), encodeString(workflow))
+		query := sqlparser.BuildParsedQuery("select vd.id as vdiff_id, vdt.vdiff_id as vdiff_table_id, vdl.vdiff_id as vdiff_log_id from %s.vdiff as vd inner join %s.vdiff_table as vdt on (vd.id = vdt.vdiff_id) inner join %s.vdiff_log as vdl on (vd.id = vdl.vdiff_id) where vd.keyspace = %s and vd.workflow = %s",
+			sidecarDBIdentifier, sidecarDBIdentifier, sidecarDBIdentifier, encodeString(keyspace), encodeString(workflow)).Query
 		for _, shard := range shards {
 			res, err := vc.getPrimaryTablet(t, keyspace, shard).QueryTablet(query, keyspace, false)
 			require.NoError(t, err)
@@ -325,7 +357,7 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 		// update the VDiff to simulate an ephemeral error having occurred
 		for _, shard := range strings.Split(tc.targetShards, ",") {
 			tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
-			res, err := tab.QueryTabletWithDB(fmt.Sprintf(sqlSimulateError, encodeString(uuid)), "vt_"+tc.targetKs)
+			res, err := tab.QueryTabletWithDB(sqlparser.BuildParsedQuery(sqlSimulateError, sidecarDBIdentifier, sidecarDBIdentifier, encodeString(uuid)).Query, "vt_"+tc.targetKs)
 			require.NoError(t, err)
 			// should have updated the vdiff record and at least one vdiff_table record
 			require.GreaterOrEqual(t, int(res.RowsAffected), 2)

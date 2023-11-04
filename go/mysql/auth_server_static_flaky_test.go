@@ -126,9 +126,7 @@ func TestStaticConfigHUP(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	// delete registered Auth server
-	for auth := range authServers {
-		delete(authServers, auth)
-	}
+	clear(authServers)
 }
 
 func TestStaticConfigHUPWithRotation(t *testing.T) {

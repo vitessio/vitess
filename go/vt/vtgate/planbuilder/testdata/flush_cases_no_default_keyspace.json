@@ -38,7 +38,19 @@
   {
     "comment": "Flush statement with flush options",
     "query": "flush no_write_to_binlog hosts, logs",
-    "plan": "VT03007: keyspace not specified"
+    "plan": {
+      "QueryType": "FLUSH",
+      "Original": "flush no_write_to_binlog hosts, logs",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "flush local hosts, logs"
+      }
+    }
   },
   {
     "comment": "Flush statement with routing rules",

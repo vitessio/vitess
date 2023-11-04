@@ -47,6 +47,7 @@ func main() {
 	defer logutil.Flush()
 
 	servenv.ParseFlags("vtaclcheck")
+	servenv.Init()
 
 	err := run()
 	if err != nil {

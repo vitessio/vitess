@@ -50,9 +50,9 @@ func RemoveUnhealthyTablets(tabletStatsList []TabletHealth) []TabletHealth {
 
 func ParseTabletTypesAndOrder(tabletTypesStr string) ([]topodatapb.TabletType, bool, error) {
 	inOrder := false
-	if strings.HasPrefix(tabletTypesStr, inOrderHint) {
+	if strings.HasPrefix(tabletTypesStr, InOrderHint) {
 		inOrder = true
-		tabletTypesStr = tabletTypesStr[len(inOrderHint):]
+		tabletTypesStr = tabletTypesStr[len(InOrderHint):]
 	}
 	tabletTypes, err := topoproto.ParseTabletTypes(tabletTypesStr)
 

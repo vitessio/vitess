@@ -35,13 +35,15 @@ const TopologyRecoveriesTemplate = `
   <tr>
     <th>Recovery ID</th>
     <th>Failure Type</th>
-    <th>Instance</th>
+    <th>Tablet Alias</th>
+    <th>Timestamp</th>
   </tr>
   {{range $i, $recovery := .}}
   <tr>
     <td>{{$recovery.ID}}</td>
     <td>{{$recovery.AnalysisEntry.Analysis}}</td>
-    <td>{{$recovery.AnalysisEntry.AnalyzedInstanceKey}}</td>
+    <td>{{$recovery.AnalysisEntry.AnalyzedInstanceAlias}}</td>
+    <td>{{$recovery.RecoveryStartTimestamp}}</td>
   </tr>
   {{end}}
 </table>

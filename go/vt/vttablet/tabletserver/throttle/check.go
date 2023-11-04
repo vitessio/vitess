@@ -17,13 +17,10 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 const (
-	// DefaultAppName is the app name used by vitess when app doesn't indicate its name
-	DefaultAppName = "default"
-	vitessAppName  = "vitess"
-
 	selfCheckInterval = 250 * time.Millisecond
 )
 
@@ -90,7 +87,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 		statusCode = http.StatusTooManyRequests // 429
 		err = base.ErrThresholdExceeded
 
-		if !flags.LowPriority && !flags.ReadCheck && appName != vitessAppName {
+		if !flags.LowPriority && !flags.ReadCheck && throttlerapp.VitessName.Equals(appName) {
 			// low priority requests will henceforth be denied
 			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(metricName, true)
 		}
@@ -151,7 +148,7 @@ func (check *ThrottlerCheck) localCheck(ctx context.Context, metricName string) 
 	if err != nil {
 		return NoSuchMetricCheckResult
 	}
-	checkResult = check.Check(ctx, vitessAppName, storeType, storeName, "local", StandardCheckFlags)
+	checkResult = check.Check(ctx, throttlerapp.VitessName.String(), storeType, storeName, "local", StandardCheckFlags)
 
 	if checkResult.StatusCode == http.StatusOK {
 		check.throttler.markMetricHealthy(metricName)

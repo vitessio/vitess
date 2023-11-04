@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-CREATE TABLE IF NOT EXISTS _vt.schemacopy
+CREATE TABLE IF NOT EXISTS schemacopy
 (
     `table_schema`       varchar(64)     NOT NULL,
     `table_name`         varchar(64)     NOT NULL,

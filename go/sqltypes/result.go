@@ -99,7 +99,7 @@ func (result *Result) Copy() *Result {
 	if result.Fields != nil {
 		out.Fields = make([]*querypb.Field, len(result.Fields))
 		for i, f := range result.Fields {
-			out.Fields[i] = proto.Clone(f).(*querypb.Field)
+			out.Fields[i] = f.CloneVT()
 		}
 	}
 	if result.Rows != nil {

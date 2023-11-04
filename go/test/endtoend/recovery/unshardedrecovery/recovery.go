@@ -24,12 +24,14 @@ import (
 	"os/exec"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/recovery"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
@@ -91,16 +93,19 @@ func TestMainImpl(m *testing.M) {
 		}
 		localCluster.Keyspaces = append(localCluster.Keyspaces, *keyspace)
 
+		// Create a new init_db.sql file that sets up passwords for all users.
+		// Then we use a db-credentials-file with the passwords.
+		// TODO: We could have operated with empty password here. Create a separate test for --db-credentials-file functionality (@rsajwani)
 		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
+		// The original init_db.sql does not have any passwords. Here we update the init file with passwords
+		oldAlterTableMode := `SET GLOBAL old_alter_table = ON;`
+		sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(localCluster), oldAlterTableMode)
+		if err != nil {
+			return 1, err
+		}
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
-		// https://github.com/vitessio/vitess/issues/8315
-		oldAlterTableMode := `
-SET GLOBAL old_alter_table = ON;
-`
-		sql = sql + oldAlterTableMode
 		os.WriteFile(newInitDBFile, []byte(sql), 0666)
 
 		extraArgs := []string{"--db-credentials-file", dbCredentialFile}
@@ -125,7 +130,11 @@ SET GLOBAL old_alter_table = ON;
 			}
 			tablet.VttabletProcess.SupportsBackup = true
 
-			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+			mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+			if err != nil {
+				return 1, err
+			}
+			tablet.MysqlctlProcess = *mysqlctlProcess
 			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
 			tablet.MysqlctlProcess.ExtraArgs = extraArgs
 			proc, err := tablet.MysqlctlProcess.StartProcess()
@@ -176,34 +185,35 @@ SET GLOBAL old_alter_table = ON;
 }
 
 // TestRecoveryImpl does following
-// - create a shard with primary and replica1 only
-// - run InitShardPrimary
-// - insert some data
-// - take a backup
-// - insert more data on the primary
-// - take another backup
-// - create a recovery keyspace after first backup
-// - bring up tablet_replica2 in the new keyspace
-// - check that new tablet does not have data created after backup1
-// - create second recovery keyspace after second backup
-// - bring up tablet_replica3 in second keyspace
-// - check that new tablet has data created after backup1 but not data created after backup2
-// - check that vtgate queries work correctly
+// 1. create a shard with primary and replica1 only
+//   - run InitShardPrimary
+//   - insert some data
+//
+// 2. take a backup
+// 3.create a recovery keyspace after first backup
+//   - bring up tablet_replica2 in the new keyspace
+//   - check that new tablet has data from backup1
+//
+// 4. insert more data on the primary
+//
+// 5. take another backup
+// 6. create a recovery keyspace after second backup
+//   - bring up tablet_replica3 in the new keyspace
+//   - check that new tablet has data from backup2
+//
+// 7. check that vtgate queries work correctly
 func TestRecoveryImpl(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	defer tabletsTeardown()
 	verifyInitialReplication(t)
 
+	// take first backup of value = test1
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	assert.NoError(t, err)
 
 	backups := listBackups(t)
 	require.Equal(t, len(backups), 1)
 	assert.Contains(t, backups[0], replica1.Alias)
-
-	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
-	assert.NoError(t, err)
-	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
 
 	err = localCluster.VtctlclientProcess.ApplyVSchema(keyspaceName, vSchema)
 	assert.NoError(t, err)
@@ -212,15 +222,14 @@ func TestRecoveryImpl(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, output, "vt_insert_test")
 
-	recovery.RestoreTablet(t, localCluster, replica2, recoveryKS1, "0", keyspaceName, commonTabletArg)
+	// restore with latest backup
+	restoreTime := time.Now().UTC()
+	recovery.RestoreTablet(t, localCluster, replica2, recoveryKS1, "0", keyspaceName, commonTabletArg, restoreTime)
 
 	output, err = localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvVSchema", cell)
 	assert.NoError(t, err)
 	assert.Contains(t, output, keyspaceName)
 	assert.Contains(t, output, recoveryKS1)
-
-	err = localCluster.VtctlclientProcess.ExecuteCommand("GetSrvKeyspace", cell, keyspaceName)
-	assert.NoError(t, err)
 
 	output, err = localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetVSchema", recoveryKS1)
 	assert.NoError(t, err)
@@ -228,48 +237,65 @@ func TestRecoveryImpl(t *testing.T) {
 
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 1)
 
+	// verify that restored replica has value = test1
+	qr, err := replica2.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
+	assert.NoError(t, err)
+	assert.Equal(t, "test1", qr.Rows[0][0].ToString())
+
+	// insert new row on primary
+	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
+	assert.NoError(t, err)
+	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
+
 	// update the original row in primary
 	_, err = primary.VttabletProcess.QueryTablet("update vt_insert_test set msg = 'msgx1' where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
 
-	//verify that primary has new value
-	qr, err := primary.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
+	// verify that primary has new value
+	qr, err = primary.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
 	assert.Equal(t, "msgx1", qr.Rows[0][0].ToString())
 
-	//verify that restored replica has old value
-	qr, err = replica2.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
-	assert.NoError(t, err)
-	assert.Equal(t, "test1", qr.Rows[0][0].ToString())
+	// check that replica1, used for the backup, has the new value
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		qr, err = replica1.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
+		assert.NoError(t, err)
+		if qr.Rows[0][0].ToString() == "msgx1" {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			t.Error("timeout waiting for new value to be replicated on replica 1")
+			break
+		case <-ticker.C:
+		}
+	}
+
+	// take second backup of value = msgx1
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	assert.NoError(t, err)
 
-	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test3')", keyspaceName, true)
-	assert.NoError(t, err)
-	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 3)
-
-	recovery.RestoreTablet(t, localCluster, replica3, recoveryKS2, "0", keyspaceName, commonTabletArg)
+	// restore to first backup
+	recovery.RestoreTablet(t, localCluster, replica3, recoveryKS2, "0", keyspaceName, commonTabletArg, restoreTime)
 
 	output, err = localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetVSchema", recoveryKS2)
 	assert.NoError(t, err)
 	assert.Contains(t, output, "vt_insert_test")
 
-	cluster.VerifyRowsInTablet(t, replica3, keyspaceName, 2)
+	// only one row from first backup
+	cluster.VerifyRowsInTablet(t, replica3, keyspaceName, 1)
 
-	// update the original row in primary
-	_, err = primary.VttabletProcess.QueryTablet("update vt_insert_test set msg = 'msgx2' where id = 1", keyspaceName, true)
-	assert.NoError(t, err)
-
-	//verify that primary has new value
-	qr, err = primary.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
-	assert.NoError(t, err)
-	assert.Equal(t, "msgx2", qr.Rows[0][0].ToString())
-
-	//verify that restored replica has old value
+	//verify that restored replica has value = test1
 	qr, err = replica3.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
-	assert.Equal(t, "msgx1", qr.Rows[0][0].ToString())
+	assert.Equal(t, "test1", qr.Rows[0][0].ToString())
 
 	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.TabletTypesToWait = "REPLICA"
@@ -277,14 +303,10 @@ func TestRecoveryImpl(t *testing.T) {
 	localCluster.VtgateGrpcPort = vtgateInstance.GrpcPort
 	assert.NoError(t, err)
 	defer vtgateInstance.TearDown()
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1)
-	assert.NoError(t, err)
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 1)
-	assert.NoError(t, err)
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", recoveryKS1, shardName), 1)
-	assert.NoError(t, err)
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", recoveryKS2, shardName), 1)
-	assert.NoError(t, err)
+	assert.NoError(t, vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 30*time.Second))
+	assert.NoError(t, vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 1, 30*time.Second))
+	assert.NoError(t, vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", recoveryKS1, shardName), 1, 30*time.Second))
+	assert.NoError(t, vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", recoveryKS2, shardName), 1, 30*time.Second))
 
 	// Build vtgate grpc connection
 	grpcAddress := fmt.Sprintf("%s:%d", localCluster.Hostname, localCluster.VtgateGrpcPort)
@@ -293,27 +315,27 @@ func TestRecoveryImpl(t *testing.T) {
 	defer vtgateConn.Close()
 	session := vtgateConn.Session("@replica", nil)
 
-	//check that vtgate doesn't route queries to new tablet
-	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(3)")
-	recovery.VerifyQueriesUsingVtgate(t, session, "select msg from vt_insert_test where id = 1", `VARCHAR("msgx2")`)
+	// check that vtgate doesn't route queries to new tablet
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select msg from vt_insert_test where id = 1", `VARCHAR("msgx1")`)
 	recovery.VerifyQueriesUsingVtgate(t, session, fmt.Sprintf("select count(*) from %s.vt_insert_test", recoveryKS1), "INT64(1)")
 	recovery.VerifyQueriesUsingVtgate(t, session, fmt.Sprintf("select msg from %s.vt_insert_test where id = 1", recoveryKS1), `VARCHAR("test1")`)
-	recovery.VerifyQueriesUsingVtgate(t, session, fmt.Sprintf("select count(*) from %s.vt_insert_test", recoveryKS2), "INT64(2)")
-	recovery.VerifyQueriesUsingVtgate(t, session, fmt.Sprintf("select msg from %s.vt_insert_test where id = 1", recoveryKS2), `VARCHAR("msgx1")`)
+	recovery.VerifyQueriesUsingVtgate(t, session, fmt.Sprintf("select count(*) from %s.vt_insert_test", recoveryKS2), "INT64(1)")
+	recovery.VerifyQueriesUsingVtgate(t, session, fmt.Sprintf("select msg from %s.vt_insert_test where id = 1", recoveryKS2), `VARCHAR("test1")`)
 
 	// check that new keyspace is accessible with 'use ks'
 	cluster.ExecuteQueriesUsingVtgate(t, session, "use "+recoveryKS1+"@replica")
 	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(1)")
 
 	cluster.ExecuteQueriesUsingVtgate(t, session, "use "+recoveryKS2+"@replica")
-	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(1)")
 
 	// check that new tablet is accessible with use `ks:shard`
 	cluster.ExecuteQueriesUsingVtgate(t, session, "use `"+recoveryKS1+":0@replica`")
 	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(1)")
 
 	cluster.ExecuteQueriesUsingVtgate(t, session, "use `"+recoveryKS2+":0@replica`")
-	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(1)")
 }
 
 // verifyInitialReplication will create schema in primary, insert some data to primary and verify the same data in replica.

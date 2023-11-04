@@ -19,7 +19,6 @@ package servenv
 import (
 	"fmt"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -49,7 +48,12 @@ func Run(port int) {
 	if err != nil {
 		log.Exit(err)
 	}
-	go http.Serve(l, nil)
+	go func() {
+		err := HTTPServe(l)
+		if err != nil {
+			log.Errorf("http serve returned unexpected error: %v", err)
+		}
+	}()
 
 	ExitChan = make(chan os.Signal, 1)
 	signal.Notify(ExitChan, syscall.SIGTERM, syscall.SIGINT)

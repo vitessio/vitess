@@ -25,11 +25,12 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/flagutil"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -175,30 +176,30 @@ func positionCmd(subFlags *pflag.FlagSet, args []string) error {
 		return fmt.Errorf("not enough arguments for position operation")
 	}
 
-	pos1, err := mysql.DecodePosition(args[1])
+	pos1, err := replication.DecodePosition(args[1])
 	if err != nil {
 		return err
 	}
 
 	switch args[0] {
 	case "equal":
-		pos2, err := mysql.DecodePosition(args[2])
+		pos2, err := replication.DecodePosition(args[2])
 		if err != nil {
 			return err
 		}
 		fmt.Println(pos1.Equal(pos2))
 	case "at_least":
-		pos2, err := mysql.DecodePosition(args[2])
+		pos2, err := replication.DecodePosition(args[2])
 		if err != nil {
 			return err
 		}
 		fmt.Println(pos1.AtLeast(pos2))
 	case "append":
-		gtid, err := mysql.DecodeGTID(args[2])
+		gtid, err := replication.DecodeGTID(args[2])
 		if err != nil {
 			return err
 		}
-		fmt.Println(mysql.AppendGTID(pos1, gtid))
+		fmt.Println(replication.AppendGTID(pos1, gtid))
 	}
 
 	return nil

@@ -17,6 +17,8 @@ limitations under the License.
 package operators
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -63,8 +65,8 @@ type (
 
 var _ ops.Operator = (*QueryGraph)(nil)
 
-// Introduces implements the TableIDIntroducer interface
-func (qg *QueryGraph) Introduces() semantics.TableSet {
+// Introduces implements the tableIDIntroducer interface
+func (qg *QueryGraph) introducesTableID() semantics.TableSet {
 	var ts semantics.TableSet
 	for _, table := range qg.Tables {
 		ts = ts.Merge(table.ID)
@@ -90,26 +92,6 @@ func newQueryGraph() *QueryGraph {
 	return &QueryGraph{}
 }
 
-func (qg *QueryGraph) collectPredicates(ctx *plancontext.PlanningContext, sel *sqlparser.Select) error {
-	predicates := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
-
-	for _, predicate := range predicates {
-		err := qg.collectPredicate(ctx, predicate)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (qg *QueryGraph) getPredicateByDeps(ts semantics.TableSet) ([]sqlparser.Expr, bool) {
-	for _, join := range qg.innerJoins {
-		if join.deps == ts {
-			return join.exprs, true
-		}
-	}
-	return nil, false
-}
 func (qg *QueryGraph) addJoinPredicates(ctx *plancontext.PlanningContext, ts semantics.TableSet, predicate sqlparser.Expr) {
 	for _, join := range qg.innerJoins {
 		if join.deps == ts {
@@ -128,7 +110,7 @@ func (qg *QueryGraph) addJoinPredicates(ctx *plancontext.PlanningContext, ts sem
 	})
 }
 
-func (qg *QueryGraph) collectPredicate(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) error {
+func (qg *QueryGraph) collectPredicate(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) {
 	deps := ctx.SemTable.RecursiveDeps(predicate)
 	switch deps.NumberOfTables() {
 	case 0:
@@ -142,7 +124,6 @@ func (qg *QueryGraph) collectPredicate(ctx *plancontext.PlanningContext, predica
 	default:
 		qg.addJoinPredicates(ctx, deps, predicate)
 	}
-	return nil
 }
 
 func (qg *QueryGraph) addToSingleTable(ctx *plancontext.PlanningContext, table semantics.TableSet, predicate sqlparser.Expr) bool {
@@ -182,7 +163,7 @@ func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr
 }
 
 // Clone implements the Operator interface
-func (qg *QueryGraph) Clone(inputs []ops.Operator) ops.Operator {
+func (qg *QueryGraph) Clone([]ops.Operator) ops.Operator {
 	result := &QueryGraph{
 		Tables:     nil,
 		innerJoins: nil,
@@ -195,12 +176,13 @@ func (qg *QueryGraph) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
+func (qg *QueryGraph) GetOrdering() ([]ops.OrderBy, error) {
+	return nil, nil
+}
+
 func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
-		err := qg.collectPredicate(ctx, e)
-		if err != nil {
-			return nil, err
-		}
+		qg.collectPredicate(ctx, e)
 	}
 	return qg, nil
 }
@@ -214,4 +196,15 @@ func (qt *QueryTable) Clone() *QueryTable {
 		Predicates:  qt.Predicates,
 		IsInfSchema: qt.IsInfSchema,
 	}
+}
+
+func (qg *QueryGraph) tableNames() (tables []string) {
+	for _, table := range qg.Tables {
+		tables = append(tables, sqlparser.String(table.Table))
+	}
+	return
+}
+
+func (qg *QueryGraph) ShortDescription() string {
+	return strings.Join(qg.tableNames(), ", ")
 }
