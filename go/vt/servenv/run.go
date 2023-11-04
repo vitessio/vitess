@@ -74,11 +74,6 @@ func Run(bindAddress string, port int) {
 
 	log.Info("Shutting down gracefully")
 	fireOnCloseHooks(onCloseTimeout)
-}
-
-// Close runs any registered exit hooks in parallel.
-func Close() {
-	onCloseHooks.Fire()
 	ListeningURL = url.URL{}
 }
 
