@@ -66,7 +66,6 @@ type QueryExecutor struct {
 
 const (
 	streamRowsSize           = 256
-	queryTimeoutMethodMySQL  = "mysql"
 	queryTimeoutMysqlMaxWait = time.Second
 )
 
