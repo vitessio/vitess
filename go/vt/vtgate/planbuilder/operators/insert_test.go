@@ -29,8 +29,8 @@ import (
 
 func TestModifyForAutoinc(t *testing.T) {
 	var testCases []string = []string{
-		"INSERT INTO seqtest (customer_id, order_date, total_amount, string) VALUES (11, '2023-09-02', 200.00);",
-		"INSERT INTO seqtest (customer_id, order_date, total_amount) VALUES (11, '2023-09-02', 200.00, 'test);",
+		"insert into test (customer_id, order_date, total_amount, string) values (11, '2023-09-02', 200.00);",
+		"insert into test (customer_id, order_date, total_amount) values (11, '2023-09-02', 200.00, 'test');",
 	}
 	for _, tc := range testCases {
 		t.Run(tc, func(t *testing.T) {
