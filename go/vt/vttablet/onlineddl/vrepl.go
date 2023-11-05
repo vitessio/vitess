@@ -168,7 +168,7 @@ func NewVRepl(workflow string,
 	}
 }
 
-// readAutoIncrement reads the AUTO_INCREMENT vlaue, if any, for a give ntable
+// readAutoIncrement reads the AUTO_INCREMENT value, if any, for a give ntable
 func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (autoIncrement uint64, err error) {
 	query, err := sqlparser.ParseAndBind(sqlGetAutoIncrement,
 		sqltypes.StringBindVariable(v.dbName),

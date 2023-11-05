@@ -238,7 +238,7 @@ func (tsv *TabletServer) loadQueryTimeout() time.Duration {
 
 // onlineDDLExecutorToggleTableBuffer is called by onlineDDLExecutor as a callback function. onlineDDLExecutor
 // uses it to start/stop query buffering for a given table.
-// It is onlineDDLExecutor's responsibility to make sure beffering is stopped after some definite amount of time.
+// It is onlineDDLExecutor's responsibility to make sure buffering is stopped after some definite amount of time.
 // There are two layers to buffering/unbuffering:
 //  1. the creation and destruction of a QueryRuleSource. The existence of such source affects query plan rules
 //     for all new queries (see Execute() function and call to GetPlan())

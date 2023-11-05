@@ -151,7 +151,7 @@ func (txs *TxSerializer) Wait(ctx context.Context, key, table string) (done Done
 	if err != nil {
 		if waited {
 			// Waiting failed early e.g. due a canceled context and we did NOT get the
-			// slot. Call "done" now because we don'txs return it to the caller.
+			// slot. Call "done" now because we do not return it to the caller.
 			txs.unlockLocked(key, false /* returnSlot */)
 		}
 		return nil, waited, err

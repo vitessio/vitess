@@ -565,7 +565,7 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 		}
 		finished <- true
 	}()
-	// Wait until the ticks are stopped or 2 seonds have expired.
+	// Wait until the ticks are stopped or 2 seconds have expired.
 	select {
 	case <-finished:
 		return

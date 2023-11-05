@@ -72,7 +72,7 @@ var waitRetryTime = 1 * time.Second
 // How frequently vcopier will update _vt.vreplication rows_copied
 var rowsCopiedUpdateInterval = 30 * time.Second
 
-// How frequntly vcopier will garbage collect old copy_state rows.
+// How frequently vcopier will garbage collect old copy_state rows.
 // By default, do it in between every 2nd and 3rd rows copied update.
 var copyStateGCInterval = (rowsCopiedUpdateInterval * 3) - (rowsCopiedUpdateInterval / 2)
 
@@ -107,7 +107,7 @@ type Engine struct {
 	throttlerClient *throttle.Client
 
 	// This should only be set in Test Engines in order to short
-	// curcuit functions as needed in unit tests. It's automatically
+	// circuit functions as needed in unit tests. It's automatically
 	// enabled in NewSimpleTestEngine. This should NOT be used in
 	// production.
 	shortcircuit bool
@@ -143,7 +143,7 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mys
 
 // InitDBConfig should be invoked after the db name is computed.
 func (vre *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	// If we're already initilized, it's a test engine. Ignore the call.
+	// If we're already initialized, it's a test engine. Ignore the call.
 	if vre.dbClientFactoryFiltered != nil && vre.dbClientFactoryDba != nil {
 		return
 	}
@@ -173,7 +173,7 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 }
 
 // NewSimpleTestEngine creates a new Engine for testing that can
-// also short curcuit functions as needed.
+// also short circuit functions as needed.
 func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactoryFiltered func() binlogplayer.DBClient, dbClientFactoryDba func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
 	vre := &Engine{
 		controllers:             make(map[int32]*controller),
@@ -262,7 +262,7 @@ func (vre *Engine) retry(ctx context.Context, err error) {
 		}
 		if err := vre.openLocked(ctx); err == nil {
 			// Don't invoke cancelRetry because openLocked
-			// will hold on to this context for later cancelation.
+			// will hold on to this context for later cancellation.
 			vre.cancelRetry = nil
 			vre.mu.Unlock()
 			return

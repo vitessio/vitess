@@ -102,7 +102,7 @@ func testPlayerCopyCharPK(t *testing.T) {
 	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time should be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -332,7 +332,7 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time should be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -811,7 +811,7 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time should be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -979,7 +979,7 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 		"update src1 set id2=10 where id1=5",
 		// move row from within to outside range.
 		"update src1 set id1=12 where id1=6",
-		// move row from outside to witihn range.
+		// move row from outside to within range.
 		"update src1 set id1=4 where id1=11",
 		// modify the copied table.
 		"update copied set val='bbb' where id=1",

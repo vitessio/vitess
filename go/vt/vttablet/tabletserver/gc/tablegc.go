@@ -65,7 +65,7 @@ func registerGCFlags(fs *pflag.FlagSet) {
 	// purgeReentranceInterval marks the interval between searching tables to purge
 	fs.DurationVar(&purgeReentranceInterval, "gc_purge_check_interval", purgeReentranceInterval, "Interval between purge discovery checks")
 	// gcLifecycle is the sequence of steps the table goes through in the process of getting dropped
-	fs.StringVar(&gcLifecycle, "table_gc_lifecycle", gcLifecycle, "States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implcitly always included)")
+	fs.StringVar(&gcLifecycle, "table_gc_lifecycle", gcLifecycle, "States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implicitly always included)")
 }
 
 var (
@@ -120,7 +120,7 @@ type TableGC struct {
 	lifecycleStates map[schema.TableGCState]bool
 }
 
-// Status published some status valus from the collector
+// Status published some status values from the collector
 type Status struct {
 	Keyspace string
 	Shard    string
