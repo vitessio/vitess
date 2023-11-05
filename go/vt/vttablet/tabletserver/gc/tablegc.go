@@ -575,7 +575,7 @@ func (collector *TableGC) transitionTable(ctx context.Context, transition *trans
 
 	// when we transition into PURGE, that means we want to begin purging immediately
 	// when we transition into DROP, that means we want to drop immediately
-	// Thereforce the default timestamp is Now
+	// Therefore the default timestamp is Now
 	t := time.Now().UTC()
 	switch transition.toGCState {
 	case schema.EvacTableGCState:
@@ -601,7 +601,7 @@ func (collector *TableGC) transitionTable(ctx context.Context, transition *trans
 	return nil
 }
 
-// addPurgingTable adds a table to the list of droppingpurging (or pending purging) tables
+// addPurgingTable adds a table to the list of dropping purging (or pending purging) tables
 func (collector *TableGC) addPurgingTable(tableName string) (added bool) {
 	if _, ok := collector.lifecycleStates[schema.PurgeTableGCState]; !ok {
 		// PURGE is not a handled state. We don't want to purge this table or any other table,

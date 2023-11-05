@@ -168,7 +168,7 @@ func (conn *snapshotConn) startSnapshotWithConsistentGTID(ctx context.Context) (
 	return replication.EncodePosition(mpos), nil
 }
 
-// Close rollsback any open transactions and closes the connection.
+// Close rolls back any open transactions and closes the connection.
 func (conn *snapshotConn) Close() {
 	_, _ = conn.ExecuteFetch("rollback", 1, false)
 	conn.Conn.Close()

@@ -51,7 +51,7 @@ import (
 //   - Waiting transactions are unblocked if their context is done.
 //   - Both the local queue (per row range) and global queue (whole process) are
 //     limited to avoid that queued transactions can consume the full capacity
-//     of vttablet. This is important if the capaciy is finite. For example, the
+//     of vttablet. This is important if the capacity is finite. For example, the
 //     number of RPCs in flight could be limited by the RPC subsystem.
 type TxSerializer struct {
 	env tabletenv.Env

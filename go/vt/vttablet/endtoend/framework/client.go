@@ -134,7 +134,7 @@ func (client *QueryClient) CommitPrepared(dtid string) error {
 	return client.server.CommitPrepared(client.ctx, client.target, dtid)
 }
 
-// RollbackPrepared rollsback a prepared transaction.
+// RollbackPrepared rolls back a prepared transaction.
 func (client *QueryClient) RollbackPrepared(dtid string, originalID int64) error {
 	return client.server.RollbackPrepared(client.ctx, client.target, dtid, originalID)
 }

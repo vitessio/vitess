@@ -242,7 +242,7 @@ func (tsv *TabletServer) loadQueryTimeout() time.Duration {
 // There are two layers to buffering/unbuffering:
 //  1. the creation and destruction of a QueryRuleSource. The existence of such source affects query plan rules
 //     for all new queries (see Execute() function and call to GetPlan())
-//  2. affecting already existing rules: a Rule has a concext.WithCancel, that is cancelled by onlineDDLExecutor
+//  2. affecting already existing rules: a Rule has a context.WithCancel, that is cancelled by onlineDDLExecutor
 func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(bufferingCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool) {
 	queryRuleSource := fmt.Sprintf("onlineddl/%s", tableName)
 
