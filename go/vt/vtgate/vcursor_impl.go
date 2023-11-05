@@ -1047,6 +1047,14 @@ func (vc *vcursorImpl) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_Forei
 	return ks.ForeignKeyMode, nil
 }
 
+func (vc *vcursorImpl) KeyspaceError(keyspace string) error {
+	ks := vc.vschema.Keyspaces[keyspace]
+	if ks == nil {
+		return vterrors.VT14004(keyspace)
+	}
+	return ks.Error
+}
+
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)

@@ -222,7 +222,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "alter table `user` add index a (id)"
+        "Query": "alter table `user` add key a (id)"
       },
       "TablesUsed": [
         "user.user"
@@ -241,7 +241,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "alter table unknown add index a (id)"
+        "Query": "alter table unknown add key a (id)"
       },
       "TablesUsed": [
         "main.unknown"

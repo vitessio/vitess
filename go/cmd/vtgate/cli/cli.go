@@ -134,7 +134,6 @@ func run(cmd *cobra.Command, args []string) error {
 	defer exit.Recover()
 
 	servenv.Init()
-	defer servenv.Close()
 
 	ts := topo.Open()
 	defer ts.Close()

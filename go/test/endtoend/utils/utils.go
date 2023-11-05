@@ -253,6 +253,33 @@ func WaitForAuthoritative(t *testing.T, ks, tbl string, readVSchema func() (*int
 	}
 }
 
+// WaitForKsError waits for the ks error field to be populated and returns it.
+func WaitForKsError(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string) string {
+	timeout := time.After(60 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("schema tracking did not find error in '%s'", ks)
+			return ""
+		default:
+			time.Sleep(1 * time.Second)
+			res, err := vtgateProcess.ReadVSchema()
+			require.NoError(t, err, res)
+			kss := convertToMap(*res)["keyspaces"]
+			ksMap := convertToMap(convertToMap(kss)[ks])
+			ksErr, fieldPresent := ksMap["error"]
+			if !fieldPresent {
+				break
+			}
+			errString, isErr := ksErr.(string)
+			if !isErr {
+				break
+			}
+			return errString
+		}
+	}
+}
+
 // WaitForColumn waits for a table's column to be present
 func WaitForColumn(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
 	timeout := time.After(60 * time.Second)

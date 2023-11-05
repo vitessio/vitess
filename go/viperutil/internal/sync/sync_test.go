@@ -93,7 +93,10 @@ func TestWatchConfig(t *testing.T) {
 
 	sv := vipersync.New()
 	A := viperutil.Configure("a", viperutil.Options[int]{Dynamic: true})
-	B := viperutil.Configure("b", viperutil.Options[int]{Dynamic: true})
+	B := viperutil.Configure("b", viperutil.Options[int]{FlagName: "b", Dynamic: true, Default: 5})
+
+	// Check that default values are actually used
+	require.Equal(t, B.Get(), B.Default())
 
 	A.(*value.Dynamic[int]).Base.BoundGetFunc = vipersync.AdaptGetter("a", func(v *viper.Viper) func(key string) int {
 		return v.GetInt

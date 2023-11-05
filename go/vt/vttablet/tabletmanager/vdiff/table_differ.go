@@ -229,11 +229,13 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 		}
 		sourceTopoServer = extTS
 	}
+	tabletPickerOptions := discovery.TabletPickerOptions{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		sourceErr = td.forEachSource(func(source *migrationSource) error {
-			sourceTablet, err := pickTablet(ctx, sourceTopoServer, sourceCells, td.wd.ct.vde.thisTablet.Alias.Cell, td.wd.ct.sourceKeyspace, source.shard, td.wd.opts.PickerOptions.TabletTypes)
+			sourceTablet, err := td.pickTablet(ctx, sourceTopoServer, sourceCells, td.wd.ct.sourceKeyspace,
+				source.shard, td.wd.opts.PickerOptions.TabletTypes, tabletPickerOptions)
 			if err != nil {
 				return err
 			}
@@ -245,8 +247,15 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		targetTablet, targetErr = pickTablet(ctx, td.wd.ct.ts, targetCells, td.wd.ct.vde.thisTablet.Alias.Cell, td.wd.ct.vde.thisTablet.Keyspace,
-			td.wd.ct.vde.thisTablet.Shard, td.wd.opts.PickerOptions.TabletTypes)
+		if td.wd.ct.workflowType == binlogdatapb.VReplicationWorkflowType_Reshard {
+			// For resharding, the target shards could be non-serving if traffic has already been switched once.
+			// When shards are created their IsPrimaryServing attribute is set to true. However, when the traffic is switched
+			// it is set to false for the shards we are switching from. We don't have a way to know if we have
+			// switched or not, so we just include non-serving tablets for all reshards.
+			tabletPickerOptions.IncludeNonServingTablets = true
+		}
+		targetTablet, targetErr = td.pickTablet(ctx, td.wd.ct.ts, targetCells, td.wd.ct.vde.thisTablet.Keyspace,
+			td.wd.ct.vde.thisTablet.Shard, td.wd.opts.PickerOptions.TabletTypes, tabletPickerOptions)
 		if targetErr != nil {
 			return
 		}
@@ -263,8 +272,11 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 	return targetErr
 }
 
-func pickTablet(ctx context.Context, ts *topo.Server, cells []string, localCell, keyspace, shard, tabletTypes string) (*topodatapb.Tablet, error) {
-	tp, err := discovery.NewTabletPicker(ctx, ts, cells, localCell, keyspace, shard, tabletTypes, discovery.TabletPickerOptions{})
+func (td *tableDiffer) pickTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace,
+	shard, tabletTypes string, options discovery.TabletPickerOptions) (*topodatapb.Tablet, error) {
+
+	tp, err := discovery.NewTabletPicker(ctx, ts, cells, td.wd.ct.vde.thisTablet.Alias.Cell, keyspace,
+		shard, tabletTypes, options)
 	if err != nil {
 		return nil, err
 	}
