@@ -7632,11 +7632,23 @@ func TestKeywordsCorrectlyParse(t *testing.T) {
 		"SELECT %s.c FROM t",
 		"ALTER TABLE t DROP CONSTRAINT %s",
 		"ALTER TABLE t DROP CHECK %s",
+		"ALTER TABLE t DROP COLUMN %s",
+	}
+
+	multikeyword_tests := []string{
+		"ALTER TABLE t RENAME COLUMN %s TO %s",
 	}
 
 	for _, kw := range correctlyDoParse {
 		for _, query := range tests {
 			test := fmt.Sprintf(query, kw)
+			t.Run(test, func(t *testing.T) {
+				_, err := Parse(test)
+				assert.NoError(t, err)
+			})
+		}
+		for _, query := range multikeyword_tests {
+			test := fmt.Sprintf(query, kw, kw)
 			t.Run(test, func(t *testing.T) {
 				_, err := Parse(test)
 				assert.NoError(t, err)

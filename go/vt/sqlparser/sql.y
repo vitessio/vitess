@@ -4589,11 +4589,23 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr, ColumnAction: DropStr, Column: NewColIdent(string($3))}
   }
+| DROP column_opt all_non_reserved
+  {
+    $$ = &DDL{Action: AlterStr, ColumnAction: DropStr, Column: NewColIdent(string($3))}
+  }
 | RENAME COLUMN ID to_or_as ID
   {
     $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
   }
-| RENAME COLUMN non_reserved_keyword to_or_as ID
+| RENAME COLUMN all_non_reserved to_or_as ID
+  {
+    $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
+  }
+| RENAME COLUMN ID to_or_as all_non_reserved
+  {
+    $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
+  }
+| RENAME COLUMN all_non_reserved to_or_as all_non_reserved
   {
     $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
   }
