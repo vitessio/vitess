@@ -95,9 +95,9 @@ func (fz *fuzzer) generateQuery() []string {
 	if val < fz.insertShare {
 		switch fz.queryFormat {
 		case OlapSQLQueries, SQLQueries:
-			return []string{fz.generateInsertDMLQuery()}
+			return []string{fz.generateInsertDMLQuery(getInsertType())}
 		case PreparedStatmentQueries:
-			return fz.getPreparedInsertQueries()
+			return fz.getPreparedInsertQueries(getInsertType())
 		default:
 			panic("Unknown query type")
 		}
@@ -122,22 +122,26 @@ func (fz *fuzzer) generateQuery() []string {
 	}
 }
 
+func getInsertType() string {
+	return []string{"insert", "replace"}[rand.Intn(2)]
+}
+
 // generateInsertDMLQuery generates an INSERT query from the parameters for the fuzzer.
-func (fz *fuzzer) generateInsertDMLQuery() string {
+func (fz *fuzzer) generateInsertDMLQuery(insertType string) string {
 	tableId := rand.Intn(len(fkTables))
 	idValue := 1 + rand.Intn(fz.maxValForId)
 	tableName := fkTables[tableId]
 	if tableName == "fk_t20" {
 		colValue := rand.Intn(1 + fz.maxValForCol)
 		col2Value := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, col, col2) values (%v, %v, %v)", tableName, idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value))
+		return fmt.Sprintf("%s into %v (id, col, col2) values (%v, %v, %v)", insertType, tableName, idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value))
 	} else if isMultiColFkTable(tableName) {
 		colaValue := rand.Intn(1 + fz.maxValForCol)
 		colbValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, cola, colb) values (%v, %v, %v)", tableName, idValue, convertIntValueToString(colaValue), convertIntValueToString(colbValue))
+		return fmt.Sprintf("%s into %v (id, cola, colb) values (%v, %v, %v)", insertType, tableName, idValue, convertIntValueToString(colaValue), convertIntValueToString(colbValue))
 	} else {
 		colValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, col) values (%v, %v)", tableName, idValue, convertIntValueToString(colValue))
+		return fmt.Sprintf("%s into %v (id, col) values (%v, %v)", insertType, tableName, idValue, convertIntValueToString(colValue))
 	}
 }
 
@@ -332,7 +336,7 @@ func (fz *fuzzer) getPreparedDeleteQueries() []string {
 }
 
 // getPreparedInsertQueries gets the list of queries to run for executing an INSERT using prepared statements.
-func (fz *fuzzer) getPreparedInsertQueries() []string {
+func (fz *fuzzer) getPreparedInsertQueries(insertType string) []string {
 	tableId := rand.Intn(len(fkTables))
 	idValue := 1 + rand.Intn(fz.maxValForId)
 	tableName := fkTables[tableId]
@@ -340,7 +344,7 @@ func (fz *fuzzer) getPreparedInsertQueries() []string {
 		colValue := rand.Intn(1 + fz.maxValForCol)
 		col2Value := rand.Intn(1 + fz.maxValForCol)
 		return []string{
-			"prepare stmt_insert from 'insert into fk_t20 (id, col, col2) values (?, ?, ?)'",
+			fmt.Sprintf("prepare stmt_insert from '%s into fk_t20 (id, col, col2) values (?, ?, ?)'", insertType),
 			fmt.Sprintf("SET @id = %v", idValue),
 			fmt.Sprintf("SET @col = %v", convertIntValueToString(colValue)),
 			fmt.Sprintf("SET @col2 = %v", convertIntValueToString(col2Value)),
@@ -350,7 +354,7 @@ func (fz *fuzzer) getPreparedInsertQueries() []string {
 		colaValue := rand.Intn(1 + fz.maxValForCol)
 		colbValue := rand.Intn(1 + fz.maxValForCol)
 		return []string{
-			fmt.Sprintf("prepare stmt_insert from 'insert into %v (id, cola, colb) values (?, ?, ?)'", tableName),
+			fmt.Sprintf("prepare stmt_insert from '%s into %v (id, cola, colb) values (?, ?, ?)'", insertType, tableName),
 			fmt.Sprintf("SET @id = %v", idValue),
 			fmt.Sprintf("SET @cola = %v", convertIntValueToString(colaValue)),
 			fmt.Sprintf("SET @colb = %v", convertIntValueToString(colbValue)),
@@ -359,7 +363,7 @@ func (fz *fuzzer) getPreparedInsertQueries() []string {
 	} else {
 		colValue := rand.Intn(1 + fz.maxValForCol)
 		return []string{
-			fmt.Sprintf("prepare stmt_insert from 'insert into %v (id, col) values (?, ?)'", tableName),
+			fmt.Sprintf("prepare stmt_insert from '%s into %v (id, col) values (?, ?)'", insertType, tableName),
 			fmt.Sprintf("SET @id = %v", idValue),
 			fmt.Sprintf("SET @col = %v", convertIntValueToString(colValue)),
 			"execute stmt_insert using @id, @col",
@@ -407,7 +411,7 @@ func (fz *fuzzer) getPreparedUpdateQueries() []string {
 func (fz *fuzzer) generateParameterizedQuery() (query string, params []any) {
 	val := rand.Intn(fz.insertShare + fz.updateShare + fz.deleteShare)
 	if val < fz.insertShare {
-		return fz.generateParameterizedInsertQuery()
+		return fz.generateParameterizedInsertQuery(getInsertType())
 	}
 	if val < fz.insertShare+fz.updateShare {
 		return fz.generateParameterizedUpdateQuery()
@@ -416,21 +420,21 @@ func (fz *fuzzer) generateParameterizedQuery() (query string, params []any) {
 }
 
 // generateParameterizedInsertQuery generates a parameterized INSERT query for the query format PreparedStatementPacket.
-func (fz *fuzzer) generateParameterizedInsertQuery() (query string, params []any) {
+func (fz *fuzzer) generateParameterizedInsertQuery(insertType string) (query string, params []any) {
 	tableId := rand.Intn(len(fkTables))
 	idValue := 1 + rand.Intn(fz.maxValForId)
 	tableName := fkTables[tableId]
 	if tableName == "fk_t20" {
 		colValue := rand.Intn(1 + fz.maxValForCol)
 		col2Value := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, col, col2) values (?, ?, ?)", tableName), []any{idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value)}
+		return fmt.Sprintf("%s into %v (id, col, col2) values (?, ?, ?)", insertType, tableName), []any{idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value)}
 	} else if isMultiColFkTable(tableName) {
 		colaValue := rand.Intn(1 + fz.maxValForCol)
 		colbValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, cola, colb) values (?, ?, ?)", tableName), []any{idValue, convertIntValueToString(colaValue), convertIntValueToString(colbValue)}
+		return fmt.Sprintf("%s into %v (id, cola, colb) values (?, ?, ?)", insertType, tableName), []any{idValue, convertIntValueToString(colaValue), convertIntValueToString(colbValue)}
 	} else {
 		colValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, col) values (?, ?)", tableName), []any{idValue, convertIntValueToString(colValue)}
+		return fmt.Sprintf("%s into %v (id, col) values (?, ?)", insertType, tableName), []any{idValue, convertIntValueToString(colValue)}
 	}
 }
 
