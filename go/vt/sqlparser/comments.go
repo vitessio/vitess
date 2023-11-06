@@ -17,11 +17,13 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -304,6 +306,54 @@ func (c *ParsedComments) GetMySQLSetVarValue(key string) string {
 	return ""
 }
 
+// SetMySQLSetVarValue updates or sets the value of the given variable as part of a /*+ SET_VAR() */ MySQL optimizer hint.
+func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) {
+	if c == nil {
+		c = &ParsedComments{
+			comments: Comments{},
+		}
+	}
+	for idx, commentStr := range c.comments {
+		if commentStr[0:3] != queryOptimizerPrefix {
+			continue
+		}
+
+		finalComment := "/*+"
+		keyPresent := false
+		pos := 4
+		for pos < len(commentStr) {
+			finalPos, ohNameStart, ohNameEnd, ohContentStart, ohContentEnd := getOptimizerHint(pos, commentStr)
+			pos = finalPos + 1
+			if ohContentEnd == -1 {
+				break
+			}
+			ohName := commentStr[ohNameStart:ohNameEnd]
+			ohContent := commentStr[ohContentStart:ohContentEnd]
+			if strings.EqualFold(strings.TrimSpace(ohName), OptimizerHintSetVar) {
+				setVarName, _, isValid := strings.Cut(ohContent, "=")
+				if !isValid || !strings.EqualFold(strings.TrimSpace(setVarName), key) {
+					finalComment += fmt.Sprintf(" %v(%v)", ohName, ohContent)
+					continue
+				}
+				if strings.EqualFold(strings.TrimSpace(setVarName), key) {
+					keyPresent = true
+					finalComment += fmt.Sprintf(" %v(%v=%v)", ohName, strings.TrimSpace(setVarName), value)
+				}
+			} else {
+				finalComment += fmt.Sprintf(" %v(%v)", ohName, ohContent)
+			}
+		}
+		if !keyPresent {
+			finalComment += fmt.Sprintf(" %v(%v=%v)", OptimizerHintSetVar, key, value)
+		}
+
+		finalComment += " */"
+		c.comments[idx] = finalComment
+		return
+	}
+	c.comments = append(c.comments, fmt.Sprintf("/*+ %v(%v=%v) */", OptimizerHintSetVar, key, value))
+}
+
 func getOptimizerHint(initialPos int, commentStr string) (pos int, ohNameStart int, ohNameEnd int, ohContentStart int, ohContentEnd int) {
 	ohContentEnd = -1
 	pos = skipBlanks(initialPos, commentStr)
@@ -453,6 +503,21 @@ func IgnoreMaxMaxMemoryRowsDirective(stmt Statement) bool {
 // AllowScatterDirective returns true if the allow scatter override is set to true
 func AllowScatterDirective(stmt Statement) bool {
 	return checkDirective(stmt, DirectiveAllowScatter)
+}
+
+// ForeignKeyChecksState returns the state of foreign_key_checks variable if it is part of a SET_VAR optimizer hint in the comments.
+func ForeignKeyChecksState(stmt Statement) FkChecksState {
+	cmt, ok := stmt.(Commented)
+	if ok {
+		fkChecksVal := cmt.GetParsedComments().GetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name)
+		switch strings.ToLower(fkChecksVal) {
+		case "on", "1":
+			return FkChecksOn
+		case "off", "0":
+			return FkChecksOff
+		}
+	}
+	return FkChecksUnspecified
 }
 
 func checkDirective(stmt Statement, key string) bool {

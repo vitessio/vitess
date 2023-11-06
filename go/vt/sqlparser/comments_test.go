@@ -574,6 +574,12 @@ func TestGetMySQLSetVarValue(t *testing.T) {
 			want:      "16M",
 		},
 		{
+			name:      "No comments",
+			comments:  nil,
+			valToFind: "sort_buffer_size",
+			want:      "",
+		},
+		{
 			name:      "Multiple SET_VAR clauses",
 			comments:  []string{"/*+ SET_VAR(sort_buffer_size = 16M) */", "/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') */", "/*+ SET_VAR( foReiGn_key_checks = On) */"},
 			valToFind: sysvars.ForeignKeyChecks.Name,
@@ -585,6 +591,12 @@ func TestGetMySQLSetVarValue(t *testing.T) {
 			valToFind: sysvars.ForeignKeyChecks.Name,
 			want:      "On",
 		},
+		{
+			name:      "Leading comment is a normal comment",
+			comments:  []string{"/* This is a normal comment */", "/*+ MAX_EXECUTION_TIME(1000) SET_VAR( foreign_key_checks = 1) */"},
+			valToFind: sysvars.ForeignKeyChecks.Name,
+			want:      "1",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -592,6 +604,68 @@ func TestGetMySQLSetVarValue(t *testing.T) {
 				comments: tt.comments,
 			}
 			assert.Equal(t, tt.want, c.GetMySQLSetVarValue(tt.valToFind))
+		})
+	}
+}
+
+func TestSetMySQLSetVarValue(t *testing.T) {
+	tests := []struct {
+		name           string
+		comments       []string
+		key            string
+		value          string
+		commentsWanted Comments
+	}{
+		{
+			name:           "SET_VAR clause in the middle",
+			comments:       []string{"/*+ NO_RANGE_OPTIMIZATION(t3 PRIMARY, f2_idx) SET_VAR(foreign_key_checks=OFF) NO_ICP(t1, t2) */"},
+			key:            sysvars.ForeignKeyChecks.Name,
+			value:          "On",
+			commentsWanted: []string{"/*+ NO_RANGE_OPTIMIZATION(t3 PRIMARY, f2_idx) SET_VAR(foreign_key_checks=On) NO_ICP(t1, t2) */"},
+		},
+		{
+			name:           "Single SET_VAR clause",
+			comments:       []string{"/*+ SET_VAR(sort_buffer_size = 16M) */"},
+			key:            "sort_buffer_size",
+			value:          "1Mb",
+			commentsWanted: []string{"/*+ SET_VAR(sort_buffer_size=1Mb) */"},
+		},
+		{
+			name:           "No comments",
+			comments:       nil,
+			key:            "sort_buffer_size",
+			value:          "13M",
+			commentsWanted: []string{"/*+ SET_VAR(sort_buffer_size=13M) */"},
+		},
+		{
+			name:           "Multiple SET_VAR clauses",
+			comments:       []string{"/*+ SET_VAR(sort_buffer_size = 16M) */", "/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') */", "/*+ SET_VAR( foReiGn_key_checks = On) */"},
+			key:            sysvars.ForeignKeyChecks.Name,
+			value:          "1",
+			commentsWanted: []string{"/*+ SET_VAR(sort_buffer_size = 16M) SET_VAR(foreign_key_checks=1) */", "/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') */", "/*+ SET_VAR( foReiGn_key_checks = On) */"},
+		},
+		{
+			name:           "Verify casing",
+			comments:       []string{"/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') SET_VAR( foReiGn_key_checks = On) */"},
+			key:            sysvars.ForeignKeyChecks.Name,
+			value:          "off",
+			commentsWanted: []string{"/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') SET_VAR(foReiGn_key_checks=off) */"},
+		},
+		{
+			name:           "Leading comment is a normal comment",
+			comments:       []string{"/* This is a normal comment */", "/*+ MAX_EXECUTION_TIME(1000) SET_VAR( foreign_key_checks = 1) */"},
+			key:            sysvars.ForeignKeyChecks.Name,
+			value:          "Off",
+			commentsWanted: []string{"/* This is a normal comment */", "/*+ MAX_EXECUTION_TIME(1000) SET_VAR(foreign_key_checks=Off) */"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &ParsedComments{
+				comments: tt.comments,
+			}
+			c.SetMySQLSetVarValue(tt.key, tt.value)
+			require.EqualValues(t, tt.commentsWanted, c.comments)
 		})
 	}
 }
