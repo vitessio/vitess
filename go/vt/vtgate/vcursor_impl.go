@@ -1084,6 +1084,8 @@ func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.Stri
 	_, _ = buf.WriteString(vindexes.TabletTypeSuffix[vc.tabletType])
 	_, _ = buf.WriteString("+Collate:")
 	_, _ = buf.WriteString(collations.Local().LookupName(vc.collation))
+	_, _ = buf.WriteString("+fkChecksState:")
+	_, _ = buf.WriteString(vc.GetForeignKeyChecksState().String())
 
 	if vc.destination != nil {
 		switch vc.destination.(type) {

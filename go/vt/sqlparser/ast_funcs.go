@@ -357,6 +357,16 @@ func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 	return newComments, nil
 }
 
+func (s FkChecksState) String() string {
+	switch s {
+	case FkChecksOff:
+		return "Off"
+	case FkChecksOn:
+		return "On"
+	}
+	return ""
+}
+
 // ParseParams parses the vindex parameter list, pulling out the special-case
 // "owner" parameter
 func (node *VindexSpec) ParseParams() (string, map[string]string) {
