@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -125,96 +124,6 @@ func (expr *CollateExpr) compile(c *compiler) (ctype, error) {
 	ct.Col = expr.TypedCollation
 	ct.Flag |= flagExplicitCollation | flagNullable
 	return ct, nil
-}
-
-func evalCollation(e eval) collations.TypedCollation {
-	switch e := e.(type) {
-	case nil:
-		return collationNull
-	case evalNumeric, *evalTemporal:
-		return collationNumeric
-	case *evalJSON:
-		return collationJSON
-	case *evalBytes:
-		return e.col
-	default:
-		return collationBinary
-	}
-}
-
-func mergeCollations(c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type) (collations.TypedCollation, colldata.Coercion, colldata.Coercion, error) {
-	if c1.Collation == c2.Collation {
-		return c1, nil, nil, nil
-	}
-
-	lt := sqltypes.IsText(t1) || sqltypes.IsBinary(t1)
-	rt := sqltypes.IsText(t2) || sqltypes.IsBinary(t2)
-	if !lt || !rt {
-		if lt {
-			return c1, nil, nil, nil
-		}
-		if rt {
-			return c2, nil, nil, nil
-		}
-		return collationBinary, nil, nil, nil
-	}
-
-	env := collations.Local()
-	return colldata.Merge(env, c1, c2, colldata.CoercionOptions{
-		ConvertToSuperset:   true,
-		ConvertWithCoercion: true,
-	})
-}
-
-func mergeAndCoerceCollations(left, right eval) (eval, eval, collations.TypedCollation, error) {
-	lt := left.SQLType()
-	rt := right.SQLType()
-
-	mc, coerceLeft, coerceRight, err := mergeCollations(evalCollation(left), evalCollation(right), lt, rt)
-	if err != nil {
-		return nil, nil, collations.TypedCollation{}, err
-	}
-	if coerceLeft == nil && coerceRight == nil {
-		return left, right, mc, nil
-	}
-
-	left1 := newEvalRaw(lt, left.(*evalBytes).bytes, mc)
-	right1 := newEvalRaw(rt, right.(*evalBytes).bytes, mc)
-
-	if coerceLeft != nil {
-		left1.bytes, err = coerceLeft(nil, left1.bytes)
-		if err != nil {
-			return nil, nil, collations.TypedCollation{}, err
-		}
-	}
-	if coerceRight != nil {
-		right1.bytes, err = coerceRight(nil, right1.bytes)
-		if err != nil {
-			return nil, nil, collations.TypedCollation{}, err
-		}
-	}
-	return left1, right1, mc, nil
-}
-
-type collationAggregation struct {
-	cur collations.TypedCollation
-}
-
-func (ca *collationAggregation) add(env *collations.Environment, tc collations.TypedCollation) error {
-	if ca.cur.Collation == collations.Unknown {
-		ca.cur = tc
-	} else {
-		var err error
-		ca.cur, _, _, err = colldata.Merge(env, ca.cur, tc, colldata.CoercionOptions{ConvertToSuperset: true, ConvertWithCoercion: true})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (ca *collationAggregation) result() collations.TypedCollation {
-	return ca.cur
 }
 
 var _ IR = (*IntroducerExpr)(nil)

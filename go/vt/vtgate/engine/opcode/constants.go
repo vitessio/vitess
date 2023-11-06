@@ -139,6 +139,9 @@ func (code AggregateOpcode) Type(typ querypb.Type) querypb.Type {
 	case AggregateUnassigned:
 		return sqltypes.Null
 	case AggregateGroupConcat:
+		if typ == sqltypes.Unknown {
+			return sqltypes.Unknown
+		}
 		if sqltypes.IsBinary(typ) {
 			return sqltypes.Blob
 		}
@@ -146,6 +149,9 @@ func (code AggregateOpcode) Type(typ querypb.Type) querypb.Type {
 	case AggregateMax, AggregateMin, AggregateAnyValue:
 		return typ
 	case AggregateSumDistinct, AggregateSum:
+		if typ == sqltypes.Unknown {
+			return sqltypes.Unknown
+		}
 		if sqltypes.IsIntegral(typ) || sqltypes.IsDecimal(typ) {
 			return sqltypes.Decimal
 		}
