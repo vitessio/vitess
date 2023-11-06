@@ -7632,6 +7632,7 @@ func TestKeywordsCorrectlyParse(t *testing.T) {
 		"SELECT %s.c FROM t",
 		"ALTER TABLE t DROP CONSTRAINT %s",
 		"ALTER TABLE t DROP CHECK %s",
+		"ALTER TABLE t DROP COLUMN %s",
 	}
 
 	for _, kw := range correctlyDoParse {
