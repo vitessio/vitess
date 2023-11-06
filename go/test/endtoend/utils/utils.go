@@ -236,16 +236,17 @@ func WaitForAuthoritative(t *testing.T, ks, tbl string, readVSchema func() (*int
 		case <-timeout:
 			return fmt.Errorf("schema tracking didn't mark table t2 as authoritative until timeout")
 		default:
-			time.Sleep(1 * time.Second)
 			res, err := readVSchema()
 			require.NoError(t, err, res)
 			t2Map := getTableT2Map(res, ks, tbl)
 			authoritative, fieldPresent := t2Map["column_list_authoritative"]
 			if !fieldPresent {
+				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 			authoritativeBool, isBool := authoritative.(bool)
 			if !isBool || !authoritativeBool {
+				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 			return nil
@@ -262,18 +263,19 @@ func WaitForKsError(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string
 			t.Fatalf("schema tracking did not find error in '%s'", ks)
 			return ""
 		default:
-			time.Sleep(1 * time.Second)
 			res, err := vtgateProcess.ReadVSchema()
 			require.NoError(t, err, res)
 			kss := convertToMap(*res)["keyspaces"]
 			ksMap := convertToMap(convertToMap(kss)[ks])
 			ksErr, fieldPresent := ksMap["error"]
 			if !fieldPresent {
-				break
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			errString, isErr := ksErr.(string)
 			if !isErr {
-				break
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			return errString
 		}
@@ -288,25 +290,28 @@ func WaitForColumn(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl, c
 		case <-timeout:
 			return fmt.Errorf("schema tracking did not find column '%s' in table '%s'", col, tbl)
 		default:
-			time.Sleep(1 * time.Second)
 			res, err := vtgateProcess.ReadVSchema()
 			require.NoError(t, err, res)
 			t2Map := getTableT2Map(res, ks, tbl)
 			authoritative, fieldPresent := t2Map["column_list_authoritative"]
 			if !fieldPresent {
-				break
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			authoritativeBool, isBool := authoritative.(bool)
 			if !isBool || !authoritativeBool {
-				break
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			colMap, exists := t2Map["columns"]
 			if !exists {
-				break
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			colList, isSlice := colMap.([]interface{})
 			if !isSlice {
-				break
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			for _, c := range colList {
 				colDef, isMap := c.(map[string]interface{})
@@ -317,6 +322,7 @@ func WaitForColumn(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl, c
 					return nil
 				}
 			}
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
@@ -330,7 +336,10 @@ func getTableT2Map(res *interface{}, ks, tbl string) map[string]interface{} {
 }
 
 func convertToMap(input interface{}) map[string]interface{} {
-	output := input.(map[string]interface{})
+	output, ok := input.(map[string]interface{})
+	if !ok {
+		return make(map[string]interface{})
+	}
 	return output
 }
 
