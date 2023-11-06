@@ -311,23 +311,15 @@ type Sorter struct {
 	Compare Comparison
 	Limit   int
 
-	weights []tinyWeighter
-	rows    []sqltypes.Row
-	heap    bool
+	rows []sqltypes.Row
+	heap bool
 }
 
 func (s *Sorter) Len() int {
 	return len(s.rows)
 }
 
-func (s *Sorter) SetFields(f []*querypb.Field) {
-	s.weights = s.Compare.tinyWeighters(f)
-}
-
 func (s *Sorter) Push(row sqltypes.Row) {
-	for _, w := range s.weights {
-		w.apply(&row[w.col])
-	}
 	if len(s.rows) < s.Limit {
 		s.rows = append(s.rows, row)
 		return
@@ -367,9 +359,8 @@ type mergeRow struct {
 type Merger struct {
 	Compare Comparison
 
-	weights []tinyWeighter
-	rows    []mergeRow
-	less    func(a, b mergeRow) bool
+	rows []mergeRow
+	less func(a, b mergeRow) bool
 }
 
 func (m *Merger) Len() int {
@@ -381,10 +372,6 @@ func (m *Merger) Init() {
 		return m.Compare.Less(a.row, b.row)
 	}
 	heapify(m.rows, m.less)
-}
-
-func (m *Merger) SetFields(f []*querypb.Field) {
-	m.weights = m.Compare.tinyWeighters(f)
 }
 
 func (m *Merger) Push(row sqltypes.Row, source int) {

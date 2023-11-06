@@ -63,17 +63,6 @@ func (ms *MemorySort) SetTruncateColumnCount(count int) {
 	ms.TruncateColumnCount = count
 }
 
-func PanicHandler(err *error) {
-	if r := recover(); r != nil {
-		badness, ok := r.(error)
-		if !ok {
-			panic(r)
-		}
-
-		*err = badness
-	}
-}
-
 // TryExecute satisfies the Primitive interface.
 func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := ms.fetchCount(ctx, vcursor, bindVars)
@@ -97,7 +86,7 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 
 // TryStreamExecute satisfies the Primitive interface.
 func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) (err error) {
-	defer PanicHandler(&err)
+	defer evalengine.PanicHandler(&err)
 
 	count, err := ms.fetchCount(ctx, vcursor, bindVars)
 	if err != nil {
@@ -117,7 +106,6 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
 			}
-			sorter.SetFields(qr.Fields)
 		}
 		for _, row := range qr.Rows {
 			sorter.Push(row)
