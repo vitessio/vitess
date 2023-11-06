@@ -1070,3 +1070,12 @@ const (
 	IndexTypeSpatial
 	IndexTypeFullText
 )
+
+// FkChecksState is the enum to store the value of `foreign_key_checks` MySQL variable.
+type FkChecksState int
+
+const (
+	FkChecksUnspecified FkChecksState = iota
+	FkChecksOn
+	FkChecksOff
+)

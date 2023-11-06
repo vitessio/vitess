@@ -1042,6 +1042,7 @@ func (e *Executor) getPlan(
 	vcursor.SetIgnoreMaxMemoryRows(sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt))
 	vcursor.SetConsolidator(sqlparser.Consolidator(stmt))
 	vcursor.SetWorkloadName(sqlparser.GetWorkloadNameFromStatement(stmt))
+	vcursor.UpdateForeignKeyChecksState(sqlparser.ForeignKeyChecksState(stmt))
 	priority, err := sqlparser.GetPriorityFromStatement(stmt)
 	if err != nil {
 		return nil, err
@@ -1066,6 +1067,7 @@ func (e *Executor) getPlan(
 		vcursor.safeSession.getSelectLimit(),
 		setVarComment,
 		vcursor.safeSession.SystemVariables,
+		vcursor.GetForeignKeyChecksState(),
 		vcursor,
 	)
 	if err != nil {

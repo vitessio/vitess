@@ -565,6 +565,7 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 					SQLSelectLimitUnset,
 					"",
 					nil, /*sysvars*/
+					FkChecksUnspecified,
 					nil, /*views*/
 				)
 				if err != nil {
@@ -855,6 +856,7 @@ func benchmarkNormalization(b *testing.B, sqls []string) {
 				SQLSelectLimitUnset,
 				"",
 				nil,
+				FkChecksUnspecified,
 				nil,
 			)
 			if err != nil {

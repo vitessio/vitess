@@ -107,6 +107,7 @@ type vcursorImpl struct {
 	collation      collations.ID
 
 	ignoreMaxMemoryRows bool
+	fkChecksState       sqlparser.FkChecksState
 	vschema             *vindexes.VSchema
 	vm                  VSchemaOperator
 	semTable            *semantics.SemTable
@@ -1341,4 +1342,27 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	v.marginComments.Trailing += "/* warming read */"
 
 	return v
+}
+
+// UpdateForeignKeyChecksState updates the foreign key checks state of the vcursor.
+func (vc *vcursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery sqlparser.FkChecksState) {
+	vc.fkChecksState = sqlparser.FkChecksUnspecified
+	if fkStateFromQuery != sqlparser.FkChecksUnspecified {
+		vc.fkChecksState = fkStateFromQuery
+		return
+	}
+	fkVal, isPresent := vc.safeSession.SystemVariables[sysvars.ForeignKeyChecks.Name]
+	if isPresent {
+		switch strings.ToLower(fkVal) {
+		case "on", "1":
+			vc.fkChecksState = sqlparser.FkChecksOn
+		case "off", "0":
+			vc.fkChecksState = sqlparser.FkChecksOff
+		}
+	}
+}
+
+// GetForeignKeyChecksState gets the stored foreign key checks state in the vcursor.
+func (vc *vcursorImpl) GetForeignKeyChecksState() sqlparser.FkChecksState {
+	return vc.fkChecksState
 }
