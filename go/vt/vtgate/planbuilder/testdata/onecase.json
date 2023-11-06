@@ -1,7 +1,7 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "query": "select /*vt+ PLANNER=Gen4 */ distinct case max(tbl0.ename) when min(tbl0.job) then 'sole' else count(case when false then -27 when 'gazelle' then tbl0.deptno end) end as caggr0 from user as tbl0",
     "plan": {
 
     }
