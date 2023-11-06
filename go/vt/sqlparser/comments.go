@@ -60,6 +60,9 @@ const (
 	// MaxPriorityValue specifies the maximum value allowed for the priority query directive. Valid priority values are
 	// between zero and MaxPriorityValue.
 	MaxPriorityValue = 100
+
+	// OptimizerHintSetVar is the optimizer hint used in MySQL to set the value of a specific session variable for a query.
+	OptimizerHintSetVar = "SET_VAR"
 )
 
 var ErrInvalidPriority = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Invalid priority value specified in query")
@@ -264,6 +267,109 @@ func (c *ParsedComments) Directives() *CommentDirectives {
 		}
 	}
 	return c._directives
+}
+
+// GetMySQLSetVarValue gets the value of the given variable if it is part of a /*+ SET_VAR() */ MySQL optimizer hint.
+func (c *ParsedComments) GetMySQLSetVarValue(key string) string {
+	if c == nil {
+		return ""
+	}
+	for _, commentStr := range c.comments {
+		if commentStr[0:3] != queryOptimizerPrefix {
+			continue
+		}
+
+		pos := 4
+		for pos < len(commentStr) {
+			finalPos, ohNameStart, ohNameEnd, ohContentStart, ohContentEnd := getOptimizerHint(pos, commentStr)
+			pos = finalPos + 1
+			if ohContentEnd == -1 {
+				break
+			}
+			ohName := commentStr[ohNameStart:ohNameEnd]
+			ohContent := commentStr[ohContentStart:ohContentEnd]
+			if strings.EqualFold(strings.TrimSpace(ohName), OptimizerHintSetVar) {
+				setVarName, setVarValue, isValid := strings.Cut(ohContent, "=")
+				if !isValid {
+					continue
+				}
+				if strings.EqualFold(strings.TrimSpace(setVarName), key) {
+					return strings.TrimSpace(setVarValue)
+				}
+			}
+		}
+
+		return ""
+	}
+	return ""
+}
+
+func getOptimizerHint(initialPos int, commentStr string) (pos int, ohNameStart int, ohNameEnd int, ohContentStart int, ohContentEnd int) {
+	ohContentEnd = -1
+	pos = skipBlanks(initialPos, commentStr)
+	ohNameStart = pos
+	pos++
+	for pos < len(commentStr) {
+		if commentStr[pos] == ' ' || commentStr[pos] == '(' {
+			break
+		}
+		pos++
+	}
+	ohNameEnd = pos
+	pos = skipBlanks(pos, commentStr)
+	if pos >= len(commentStr) || commentStr[pos] != '(' {
+		return
+	}
+	pos++
+	ohContentStart = pos
+	pos = skipUntilParanthesisEnd(pos, commentStr)
+	ohContentEnd = pos
+	return
+}
+
+func skipUntilParanthesisEnd(pos int, commentStr string) int {
+	stack := []byte{'('}
+	for pos < len(commentStr) {
+		switch commentStr[pos] {
+		case '(':
+			if stack[len(stack)-1] == '(' {
+				stack = append(stack, '(')
+			}
+		case ')':
+			if stack[len(stack)-1] == '(' {
+				stack = stack[:len(stack)-1]
+			}
+		case '\'':
+			if stack[len(stack)-1] == '\'' {
+				stack = stack[:len(stack)-1]
+			} else if stack[len(stack)-1] != '"' {
+				stack = append(stack, '\'')
+			}
+		case '"':
+			if stack[len(stack)-1] == '"' {
+				stack = stack[:len(stack)-1]
+			} else if stack[len(stack)-1] != '\'' {
+				stack = append(stack, '"')
+			}
+		}
+		if len(stack) == 0 {
+			return pos
+		}
+		pos++
+	}
+
+	return pos
+}
+
+func skipBlanks(pos int, commentStr string) int {
+	for pos < len(commentStr) {
+		if commentStr[pos] == ' ' {
+			pos++
+			continue
+		}
+		break
+	}
+	return pos
 }
 
 func (c *ParsedComments) Length() int {
