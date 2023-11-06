@@ -19,8 +19,8 @@ package evalengine
 import (
 	"encoding/binary"
 	"math"
-	"math/bits"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
@@ -179,28 +179,15 @@ func evalWeightString(dst []byte, e eval, length, precision int) ([]byte, bool, 
 	return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", e.SQLType())
 }
 
-func DeMorgan(n uint64) uint32 {
-	var w32 [4]byte
-
-	lead := byte(bits.LeadingZeros64(n))
-	w32[0] = 64 - lead
-
-	n = n << (lead + 1)
-	lead = byte(bits.LeadingZeros64(n))
-	w32[1] = w32[0] - lead - 1
-
-	n = n << (lead + 1)
-	lead = byte(bits.LeadingZeros64(n))
-	w32[2] = w32[1] - lead - 1
-
-	n = n << (lead + 1)
-	lead = byte(bits.LeadingZeros64(n))
-	w32[3] = w32[2] - lead - 1
-
-	return binary.BigEndian.Uint32(w32[:4])
-}
-
-func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltypes.Value) {
+// TinyWeighter returns a callback to apply a Tiny Weight string to a sqltypes.Value.
+// A tiny weight string is a compressed 4-byte representation of the value's full weight string that
+// sorts identically to its full weight. Obviously, the tiny weight string can collide because
+// it's represented in fewer bytes than the full one.
+// Hence, for any 2 instances of sqltypes.Value: if both instances have a Tiny Weight string,
+// and the weight strings are **different**, the two values will sort accordingly to the 32-bit
+// numerical sort of their tiny weight strings. Otherwise, the relative sorting of the two values
+// will not be known, and they will require a full sort using e.g. NullsafeCompare.
+func TinyWeighter(f *querypb.Field, collation collations.ID) func(v *sqltypes.Value) {
 	switch {
 	case sqltypes.IsNull(f.Type):
 		return nil
@@ -211,6 +198,13 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 			if err != nil {
 				return
 			}
+			// The full weight string for an integer is just its MSB bit-inverted 64 bit representation.
+			// However, we only have 4 bytes to work with here, so in order to minimize the amount
+			// of collisions for the tiny weight string, instead of grabbing the top 32 bits of the
+			// 64 bit representation, we're going to cast to float32. Floats are sortable once bit-inverted,
+			// and although they cannot represent the full 64-bit range (duh!), that's perfectly fine
+			// because close-by numbers will collide into the same tiny weight, allowing us to fall back
+			// to a full comparison.
 			raw := math.Float32bits(float32(i))
 			if i < 0 {
 				raw = ^raw
@@ -226,17 +220,20 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 			if err != nil {
 				return
 			}
+			// See comment for the IsSigned block. No bit-inversion is required here as all floats will be positive.
 			v.SetTinyWeight(math.Float32bits(float32(u)))
 		}
 
 	case sqltypes.IsFloat(f.Type):
 		return func(v *sqltypes.Value) {
-			f, err := v.ToFloat64()
+			fl, err := v.ToFloat64()
 			if err != nil {
 				return
 			}
-			raw := math.Float32bits(float32(f))
-			if math.Signbit(f) {
+			// Similarly as the IsSigned block, we could take the top 32 bits of the float64 bit representation,
+			// but by down-sampling to a float32 we reduce the amount of collisions.
+			raw := math.Float32bits(float32(fl))
+			if math.Signbit(fl) {
 				raw = ^raw
 			} else {
 				raw = raw ^ (1 << 31)
@@ -273,14 +270,20 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 			if v.IsNull() {
 				return
 			}
-			dec, err := decimal.NewFromMySQL(v.Raw())
+			// To generate a 32-bit weight string of the decimal, we'll just attempt a fast 32bit atof parse
+			// of its contents. This can definitely fail for many corner cases, but that's OK: we'll just fall
+			// back to a full decimal comparison in those cases.
+			fl, _, err := hack.Atof32(v.RawStr())
 			if err != nil {
 				return
 			}
-
-			var w32 [4]byte
-			copy(w32[:4], dec.WeightString(nil, int32(f.ColumnLength), int32(f.Decimals)))
-			v.SetTinyWeight(binary.BigEndian.Uint32(w32[:4]))
+			raw := math.Float32bits(fl)
+			if raw&(1<<31) != 0 {
+				raw = ^raw
+			} else {
+				raw = raw ^ (1 << 31)
+			}
+			v.SetTinyWeight(raw)
 		}
 
 	case f.Type == sqltypes.TypeJSON:
@@ -293,6 +296,8 @@ func TinyWeightString(f *querypb.Field, collation collations.ID) func(v *sqltype
 				return
 			}
 			var w32 [4]byte
+			// TODO: this can be done more efficiently without having to calculate the full weight string and
+			// extracting its prefix.
 			copy(w32[:4], j.WeightString(nil))
 			v.SetTinyWeight(binary.BigEndian.Uint32(w32[:4]))
 		}

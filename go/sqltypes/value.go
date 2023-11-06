@@ -54,6 +54,7 @@ var (
 )
 
 const (
+	// flagTinyWeight marks this Value as having a Tiny Weight String
 	flagTinyWeight = 0x1
 )
 
@@ -70,10 +71,16 @@ type (
 	// an integral type, the bytes are always stored as a canonical
 	// representation that matches how MySQL returns such values.
 	Value struct {
-		typ        uint16
-		flags      uint16
+		// typ is the value's sqltypes.Type (this always fits in 16 bits)
+		typ uint16
+		// flags are the flags set for this Value; right now this field is only
+		// used to track whether tinyweight is set
+		flags uint16
+		// tinyweight is a weight string prefix for this Value.
+		// See: evalengine.TinyWeighter
 		tinyweight uint32
-		val        []byte
+		// val is the raw byte representation of this Value
+		val []byte
 	}
 
 	Row = []Value
@@ -704,16 +711,25 @@ func (v *Value) ForEachValue(each func(bv Value)) error {
 	return nil
 }
 
+// Equal compares this Value to other. It ignores any flags set.
 func (v Value) Equal(other Value) bool {
 	return v.typ == other.typ && bytes.Equal(v.val, other.val)
 }
 
+// SetTinyWeight sets this Value's tiny weight string
 func (v *Value) SetTinyWeight(w uint32) {
 	v.tinyweight = w
 	v.flags |= flagTinyWeight
 }
 
+// TinyWeightCmp performs a fast comparison of this Value with other if both have a Tiny Weight String set.
+// For any 2 instances of Value: if both instances have a Tiny Weight string,
+// and the weight strings are **different**, the two values will sort accordingly to the 32-bit
+// numerical sort of their tiny weight strings. Otherwise, the relative sorting of the two values
+// will not be known, and they will require a full sort using e.g. evalengine.NullsafeCompare
+// See: evalengine.TinyWeighter
 func (v Value) TinyWeightCmp(other Value) int {
+	// both values need a tinyweight; otherwise the comparison is invalid
 	if v.flags&other.flags&flagTinyWeight == 0 {
 		return 0
 	}

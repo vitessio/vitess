@@ -57,7 +57,7 @@ func TestTinyWeightStrings(t *testing.T) {
 				Charset:      uint32(tc.col),
 				Decimals:     uint32(tc.prec),
 			}
-			weight := TinyWeightString(field, tc.col)
+			weight := TinyWeighter(field, tc.col)
 			if weight == nil {
 				t.Fatalf("could not generate Tiny Weight function")
 			}

@@ -236,7 +236,7 @@ func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
 func (cmp Comparison) tinyWeighters(fields []*querypb.Field) []tinyWeighter {
 	weights := make([]tinyWeighter, 0, len(cmp))
 	for _, c := range cmp {
-		if apply := TinyWeightString(fields[c.Col], c.Type.Coll); apply != nil {
+		if apply := TinyWeighter(fields[c.Col], c.Type.Coll); apply != nil {
 			weights = append(weights, tinyWeighter{c.Col, apply})
 		}
 	}

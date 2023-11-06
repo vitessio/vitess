@@ -1330,16 +1330,7 @@ func BenchmarkNullSafeComparison(b *testing.B) {
 	})
 }
 
-func linear() sqltypes.RandomGenerator {
-	var n int64
-	return func() sqltypes.Value {
-		n++
-		return sqltypes.NewInt64(n)
-	}
-}
-
 func TestCompareSorter(t *testing.T) {
-
 	var cases = []struct {
 		Count  int
 		Limit  int

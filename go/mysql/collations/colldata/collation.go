@@ -155,8 +155,11 @@ type CaseAwareCollation interface {
 	ToLower(dst []byte, src []byte) []byte
 }
 
+// TinyWeightCollation implements the TinyWeightString API for collations.
 type TinyWeightCollation interface {
 	Collation
+	// TinyWeightString returns a 32-bit weight string for a source string based on this collation.
+	// This is usually the 4-byte prefix of the full weight string, calculated more efficiently.
 	TinyWeightString(src []byte) uint32
 }
 
