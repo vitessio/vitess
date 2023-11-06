@@ -19,6 +19,8 @@ package operators
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -56,7 +58,7 @@ func getVindexInformation(id semantics.TableSet, table *vindexes.Table) (
 	return primaryVindex, vindexesAndPredicates, nil
 }
 
-func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI, assignments []SetExpr) (vv map[string]*engine.VindexValues, ownedVindexQuery string, subQueriesArgOnChangedVindex []string, err error) {
+func buildChangedVindexesValues(ctx *plancontext.PlanningContext, update *sqlparser.Update, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI, assignments []SetExpr) (vv map[string]*engine.VindexValues, ownedVindexQuery string, subQueriesArgOnChangedVindex []string, err error) {
 	changedVindexes := make(map[string]*engine.VindexValues)
 	buf, offset := initialQuery(ksidCols, table)
 	for i, vindex := range table.ColumnVindexes {
@@ -73,7 +75,10 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 					return nil, "", nil, vterrors.VT03015(assignment.Name.Name)
 				}
 				found = true
-				pv, err := evalengine.Translate(assignment.Expr.EvalExpr, nil)
+				pv, err := evalengine.Translate(assignment.Expr.EvalExpr, &evalengine.Config{
+					ResolveType: ctx.SemTable.TypeForExpr,
+					Collation:   ctx.SemTable.Collation,
+				})
 				if err != nil {
 					return nil, "", nil, invalidUpdateExpr(assignment.Name.Name.String(), assignment.Expr.EvalExpr)
 				}
