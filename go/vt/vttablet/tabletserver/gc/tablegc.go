@@ -51,7 +51,8 @@ const (
 var (
 	checkInterval                 = 1 * time.Hour
 	purgeReentranceInterval       = 1 * time.Minute
-	checkTablesReentryMinInterval = 5 * time.Second
+	checkTablesReentryMinInterval = 10 * time.Second
+	NextChecksIntervals           = []time.Duration{time.Second, checkTablesReentryMinInterval + 5*time.Second}
 	gcLifecycle                   = "hold,purge,evac,drop"
 )
 
@@ -236,7 +237,7 @@ func (collector *TableGC) Close() {
 // _know_ that changes have been made, and now have a way to tell TableGC: "please take a look asap rather
 // than in the next hour".
 func (collector *TableGC) RequestChecks() {
-	for _, d := range []time.Duration{time.Second, checkTablesReentryMinInterval + 5*time.Second} {
+	for _, d := range NextChecksIntervals {
 		time.AfterFunc(d, func() { collector.checkRequestChan <- true })
 	}
 }
