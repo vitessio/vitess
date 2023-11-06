@@ -22,7 +22,7 @@
           {
             "OperatorType": "Sort",
             "Variant": "Memory",
-            "OrderBy": "1 DESC, (2|5) ASC",
+            "OrderBy": "1 DESC COLLATE utf8mb4_0900_ai_ci, (2|5) ASC",
             "ResultColumns": 4,
             "Inputs": [
               {
@@ -233,7 +233,7 @@
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
-        "OrderBy": "1 DESC",
+        "OrderBy": "1 DESC COLLATE utf8mb4_0900_ai_ci",
         "ResultColumns": 2,
         "Inputs": [
           {
@@ -758,7 +758,7 @@
           {
             "OperatorType": "Sort",
             "Variant": "Memory",
-            "OrderBy": "2 DESC",
+            "OrderBy": "2 DESC COLLATE utf8mb4_0900_ai_ci",
             "ResultColumns": 8,
             "Inputs": [
               {
@@ -1075,7 +1075,7 @@
               {
                 "OperatorType": "Sort",
                 "Variant": "Memory",
-                "OrderBy": "1 DESC",
+                "OrderBy": "1 DESC COLLATE utf8mb4_0900_ai_ci",
                 "Inputs": [
                   {
                     "OperatorType": "Aggregate",

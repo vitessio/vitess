@@ -164,6 +164,7 @@ func TestCompilerSingle(t *testing.T) {
 		expression string
 		values     []sqltypes.Value
 		result     string
+		collation  collations.ID
 	}{
 		{
 			expression: "1 + column0",
@@ -489,6 +490,12 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `'2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month))-1 month`,
 			result:     `CHAR("2020-12-01")`,
 		},
+		{
+			expression: `case column0 when 1 then column1 else column2 end`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(42), sqltypes.NewVarChar("sole"), sqltypes.NewInt64(0)},
+			result:     `VARCHAR("0")`,
+			collation:  collations.CollationUtf8mb4ID,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
@@ -524,6 +531,9 @@ func TestCompilerSingle(t *testing.T) {
 			if expected.String() != tc.result {
 				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), tc.result)
 			}
+			if tc.collation != collations.Unknown && tc.collation != expected.Collation() {
+				t.Fatalf("bad collation evaluation from eval engine: got %d, want %d", expected.Collation(), tc.collation)
+			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
 			for i := 0; i < 8; i++ {
@@ -534,6 +544,9 @@ func TestCompilerSingle(t *testing.T) {
 
 				if res.String() != tc.result {
 					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
+				}
+				if tc.collation != collations.Unknown && tc.collation != res.Collation() {
+					t.Fatalf("bad collation evaluation from compiler: got %d, want %d", res.Collation(), tc.collation)
 				}
 			}
 		})

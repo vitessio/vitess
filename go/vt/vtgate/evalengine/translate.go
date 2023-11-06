@@ -253,7 +253,7 @@ func translateLiteral(lit *sqlparser.Literal, collation collations.ID) (*Literal
 	case sqlparser.DecimalVal:
 		return NewLiteralDecimalFromBytes(lit.Bytes())
 	case sqlparser.StrVal:
-		return NewLiteralString(lit.Bytes(), defaultCoercionCollation(collation)), nil
+		return NewLiteralString(lit.Bytes(), typedCoercionCollation(sqltypes.VarChar, collation)), nil
 	case sqlparser.HexNum:
 		return NewLiteralBinaryFromHexNum(lit.Bytes())
 	case sqlparser.HexVal:
