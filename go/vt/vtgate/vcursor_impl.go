@@ -28,6 +28,7 @@ import (
 	"github.com/google/uuid"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/sysvars"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -817,6 +818,16 @@ func (vc *vcursorImpl) SetAutocommit(ctx context.Context, autocommit bool) error
 		}
 	}
 	vc.safeSession.Autocommit = autocommit
+	return nil
+}
+
+// SetSessionForeignKeyChecks implements the SessionActions interface
+func (vc *vcursorImpl) SetSessionForeignKeyChecks(ctx context.Context, foreignKeyChecks bool) error {
+	if foreignKeyChecks {
+		vc.safeSession.SetSystemVariable(sysvars.ForeignKeyChecks.Name, "1")
+	} else {
+		vc.safeSession.SetSystemVariable(sysvars.ForeignKeyChecks.Name, "0")
+	}
 	return nil
 }
 
