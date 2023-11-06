@@ -34,7 +34,7 @@ var semanticKS = &vindexes.Keyspace{
 
 var _ semantics.SchemaInformation = (*declarativeSchemaInformation)(nil)
 
-// declarativeSchemaInformation is a utility wrapper arounf FakeSI, and adds a few utility functions
+// declarativeSchemaInformation is a utility wrapper around FakeSI, and adds a few utility functions
 // to make it more simple and accessible to schemadiff's logic.
 type declarativeSchemaInformation struct {
 	Tables map[string]*vindexes.Table

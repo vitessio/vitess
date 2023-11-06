@@ -92,7 +92,7 @@ func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, t
 
 // NewTabletGateway creates and returns a new TabletGateway
 func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, localCell string) *TabletGateway {
-	// hack to accomodate various users of gateway + tests
+	// hack to accommodate various users of gateway + tests
 	if hc == nil {
 		var topoServer *topo.Server
 		if serv != nil {

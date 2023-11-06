@@ -34,7 +34,7 @@ type Rows struct {
 	noTxNeeded
 }
 
-// NewRowsPrimitive returns a new Rows primitie
+// NewRowsPrimitive returns a new Rows primitive
 func NewRowsPrimitive(rows [][]sqltypes.Value, fields []*querypb.Field) Primitive {
 	return &Rows{rows: rows, fields: fields}
 }

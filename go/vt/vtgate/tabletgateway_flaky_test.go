@@ -61,7 +61,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	tg := NewTabletGateway(ctx, hc, ts, "cell")
 	defer tg.Close(ctx)
 
-	// add a primary tabelt which is serving
+	// add a primary tablet which is serving
 	sbc := hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
 
 	// add a result to the sandbox connection
@@ -148,7 +148,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	tg := NewTabletGateway(ctx, hc, ts, "cell")
 	defer tg.Close(ctx)
 
-	// add a primary tabelt which is serving
+	// add a primary tablet which is serving
 	sbc := hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
 	// also add a replica which is serving
 	sbcReplica := hc.AddTestTablet("cell", hostReplica, portReplica, keyspace, shard, topodatapb.TabletType_REPLICA, true, 0, nil)
@@ -279,7 +279,7 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 
 	tg.retryCount = 0
 
-	// add a primary tabelt which is serving
+	// add a primary tablet which is serving
 	sbc := hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
 
 	// add a result to the sandbox connection

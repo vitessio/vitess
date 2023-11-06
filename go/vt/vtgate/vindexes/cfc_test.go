@@ -199,7 +199,7 @@ func TestCFCComputeKsid(t *testing.T) {
 			testName: "misaligned prefix",
 			id:       [][]byte{{3, 4, 5}, {1}},
 			prefix:   true,
-			// use the first component that's availabe
+			// use the first component that's available
 			expected: expectedHash([][]byte{{3, 4, 5}}),
 			err:      nil,
 		},
@@ -207,7 +207,7 @@ func TestCFCComputeKsid(t *testing.T) {
 			testName: "misaligned prefix",
 			id:       [][]byte{{3, 4}},
 			prefix:   true,
-			// use the first component that's availabe
+			// use the first component that's available
 			expected: nil,
 			err:      nil,
 		},
@@ -286,7 +286,7 @@ func TestCFCComputeKsidXxhash(t *testing.T) {
 			testName: "misaligned prefix",
 			id:       [][]byte{{3, 4, 5}, {1}},
 			prefix:   true,
-			// use the first component that's availabe
+			// use the first component that's available
 			expected: expectedHashXX([][]byte{{3, 4, 5}}),
 			err:      nil,
 		},
@@ -294,7 +294,7 @@ func TestCFCComputeKsidXxhash(t *testing.T) {
 			testName: "misaligned prefix",
 			id:       [][]byte{{3, 4}},
 			prefix:   true,
-			// use the first component that's availabe
+			// use the first component that's available
 			expected: nil,
 			err:      nil,
 		},

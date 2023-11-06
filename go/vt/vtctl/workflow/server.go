@@ -141,7 +141,7 @@ var (
 type Server struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
-	// Limt the number of concurrent background goroutines if needed.
+	// Limit the number of concurrent background goroutines if needed.
 	sem *semaphore.Weighted
 }
 
