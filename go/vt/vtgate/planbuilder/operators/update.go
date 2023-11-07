@@ -149,7 +149,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		}
 	}
 
-	vp, cvv, ovq, subQueriesArgOnChangedVindex, err := getUpdateVindexInformation(updStmt, vindexTable, qt.ID, assignments)
+	vp, cvv, ovq, subQueriesArgOnChangedVindex, err := getUpdateVindexInformation(ctx, updStmt, vindexTable, qt.ID, assignments)
 	if err != nil {
 		return nil, err
 	}

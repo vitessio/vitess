@@ -42783,6 +42783,9 @@ export namespace vtctldata {
 
         /** SchemaMigration ready_to_complete_at */
         ready_to_complete_at?: (vttime.ITime|null);
+
+        /** SchemaMigration removed_foreign_key_names */
+        removed_foreign_key_names?: (string|null);
     }
 
     /** Represents a SchemaMigration. */
@@ -42952,6 +42955,9 @@ export namespace vtctldata {
 
         /** SchemaMigration ready_to_complete_at. */
         public ready_to_complete_at?: (vttime.ITime|null);
+
+        /** SchemaMigration removed_foreign_key_names. */
+        public removed_foreign_key_names: string;
 
         /**
          * Creates a new SchemaMigration instance using the specified properties.

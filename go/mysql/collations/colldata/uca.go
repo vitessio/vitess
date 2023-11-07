@@ -18,6 +18,7 @@ package colldata
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math/bits"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -117,6 +118,28 @@ nextLevel:
 	}
 
 	return int(l) - int(r)
+}
+
+func (c *Collation_utf8mb4_uca_0900) TinyWeightString(src []byte) uint32 {
+	it := c.uca.Iterator(src)
+	defer it.Done()
+
+	if fast, ok := it.(*uca.FastIterator900); ok {
+		var chunk [16]byte
+		fast.NextWeightBlock64(chunk[:16])
+		return binary.BigEndian.Uint32(chunk[:4])
+	}
+
+	var w32 uint32
+	w, ok := it.Next()
+	if ok {
+		w32 = uint32(w) << 16
+		w, ok = it.Next()
+		if ok {
+			w32 |= uint32(w)
+		}
+	}
+	return w32
 }
 
 func (c *Collation_utf8mb4_uca_0900) WeightString(dst, src []byte, numCodepoints int) []byte {

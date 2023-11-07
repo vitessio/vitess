@@ -49,9 +49,9 @@ func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
 		encoded = hex.EncodeBytes(arg.ToRawBytes())
 	}
 	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
-		return newEvalRaw(sqltypes.Text, encoded, defaultCoercionCollation(call.collate)), nil
+		return newEvalRaw(sqltypes.Text, encoded, typedCoercionCollation(sqltypes.Text, call.collate)), nil
 	}
-	return newEvalText(encoded, defaultCoercionCollation(call.collate)), nil
+	return newEvalText(encoded, typedCoercionCollation(sqltypes.VarChar, call.collate)), nil
 }
 
 func (call *builtinHex) compile(c *compiler) (ctype, error) {
@@ -61,11 +61,11 @@ func (call *builtinHex) compile(c *compiler) (ctype, error) {
 	}
 
 	skip := c.compileNullCheck1(str)
-	col := defaultCoercionCollation(c.collation)
 	t := sqltypes.VarChar
 	if str.Type == sqltypes.Blob || str.Type == sqltypes.TypeJSON {
 		t = sqltypes.Text
 	}
+	col := typedCoercionCollation(t, c.collation)
 
 	switch {
 	case sqltypes.IsNumber(str.Type):

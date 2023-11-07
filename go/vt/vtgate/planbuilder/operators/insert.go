@@ -174,7 +174,7 @@ func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.I
 	}
 
 	// modify column list or values for autoincrement column.
-	autoIncGen, err := modifyForAutoinc(insStmt, vTbl)
+	autoIncGen, err := modifyForAutoinc(ctx, insStmt, vTbl)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +186,7 @@ func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.I
 	insOp.ColVindexes = getColVindexes(insOp)
 	switch rows := insStmt.Rows.(type) {
 	case sqlparser.Values:
-		route.Source, err = insertRowsPlan(insOp, insStmt, rows)
+		route.Source, err = insertRowsPlan(ctx, insOp, insStmt, rows)
 		if err != nil {
 			return nil, err
 		}
@@ -277,7 +277,7 @@ func columnMismatch(gen *Generate, ins *sqlparser.Insert, sel sqlparser.SelectSt
 	return false
 }
 
-func insertRowsPlan(insOp *Insert, ins *sqlparser.Insert, rows sqlparser.Values) (*Insert, error) {
+func insertRowsPlan(ctx *plancontext.PlanningContext, insOp *Insert, ins *sqlparser.Insert, rows sqlparser.Values) (*Insert, error) {
 	for _, row := range rows {
 		if len(ins.Columns) != len(row) {
 			return nil, vterrors.VT03006()
@@ -300,7 +300,10 @@ func insertRowsPlan(insOp *Insert, ins *sqlparser.Insert, rows sqlparser.Values)
 			routeValues[vIdx][colIdx] = make([]evalengine.Expr, len(rows))
 			colNum, _ := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
-				innerpv, err := evalengine.Translate(row[colNum], nil)
+				innerpv, err := evalengine.Translate(row[colNum], &evalengine.Config{
+					ResolveType: ctx.SemTable.TypeForExpr,
+					Collation:   ctx.SemTable.Collation,
+				})
 				if err != nil {
 					return nil, err
 				}
@@ -401,7 +404,7 @@ func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) *sql
 
 // modifyForAutoinc modifies the AST and the plan to generate necessary autoinc values.
 // For row values cases, bind variable names are generated using baseName.
-func modifyForAutoinc(ins *sqlparser.Insert, vTable *vindexes.Table) (*Generate, error) {
+func modifyForAutoinc(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, vTable *vindexes.Table) (*Generate, error) {
 	if vTable.AutoIncrement == nil {
 		return nil, nil
 	}
@@ -425,7 +428,10 @@ func modifyForAutoinc(ins *sqlparser.Insert, vTable *vindexes.Table) (*Generate,
 			row[colNum] = sqlparser.NewArgument(engine.SeqVarName + strconv.Itoa(rowNum))
 		}
 		var err error
-		gen.Values, err = evalengine.Translate(autoIncValues, nil)
+		gen.Values, err = evalengine.Translate(autoIncValues, &evalengine.Config{
+			ResolveType: ctx.SemTable.TypeForExpr,
+			Collation:   ctx.SemTable.Collation,
+		})
 		if err != nil {
 			return nil, err
 		}
