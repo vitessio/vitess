@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations
     `is_immediate_operation`          tinyint unsigned NOT NULL DEFAULT '0',
     `reviewed_timestamp`              timestamp        NULL DEFAULT NULL,
     `ready_to_complete_timestamp`     timestamp        NULL DEFAULT NULL,
+    `removed_foreign_key_names`       text             NOT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uuid_idx` (`migration_uuid`),
     KEY `keyspace_shard_idx` (`keyspace`(64), `shard`(64)),
