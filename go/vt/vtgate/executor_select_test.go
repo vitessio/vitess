@@ -663,17 +663,8 @@ func TestStreamBuffering(t *testing.T) {
 }
 
 func TestStreamLimitOffset(t *testing.T) {
-	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
-
-	// This test is similar to TestStreamUnsharded except that it returns a Result > 10 bytes,
-	// such that the splitting of the Result into multiple Result responses gets tested.
-	sbc1.SetResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "weight_string(id)", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
-		},
-		Rows: [][]sqltypes.Value{{
+	returnRows := map[string][]sqltypes.Row{
+		"-20": [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewVarChar("1234"),
 			sqltypes.NULL,
@@ -682,20 +673,30 @@ func TestStreamLimitOffset(t *testing.T) {
 			sqltypes.NewVarChar("4567"),
 			sqltypes.NULL,
 		}},
-	}})
-
-	sbc2.SetResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "weight_string(id)", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
-		},
-		Rows: [][]sqltypes.Value{{
+		"40-60": [][]sqltypes.Value{{
 			sqltypes.NewInt32(2),
 			sqltypes.NewVarChar("2345"),
 			sqltypes.NULL,
 		}},
-	}})
+		"80-a0": [][]sqltypes.Value{{
+			sqltypes.NewInt32(3),
+			sqltypes.NewVarChar("3456"),
+			sqltypes.NULL,
+		}},
+	}
+
+	executor, _ := createExecutorEnvCallback(t, func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		if ks == KsTestSharded {
+			conn.SetResults([]*sqltypes.Result{{
+				Fields: []*querypb.Field{
+					{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+					{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+					{Name: "weight_string(id)", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+				},
+				Rows: returnRows[shard],
+			}})
+		}
+	})
 
 	results := make(chan *sqltypes.Result, 10)
 	session := &vtgatepb.Session{
@@ -722,11 +723,11 @@ func TestStreamLimitOffset(t *testing.T) {
 		},
 
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(1),
-			sqltypes.NewVarChar("1234"),
+			sqltypes.NewInt32(3),
+			sqltypes.NewVarChar("3456"),
 		}, {
-			sqltypes.NewInt32(1),
-			sqltypes.NewVarChar("foo"),
+			sqltypes.NewInt32(4),
+			sqltypes.NewVarChar("4567"),
 		}},
 	}
 	var gotResults []*sqltypes.Result

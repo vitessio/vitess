@@ -17,6 +17,8 @@ limitations under the License.
 package colldata
 
 import (
+	"encoding/binary"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/vt/vthash"
@@ -168,6 +170,16 @@ func (c *Collation_8bit_simple_ci) Collate(left, right []byte, rightIsPrefix boo
 	return len(left) - len(right)
 }
 
+func (c *Collation_8bit_simple_ci) TinyWeightString(src []byte) uint32 {
+	var w32 [4]byte
+	sortOrder := c.sort
+	sortLen := min(4, len(src))
+	for i := 0; i < sortLen; i++ {
+		w32[i] = sortOrder[src[i]]
+	}
+	return binary.BigEndian.Uint32(w32[:4])
+}
+
 func (c *Collation_8bit_simple_ci) WeightString(dst, src []byte, numCodepoints int) []byte {
 	padToMax := false
 	sortOrder := c.sort
@@ -270,6 +282,12 @@ func (c *Collation_binary) IsBinary() bool {
 
 func (c *Collation_binary) Collate(left, right []byte, isPrefix bool) int {
 	return collationBinary(left, right, isPrefix)
+}
+
+func (c *Collation_binary) TinyWeightString(src []byte) uint32 {
+	var w32 [4]byte
+	copy(w32[:4], src)
+	return binary.BigEndian.Uint32(w32[:4])
 }
 
 func (c *Collation_binary) WeightString(dst, src []byte, numCodepoints int) []byte {

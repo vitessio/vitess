@@ -147,7 +147,7 @@ func TestValue(typ querypb.Type, val string) Value {
 // This function should only be used for testing.
 func TestTuple(vals ...Value) Value {
 	return Value{
-		typ: Tuple,
+		typ: uint16(Tuple),
 		val: encodeTuple(vals),
 	}
 }

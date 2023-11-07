@@ -38,7 +38,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	for _, participant := range participants {
 		prims = append(prims, participant)
 	}
-	ob := make([]engine.OrderByParams, len(comparePKs))
+	ob := make([]evalengine.OrderByParams, len(comparePKs))
 	for i, cpk := range comparePKs {
 		weightStringCol := -1
 		// if the collation is nil or unknown, use binary collation to compare as bytes
@@ -49,7 +49,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 		if cpk.collation != collations.Unknown {
 			t.Coll = cpk.collation
 		}
-		ob[i] = engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: t}
+		ob[i] = evalengine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: t}
 	}
 	return &engine.MergeSort{
 		Primitives: prims,
