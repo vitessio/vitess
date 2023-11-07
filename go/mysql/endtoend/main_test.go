@@ -40,6 +40,7 @@ import (
 
 var (
 	connParams mysql.ConnParams
+	cluster    vttest.LocalCluster
 )
 
 // assertSQLError makes sure we get the right error.
@@ -200,8 +201,17 @@ ssl-key=%v/server-key.pem
 			OnlyMySQL:  true,
 			ExtraMyCnf: []string{extraMyCnf, maxPacketMyCnf},
 		}
-		cluster := vttest.LocalCluster{
+
+		env, err := vttest.NewLocalTestEnv(0)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
+		env.EnableToxiproxy = true
+
+		cluster = vttest.LocalCluster{
 			Config: cfg,
+			Env:    env,
 		}
 		if err := cluster.Setup(); err != nil {
 			fmt.Fprintf(os.Stderr, "could not launch mysql: %v\n", err)

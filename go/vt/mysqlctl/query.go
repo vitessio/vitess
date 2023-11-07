@@ -35,20 +35,42 @@ func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*db
 	if err != nil {
 		return conn, err
 	}
-	// Run a test query to see if this connection is still good.
-	if _, err := conn.Conn.ExecuteFetch("SELECT 1", 1, false); err != nil {
+
+	errChan := make(chan error, 1)
+	resultChan := make(chan *sqltypes.Result, 1)
+
+	go func() {
+		result, err := conn.Conn.ExecuteFetch("SELECT 1", 1, false)
+		if err != nil {
+			errChan <- err
+		} else {
+			resultChan <- result
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		conn.Close()
+		conn.Recycle()
+		return nil, ctx.Err()
+
+	case err := <-errChan:
 		// If we get a connection error, try to reconnect.
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && (sqlErr.Number() == sqlerror.CRServerGone || sqlErr.Number() == sqlerror.CRServerLost) {
 			if err := conn.Conn.Reconnect(ctx); err != nil {
 				conn.Recycle()
 				return nil, err
 			}
+
 			return conn, nil
 		}
+
 		conn.Recycle()
 		return nil, err
+
+	case <-resultChan:
+		return conn, nil
 	}
-	return conn, nil
 }
 
 // ExecuteSuperQuery allows the user to execute a query as a super user.

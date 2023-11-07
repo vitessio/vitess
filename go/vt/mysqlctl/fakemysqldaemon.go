@@ -313,6 +313,10 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus() (replication.ReplicationStatus, 
 	}, nil
 }
 
+func (fmd *FakeMysqlDaemon) ReplicationStatusWithContext(ctx context.Context) (replication.ReplicationStatus, error) {
+	return fmd.ReplicationStatus()
+}
+
 // PrimaryStatus is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error) {
 	if fmd.PrimaryStatusError != nil {

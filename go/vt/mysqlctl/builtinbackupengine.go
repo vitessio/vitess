@@ -388,7 +388,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 
 	// See if we need to restart replication after backup.
 	params.Logger.Infof("getting current replication status")
-	replicaStatus, err := params.Mysqld.ReplicationStatus()
+	replicaStatus, err := params.Mysqld.ReplicationStatusWithContext(ctx)
 	switch err {
 	case nil:
 		replicaStartRequired = replicaStatus.Healthy() && !DisableActiveReparents
@@ -436,7 +436,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		if err := params.Mysqld.StopReplication(params.HookExtraEnv); err != nil {
 			return false, vterrors.Wrapf(err, "can't stop replica")
 		}
-		replicaStatus, err := params.Mysqld.ReplicationStatus()
+		replicaStatus, err := params.Mysqld.ReplicationStatusWithContext(ctx)
 		if err != nil {
 			return false, vterrors.Wrap(err, "can't get replica status")
 		}
@@ -534,7 +534,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 				if err := ctx.Err(); err != nil {
 					return usable, err
 				}
-				status, err := params.Mysqld.ReplicationStatus()
+				status, err := params.Mysqld.ReplicationStatusWithContext(ctx)
 				if err != nil {
 					return usable, err
 				}
