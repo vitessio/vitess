@@ -61,6 +61,10 @@ func (s *FakeSI) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyM
 	return vschemapb.Keyspace_unmanaged, nil
 }
 
+func (s *FakeSI) GetForeignKeyChecksState() sqlparser.FkChecksState {
+	return sqlparser.FkChecksUnspecified
+}
+
 func (s *FakeSI) KeyspaceError(keyspace string) error {
 	if s.KsError != nil {
 		fkErr, isPresent := s.KsError[keyspace]

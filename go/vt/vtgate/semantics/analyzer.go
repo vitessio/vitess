@@ -77,7 +77,7 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	}
 
 	// Creation of the semantic table
-	return analyzer.newSemTable(statement, si.ConnCollation())
+	return analyzer.newSemTable(statement, si.ConnCollation(), si.GetForeignKeyChecksState())
 }
 
 // AnalyzeStrict analyzes the parsed query, and fails the analysis for any possible errors
@@ -97,7 +97,7 @@ func AnalyzeStrict(statement sqlparser.Statement, currentDb string, si SchemaInf
 	return st, nil
 }
 
-func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID) (*SemTable, error) {
+func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID, fkChecksState sqlparser.FkChecksState) (*SemTable, error) {
 	var comments *sqlparser.ParsedComments
 	commentedStmt, isCommented := statement.(sqlparser.Commented)
 	if isCommented {
@@ -108,7 +108,7 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		columns[union] = info.exprs
 	}
 
-	childFks, parentFks, err := a.getInvolvedForeignKeys(statement)
+	childFks, parentFks, err := a.getInvolvedForeignKeys(statement, fkChecksState)
 	if err != nil {
 		return nil, err
 	}
@@ -317,7 +317,10 @@ func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
 }
 
 // getInvolvedForeignKeys gets the foreign keys that might require taking care off when executing the given statement.
-func (a *analyzer) getInvolvedForeignKeys(statement sqlparser.Statement) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, error) {
+func (a *analyzer) getInvolvedForeignKeys(statement sqlparser.Statement, fkChecksState sqlparser.FkChecksState) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, error) {
+	if fkChecksState == sqlparser.FkChecksOff {
+		return nil, nil, nil
+	}
 	// There are only the DML statements that require any foreign keys handling.
 	switch stmt := statement.(type) {
 	case *sqlparser.Delete:

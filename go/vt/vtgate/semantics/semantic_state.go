@@ -144,12 +144,13 @@ type (
 		ColumnName string
 	}
 
-	// SchemaInformation is used tp provide table information from Vschema.
+	// SchemaInformation is used to provide table information from Vschema.
 	SchemaInformation interface {
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 		ConnCollation() collations.ID
 		// ForeignKeyMode returns the foreign_key flag value
 		ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
+		GetForeignKeyChecksState() sqlparser.FkChecksState
 		KeyspaceError(keyspace string) error
 	}
 

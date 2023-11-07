@@ -2152,7 +2152,7 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			childFks, parentFks, err := tt.analyzer.getInvolvedForeignKeys(tt.stmt)
+			childFks, parentFks, err := tt.analyzer.getInvolvedForeignKeys(tt.stmt, sqlparser.FkChecksOn)
 			if tt.expectedErr != "" {
 				require.EqualError(t, err, tt.expectedErr)
 				return

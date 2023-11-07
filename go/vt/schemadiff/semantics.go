@@ -64,6 +64,10 @@ func (si *declarativeSchemaInformation) KeyspaceError(keyspace string) error {
 	return nil
 }
 
+func (si *declarativeSchemaInformation) GetForeignKeyChecksState() sqlparser.FkChecksState {
+	return sqlparser.FkChecksUnspecified
+}
+
 // addTable adds a fake table with an empty column list
 func (si *declarativeSchemaInformation) addTable(tableName string) {
 	tbl := &vindexes.Table{

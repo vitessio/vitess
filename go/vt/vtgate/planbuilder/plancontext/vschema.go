@@ -60,6 +60,8 @@ type VSchema interface {
 	// KeyspaceError returns any error in the keyspace vschema.
 	KeyspaceError(keyspace string) error
 
+	GetForeignKeyChecksState() sqlparser.FkChecksState
+
 	// GetVSchema returns the latest cached vindexes.VSchema
 	GetVSchema() *vindexes.VSchema
 
