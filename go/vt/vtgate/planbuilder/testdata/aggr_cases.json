@@ -6124,5 +6124,130 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "avg function on scatter query deep inside the output expression",
+    "query": "select avg(id)+count(foo)+bar from user group by bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(id)+count(foo)+bar from user group by bar",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "avg(id) + count(foo) + bar as avg(id) + count(foo) + bar"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":0 as bar",
+              "sum(id) / count(id) as avg(id)",
+              ":2 as count(foo)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum(1) AS avg(id), sum_count(2) AS count(foo), sum_count(3) AS count(id)",
+                "GroupBy": "(0|4)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` where 1 != 1 group by bar, weight_string(bar)",
+                    "OrderBy": "(0|4) ASC",
+                    "Query": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` group by bar, weight_string(bar) order by bar asc",
+                    "Table": "`user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "two avg aggregations",
+    "query": "select avg(foo), avg(bar) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(foo), avg(bar) from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "sum(foo) / count(foo) as avg(foo)",
+          "sum(bar) / count(bar) as avg(bar)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS avg(foo), sum(1) AS avg(bar), sum_count(2) AS count(foo), sum_count(3) AS count(bar)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(foo), sum(bar), count(foo), count(bar) from `user` where 1 != 1",
+                "Query": "select sum(foo), sum(bar), count(foo), count(bar) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "avg and count on the same argument",
+    "query": "select avg(foo), count(foo) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(foo), count(foo) from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "sum(foo) / count(foo) as avg(foo)",
+          ":1 as count(foo)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS avg(foo), sum_count(1) AS count(foo), sum_count(2) AS count(foo)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(foo), count(foo), count(foo) from `user` where 1 != 1",
+                "Query": "select sum(foo), count(foo), count(foo) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
