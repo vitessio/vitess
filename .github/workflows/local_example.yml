@@ -8,8 +8,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+<<<<<<< HEAD
         os: [ubuntu-22.04]
         topo: [consul,etcd,k8s]
+=======
+        topo: [consul,etcd,zk2]
+>>>>>>> 1a9119d089 (examples: fix flag syntax for zkctl (#14469))
 
     steps:
     - name: Skip CI
