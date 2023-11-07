@@ -19,6 +19,7 @@ package operators
 import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -56,9 +57,9 @@ func (p Phase) String() string {
 		return "optimize Distinct operations"
 	case subquerySettling:
 		return "settle subqueries"
+	default:
+		panic(vterrors.VT13001("unhandled default case"))
 	}
-
-	return "unknown"
 }
 
 func (p Phase) shouldRun(s semantics.QuerySignature) bool {
@@ -73,8 +74,9 @@ func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 		return s.Distinct
 	case subquerySettling:
 		return s.SubQueries
+	default:
+		return true
 	}
-	return true
 }
 
 func (p Phase) act(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
@@ -89,9 +91,9 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Opera
 		return removePerformanceDistinctAboveRoute(ctx, op)
 	case subquerySettling:
 		return settleSubqueries(ctx, op), nil
+	default:
+		return op, nil
 	}
-
-	return op, nil
 }
 
 // getPhases returns the ordered phases that the planner will undergo.
@@ -128,18 +130,16 @@ func addOrderingForAllAggregations(ctx *plancontext.PlanningContext, root ops.Op
 			return in, rewrite.SameTree, nil
 		}
 
-		var res *rewrite.ApplyResult
-
 		requireOrdering, err := needsOrdering(ctx, aggrOp)
 		if err != nil {
 			return nil, nil, err
 		}
 
+		var res *rewrite.ApplyResult
 		if requireOrdering {
 			addOrderingFor(aggrOp)
 			res = rewrite.NewTree("added ordering before aggregation", in)
 		}
-
 		return in, res, nil
 	}
 

@@ -6038,5 +6038,91 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "avg function on scatter query",
+    "query": "select avg(id) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(id) from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "sum(id) / count(id) as avg(id)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS avg(id), sum_count(1) AS count(id)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(id), count(id) from `user` where 1 != 1",
+                "Query": "select sum(id), count(id) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "avg function on scatter query deep inside the output expression",
+    "query": "select avg(id)+count(foo)+bar from user group by bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(id)+count(foo)+bar from user group by bar",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "avg(id) + count(foo) + bar as avg(id) + count(foo) + bar"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":0 as bar",
+              "sum(id) / count(id) as avg(id)",
+              ":2 as count(foo)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum(1) AS avg(id), sum_count(2) AS count(foo), sum_count(3) AS count(id)",
+                "GroupBy": "(0|4)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` where 1 != 1 group by bar, weight_string(bar)",
+                    "OrderBy": "(0|4) ASC",
+                    "Query": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` group by bar, weight_string(bar) order by bar asc",
+                    "Table": "`user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
