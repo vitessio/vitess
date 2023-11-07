@@ -385,13 +385,20 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos replication.P
 
 // ReplicationStatus returns the server replication status
 func (mysqld *Mysqld) ReplicationStatus() (replication.ReplicationStatus, error) {
-	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	defer cancel()
+
+	return mysqld.ReplicationStatusWithContext(ctx)
+}
+
+func (mysqld *Mysqld) ReplicationStatusWithContext(ctx context.Context) (replication.ReplicationStatus, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return replication.ReplicationStatus{}, err
 	}
-	defer conn.Recycle()
 
-	return conn.Conn.ShowReplicationStatus()
+	defer conn.Recycle()
+	return conn.Conn.ShowReplicationStatusWithContext(ctx)
 }
 
 // PrimaryStatus returns the primary replication statuses

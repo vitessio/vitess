@@ -441,6 +441,34 @@ func (c *Conn) ShowReplicationStatus() (replication.ReplicationStatus, error) {
 	return c.flavor.status(c)
 }
 
+func (c *Conn) ShowReplicationStatusWithContext(ctx context.Context) (replication.ReplicationStatus, error) {
+	result := make(chan replication.ReplicationStatus, 1)
+	errors := make(chan error, 1)
+
+	go func() {
+		res, err := c.ShowReplicationStatus()
+		if err != nil {
+			errors <- err
+		} else {
+			result <- res
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			c.Close()
+			return replication.ReplicationStatus{}, ctx.Err()
+
+		case err := <-errors:
+			return replication.ReplicationStatus{}, err
+
+		case res := <-result:
+			return res, nil
+		}
+	}
+}
+
 // ShowPrimaryStatus executes the right SHOW MASTER STATUS command,
 // and returns a parsed executed Position, as well as file based Position.
 func (c *Conn) ShowPrimaryStatus() (replication.PrimaryStatus, error) {

@@ -287,7 +287,28 @@ func TestReplicationStatus(t *testing.T) {
 
 	status, err := conn.ShowReplicationStatus()
 	assert.Equal(t, mysql.ErrNotReplica, err, "Got unexpected result for ShowReplicationStatus: %v %v", status, err)
+}
 
+func TestReplicationStatusWithMysqlHang(t *testing.T) {
+	params := connParams
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	conn, err := mysql.Connect(ctx, &params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	err = cluster.SimulateMySQLHang()
+	require.NoError(t, err)
+
+	defer cluster.StopSimulateMySQLHang()
+
+	status, err := conn.ShowReplicationStatusWithContext(ctx)
+	assert.Equal(t, ctx.Err().Error(), "context deadline exceeded")
+	assert.Equal(t, ctx.Err(), err, "Got unexpected result for ShowReplicationStatus: %v %v", status, err)
+	assert.True(t, conn.IsClosed())
 }
 
 func TestSessionTrackGTIDs(t *testing.T) {
