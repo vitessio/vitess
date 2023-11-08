@@ -92,7 +92,15 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 			"--init_db_sql_file", mysqlctld.InitDBFile)
 	}
 
-	errFile, _ := os.Create(path.Join(mysqlctld.LogDirectory, "mysqlctld-stderr.txt"))
+	err := os.MkdirAll(mysqlctld.LogDirectory, 0755)
+	if err != nil {
+		log.Errorf("Failed to create directory for mysqlctld logs: %v", err)
+		return err
+	}
+	errFile, err := os.Create(path.Join(mysqlctld.LogDirectory, "mysqlctld-stderr.txt"))
+	if err != nil {
+		log.Errorf("Failed to create directory for mysqlctld stderr: %v", err)
+	}
 	tempProcess.Stderr = errFile
 
 	tempProcess.Env = append(tempProcess.Env, os.Environ()...)
@@ -103,7 +111,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 
 	log.Infof("%v", strings.Join(tempProcess.Args, " "))
 
-	err := tempProcess.Start()
+	err = tempProcess.Start()
 	if err != nil {
 		return err
 	}
