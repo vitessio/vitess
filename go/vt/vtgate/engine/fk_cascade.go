@@ -33,13 +33,20 @@ type FkChild struct {
 	BVName string
 	// Cols are the indexes of the column that need to be selected from the SELECT query to create the tuple bind variable.
 	Cols []int
-	// UpdateExprBvNames is the list of bind variables for non-literal expressions in UPDATES.
-	UpdateExprBvNames []string
-	// UpdateExprCols is the list of indexes for non-literal expressions in UPDATES that need to be taken from the SELECT.
-	UpdateExprCols []int
-	// CompExprCols is the list of indexes for the comparison in the SELECTS to know if the column is actually being updated or not.
-	CompExprCols []int
-	Exec         Primitive
+	// NonLiteralInfo stores the information that is needed to run an update query with non-literal values.
+	NonLiteralInfo []NonLiteralUpdateInfo
+	Exec           Primitive
+}
+
+// NonLiteralUpdateInfo stores the information required to process non-literal update queries.
+// It stores 3 information-
+// 1. UpdateExprCol- The index of the updated expression in the select query.
+// 2. UpdateExprBvName- The bind variable name to store the updated expression into.
+// 3. CompExprCol- The index of the comparison expression in the select query to know if the row value is actually being changed or not.
+type NonLiteralUpdateInfo struct {
+	UpdateExprCol    int
+	UpdateExprBvName string
+	CompExprCol      int
 }
 
 // FkCascade is a primitive that implements foreign key cascading using Selection as values required to execute the FkChild Primitives.
@@ -92,7 +99,7 @@ func (fkc *FkCascade) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	for _, child := range fkc.Children {
 		// Having non-empty UpdateExprBvNames is an indication that we have an update query with non-literal expressions in it.
 		// We need to run this query differently because we need to run an update for each row we get back from the SELECT.
-		if len(child.UpdateExprBvNames) > 0 {
+		if len(child.NonLiteralInfo) > 0 {
 			err = fkc.executeNonLiteralExprFkChild(ctx, vcursor, bindVars, wantfields, selectionRes, child, false)
 		} else {
 			err = fkc.executeLiteralExprFkChild(ctx, vcursor, bindVars, wantfields, selectionRes, child, false)
@@ -141,10 +148,10 @@ func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor 
 	for _, row := range selectionRes.Rows {
 		// First we check if any of the columns is being updated at all.
 		skipRow := true
-		for _, colIdx := range child.CompExprCols {
+		for _, info := range child.NonLiteralInfo {
 			// We use a null-safe comparison, so the value is guaranteed to be not null.
 			// We check if the column has updated or not.
-			isUnchanged, err := row[colIdx].ToBool()
+			isUnchanged, err := row[info.CompExprCol].ToBool()
 			if err != nil {
 				return err
 			}
@@ -175,8 +182,8 @@ func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor 
 		bindVars[child.BVName] = bv
 
 		// Next, we need to copy the updated expressions value into the bind variables map.
-		for idx, updateExprBvName := range child.UpdateExprBvNames {
-			bindVars[updateExprBvName] = sqltypes.ValueBindVariable(row[child.UpdateExprCols[idx]])
+		for _, info := range child.NonLiteralInfo {
+			bindVars[info.UpdateExprBvName] = sqltypes.ValueBindVariable(row[info.UpdateExprCol])
 		}
 		var err error
 		if isStreaming {
@@ -189,8 +196,8 @@ func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor 
 		}
 		// Remove the bind variables that have been used and are no longer required.
 		delete(bindVars, child.BVName)
-		for _, updateExprBvName := range child.UpdateExprBvNames {
-			delete(bindVars, updateExprBvName)
+		for _, info := range child.NonLiteralInfo {
+			delete(bindVars, info.UpdateExprBvName)
 		}
 	}
 	return nil
@@ -225,7 +232,7 @@ func (fkc *FkCascade) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	// Since this Primitive is always executed in a transaction, the changes should
 	// be rolled back incase of an error.
 	for _, child := range fkc.Children {
-		if len(child.UpdateExprBvNames) > 0 {
+		if len(child.NonLiteralInfo) > 0 {
 			err = fkc.executeNonLiteralExprFkChild(ctx, vcursor, bindVars, wantfields, selectionRes, child, true)
 		} else {
 			err = fkc.executeLiteralExprFkChild(ctx, vcursor, bindVars, wantfields, selectionRes, child, true)
@@ -253,10 +260,8 @@ func (fkc *FkCascade) Inputs() ([]Primitive, []map[string]any) {
 			"BvName":  child.BVName,
 			"Cols":    child.Cols,
 		}
-		if len(child.UpdateExprBvNames) > 0 {
-			childInfoMap["UpdateExprBvNames"] = child.UpdateExprBvNames
-			childInfoMap["UpdateExprCols"] = child.UpdateExprCols
-			childInfoMap["CompExprCols"] = child.CompExprCols
+		if len(child.NonLiteralInfo) > 0 {
+			childInfoMap["NonLiteralUpdateInfo"] = child.NonLiteralInfo
 		}
 		inputsMap = append(inputsMap, childInfoMap)
 		inputs = append(inputs, child.Exec)

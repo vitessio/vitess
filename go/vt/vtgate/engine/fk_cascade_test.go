@@ -151,10 +151,10 @@ func TestUpdateCascade(t *testing.T) {
 
 // TestNonLiteralUpdateCascade tests that FkCascade executes the child and parent primitives for a non-literal update cascade.
 func TestNonLiteralUpdateCascade(t *testing.T) {
-	fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("cola|cola != colb + 2|colb + 2", "int64|int64|int64"), "1|0|3", "2|1|5", "3|1|7")
+	fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("cola|cola <=> colb + 2|colb + 2", "int64|int64|int64"), "1|1|3", "2|0|5", "3|0|7")
 
 	inputP := &Route{
-		Query: "select cola, cola != colb + 2, colb + 2, from parent where foo = 48",
+		Query: "select cola, cola <=> colb + 2, colb + 2, from parent where foo = 48",
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Unsharded,
 			Keyspace: &vindexes.Keyspace{Name: "ks"},
@@ -181,12 +181,16 @@ func TestNonLiteralUpdateCascade(t *testing.T) {
 	fkc := &FkCascade{
 		Selection: inputP,
 		Children: []*FkChild{{
-			BVName:            "__vals",
-			Cols:              []int{0},
-			UpdateExprBvNames: []string{"fkc_upd"},
-			UpdateExprCols:    []int{2},
-			CompExprCols:      []int{1},
-			Exec:              childP,
+			BVName: "__vals",
+			Cols:   []int{0},
+			NonLiteralInfo: []NonLiteralUpdateInfo{
+				{
+					UpdateExprBvName: "fkc_upd",
+					UpdateExprCol:    2,
+					CompExprCol:      1,
+				},
+			},
+			Exec: childP,
 		}},
 		Parent: parentP,
 	}
@@ -197,7 +201,7 @@ func TestNonLiteralUpdateCascade(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: select cola, cola != colb + 2, colb + 2, from parent where foo = 48 {} false false`,
+		`ExecuteMultiShard ks.0: select cola, cola <=> colb + 2, colb + 2, from parent where foo = 48 {} false false`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x012"} fkc_upd: type:INT64 value:"5"} true true`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -211,7 +215,7 @@ func TestNonLiteralUpdateCascade(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`StreamExecuteMulti select cola, cola != colb + 2, colb + 2, from parent where foo = 48 ks.0: {} `,
+		`StreamExecuteMulti select cola, cola <=> colb + 2, colb + 2, from parent where foo = 48 ks.0: {} `,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x012"} fkc_upd: type:INT64 value:"5"} true true`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,

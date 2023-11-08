@@ -280,7 +280,7 @@ func (cached *FkChild) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(80)
 	}
 	// field BVName string
 	size += hack.RuntimeAllocSize(int64(len(cached.BVName)))
@@ -288,20 +288,12 @@ func (cached *FkChild) CachedSize(alloc bool) int64 {
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(8))
 	}
-	// field UpdateExprBvNames []string
+	// field NonLiteralInfo []vitess.io/vitess/go/vt/vtgate/engine.NonLiteralUpdateInfo
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.UpdateExprBvNames)) * int64(16))
-		for _, elem := range cached.UpdateExprBvNames {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
+		size += hack.RuntimeAllocSize(int64(cap(cached.NonLiteralInfo)) * int64(32))
+		for _, elem := range cached.NonLiteralInfo {
+			size += elem.CachedSize(false)
 		}
-	}
-	// field UpdateExprCols []int
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.UpdateExprCols)) * int64(8))
-	}
-	// field CompExprCols []int
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.CompExprCols)) * int64(8))
 	}
 	// field Exec vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Exec.(cachedObject); ok {
@@ -625,6 +617,18 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(39))
 	}
+	return size
+}
+func (cached *NonLiteralUpdateInfo) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field UpdateExprBvName string
+	size += hack.RuntimeAllocSize(int64(len(cached.UpdateExprBvName)))
 	return size
 }
 func (cached *OnlineDDL) CachedSize(alloc bool) int64 {

@@ -838,17 +838,15 @@
                 "Cols": [
                   0
                 ],
-                "CompExprCols": [
-                  1
+                "NonLiteralUpdateInfo": [
+                  {
+                    "UpdateExprCol": 2,
+                    "UpdateExprBvName": "fkc_upd",
+                    "CompExprCol": 1
+                  }
                 ],
                 "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (:fkc_upd is null or (u_tbl3.col3) not in ((:fkc_upd)))",
-                "Table": "u_tbl3",
-                "UpdateExprBvNames": [
-                  "fkc_upd"
-                ],
-                "UpdateExprCols": [
-                  2
-                ]
+                "Table": "u_tbl3"
               },
               {
                 "InputName": "Parent",
@@ -901,14 +899,12 @@
             "Cols": [
               0
             ],
-            "CompExprCols": [
-              1
-            ],
-            "UpdateExprBvNames": [
-              "fkc_upd"
-            ],
-            "UpdateExprCols": [
-              2
+            "NonLiteralUpdateInfo": [
+              {
+                "UpdateExprCol": 2,
+                "UpdateExprBvName": "fkc_upd",
+                "CompExprCol": 1
+              }
             ],
             "Inputs": [
               {
@@ -960,14 +956,12 @@
             "Cols": [
               0
             ],
-            "CompExprCols": [
-              1
-            ],
-            "UpdateExprBvNames": [
-              "fkc_upd1"
-            ],
-            "UpdateExprCols": [
-              2
+            "NonLiteralUpdateInfo": [
+              {
+                "UpdateExprCol": 2,
+                "UpdateExprBvName": "fkc_upd1",
+                "CompExprCol": 1
+              }
             ],
             "Inputs": [
               {
@@ -2002,14 +1996,12 @@
             "Cols": [
               0
             ],
-            "CompExprCols": [
-              1
-            ],
-            "UpdateExprBvNames": [
-              "fkc_upd"
-            ],
-            "UpdateExprCols": [
-              2
+            "NonLiteralUpdateInfo": [
+              {
+                "UpdateExprCol": 2,
+                "UpdateExprBvName": "fkc_upd",
+                "CompExprCol": 1
+              }
             ],
             "Inputs": [
               {
@@ -2101,14 +2093,12 @@
               0,
               1
             ],
-            "CompExprCols": [
-              2
-            ],
-            "UpdateExprBvNames": [
-              "fkc_upd"
-            ],
-            "UpdateExprCols": [
-              3
+            "NonLiteralUpdateInfo": [
+              {
+                "UpdateExprCol": 3,
+                "UpdateExprBvName": "fkc_upd",
+                "CompExprCol": 2
+              }
             ],
             "Inputs": [
               {
@@ -2231,20 +2221,20 @@
                   0,
                   1
                 ],
-                "CompExprCols": [
-                  2,
-                  4
+                "NonLiteralUpdateInfo": [
+                  {
+                    "UpdateExprCol": 3,
+                    "UpdateExprBvName": "fkc_upd",
+                    "CompExprCol": 2
+                  },
+                  {
+                    "UpdateExprCol": 5,
+                    "UpdateExprBvName": "fkc_upd1",
+                    "CompExprCol": 4
+                  }
                 ],
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = :fkc_upd, colb = :fkc_upd1 where (cola, colb) in ::fkc_vals",
-                "Table": "u_multicol_tbl3",
-                "UpdateExprBvNames": [
-                  "fkc_upd",
-                  "fkc_upd1"
-                ],
-                "UpdateExprCols": [
-                  3,
-                  5
-                ]
+                "Table": "u_multicol_tbl3"
               },
               {
                 "InputName": "Parent",
