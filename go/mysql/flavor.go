@@ -438,7 +438,7 @@ func resultToMap(qr *sqltypes.Result) (map[string]string, error) {
 // ShowReplicationStatus executes the right command to fetch replication status,
 // and returns a parsed Position with other fields.
 func (c *Conn) ShowReplicationStatus() (replication.ReplicationStatus, error) {
-	return c.flavor.status(c)
+	return c.ShowReplicationStatusWithContext(context.TODO())
 }
 
 func (c *Conn) ShowReplicationStatusWithContext(ctx context.Context) (replication.ReplicationStatus, error) {
@@ -446,7 +446,7 @@ func (c *Conn) ShowReplicationStatusWithContext(ctx context.Context) (replicatio
 	errors := make(chan error, 1)
 
 	go func() {
-		res, err := c.ShowReplicationStatus()
+		res, err := c.flavor.status(c)
 		if err != nil {
 			errors <- err
 		} else {
