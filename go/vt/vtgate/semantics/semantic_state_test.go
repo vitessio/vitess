@@ -757,10 +757,10 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 		Name:     sqlparser.NewIdentifierCS("t3"),
 	}
 	tests := []struct {
-		name      string
-		query     string
-		fakeSi    *FakeSI
-		isUpdated bool
+		name       string
+		query      string
+		fakeSi     *FakeSI
+		updatedErr string
 	}{
 		{
 			name:  "updated child foreign key column is dependent on another updated column",
@@ -779,7 +779,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 					},
 				},
 			},
-			isUpdated: true,
+			updatedErr: "VT12001: unsupported: id column referenced in foreign key column col is itself updated",
 		}, {
 			name:  "updated parent foreign key column is dependent on another updated column",
 			query: "update t1 set col = id + 1, id = 6 where foo = 3",
@@ -797,7 +797,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 					},
 				},
 			},
-			isUpdated: true,
+			updatedErr: "VT12001: unsupported: id column referenced in foreign key column col is itself updated",
 		}, {
 			name:  "no foreign key column is dependent on a updated value",
 			query: "update t1 set col = id + 1 where foo = 3",
@@ -815,7 +815,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 					},
 				},
 			},
-			isUpdated: false,
+			updatedErr: "",
 		}, {
 			name:  "self-referenced foreign key",
 			query: "update t1 set col = col + 1 where foo = 3",
@@ -833,7 +833,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 					},
 				},
 			},
-			isUpdated: false,
+			updatedErr: "",
 		}, {
 			name:  "no foreign keys",
 			query: "update t1 set col = id + 1, id = 6 where foo = 3",
@@ -848,7 +848,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 					},
 				},
 			},
-			isUpdated: false,
+			updatedErr: "",
 		},
 	}
 	for _, tt := range tests {
@@ -857,8 +857,12 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 			require.NoError(t, err)
 			semTable, err := Analyze(stmt, keyspaceName, tt.fakeSi)
 			require.NoError(t, err)
-			got := semTable.IsFkDependentColumnUpdated(stmt.(*sqlparser.Update).Exprs)
-			require.EqualValues(t, tt.isUpdated, got)
+			got := semTable.ErrIfFkDependentColumnUpdated(stmt.(*sqlparser.Update).Exprs)
+			if tt.updatedErr == "" {
+				require.NoError(t, got)
+			} else {
+				require.EqualError(t, got, tt.updatedErr)
+			}
 		})
 	}
 }

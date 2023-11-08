@@ -285,8 +285,8 @@ func (st *SemTable) RemoveNonRequiredForeignKeys(verifyAllFks bool, getAction fu
 	return nil
 }
 
-// IsFkDependentColumnUpdated checks if a foreign key column that is being updated is dependent on another column which also being updated.
-func (st *SemTable) IsFkDependentColumnUpdated(updateExprs sqlparser.UpdateExprs) bool {
+// ErrIfFkDependentColumnUpdated checks if a foreign key column that is being updated is dependent on another column which also being updated.
+func (st *SemTable) ErrIfFkDependentColumnUpdated(updateExprs sqlparser.UpdateExprs) error {
 	// Go over all the update expressions
 	for _, updateExpr := range updateExprs {
 		deps := st.RecursiveDeps(updateExpr.Name)
@@ -321,7 +321,7 @@ func (st *SemTable) IsFkDependentColumnUpdated(updateExprs sqlparser.UpdateExprs
 		// what to cascade to the child. The selection that we do isn't enough to know if the updated value, since one of the columns used in the update is also being updated.
 		// 2. For the parent foreign keys, we don't know if we need to reject this update. Because we don't know the final updated value, the update might need to be failed,
 		// but we can't say for certain.
-		dependencyUpdated := false
+		var dependencyUpdatedErr error
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			col, ok := node.(*sqlparser.ColName)
 			if !ok {
@@ -333,17 +333,17 @@ func (st *SemTable) IsFkDependentColumnUpdated(updateExprs sqlparser.UpdateExprs
 			}
 			for _, updExpr := range updateExprs {
 				if st.EqualsExpr(updExpr.Name, col) {
-					dependencyUpdated = true
+					dependencyUpdatedErr = vterrors.VT12001(fmt.Sprintf("%v column referenced in foreign key column %v is itself updated", sqlparser.String(col), sqlparser.String(updateExpr.Name)))
 					return false, nil
 				}
 			}
 			return false, nil
 		}, updateExpr.Expr)
-		if dependencyUpdated {
-			return true
+		if dependencyUpdatedErr != nil {
+			return dependencyUpdatedErr
 		}
 	}
-	return false
+	return nil
 }
 
 // HasNonLiteralForeignKeyUpdate returns if any of the updated expressions have a non-literal update and are part of a foreign key.

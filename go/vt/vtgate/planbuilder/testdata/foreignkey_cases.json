@@ -1972,7 +1972,7 @@
   {
     "comment": "foreign key column updated by using a column which is also getting updated",
     "query": "update u_tbl1 set foo = 100, col1 = baz + 1 + foo where bar = 42",
-    "plan": "VT12001: unsupported: same column referenced in foreign key column update is also updated"
+    "plan": "VT12001: unsupported: foo column referenced in foreign key column col1 is itself updated"
   },
   {
     "comment": "foreign key column updated by using a column which is also getting updated - self reference column is allowed",
@@ -2178,7 +2178,7 @@
   {
     "comment": "updating multiple columns of a fk constraint such that one uses the other",
     "query": "update u_multicol_tbl3 set cola = id, colb = 5 * (cola + (1 - (cola))) where id = 2",
-    "plan": "VT12001: unsupported: same column referenced in foreign key column update is also updated"
+    "plan": "VT12001: unsupported: cola column referenced in foreign key column colb is itself updated"
   },
   {
     "comment": "multicol foreign key updates with one literal and one non-literal update",
