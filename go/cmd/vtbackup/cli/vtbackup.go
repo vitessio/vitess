@@ -520,7 +520,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		}
 
 		lastStatus = status
-		status, statusErr = mysqld.ReplicationStatus()
+		status, statusErr = mysqld.ReplicationStatusWithContext(ctx)
 		if statusErr != nil {
 			log.Warningf("Error getting replication status: %v", statusErr)
 			continue
@@ -557,7 +557,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	// Did we make any progress?
-	status, statusErr = mysqld.ReplicationStatus()
+	status, statusErr = mysqld.ReplicationStatusWithContext(ctx)
 	if statusErr != nil {
 		return fmt.Errorf("can't get replication status: %v", err)
 	}

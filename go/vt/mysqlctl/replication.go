@@ -385,10 +385,7 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos replication.P
 
 // ReplicationStatus returns the server replication status
 func (mysqld *Mysqld) ReplicationStatus() (replication.ReplicationStatus, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-	defer cancel()
-
-	return mysqld.ReplicationStatusWithContext(ctx)
+	return mysqld.ReplicationStatusWithContext(context.TODO())
 }
 
 func (mysqld *Mysqld) ReplicationStatusWithContext(ctx context.Context) (replication.ReplicationStatus, error) {
