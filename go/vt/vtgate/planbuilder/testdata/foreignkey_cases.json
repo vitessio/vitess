@@ -821,8 +821,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col2, col2 != u_tbl2.col1 + 'bar', u_tbl2.col1 + 'bar' from u_tbl2 where 1 != 1",
-                "Query": "select col2, col2 != u_tbl2.col1 + 'bar', u_tbl2.col1 + 'bar' from u_tbl2 where u_tbl2.id = 1 for update",
+                "FieldQuery": "select col2, col2 <=> u_tbl2.col1 + 'bar', u_tbl2.col1 + 'bar' from u_tbl2 where 1 != 1",
+                "Query": "select col2, col2 <=> u_tbl2.col1 + 'bar', u_tbl2.col1 + 'bar' from u_tbl2 where u_tbl2.id = 1 for update",
                 "Table": "u_tbl2"
               },
               {
@@ -890,8 +890,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col1, col1 != u_tbl1.x + 'bar', u_tbl1.x + 'bar' from u_tbl1 where 1 != 1",
-            "Query": "select col1, col1 != u_tbl1.x + 'bar', u_tbl1.x + 'bar' from u_tbl1 where id = 1 for update",
+            "FieldQuery": "select col1, col1 <=> u_tbl1.x + 'bar', u_tbl1.x + 'bar' from u_tbl1 where 1 != 1",
+            "Query": "select col1, col1 <=> u_tbl1.x + 'bar', u_tbl1.x + 'bar' from u_tbl1 where id = 1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -1991,8 +1991,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col7, col7 != baz + 1 + col7, baz + 1 + col7 from u_tbl7 where 1 != 1",
-            "Query": "select col7, col7 != baz + 1 + col7, baz + 1 + col7 from u_tbl7 where bar = 42 for update",
+            "FieldQuery": "select col7, col7 <=> baz + 1 + col7, baz + 1 + col7 from u_tbl7 where 1 != 1",
+            "Query": "select col7, col7 <=> baz + 1 + col7, baz + 1 + col7 from u_tbl7 where bar = 42 for update",
             "Table": "u_tbl7"
           },
           {
@@ -2089,8 +2089,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select cola, colb, cola != u_multicol_tbl1.cola + 3, u_multicol_tbl1.cola + 3 from u_multicol_tbl1 where 1 != 1",
-            "Query": "select cola, colb, cola != u_multicol_tbl1.cola + 3, u_multicol_tbl1.cola + 3 from u_multicol_tbl1 where id = 3 for update",
+            "FieldQuery": "select cola, colb, cola <=> u_multicol_tbl1.cola + 3, u_multicol_tbl1.cola + 3 from u_multicol_tbl1 where 1 != 1",
+            "Query": "select cola, colb, cola <=> u_multicol_tbl1.cola + 3, u_multicol_tbl1.cola + 3 from u_multicol_tbl1 where id = 3 for update",
             "Table": "u_multicol_tbl1"
           },
           {
@@ -2213,8 +2213,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select cola, colb, cola != 2, 2, colb != u_multicol_tbl2.colc - 2, u_multicol_tbl2.colc - 2 from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb, cola != 2, 2, colb != u_multicol_tbl2.colc - 2, u_multicol_tbl2.colc - 2 from u_multicol_tbl2 where u_multicol_tbl2.id = 7 for update",
+                "FieldQuery": "select cola, colb, cola <=> 2, 2, colb <=> u_multicol_tbl2.colc - 2, u_multicol_tbl2.colc - 2 from u_multicol_tbl2 where 1 != 1",
+                "Query": "select cola, colb, cola <=> 2, 2, colb <=> u_multicol_tbl2.colc - 2, u_multicol_tbl2.colc - 2 from u_multicol_tbl2 where u_multicol_tbl2.id = 7 for update",
                 "Table": "u_multicol_tbl2"
               },
               {

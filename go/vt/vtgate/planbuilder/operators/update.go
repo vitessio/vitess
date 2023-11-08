@@ -326,10 +326,10 @@ func addColumns(ctx *plancontext.PlanningContext, columns sqlparser.Columns, exp
 
 // For an update query having non-literal updates, we add the updated expression and a comparison expression to the select query.
 // For example, for a query like `update fk_table set col = id * 100 + 1`
-// We would add the expression `id * 100 + 1` and the comparison expression `col != id * 100 + 1` to the select query.
+// We would add the expression `id * 100 + 1` and the comparison expression `col <=> id * 100 + 1` to the select query.
 func addUpdExprToSelect(ctx *plancontext.PlanningContext, updExpr *sqlparser.UpdateExpr, exprs []sqlparser.SelectExpr) ([2]int, []sqlparser.SelectExpr) {
 	// Create the comparison expression.
-	compExpr := sqlparser.NewComparisonExpr(sqlparser.NotEqualOp, updExpr.Name, updExpr.Expr, nil)
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.NullSafeEqualOp, updExpr.Name, updExpr.Expr, nil)
 	offsets := [2]int{-1, -1}
 	// Add the expressions to the select expressions. We make sure to reuse the offset if it has already been added once.
 	for idx, selectExpr := range exprs {

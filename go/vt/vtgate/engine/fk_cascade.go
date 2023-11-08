@@ -142,17 +142,13 @@ func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor 
 		// First we check if any of the columns is being updated at all.
 		skipRow := true
 		for _, colIdx := range child.CompExprCols {
-			// The comparison expression in NULL means that the update expression itself was NULL.
-			if row[colIdx].IsNull() {
-				skipRow = false
-				break
-			}
-			// Now we check if the column has updated or not.
-			hasChanged, err := row[colIdx].ToBool()
+			// We use a null-safe comparison, so the value is guaranteed to be not null.
+			// We check if the column has updated or not.
+			isUnchanged, err := row[colIdx].ToBool()
 			if err != nil {
 				return err
 			}
-			if hasChanged {
+			if !isUnchanged {
 				// If any column has changed, then we can't skip this row.
 				// We need to execute the child primitive.
 				skipRow = false
