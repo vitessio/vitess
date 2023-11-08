@@ -48,13 +48,7 @@ func tryPushAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator)
 	// if we have not yet been able to push this aggregation down,
 	// we need to turn AVG into SUM/COUNT to support this over a sharded keyspace
 	if needAvgBreaking(aggregator.Aggregations) {
-		output, err = splitAvgAggregations(ctx, aggregator)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		applyResult = rewrite.NewTree("split avg aggregation", output)
-		return
+		return splitAvgAggregations(ctx, aggregator)
 	}
 
 	switch src := aggregator.Source.(type) {
@@ -826,7 +820,7 @@ func needAvgBreaking(aggrs []Aggr) bool {
 
 // splitAvgAggregations takes an aggregator that has AVG aggregations in it and splits
 // these into sum/count expressions that can be spread out to shards
-func splitAvgAggregations(ctx *plancontext.PlanningContext, aggr *Aggregator) (ops.Operator, error) {
+func splitAvgAggregations(ctx *plancontext.PlanningContext, aggr *Aggregator) (ops.Operator, *rewrite.ApplyResult, error) {
 	proj := newAliasedProjection(aggr)
 
 	var columns []*sqlparser.AliasedExpr
@@ -856,10 +850,10 @@ func splitAvgAggregations(ctx *plancontext.PlanningContext, aggr *Aggregator) (o
 		outputColumn.As = sqlparser.NewIdentifierCI(col.ColumnName())
 		_, err := proj.addUnexploredExpr(sqlparser.CloneRefOfAliasedExpr(col), calcExpr)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		col.Expr = sumExpr
-
+		found := false
 		for aggrOffset, aggregation := range aggr.Aggregations {
 			if offset == aggregation.ColOffset {
 				// We have found the AVG column. We'll change it to SUM, and then we add a COUNT as well
@@ -870,13 +864,18 @@ func splitAvgAggregations(ctx *plancontext.PlanningContext, aggr *Aggregator) (o
 				countAggr.ColOffset = len(aggr.Columns) + len(columns)
 				aggregations = append(aggregations, countAggr)
 				columns = append(columns, countExprAlias)
+				found = true
 				break // no need to search the remaining aggregations
 			}
+		}
+		if !found {
+			// if we get here, it's because we didn't find the aggregation. Something is wrong
+			panic(vterrors.VT13001("no aggregation pointing to this column was found"))
 		}
 	}
 
 	aggr.Columns = append(aggr.Columns, columns...)
 	aggr.Aggregations = append(aggr.Aggregations, aggregations...)
 
-	return proj, nil
+	return proj, rewrite.NewTree("split avg aggregation", proj), nil
 }
