@@ -34,22 +34,33 @@ func tryPushAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator)
 	if aggregator.Pushed {
 		return aggregator, rewrite.SameTree, nil
 	}
+
+	// this rewrite is always valid, and we should do it whenever possible
+	if route, ok := aggregator.Source.(*Route); ok && (route.IsSingleShard() || overlappingUniqueVindex(ctx, aggregator.Grouping)) {
+		return rewrite.Swap(aggregator, route, "push down aggregation under route - remove original")
+	}
+
+	// other rewrites require us to have reached this phase before we can consider them
+	if !reachedPhase(ctx, delegateAggregation) {
+		return aggregator, rewrite.SameTree, nil
+	}
+
+	// if we have not yet been able to push this aggregation down,
+	// we need to turn AVG into SUM/COUNT to support this over a sharded keyspace
+	if needAvgBreaking(aggregator.Aggregations) {
+		return splitAvgAggregations(ctx, aggregator)
+	}
+
 	switch src := aggregator.Source.(type) {
 	case *Route:
 		// if we have a single sharded route, we can push it down
 		output, applyResult, err = pushAggregationThroughRoute(ctx, aggregator, src)
 	case *ApplyJoin:
-		if reachedPhase(ctx, delegateAggregation) {
-			output, applyResult, err = pushAggregationThroughJoin(ctx, aggregator, src)
-		}
+		output, applyResult, err = pushAggregationThroughJoin(ctx, aggregator, src)
 	case *Filter:
-		if reachedPhase(ctx, delegateAggregation) {
-			output, applyResult, err = pushAggregationThroughFilter(ctx, aggregator, src)
-		}
+		output, applyResult, err = pushAggregationThroughFilter(ctx, aggregator, src)
 	case *SubQueryContainer:
-		if reachedPhase(ctx, delegateAggregation) {
-			output, applyResult, err = pushAggregationThroughSubquery(ctx, aggregator, src)
-		}
+		output, applyResult, err = pushAggregationThroughSubquery(ctx, aggregator, src)
 	default:
 		return aggregator, rewrite.SameTree, nil
 	}
@@ -135,15 +146,6 @@ func pushAggregationThroughRoute(
 	aggregator *Aggregator,
 	route *Route,
 ) (ops.Operator, *rewrite.ApplyResult, error) {
-	// If the route is single-shard, or we are grouping by sharding keys, we can just push down the aggregation
-	if route.IsSingleShard() || overlappingUniqueVindex(ctx, aggregator.Grouping) {
-		return rewrite.Swap(aggregator, route, "push down aggregation under route - remove original")
-	}
-
-	if !reachedPhase(ctx, delegateAggregation) {
-		return nil, nil, nil
-	}
-
 	// Create a new aggregator to be placed below the route.
 	aggrBelowRoute := aggregator.SplitAggregatorBelowRoute(route.Inputs())
 	aggrBelowRoute.Aggregations = nil
@@ -806,3 +808,74 @@ func initColReUse(size int) []int {
 }
 
 func extractExpr(expr *sqlparser.AliasedExpr) sqlparser.Expr { return expr.Expr }
+
+func needAvgBreaking(aggrs []Aggr) bool {
+	for _, aggr := range aggrs {
+		if aggr.OpCode == opcode.AggregateAvg {
+			return true
+		}
+	}
+	return false
+}
+
+// splitAvgAggregations takes an aggregator that has AVG aggregations in it and splits
+// these into sum/count expressions that can be spread out to shards
+func splitAvgAggregations(ctx *plancontext.PlanningContext, aggr *Aggregator) (ops.Operator, *rewrite.ApplyResult, error) {
+	proj := newAliasedProjection(aggr)
+
+	var columns []*sqlparser.AliasedExpr
+	var aggregations []Aggr
+
+	for offset, col := range aggr.Columns {
+		avg, ok := col.Expr.(*sqlparser.Avg)
+		if !ok {
+			proj.addColumnWithoutPushing(ctx, col, false /* addToGroupBy */)
+			continue
+		}
+
+		if avg.Distinct {
+			panic(vterrors.VT12001("AVG(distinct <>)"))
+		}
+
+		// We have an AVG that we need to split
+		sumExpr := &sqlparser.Sum{Arg: avg.Arg}
+		countExpr := &sqlparser.Count{Args: []sqlparser.Expr{avg.Arg}}
+		calcExpr := &sqlparser.BinaryExpr{
+			Operator: sqlparser.DivOp,
+			Left:     sumExpr,
+			Right:    countExpr,
+		}
+
+		outputColumn := aeWrap(col.Expr)
+		outputColumn.As = sqlparser.NewIdentifierCI(col.ColumnName())
+		_, err := proj.addUnexploredExpr(sqlparser.CloneRefOfAliasedExpr(col), calcExpr)
+		if err != nil {
+			return nil, nil, err
+		}
+		col.Expr = sumExpr
+		found := false
+		for aggrOffset, aggregation := range aggr.Aggregations {
+			if offset == aggregation.ColOffset {
+				// We have found the AVG column. We'll change it to SUM, and then we add a COUNT as well
+				aggr.Aggregations[aggrOffset].OpCode = opcode.AggregateSum
+
+				countExprAlias := aeWrap(countExpr)
+				countAggr := NewAggr(opcode.AggregateCount, countExpr, countExprAlias, sqlparser.String(countExpr))
+				countAggr.ColOffset = len(aggr.Columns) + len(columns)
+				aggregations = append(aggregations, countAggr)
+				columns = append(columns, countExprAlias)
+				found = true
+				break // no need to search the remaining aggregations
+			}
+		}
+		if !found {
+			// if we get here, it's because we didn't find the aggregation. Something is wrong
+			panic(vterrors.VT13001("no aggregation pointing to this column was found"))
+		}
+	}
+
+	aggr.Columns = append(aggr.Columns, columns...)
+	aggr.Aggregations = append(aggr.Aggregations, aggregations...)
+
+	return proj, rewrite.NewTree("split avg aggregation", proj), nil
+}

@@ -686,25 +686,13 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 }
 
 func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningContext, allowComplexExpression bool) (out []Aggr, complex bool, err error) {
-orderBy:
-	for _, orderExpr := range qp.OrderExprs {
-		orderExpr := orderExpr.SimplifiedExpr
-		for _, expr := range qp.SelectExprs {
-			col, ok := expr.Col.(*sqlparser.AliasedExpr)
-			if !ok {
-				continue
-			}
-			if ctx.SemTable.EqualsExprWithDeps(col.Expr, orderExpr) {
-				continue orderBy // we found the expression we were looking for!
-			}
-		}
-		qp.SelectExprs = append(qp.SelectExprs, SelectExpr{
-			Col:  &sqlparser.AliasedExpr{Expr: orderExpr},
-			Aggr: containsAggr(orderExpr),
-		})
-		qp.AddedColumn++
+	qp.addOrderByToSelect(ctx)
+	addAggr := func(a Aggr) {
+		out = append(out, a)
 	}
-
+	makeComplex := func() {
+		complex = true
+	}
 	// Here we go over the expressions we are returning. Since we know we are aggregating,
 	// all expressions have to be either grouping expressions or aggregate expressions.
 	// If we find an expression that is neither, we treat is as a special aggregation function AggrRandom
@@ -733,34 +721,66 @@ orderBy:
 			return nil, false, vterrors.VT12001("in scatter query: complex aggregate expression")
 		}
 
-		sqlparser.CopyOnRewrite(aliasedExpr.Expr, func(node, parent sqlparser.SQLNode) bool {
-			ex, isExpr := node.(sqlparser.Expr)
-			if !isExpr {
-				return true
-			}
-			if aggr, isAggr := node.(sqlparser.AggrFunc); isAggr {
-				ae := aeWrap(aggr)
-				if aggr == aliasedExpr.Expr {
-					ae = aliasedExpr
-				}
-				aggrFunc := createAggrFromAggrFunc(aggr, ae)
-				aggrFunc.Index = &idxCopy
-				out = append(out, aggrFunc)
-				return false
-			}
-			if containsAggr(node) {
-				complex = true
-				return true
-			}
-			if !qp.isExprInGroupByExprs(ctx, ex) {
-				aggr := NewAggr(opcode.AggregateAnyValue, nil, aeWrap(ex), "")
-				aggr.Index = &idxCopy
-				out = append(out, aggr)
-			}
-			return false
-		}, nil, nil)
+		sqlparser.CopyOnRewrite(aliasedExpr.Expr, qp.extractAggr(ctx, idx, aliasedExpr, addAggr, makeComplex), nil, nil)
 	}
 	return
+}
+
+func (qp *QueryProjection) extractAggr(
+	ctx *plancontext.PlanningContext,
+	idx int,
+	aliasedExpr *sqlparser.AliasedExpr,
+	addAggr func(a Aggr),
+	makeComplex func(),
+) func(node sqlparser.SQLNode, parent sqlparser.SQLNode) bool {
+	return func(node, parent sqlparser.SQLNode) bool {
+		ex, isExpr := node.(sqlparser.Expr)
+		if !isExpr {
+			return true
+		}
+		if aggr, isAggr := node.(sqlparser.AggrFunc); isAggr {
+			ae := aeWrap(aggr)
+			if aggr == aliasedExpr.Expr {
+				ae = aliasedExpr
+			}
+			aggrFunc := createAggrFromAggrFunc(aggr, ae)
+			aggrFunc.Index = &idx
+			addAggr(aggrFunc)
+			return false
+		}
+		if containsAggr(node) {
+			makeComplex()
+			return true
+		}
+		if !qp.isExprInGroupByExprs(ctx, ex) {
+			aggr := NewAggr(opcode.AggregateAnyValue, nil, aeWrap(ex), "")
+			aggr.Index = &idx
+			addAggr(aggr)
+		}
+		return false
+	}
+}
+
+func (qp *QueryProjection) addOrderByToSelect(ctx *plancontext.PlanningContext) {
+orderBy:
+	// We need to return all columns that are being used for ordering
+	for _, orderExpr := range qp.OrderExprs {
+		orderExpr := orderExpr.SimplifiedExpr
+		for _, expr := range qp.SelectExprs {
+			col, ok := expr.Col.(*sqlparser.AliasedExpr)
+			if !ok {
+				continue
+			}
+			if ctx.SemTable.EqualsExprWithDeps(col.Expr, orderExpr) {
+				continue orderBy // we found the expression we were looking for!
+			}
+		}
+		qp.SelectExprs = append(qp.SelectExprs, SelectExpr{
+			Col:  &sqlparser.AliasedExpr{Expr: orderExpr},
+			Aggr: containsAggr(orderExpr),
+		})
+		qp.AddedColumn++
+	}
 }
 
 func createAggrFromAggrFunc(fnc sqlparser.AggrFunc, aliasedExpr *sqlparser.AliasedExpr) Aggr {
