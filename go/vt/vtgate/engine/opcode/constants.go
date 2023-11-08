@@ -74,6 +74,7 @@ const (
 	AggregateAnyValue
 	AggregateCountStar
 	AggregateGroupConcat
+	AggregateAvg
 	_NumOfOpCodes // This line must be last of the opcodes!
 )
 
@@ -85,6 +86,7 @@ var (
 		AggregateCountStar:     sqltypes.Int64,
 		AggregateSumDistinct:   sqltypes.Decimal,
 		AggregateSum:           sqltypes.Decimal,
+		AggregateAvg:           sqltypes.Decimal,
 		AggregateGtid:          sqltypes.VarChar,
 	}
 )
@@ -96,6 +98,7 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"sum":   AggregateSum,
 	"min":   AggregateMin,
 	"max":   AggregateMax,
+	"avg":   AggregateAvg,
 	// These functions don't exist in mysql, but are used
 	// to display the plan.
 	"count_distinct": AggregateCountDistinct,
@@ -117,6 +120,7 @@ var AggregateName = map[AggregateOpcode]string{
 	AggregateCountStar:     "count_star",
 	AggregateGroupConcat:   "group_concat",
 	AggregateAnyValue:      "any_value",
+	AggregateAvg:           "avg",
 }
 
 func (code AggregateOpcode) String() string {
@@ -148,7 +152,7 @@ func (code AggregateOpcode) Type(typ querypb.Type) querypb.Type {
 		return sqltypes.Text
 	case AggregateMax, AggregateMin, AggregateAnyValue:
 		return typ
-	case AggregateSumDistinct, AggregateSum:
+	case AggregateSumDistinct, AggregateSum, AggregateAvg:
 		if typ == sqltypes.Unknown {
 			return sqltypes.Unknown
 		}
