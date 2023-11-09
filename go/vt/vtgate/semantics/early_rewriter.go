@@ -67,7 +67,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 
 func (r *earlyRewriter) handleAliasedTable(node *sqlparser.AliasedTableExpr) error {
 	tbl, ok := node.Expr.(sqlparser.TableName)
-	if !ok || !tbl.Qualifier.IsEmpty() {
+	if !ok || tbl.Qualifier.NotEmpty() {
 		return nil
 	}
 	scope := r.scoper.currentScope()
@@ -348,7 +348,7 @@ func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.E
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
 	}
 
-	if !aliasedExpr.As.IsEmpty() {
+	if aliasedExpr.As.NotEmpty() {
 		return sqlparser.NewColName(aliasedExpr.As.String()), nil
 	}
 
