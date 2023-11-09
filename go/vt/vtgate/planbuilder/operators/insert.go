@@ -139,11 +139,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 		return nil, vterrors.VT12001("REPLACE INTO using select statement")
 	}
 
-	pkCompExpr, err := pkCompExpression(vTbl, ins, rows)
-	if err != nil {
-		return nil, err
-	}
-
+	pkCompExpr := pkCompExpression(vTbl, ins, rows)
 	uniqKeyCompExprs, err := uniqKeyCompExpressions(vTbl, ins, rows)
 	if err != nil {
 		return nil, err
@@ -180,9 +176,9 @@ func getWhereCondExpr(compExprs []*sqlparser.ComparisonExpr) sqlparser.Expr {
 	return outputExpr
 }
 
-func pkCompExpression(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sqlparser.Values) (*sqlparser.ComparisonExpr, error) {
+func pkCompExpression(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sqlparser.Values) *sqlparser.ComparisonExpr {
 	if len(vTbl.PrimaryKey) == 0 {
-		return nil, nil
+		return nil
 	}
 	type pComp struct {
 		idx int
@@ -191,25 +187,16 @@ func pkCompExpression(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sqlparse
 	var pIndexes []pComp
 	var pColTuple sqlparser.ValTuple
 	for _, pCol := range vTbl.PrimaryKey {
+		var def sqlparser.Expr
 		idx := ins.Columns.FindColumn(pCol)
 		if idx == -1 {
-			found := false
-			for _, column := range vTbl.Columns {
-				if column.Name.Equal(pCol) {
-					found = true
-					if column.Default == nil {
-						// default value is empty, nothing to compare as it will always be false.
-						return nil, nil
-					}
-					pIndexes = append(pIndexes, pComp{-1, column.Default})
-				}
-
-			}
-			if !found {
-				panic("column not found")
+			def = findDefault(vTbl, pCol)
+			if def == nil {
+				// If default value is empty, nothing to compare as it will always be false.
+				return nil
 			}
 		}
-		pIndexes = append(pIndexes, pComp{idx, nil})
+		pIndexes = append(pIndexes, pComp{idx, def})
 		pColTuple = append(pColTuple, sqlparser.NewColName(pCol.String()))
 	}
 
@@ -225,10 +212,19 @@ func pkCompExpression(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sqlparse
 		}
 		pValTuple = append(pValTuple, rowTuple)
 	}
-	return sqlparser.NewComparisonExpr(sqlparser.InOp, pColTuple, pValTuple, nil), nil
+	return sqlparser.NewComparisonExpr(sqlparser.InOp, pColTuple, pValTuple, nil)
 }
 
-func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sqlparser.Values) ([]*sqlparser.ComparisonExpr, error) {
+func findDefault(vTbl *vindexes.Table, pCol sqlparser.IdentifierCI) sqlparser.Expr {
+	for _, column := range vTbl.Columns {
+		if column.Name.Equal(pCol) {
+			return column.Default
+		}
+	}
+	panic(vterrors.VT03014(pCol.String(), vTbl.Name.String()))
+}
+
+func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sqlparser.Values) (comps []*sqlparser.ComparisonExpr, err error) {
 	noOfUniqKeys := len(vTbl.UniqueKeys)
 	if noOfUniqKeys == 0 {
 		return nil, nil
@@ -254,53 +250,33 @@ func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sq
 			var offsets []uComp
 			col, isCol := expr.(*sqlparser.ColName)
 			if isCol {
+				var def sqlparser.Expr
 				idx := ins.Columns.FindColumn(col.Name)
 				if idx == -1 {
-					found := false
-					for _, column := range vTbl.Columns {
-						if column.Name.Equal(col.Name) {
-							found = true
-							if column.Default == nil {
-								// default value is empty, nothing to compare as it will always be false.
-								skipKey = true
-								break
-							}
-							offsets = append(offsets, uComp{-1, column.Default})
-						}
-					}
-					if !found {
-						return nil, vterrors.VT03014(col.Name.String(), vTbl.Name.String())
+					def = findDefault(vTbl, col.Name)
+					if def == nil {
+						// default value is empty, nothing to compare as it will always be false.
+						skipKey = true
+						break
 					}
 				}
-				if skipKey {
-					break
-				}
-				offsets = append(offsets, uComp{idx, nil})
+				offsets = append(offsets, uComp{idx, def})
 			} else {
-				err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 					col, ok := node.(*sqlparser.ColName)
 					if !ok {
 						return true, nil
 					}
+					var def sqlparser.Expr
 					idx := ins.Columns.FindColumn(col.Name)
 					if idx == -1 {
-						found := false
-						for _, column := range vTbl.Columns {
-							if column.Name.Equal(col.Name) {
-								found = true
-								if column.Default == nil {
-									offsets = append(offsets, uComp{-1, &sqlparser.NullVal{}})
-									break
-								}
-								offsets = append(offsets, uComp{-1, column.Default})
-							}
-
-						}
-						if !found {
-							return false, vterrors.VT03014(col.Name.String(), vTbl.Name.String())
+						def = findDefault(vTbl, col.Name)
+						// no default, replace it with null value.
+						if def == nil {
+							def = &sqlparser.NullVal{}
 						}
 					}
-					offsets = append(offsets, uComp{idx, nil})
+					offsets = append(offsets, uComp{idx, def})
 					return false, nil
 				}, expr)
 				if err != nil {

@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,16 +21,19 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// Concatenate Primitive is used to concatenate results from multiple sources.
-var _ Primitive = (*Sequential)(nil)
-
-// Sequential specified the parameter for concatenate primitive
+// Sequential Primitive is used to execute DML statements in a fixed order.
+// Any failure, stops the execution and returns.
 type Sequential struct {
 	Sources []Primitive
+
+	txNeeded
 }
+
+var _ Primitive = (*Sequential)(nil)
 
 // NewSequential creates a Sequential primitive.
 func NewSequential(Sources []Primitive) *Sequential {
@@ -83,51 +86,16 @@ func (s *Sequential) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 
 // TryStreamExecute performs a streaming exec.
 func (s *Sequential) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantFields bool, callback func(*sqltypes.Result) error) error {
-	for _, source := range s.Sources {
-		err := source.TryStreamExecute(ctx, vcursor, bindVars, wantFields, callback)
-		if err != nil {
-			return err
-		}
+	res, err := s.TryExecute(ctx, vcursor, bindVars, wantFields)
+	if err != nil {
+		return err
 	}
-	return nil
+	return callback(res)
 }
 
 // GetFields fetches the field info.
-func (s *Sequential) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	res, err := s.Sources[0].GetFields(ctx, vcursor, bindVars)
-	if err != nil {
-		return nil, err
-	}
-
-	columns := make([][]sqltypes.Type, len(res.Fields))
-
-	addFields := func(fields []*querypb.Field) {
-		for idx, field := range fields {
-			columns[idx] = append(columns[idx], field.Type)
-		}
-	}
-
-	addFields(res.Fields)
-
-	for i := 1; i < len(s.Sources); i++ {
-		result, err := s.Sources[i].GetFields(ctx, vcursor, bindVars)
-		if err != nil {
-			return nil, err
-		}
-		addFields(result.Fields)
-	}
-
-	// The resulting column types need to be the coercion of all the input columns
-	for colIdx, t := range columns {
-		res.Fields[colIdx].Type = evalengine.AggregateTypes(t)
-	}
-
-	return res, nil
-}
-
-// NeedsTransaction returns whether a transaction is needed for this primitive
-func (s *Sequential) NeedsTransaction() bool {
-	return true
+func (s *Sequential) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code for Sequential engine")
 }
 
 // Inputs returns the input primitives for this

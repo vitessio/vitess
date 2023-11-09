@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,15 +29,15 @@ var _ logicalPlan = (*sequential)(nil)
 // Primitive implements the logicalPlan interface
 func (s *sequential) Primitive() engine.Primitive {
 	var sources []engine.Primitive
-	for idx, source := range s.sources {
+	for _, source := range s.sources {
 		prim := source.Primitive()
-		if idx == 0 {
-			switch dml := prim.(type) {
-			case *engine.Update:
-				dml.PreventAutoCommit = true
-			case *engine.Delete:
-				dml.PreventAutoCommit = true
-			}
+		switch dml := prim.(type) {
+		case *engine.Update:
+			dml.PreventAutoCommit = true
+		case *engine.Delete:
+			dml.PreventAutoCommit = true
+		case *engine.Insert:
+			dml.PreventAutoCommit = true
 		}
 		sources = append(sources, prim)
 	}

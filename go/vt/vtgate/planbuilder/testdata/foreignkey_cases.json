@@ -1690,7 +1690,7 @@
     "plan": "VT12002: unsupported: cross-shard foreign keys"
   },
   {
-    "comment": "replace intp with table having primary key",
+    "comment": "replace into with table having primary key",
     "query": "replace into u_tbl1 (id, col1) values (1, 2)",
     "plan": {
       "QueryType": "INSERT",
@@ -1785,6 +1785,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
+            "NoAutoCommit": true,
             "Query": "insert into u_tbl1(id, col1) values (1, 2)",
             "TableName": "u_tbl1"
           }
@@ -2424,6 +2425,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
+            "NoAutoCommit": true,
             "Query": "insert into u_tbl9(id, col9) values (1, 10), (2, 20), (3, 30)",
             "TableName": "u_tbl9"
           }
