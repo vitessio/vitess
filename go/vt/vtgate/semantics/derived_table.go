@@ -77,7 +77,7 @@ func handleAliasedExpr(vTbl *DerivedTable, expr *sqlparser.AliasedExpr, cols sql
 		return
 	}
 
-	if !expr.As.IsEmpty() {
+	if expr.As.NonEmpty() {
 		vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
 		return
 	}

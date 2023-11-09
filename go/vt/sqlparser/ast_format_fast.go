@@ -1128,7 +1128,7 @@ func (idx *IndexDefinition) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (ii *IndexInfo) FormatFast(buf *TrackedBuffer) {
-	if !ii.ConstraintName.IsEmpty() {
+	if ii.ConstraintName.NonEmpty() {
 		buf.WriteString("constraint ")
 		ii.ConstraintName.FormatFast(buf)
 		buf.WriteByte(' ')
@@ -1154,7 +1154,7 @@ func (ii *IndexInfo) FormatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[KEY])
 	}
-	if !ii.Name.IsEmpty() {
+	if ii.Name.NonEmpty() {
 		buf.WriteByte(' ')
 		ii.Name.FormatFast(buf)
 	}
@@ -1196,7 +1196,7 @@ func (node VindexParam) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (c *ConstraintDefinition) FormatFast(buf *TrackedBuffer) {
-	if !c.Name.IsEmpty() {
+	if c.Name.NonEmpty() {
 		buf.WriteString("constraint ")
 		c.Name.FormatFast(buf)
 		buf.WriteByte(' ')
@@ -1474,7 +1474,7 @@ func (node *StarExpr) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node.
 func (node *AliasedExpr) FormatFast(buf *TrackedBuffer) {
 	node.Expr.FormatFast(buf)
-	if !node.As.IsEmpty() {
+	if node.As.NonEmpty() {
 		buf.WriteString(" as ")
 		node.As.FormatFast(buf)
 	}
@@ -2138,7 +2138,7 @@ func (node *JSONStorageSizeExpr) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node
 func (node *OverClause) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("over")
-	if !node.WindowName.IsEmpty() {
+	if node.WindowName.NonEmpty() {
 		buf.WriteByte(' ')
 		node.WindowName.FormatFast(buf)
 	}
@@ -2151,7 +2151,7 @@ func (node *OverClause) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node
 func (node *WindowSpecification) FormatFast(buf *TrackedBuffer) {
-	if !node.Name.IsEmpty() {
+	if node.Name.NonEmpty() {
 		buf.WriteByte(' ')
 		node.Name.FormatFast(buf)
 	}
@@ -3118,7 +3118,7 @@ func (node *DropColumn) FormatFast(buf *TrackedBuffer) {
 func (node *DropKey) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("drop ")
 	buf.WriteString(node.Type.ToString())
-	if !node.Name.IsEmpty() {
+	if node.Name.NonEmpty() {
 		buf.WriteByte(' ')
 		node.Name.FormatFast(buf)
 	}

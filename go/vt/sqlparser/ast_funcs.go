@@ -868,6 +868,11 @@ func (node IdentifierCI) IsEmpty() bool {
 	return node.val == ""
 }
 
+// NonEmpty returns true if the name is not empty.
+func (node IdentifierCI) NonEmpty() bool {
+	return !node.IsEmpty()
+}
+
 // String returns the unescaped column name. It must
 // not be used for SQL generation. Use sqlparser.String
 // instead. The Stringer conformance is for usage
@@ -2099,7 +2104,7 @@ func GetAllSelects(selStmt SelectStatement) []*Select {
 
 // ColumnName returns the alias if one was provided, otherwise prints the AST
 func (ae *AliasedExpr) ColumnName() string {
-	if !ae.As.IsEmpty() {
+	if ae.As.NonEmpty() {
 		return ae.As.String()
 	}
 

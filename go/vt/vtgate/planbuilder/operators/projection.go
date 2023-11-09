@@ -166,7 +166,7 @@ func (ap AliasedProjections) AddColumn(col *sqlparser.AliasedExpr) (ProjCols, in
 
 func (pe *ProjExpr) String() string {
 	var alias, expr, info string
-	if !pe.Original.As.IsEmpty() {
+	if pe.Original.As.NonEmpty() {
 		alias = " AS " + pe.Original.As.String()
 	}
 	if sqlparser.Equals.Expr(pe.EvalExpr, pe.ColExpr) {
@@ -399,7 +399,7 @@ func (p *Projection) GetSelectExprs(*plancontext.PlanningContext) sqlparser.Sele
 		var output sqlparser.SelectExprs
 		for _, pe := range cols {
 			ae := &sqlparser.AliasedExpr{Expr: pe.EvalExpr}
-			if !pe.Original.As.IsEmpty() {
+			if pe.Original.As.NonEmpty() {
 				ae.As = pe.Original.As
 			} else if !sqlparser.Equals.Expr(ae.Expr, pe.Original.Expr) {
 				ae.As = sqlparser.NewIdentifierCI(pe.Original.ColumnName())

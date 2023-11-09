@@ -831,7 +831,7 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (ii *IndexInfo) Format(buf *TrackedBuffer) {
-	if !ii.ConstraintName.IsEmpty() {
+	if ii.ConstraintName.NonEmpty() {
 		buf.astPrintf(ii, "constraint %v ", ii.ConstraintName)
 	}
 	switch ii.Type {
@@ -847,7 +847,7 @@ func (ii *IndexInfo) Format(buf *TrackedBuffer) {
 	case IndexTypeFullText:
 		buf.astPrintf(ii, "%s %s", keywordStrings[FULLTEXT], keywordStrings[KEY])
 	}
-	if !ii.Name.IsEmpty() {
+	if ii.Name.NonEmpty() {
 		buf.astPrintf(ii, " %v", ii.Name)
 	}
 }
@@ -883,7 +883,7 @@ func (node VindexParam) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (c *ConstraintDefinition) Format(buf *TrackedBuffer) {
-	if !c.Name.IsEmpty() {
+	if c.Name.NonEmpty() {
 		buf.astPrintf(c, "constraint %v ", c.Name)
 	}
 	c.Details.Format(buf)
@@ -1114,7 +1114,7 @@ func (node *StarExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *AliasedExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v", node.Expr)
-	if !node.As.IsEmpty() {
+	if node.As.NonEmpty() {
 		buf.astPrintf(node, " as %v", node.As)
 	}
 }
@@ -1598,7 +1598,7 @@ func (node *JSONStorageSizeExpr) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *OverClause) Format(buf *TrackedBuffer) {
 	buf.WriteString("over")
-	if !node.WindowName.IsEmpty() {
+	if node.WindowName.NonEmpty() {
 		buf.astPrintf(node, " %v", node.WindowName)
 	}
 	if node.WindowSpec != nil {
@@ -1608,7 +1608,7 @@ func (node *OverClause) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *WindowSpecification) Format(buf *TrackedBuffer) {
-	if !node.Name.IsEmpty() {
+	if node.Name.NonEmpty() {
 		buf.astPrintf(node, " %v", node.Name)
 	}
 	if node.PartitionClause != nil {
@@ -2354,7 +2354,7 @@ func (node *DropColumn) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *DropKey) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "drop %s", node.Type.ToString())
-	if !node.Name.IsEmpty() {
+	if node.Name.NonEmpty() {
 		buf.astPrintf(node, " %v", node.Name)
 	}
 }

@@ -307,7 +307,7 @@ func (er *astRewriter) visitSelect(node *Select) {
 		}
 
 		aliasedExpr, ok := col.(*AliasedExpr)
-		if !ok || !aliasedExpr.As.IsEmpty() {
+		if !ok || aliasedExpr.As.NonEmpty() {
 			continue
 		}
 		buf := NewTrackedBuffer(nil)

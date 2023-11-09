@@ -348,7 +348,7 @@ func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.E
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
 	}
 
-	if !aliasedExpr.As.IsEmpty() {
+	if aliasedExpr.As.NonEmpty() {
 		return sqlparser.NewColName(aliasedExpr.As.String()), nil
 	}
 

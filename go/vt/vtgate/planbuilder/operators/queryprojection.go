@@ -515,7 +515,7 @@ func (qp *QueryProjection) GetSimplifiedExpr(ctx *plancontext.PlanningContext, e
 		if !ok {
 			continue
 		}
-		aliased := !ae.As.IsEmpty()
+		aliased := ae.As.NonEmpty()
 		if aliased {
 			if in.Name.Equal(ae.As) {
 				err = check(ae.Expr)
@@ -818,7 +818,7 @@ func (qp *QueryProjection) FindSelectExprIndexForExpr(ctx *plancontext.PlanningC
 			continue
 		}
 		if isCol {
-			isAliasExpr := !aliasedExpr.As.IsEmpty()
+			isAliasExpr := aliasedExpr.As.NonEmpty()
 			if isAliasExpr && colExpr.Name.Equal(aliasedExpr.As) {
 				return &idx, aliasedExpr
 			}
