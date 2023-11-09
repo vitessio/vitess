@@ -106,8 +106,11 @@ type vcursorImpl struct {
 	logStats       *logstats.LogStats
 	collation      collations.ID
 
-	ignoreMaxMemoryRows bool
+	// fkChecksState stores the state of foreign key checks variable.
+	// This state is meant to be the final fk checks state after consulting the
+	// session state, and the given query's comments for `SET_VAR` optimizer hints.
 	fkChecksState       sqlparser.FkChecksState
+	ignoreMaxMemoryRows bool
 	vschema             *vindexes.VSchema
 	vm                  VSchemaOperator
 	semTable            *semantics.SemTable
@@ -1348,11 +1351,15 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 
 // UpdateForeignKeyChecksState updates the foreign key checks state of the vcursor.
 func (vc *vcursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery sqlparser.FkChecksState) {
+	// Initialize the state to unspecified.
 	vc.fkChecksState = sqlparser.FkChecksUnspecified
+	// If the query has a SET_VAR optimizer hint that explicitly sets the foreign key checks state,
+	// we should use that.
 	if fkStateFromQuery != sqlparser.FkChecksUnspecified {
 		vc.fkChecksState = fkStateFromQuery
 		return
 	}
+	// If the query doesn't have anything, then we consult the session state.
 	fkVal, isPresent := vc.safeSession.SystemVariables[sysvars.ForeignKeyChecks.Name]
 	if isPresent {
 		switch strings.ToLower(fkVal) {

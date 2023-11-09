@@ -274,23 +274,34 @@ func (c *ParsedComments) Directives() *CommentDirectives {
 // GetMySQLSetVarValue gets the value of the given variable if it is part of a /*+ SET_VAR() */ MySQL optimizer hint.
 func (c *ParsedComments) GetMySQLSetVarValue(key string) string {
 	if c == nil {
+		// If we have no parsed comments, then we return an empty string.
 		return ""
 	}
 	for _, commentStr := range c.comments {
+		// Skip all the comments that don't start with the query optimizer prefix.
 		if commentStr[0:3] != queryOptimizerPrefix {
 			continue
 		}
 
 		pos := 4
 		for pos < len(commentStr) {
+			// Go over the entire comment and extract an optimizer hint.
+			// We get back the final position of the cursor, along with the start and end of
+			// the optimizer hint name and content.
 			finalPos, ohNameStart, ohNameEnd, ohContentStart, ohContentEnd := getOptimizerHint(pos, commentStr)
 			pos = finalPos + 1
+			// If we didn't find an optimizer hint or if it was malformed, we skip it.
 			if ohContentEnd == -1 {
 				break
 			}
+			// Construct the name and the content from the starts and ends.
 			ohName := commentStr[ohNameStart:ohNameEnd]
 			ohContent := commentStr[ohContentStart:ohContentEnd]
+			// Check if the optimizer hint name matches `SET_VAR`.
 			if strings.EqualFold(strings.TrimSpace(ohName), OptimizerHintSetVar) {
+				// If it does, then we cut the string at the first occurrence of "=".
+				// That gives us the name of the variable, and the value that it is being set to.
+				// If the variable matches what we are looking for, we return its value.
 				setVarName, setVarValue, isValid := strings.Cut(ohContent, "=")
 				if !isValid {
 					continue
@@ -301,6 +312,7 @@ func (c *ParsedComments) GetMySQLSetVarValue(key string) string {
 			}
 		}
 
+		// MySQL only parses the first comment that has the optimizer hint prefix. The following ones are ignored.
 		return ""
 	}
 	return ""
@@ -309,11 +321,15 @@ func (c *ParsedComments) GetMySQLSetVarValue(key string) string {
 // SetMySQLSetVarValue updates or sets the value of the given variable as part of a /*+ SET_VAR() */ MySQL optimizer hint.
 func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComments Comments) {
 	if c == nil {
+		// If we have no parsed comments, then we create a new one with the required optimizer hint and return it.
 		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v=%v) */", OptimizerHintSetVar, key, value))
 		return
 	}
 	seenFirstOhComment := false
 	for _, commentStr := range c.comments {
+		// Skip all the comments that don't start with the query optimizer prefix.
+		// Also, since MySQL only parses the first comment that has the optimizer hint prefix and ignores the following ones,
+		// we skip over all the comments that come after we have seen the first comment with the optimizer hint.
 		if seenFirstOhComment || commentStr[0:3] != queryOptimizerPrefix {
 			newComments = append(newComments, commentStr)
 			continue
@@ -324,14 +340,24 @@ func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComme
 		keyPresent := false
 		pos := 4
 		for pos < len(commentStr) {
+			// Go over the entire comment and extract an optimizer hint.
+			// We get back the final position of the cursor, along with the start and end of
+			// the optimizer hint name and content.
 			finalPos, ohNameStart, ohNameEnd, ohContentStart, ohContentEnd := getOptimizerHint(pos, commentStr)
 			pos = finalPos + 1
+			// If we didn't find an optimizer hint or if it was malformed, we skip it.
 			if ohContentEnd == -1 {
 				break
 			}
+			// Construct the name and the content from the starts and ends.
 			ohName := commentStr[ohNameStart:ohNameEnd]
 			ohContent := commentStr[ohContentStart:ohContentEnd]
+			// Check if the optimizer hint name matches `SET_VAR`.
 			if strings.EqualFold(strings.TrimSpace(ohName), OptimizerHintSetVar) {
+				// If it does, then we cut the string at the first occurrence of "=".
+				// That gives us the name of the variable, and the value that it is being set to.
+				// If the variable matches what we are looking for, we can change its value.
+				// Otherwise we add the comment as is to our final comments and move on.
 				setVarName, _, isValid := strings.Cut(ohContent, "=")
 				if !isValid || !strings.EqualFold(strings.TrimSpace(setVarName), key) {
 					finalComment += fmt.Sprintf(" %v(%v)", ohName, ohContent)
@@ -342,9 +368,12 @@ func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComme
 					finalComment += fmt.Sprintf(" %v(%v=%v)", ohName, strings.TrimSpace(setVarName), value)
 				}
 			} else {
+				// If it doesn't match, we add it to our final comment and move on.
 				finalComment += fmt.Sprintf(" %v(%v)", ohName, ohContent)
 			}
 		}
+		// If we haven't found any SET_VAR optimizer hint with the matching variable,
+		// then we add a new optimizer hint to introduce this variable.
 		if !keyPresent {
 			finalComment += fmt.Sprintf(" %v(%v=%v)", OptimizerHintSetVar, key, value)
 		}
@@ -352,60 +381,90 @@ func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComme
 		finalComment += " */"
 		newComments = append(newComments, finalComment)
 	}
+	// If we have not seen even a single comment that has the optimizer hint prefix,
+	// then we add a new optimizer hint to introduce this variable.
 	if !seenFirstOhComment {
 		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v=%v) */", OptimizerHintSetVar, key, value))
 	}
 	return newComments
 }
 
+// getOptimizerHint goes over the comment string from the given initial position.
+// It returns back the final position of the cursor, along with the start and end of
+// the optimizer hint name and content.
 func getOptimizerHint(initialPos int, commentStr string) (pos int, ohNameStart int, ohNameEnd int, ohContentStart int, ohContentEnd int) {
 	ohContentEnd = -1
+	// skip spaces as they aren't interesting.
 	pos = skipBlanks(initialPos, commentStr)
 	ohNameStart = pos
 	pos++
+	// All characters until we get a space of a opening bracket are part of the optimizer hint name.
 	for pos < len(commentStr) {
 		if commentStr[pos] == ' ' || commentStr[pos] == '(' {
 			break
 		}
 		pos++
 	}
+	// Mark the end of the optimizer hint name and skip spaces.
 	ohNameEnd = pos
 	pos = skipBlanks(pos, commentStr)
+	// Verify that the comment is not malformed. If it doesn't contain an opening bracket
+	// at the current position, then something is wrong.
 	if pos >= len(commentStr) || commentStr[pos] != '(' {
 		return
 	}
+	// Seeing the opening bracket, marks the start of the optimizer hint content.
+	// We skip over the comment until we see the end of the parenthesis.
 	pos++
 	ohContentStart = pos
-	pos = skipUntilParanthesisEnd(pos, commentStr)
+	pos = skipUntilParenthesisEnd(pos, commentStr)
 	ohContentEnd = pos
 	return
 }
 
-func skipUntilParanthesisEnd(pos int, commentStr string) int {
+// skipUntilParenthesisEnd reads the comment string given the initial position and skips over until
+// it has seen the end of opening bracket.
+func skipUntilParenthesisEnd(pos int, commentStr string) int {
+	// This is a problem of bracket matching. We solve this using a stack, because strings are also part of the comment
+	// that can also have '(' and ')' characters. So we can't just skip over until we see a closing parenthesis.
+	// Initialize a stack with opening bracket.
 	stack := []byte{'('}
 	for pos < len(commentStr) {
 		switch commentStr[pos] {
 		case '(':
+			// If we see an opening bracket, we put it into the stack
+			// only if we aren't currently reading a string.
 			if stack[len(stack)-1] == '(' {
 				stack = append(stack, '(')
 			}
 		case ')':
+			// If we see a closing bracket, we try to remove an opening
+			// bracket from the stack.
 			if stack[len(stack)-1] == '(' {
 				stack = stack[:len(stack)-1]
 			}
 		case '\'':
+			// If we see a single quote character, then it can either
+			// signify the ending of a previously started string, it could be
+			// part of a string that is encased in double quotes, or it could
+			// be the start of a new string.
 			if stack[len(stack)-1] == '\'' {
 				stack = stack[:len(stack)-1]
 			} else if stack[len(stack)-1] != '"' {
 				stack = append(stack, '\'')
 			}
 		case '"':
+			// If we see a double quote character, then it can either
+			// signify the ending of a previously started string, it could be
+			// part of a string that is encased in single quotes, or it could
+			// be the start of a new string.
 			if stack[len(stack)-1] == '"' {
 				stack = stack[:len(stack)-1]
 			} else if stack[len(stack)-1] != '\'' {
 				stack = append(stack, '"')
 			}
 		}
+		// The first time the stack becomes empty, signifies the ending of the parenthesis we set out to match.
 		if len(stack) == 0 {
 			return pos
 		}
@@ -415,6 +474,7 @@ func skipUntilParanthesisEnd(pos int, commentStr string) int {
 	return pos
 }
 
+// skipBlanks skips over space characters from the comment string, given the starting position.
 func skipBlanks(pos int, commentStr string) int {
 	for pos < len(commentStr) {
 		if commentStr[pos] == ' ' {
