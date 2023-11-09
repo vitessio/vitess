@@ -664,8 +664,8 @@ func TestSetMySQLSetVarValue(t *testing.T) {
 			c := &ParsedComments{
 				comments: tt.comments,
 			}
-			c.SetMySQLSetVarValue(tt.key, tt.value)
-			require.EqualValues(t, tt.commentsWanted, c.comments)
+			newComments := c.SetMySQLSetVarValue(tt.key, tt.value)
+			require.EqualValues(t, tt.commentsWanted, newComments)
 		})
 	}
 }

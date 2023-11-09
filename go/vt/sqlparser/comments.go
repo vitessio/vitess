@@ -307,17 +307,19 @@ func (c *ParsedComments) GetMySQLSetVarValue(key string) string {
 }
 
 // SetMySQLSetVarValue updates or sets the value of the given variable as part of a /*+ SET_VAR() */ MySQL optimizer hint.
-func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) {
+func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComments Comments) {
 	if c == nil {
-		c = &ParsedComments{
-			comments: Comments{},
-		}
+		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v=%v) */", OptimizerHintSetVar, key, value))
+		return
 	}
-	for idx, commentStr := range c.comments {
-		if commentStr[0:3] != queryOptimizerPrefix {
+	seenFirstOhComment := false
+	for _, commentStr := range c.comments {
+		if seenFirstOhComment || commentStr[0:3] != queryOptimizerPrefix {
+			newComments = append(newComments, commentStr)
 			continue
 		}
 
+		seenFirstOhComment = true
 		finalComment := "/*+"
 		keyPresent := false
 		pos := 4
@@ -348,10 +350,12 @@ func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) {
 		}
 
 		finalComment += " */"
-		c.comments[idx] = finalComment
-		return
+		newComments = append(newComments, finalComment)
 	}
-	c.comments = append(c.comments, fmt.Sprintf("/*+ %v(%v=%v) */", OptimizerHintSetVar, key, value))
+	if !seenFirstOhComment {
+		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v=%v) */", OptimizerHintSetVar, key, value))
+	}
+	return newComments
 }
 
 func getOptimizerHint(initialPos int, commentStr string) (pos int, ohNameStart int, ohNameEnd int, ohContentStart int, ohContentEnd int) {

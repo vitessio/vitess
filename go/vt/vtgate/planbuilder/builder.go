@@ -22,6 +22,7 @@ import (
 	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -74,7 +75,15 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset, "", nil, sqlparser.FkChecksUnspecified, vschema)
+	// Store the foreign key mode like we do for vcursor.
+	vw, isVw := vschema.(*vschemawrapper.VSchemaWrapper)
+	if isVw {
+		fkState := sqlparser.ForeignKeyChecksState(stmt)
+		if fkState != sqlparser.FkChecksUnspecified {
+			vw.ForeignKeyChecksState = fkState
+		}
+	}
+	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset, "", nil, vschema.GetForeignKeyChecksState(), vschema)
 	if err != nil {
 		return nil, err
 	}

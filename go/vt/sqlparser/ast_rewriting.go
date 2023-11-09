@@ -191,7 +191,8 @@ func (er *astRewriter) rewriteUp(cursor *Cursor) bool {
 			supportOptimizerHint.SetComments(newComments)
 		}
 		if er.fkChecksState != FkChecksUnspecified {
-			supportOptimizerHint.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, er.fkChecksState.String())
+			newComments := supportOptimizerHint.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, er.fkChecksState.String())
+			supportOptimizerHint.SetComments(newComments)
 		}
 	}
 

@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -204,7 +205,15 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.O
 
 func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, cols []int) (*FkChild, error) {
 	bvName := ctx.ReservedVars.ReserveVariable(foreignKeyConstraintValues)
-
+	// We only reach this code if foreign key checks are either unspecified or on.
+	// If foreign key checks are explicity turned on, then we should add the set_var parsed comment too
+	// since underlying MySQL might have foreign_key_checks as off.
+	// We run with foreign key checks on because the delete might still fail on MySQL due to a child table
+	// with RESTRICT constraints.
+	var parsedComments *sqlparser.ParsedComments
+	if ctx.VSchema.GetForeignKeyChecksState() == sqlparser.FkChecksOn {
+		parsedComments = parsedComments.SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, sqlparser.FkChecksOn.String()).Parsed()
+	}
 	var childStmt sqlparser.Statement
 	switch fk.OnDelete {
 	case sqlparser.Cascade:
@@ -216,6 +225,7 @@ func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 		}
 		compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, valTuple, sqlparser.NewListArg(bvName), nil)
 		childStmt = &sqlparser.Delete{
+			Comments:   parsedComments,
 			TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
 			Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
 		}
@@ -234,6 +244,7 @@ func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 		compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, valTuple, sqlparser.NewListArg(bvName), nil)
 		childStmt = &sqlparser.Update{
 			Exprs:      updExprs,
+			Comments:   parsedComments,
 			TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
 			Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
 		}
