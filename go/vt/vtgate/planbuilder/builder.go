@@ -246,7 +246,7 @@ func buildAnalyzePlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsche
 	var err error
 	dest := key.Destination(key.DestinationAllShards{})
 
-	if !analyzeStmt.Table.Qualifier.IsEmpty() && sqlparser.SystemSchema(analyzeStmt.Table.Qualifier.String()) {
+	if analyzeStmt.Table.Qualifier.NotEmpty() && sqlparser.SystemSchema(analyzeStmt.Table.Qualifier.String()) {
 		ks, err = vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err

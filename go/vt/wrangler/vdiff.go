@@ -672,14 +672,14 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 			}
 		case *sqlparser.AliasedExpr:
 			var targetCol *sqlparser.ColName
-			if !selExpr.As.IsEmpty() {
-				targetCol = &sqlparser.ColName{Name: selExpr.As}
-			} else {
+			if selExpr.As.IsEmpty() {
 				if colAs, ok := selExpr.Expr.(*sqlparser.ColName); ok {
 					targetCol = colAs
 				} else {
 					return nil, fmt.Errorf("expression needs an alias: %v", sqlparser.String(selExpr))
 				}
+			} else {
+				targetCol = &sqlparser.ColName{Name: selExpr.As}
 			}
 			// If the input was "select a as b", then source will use "a" and target will use "b".
 			sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, selExpr)

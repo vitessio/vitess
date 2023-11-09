@@ -95,7 +95,7 @@ func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {
 	if !ok {
 		return del, nil
 	}
-	if !atExpr.As.IsEmpty() && !sqlparser.Equals.IdentifierCS(del.Targets[0].Name, atExpr.As) {
+	if atExpr.As.NotEmpty() && !sqlparser.Equals.IdentifierCS(del.Targets[0].Name, atExpr.As) {
 		// Unknown table in MULTI DELETE
 		return nil, vterrors.VT03003(del.Targets[0].Name.String())
 	}
