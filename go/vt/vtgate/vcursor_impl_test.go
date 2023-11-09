@@ -260,6 +260,7 @@ func TestSetTarget(t *testing.T) {
 func TestKeyForPlan(t *testing.T) {
 	type testCase struct {
 		vschema               *vindexes.VSchema
+		fkState               sqlparser.FkChecksState
 		targetString          string
 		expectedPlanPrefixKey string
 	}
@@ -267,19 +268,29 @@ func TestKeyForPlan(t *testing.T) {
 	tests := []testCase{{
 		vschema:               vschemaWith1KS,
 		targetString:          "",
-		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
+		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+fkChecksState:+Query:SELECT 1",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1@replica",
-		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
+		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+fkChecksState:+Query:SELECT 1",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1:-80",
-		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+DestinationShard(-80)+Query:SELECT 1",
+		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+fkChecksState:+DestinationShard(-80)+Query:SELECT 1",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1[deadbeef]",
-		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+KsIDsResolved:80-+Query:SELECT 1",
+		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+fkChecksState:+KsIDsResolved:80-+Query:SELECT 1",
+	}, {
+		vschema:               vschemaWith1KS,
+		targetString:          "",
+		fkState:               sqlparser.FkChecksOn,
+		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+fkChecksState:On+Query:SELECT 1",
+	}, {
+		vschema:               vschemaWith1KS,
+		targetString:          "ks1@replica",
+		fkState:               sqlparser.FkChecksOff,
+		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+fkChecksState:Off+Query:SELECT 1",
 	}}
 
 	for i, tc := range tests {
@@ -289,6 +300,7 @@ func TestKeyForPlan(t *testing.T) {
 			vc, err := newVCursorImpl(ss, sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4)
 			require.NoError(t, err)
 			vc.vschema = tc.vschema
+			vc.fkChecksState = tc.fkState
 
 			var buf strings.Builder
 			vc.keyForPlan(context.Background(), "SELECT 1", &buf)
