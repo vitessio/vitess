@@ -235,7 +235,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %left <bytes> AND
 %right <bytes> NOT '!'
 %left <bytes> BETWEEN CASE WHEN THEN ELSE ELSEIF END
-%left <bytes> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
+%left <bytes> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN ASSIGNMENT_OP
 %nonassoc  UNBOUNDED // ideally should have same precedence as IDENT
 %nonassoc ID NULL PARTITION RANGE ROWS GROUPS PRECEDING FOLLOWING
 %left <bytes> '|'
@@ -549,7 +549,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> index_or_key indexes_or_keys index_or_key_opt
 %type <str> from_or_in show_database_opt
 %type <str> name_opt
-%type <str> equal_opt
+%type <str> equal_opt assignment_op
 %type <TableSpec> table_spec table_column_list
 %type <str> table_option_list table_option table_opt_value row_fmt_opt
 %type <str> partition_options partition_option linear_partition_opt linear_opt partition_num_opt subpartition_opt subpartition_num_opt
@@ -3885,9 +3885,19 @@ equal_opt:
   {
     $$ = ""
   }
-| '='
+| assignment_op
   {
     $$ = string($1)
+  }
+
+assignment_op:
+  '='
+  {
+    $$ = string($1)
+  }
+| ASSIGNMENT_OP
+  {
+    $$ = ":="
   }
 
 index_info:
@@ -6637,7 +6647,6 @@ subquery_or_values:
     $$ = $2
   }
 
-
 argument_expression_list_opt:
   {
     $$ = nil
@@ -7881,18 +7890,18 @@ assignment_list:
   }
 
 assignment_expression:
-  column_name '=' expression
+  column_name assignment_op expression
   {
     $$ = &AssignmentExpr{Name: $1, Expr: $3}
   }
-| column_name_safe_keyword '=' expression {
+| column_name_safe_keyword assignment_op expression {
     $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
   }
-| non_reserved_keyword3 '=' expression
+| non_reserved_keyword3 assignment_op expression
   {
     $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
   }
-| ESCAPE '=' expression
+| ESCAPE assignment_op expression
   {
     $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
   }
@@ -7975,15 +7984,15 @@ set_scope_secondary:
   }
 
 set_expression_assignment:
-  column_name '=' ON
+  column_name assignment_op ON
   {
     $$ = &SetVarExpr{Name: $1, Expr: NewStrVal($3), Scope: SetScope_None}
   }
-| column_name '=' OFF
+| column_name assignment_op OFF
   {
     $$ = &SetVarExpr{Name: $1, Expr: NewStrVal($3), Scope: SetScope_None}
   }
-| column_name '=' STRING STRING
+| column_name assignment_op STRING STRING
   {
     // NOTE: This is a fix to allow MySQL dumps to load cleanly when they contain the following:
     //       SET @@GLOBAL.GTID_PURGED= /*!80000 '+'*/ 'beabe64c-9dc6-11ed-8021-a0f9021e8e70:1-126';
@@ -7992,7 +8001,7 @@ set_expression_assignment:
     // In other places we can correctly concatenate adjacent string literals, but the special comments break it
     $$ = &SetVarExpr{Name: $1, Expr: NewStrVal([]byte(string($3)+string($4))), Scope: SetScope_None}
   }
-| column_name '=' expression
+| column_name assignment_op expression
   {
     $$ = &SetVarExpr{Name: $1, Expr: $3, Scope: SetScope_None}
   }

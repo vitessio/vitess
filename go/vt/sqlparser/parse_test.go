@@ -86,6 +86,10 @@ var (
 			output: "set @foo = 'one'",
 		},
 		{
+			input:  "SET @foo := 'o' 'ne';",
+			output: "set @foo = 'one'",
+		},
+		{
 			input:  "SET @foo = \"o\" \"ne\";",
 			output: "set @foo = 'one'",
 		},
@@ -95,6 +99,10 @@ var (
 		},
 		{
 			input:  "SET @@GLOBAL.GTID_PURGED= /*!80000 '+'*/ 'beabe64c-9dc6-11ed-8021-a0f9021e8e70:1-126';",
+			output: "set global GTID_PURGED = '+beabe64c-9dc6-11ed-8021-a0f9021e8e70:1-126'",
+		},
+		{
+			input:  "SET @@GLOBAL.GTID_PURGED:= /*!80000 '+'*/ 'beabe64c-9dc6-11ed-8021-a0f9021e8e70:1-126';",
 			output: "set global GTID_PURGED = '+beabe64c-9dc6-11ed-8021-a0f9021e8e70:1-126'",
 		},
 		{
@@ -392,27 +400,27 @@ var (
 			input: "select /* straight_join */ straight_join 1 from t",
 		},
 		{
-			input: "select sql_calc_found_rows distinct * from t",
+			input:  "select sql_calc_found_rows distinct * from t",
 			output: "select distinct sql_calc_found_rows * from t",
 		},
 		{
-			input: "select distinct sql_calc_found_rows * from t",
+			input:  "select distinct sql_calc_found_rows * from t",
 			output: "select distinct sql_calc_found_rows * from t",
 		},
 		{
-			input: "select distinct sql_calc_found_rows distinct * from t",
+			input:  "select distinct sql_calc_found_rows distinct * from t",
 			output: "select distinct sql_calc_found_rows * from t",
 		},
 		{
-			input: "select sql_cache distinct sql_calc_found_rows straight_join * from t",
+			input:  "select sql_cache distinct sql_calc_found_rows straight_join * from t",
 			output: "select distinct straight_join sql_calc_found_rows sql_cache * from t",
 		},
 		{
-			input: "select straight_join sql_calc_found_rows all sql_no_cache * from t",
+			input:  "select straight_join sql_calc_found_rows all sql_no_cache * from t",
 			output: "select all straight_join sql_calc_found_rows sql_no_cache * from t",
 		},
 		{
-			input: "select sql_cache distinct sql_calc_found_rows straight_join straight_join sql_calc_found_rows distinct sql_cache * from t",
+			input:  "select sql_cache distinct sql_calc_found_rows straight_join straight_join sql_calc_found_rows distinct sql_cache * from t",
 			output: "select distinct straight_join sql_calc_found_rows sql_cache * from t",
 		},
 		{
@@ -1108,6 +1116,9 @@ var (
 			input:  "insert /* set default */ into a set a = default, b = 2",
 			output: "insert /* set default */ into a(a, b) values (default, 2)",
 		}, {
+			input:  "insert /* set default */ into a set a := default, b := 2",
+			output: "insert /* set default */ into a(a, b) values (default, 2)",
+		}, {
 			input: "insert /* value expression list */ into a values (a + 1, 2 * 3)",
 		}, {
 			input: "insert /* default */ into a values (default, 2 * 3)",
@@ -1159,6 +1170,9 @@ var (
 			output: "create table A (\n\tA int\n)",
 		}, {
 			input: "update /* simple */ a set b = 3",
+		}, {
+			input:  "update /* simple */ a set b := 3",
+			output: "update /* simple */ a set b = 3",
 		}, {
 			input: "update /* a.b */ a.b set b = 3",
 		}, {
@@ -1293,6 +1307,9 @@ var (
 			input:  "set session autocommit = ON",
 			output: "set session autocommit = 'ON'",
 		}, {
+			input:  "set session autocommit := ON",
+			output: "set session autocommit = 'ON'",
+		}, {
 			input:  "set global autocommit = OFF",
 			output: "set global autocommit = 'OFF'",
 		}, {
@@ -1331,6 +1348,9 @@ var (
 			input: "set @user.var = 1",
 		}, {
 			input: "set @user.var.name = 1",
+		}, {
+			input:  "set @user.var.name := 1",
+			output: "set @user.var.name = 1",
 		}, {
 			input:  "set autocommit = on",
 			output: "set autocommit = 'on'",
@@ -2991,6 +3011,9 @@ var (
 			output: "alter table t character set utf8mb4",
 		}, {
 			input:  "alter table t character set = utf8mb4",
+			output: "alter table t character set utf8mb4",
+		}, {
+			input:  "alter table t character set := utf8mb4",
 			output: "alter table t character set utf8mb4",
 		}, {
 			input:  "alter table t character set utf8mb4 collate utf8mb4_0900_bin",

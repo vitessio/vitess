@@ -52,7 +52,7 @@ type Tokenizer struct {
 	Position             int
 	OldPosition          int
 	lastToken            []byte
-	lastTyp  int
+	lastTyp              int
 	lastNonNilToken      []byte
 	LastError            error
 	posVarIndex          int
@@ -92,8 +92,8 @@ type Tokenizer struct {
 func NewStringTokenizer(sql string) *Tokenizer {
 	buf := []byte(sql)
 	return &Tokenizer{
-		buf:     buf,
-		bufSize: len(buf),
+		buf:                 buf,
+		bufSize:             len(buf),
 		identifierQuotes:    map[uint16]struct{}{backtickQuote: {}},
 		stringLiteralQuotes: map[uint16]struct{}{doubleQuote: {}, singleQuote: {}},
 	}
@@ -116,8 +116,8 @@ func NewStringTokenizerForAnsiQuotes(sql string) *Tokenizer {
 // default parser options.
 func NewTokenizer(r io.Reader) *Tokenizer {
 	return &Tokenizer{
-		InStream: r,
-		buf:      make([]byte, defaultBufSize),
+		InStream:            r,
+		buf:                 make([]byte, defaultBufSize),
 		identifierQuotes:    map[uint16]struct{}{backtickQuote: {}},
 		stringLiteralQuotes: map[uint16]struct{}{doubleQuote: {}, singleQuote: {}},
 	}
@@ -177,7 +177,7 @@ func (tkn *Tokenizer) digestedToken() (token int, value []byte) {
 	}
 	tokenAndValue := tkn.digestedTokens[0]
 	tkn.digestedTokens = tkn.digestedTokens[1:]
-	
+
 	if len(tkn.digestedTokens) == 0 {
 		tkn.digestedTokens = nil
 	}
@@ -190,7 +190,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 	if tkn.stopped {
 		return 0, nil
 	}
-	
+
 	if tkn.digestedTokens != nil {
 		return tkn.digestedToken()
 	}
@@ -267,7 +267,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		typ1, res1 := tkn.scanIdentifier(byte(tkn.lastChar), false)
 		return typ1, append(res, res1[1:]...) // Concatenate the two partial symbols
 	case ch == ':':
-		return tkn.scanBindVar()
+		return tkn.scanColonPrefixToken()
 	case ch == ';':
 		if tkn.multi {
 			// In multi mode, ';' is treated as EOF. So, we don't advance.
@@ -429,7 +429,7 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (i
 	loweredStr := string(lowered)
 	keywordID, found := keywords[loweredStr]
 	if found {
-		// Some tokens require special handling to avoid conflicts in the grammar. 
+		// Some tokens require special handling to avoid conflicts in the grammar.
 		// This means we're doing additional look-ahead just for these special tokens.
 		switch keywordID {
 		case FOR:
@@ -444,10 +444,10 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (i
 				return FOR, buffer.Bytes()
 			}
 		}
-		
+
 		return keywordID, buffer.Bytes()
 	}
-	
+
 	return ID, buffer.Bytes()
 }
 
@@ -508,7 +508,8 @@ func (tkn *Tokenizer) scanLiteralIdentifier(startingChar uint16) (int, []byte) {
 	return ID, buffer.Bytes()
 }
 
-func (tkn *Tokenizer) scanBindVar() (int, []byte) {
+// scanColonPrefixToken handles bind variables(e.g. ':v1') and ':=' assignment operator.
+func (tkn *Tokenizer) scanColonPrefixToken() (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	buffer.WriteByte(byte(tkn.lastChar))
 	token := VALUE_ARG
@@ -519,11 +520,17 @@ func (tkn *Tokenizer) scanBindVar() (int, []byte) {
 		tkn.next()
 	}
 	if !isLetter(tkn.lastChar) {
-		// If there isn't a previous error, then return the colon as it may be a valid token
-		if tkn.LastError == nil {
-			return int(':'), buffer.Bytes()
+		switch tkn.lastChar {
+		case '=':
+			tkn.next()
+			return ASSIGNMENT_OP, []byte(":=")
+		default:
+			// If there isn't a previous error, then return the colon as it may be a valid token
+			if tkn.LastError == nil {
+				return int(':'), buffer.Bytes()
+			}
+			return LEX_ERROR, buffer.Bytes()
 		}
-		return LEX_ERROR, buffer.Bytes()
 	}
 	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || tkn.lastChar == '.' {
 		buffer.WriteByte(byte(tkn.lastChar))
@@ -659,7 +666,7 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 	if tkn.lastChar == '@' {
 		tkn.potentialAccountName = true
 	}
-	
+
 	// mysql strings get auto concatenated, so see if the next token is a string and scan it if so
 	tkn.skipBlank()
 	if contains(tkn.stringLiteralQuotes, tkn.lastChar) == tkn.lastChar {
@@ -672,7 +679,7 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 			return LEX_ERROR, buffer.Bytes()
 		}
 	}
-	
+
 	return typ, buffer.Bytes()
 }
 
