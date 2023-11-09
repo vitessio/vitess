@@ -3589,18 +3589,18 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		_ = e.updateMigrationUserThrottleRatio(ctx, uuid, currentUserThrottleRatio)
 		switch onlineDDL.StrategySetting().Strategy {
 		case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
-			{
+			reviewVReplRunningMigration := func() error {
 				// We check the _vt.vreplication table
 				s, err := e.readVReplStream(ctx, uuid, true)
 				if err != nil {
-					return countRunnning, cancellable, err
+					return err
 				}
 				isVreplicationTestSuite := onlineDDL.StrategySetting().IsVreplicationTestSuite()
 				if isVreplicationTestSuite {
 					e.triggerNextCheckInterval()
 				}
 				if s == nil {
-					continue
+					return nil
 				}
 				// Let's see if vreplication indicates an error. Many errors are recoverable, and
 				// we do not wish to fail on first sight. We will use LastError to repeatedly
@@ -3617,74 +3617,80 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				if isTerminal || !lastError.ShouldRetry() {
 					cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
 				}
-				if s.isRunning() {
-					// This VRepl migration may have started from outside this tablet, so
-					// this executor may not own the migration _yet_. We make sure to own it.
-					// VReplication migrations are unique in this respect: we are able to complete
-					// a vreplicaiton migration started by another tablet.
-					e.ownedRunningMigrations.Store(uuid, onlineDDL)
-					if lastVitessLivenessIndicator := migrationRow.AsInt64("vitess_liveness_indicator", 0); lastVitessLivenessIndicator < s.livenessTimeIndicator() {
-						_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
-						_ = e.updateVitessLivenessIndicator(ctx, uuid, s.livenessTimeIndicator())
-					}
-					if onlineDDL.TabletAlias != e.TabletAliasString() {
-						_ = e.updateMigrationTablet(ctx, uuid)
-						log.Infof("migration %s adopted by tablet %s", uuid, e.TabletAliasString())
-					}
-					_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
-					_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
-					_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
-					_ = e.updateMigrationLastThrottled(ctx, uuid, time.Unix(s.timeThrottled, 0), s.componentThrottled)
+				if !s.isRunning() {
+					return nil
+				}
+				// This VRepl migration may have started from outside this tablet, so
+				// this executor may not own the migration _yet_. We make sure to own it.
+				// VReplication migrations are unique in this respect: we are able to complete
+				// a vreplicaiton migration started by another tablet.
+				e.ownedRunningMigrations.Store(uuid, onlineDDL)
+				if lastVitessLivenessIndicator := migrationRow.AsInt64("vitess_liveness_indicator", 0); lastVitessLivenessIndicator < s.livenessTimeIndicator() {
+					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+					_ = e.updateVitessLivenessIndicator(ctx, uuid, s.livenessTimeIndicator())
+				}
+				if onlineDDL.TabletAlias != e.TabletAliasString() {
+					_ = e.updateMigrationTablet(ctx, uuid)
+					log.Infof("migration %s adopted by tablet %s", uuid, e.TabletAliasString())
+				}
+				_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
+				_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
+				_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
+				_ = e.updateMigrationLastThrottled(ctx, uuid, time.Unix(s.timeThrottled, 0), s.componentThrottled)
 
-					isReady, err := e.isVReplMigrationReadyToCutOver(ctx, onlineDDL, s)
-					if err != nil {
-						_ = e.updateMigrationMessage(ctx, uuid, err.Error())
-						return countRunnning, cancellable, err
-					}
-					if isReady && isVreplicationTestSuite {
-						// This is a endtoend test suite execution. We intentionally delay it by at least
-						// vreplicationTestSuiteWaitSeconds
-						if elapsedSeconds < vreplicationTestSuiteWaitSeconds {
-							isReady = false
-						}
-					}
-					// Indicate to outside observers whether the migration is generally ready to complete.
-					// In the case of a postponed migration, we will not complete it, but the user will
-					// understand whether "now is a good time" or "not there yet"
-					_ = e.updateMigrationReadyToComplete(ctx, uuid, isReady)
-					if postponeCompletion {
-						// override. Even if migration is ready, we do not complete it.
+				isReady, err := e.isVReplMigrationReadyToCutOver(ctx, onlineDDL, s)
+				if err != nil {
+					_ = e.updateMigrationMessage(ctx, uuid, err.Error())
+					return err
+				}
+				if isReady && isVreplicationTestSuite {
+					// This is a endtoend test suite execution. We intentionally delay it by at least
+					// vreplicationTestSuiteWaitSeconds
+					if elapsedSeconds < vreplicationTestSuiteWaitSeconds {
 						isReady = false
-					}
-					// Check how much time passed since last cut-over attempt
-					desiredTimeSinceLastCutover := cutoverIntervals[len(cutoverIntervals)-1]
-					if int(cutoverAttempts) < len(cutoverIntervals) {
-						desiredTimeSinceLastCutover = cutoverIntervals[cutoverAttempts]
-					}
-					if sinceLastCutoverAttempt < desiredTimeSinceLastCutover {
-						isReady = false
-					}
-					fmt.Printf("======= cutoverAttempts=%v, desiredTimeSinceLastCutover=%v, sinceLastCutoverAttempt=%v, isReady=%v\n", cutoverAttempts, desiredTimeSinceLastCutover, sinceLastCutoverAttempt, isReady)
-					if isReady && onlineDDL.StrategySetting().IsInOrderCompletion() {
-						if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
-							// wait for earlier pending migrations to complete
-							isReady = false
-						}
-					}
-					if isReady {
-						if err := e.cutOverVReplMigration(ctx, s); err != nil {
-							_ = e.updateMigrationMessage(ctx, uuid, err.Error())
-							log.Errorf("cutOverVReplMigration failed: err=%v", err)
-							if merr, ok := err.(*sqlerror.SQLError); ok {
-								switch merr.Num {
-								case sqlerror.ERTooLongIdent:
-									go e.CancelMigration(ctx, uuid, err.Error(), false)
-								}
-							}
-							return countRunnning, cancellable, err
-						}
 					}
 				}
+				// Indicate to outside observers whether the migration is generally ready to complete.
+				// In the case of a postponed migration, we will not complete it, but the user will
+				// understand whether "now is a good time" or "not there yet"
+				_ = e.updateMigrationReadyToComplete(ctx, uuid, isReady)
+				if !isReady {
+					return nil
+				}
+				if postponeCompletion {
+					// override. Even if migration is ready, we do not complete it.
+					return nil
+				}
+				// Check how much time passed since last cut-over attempt
+				desiredTimeSinceLastCutover := cutoverIntervals[len(cutoverIntervals)-1]
+				if int(cutoverAttempts) < len(cutoverIntervals) {
+					desiredTimeSinceLastCutover = cutoverIntervals[cutoverAttempts]
+				}
+				if sinceLastCutoverAttempt < desiredTimeSinceLastCutover {
+					return nil
+				}
+				fmt.Printf("======= cutoverAttempts=%v, desiredTimeSinceLastCutover=%v, sinceLastCutoverAttempt=%v, isReady=%v\n", cutoverAttempts, desiredTimeSinceLastCutover, sinceLastCutoverAttempt, isReady)
+				if onlineDDL.StrategySetting().IsInOrderCompletion() {
+					if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
+						// wait for earlier pending migrations to complete
+						return nil
+					}
+				}
+				if err := e.cutOverVReplMigration(ctx, s); err != nil {
+					_ = e.updateMigrationMessage(ctx, uuid, err.Error())
+					log.Errorf("cutOverVReplMigration failed: err=%v", err)
+					if merr, ok := err.(*sqlerror.SQLError); ok {
+						switch merr.Num {
+						case sqlerror.ERTooLongIdent:
+							go e.CancelMigration(ctx, uuid, err.Error(), false)
+						}
+					}
+					return err
+				}
+				return nil
+			}
+			if err := reviewVReplRunningMigration(); err != nil {
+				return countRunnning, cancellable, err
 			}
 		case schema.DDLStrategyPTOSC:
 			{
