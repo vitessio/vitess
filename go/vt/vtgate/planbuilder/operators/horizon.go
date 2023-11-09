@@ -145,7 +145,11 @@ func canReuseColumn[T any](
 	return
 }
 
-func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
+func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+	if underRoute && h.IsDerived() {
+		return -1
+	}
+
 	for idx, se := range sqlparser.GetFirstSelect(h.Query).SelectExprs {
 		ae, ok := se.(*sqlparser.AliasedExpr)
 		if !ok {
