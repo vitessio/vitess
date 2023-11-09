@@ -163,7 +163,7 @@ const (
 	FloatVal
 	HexNum
 	HexVal
-	BitVal
+	BitNum
 	DateVal
 	TimeVal
 	TimestampVal
@@ -515,9 +515,9 @@ func NewHexLiteral(in string) *Literal {
 	return &Literal{Type: HexVal, Val: in}
 }
 
-// NewBitLiteral builds a new BitVal containing a bit literal.
+// NewBitLiteral builds a new BitNum containing a bit literal.
 func NewBitLiteral(in string) *Literal {
-	return &Literal{Type: BitVal, Val: in}
+	return &Literal{Type: BitNum, Val: in}
 }
 
 // NewDateLiteral builds a new Date.
@@ -583,8 +583,8 @@ func (node *Literal) SQLType() sqltypes.Type {
 		return sqltypes.HexNum
 	case HexVal:
 		return sqltypes.HexVal
-	case BitVal:
-		return sqltypes.HexNum
+	case BitNum:
+		return sqltypes.BitNum
 	case DateVal:
 		return sqltypes.Date
 	case TimeVal:
@@ -2495,4 +2495,8 @@ func IsLiteral(expr Expr) bool {
 	default:
 		return false
 	}
+}
+
+func (ct *ColumnType) Invisible() bool {
+	return ct.Options.Invisible != nil && *ct.Options.Invisible
 }

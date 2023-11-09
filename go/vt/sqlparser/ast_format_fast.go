@@ -201,17 +201,20 @@ func (node *Insert) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *With) FormatFast(buf *TrackedBuffer) {
+	if len(node.CTEs) == 0 {
+		return
+	}
 	buf.WriteString("with ")
 
 	if node.Recursive {
 		buf.WriteString("recursive ")
 	}
-	ctesLength := len(node.ctes)
+	ctesLength := len(node.CTEs)
 	for i := 0; i < ctesLength-1; i++ {
-		node.ctes[i].FormatFast(buf)
+		node.CTEs[i].FormatFast(buf)
 		buf.WriteString(", ")
 	}
-	node.ctes[ctesLength-1].FormatFast(buf)
+	node.CTEs[ctesLength-1].FormatFast(buf)
 }
 
 // FormatFast formats the node.
@@ -1137,19 +1140,19 @@ func (ii *IndexInfo) FormatFast(buf *TrackedBuffer) {
 		buf.WriteString(keywordStrings[KEY])
 		return
 	case IndexTypeDefault:
-		buf.WriteString(keywordStrings[INDEX])
+		buf.WriteString(keywordStrings[KEY])
 	case IndexTypeUnique:
 		buf.WriteString(keywordStrings[UNIQUE])
 		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[INDEX])
+		buf.WriteString(keywordStrings[KEY])
 	case IndexTypeSpatial:
 		buf.WriteString(keywordStrings[SPATIAL])
 		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[INDEX])
+		buf.WriteString(keywordStrings[KEY])
 	case IndexTypeFullText:
 		buf.WriteString(keywordStrings[FULLTEXT])
 		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[INDEX])
+		buf.WriteString(keywordStrings[KEY])
 	}
 	if !ii.Name.IsEmpty() {
 		buf.WriteByte(' ')
@@ -1727,14 +1730,10 @@ func (node *Literal) FormatFast(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
 		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Bytes()).EncodeSQL(buf)
-	case IntVal, FloatVal, DecimalVal, HexNum:
+	case IntVal, FloatVal, DecimalVal, HexNum, BitNum:
 		buf.WriteString(node.Val)
 	case HexVal:
 		buf.WriteString("X'")
-		buf.WriteString(node.Val)
-		buf.WriteByte('\'')
-	case BitVal:
-		buf.WriteString("B'")
 		buf.WriteString(node.Val)
 		buf.WriteByte('\'')
 	case DateVal:

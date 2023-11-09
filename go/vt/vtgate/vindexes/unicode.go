@@ -18,76 +18,66 @@ package vindexes
 
 import (
 	"bytes"
+	"crypto/md5"
 	"fmt"
 	"sync"
 	"unicode/utf8"
 
-	"vitess.io/vitess/go/sqltypes"
+	"github.com/cespare/xxhash/v2"
 
-	"golang.org/x/text/collate"
-	"golang.org/x/text/language"
+	"vitess.io/vitess/go/mysql/collations/vindex/collate"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 // Shared functions for Unicode string normalization
 // for Vindexes.
 
-func unicodeHash(hashFunc func([]byte) []byte, key sqltypes.Value) ([]byte, error) {
-	collator := collatorPool.Get().(*pooledCollator)
-	defer collatorPool.Put(collator)
+func unicodeHash(pool *sync.Pool, key sqltypes.Value) ([]byte, error) {
+	collator := pool.Get().(*collate.Hasher)
+	defer pool.Put(collator)
 
 	keyBytes, err := key.ToBytes()
 	if err != nil {
 		return nil, err
 	}
-	norm, err := normalize(collator.col, collator.buf, keyBytes)
-	if err != nil {
-		return nil, err
-	}
-	return hashFunc(norm), nil
-}
 
-func normalize(col *collate.Collator, buf *collate.Buffer, in []byte) ([]byte, error) {
 	// We cannot pass invalid UTF-8 to the collator.
-	if !utf8.Valid(in) {
-		return nil, fmt.Errorf("cannot normalize string containing invalid UTF-8: %q", string(in))
+	if !utf8.Valid(keyBytes) {
+		return nil, fmt.Errorf("cannot normalize string containing invalid UTF-8: %q", keyBytes)
 	}
 
 	// Ref: http://dev.mysql.com/doc/refman/5.6/en/char.html.
 	// Trailing spaces are ignored by MySQL.
-	in = bytes.TrimRight(in, " ")
+	keyBytes = bytes.TrimRight(keyBytes, " ")
 
 	// We use the collation key which can be used to
 	// perform lexical comparisons.
-	return col.Key(buf, in), nil
+	return collator.Hash(keyBytes), nil
 }
 
-// pooledCollator pairs a Collator and a Buffer.
-// These pairs are pooled to avoid reallocating for every request,
-// which would otherwise be required because they can't be used concurrently.
-//
-// Note that you must ensure no active references into the buffer remain
-// before you return this pair back to the pool.
-// That is, either do your processing on the result first, or make a copy.
-type pooledCollator struct {
-	col *collate.Collator
-	buf *collate.Buffer
+var collateMD5 = sync.Pool{New: func() any {
+	return collate.New(md5.New())
+}}
+
+var collateXX = sync.Pool{New: func() any {
+	return collate.New(XXHashBigEndian{Digest: xxhash.New()})
+}}
+
+type XXHashBigEndian struct {
+	*xxhash.Digest
 }
 
-var collatorPool = sync.Pool{New: newPooledCollator}
-
-func newPooledCollator() any {
-	// Ref: http://www.unicode.org/reports/tr10/#Introduction.
-	// Unicode seems to define a universal (or default) order.
-	// But various locales have conflicting order,
-	// which they have the right to override.
-	// Unfortunately, the Go library requires you to specify a locale.
-	// So, I chose English assuming that it won't override
-	// the Unicode universal order. But I couldn't find an easy
-	// way to verify this.
-	// Also, the locale differences are not an issue for level 1,
-	// because the conservative comparison makes them all equal.
-	return &pooledCollator{
-		col: collate.New(language.English, collate.Loose),
-		buf: new(collate.Buffer),
-	}
+func (d XXHashBigEndian) Sum(b []byte) []byte {
+	s := d.Sum64()
+	return append(
+		b,
+		byte(s),
+		byte(s>>8),
+		byte(s>>16),
+		byte(s>>24),
+		byte(s>>32),
+		byte(s>>40),
+		byte(s>>48),
+		byte(s>>56),
+	)
 }

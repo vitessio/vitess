@@ -114,6 +114,35 @@ func (oa *OrderedAggregate) TryExecute(ctx context.Context, vcursor VCursor, bin
 	return qr.Truncate(oa.TruncateColumnCount), nil
 }
 
+func (oa *OrderedAggregate) executeGroupBy(result *sqltypes.Result) (*sqltypes.Result, error) {
+	if len(result.Rows) < 1 {
+		return result, nil
+	}
+
+	out := &sqltypes.Result{
+		Fields: result.Fields,
+		Rows:   result.Rows[:0],
+	}
+
+	var currentKey []sqltypes.Value
+	var lastRow sqltypes.Row
+	var err error
+	for _, row := range result.Rows {
+		var nextGroup bool
+
+		currentKey, nextGroup, err = oa.nextGroupBy(currentKey, row)
+		if err != nil {
+			return nil, err
+		}
+		if nextGroup {
+			out.Rows = append(out.Rows, lastRow)
+		}
+		lastRow = row
+	}
+	out.Rows = append(out.Rows, lastRow)
+	return out, nil
+}
+
 func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	result, err := vcursor.ExecutePrimitive(
 		ctx,
@@ -124,6 +153,10 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 	if err != nil {
 		return nil, err
 	}
+	if len(oa.Aggregates) == 0 {
+		return oa.executeGroupBy(result)
+	}
+
 	agg, fields, err := newAggregation(result.Fields, oa.Aggregates)
 	if err != nil {
 		return nil, err
@@ -160,8 +193,63 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 	return out, nil
 }
 
+func (oa *OrderedAggregate) executeStreamGroupBy(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+	cb := func(qr *sqltypes.Result) error {
+		return callback(qr.Truncate(oa.TruncateColumnCount))
+	}
+
+	var fields []*querypb.Field
+	var currentKey []sqltypes.Value
+	var lastRow sqltypes.Row
+
+	visitor := func(qr *sqltypes.Result) error {
+		var err error
+		if fields == nil && len(qr.Fields) > 0 {
+			fields = qr.Fields
+			if err = cb(&sqltypes.Result{Fields: fields}); err != nil {
+				return err
+			}
+		}
+		for _, row := range qr.Rows {
+			var nextGroup bool
+
+			currentKey, nextGroup, err = oa.nextGroupBy(currentKey, row)
+			if err != nil {
+				return err
+			}
+
+			if nextGroup {
+				// this is a new grouping. let's yield the old one, and start a new
+				if err := cb(&sqltypes.Result{Rows: []sqltypes.Row{lastRow}}); err != nil {
+					return err
+				}
+			}
+
+			lastRow = row
+		}
+		return nil
+	}
+
+	/* we need the input fields types to correctly calculate the output types */
+	err := vcursor.StreamExecutePrimitive(ctx, oa.Input, bindVars, true, visitor)
+	if err != nil {
+		return err
+	}
+
+	if lastRow != nil {
+		if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{lastRow}}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // TryStreamExecute is a Primitive function.
 func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
+	if len(oa.Aggregates) == 0 {
+		return oa.executeStreamGroupBy(ctx, vcursor, bindVars, callback)
+	}
+
 	cb := func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(oa.TruncateColumnCount))
 	}
@@ -254,11 +342,16 @@ func (oa *OrderedAggregate) nextGroupBy(currentKey, nextRow []sqltypes.Value) (n
 	}
 
 	for _, gb := range oa.GroupByKeys {
-		cmp, err := evalengine.NullsafeCompare(currentKey[gb.KeyCol], nextRow[gb.KeyCol], gb.Type.Coll)
+		v1 := currentKey[gb.KeyCol]
+		v2 := nextRow[gb.KeyCol]
+		if v1.TinyWeightCmp(v2) != 0 {
+			return nextRow, true, nil
+		}
+
+		cmp, err := evalengine.NullsafeCompare(v1, v2, gb.Type.Coll)
 		if err != nil {
-			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
 			_, isCollationErr := err.(evalengine.UnsupportedCollationError)
-			if !isComparisonErr && !isCollationErr || gb.WeightStringCol == -1 {
+			if !isCollationErr || gb.WeightStringCol == -1 {
 				return nil, false, err
 			}
 			gb.KeyCol = gb.WeightStringCol

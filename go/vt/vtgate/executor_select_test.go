@@ -663,17 +663,8 @@ func TestStreamBuffering(t *testing.T) {
 }
 
 func TestStreamLimitOffset(t *testing.T) {
-	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
-
-	// This test is similar to TestStreamUnsharded except that it returns a Result > 10 bytes,
-	// such that the splitting of the Result into multiple Result responses gets tested.
-	sbc1.SetResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "weight_string(id)", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
-		},
-		Rows: [][]sqltypes.Value{{
+	returnRows := map[string][]sqltypes.Row{
+		"-20": [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewVarChar("1234"),
 			sqltypes.NULL,
@@ -682,20 +673,30 @@ func TestStreamLimitOffset(t *testing.T) {
 			sqltypes.NewVarChar("4567"),
 			sqltypes.NULL,
 		}},
-	}})
-
-	sbc2.SetResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "weight_string(id)", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
-		},
-		Rows: [][]sqltypes.Value{{
+		"40-60": [][]sqltypes.Value{{
 			sqltypes.NewInt32(2),
 			sqltypes.NewVarChar("2345"),
 			sqltypes.NULL,
 		}},
-	}})
+		"80-a0": [][]sqltypes.Value{{
+			sqltypes.NewInt32(3),
+			sqltypes.NewVarChar("3456"),
+			sqltypes.NULL,
+		}},
+	}
+
+	executor, _ := createExecutorEnvCallback(t, func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		if ks == KsTestSharded {
+			conn.SetResults([]*sqltypes.Result{{
+				Fields: []*querypb.Field{
+					{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+					{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+					{Name: "weight_string(id)", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+				},
+				Rows: returnRows[shard],
+			}})
+		}
+	})
 
 	results := make(chan *sqltypes.Result, 10)
 	session := &vtgatepb.Session{
@@ -722,11 +723,11 @@ func TestStreamLimitOffset(t *testing.T) {
 		},
 
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(1),
-			sqltypes.NewVarChar("1234"),
+			sqltypes.NewInt32(3),
+			sqltypes.NewVarChar("3456"),
 		}, {
-			sqltypes.NewInt32(1),
-			sqltypes.NewVarChar("foo"),
+			sqltypes.NewInt32(4),
+			sqltypes.NewVarChar("4567"),
 		}},
 	}
 	var gotResults []*sqltypes.Result
@@ -1027,7 +1028,7 @@ func TestLastInsertIDInVirtualTable(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "select * from (select last_insert_id()) as t", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select t.`last_insert_id()` from (select :__lastInsertId as `last_insert_id()` from dual) as t",
+		Sql:           "select `last_insert_id()` from (select :__lastInsertId as `last_insert_id()` from dual) as t",
 		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
 	}}
 
@@ -4068,6 +4069,17 @@ func TestSelectAggregationRandom(t *testing.T) {
 	assert.Equal(t, `[[DECIMAL(10) DECIMAL(1) DECIMAL(10.0000)]]`, fmt.Sprintf("%v", rs.Rows))
 }
 
+func TestSelectDateTypes(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+	executor.normalize = true
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	qr, err := executor.Execute(context.Background(), nil, "TestSelectDateTypes", session, "select '2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month))-1 month", nil)
+	require.NoError(t, err)
+	require.Equal(t, sqltypes.Char, qr.Fields[0].Type)
+	require.Equal(t, `[[CHAR("2020-12-01")]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
 func TestSelectHexAndBit(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 	executor.normalize = true
@@ -4079,7 +4091,7 @@ func TestSelectHexAndBit(t *testing.T) {
 
 	qr, err = executor.Execute(context.Background(), nil, "TestSelectHexAndBit", session, "select 1 + 0b1001, 1 + b'1001', 1 + 0x9, 1 + x'09'", nil)
 	require.NoError(t, err)
-	require.Equal(t, `[[UINT64(10) UINT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, `[[INT64(10) INT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 // TestSelectCFC tests validates that cfc vindex plan gets cached and same plan is getting reused.
@@ -4121,7 +4133,7 @@ func TestSelectView(t *testing.T) {
 	_, err = executor.Execute(context.Background(), nil, "TestSelectView", session, "select * from user_details_view", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select user_details_view.id, user_details_view.col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = user_extra.user_id) as user_details_view",
+		Sql:           "select id, col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = user_extra.user_id) as user_details_view",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc.Queries)
@@ -4130,7 +4142,7 @@ func TestSelectView(t *testing.T) {
 	_, err = executor.Execute(context.Background(), nil, "TestSelectView", session, "select * from user_details_view where id = 2", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select user_details_view.id, user_details_view.col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = :id /* INT64 */ and `user`.id = user_extra.user_id) as user_details_view",
+		Sql: "select id, col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = :id /* INT64 */ and `user`.id = user_extra.user_id) as user_details_view",
 		BindVariables: map[string]*querypb.BindVariable{
 			"id": sqltypes.Int64BindVariable(2),
 		},
@@ -4143,7 +4155,7 @@ func TestSelectView(t *testing.T) {
 	bvtg1, _ := sqltypes.BuildBindVariable([]int64{1, 2, 3, 4, 5})
 	bvals, _ := sqltypes.BuildBindVariable([]int64{1, 2})
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select user_details_view.id, user_details_view.col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id in ::__vals and `user`.id = user_extra.user_id) as user_details_view",
+		Sql: "select id, col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id in ::__vals and `user`.id = user_extra.user_id) as user_details_view",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1":   bvtg1,
 			"__vals": bvals,

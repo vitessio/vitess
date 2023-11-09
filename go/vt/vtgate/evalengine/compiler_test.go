@@ -28,9 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/testcases"
 )
@@ -116,10 +114,10 @@ func TestCompilerReference(t *testing.T) {
 
 				fields := evalengine.FieldResolver(tc.Schema)
 				cfg := &evalengine.Config{
-					ResolveColumn: fields.Column,
-					ResolveType:   fields.Type,
-					Collation:     collations.CollationUtf8mb4ID,
-					Optimization:  evalengine.OptimizationLevelCompilerDebug,
+					ResolveColumn:     fields.Column,
+					ResolveType:       fields.Type,
+					Collation:         collations.CollationUtf8mb4ID,
+					NoConstantFolding: true,
 				}
 
 				converted, err := evalengine.Translate(stmt, cfg)
@@ -127,28 +125,10 @@ func TestCompilerReference(t *testing.T) {
 					return
 				}
 
-				expected, evalErr := env.Evaluate(evalengine.Deoptimize(converted))
+				expected, evalErr := env.EvaluateAST(converted)
 				total++
 
-				if cfg.CompilerErr != nil {
-					switch {
-					case vterrors.Code(cfg.CompilerErr) == vtrpcpb.Code_UNIMPLEMENTED:
-						t.Logf("unsupported: %s", query)
-					case evalErr == nil:
-						t.Errorf("failed compilation:\nSQL:  %s\nError: %s", query, cfg.CompilerErr)
-					case evalErr.Error() != cfg.CompilerErr.Error():
-						t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, cfg.CompilerErr)
-					default:
-						supported++
-					}
-					return
-				}
-
-				res, vmErr := func() (res evalengine.EvalResult, err error) {
-					res, err = env.EvaluateVM(converted.(*evalengine.CompiledExpr))
-					return
-				}()
-
+				res, vmErr := env.Evaluate(converted)
 				if vmErr != nil {
 					switch {
 					case evalErr == nil:
@@ -184,6 +164,7 @@ func TestCompilerSingle(t *testing.T) {
 		expression string
 		values     []sqltypes.Value
 		result     string
+		collation  collations.ID
 	}{
 		{
 			expression: "1 + column0",
@@ -455,6 +436,66 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `WEIGHT_STRING('foobar' as char(3))`,
 			result:     `VARBINARY("\x1c\xe5\x1d\xdd\x1d\xdd")`,
 		},
+		{
+			expression: `CAST(time '5 10:34:58' AS DATETIME)`,
+			result:     `DATETIME("2023-10-29 10:34:58")`,
+		},
+		{
+			expression: `CAST(time '130:34:58' AS DATETIME)`,
+			result:     `DATETIME("2023-10-29 10:34:58")`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP(time '5 10:34:58')`,
+			result:     `INT64(1698572098)`,
+		},
+		{
+			expression: `CONV(-1, -1.5e0, 3.141592653589793)`,
+			result:     `VARCHAR("11112220022122120101211020120210210211220")`,
+		},
+		{
+			expression: `column0 between 10 and 20`,
+			values:     []sqltypes.Value{sqltypes.NewInt16(15)},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 between 10 and 20`,
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     `NULL`,
+		},
+		{
+			expression: `1 + 0b1001`,
+			result:     `INT64(10)`,
+		},
+		{
+			expression: `1 + 0x6`,
+			result:     `UINT64(7)`,
+		},
+		{
+			expression: `0 DIV 0b1001`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `0 & 0b1001`,
+			result:     `UINT64(0)`,
+		},
+		{
+			expression: `CAST(0b1001 AS DECIMAL)`,
+			result:     `DECIMAL(9)`,
+		},
+		{
+			expression: `-0b1001`,
+			result:     `FLOAT64(-9)`,
+		},
+		{
+			expression: `'2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month))-1 month`,
+			result:     `CHAR("2020-12-01")`,
+		},
+		{
+			expression: `case column0 when 1 then column1 else column2 end`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(42), sqltypes.NewVarChar("sole"), sqltypes.NewInt64(0)},
+			result:     `VARCHAR("0")`,
+			collation:  collations.CollationUtf8mb4ID,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
@@ -468,10 +509,10 @@ func TestCompilerSingle(t *testing.T) {
 
 			fields := evalengine.FieldResolver(makeFields(tc.values))
 			cfg := &evalengine.Config{
-				ResolveColumn: fields.Column,
-				ResolveType:   fields.Type,
-				Collation:     collations.CollationUtf8mb4ID,
-				Optimization:  evalengine.OptimizationLevelCompilerDebug,
+				ResolveColumn:     fields.Column,
+				ResolveType:       fields.Type,
+				Collation:         collations.CollationUtf8mb4ID,
+				NoConstantFolding: true,
 			}
 
 			converted, err := evalengine.Translate(expr, cfg)
@@ -483,27 +524,29 @@ func TestCompilerSingle(t *testing.T) {
 			env.SetTime(time.Date(2023, 10, 24, 12, 0, 0, 0, tz))
 			env.Row = tc.values
 
-			expected, err := env.Evaluate(evalengine.Deoptimize(converted))
+			expected, err := env.EvaluateAST(converted)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if expected.String() != tc.result {
 				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), tc.result)
 			}
-
-			if cfg.CompilerErr != nil {
-				t.Fatalf("bad compilation: %v", cfg.CompilerErr)
+			if tc.collation != collations.Unknown && tc.collation != expected.Collation() {
+				t.Fatalf("bad collation evaluation from eval engine: got %d, want %d", expected.Collation(), tc.collation)
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
 			for i := 0; i < 8; i++ {
-				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
+				res, err := env.Evaluate(converted)
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				if res.String() != tc.result {
 					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
+				}
+				if tc.collation != collations.Unknown && tc.collation != res.Collation() {
+					t.Fatalf("bad collation evaluation from compiler: got %d, want %d", res.Collation(), tc.collation)
 				}
 			}
 		})
@@ -546,10 +589,10 @@ func TestBindVarLiteral(t *testing.T) {
 
 			fields := evalengine.FieldResolver(makeFields(nil))
 			cfg := &evalengine.Config{
-				ResolveColumn: fields.Column,
-				ResolveType:   fields.Type,
-				Collation:     collations.CollationUtf8mb4ID,
-				Optimization:  evalengine.OptimizationLevelCompilerDebug,
+				ResolveColumn:     fields.Column,
+				ResolveType:       fields.Type,
+				Collation:         collations.CollationUtf8mb4ID,
+				NoConstantFolding: true,
 			}
 
 			converted, err := evalengine.Translate(expr, cfg)
@@ -564,16 +607,12 @@ func TestBindVarLiteral(t *testing.T) {
 				"vtg1": tc.bindVar,
 			}
 
-			expected, err := env.Evaluate(evalengine.Deoptimize(converted))
+			expected, err := env.EvaluateAST(converted)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if expected.String() != result {
 				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), result)
-			}
-
-			if cfg.CompilerErr != nil {
-				t.Fatalf("bad compilation: %v", cfg.CompilerErr)
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
@@ -611,8 +650,8 @@ func TestCompilerNonConstant(t *testing.T) {
 			}
 
 			cfg := &evalengine.Config{
-				Collation:    collations.CollationUtf8mb4ID,
-				Optimization: evalengine.OptimizationLevelCompile,
+				Collation:         collations.CollationUtf8mb4ID,
+				NoConstantFolding: true,
 			}
 
 			converted, err := evalengine.Translate(expr, cfg)
@@ -623,7 +662,7 @@ func TestCompilerNonConstant(t *testing.T) {
 			env := evalengine.EmptyExpressionEnv()
 			var prev string
 			for i := 0; i < 1000; i++ {
-				expected, err := env.Evaluate(evalengine.Deoptimize(converted))
+				expected, err := env.EvaluateAST(converted)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -631,10 +670,6 @@ func TestCompilerNonConstant(t *testing.T) {
 					t.Fatalf("constant evaluation from eval engine: got %s multiple times", expected.String())
 				}
 				prev = expected.String()
-			}
-
-			if cfg.CompilerErr != nil {
-				t.Fatalf("bad compilation: %v", cfg.CompilerErr)
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent

@@ -74,8 +74,28 @@ func (r *RealTable) getColumns() []ColumnInfo {
 }
 
 // GetExpr implements the TableInfo interface
-func (r *RealTable) GetExpr() *sqlparser.AliasedTableExpr {
+func (r *RealTable) getAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return r.ASTNode
+}
+
+func (r *RealTable) canShortCut() shortCut {
+	if r.Table == nil {
+		return cannotShortCut
+	}
+	if r.Table.Type != "" {
+		// A reference table is not an issue when seeing if a query is going to an unsharded keyspace
+		if r.Table.Type == vindexes.TypeReference {
+			return canShortCut
+		}
+		return cannotShortCut
+	}
+
+	name, ok := r.ASTNode.Expr.(sqlparser.TableName)
+	if !ok || name.Name.String() != r.Table.Name.String() {
+		return cannotShortCut
+	}
+
+	return dependsOnKeyspace
 }
 
 // GetVindexTable implements the TableInfo interface
@@ -119,6 +139,7 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 				Type: col.Type,
 				Coll: collation,
 			},
+			Invisible: col.Invisible,
 		})
 		nameMap[col.Name.String()] = nil
 	}

@@ -21,9 +21,9 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -74,7 +74,7 @@ func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 		resultRows = append(resultRows, resultRow)
 	}
 	if wantfields {
-		result.Fields, err = p.evalFields(env, result.Fields, vcursor)
+		result.Fields, err = p.evalFields(env, result.Fields)
 		if err != nil {
 			return nil, err
 		}
@@ -92,7 +92,7 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		var err error
 		if wantfields {
 			once.Do(func() {
-				fields, err = p.evalFields(env, qr.Fields, vcursor)
+				fields, err = p.evalFields(env, qr.Fields)
 				if err != nil {
 					return
 				}
@@ -131,33 +131,32 @@ func (p *Projection) GetFields(ctx context.Context, vcursor VCursor, bindVars ma
 		return nil, err
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	qr.Fields, err = p.evalFields(env, qr.Fields, vcursor)
+	qr.Fields, err = p.evalFields(env, qr.Fields)
 	if err != nil {
 		return nil, err
 	}
 	return qr, nil
 }
 
-func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*querypb.Field, vcursor VCursor) ([]*querypb.Field, error) {
+func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*querypb.Field) ([]*querypb.Field, error) {
+	// TODO: once the evalengine becomes smart enough, we should be able to remove the
+	// dependency on these fields altogether
+	env.Fields = infields
+
 	var fields []*querypb.Field
 	for i, col := range p.Cols {
-		q, f, err := env.TypeOf(p.Exprs[i], infields)
+		typ, err := env.TypeOf(p.Exprs[i])
 		if err != nil {
 			return nil, err
 		}
-		var cs collations.ID = collations.CollationBinaryID
-		if sqltypes.IsText(q) {
-			cs = vcursor.ConnCollation()
-		}
-
-		fl := mysql.FlagsForColumn(q, cs)
-		if !sqltypes.IsNull(q) && !f.Nullable() {
+		fl := mysql.FlagsForColumn(typ.Type, typ.Coll)
+		if !sqltypes.IsNull(typ.Type) && !typ.Nullable {
 			fl |= uint32(querypb.MySqlFlag_NOT_NULL_FLAG)
 		}
 		fields = append(fields, &querypb.Field{
 			Name:    col,
-			Type:    q,
-			Charset: uint32(cs),
+			Type:    typ.Type,
+			Charset: uint32(typ.Coll),
 			Flags:   fl,
 		})
 	}
@@ -173,7 +172,7 @@ func (p *Projection) Inputs() ([]Primitive, []map[string]any) {
 func (p *Projection) description() PrimitiveDescription {
 	var exprs []string
 	for idx, e := range p.Exprs {
-		expr := evalengine.FormatExpr(e)
+		expr := sqlparser.String(e)
 		alias := p.Cols[idx]
 		if alias != "" {
 			expr += " as " + alias

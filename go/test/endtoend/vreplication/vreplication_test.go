@@ -1077,6 +1077,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 				continue
 			}
 		}
+		restartWorkflow(t, ksWorkflow)
 		vdiffSideBySide(t, ksWorkflow, "")
 		if dryRunResultSwitchReads != nil {
 			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", allCellNames, "rdonly,replica", "--dry-run")
@@ -1576,6 +1577,19 @@ func switchWritesDryRun(t *testing.T, workflowType, ksWorkflow string, dryRunRes
 		"SwitchTraffic", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("Switch writes DryRun Error: %s: %s", err, output))
 	validateDryRunResults(t, output, dryRunResults)
+}
+
+// restartWorkflow confirms that a workflow can be successfully
+// stopped and started.
+func restartWorkflow(t *testing.T, ksWorkflow string) {
+	keyspace, workflow, found := strings.Cut(ksWorkflow, ".")
+	require.True(t, found, "unexpected ksWorkflow value: %s", ksWorkflow)
+	err := vc.VtctldClient.ExecuteCommand("workflow", "--keyspace", keyspace, "stop", "--workflow", workflow)
+	require.NoError(t, err, "failed to stop workflow: %v", err)
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String())
+	err = vc.VtctldClient.ExecuteCommand("workflow", "--keyspace", keyspace, "start", "--workflow", workflow)
+	require.NoError(t, err, "failed to start workflow: %v", err)
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 }
 
 func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
