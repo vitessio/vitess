@@ -25,7 +25,7 @@ import (
 
 func buildCallProcPlan(stmt *sqlparser.CallProc, vschema plancontext.VSchema) (*planResult, error) {
 	var ks string
-	if stmt.Name.Qualifier.NonEmpty() {
+	if stmt.Name.Qualifier.NotEmpty() {
 		ks = stmt.Name.Qualifier.String()
 	}
 

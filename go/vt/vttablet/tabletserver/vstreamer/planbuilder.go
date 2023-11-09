@@ -338,7 +338,7 @@ func ruleMatches(tableName string, filter *binlogdatapb.Filter) bool {
 
 // tableMatches is similar to buildPlan below and MatchTable in vreplication/table_plan_builder.go.
 func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb.Filter) bool {
-	if table.Qualifier.NonEmpty() && table.Qualifier.String() != dbname {
+	if table.Qualifier.NotEmpty() && table.Qualifier.String() != dbname {
 		return false
 	}
 	return ruleMatches(table.Name.String(), filter)

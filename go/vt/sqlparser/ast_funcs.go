@@ -400,7 +400,7 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 
 // TableName returns a TableName pointing to this table expr
 func (node *AliasedTableExpr) TableName() (TableName, error) {
-	if node.As.NonEmpty() {
+	if node.As.NotEmpty() {
 		return TableName{Name: node.As}, nil
 	}
 
@@ -869,7 +869,7 @@ func (node IdentifierCI) IsEmpty() bool {
 }
 
 // NonEmpty returns true if the name is not empty.
-func (node IdentifierCI) NonEmpty() bool {
+func (node IdentifierCI) NotEmpty() bool {
 	return !node.IsEmpty()
 }
 
@@ -941,7 +941,7 @@ func (node IdentifierCS) IsEmpty() bool {
 }
 
 // NonEmpty returns true if TabIdent is not empty.
-func (node IdentifierCS) NonEmpty() bool {
+func (node IdentifierCS) NotEmpty() bool {
 	return !node.IsEmpty()
 }
 
@@ -2109,7 +2109,7 @@ func GetAllSelects(selStmt SelectStatement) []*Select {
 
 // ColumnName returns the alias if one was provided, otherwise prints the AST
 func (ae *AliasedExpr) ColumnName() string {
-	if ae.As.NonEmpty() {
+	if ae.As.NotEmpty() {
 		return ae.As.String()
 	}
 
@@ -2141,7 +2141,7 @@ func RemoveKeyspace(in SQLNode) {
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
 		switch col := node.(type) {
 		case *ColName:
-			if col.Qualifier.Qualifier.NonEmpty() {
+			if col.Qualifier.Qualifier.NotEmpty() {
 				col.Qualifier.Qualifier = NewIdentifierCS("")
 			}
 		}
