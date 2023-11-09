@@ -54,6 +54,7 @@ type fuzzer struct {
 	updateShare  int
 	concurrency  int
 	queryFormat  QueryFormat
+	fkState      sqlparser.FkChecksState
 
 	// shouldStop is an internal state variable, that tells the fuzzer
 	// whether it should stop or not.
@@ -73,7 +74,7 @@ type debugInfo struct {
 }
 
 // newFuzzer creates a new fuzzer struct.
-func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare int, deleteShare int, updateShare int, queryFormat QueryFormat) *fuzzer {
+func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare int, deleteShare int, updateShare int, queryFormat QueryFormat, fkState sqlparser.FkChecksState) *fuzzer {
 	fz := &fuzzer{
 		concurrency:  concurrency,
 		maxValForId:  maxValForId,
@@ -82,6 +83,7 @@ func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare i
 		deleteShare:  deleteShare,
 		updateShare:  updateShare,
 		queryFormat:  queryFormat,
+		fkState:      fkState,
 		wg:           sync.WaitGroup{},
 	}
 	// Initially the fuzzer thread is stopped.
@@ -203,6 +205,9 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, sharded bool, fuzzerThreadId int
 	// Create a MySQL Compare that connects to both Vitess and MySQL and runs the queries against both.
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
 	require.NoError(t, err)
+	if fz.fkState != sqlparser.FkChecksUnspecified {
+		mcmp.Exec(fmt.Sprintf("SET FOREIGN_KEY_CHECKS=%v", fz.fkState.String()))
+	}
 	var vitessDb, mysqlDb *sql.DB
 	if fz.queryFormat == PreparedStatementPacket {
 		// Open another connection to Vitess using the go-sql-driver so that we can send prepared statements as COM_STMT_PREPARE packets.
@@ -622,12 +627,11 @@ func TestFkFuzzTest(t *testing.T) {
 			updateShare:    50,
 		},
 	}
-
-	for _, tt := range testcases {
-		for _, testSharded := range []bool{false, true} {
-			for _, queryFormat := range []QueryFormat{SQLQueries, PreparedStatmentQueries, PreparedStatementPacket} {
-				for _, fkState := range []sqlparser.FkChecksState{sqlparser.FkChecksOn, sqlparser.FkChecksOff} {
-					if fkState == sqlparser.FkChecksOff && (queryFormat != SQLQueries || tt.concurrency != 1) {
+	for _, fkState := range []sqlparser.FkChecksState{sqlparser.FkChecksUnspecified, sqlparser.FkChecksOn, sqlparser.FkChecksOff} {
+		for _, tt := range testcases {
+			for _, testSharded := range []bool{false, true} {
+				for _, queryFormat := range []QueryFormat{SQLQueries, PreparedStatmentQueries, PreparedStatementPacket} {
+					if fkState != sqlparser.FkChecksUnspecified && (queryFormat != SQLQueries || tt.concurrency != 1) {
 						continue
 					}
 					t.Run(getTestName(tt.name, testSharded)+fmt.Sprintf(" FkState - %v QueryFormat - %v", fkState.String(), queryFormat), func(t *testing.T) {
@@ -640,14 +644,13 @@ func TestFkFuzzTest(t *testing.T) {
 						} else {
 							_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
 						}
-						mcmp.Exec(fmt.Sprintf("SET GLOBAL FOREIGN_KEY_CHECKS=%v", fkState.String()))
 
 						// Ensure that the Vitess database is originally empty
 						ensureDatabaseState(t, mcmp.VtConn, true)
 						ensureDatabaseState(t, mcmp.MySQLConn, true)
 
 						// Create the fuzzer.
-						fz := newFuzzer(tt.concurrency, tt.maxValForId, tt.maxValForCol, tt.insertShare, tt.deleteShare, tt.updateShare, queryFormat)
+						fz := newFuzzer(tt.concurrency, tt.maxValForId, tt.maxValForCol, tt.insertShare, tt.deleteShare, tt.updateShare, queryFormat, fkState)
 
 						// Start the fuzzer.
 						fz.start(t, testSharded)
@@ -727,7 +730,7 @@ func verifyDataIsCorrect(t *testing.T, mcmp utils.MySQLCompare, concurrency int)
 			require.NotNil(t, primaryTab)
 			require.NotNil(t, replicaTab)
 			checkReplicationHealthy(t, replicaTab)
-			cluster.WaitForReplicationPos(t, primaryTab, replicaTab, true, 60.0)
+			cluster.WaitForReplicationPos(t, primaryTab, replicaTab, true, 1*time.Minute)
 			primaryConn, err := utils.GetMySQLConn(primaryTab, fmt.Sprintf("vt_%v", keyspace.Name))
 			require.NoError(t, err)
 			replicaConn, err := utils.GetMySQLConn(replicaTab, fmt.Sprintf("vt_%v", keyspace.Name))
