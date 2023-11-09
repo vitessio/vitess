@@ -296,7 +296,7 @@ func TestSelectNone(t *testing.T) {
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	require.Empty(t, vc.log)
-	expectResult(t, "sel.StreamExecute", result, nil)
+	require.Nil(t, result)
 
 	vc.Rewind()
 
@@ -452,7 +452,7 @@ func TestSelectEqualNoRoute(t *testing.T) {
 		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
 	})
-	expectResult(t, "sel.StreamExecute", result, nil)
+	require.Nil(t, result)
 
 	// test with special no-routes handling
 	sel.NoRoutesSpecialHandling = true
@@ -888,7 +888,7 @@ func TestRouteSort(t *testing.T) {
 		"dummy_select",
 		"dummy_select_field",
 	)
-	sel.OrderBy = []OrderByParams{{
+	sel.OrderBy = []evalengine.OrderByParams{{
 		Col:             0,
 		WeightStringCol: -1,
 	}}
@@ -970,7 +970,7 @@ func TestRouteSortWeightStrings(t *testing.T) {
 		"dummy_select",
 		"dummy_select_field",
 	)
-	sel.OrderBy = []OrderByParams{{
+	sel.OrderBy = []evalengine.OrderByParams{{
 		Col:             1,
 		WeightStringCol: 0,
 	}}
@@ -1036,7 +1036,7 @@ func TestRouteSortWeightStrings(t *testing.T) {
 	})
 
 	t.Run("Error when no weight string set", func(t *testing.T) {
-		sel.OrderBy = []OrderByParams{{
+		sel.OrderBy = []evalengine.OrderByParams{{
 			Col:             1,
 			WeightStringCol: -1,
 		}}
@@ -1075,7 +1075,7 @@ func TestRouteSortCollation(t *testing.T) {
 
 	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
 
-	sel.OrderBy = []OrderByParams{{
+	sel.OrderBy = []evalengine.OrderByParams{{
 		Col:  0,
 		Type: evalengine.Type{Type: sqltypes.VarChar, Coll: collationID},
 	}}
@@ -1141,7 +1141,7 @@ func TestRouteSortCollation(t *testing.T) {
 	})
 
 	t.Run("Error when Unknown Collation", func(t *testing.T) {
-		sel.OrderBy = []OrderByParams{{
+		sel.OrderBy = []evalengine.OrderByParams{{
 			Col:  0,
 			Type: evalengine.UnknownType(),
 		}}
@@ -1167,7 +1167,7 @@ func TestRouteSortCollation(t *testing.T) {
 	})
 
 	t.Run("Error when Unsupported Collation", func(t *testing.T) {
-		sel.OrderBy = []OrderByParams{{
+		sel.OrderBy = []evalengine.OrderByParams{{
 			Col:  0,
 			Type: evalengine.Type{Coll: 1111},
 		}}
@@ -1203,7 +1203,7 @@ func TestRouteSortTruncate(t *testing.T) {
 		"dummy_select",
 		"dummy_select_field",
 	)
-	sel.OrderBy = []OrderByParams{{
+	sel.OrderBy = []evalengine.OrderByParams{{
 		Col: 0,
 	}}
 	sel.TruncateColumnCount = 1
@@ -1294,7 +1294,7 @@ func TestRouteStreamSortTruncate(t *testing.T) {
 		"dummy_select",
 		"dummy_select_field",
 	)
-	sel.OrderBy = []OrderByParams{{
+	sel.OrderBy = []evalengine.OrderByParams{{
 		Col: 0,
 	}}
 	sel.TruncateColumnCount = 1
@@ -1437,7 +1437,7 @@ func TestExecFail(t *testing.T) {
 		vc.Rewind()
 		vc.resultErr = sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, "", "query timeout -20")
 		// test when there is order by column
-		sel.OrderBy = []OrderByParams{{
+		sel.OrderBy = []evalengine.OrderByParams{{
 			WeightStringCol: -1,
 			Col:             0,
 		}}

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/proto/topodata"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -66,6 +67,34 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	qr := utils.Exec(t, conn, "show vitess_replication_status like '%'")
 	expectNumRows := 2
 	numRows := len(qr.Rows)
+	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
+}
+
+func TestVtgateReplicationStatusCheckWithTabletTypeChange(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
+	time.Sleep(2 * time.Second)
+	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Only returns rows for REPLICA and RDONLY tablets -- so should be 2 of them
+	qr := utils.Exec(t, conn, "show vitess_replication_status like '%'")
+	expectNumRows := 2
+	numRows := len(qr.Rows)
+	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
+
+	// change the RDONLY tablet to SPARE
+	rdOnlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
+	err = clusterInstance.VtctlclientChangeTabletType(rdOnlyTablet, topodata.TabletType_SPARE)
+	require.NoError(t, err)
+
+	// Only returns rows for REPLICA and RDONLY tablets -- so should be 1 of them since we updated 1 to spare
+	qr = utils.Exec(t, conn, "show vitess_replication_status like '%'")
+	expectNumRows = 1
+	numRows = len(qr.Rows)
 	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
 }
 

@@ -333,7 +333,7 @@ func (c *Conn) endWriterBuffering() error {
 		c.bufferedWriter = nil
 	}()
 
-	c.stopFlushTimer()
+	c.flushTimer.Stop()
 	return c.bufferedWriter.Flush()
 }
 
@@ -345,43 +345,20 @@ func (c *Conn) returnReader() {
 	readersPool.Put(c.bufferedReader)
 }
 
-// getWriter returns the current writer. It may be either
-// the original connection or a wrapper. The returned unget
-// function must be invoked after the writing is finished.
-// In buffered mode, the unget starts a timer to flush any
-// buffered data.
-func (c *Conn) getWriter() (w io.Writer, unget func()) {
-	c.bufMu.Lock()
-	if c.bufferedWriter != nil {
-		return c.bufferedWriter, func() {
-			c.startFlushTimer()
-			c.bufMu.Unlock()
-		}
-	}
-	c.bufMu.Unlock()
-	return c.conn, func() {}
-}
-
 // startFlushTimer must be called while holding lock on bufMu.
 func (c *Conn) startFlushTimer() {
-	c.stopFlushTimer()
-	c.flushTimer = time.AfterFunc(mysqlServerFlushDelay, func() {
-		c.bufMu.Lock()
-		defer c.bufMu.Unlock()
+	if c.flushTimer == nil {
+		c.flushTimer = time.AfterFunc(mysqlServerFlushDelay, func() {
+			c.bufMu.Lock()
+			defer c.bufMu.Unlock()
 
-		if c.bufferedWriter == nil {
-			return
-		}
-		c.stopFlushTimer()
-		c.bufferedWriter.Flush()
-	})
-}
-
-// stopFlushTimer must be called while holding lock on bufMu.
-func (c *Conn) stopFlushTimer() {
-	if c.flushTimer != nil {
-		c.flushTimer.Stop()
-		c.flushTimer = nil
+			if c.bufferedWriter == nil {
+				return
+			}
+			c.bufferedWriter.Flush()
+		})
+	} else {
+		c.flushTimer.Reset(mysqlServerFlushDelay)
 	}
 }
 
@@ -615,8 +592,19 @@ func (c *Conn) writePacket(data []byte) error {
 	index := 0
 	dataLength := len(data) - packetHeaderSize
 
-	w, unget := c.getWriter()
-	defer unget()
+	var w io.Writer
+
+	c.bufMu.Lock()
+	if c.bufferedWriter != nil {
+		w = c.bufferedWriter
+		defer func() {
+			c.startFlushTimer()
+			c.bufMu.Unlock()
+		}()
+	} else {
+		c.bufMu.Unlock()
+		w = c.conn
+	}
 
 	var header [packetHeaderSize]byte
 	for {
@@ -1708,6 +1696,10 @@ func (c *Conn) IsMarkedForClose() bool {
 	return c.closing
 }
 
+func (c *Conn) IsShuttingDown() bool {
+	return c.listener.shutdown.Load()
+}
+
 // ConnCheck ensures that this connection to the MySQL server hasn't been broken.
 // This is a fast, non-blocking check. For details on its implementation, please read
 // "Three Bugs in the Go MySQL Driver" (Vicent Marti, GitHub, 2020)
@@ -1744,9 +1736,4 @@ func (c *Conn) ConnCheck() error {
 		}
 	}
 	return nil
-}
-
-// GetTestConn returns a conn for testing purpose only.
-func GetTestConn() *Conn {
-	return newConn(testConn{})
 }

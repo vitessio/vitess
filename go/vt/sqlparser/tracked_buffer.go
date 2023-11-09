@@ -86,6 +86,10 @@ func (buf *TrackedBuffer) SetUpperCase(enable bool) {
 	}
 }
 
+func (buf *TrackedBuffer) WriteLiteral(lit string) {
+	_, _ = buf.literal(lit)
+}
+
 // SetEscapeAllIdentifiers sets whether ALL identifiers in the serialized SQL query should be quoted
 // and escaped. By default, identifiers are only escaped if they match the name of a SQL keyword or they
 // contain characters that must be escaped.
@@ -126,13 +130,13 @@ func (buf *TrackedBuffer) Myprintf(format string, values ...any) {
 
 func (buf *TrackedBuffer) printExpr(currentExpr Expr, expr Expr, left bool) {
 	if precedenceFor(currentExpr) == Syntactic {
-		expr.formatFast(buf)
+		expr.FormatFast(buf)
 	} else {
 		needParens := needParens(currentExpr, expr, left)
 		if needParens {
 			buf.WriteByte('(')
 		}
-		expr.formatFast(buf)
+		expr.FormatFast(buf)
 		if needParens {
 			buf.WriteByte(')')
 		}
@@ -231,7 +235,7 @@ func getExpressionForParensEval(checkParens bool, value any) Expr {
 func (buf *TrackedBuffer) formatter(node SQLNode) {
 	switch {
 	case buf.fast:
-		node.formatFast(buf)
+		node.FormatFast(buf)
 	case buf.nodeFormatter != nil:
 		buf.nodeFormatter(buf, node)
 	default:
@@ -317,7 +321,7 @@ func String(node SQLNode) string {
 	}
 
 	buf := NewTrackedBuffer(nil)
-	node.formatFast(buf)
+	node.FormatFast(buf)
 	return buf.String()
 }
 

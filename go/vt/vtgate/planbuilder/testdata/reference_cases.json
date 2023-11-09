@@ -106,7 +106,7 @@
         "Query": "select ambiguous_ref_with_source.col from (select aa from `user` where `user`.id = 1) as `user`, ambiguous_ref_with_source",
         "Table": "`user`, ambiguous_ref_with_source",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },

@@ -3446,6 +3446,9 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfWith(in.With, f); err != nil {
+		return err
+	}
 	for _, el := range in.From {
 		if err := VisitTableExpr(el, f); err != nil {
 			return err
@@ -3458,9 +3461,6 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfWhere(in.Where, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfWith(in.With, f); err != nil {
 		return err
 	}
 	if err := VisitGroupBy(in.GroupBy, f); err != nil {
@@ -3972,6 +3972,9 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfWith(in.With, f); err != nil {
+		return err
+	}
 	if err := VisitSelectStatement(in.Left, f); err != nil {
 		return err
 	}
@@ -3979,9 +3982,6 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 		return err
 	}
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfWith(in.With, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
@@ -4354,7 +4354,7 @@ func VisitRefOfWith(in *With, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	for _, el := range in.ctes {
+	for _, el := range in.CTEs {
 		if err := VisitRefOfCommonTableExpr(el, f); err != nil {
 			return err
 		}

@@ -68,6 +68,7 @@ func createUncertain(direct TableSet, recursive TableSet) *uncertain {
 		dependency: dependency{
 			direct:    direct,
 			recursive: recursive,
+			typ:       evalengine.UnknownType(),
 		},
 	}
 }

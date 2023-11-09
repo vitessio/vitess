@@ -31,7 +31,7 @@ func (err argError) Error() string {
 	return fmt.Sprintf("Incorrect parameter count in the call to native function '%s'", string(err))
 }
 
-func (ast *astCompiler) translateFuncArgs(fnargs []sqlparser.Expr) ([]Expr, error) {
+func (ast *astCompiler) translateFuncArgs(fnargs []sqlparser.Expr) ([]IR, error) {
 	var args TupleExpr
 	for _, expr := range fnargs {
 		convertedExpr, err := ast.translateExpr(expr)
@@ -43,7 +43,7 @@ func (ast *astCompiler) translateFuncArgs(fnargs []sqlparser.Expr) ([]Expr, erro
 	return args, nil
 }
 
-func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) {
+func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 	var args TupleExpr
 	for _, expr := range fn.Exprs {
 		aliased, ok := expr.(*sqlparser.AliasedExpr)
@@ -579,7 +579,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 	}
 }
 
-func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error) {
+func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 	switch call := call.(type) {
 	case *sqlparser.FuncExpr:
 		return ast.translateFuncExpr(call)
@@ -591,12 +591,15 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		return ast.translateConvertUsingExpr(call)
 
 	case *sqlparser.WeightStringFuncExpr:
-		var ws builtinWeightString
-		var err error
+		ws := &builtinWeightString{}
 
-		ws.Expr, err = ast.translateExpr(call.Expr)
+		expr, err := ast.translateExpr(call.Expr)
 		if err != nil {
 			return nil, err
+		}
+		ws.CallExpr = CallExpr{
+			Arguments: []IR{expr},
+			Method:    "WEIGHT_STRING",
 		}
 		if call.As != nil {
 			ws.Cast = strings.ToLower(call.As.Type)
@@ -605,7 +608,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 				return nil, err
 			}
 		}
-		return &ws, nil
+		return ws, nil
 
 	case *sqlparser.JSONExtractExpr:
 		args, err := ast.translateFuncArgs(append([]sqlparser.Expr{call.JSONDoc}, call.PathList...))
@@ -626,13 +629,13 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		}
 		return &builtinJSONUnquote{
 			CallExpr: CallExpr{
-				Arguments: []Expr{arg},
+				Arguments: []IR{arg},
 				Method:    "JSON_UNQUOTE",
 			},
 		}, nil
 
 	case *sqlparser.JSONObjectExpr:
-		var args []Expr
+		var args []IR
 		for _, param := range call.Params {
 			key, err := ast.translateExpr(param.Key)
 			if err != nil {
@@ -674,7 +677,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		}}, nil
 
 	case *sqlparser.JSONKeysExpr:
-		var args []Expr
+		var args []IR
 		doc, err := ast.translateExpr(call.JSONDoc)
 		if err != nil {
 			return nil, err
@@ -723,7 +726,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		}, nil
 
 	case *sqlparser.TrimFuncExpr:
-		var args []Expr
+		var args []IR
 		str, err := ast.translateExpr(call.StringArg)
 		if err != nil {
 			return nil, err
@@ -746,7 +749,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 
 	case *sqlparser.IntervalDateExpr:
 		var err error
-		args := make([]Expr, 2)
+		args := make([]IR, 2)
 
 		args[0], err = ast.translateExpr(call.Date)
 		if err != nil {
@@ -776,7 +779,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			return nil, err
 		}
 
-		args := []Expr{input, pattern}
+		args := []IR{input, pattern}
 
 		if call.MatchType != nil {
 			matchType, err := ast.translateExpr(call.MatchType)
@@ -802,7 +805,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			return nil, err
 		}
 
-		args := []Expr{input, pattern}
+		args := []IR{input, pattern}
 
 		if call.Position != nil {
 			position, err := ast.translateExpr(call.Position)
@@ -851,7 +854,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			return nil, err
 		}
 
-		args := []Expr{input, pattern}
+		args := []IR{input, pattern}
 
 		if call.Position != nil {
 			position, err := ast.translateExpr(call.Position)
@@ -897,7 +900,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			return nil, err
 		}
 
-		args := []Expr{input, pattern, repl}
+		args := []IR{input, pattern, repl}
 
 		if call.Position != nil {
 			position, err := ast.translateExpr(call.Position)
@@ -931,32 +934,32 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 	}
 }
 
-func builtinJSONExtractUnquoteRewrite(left Expr, right Expr) (Expr, error) {
+func builtinJSONExtractUnquoteRewrite(left IR, right IR) (IR, error) {
 	extract, err := builtinJSONExtractRewrite(left, right)
 	if err != nil {
 		return nil, err
 	}
 	return &builtinJSONUnquote{
 		CallExpr: CallExpr{
-			Arguments: []Expr{extract},
+			Arguments: []IR{extract},
 			Method:    "JSON_UNQUOTE",
 		},
 	}, nil
 }
 
-func builtinJSONExtractRewrite(left Expr, right Expr) (Expr, error) {
+func builtinJSONExtractRewrite(left IR, right IR) (IR, error) {
 	if _, ok := left.(*Column); !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "lhs of a JSON extract operator must be a column")
 	}
 	return &builtinJSONExtract{
 		CallExpr: CallExpr{
-			Arguments: []Expr{left, right},
+			Arguments: []IR{left, right},
 			Method:    "JSON_EXTRACT",
 		},
 	}, nil
 }
 
-func builtinIsNullRewrite(args []Expr) (Expr, error) {
+func builtinIsNullRewrite(args []IR) (IR, error) {
 	if len(args) != 1 {
 		return nil, argError("ISNULL")
 	}
@@ -967,7 +970,7 @@ func builtinIsNullRewrite(args []Expr) (Expr, error) {
 	}, nil
 }
 
-func builtinIfNullRewrite(args []Expr) (Expr, error) {
+func builtinIfNullRewrite(args []IR) (IR, error) {
 	if len(args) != 2 {
 		return nil, argError("IFNULL")
 	}
@@ -986,7 +989,7 @@ func builtinIfNullRewrite(args []Expr) (Expr, error) {
 	}, nil
 }
 
-func builtinNullIfRewrite(args []Expr) (Expr, error) {
+func builtinNullIfRewrite(args []IR) (IR, error) {
 	if len(args) != 2 {
 		return nil, argError("NULLIF")
 	}
@@ -1005,7 +1008,7 @@ func builtinNullIfRewrite(args []Expr) (Expr, error) {
 	}, nil
 }
 
-func builtinIfRewrite(args []Expr) (Expr, error) {
+func builtinIfRewrite(args []IR) (IR, error) {
 	if len(args) != 3 {
 		return nil, argError("IF")
 	}

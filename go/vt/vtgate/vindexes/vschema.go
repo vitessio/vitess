@@ -178,6 +178,9 @@ type Column struct {
 	Name          sqlparser.IdentifierCI `json:"name"`
 	Type          querypb.Type           `json:"type"`
 	CollationName string                 `json:"collation_name"`
+
+	// Invisible marks this as a column that will not be automatically included in `*` projections
+	Invisible bool `json:"invisible"`
 }
 
 // MarshalJSON returns a JSON representation of Column.
@@ -610,7 +613,7 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				)
 			}
 			colNames[name.Lowered()] = true
-			t.Columns = append(t.Columns, Column{Name: name, Type: col.Type})
+			t.Columns = append(t.Columns, Column{Name: name, Type: col.Type, Invisible: col.Invisible})
 		}
 
 		// Initialize ColumnVindexes.

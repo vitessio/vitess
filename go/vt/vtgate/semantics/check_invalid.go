@@ -44,6 +44,10 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		return vterrors.VT12001("Assignment expression")
 	case *sqlparser.Subquery:
 		return a.checkSubqueryColumns(cursor.Parent(), node)
+	case *sqlparser.With:
+		if node.Recursive {
+			return vterrors.VT12001("recursive common table expression")
+		}
 	case *sqlparser.Insert:
 		if node.Action == sqlparser.ReplaceAct {
 			return ShardedError{Inner: &UnsupportedConstruct{errString: "REPLACE INTO with sharded keyspace"}}

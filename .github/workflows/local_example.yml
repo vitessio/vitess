@@ -8,7 +8,7 @@ jobs:
     runs-on: gh-hosted-runners-16cores-1
     strategy:
       matrix:
-        topo: [consul,etcd,k8s]
+        topo: [consul,etcd,zk2]
 
     steps:
     - name: Skip CI

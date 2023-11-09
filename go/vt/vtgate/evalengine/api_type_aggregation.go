@@ -57,6 +57,21 @@ func AggregateTypes(types []sqltypes.Type) sqltypes.Type {
 	return typeAgg.result()
 }
 
+func (ta *typeAggregation) addEval(e eval) {
+	var t sqltypes.Type
+	var f typeFlag
+	switch e := e.(type) {
+	case nil:
+		t = sqltypes.Null
+	case *evalBytes:
+		t = sqltypes.Type(e.tt)
+		f = e.flag
+	default:
+		t = e.SQLType()
+	}
+	ta.add(t, f)
+}
+
 func (ta *typeAggregation) add(tt sqltypes.Type, f typeFlag) {
 	switch tt {
 	case sqltypes.Float32, sqltypes.Float64:

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -245,7 +246,7 @@ func (vf *VindexFunc) description() PrimitiveDescription {
 	other := map[string]any{
 		"Fields":  fields,
 		"Columns": vf.Cols,
-		"Value":   evalengine.FormatExpr(vf.Value),
+		"Value":   sqlparser.String(vf.Value),
 	}
 	if vf.Vindex != nil {
 		other["Vindex"] = vf.Vindex.String()
