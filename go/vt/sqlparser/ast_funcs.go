@@ -400,7 +400,7 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 
 // TableName returns a TableName pointing to this table expr
 func (node *AliasedTableExpr) TableName() (TableName, error) {
-	if !node.As.IsEmpty() {
+	if node.As.NonEmpty() {
 		return TableName{Name: node.As}, nil
 	}
 
@@ -938,6 +938,11 @@ func NewIdentifierCS(str string) IdentifierCS {
 // IsEmpty returns true if TabIdent is empty.
 func (node IdentifierCS) IsEmpty() bool {
 	return node.v == ""
+}
+
+// NonEmpty returns true if TabIdent is not empty.
+func (node IdentifierCS) NonEmpty() bool {
+	return !node.IsEmpty()
 }
 
 // String returns the unescaped table name. It must
@@ -2136,7 +2141,7 @@ func RemoveKeyspace(in SQLNode) {
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
 		switch col := node.(type) {
 		case *ColName:
-			if !col.Qualifier.Qualifier.IsEmpty() {
+			if col.Qualifier.Qualifier.NonEmpty() {
 				col.Qualifier.Qualifier = NewIdentifierCS("")
 			}
 		}

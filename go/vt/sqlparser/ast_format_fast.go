@@ -1530,7 +1530,7 @@ func (node TableExprs) FormatFast(buf *TrackedBuffer) {
 func (node *AliasedTableExpr) FormatFast(buf *TrackedBuffer) {
 	node.Expr.FormatFast(buf)
 	node.Partitions.FormatFast(buf)
-	if !node.As.IsEmpty() {
+	if node.As.NonEmpty() {
 		buf.WriteString(" as ")
 		node.As.FormatFast(buf)
 		if len(node.Columns) != 0 {
@@ -1558,7 +1558,7 @@ func (node TableName) FormatFast(buf *TrackedBuffer) {
 	if node.IsEmpty() {
 		return
 	}
-	if !node.Qualifier.IsEmpty() {
+	if node.Qualifier.NonEmpty() {
 		node.Qualifier.FormatFast(buf)
 		buf.WriteByte('.')
 	}
@@ -2064,7 +2064,7 @@ func (node *CollateExpr) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *FuncExpr) FormatFast(buf *TrackedBuffer) {
-	if !node.Qualifier.IsEmpty() {
+	if node.Qualifier.NonEmpty() {
 		node.Qualifier.FormatFast(buf)
 		buf.WriteByte('.')
 	}
@@ -2690,7 +2690,7 @@ func (node *ShowBasic) FormatFast(buf *TrackedBuffer) {
 		buf.WriteString(" from ")
 		node.Tbl.FormatFast(buf)
 	}
-	if !node.DbName.IsEmpty() {
+	if node.DbName.NonEmpty() {
 		buf.WriteString(" from ")
 		node.DbName.FormatFast(buf)
 	}
@@ -2751,7 +2751,7 @@ func (node *CreateDatabase) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node.
 func (node *AlterDatabase) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("alter database")
-	if !node.DBName.IsEmpty() {
+	if node.DBName.NonEmpty() {
 		buf.WriteByte(' ')
 		node.DBName.FormatFast(buf)
 	}

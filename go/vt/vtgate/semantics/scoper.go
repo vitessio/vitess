@@ -320,7 +320,7 @@ func checkForInvalidAliasUse(cte *sqlparser.CommonTableExpr, name string) (err e
 	// TODO I'm sure there is a better. way, but we need to do this to stop infinite loops from occurring
 	down := func(node sqlparser.SQLNode, parent sqlparser.SQLNode) bool {
 		tbl, ok := node.(sqlparser.TableName)
-		if !ok || !tbl.Qualifier.IsEmpty() {
+		if !ok || tbl.Qualifier.NonEmpty() {
 			return err == nil
 		}
 		if tbl.Name.String() == name {

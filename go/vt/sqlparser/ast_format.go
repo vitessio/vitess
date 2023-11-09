@@ -1163,7 +1163,7 @@ func (node TableExprs) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v%v", node.Expr, node.Partitions)
-	if !node.As.IsEmpty() {
+	if node.As.NonEmpty() {
 		buf.astPrintf(node, " as %v", node.As)
 		if len(node.Columns) != 0 {
 			buf.astPrintf(node, "%v", node.Columns)
@@ -1189,7 +1189,7 @@ func (node TableName) Format(buf *TrackedBuffer) {
 	if node.IsEmpty() {
 		return
 	}
-	if !node.Qualifier.IsEmpty() {
+	if node.Qualifier.NonEmpty() {
 		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
 	buf.astPrintf(node, "%v", node.Name)
@@ -1544,7 +1544,7 @@ func (node *CollateExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *FuncExpr) Format(buf *TrackedBuffer) {
-	if !node.Qualifier.IsEmpty() {
+	if node.Qualifier.NonEmpty() {
 		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
 	// Function names should not be back-quoted even
@@ -2020,7 +2020,7 @@ func (node *ShowBasic) Format(buf *TrackedBuffer) {
 	if !node.Tbl.IsEmpty() {
 		buf.astPrintf(node, " from %v", node.Tbl)
 	}
-	if !node.DbName.IsEmpty() {
+	if node.DbName.NonEmpty() {
 		buf.astPrintf(node, " from %v", node.DbName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
@@ -2070,7 +2070,7 @@ func (node *CreateDatabase) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *AlterDatabase) Format(buf *TrackedBuffer) {
 	buf.literal("alter database")
-	if !node.DBName.IsEmpty() {
+	if node.DBName.NonEmpty() {
 		buf.astPrintf(node, " %v", node.DBName)
 	}
 	if node.UpdateDataDirectory {

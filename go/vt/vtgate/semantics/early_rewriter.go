@@ -67,7 +67,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 
 func (r *earlyRewriter) handleAliasedTable(node *sqlparser.AliasedTableExpr) error {
 	tbl, ok := node.Expr.(sqlparser.TableName)
-	if !ok || !tbl.Qualifier.IsEmpty() {
+	if !ok || tbl.Qualifier.NonEmpty() {
 		return nil
 	}
 	scope := r.scoper.currentScope()

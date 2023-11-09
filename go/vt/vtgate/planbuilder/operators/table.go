@@ -130,7 +130,7 @@ func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.
 func (to *Table) ShortDescription() string {
 	tbl := to.VTable.String()
 	var alias, where string
-	if !to.QTable.Alias.As.IsEmpty() {
+	if to.QTable.Alias.As.NonEmpty() {
 		alias = " AS " + to.QTable.Alias.As.String()
 	}
 

@@ -164,7 +164,7 @@ func buildVariablePlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (
 }
 
 func buildShowTblPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
-	if !show.DbName.IsEmpty() {
+	if show.DbName.NonEmpty() {
 		show.Tbl.Qualifier = sqlparser.NewIdentifierCS(show.DbName.String())
 		// Remove Database Name from the query.
 		show.DbName = sqlparser.NewIdentifierCS("")
@@ -174,7 +174,7 @@ func buildShowTblPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (e
 	var ks *vindexes.Keyspace
 	var err error
 
-	if !show.Tbl.Qualifier.IsEmpty() && sqlparser.SystemSchema(show.Tbl.Qualifier.String()) {
+	if show.Tbl.Qualifier.NonEmpty() && sqlparser.SystemSchema(show.Tbl.Qualifier.String()) {
 		ks, err = vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
@@ -486,7 +486,7 @@ func buildCreateTblPlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema)
 	var ks *vindexes.Keyspace
 	var err error
 
-	if !show.Op.Qualifier.IsEmpty() && sqlparser.SystemSchema(show.Op.Qualifier.String()) {
+	if show.Op.Qualifier.NonEmpty() && sqlparser.SystemSchema(show.Op.Qualifier.String()) {
 		ks, err = vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
@@ -519,7 +519,7 @@ func buildCreateTblPlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema)
 
 func buildCreatePlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema) (engine.Primitive, error) {
 	dbName := ""
-	if !show.Op.Qualifier.IsEmpty() {
+	if show.Op.Qualifier.NonEmpty() {
 		dbName = show.Op.Qualifier.String()
 	}
 
@@ -567,7 +567,7 @@ func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 
 func buildShowGtidPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
 	dbName := ""
-	if !show.DbName.IsEmpty() {
+	if show.DbName.NonEmpty() {
 		dbName = show.DbName.String()
 	}
 	dest, ks, _, err := vschema.TargetDestination(dbName)
