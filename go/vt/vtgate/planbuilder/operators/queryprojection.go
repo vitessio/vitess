@@ -460,29 +460,47 @@ func (qp *QueryProjection) isExprInGroupByExprs(ctx *plancontext.PlanningContext
 }
 
 // GetSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
-func (qp *QueryProjection) GetSimplifiedExpr(e sqlparser.Expr) sqlparser.Expr {
+func (qp *QueryProjection) GetSimplifiedExpr(e sqlparser.Expr) (found sqlparser.Expr) {
+	if qp == nil {
+		return e
+	}
 	// If the ORDER BY is against a column alias, we need to remember the expression
 	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
 	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
 
-	colExpr, isColName := e.(*sqlparser.ColName)
-	if !(isColName && colExpr.Qualifier.IsEmpty()) {
-		// we are only interested in unqualified column names. if it's not a column name and not
+	in, isColName := e.(*sqlparser.ColName)
+	if !(isColName && in.Qualifier.IsEmpty()) {
+		// we are only interested in unqualified column names. if it's not a column name and not unqualified, we're done
 		return e
 	}
 
 	for _, selectExpr := range qp.SelectExprs {
-		aliasedExpr, isAliasedExpr := selectExpr.Col.(*sqlparser.AliasedExpr)
-		if !isAliasedExpr {
+		ae, ok := selectExpr.Col.(*sqlparser.AliasedExpr)
+		if !ok {
 			continue
 		}
-		aliased := !aliasedExpr.As.IsEmpty()
-		if aliased && colExpr.Name.Equal(aliasedExpr.As) {
-			return aliasedExpr.Expr
+		aliased := !ae.As.IsEmpty()
+		if aliased {
+			if in.Name.Equal(ae.As) {
+				return ae.Expr
+			}
+		} else {
+			seCol, ok := ae.Expr.(*sqlparser.ColName)
+			if !ok {
+				continue
+			}
+			if seCol.Name.Equal(in.Name) {
+				// If the column name matches, we have a match, even if the table name is not listed
+				return ae.Expr
+			}
 		}
 	}
 
-	return e
+	if found == nil {
+		found = e
+	}
+
+	return found
 }
 
 // toString should only be used for tests
