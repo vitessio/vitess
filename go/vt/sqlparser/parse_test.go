@@ -2370,6 +2370,8 @@ var (
 	}, {
 		input: "show vschema tables",
 	}, {
+		input: "show vschema keyspaces",
+	}, {
 		input: "show vschema vindexes",
 	}, {
 		input: "show vschema vindexes from t",
