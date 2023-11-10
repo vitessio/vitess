@@ -88,7 +88,7 @@
               "Sharded": true
             },
             "FieldQuery": "select `user`.col1 as a, `user`.col2 from `user` where 1 != 1",
-            "Query": "select `user`.col1 as a, `user`.col2 from `user` where `user`.col1 = 1 and `user`.col1 = `user`.col2 and 1 = 1",
+            "Query": "select `user`.col1 as a, `user`.col2 from `user` where `user`.col1 = 1 and `user`.col1 = `user`.col2",
             "Table": "`user`"
           },
           {
@@ -99,7 +99,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_extra.col3 from user_extra where 1 != 1",
-            "Query": "select user_extra.col3 from user_extra where user_extra.col3 = 1 and 1 = 1",
+            "Query": "select user_extra.col3 from user_extra where user_extra.col3 = 1",
             "Table": "user_extra"
           }
         ]
