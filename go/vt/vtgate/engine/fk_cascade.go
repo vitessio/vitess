@@ -100,7 +100,7 @@ func (fkc *FkCascade) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		// Having non-empty UpdateExprBvNames is an indication that we have an update query with non-literal expressions in it.
 		// We need to run this query differently because we need to run an update for each row we get back from the SELECT.
 		if len(child.NonLiteralInfo) > 0 {
-			err = fkc.executeNonLiteralExprFkChild(ctx, vcursor, bindVars, wantfields, selectionRes, child, false)
+			err = fkc.executeNonLiteralExprFkChild(ctx, vcursor, bindVars, wantfields, selectionRes, child)
 		} else {
 			err = fkc.executeLiteralExprFkChild(ctx, vcursor, bindVars, wantfields, selectionRes, child, false)
 		}
@@ -143,7 +143,7 @@ func (fkc *FkCascade) executeLiteralExprFkChild(ctx context.Context, vcursor VCu
 	return nil
 }
 
-func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, selectionRes *sqltypes.Result, child *FkChild, isStreaming bool) error {
+func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, selectionRes *sqltypes.Result, child *FkChild) error {
 	// For each row in the SELECT we need to run the child primitive.
 	for _, row := range selectionRes.Rows {
 		// First we check if any of the columns is being updated at all.
@@ -185,12 +185,7 @@ func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor 
 		for _, info := range child.NonLiteralInfo {
 			bindVars[info.UpdateExprBvName] = sqltypes.ValueBindVariable(row[info.UpdateExprCol])
 		}
-		var err error
-		if isStreaming {
-			err = vcursor.StreamExecutePrimitive(ctx, child.Exec, bindVars, wantfields, func(result *sqltypes.Result) error { return nil })
-		} else {
-			_, err = vcursor.ExecutePrimitive(ctx, child.Exec, bindVars, wantfields)
-		}
+		_, err := vcursor.ExecutePrimitive(ctx, child.Exec, bindVars, wantfields)
 		if err != nil {
 			return err
 		}
