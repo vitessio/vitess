@@ -192,6 +192,10 @@ func TestInitAndUpdate(t *testing.T) {
 		30*time.Second,
 		"initial table list not complete")
 
+	utils.AssertMatches(t, conn,
+		"SHOW VSCHEMA KEYSPACES",
+		`[[VARCHAR("ks") VARCHAR("true") VARCHAR("unmanaged") VARCHAR("")]]`)
+
 	// Init
 	_ = utils.Exec(t, conn, "create table test_sc (id bigint primary key)")
 	expected = `[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")]]`
