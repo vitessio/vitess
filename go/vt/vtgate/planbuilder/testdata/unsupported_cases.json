@@ -482,12 +482,12 @@
   {
     "comment": "cant switch sides for outer joins",
     "query": "select id from user left join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
-    "plan": "VT12001: unsupported: LEFT JOIN with derived tables"
+    "plan": "VT12001: unsupported: LEFT JOIN with LIMIT on the outer side"
   },
   {
     "comment": "limit on both sides means that we can't evaluate this at all",
     "query": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
-    "plan": "VT12001: unsupported: JOIN between derived tables"
+    "plan": "VT12001: unsupported: JOIN between derived tables with LIMIT"
   },
   {
     "comment": "multi-shard union",

@@ -225,3 +225,32 @@ func TestInfrSchemaAndUnionAll(t *testing.T) {
 		})
 	}
 }
+
+func TestJoinWithSingleShardQueryOnRHS(t *testing.T) {
+	// This test checks that we can run queries like this, where the RHS is a single shard query
+	mcmp, closer := start(t)
+	defer closer()
+
+	query := `SELECT
+        c.column_name as column_name,
+        c.data_type as data_type,
+        c.table_name as table_name,
+        c.table_schema as table_schema
+FROM
+        information_schema.columns c
+        JOIN (
+          SELECT
+            table_name
+          FROM
+            information_schema.tables
+          WHERE
+            table_schema != 'information_schema'
+          LIMIT
+            1
+        ) AS tables ON tables.table_name = c.table_name
+ORDER BY
+        c.table_name`
+
+	res := utils.Exec(t, mcmp.VtConn, query)
+	require.NotEmpty(t, res.Rows)
+}
