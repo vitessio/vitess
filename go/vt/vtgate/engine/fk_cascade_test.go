@@ -80,7 +80,7 @@ func TestDeleteCascade(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`StreamExecuteMulti select cola, colb from parent where foo = 48 ks.0: {} `,
+		`ExecuteMultiShard ks.0: select cola, colb from parent where foo = 48 {} false false`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: delete from child where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x012\x950\x01b"}} true true`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -141,7 +141,7 @@ func TestUpdateCascade(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`StreamExecuteMulti select cola, colb from parent where foo = 48 ks.0: {} `,
+		`ExecuteMultiShard ks.0: select cola, colb from parent where foo = 48 {} false false`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: update child set ca = :vtg1 where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x012\x950\x01b"}} true true`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -215,7 +215,7 @@ func TestNonLiteralUpdateCascade(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`StreamExecuteMulti select cola, cola <=> colb + 2, colb + 2, from parent where foo = 48 ks.0: {} `,
+		`ExecuteMultiShard ks.0: select cola, cola <=> colb + 2, colb + 2, from parent where foo = 48 {} false false`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x012"} fkc_upd: type:INT64 value:"5"} true true`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,

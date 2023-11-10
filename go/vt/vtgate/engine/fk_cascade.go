@@ -205,45 +205,11 @@ func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor 
 
 // TryStreamExecute implements the Primitive interface.
 func (fkc *FkCascade) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	var selectionRes *sqltypes.Result
-	// Execute the Selection primitive to find the rows that are going to modified.
-	// This will be used to find the rows that need modification on the children.
-	err := vcursor.StreamExecutePrimitive(ctx, fkc.Selection, bindVars, wantfields, func(result *sqltypes.Result) error {
-		if len(result.Rows) == 0 {
-			return nil
-		}
-		if selectionRes == nil {
-			selectionRes = result
-			return nil
-		}
-		selectionRes.Rows = append(selectionRes.Rows, result.Rows...)
-		return nil
-	})
+	res, err := fkc.TryExecute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
-
-	// If no rows are to be modified, there is nothing to do.
-	if selectionRes == nil || len(selectionRes.Rows) == 0 {
-		return callback(&sqltypes.Result{})
-	}
-
-	// Execute the child primitive, and bail out incase of failure.
-	// Since this Primitive is always executed in a transaction, the changes should
-	// be rolled back incase of an error.
-	for _, child := range fkc.Children {
-		if len(child.NonLiteralInfo) > 0 {
-			err = fkc.executeNonLiteralExprFkChild(ctx, vcursor, bindVars, wantfields, selectionRes, child, true)
-		} else {
-			err = fkc.executeLiteralExprFkChild(ctx, vcursor, bindVars, wantfields, selectionRes, child, true)
-		}
-		if err != nil {
-			return err
-		}
-	}
-
-	// All the children are modified successfully, we can now execute the Parent Primitive.
-	return vcursor.StreamExecutePrimitive(ctx, fkc.Parent, bindVars, wantfields, callback)
+	return callback(res)
 }
 
 // Inputs implements the Primitive interface.
