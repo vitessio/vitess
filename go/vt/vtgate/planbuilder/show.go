@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -116,6 +117,8 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 		return buildShowTargetPlan(vschema)
 	case sqlparser.VschemaTables:
 		return buildVschemaTablesPlan(vschema)
+	case sqlparser.VschemaKeyspaces:
+		return buildVschemaKeyspacesPlan(vschema)
 	case sqlparser.VschemaVindexes:
 		return buildVschemaVindexesPlan(show, vschema)
 	}
@@ -639,6 +642,26 @@ func buildEnginesPlan() (engine.Primitive, error) {
 
 	return engine.NewRowsPrimitive(rows,
 		buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints")), nil
+}
+
+func buildVschemaKeyspacesPlan(vschema plancontext.VSchema) (engine.Primitive, error) {
+	vs := vschema.GetVSchema()
+	var rows [][]sqltypes.Value
+	for ksName, ks := range vs.Keyspaces {
+		var row []sqltypes.Value
+		row = append(row, sqltypes.NewVarChar(ksName))
+		row = append(row, sqltypes.NewVarChar(strconv.FormatBool(ks.Keyspace.Sharded)))
+		fkMode, _ := vschema.ForeignKeyMode(ksName)
+		row = append(row, sqltypes.NewVarChar(fkMode.String()))
+		ksError := ""
+		if ks.Error != nil {
+			ksError = ks.Error.Error()
+		}
+		row = append(row, sqltypes.NewVarChar(ksError))
+		rows = append(rows, row)
+	}
+
+	return engine.NewRowsPrimitive(rows, buildVarCharFields("Keyspace Name", "Sharded", "Foreign Key Mode", "Error")), nil
 }
 
 func buildVschemaTablesPlan(vschema plancontext.VSchema) (engine.Primitive, error) {
