@@ -450,7 +450,13 @@ func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.Chi
 //	`UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query>
 //	WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)
 //	[AND ({<bind variables in the SET clause of the original update> IS NULL OR}... <child_columns_in_fk> NOT IN (<bind variables in the SET clause of the original update>))]`
-func buildChildUpdOpForSetNull(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, childWhereExpr sqlparser.Expr, nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo, updatedTable *vindexes.Table) (ops.Operator, error) {
+func buildChildUpdOpForSetNull(
+	ctx *plancontext.PlanningContext,
+	fk vindexes.ChildFKInfo,
+	childWhereExpr sqlparser.Expr,
+	nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo,
+	updatedTable *vindexes.Table,
+) (ops.Operator, error) {
 	// For the SET NULL type constraint, we need to set all the child columns to NULL.
 	var childUpdateExprs sqlparser.UpdateExprs
 	for _, column := range fk.ChildColumns {
@@ -485,7 +491,13 @@ func buildChildUpdOpForSetNull(ctx *plancontext.PlanningContext, fk vindexes.Chi
 }
 
 // createFKVerifyOp creates the verify operator for the parent foreign key constraints.
-func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, updStmt *sqlparser.Update, parentFks []vindexes.ParentFKInfo, restrictChildFks []vindexes.ChildFKInfo) (ops.Operator, error) {
+func createFKVerifyOp(
+	ctx *plancontext.PlanningContext,
+	childOp ops.Operator,
+	updStmt *sqlparser.Update,
+	parentFks []vindexes.ParentFKInfo,
+	restrictChildFks []vindexes.ChildFKInfo,
+) (ops.Operator, error) {
 	if len(parentFks) == 0 && len(restrictChildFks) == 0 {
 		return childOp, nil
 	}
