@@ -137,6 +137,7 @@ type (
 		// The map is keyed by the tableset of the table that each of the foreign key belongs to.
 		childForeignKeysInvolved  map[TableSet][]vindexes.ChildFKInfo
 		parentForeignKeysInvolved map[TableSet][]vindexes.ParentFKInfo
+		childFkToUpdExprs         map[string]sqlparser.UpdateExprs
 	}
 
 	columnName struct {
@@ -194,6 +195,11 @@ func (st *SemTable) GetParentForeignKeysList() []vindexes.ParentFKInfo {
 		parentFkInfos = append(parentFkInfos, infos...)
 	}
 	return parentFkInfos
+}
+
+// GetUpdateExpressionsForFk gets the update expressions for the given serialized foreign key constraint.
+func (st *SemTable) GetUpdateExpressionsForFk(foreignKey string) sqlparser.UpdateExprs {
+	return st.childFkToUpdExprs[foreignKey]
 }
 
 // RemoveParentForeignKey removes the given foreign key from the parent foreign keys that sem table stores.
@@ -277,6 +283,89 @@ func (st *SemTable) RemoveNonRequiredForeignKeys(verifyAllFks bool, getAction fu
 	}
 
 	return nil
+}
+
+// ErrIfFkDependentColumnUpdated checks if a foreign key column that is being updated is dependent on another column which also being updated.
+func (st *SemTable) ErrIfFkDependentColumnUpdated(updateExprs sqlparser.UpdateExprs) error {
+	// Go over all the update expressions
+	for _, updateExpr := range updateExprs {
+		deps := st.RecursiveDeps(updateExpr.Name)
+		if deps.NumberOfTables() != 1 {
+			panic("expected to have single table dependency")
+		}
+		// Get all the child and parent foreign keys for the given table that the update expression belongs to.
+		childFks := st.childForeignKeysInvolved[deps]
+		parentFKs := st.parentForeignKeysInvolved[deps]
+
+		involvedInFk := false
+		// Check if this updated column is part of any child or parent foreign key.
+		for _, childFk := range childFks {
+			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				involvedInFk = true
+				break
+			}
+		}
+		for _, parentFk := range parentFKs {
+			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				involvedInFk = true
+				break
+			}
+		}
+
+		if !involvedInFk {
+			continue
+		}
+
+		// We cannot support updating a foreign key column that is using a column which is also being updated for 2 reasons—
+		// 1. For the child foreign keys, we aren't sure what the final value of the updated foreign key column will be. So we don't know
+		// what to cascade to the child. The selection that we do isn't enough to know if the updated value, since one of the columns used in the update is also being updated.
+		// 2. For the parent foreign keys, we don't know if we need to reject this update. Because we don't know the final updated value, the update might need to be failed,
+		// but we can't say for certain.
+		var dependencyUpdatedErr error
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			col, ok := node.(*sqlparser.ColName)
+			if !ok {
+				return true, nil
+			}
+			// self reference column dependency is not considered a dependent column being updated.
+			if st.EqualsExpr(updateExpr.Name, col) {
+				return true, nil
+			}
+			for _, updExpr := range updateExprs {
+				if st.EqualsExpr(updExpr.Name, col) {
+					dependencyUpdatedErr = vterrors.VT12001(fmt.Sprintf("%v column referenced in foreign key column %v is itself updated", sqlparser.String(col), sqlparser.String(updateExpr.Name)))
+					return false, nil
+				}
+			}
+			return false, nil
+		}, updateExpr.Expr)
+		if dependencyUpdatedErr != nil {
+			return dependencyUpdatedErr
+		}
+	}
+	return nil
+}
+
+// HasNonLiteralForeignKeyUpdate checks for non-literal updates in expressions linked to a foreign key.
+func (st *SemTable) HasNonLiteralForeignKeyUpdate(updExprs sqlparser.UpdateExprs) bool {
+	for _, updateExpr := range updExprs {
+		if sqlparser.IsLiteral(updateExpr.Expr) {
+			continue
+		}
+		parentFks := st.parentForeignKeysInvolved[st.RecursiveDeps(updateExpr.Name)]
+		for _, parentFk := range parentFks {
+			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				return true
+			}
+		}
+		childFks := st.childForeignKeysInvolved[st.RecursiveDeps(updateExpr.Name)]
+		for _, childFk := range childFks {
+			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // isShardScoped checks if the foreign key constraint is shard-scoped or not. It uses the vindex information to make this call.
