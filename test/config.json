@@ -1040,6 +1040,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vdiff_multiple_movetables_test.go": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMultipleConcurrentVDiffs"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_partial_movetables_basic",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vreplication_movetables_buffering": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesBuffering"],
