@@ -429,7 +429,10 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, rootAgg
 	for _, pred := range join.JoinPredicates {
 		for _, bve := range pred.LHSExprs {
 			expr := bve.Expr
-			wexpr := rootAggr.QP.GetSimplifiedExpr(expr)
+			wexpr, err := rootAggr.QP.GetSimplifiedExpr(ctx, expr)
+			if err != nil {
+				return err
+			}
 			idx, found := canReuseColumn(ctx, lhs.pushed.Columns, expr, extractExpr)
 			if !found {
 				idx = len(lhs.pushed.Columns)
