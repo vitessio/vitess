@@ -78,6 +78,115 @@ func (h *Horizon) SetInputs(ops []ops.Operator) {
 	h.Source = ops[0]
 }
 
+<<<<<<< HEAD
+=======
+func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+	if _, isUNion := h.Source.(*Union); isUNion {
+		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
+		h.Source = h.Source.AddPredicate(ctx, expr)
+		return h
+	}
+	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
+	if err != nil {
+		if errors.Is(err, semantics.ErrNotSingleTable) {
+			return &Filter{
+				Source:     h,
+				Predicates: []sqlparser.Expr{expr},
+			}
+		}
+		panic(err)
+	}
+
+	newExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+	if sqlparser.ContainsAggregation(newExpr) {
+		return &Filter{Source: h, Predicates: []sqlparser.Expr{expr}}
+	}
+	h.Source = h.Source.AddPredicate(ctx, newExpr)
+	return h
+}
+
+func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, reuse bool, _ bool, expr *sqlparser.AliasedExpr) int {
+	if !reuse {
+		panic(errNoNewColumns)
+	}
+	col, ok := expr.Expr.(*sqlparser.ColName)
+	if !ok {
+		panic(vterrors.VT13001("cannot push non-ColName expression to horizon"))
+	}
+	offset := h.FindCol(ctx, col, false)
+	if offset < 0 {
+		panic(errNoNewColumns)
+	}
+	return offset
+}
+
+var errNoNewColumns = vterrors.VT13001("can't add new columns to Horizon")
+
+// canReuseColumn is generic, so it can be used with slices of different types.
+// We don't care about the actual type, as long as we know it's a sqlparser.Expr
+func canReuseColumn[T any](
+	ctx *plancontext.PlanningContext,
+	columns []T,
+	col sqlparser.Expr,
+	f func(T) sqlparser.Expr,
+) (offset int, found bool) {
+	for offset, column := range columns {
+		if ctx.SemTable.EqualsExprWithDeps(col, f(column)) {
+			return offset, true
+		}
+	}
+
+	return
+}
+
+func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+	if underRoute && h.IsDerived() {
+		// We don't want to use columns on this operator if it's a derived table under a route.
+		// In this case, we need to add a Projection on top of this operator to make the column available
+		return -1
+	}
+
+	for idx, se := range sqlparser.GetFirstSelect(h.Query).SelectExprs {
+		ae, ok := se.(*sqlparser.AliasedExpr)
+		if !ok {
+			panic(vterrors.VT09015())
+		}
+		if ctx.SemTable.EqualsExprWithDeps(ae.Expr, expr) {
+			return idx
+		}
+	}
+
+	return -1
+}
+
+func (h *Horizon) GetColumns(ctx *plancontext.PlanningContext) (exprs []*sqlparser.AliasedExpr) {
+	for _, expr := range ctx.SemTable.SelectExprs(h.Query) {
+		ae, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			panic(vterrors.VT09015())
+		}
+		exprs = append(exprs, ae)
+	}
+
+	return exprs
+}
+
+func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectExprs {
+	return sqlparser.GetFirstSelect(h.Query).SelectExprs
+}
+
+func (h *Horizon) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+	if h.QP == nil {
+		_, err := h.getQP(ctx)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return h.QP.OrderExprs
+}
+
+// TODO: REMOVE
+>>>>>>> 817c24e942 (planbuilder bugfix: expose columns through derived tables (#14501))
 func (h *Horizon) selectStatement() sqlparser.SelectStatement {
 	return h.Select
 }

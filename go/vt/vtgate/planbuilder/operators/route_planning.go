@@ -412,11 +412,11 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
 		if !inner {
-			return nil, nil, vterrors.VT12001("LEFT JOIN with derived tables")
+			return nil, nil, vterrors.VT12001("LEFT JOIN with LIMIT on the outer side")
 		}
 
 		if requiresSwitchingSides(ctx, lhs) {
-			return nil, nil, vterrors.VT12001("JOIN between derived tables")
+			return nil, nil, vterrors.VT12001("JOIN between derived tables with LIMIT")
 		}
 
 		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)
@@ -424,7 +424,11 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 		if err != nil {
 			return nil, nil, err
 		}
+<<<<<<< HEAD
 		return newOp, rewrite.NewTree("merge routes, but switch sides", newOp), nil
+=======
+		return newOp, rewrite.NewTree("logical join to applyJoin, switching side because LIMIT", newOp), nil
+>>>>>>> 817c24e942 (planbuilder bugfix: expose columns through derived tables (#14501))
 	}
 
 	join := NewApplyJoin(Clone(lhs), Clone(rhs), nil, !inner)
