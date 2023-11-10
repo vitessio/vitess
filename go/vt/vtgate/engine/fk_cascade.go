@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"maps"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -113,7 +114,8 @@ func (fkc *FkCascade) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	return vcursor.ExecutePrimitive(ctx, fkc.Parent, bindVars, wantfields)
 }
 
-func (fkc *FkCascade) executeLiteralExprFkChild(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, selectionRes *sqltypes.Result, child *FkChild, isStreaming bool) error {
+func (fkc *FkCascade) executeLiteralExprFkChild(ctx context.Context, vcursor VCursor, in map[string]*querypb.BindVariable, wantfields bool, selectionRes *sqltypes.Result, child *FkChild, isStreaming bool) error {
+	bindVars := maps.Clone(in)
 	// We create a bindVariable that stores the tuple of columns involved in the fk constraint.
 	bv := &querypb.BindVariable{
 		Type: querypb.Type_TUPLE,
@@ -139,13 +141,13 @@ func (fkc *FkCascade) executeLiteralExprFkChild(ctx context.Context, vcursor VCu
 	if err != nil {
 		return err
 	}
-	delete(bindVars, child.BVName)
 	return nil
 }
 
-func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, selectionRes *sqltypes.Result, child *FkChild) error {
+func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor VCursor, in map[string]*querypb.BindVariable, wantfields bool, selectionRes *sqltypes.Result, child *FkChild) error {
 	// For each row in the SELECT we need to run the child primitive.
 	for _, row := range selectionRes.Rows {
+		bindVars := maps.Clone(in)
 		// First we check if any of the columns is being updated at all.
 		skipRow := true
 		for _, info := range child.NonLiteralInfo {
@@ -188,11 +190,6 @@ func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor 
 		_, err := vcursor.ExecutePrimitive(ctx, child.Exec, bindVars, wantfields)
 		if err != nil {
 			return err
-		}
-		// Remove the bind variables that have been used and are no longer required.
-		delete(bindVars, child.BVName)
-		for _, info := range child.NonLiteralInfo {
-			delete(bindVars, info.UpdateExprBvName)
 		}
 	}
 	return nil
