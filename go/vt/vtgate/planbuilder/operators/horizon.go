@@ -147,6 +147,8 @@ func canReuseColumn[T any](
 
 func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	if underRoute && h.IsDerived() {
+		// We don't want to use columns on this operator if it's a derived table under a route.
+		// In this case, we need to add a Projection on top of this operator to make the column available
 		return -1
 	}
 
