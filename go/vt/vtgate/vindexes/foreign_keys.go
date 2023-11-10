@@ -46,13 +46,13 @@ func (fk *ParentFKInfo) MarshalJSON() ([]byte, error) {
 
 func (fk *ParentFKInfo) String(childTable *Table) string {
 	var str strings.Builder
-	str.WriteString(childTable.String())
+	str.WriteString(sqlparser.String(childTable.GetTableName()))
 	for _, column := range fk.ChildColumns {
-		str.WriteString(column.String())
+		str.WriteString("|" + sqlparser.String(column))
 	}
-	str.WriteString(fk.Table.String())
+	str.WriteString("||" + sqlparser.String(fk.Table.GetTableName()))
 	for _, column := range fk.ParentColumns {
-		str.WriteString(column.String())
+		str.WriteString("|" + sqlparser.String(column))
 	}
 	return str.String()
 }
@@ -91,13 +91,13 @@ func (fk *ChildFKInfo) MarshalJSON() ([]byte, error) {
 
 func (fk *ChildFKInfo) String(parentTable *Table) string {
 	var str strings.Builder
-	str.WriteString(fk.Table.String())
+	str.WriteString(sqlparser.String(fk.Table.GetTableName()))
 	for _, column := range fk.ChildColumns {
-		str.WriteString(column.String())
+		str.WriteString("|" + sqlparser.String(column))
 	}
-	str.WriteString(parentTable.String())
+	str.WriteString("||" + sqlparser.String(parentTable.GetTableName()))
 	for _, column := range fk.ParentColumns {
-		str.WriteString(column.String())
+		str.WriteString("|" + sqlparser.String(column))
 	}
 	return str.String()
 }
