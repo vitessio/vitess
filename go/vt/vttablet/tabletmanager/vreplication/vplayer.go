@@ -266,18 +266,29 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	if tplan == nil {
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
 	}
-	for _, change := range rowEvent.RowChanges {
-		_, err := tplan.applyChange(change, func(sql string) (*sqltypes.Result, error) {
-			stats := NewVrLogStats("ROWCHANGE")
-			start := time.Now()
-			qr, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
-			vp.vr.stats.QueryCount.Add(vp.phase, 1)
-			vp.vr.stats.QueryTimings.Record(vp.phase, start)
-			stats.Send(sql)
-			return qr, err
-		})
-		if err != nil {
-			return err
+
+	applyFunc := func(sql string) (*sqltypes.Result, error) {
+		stats := NewVrLogStats("ROWCHANGE")
+		start := time.Now()
+		qr, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
+		vp.vr.stats.QueryCount.Add(vp.phase, 1)
+		vp.vr.stats.QueryTimings.Record(vp.phase, start)
+		stats.Send(sql)
+		return qr, err
+	}
+	// If we have a delete row event for a table with a single PK column then we
+	// can perform a simple bulk delete using an IN clause.
+	// TODO: we should ensure that the total size of the statement does not
+	// exceed mysqld's max allowed packet size.
+	if (len(tplan.TablePlanBuilder.pkCols)+len(tplan.TablePlanBuilder.extraSourcePkCols)) == 1 &&
+		len(rowEvent.RowChanges) > 0 && (rowEvent.RowChanges[0].Before != nil && rowEvent.RowChanges[0].After == nil) &&
+		tplan.Delete != nil {
+		tplan.applyBulkDeleteChanges(rowEvent.RowChanges, applyFunc)
+	} else {
+		for _, change := range rowEvent.RowChanges {
+			if _, err := tplan.applyChange(change, applyFunc); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

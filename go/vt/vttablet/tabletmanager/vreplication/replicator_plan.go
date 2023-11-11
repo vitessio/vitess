@@ -29,6 +29,7 @@ import (
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -442,6 +443,44 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	}
 	// Unreachable.
 	return nil, nil
+}
+
+// applyBulkDeleteChanges applies a bulk delete statement from the row changes
+// to the target table using an IN clause with the primary key values of the
+// rows to be deleted. This only supports tables with single column primary keys.
+func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+	if (len(tp.TablePlanBuilder.pkCols) + len(tp.TablePlanBuilder.extraSourcePkCols)) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "bulk delete is only supported for tables with a single primary key column")
+	}
+	pkIndex := -1
+	pkVals := make([]sqltypes.Value, 0, len(rowDeletes))
+	for _, rowDelete := range rowDeletes {
+		vals := sqltypes.MakeRowTrusted(tp.Fields, rowDelete.Before)
+		if pkIndex == -1 {
+			for i := range vals {
+				if tp.PKIndices[i] {
+					pkIndex = i
+					break
+				}
+			}
+		}
+		pkVals = append(pkVals, vals[pkIndex])
+	}
+	pksBV, err := sqltypes.BuildBindVariable(pkVals)
+	if err != nil {
+		return nil, err
+	}
+	parsed := sqlparser.BuildParsedQuery("delete from %s where %s in %a",
+		sqlparser.String(tp.TablePlanBuilder.name),
+		sqlparser.String(tp.TablePlanBuilder.pkCols[0].colName),
+		"::pks",
+	)
+	query, err := parsed.GenerateQuery(map[string]*querypb.BindVariable{"pks": pksBV}, nil)
+	if err != nil {
+		return nil, err
+	}
+	log.Errorf("DEBUG: applyBulkDeleteChanges: %s", query)
+	return executor(query)
 }
 
 func getQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable) (string, error) {
