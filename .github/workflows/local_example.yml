@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-22.04]
-        topo: [consul,etcd,k8s]
+        topo: [consul,etcd,zk2]
 
     steps:
     - name: Skip CI
