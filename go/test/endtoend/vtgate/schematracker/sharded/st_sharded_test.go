@@ -192,9 +192,11 @@ func TestInitAndUpdate(t *testing.T) {
 		30*time.Second,
 		"initial table list not complete")
 
-	utils.AssertMatches(t, conn,
-		"SHOW VSCHEMA KEYSPACES",
-		`[[VARCHAR("ks") VARCHAR("true") VARCHAR("unmanaged") VARCHAR("")]]`)
+	if vtgateVersion >= 19 {
+		utils.AssertMatches(t, conn,
+			"SHOW VSCHEMA KEYSPACES",
+			`[[VARCHAR("ks") VARCHAR("true") VARCHAR("unmanaged") VARCHAR("")]]`)
+	}
 
 	// Init
 	_ = utils.Exec(t, conn, "create table test_sc (id bigint primary key)")
