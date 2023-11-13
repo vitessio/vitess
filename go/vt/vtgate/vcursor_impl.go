@@ -1089,8 +1089,11 @@ func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.Stri
 	_, _ = buf.WriteString(collations.Local().LookupName(vc.collation))
 	// The plans are going to be different based on the foreign key checks state. So we need to use that value
 	// as part of the plan's hashing key.
-	_, _ = buf.WriteString("+fkChecksState:")
-	_, _ = buf.WriteString(vc.GetForeignKeyChecksState().String())
+	fkChecksState := vc.GetForeignKeyChecksState().String()
+	if fkChecksState != "" {
+		_, _ = buf.WriteString("+fkChecksState:")
+		_, _ = buf.WriteString(fkChecksState)
+	}
 
 	if vc.destination != nil {
 		switch vc.destination.(type) {

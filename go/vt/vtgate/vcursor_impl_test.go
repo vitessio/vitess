@@ -268,19 +268,19 @@ func TestKeyForPlan(t *testing.T) {
 	tests := []testCase{{
 		vschema:               vschemaWith1KS,
 		targetString:          "",
-		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+fkChecksState:+Query:SELECT 1",
+		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1@replica",
-		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+fkChecksState:+Query:SELECT 1",
+		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1:-80",
-		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+fkChecksState:+DestinationShard(-80)+Query:SELECT 1",
+		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+DestinationShard(-80)+Query:SELECT 1",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1[deadbeef]",
-		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+fkChecksState:+KsIDsResolved:80-+Query:SELECT 1",
+		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+KsIDsResolved:80-+Query:SELECT 1",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "",
