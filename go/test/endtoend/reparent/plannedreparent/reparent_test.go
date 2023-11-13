@@ -275,17 +275,24 @@ func TestReparentWithDownReplica(t *testing.T) {
 	// Perform a graceful reparent operation. It will fail as one tablet is down.
 	out, err := utils.Prs(t, clusterInstance, tablets[1])
 	require.Error(t, err)
-	assert.True(t, utils.SetReplicationSourceFailed(tablets[2], out))
-
-	// insert data into the new primary, check the connected replica work
-	insertVal := utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0], tablets[3]})
+	var insertVal int
+	// Assert that PRS failed
+	if clusterInstance.VtctlMajorVersion <= 17 {
+		assert.True(t, utils.SetReplicationSourceFailed(tablets[2], out))
+		// insert data into the new primary, check the connected replica work
+		insertVal = utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0], tablets[3]})
+	} else {
+		assert.Contains(t, out, fmt.Sprintf("TabletManager.PrimaryStatus on %s error", tablets[2].Alias))
+		// insert data into the old primary, check the connected replica works. The primary tablet shouldn't have changed.
+		insertVal = utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[3]})
+	}
 
 	// restart mysql on the old replica, should still be connecting to the old primary
 	tablets[2].MysqlctlProcess.InitMysql = false
 	err = tablets[2].MysqlctlProcess.Start()
 	require.NoError(t, err)
 
-	// Use the same PlannedReparentShard command to fix up the tablet.
+	// Use the same PlannedReparentShard command to promote the new primary.
 	_, err = utils.Prs(t, clusterInstance, tablets[1])
 	require.NoError(t, err)
 
