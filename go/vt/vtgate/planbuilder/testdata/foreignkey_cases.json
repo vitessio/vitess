@@ -857,7 +857,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set m = 2, col2 = u_tbl2.col1 + 'bar' where u_tbl2.id = 1",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_tbl2 set m = 2, col2 = u_tbl2.col1 + 'bar' where u_tbl2.id = 1",
                 "Table": "u_tbl2"
               }
             ]
@@ -944,7 +944,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = :fkc_upd where (col2) in ::fkc_vals",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_tbl2 set col2 = :fkc_upd where (col2) in ::fkc_vals",
                 "Table": "u_tbl2"
               }
             ]
@@ -1015,7 +1015,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1 set m = 2, col1 = u_tbl1.x + 'bar' where id = 1",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_tbl1 set m = 2, col1 = u_tbl1.x + 'bar' where id = 1",
             "Table": "u_tbl1"
           }
         ]
@@ -1312,7 +1312,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ tbl3 set coly = tbl3.colx + 10 where tbl3.coly = 10",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ tbl3 set coly = tbl3.colx + 10 where tbl3.coly = 10",
             "Table": "tbl3"
           }
         ]
@@ -2037,7 +2037,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col4 = :fkc_upd where (u_tbl4.col4) in ::fkc_vals",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_tbl4 set col4 = :fkc_upd where (u_tbl4.col4) in ::fkc_vals",
                 "Table": "u_tbl4"
               }
             ]
@@ -2051,7 +2051,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl7 set foo = 100, col7 = baz + 1 + col7 where bar = 42",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_tbl7 set foo = 100, col7 = baz + 1 + col7 where bar = 42",
             "Table": "u_tbl7"
           }
         ]
@@ -2127,7 +2127,7 @@
                   0,
                   1
                 ],
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = null, colb = null where (cola, colb) in ::fkc_vals1",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_multicol_tbl3 set cola = null, colb = null where (cola, colb) in ::fkc_vals1",
                 "Table": "u_multicol_tbl3"
               },
               {
@@ -2153,7 +2153,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl1 set cola = u_multicol_tbl1.cola + 3 where id = 3",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_multicol_tbl1 set cola = u_multicol_tbl1.cola + 3 where id = 3",
             "Table": "u_multicol_tbl1"
           }
         ]
@@ -2233,7 +2233,7 @@
                     "CompExprCol": 4
                   }
                 ],
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = :fkc_upd, colb = :fkc_upd1 where (cola, colb) in ::fkc_vals",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_multicol_tbl3 set cola = :fkc_upd, colb = :fkc_upd1 where (cola, colb) in ::fkc_vals",
                 "Table": "u_multicol_tbl3"
               },
               {
@@ -2245,7 +2245,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl2 set cola = 2, colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl2.id = 7",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_multicol_tbl2 set cola = 2, colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl2.id = 7",
                 "Table": "u_multicol_tbl2"
               }
             ]
