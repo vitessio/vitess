@@ -3300,39 +3300,7 @@
   {
     "comment": "scatter aggregate symtab lookup error",
     "query": "select id, b as id, count(*) from user order by id",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select id, b as id, count(*) from user order by id",
-      "Instructions": {
-        "OperatorType": "Sort",
-        "Variant": "Memory",
-        "OrderBy": "(1|3) ASC",
-        "ResultColumns": 3,
-        "Inputs": [
-          {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "any_value(0) AS id, any_value(1) AS id, sum_count_star(2) AS count(*), any_value(3)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id, b as id, count(*), weight_string(b) from `user` where 1 != 1",
-                "Query": "select id, b as id, count(*), weight_string(b) from `user`",
-                "Table": "`user`"
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
-    }
+    "plan": "Column 'id' in field list is ambiguous"
   },
   {
     "comment": "aggr and non-aggr without group by (with query does not give useful result out)",
@@ -3388,9 +3356,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.id, weight_string(id) from `user` where 1 != 1 group by id, weight_string(id)",
+                "FieldQuery": "select `user`.id, weight_string(`user`.id) from `user` where 1 != 1 group by id, weight_string(`user`.id)",
                 "OrderBy": "(0|1) ASC",
-                "Query": "select `user`.id, weight_string(id) from `user` group by id, weight_string(id) order by id asc",
+                "Query": "select `user`.id, weight_string(`user`.id) from `user` group by id, weight_string(`user`.id) order by id asc",
                 "Table": "`user`"
               },
               {
@@ -4775,7 +4743,7 @@
         "OperatorType": "Distinct",
         "Collations": [
           "(0:2)",
-          "(1:2)"
+          "(1:3)"
         ],
         "ResultColumns": 2,
         "Inputs": [
@@ -4786,8 +4754,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b as a, weight_string(b) from `user` where 1 != 1",
-            "Query": "select distinct a, b as a, weight_string(b) from `user`",
+            "FieldQuery": "select a, b as a, weight_string(a), weight_string(b) from `user` where 1 != 1",
+            "Query": "select distinct a, b as a, weight_string(a), weight_string(b) from `user`",
             "Table": "`user`"
           }
         ]
@@ -6068,6 +6036,265 @@
         "main.dual",
         "user.user",
         "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "avg function on scatter query",
+    "query": "select avg(id) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(id) from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "sum(id) / count(id) as avg(id)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS avg(id), sum_count(1) AS count(id)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(id), count(id) from `user` where 1 != 1",
+                "Query": "select sum(id), count(id) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "avg function on scatter query deep inside the output expression",
+    "query": "select avg(id)+count(foo)+bar from user group by bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(id)+count(foo)+bar from user group by bar",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "avg(id) + count(foo) + bar as avg(id) + count(foo) + bar"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":0 as bar",
+              "sum(id) / count(id) as avg(id)",
+              ":2 as count(foo)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum(1) AS avg(id), sum_count(2) AS count(foo), sum_count(3) AS count(id)",
+                "GroupBy": "(0|4)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` where 1 != 1 group by bar, weight_string(bar)",
+                    "OrderBy": "(0|4) ASC",
+                    "Query": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` group by bar, weight_string(bar) order by bar asc",
+                    "Table": "`user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "avg function on scatter query deep inside the output expression",
+    "query": "select avg(id)+count(foo)+bar from user group by bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(id)+count(foo)+bar from user group by bar",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "avg(id) + count(foo) + bar as avg(id) + count(foo) + bar"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":0 as bar",
+              "sum(id) / count(id) as avg(id)",
+              ":2 as count(foo)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum(1) AS avg(id), sum_count(2) AS count(foo), sum_count(3) AS count(id)",
+                "GroupBy": "(0|4)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` where 1 != 1 group by bar, weight_string(bar)",
+                    "OrderBy": "(0|4) ASC",
+                    "Query": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` group by bar, weight_string(bar) order by bar asc",
+                    "Table": "`user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "two avg aggregations",
+    "query": "select avg(foo), avg(bar) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(foo), avg(bar) from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "sum(foo) / count(foo) as avg(foo)",
+          "sum(bar) / count(bar) as avg(bar)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS avg(foo), sum(1) AS avg(bar), sum_count(2) AS count(foo), sum_count(3) AS count(bar)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(foo), sum(bar), count(foo), count(bar) from `user` where 1 != 1",
+                "Query": "select sum(foo), sum(bar), count(foo), count(bar) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "avg and count on the same argument",
+    "query": "select avg(foo), count(foo) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(foo), count(foo) from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "sum(foo) / count(foo) as avg(foo)",
+          ":1 as count(foo)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS avg(foo), sum_count(1) AS count(foo), sum_count(2) AS count(foo)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(foo), count(foo), count(foo) from `user` where 1 != 1",
+                "Query": "select sum(foo), count(foo), count(foo) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "GROUP BY inside derived table on the RHS should not be a problem",
+    "query": "SELECT c.column_name FROM user c JOIN (SELECT table_name FROM user WHERE id = 143 GROUP BY 1) AS tables ON tables.table_name = c.table_name",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT c.column_name FROM user c JOIN (SELECT table_name FROM user WHERE id = 143 GROUP BY 1) AS tables ON tables.table_name = c.table_name",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "tables_table_name": 0
+        },
+        "TableName": "`user`_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select table_name from (select table_name from `user` where 1 != 1 group by table_name) as `tables` where 1 != 1",
+            "Query": "select table_name from (select table_name from `user` where id = 143 group by table_name) as `tables`",
+            "Table": "`user`",
+            "Values": [
+              "143"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select c.column_name from `user` as c where 1 != 1",
+            "Query": "select c.column_name from `user` as c where c.table_name = :tables_table_name",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
       ]
     }
   }

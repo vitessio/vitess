@@ -241,10 +241,10 @@ In v17, the `vtbackup` stat `DurationByPhase` stat was added to measure the time
 
 `Phase` reports a 1 (active) or a 0 (inactive) for each of the following phases:
 
-* `CatchupReplication`
-* `InitialBackup`
-* `RestoreLastBackup`
-* `TakeNewBackup`
+ * `CatchupReplication`
+ * `InitialBackup`
+ * `RestoreLastBackup`
+ * `TakeNewBackup`
 
 To calculate how long `vtbackup` has spent in a given phase, sum the 1-valued data points over time and multiply by the data collection or reporting interval. For example, in Prometheus:
 
@@ -255,9 +255,9 @@ sum_over_time(vtbackup_phase{phase="TakeNewBackup"}) * <interval>
 
 `PhaseStatus` reports a 1 (active) or a 0 (inactive) for each of the following phases and statuses:
 
-* `CatchupReplication` phase has statuses `Stalled` and `Stopped`.
-  * `Stalled` is set to `1` when replication stops advancing.
-  * `Stopped` is set to `1` when replication stops before `vtbackup` catches up with the primary.
+ * `CatchupReplication` phase has statuses `Stalled` and `Stopped`.
+    * `Stalled` is set to `1` when replication stops advancing.
+    * `Stopped` is set to `1` when replication stops before `vtbackup` catches up with the primary.
 
 #### <a id="backup-restore-metrics-aws-s3"/>Backup and restore metrics for AWS S3
 

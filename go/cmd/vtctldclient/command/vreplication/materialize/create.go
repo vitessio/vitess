@@ -167,7 +167,7 @@ func (ts *tableSettings) Set(v string) error {
 		err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case sqlparser.TableName:
-				if !node.Name.IsEmpty() {
+				if node.Name.NotEmpty() {
 					if seenSourceTables[node.Name.String()] {
 						return false, fmt.Errorf("multiple source_expression queries use the same table: %q", node.Name.String())
 					}

@@ -54,7 +54,7 @@ func TestMemorySortExecute(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
@@ -107,7 +107,7 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			WeightStringCol: 0,
 			Col:             1,
 		}},
@@ -173,7 +173,7 @@ func TestMemorySortExecuteWeightString(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			WeightStringCol: 1,
 			Col:             0,
 		}},
@@ -227,7 +227,7 @@ func TestMemorySortStreamExecuteCollation(t *testing.T) {
 
 	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			Col:  0,
 			Type: evalengine.Type{Type: sqltypes.VarChar, Coll: collationID},
 		}},
@@ -315,7 +315,7 @@ func TestMemorySortExecuteCollation(t *testing.T) {
 
 	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			Col:  0,
 			Type: evalengine.Type{Type: sqltypes.VarChar, Coll: collationID},
 		}},
@@ -368,7 +368,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
@@ -445,7 +445,7 @@ func TestMemorySortExecuteTruncate(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
@@ -484,7 +484,7 @@ func TestMemorySortStreamExecuteTruncate(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
@@ -527,7 +527,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			Col:             1,
 			WeightStringCol: -1,
 		}, {
@@ -600,7 +600,7 @@ func TestMemorySortMaxMemoryRows(t *testing.T) {
 		}
 
 		ms := &MemorySort{
-			OrderBy: []OrderByParams{{
+			OrderBy: []evalengine.OrderByParams{{
 				WeightStringCol: -1,
 				Col:             1,
 			}},
@@ -636,7 +636,7 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			WeightStringCol: -1,
 			Col:             0,
 		}},

@@ -18,6 +18,7 @@ package foreignkey
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -773,6 +775,193 @@ func TestFkScenarios(t *testing.T) {
 			mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
 		})
 	}
+}
+
+// TestFkQueries is for testing a specific set of queries one after the other.
+func TestFkQueries(t *testing.T) {
+	// Wait for schema-tracking to be complete.
+	waitForSchemaTrackingForFkTables(t)
+	// Remove all the foreign key constraints for all the replicas.
+	// We can then verify that the replica, and the primary have the same data, to ensure
+	// that none of the queries ever lead to cascades/updates on MySQL level.
+	for _, ks := range []string{shardedKs, unshardedKs} {
+		replicas := getReplicaTablets(ks)
+		for _, replica := range replicas {
+			removeAllForeignKeyConstraints(t, replica, ks)
+		}
+	}
+
+	testcases := []struct {
+		name    string
+		queries []string
+	}{
+		{
+			name: "Non-literal update",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t10 set col = id + 3",
+			},
+		}, {
+			name: "Non-literal update with order by",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t10 set col = id + 3 order by id desc",
+			},
+		}, {
+			name: "Non-literal update with order by that require parent and child foreign keys verification - success",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t13 (id, col) values (1,1),(2,2)",
+				"update fk_t11 set col = id + 3 where id >= 3",
+			},
+		}, {
+			name: "Non-literal update with order by that require parent and child foreign keys verification - parent fails",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t11 set col = id + 3",
+			},
+		}, {
+			name: "Non-literal update with order by that require parent and child foreign keys verification - child fails",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t13 (id, col) values (1,1),(2,2)",
+				"update fk_t11 set col = id + 3",
+			},
+		}, {
+			name: "Single column update in a multi-col table - success",
+			queries: []string{
+				"insert into fk_multicol_t1 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t2 (id, cola, colb) values (1, 1, 1)",
+				"update fk_multicol_t1 set colb = 4 + (colb) where id = 2",
+			},
+		}, {
+			name: "Single column update in a multi-col table - restrict failure",
+			queries: []string{
+				"insert into fk_multicol_t1 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t2 (id, cola, colb) values (1, 1, 1)",
+				"update fk_multicol_t1 set colb = 4 + (colb) where id = 1",
+			},
+		}, {
+			name: "Single column update in multi-col table - cascade and set null",
+			queries: []string{
+				"insert into fk_multicol_t15 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t16 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t17 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"update fk_multicol_t15 set colb = 4 + (colb) where id = 1",
+			},
+		}, {
+			name: "Non literal update that evaluates to NULL - restricted",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t13 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t10 set col = id + null where id = 1",
+			},
+		}, {
+			name: "Non literal update that evaluates to NULL - success",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t10 set col = id + null where id = 1",
+			},
+		}, {
+			name: "Multi column foreign key update with one literal and one non-literal update",
+			queries: []string{
+				"insert into fk_multicol_t15 (id, cola, colb) values (1,1,1),(2,2,2)",
+				"insert into fk_multicol_t16 (id, cola, colb) values (1,1,1),(2,2,2)",
+				"update fk_multicol_t15 set cola = 3, colb = (id * 2) - 2",
+			},
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			mcmp, closer := start(t)
+			defer closer()
+			_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
+
+			// Ensure that the Vitess database is originally empty
+			ensureDatabaseState(t, mcmp.VtConn, true)
+			ensureDatabaseState(t, mcmp.MySQLConn, true)
+
+			for _, query := range testcase.queries {
+				_, _ = mcmp.ExecAllowAndCompareError(query)
+				if t.Failed() {
+					break
+				}
+			}
+
+			// ensure Vitess database has some data. This ensures not all the commands failed.
+			ensureDatabaseState(t, mcmp.VtConn, false)
+			// Verify the consistency of the data.
+			verifyDataIsCorrect(t, mcmp, 1)
+		})
+	}
+}
+
+// TestShowVschemaKeyspaces verifies the show vschema keyspaces query output for the keyspaces where the foreign keys are
+func TestShowVschemaKeyspaces(t *testing.T) {
+	mcmp, closer := start(t)
+	conn := mcmp.VtConn
+	defer closer()
+
+	res := utils.Exec(t, conn, "SHOW VSCHEMA KEYSPACES")
+	resStr := fmt.Sprintf("%v", res.Rows)
+	require.Contains(t, resStr, `[VARCHAR("uks") VARCHAR("false") VARCHAR("managed") VARCHAR("")]`)
+	require.Contains(t, resStr, `[VARCHAR("ks") VARCHAR("true") VARCHAR("managed") VARCHAR("")]`)
+}
+
+// TestFkOneCase is for testing a specific set of queries. On the CI this test won't run since we'll keep the queries empty.
+func TestFkOneCase(t *testing.T) {
+	queries := []string{}
+	if len(queries) == 0 {
+		t.Skip("No queries to test")
+	}
+	// Wait for schema-tracking to be complete.
+	waitForSchemaTrackingForFkTables(t)
+	// Remove all the foreign key constraints for all the replicas.
+	// We can then verify that the replica, and the primary have the same data, to ensure
+	// that none of the queries ever lead to cascades/updates on MySQL level.
+	for _, ks := range []string{shardedKs, unshardedKs} {
+		replicas := getReplicaTablets(ks)
+		for _, replica := range replicas {
+			removeAllForeignKeyConstraints(t, replica, ks)
+		}
+	}
+
+	mcmp, closer := start(t)
+	defer closer()
+	_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
+
+	// Ensure that the Vitess database is originally empty
+	ensureDatabaseState(t, mcmp.VtConn, true)
+	ensureDatabaseState(t, mcmp.MySQLConn, true)
+
+	for _, query := range queries {
+		_, _ = mcmp.ExecAllowAndCompareError(query)
+		if t.Failed() {
+			log.Errorf("Query failed - %v", query)
+			break
+		}
+	}
+	vitessData := collectFkTablesState(mcmp.VtConn)
+	for idx, table := range fkTables {
+		log.Errorf("Vitess data for %v -\n%v", table, vitessData[idx].Rows)
+	}
+
+	// ensure Vitess database has some data. This ensures not all the commands failed.
+	ensureDatabaseState(t, mcmp.VtConn, false)
+	// Verify the consistency of the data.
+	verifyDataIsCorrect(t, mcmp, 1)
 }
 
 func TestCyclicFks(t *testing.T) {

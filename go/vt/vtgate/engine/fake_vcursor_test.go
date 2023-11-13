@@ -816,8 +816,16 @@ func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
 
 func expectResult(t *testing.T, msg string, result, want *sqltypes.Result) {
 	t.Helper()
-	if !reflect.DeepEqual(result, want) {
-		t.Errorf("%s:\n%v\nwant:\n%v", msg, result, want)
+	fieldsResult := fmt.Sprintf("%v", result.Fields)
+	fieldsWant := fmt.Sprintf("%v", want.Fields)
+	if fieldsResult != fieldsWant {
+		t.Errorf("%s (mismatch in Fields):\n%s\nwant:\n%s", msg, fieldsResult, fieldsWant)
+	}
+
+	rowsResult := fmt.Sprintf("%v", result.Rows)
+	rowsWant := fmt.Sprintf("%v", want.Rows)
+	if rowsResult != rowsWant {
+		t.Errorf("%s (mismatch in Rows):\n%s\nwant:\n%s", msg, rowsResult, rowsWant)
 	}
 }
 

@@ -58,11 +58,10 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 		if !ok {
 			return nil
 		}
-		var inputType sqltypes.Type
+		inputType := sqltypes.Unknown
 		if arg := node.GetArg(); arg != nil {
-			t, ok := t.m[arg]
-			if ok {
-				inputType = t.Type
+			if tt, ok := t.m[arg]; ok {
+				inputType = tt.Type
 			}
 		}
 		type_ := code.Type(inputType)

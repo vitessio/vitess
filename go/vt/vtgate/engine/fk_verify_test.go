@@ -74,7 +74,7 @@ func TestFKVerifyUpdate(t *testing.T) {
 		require.NoError(t, err)
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			`StreamExecuteMulti select 1 from child c left join parent p on p.cola = 1 and p.colb = 'a' where p.cola is null and p.colb is null ks.0: {} `,
+			`ExecuteMultiShard ks.0: select 1 from child c left join parent p on p.cola = 1 and p.colb = 'a' where p.cola is null and p.colb is null {} false false`,
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 			`ExecuteMultiShard ks.0: update child set cola = 1, colb = 'a' where foo = 48 {} true true`,
 		})
@@ -97,7 +97,7 @@ func TestFKVerifyUpdate(t *testing.T) {
 		require.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			`StreamExecuteMulti select 1 from child c left join parent p on p.cola = 1 and p.colb = 'a' where p.cola is null and p.colb is null ks.0: {} `,
+			`ExecuteMultiShard ks.0: select 1 from child c left join parent p on p.cola = 1 and p.colb = 'a' where p.cola is null and p.colb is null {} false false`,
 		})
 	})
 
@@ -119,7 +119,7 @@ func TestFKVerifyUpdate(t *testing.T) {
 		require.ErrorContains(t, err, "Cannot delete or update a parent row: a foreign key constraint fails")
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			`StreamExecuteMulti select 1 from grandchild g join child c on g.cola = c.cola and g.colb = c.colb where c.foo = 48 ks.0: {} `,
+			`ExecuteMultiShard ks.0: select 1 from grandchild g join child c on g.cola = c.cola and g.colb = c.colb where c.foo = 48 {} false false`,
 		})
 	})
 }

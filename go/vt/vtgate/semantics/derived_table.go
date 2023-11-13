@@ -77,7 +77,7 @@ func handleAliasedExpr(vTbl *DerivedTable, expr *sqlparser.AliasedExpr, cols sql
 		return
 	}
 
-	if !expr.As.IsEmpty() {
+	if expr.As.NotEmpty() {
 		vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
 		return
 	}
@@ -161,7 +161,7 @@ func (dt *DerivedTable) getColumns() []ColumnInfo {
 }
 
 func (dt *DerivedTable) hasStar() bool {
-	return dt.tables.NonEmpty()
+	return dt.tables.NotEmpty()
 }
 
 // GetTables implements the TableInfo interface

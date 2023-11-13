@@ -166,7 +166,7 @@ func (ap AliasedProjections) AddColumn(col *sqlparser.AliasedExpr) (ProjCols, in
 
 func (pe *ProjExpr) String() string {
 	var alias, expr, info string
-	if !pe.Original.As.IsEmpty() {
+	if pe.Original.As.NotEmpty() {
 		alias = " AS " + pe.Original.As.String()
 	}
 	if sqlparser.Equals.Expr(pe.EvalExpr, pe.ColExpr) {
@@ -399,7 +399,7 @@ func (p *Projection) GetSelectExprs(*plancontext.PlanningContext) sqlparser.Sele
 		var output sqlparser.SelectExprs
 		for _, pe := range cols {
 			ae := &sqlparser.AliasedExpr{Expr: pe.EvalExpr}
-			if !pe.Original.As.IsEmpty() {
+			if pe.Original.As.NotEmpty() {
 				ae.As = pe.Original.As
 			} else if !sqlparser.Equals.Expr(ae.Expr, pe.Original.Expr) {
 				ae.As = sqlparser.NewIdentifierCI(pe.Original.ColumnName())
@@ -585,7 +585,10 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) {
 		}
 
 		// for everything else, we'll turn to the evalengine
-		eexpr, err := evalengine.Translate(rewritten, nil)
+		eexpr, err := evalengine.Translate(rewritten, &evalengine.Config{
+			ResolveType: ctx.SemTable.TypeForExpr,
+			Collation:   ctx.SemTable.Collation,
+		})
 		if err != nil {
 			panic(err)
 		}

@@ -4165,13 +4165,13 @@ func (asm *assembler) Fn_DATEADD_D(unit datetime.IntervalType, sub bool) {
 		}
 
 		tmp := env.vm.stack[env.vm.sp-2].(*evalTemporal)
-		env.vm.stack[env.vm.sp-2] = tmp.addInterval(interval, collations.TypedCollation{}, env.now)
+		env.vm.stack[env.vm.sp-2] = tmp.addInterval(interval, collations.Unknown, env.now)
 		env.vm.sp--
 		return 1
 	}, "FN DATEADD TEMPORAL(SP-2), INTERVAL(SP-1)")
 }
 
-func (asm *assembler) Fn_DATEADD_s(unit datetime.IntervalType, sub bool, col collations.TypedCollation) {
+func (asm *assembler) Fn_DATEADD_s(unit datetime.IntervalType, sub bool, col collations.ID) {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		var interval *datetime.Interval

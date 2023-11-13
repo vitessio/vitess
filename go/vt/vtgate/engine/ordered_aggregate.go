@@ -342,11 +342,16 @@ func (oa *OrderedAggregate) nextGroupBy(currentKey, nextRow []sqltypes.Value) (n
 	}
 
 	for _, gb := range oa.GroupByKeys {
-		cmp, err := evalengine.NullsafeCompare(currentKey[gb.KeyCol], nextRow[gb.KeyCol], gb.Type.Coll)
+		v1 := currentKey[gb.KeyCol]
+		v2 := nextRow[gb.KeyCol]
+		if v1.TinyWeightCmp(v2) != 0 {
+			return nextRow, true, nil
+		}
+
+		cmp, err := evalengine.NullsafeCompare(v1, v2, gb.Type.Coll)
 		if err != nil {
-			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
 			_, isCollationErr := err.(evalengine.UnsupportedCollationError)
-			if !isComparisonErr && !isCollationErr || gb.WeightStringCol == -1 {
+			if !isCollationErr || gb.WeightStringCol == -1 {
 				return nil, false, err
 			}
 			gb.KeyCol = gb.WeightStringCol
