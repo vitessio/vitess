@@ -223,7 +223,6 @@ func (t *Tracker) GetIndexes(ks string, tbl string) []*sqlparser.IndexDefinition
 
 	tblInfo := t.tables.get(ks, tbl)
 	return tblInfo.Indexes
-
 }
 
 // Tables returns a map with the columns for all known tables in the keyspace

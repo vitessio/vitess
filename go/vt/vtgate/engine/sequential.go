@@ -69,7 +69,7 @@ func (s *Sequential) GetTableName() string {
 func (s *Sequential) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantFields bool) (*sqltypes.Result, error) {
 	finalRes := &sqltypes.Result{}
 	for _, source := range s.Sources {
-		res, err := source.TryExecute(ctx, vcursor, bindVars, wantFields)
+		res, err := vcursor.ExecutePrimitive(ctx, source, bindVars, wantFields)
 		if err != nil {
 			return nil, err
 		}

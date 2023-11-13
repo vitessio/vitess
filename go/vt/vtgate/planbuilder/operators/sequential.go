@@ -28,12 +28,6 @@ type Sequential struct {
 	noColumns
 }
 
-func newSequential(srcs []ops.Operator) *Sequential {
-	return &Sequential{
-		Sources: srcs,
-	}
-}
-
 // Clone implements the Operator interface
 func (s *Sequential) Clone(inputs []ops.Operator) ops.Operator {
 	newOp := *s

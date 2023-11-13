@@ -30,17 +30,7 @@ var _ logicalPlan = (*sequential)(nil)
 func (s *sequential) Primitive() engine.Primitive {
 	var sources []engine.Primitive
 	for _, source := range s.sources {
-		prim := source.Primitive()
-		switch dml := prim.(type) {
-		case *engine.Update:
-			dml.PreventAutoCommit = true
-		case *engine.Delete:
-			dml.PreventAutoCommit = true
-		case *engine.Insert:
-			dml.PreventAutoCommit = true
-		}
-		sources = append(sources, prim)
+		sources = append(sources, source.Primitive())
 	}
-
 	return engine.NewSequential(sources)
 }
