@@ -52,7 +52,7 @@ function createRelease () {
   rm -f ./.github/workflows/code_freeze.yml.bak
 
   # Wait for release notes to be injected in the code base
-  echo -n Pausing so relase notes can be added. Press enter to continue
+  echo -n Pausing so release notes can be added. Press enter to continue
   read line
 
   git add --all
