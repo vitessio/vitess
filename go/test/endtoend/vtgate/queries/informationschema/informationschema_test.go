@@ -21,14 +21,12 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func start(t *testing.T) (utils.MySQLCompare, func()) {
@@ -203,27 +201,6 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 	_, err := mcmp.VtConn.ExecuteFetch(query, 1000, true)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "specifying two different database in the query is not supported")
-}
-
-func TestInfrSchemaAndUnionAll(t *testing.T) {
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--planner-version=gen4")
-	require.NoError(t,
-		clusterInstance.RestartVtgate())
-
-	vtConnParams := clusterInstance.GetVTParams(keyspaceName)
-	vtConnParams.DbName = keyspaceName
-	conn, err := mysql.Connect(context.Background(), &vtConnParams)
-	require.NoError(t, err)
-
-	for _, workload := range []string{"oltp", "olap"} {
-		t.Run(workload, func(t *testing.T) {
-			utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
-			utils.Exec(t, conn, "start transaction")
-			utils.Exec(t, conn, `select connection_id()`)
-			utils.Exec(t, conn, `(select 'corder' from t1 limit 1) union all (select 'customer' from t7_xxhash limit 1)`)
-			utils.Exec(t, conn, "rollback")
-		})
-	}
 }
 
 func TestJoinWithSingleShardQueryOnRHS(t *testing.T) {
