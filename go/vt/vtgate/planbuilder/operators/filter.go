@@ -107,7 +107,7 @@ func (f *Filter) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
 
 func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
 	if len(f.Predicates) == 0 {
-		return f.Source, rewrite.NewTree("filter with no predicates removed", f), nil
+		return f.Source, rewrite.NewTree("filter with no predicates removed"), nil
 	}
 
 	other, isFilter := f.Source.(*Filter)
@@ -116,10 +116,10 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.A
 	}
 	f.Source = other.Source
 	f.Predicates = append(f.Predicates, other.Predicates...)
-	return f, rewrite.NewTree("two filters merged into one", f), nil
+	return f, rewrite.NewTree("two filters merged into one"), nil
 }
 
-func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) {
+func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
 	cfg := &evalengine.Config{
 		ResolveType: ctx.SemTable.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
@@ -136,6 +136,7 @@ func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) {
 	}
 
 	f.PredicateWithOffsets = eexpr
+	return nil
 }
 
 func (f *Filter) ShortDescription() string {
