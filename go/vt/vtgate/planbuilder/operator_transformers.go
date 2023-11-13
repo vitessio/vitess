@@ -82,16 +82,8 @@ func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequent
 		if err != nil {
 			return nil, err
 		}
-		pw, ok := lp.(*primitiveWrapper)
-		if ok {
-			switch dml := pw.prim.(type) {
-			case *engine.Update:
-				dml.PreventAutoCommit = true
-			case *engine.Delete:
-				dml.PreventAutoCommit = true
-			case *engine.Insert:
-				dml.PreventAutoCommit = true
-			}
+		if ins, ok := lp.(*insert); ok {
+			ins.eInsert.PreventAutoCommit = true
 		}
 		lps = append(lps, lp)
 	}

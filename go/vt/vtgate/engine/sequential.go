@@ -67,30 +67,12 @@ func (s *Sequential) GetTableName() string {
 
 // TryExecute performs a non-streaming exec.
 func (s *Sequential) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantFields bool) (*sqltypes.Result, error) {
-	finalRes := &sqltypes.Result{}
-	for _, source := range s.Sources {
-		res, err := vcursor.ExecutePrimitive(ctx, source, bindVars, wantFields)
-		if err != nil {
-			return nil, err
-		}
-		finalRes.RowsAffected += res.RowsAffected
-		if finalRes.InsertID == 0 {
-			finalRes.InsertID = res.InsertID
-		}
-		if res.Info != "" {
-			finalRes.Info = res.Info
-		}
-	}
-	return finalRes, nil
+	return nil, vterrors.VT10002()
 }
 
 // TryStreamExecute performs a streaming exec.
 func (s *Sequential) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantFields bool, callback func(*sqltypes.Result) error) error {
-	res, err := s.TryExecute(ctx, vcursor, bindVars, wantFields)
-	if err != nil {
-		return err
-	}
-	return callback(res)
+	return vterrors.VT10002()
 }
 
 // GetFields fetches the field info.
