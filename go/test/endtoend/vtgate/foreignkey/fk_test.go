@@ -18,6 +18,7 @@ package foreignkey
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"testing"
 	"time"
@@ -905,6 +906,18 @@ func TestFkQueries(t *testing.T) {
 			verifyDataIsCorrect(t, mcmp, 1)
 		})
 	}
+}
+
+// TestShowVschemaKeyspaces verifies the show vschema keyspaces query output for the keyspaces where the foreign keys are
+func TestShowVschemaKeyspaces(t *testing.T) {
+	mcmp, closer := start(t)
+	conn := mcmp.VtConn
+	defer closer()
+
+	res := utils.Exec(t, conn, "SHOW VSCHEMA KEYSPACES")
+	resStr := fmt.Sprintf("%v", res.Rows)
+	require.Contains(t, resStr, `[VARCHAR("uks") VARCHAR("false") VARCHAR("managed") VARCHAR("")]`)
+	require.Contains(t, resStr, `[VARCHAR("ks") VARCHAR("true") VARCHAR("managed") VARCHAR("")]`)
 }
 
 // TestFkOneCase is for testing a specific set of queries. On the CI this test won't run since we'll keep the queries empty.

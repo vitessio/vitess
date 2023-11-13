@@ -4128,6 +4128,10 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: VschemaTables}}
   }
+| SHOW VSCHEMA KEYSPACES
+  {
+    $$ = &Show{&ShowBasic{Command: VschemaKeyspaces}}
+  }
 | SHOW VSCHEMA VINDEXES
   {
     $$ = &Show{&ShowBasic{Command: VschemaVindexes}}
