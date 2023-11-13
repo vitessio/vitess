@@ -430,7 +430,7 @@ func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.Chi
 	// Because we could be updating the child to a non-null value,
 	// We have to run with foreign key checks OFF because the parent isn't guaranteed to have
 	// the data being updated to.
-	parsedComments := (&sqlparser.ParsedComments{}).SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, sqlparser.FkChecksOff.String()).Parsed()
+	parsedComments := (&sqlparser.ParsedComments{}).SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, "Off").Parsed()
 	childUpdStmt := &sqlparser.Update{
 		Comments:   parsedComments,
 		Exprs:      childUpdateExprs,
@@ -487,8 +487,9 @@ func buildChildUpdOpForSetNull(
 	// We run with foreign key checks on because the update might still fail on MySQL due to a child table
 	// with RESTRICT constraints.
 	var parsedComments *sqlparser.ParsedComments
-	if ctx.VSchema.GetForeignKeyChecksState() == sqlparser.FkChecksOn {
-		parsedComments = parsedComments.SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, sqlparser.FkChecksOn.String()).Parsed()
+	fkState := ctx.VSchema.GetForeignKeyChecksState()
+	if fkState != nil && *fkState {
+		parsedComments = parsedComments.SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, "On").Parsed()
 	}
 	childUpdStmt := &sqlparser.Update{
 		Exprs:      childUpdateExprs,

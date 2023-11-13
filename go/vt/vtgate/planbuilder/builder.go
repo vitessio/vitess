@@ -79,7 +79,7 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	vw, isVw := vschema.(*vschemawrapper.VSchemaWrapper)
 	if isVw {
 		fkState := sqlparser.ForeignKeyChecksState(stmt)
-		if fkState != sqlparser.FkChecksUnspecified {
+		if fkState != nil {
 			// Restore the old volue of ForeignKeyChecksState to not interfere with the next test cases.
 			oldVal := vw.ForeignKeyChecksState
 			vw.ForeignKeyChecksState = fkState

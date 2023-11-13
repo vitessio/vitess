@@ -258,9 +258,11 @@ func TestSetTarget(t *testing.T) {
 }
 
 func TestKeyForPlan(t *testing.T) {
+	valTrue := true
+	valFalse := false
 	type testCase struct {
 		vschema               *vindexes.VSchema
-		fkState               sqlparser.FkChecksState
+		fkState               *bool
 		targetString          string
 		expectedPlanPrefixKey string
 	}
@@ -284,12 +286,12 @@ func TestKeyForPlan(t *testing.T) {
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "",
-		fkState:               sqlparser.FkChecksOn,
+		fkState:               &valTrue,
 		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+fkChecksState:On+Query:SELECT 1",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1@replica",
-		fkState:               sqlparser.FkChecksOff,
+		fkState:               &valFalse,
 		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+fkChecksState:Off+Query:SELECT 1",
 	}}
 

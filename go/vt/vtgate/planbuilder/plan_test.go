@@ -117,10 +117,11 @@ func TestForeignKeyPlanning(t *testing.T) {
 func TestForeignKeyChecksOn(t *testing.T) {
 	vschema := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, vschema)
+	fkChecksState := true
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:                     vschema,
 		TestBuilder:           TestBuilder,
-		ForeignKeyChecksState: sqlparser.FkChecksOn,
+		ForeignKeyChecksState: &fkChecksState,
 	}
 
 	testOutputTempDir := makeTestOutput(t)
@@ -132,10 +133,11 @@ func TestForeignKeyChecksOn(t *testing.T) {
 func TestForeignKeyChecksOff(t *testing.T) {
 	vschema := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, vschema)
+	fkChecksState := false
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:                     vschema,
 		TestBuilder:           TestBuilder,
-		ForeignKeyChecksState: sqlparser.FkChecksOff,
+		ForeignKeyChecksState: &fkChecksState,
 	}
 
 	testOutputTempDir := makeTestOutput(t)

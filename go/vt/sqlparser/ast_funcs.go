@@ -357,11 +357,15 @@ func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 	return newComments, nil
 }
 
-func (s FkChecksState) String() string {
-	switch s {
-	case FkChecksOff:
+// FkChecksStateString prints the foreign key checks state.
+func FkChecksStateString(state *bool) string {
+	if state == nil {
+		return ""
+	}
+	switch *state {
+	case false:
 		return "Off"
-	case FkChecksOn:
+	case true:
 		return "On"
 	}
 	return ""

@@ -45,7 +45,7 @@ type VSchemaWrapper struct {
 	TabletType_           topodatapb.TabletType
 	Dest                  key.Destination
 	SysVarEnabled         bool
-	ForeignKeyChecksState sqlparser.FkChecksState
+	ForeignKeyChecksState *bool
 	Version               plancontext.PlannerVersion
 	EnableViews           bool
 	TestBuilder           func(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error)
@@ -141,7 +141,7 @@ func (vw *VSchemaWrapper) KeyspaceError(keyspace string) error {
 	return nil
 }
 
-func (vw *VSchemaWrapper) GetForeignKeyChecksState() sqlparser.FkChecksState {
+func (vw *VSchemaWrapper) GetForeignKeyChecksState() *bool {
 	return vw.ForeignKeyChecksState
 }
 

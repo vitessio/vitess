@@ -211,8 +211,9 @@ func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 	// We run with foreign key checks on because the delete might still fail on MySQL due to a child table
 	// with RESTRICT constraints.
 	var parsedComments *sqlparser.ParsedComments
-	if ctx.VSchema.GetForeignKeyChecksState() == sqlparser.FkChecksOn {
-		parsedComments = parsedComments.SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, sqlparser.FkChecksOn.String()).Parsed()
+	fkChecksState := ctx.VSchema.GetForeignKeyChecksState()
+	if fkChecksState != nil && *fkChecksState {
+		parsedComments = parsedComments.SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, "On").Parsed()
 	}
 	var childStmt sqlparser.Statement
 	switch fk.OnDelete {

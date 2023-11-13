@@ -53,7 +53,7 @@ type fuzzer struct {
 	updateShare  int
 	concurrency  int
 	queryFormat  QueryFormat
-	fkState      sqlparser.FkChecksState
+	fkState      *bool
 
 	// shouldStop is an internal state variable, that tells the fuzzer
 	// whether it should stop or not.
@@ -73,7 +73,7 @@ type debugInfo struct {
 }
 
 // newFuzzer creates a new fuzzer struct.
-func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare int, deleteShare int, updateShare int, queryFormat QueryFormat, fkState sqlparser.FkChecksState) *fuzzer {
+func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare int, deleteShare int, updateShare int, queryFormat QueryFormat, fkState *bool) *fuzzer {
 	fz := &fuzzer{
 		concurrency:  concurrency,
 		maxValForId:  maxValForId,
@@ -206,8 +206,8 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, sharded bool, fuzzerThreadId int
 	// Create a MySQL Compare that connects to both Vitess and MySQL and runs the queries against both.
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
 	require.NoError(t, err)
-	if fz.fkState != sqlparser.FkChecksUnspecified {
-		mcmp.Exec(fmt.Sprintf("SET FOREIGN_KEY_CHECKS=%v", fz.fkState.String()))
+	if fz.fkState != nil {
+		mcmp.Exec(fmt.Sprintf("SET FOREIGN_KEY_CHECKS=%v", sqlparser.FkChecksStateString(fz.fkState)))
 	}
 	var vitessDb, mysqlDb *sql.DB
 	if fz.queryFormat == PreparedStatementPacket {
@@ -631,14 +631,17 @@ func TestFkFuzzTest(t *testing.T) {
 			updateShare:    50,
 		},
 	}
-	for _, fkState := range []sqlparser.FkChecksState{sqlparser.FkChecksUnspecified, sqlparser.FkChecksOn, sqlparser.FkChecksOff} {
+
+	valTrue := true
+	valFalse := false
+	for _, fkState := range []*bool{nil, &valTrue, &valFalse} {
 		for _, tt := range testcases {
 			for _, testSharded := range []bool{false, true} {
 				for _, queryFormat := range []QueryFormat{OlapSQLQueries, SQLQueries, PreparedStatmentQueries, PreparedStatementPacket} {
-					if fkState != sqlparser.FkChecksUnspecified && (queryFormat != SQLQueries || tt.concurrency != 1) {
+					if fkState != nil && (queryFormat != SQLQueries || tt.concurrency != 1) {
 						continue
 					}
-					t.Run(getTestName(tt.name, testSharded)+fmt.Sprintf(" FkState - %v QueryFormat - %v", fkState.String(), queryFormat), func(t *testing.T) {
+					t.Run(getTestName(tt.name, testSharded)+fmt.Sprintf(" FkState - %v QueryFormat - %v", sqlparser.FkChecksStateString(fkState), queryFormat), func(t *testing.T) {
 						mcmp, closer := start(t)
 						defer closer()
 						// Set the correct keyspace to use from VtGates.

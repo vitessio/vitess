@@ -64,8 +64,8 @@ func (si *declarativeSchemaInformation) KeyspaceError(keyspace string) error {
 	return nil
 }
 
-func (si *declarativeSchemaInformation) GetForeignKeyChecksState() sqlparser.FkChecksState {
-	return sqlparser.FkChecksUnspecified
+func (si *declarativeSchemaInformation) GetForeignKeyChecksState() *bool {
+	return nil
 }
 
 // addTable adds a fake table with an empty column list

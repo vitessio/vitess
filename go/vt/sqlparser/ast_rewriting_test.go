@@ -348,7 +348,7 @@ func TestRewrites(in *testing.T) {
 				SQLSelectLimitUnset,
 				"",
 				nil,
-				FkChecksUnspecified,
+				nil,
 				&fakeViews{},
 			)
 			require.NoError(err)
@@ -440,7 +440,7 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, tc.setVarComment, nil, FkChecksUnspecified, &fakeViews{})
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, tc.setVarComment, nil, nil, &fakeViews{})
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -488,7 +488,7 @@ func TestRewritesSysVar(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", tc.sysVar, FkChecksUnspecified, &fakeViews{})
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", tc.sysVar, nil, &fakeViews{})
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -538,7 +538,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "sys", SQLSelectLimitUnset, "", nil, FkChecksUnspecified, &fakeViews{})
+			result, err := RewriteAST(stmt, "sys", SQLSelectLimitUnset, "", nil, nil, &fakeViews{})
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)

@@ -570,18 +570,20 @@ func AllowScatterDirective(stmt Statement) bool {
 }
 
 // ForeignKeyChecksState returns the state of foreign_key_checks variable if it is part of a SET_VAR optimizer hint in the comments.
-func ForeignKeyChecksState(stmt Statement) FkChecksState {
+func ForeignKeyChecksState(stmt Statement) *bool {
 	cmt, ok := stmt.(Commented)
 	if ok {
 		fkChecksVal := cmt.GetParsedComments().GetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name)
 		switch strings.ToLower(fkChecksVal) {
 		case "on", "1":
-			return FkChecksOn
+			fkState := true
+			return &fkState
 		case "off", "0":
-			return FkChecksOff
+			fkState := false
+			return &fkState
 		}
 	}
-	return FkChecksUnspecified
+	return nil
 }
 
 func checkDirective(stmt Statement, key string) bool {

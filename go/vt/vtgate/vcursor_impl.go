@@ -109,7 +109,8 @@ type vcursorImpl struct {
 	// fkChecksState stores the state of foreign key checks variable.
 	// This state is meant to be the final fk checks state after consulting the
 	// session state, and the given query's comments for `SET_VAR` optimizer hints.
-	fkChecksState       sqlparser.FkChecksState
+	// A nil value represents that no foreign_key_checks value was provided.
+	fkChecksState       *bool
 	ignoreMaxMemoryRows bool
 	vschema             *vindexes.VSchema
 	vm                  VSchemaOperator
@@ -1089,10 +1090,10 @@ func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.Stri
 	_, _ = buf.WriteString(collations.Local().LookupName(vc.collation))
 	// The plans are going to be different based on the foreign key checks state. So we need to use that value
 	// as part of the plan's hashing key.
-	fkChecksState := vc.GetForeignKeyChecksState().String()
-	if fkChecksState != "" {
+	fkChecksState := vc.GetForeignKeyChecksState()
+	if fkChecksState != nil {
 		_, _ = buf.WriteString("+fkChecksState:")
-		_, _ = buf.WriteString(fkChecksState)
+		_, _ = buf.WriteString(sqlparser.FkChecksStateString(fkChecksState))
 	}
 
 	if vc.destination != nil {
@@ -1355,12 +1356,12 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 }
 
 // UpdateForeignKeyChecksState updates the foreign key checks state of the vcursor.
-func (vc *vcursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery sqlparser.FkChecksState) {
+func (vc *vcursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery *bool) {
 	// Initialize the state to unspecified.
-	vc.fkChecksState = sqlparser.FkChecksUnspecified
+	vc.fkChecksState = nil
 	// If the query has a SET_VAR optimizer hint that explicitly sets the foreign key checks state,
 	// we should use that.
-	if fkStateFromQuery != sqlparser.FkChecksUnspecified {
+	if fkStateFromQuery != nil {
 		vc.fkChecksState = fkStateFromQuery
 		return
 	}
@@ -1369,14 +1370,16 @@ func (vc *vcursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery sqlparser.Fk
 	if isPresent {
 		switch strings.ToLower(fkVal) {
 		case "on", "1":
-			vc.fkChecksState = sqlparser.FkChecksOn
+			val := true
+			vc.fkChecksState = &val
 		case "off", "0":
-			vc.fkChecksState = sqlparser.FkChecksOff
+			val := false
+			vc.fkChecksState = &val
 		}
 	}
 }
 
 // GetForeignKeyChecksState gets the stored foreign key checks state in the vcursor.
-func (vc *vcursorImpl) GetForeignKeyChecksState() sqlparser.FkChecksState {
+func (vc *vcursorImpl) GetForeignKeyChecksState() *bool {
 	return vc.fkChecksState
 }

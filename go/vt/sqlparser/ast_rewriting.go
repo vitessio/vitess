@@ -51,7 +51,7 @@ func PrepareAST(
 	selectLimit int,
 	setVarComment string,
 	sysVars map[string]string,
-	fkChecksState FkChecksState,
+	fkChecksState *bool,
 	views VSchemaViews,
 ) (*RewriteASTResult, error) {
 	if parameterize {
@@ -71,7 +71,7 @@ func RewriteAST(
 	selectLimit int,
 	setVarComment string,
 	sysVars map[string]string,
-	fkChecksState FkChecksState,
+	fkChecksState *bool,
 	views VSchemaViews,
 ) (*RewriteASTResult, error) {
 	er := newASTRewriter(keyspace, selectLimit, setVarComment, sysVars, fkChecksState, views)
@@ -123,12 +123,12 @@ type astRewriter struct {
 	keyspace      string
 	selectLimit   int
 	setVarComment string
-	fkChecksState FkChecksState
+	fkChecksState *bool
 	sysVars       map[string]string
 	views         VSchemaViews
 }
 
-func newASTRewriter(keyspace string, selectLimit int, setVarComment string, sysVars map[string]string, fkChecksState FkChecksState, views VSchemaViews) *astRewriter {
+func newASTRewriter(keyspace string, selectLimit int, setVarComment string, sysVars map[string]string, fkChecksState *bool, views VSchemaViews) *astRewriter {
 	return &astRewriter{
 		bindVars:      &BindVarNeeds{},
 		keyspace:      keyspace,
@@ -158,7 +158,7 @@ const (
 )
 
 func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
-	inner := newASTRewriter(er.keyspace, er.selectLimit, er.setVarComment, er.sysVars, FkChecksUnspecified, er.views)
+	inner := newASTRewriter(er.keyspace, er.selectLimit, er.setVarComment, er.sysVars, nil, er.views)
 	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
 	tmp := SafeRewrite(node.Expr, inner.rewriteDown, inner.rewriteUp)
 	newExpr, ok := tmp.(Expr)
@@ -190,8 +190,8 @@ func (er *astRewriter) rewriteUp(cursor *Cursor) bool {
 			}
 			supportOptimizerHint.SetComments(newComments)
 		}
-		if er.fkChecksState != FkChecksUnspecified {
-			newComments := supportOptimizerHint.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, er.fkChecksState.String())
+		if er.fkChecksState != nil {
+			newComments := supportOptimizerHint.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, FkChecksStateString(er.fkChecksState))
 			supportOptimizerHint.SetComments(newComments)
 		}
 	}
