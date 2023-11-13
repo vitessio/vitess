@@ -559,58 +559,61 @@ func TestFkFuzzTest(t *testing.T) {
 		insertShare    int
 		deleteShare    int
 		updateShare    int
-	}{
-		{
-			name:           "Single Thread - Only Inserts",
-			concurrency:    1,
-			timeForTesting: 5 * time.Second,
-			maxValForCol:   5,
-			maxValForId:    10,
-			insertShare:    100,
-			deleteShare:    0,
-			updateShare:    0,
-		},
-		{
-			name:           "Single Thread - Balanced Inserts and Deletes",
-			concurrency:    1,
-			timeForTesting: 5 * time.Second,
-			maxValForCol:   5,
-			maxValForId:    10,
-			insertShare:    50,
-			deleteShare:    50,
-			updateShare:    0,
-		},
-		{
-			name:           "Single Thread - Balanced Inserts and Updates",
-			concurrency:    1,
-			timeForTesting: 5 * time.Second,
-			maxValForCol:   5,
-			maxValForId:    10,
-			insertShare:    50,
-			deleteShare:    0,
-			updateShare:    50,
-		},
-		{
-			name:           "Single Thread - Balanced Inserts, Updates and Deletes",
-			concurrency:    1,
-			timeForTesting: 5 * time.Second,
-			maxValForCol:   5,
-			maxValForId:    10,
-			insertShare:    50,
-			deleteShare:    50,
-			updateShare:    50,
-		},
-		{
-			name:           "Multi Thread - Balanced Inserts, Updates and Deletes",
-			concurrency:    30,
-			timeForTesting: 5 * time.Second,
-			maxValForCol:   5,
-			maxValForId:    30,
-			insertShare:    50,
-			deleteShare:    50,
-			updateShare:    50,
-		},
-	}
+	}{{
+		name:           "Single Thread - Only Inserts",
+		concurrency:    1,
+		timeForTesting: 5 * time.Second,
+		maxValForCol:   5,
+		maxValForId:    10,
+		insertShare:    100,
+		deleteShare:    0,
+		updateShare:    0,
+	}, {
+		name:           "Single Thread - Balanced Inserts and Deletes",
+		concurrency:    1,
+		timeForTesting: 5 * time.Second,
+		maxValForCol:   5,
+		maxValForId:    10,
+		insertShare:    50,
+		deleteShare:    50,
+		updateShare:    0,
+	}, {
+		name:           "Single Thread - Balanced Inserts and Updates",
+		concurrency:    1,
+		timeForTesting: 5 * time.Second,
+		maxValForCol:   5,
+		maxValForId:    10,
+		insertShare:    50,
+		deleteShare:    0,
+		updateShare:    50,
+	}, {
+		name:           "Single Thread - Balanced Inserts, Updates and Deletes",
+		concurrency:    1,
+		timeForTesting: 5 * time.Second,
+		maxValForCol:   5,
+		maxValForId:    10,
+		insertShare:    50,
+		deleteShare:    50,
+		updateShare:    50,
+	}, {
+		name:           "Multi Thread - Only Inserts",
+		concurrency:    30,
+		timeForTesting: 5 * time.Second,
+		maxValForCol:   5,
+		maxValForId:    30,
+		insertShare:    100,
+		deleteShare:    0,
+		updateShare:    0,
+	}, {
+		name:           "Multi Thread - Balanced Inserts, Updates and Deletes",
+		concurrency:    30,
+		timeForTesting: 5 * time.Second,
+		maxValForCol:   5,
+		maxValForId:    30,
+		insertShare:    50,
+		deleteShare:    50,
+		updateShare:    50,
+	}}
 
 	for _, tt := range testcases {
 		for _, testSharded := range []bool{false, true} {
@@ -636,7 +639,16 @@ func TestFkFuzzTest(t *testing.T) {
 					fz.start(t, testSharded)
 
 					// Wait for the timeForTesting so that the threads continue to run.
-					time.Sleep(tt.timeForTesting)
+					totalTime := time.After(tt.timeForTesting)
+					done := false
+					for !done {
+						select {
+						case <-totalTime:
+							done = true
+						case <-time.After(10 * time.Millisecond):
+							validateReplication(t)
+						}
+					}
 
 					fz.stop()
 
@@ -654,6 +666,18 @@ func TestFkFuzzTest(t *testing.T) {
 					// Verify the consistency of the data.
 					verifyDataIsCorrect(t, mcmp, tt.concurrency)
 				})
+			}
+		}
+	}
+}
+
+func validateReplication(t *testing.T) {
+	for _, keyspace := range clusterInstance.Keyspaces {
+		for _, shard := range keyspace.Shards {
+			for _, vttablet := range shard.Vttablets {
+				if vttablet.Type != "primary" {
+					checkReplicationHealthy(t, vttablet)
+				}
 			}
 		}
 	}
