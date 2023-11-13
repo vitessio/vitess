@@ -941,6 +941,21 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
+	// Constraints
+	t.Run("CREATE TABLE with CHECK constraint", func(t *testing.T) {
+		query := `create table with_constraint (id int primary key, check ((id >= 0)))`
+		uuid := testOnlineDDLStatement(t, createParams(query, ddlStrategy, "vtgate", "chk_", "", false))
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		t.Run("ensure constraint name is rewritten", func(t *testing.T) {
+			// Since we did not provide a name for the CHECK constraint, MySQL will
+			// name it `with_constraint_chk_1`. But we expect Online DDL to explicitly
+			// modify the constraint name, specifically to get rid of the <table-name> prefix,
+			// so that we don't get into https://bugs.mysql.com/bug.php?id=107772 situation.
+			createStatement := getCreateTableStatement(t, shards[0].Vttablets[0], "with_constraint")
+			assert.NotContains(t, createStatement, "with_constraint_chk")
+		})
+	})
+
 	// INSTANT DDL
 	instantDDLCapable, err := capableOf(mysql.InstantAddLastColumnFlavorCapability)
 	require.NoError(t, err)
@@ -2328,7 +2343,7 @@ func testRevertMigration(t *testing.T, params *testRevertMigrationParams) (uuid 
 	return uuid
 }
 
-// checkTable checks the number of tables in the first two shards.
+// checkTable checks the number of tables in all shards
 func checkTable(t *testing.T, showTableName string, expectExists bool) bool {
 	expectCount := 0
 	if expectExists {
