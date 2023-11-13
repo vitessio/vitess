@@ -59,8 +59,8 @@ func mergeCollations(c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type) (co
 		return c1, nil, nil, nil
 	}
 
-	lt := sqltypes.IsText(t1) || sqltypes.IsBinary(t1)
-	rt := sqltypes.IsText(t2) || sqltypes.IsBinary(t2)
+	lt := sqltypes.IsTextOrBinary(t1)
+	rt := sqltypes.IsTextOrBinary(t2)
 	if !lt || !rt {
 		if lt {
 			return c1, nil, nil, nil

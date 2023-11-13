@@ -39,38 +39,60 @@ func CoerceTypes(v1, v2 Type) (out Type, err error) {
 	if sqltypes.IsNull(v1.Type) || sqltypes.IsNull(v2.Type) {
 		return Type{Type: sqltypes.Null, Coll: collations.CollationBinaryID, Nullable: true}, nil
 	}
-
-	nullable := v1.Nullable || v2.Nullable
-	if (sqltypes.IsText(v1.Type) || sqltypes.IsBinary(v1.Type)) && (sqltypes.IsText(v2.Type) || sqltypes.IsBinary(v2.Type)) {
-		mergedCollation, _, _, err := mergeCollations(typedCoercionCollation(v1.Type, v1.Coll), typedCoercionCollation(v2.Type, v2.Coll), v1.Type, v2.Type)
-		if err != nil {
-			return Type{}, err
-		}
-		return Type{Type: sqltypes.VarChar, Coll: mergedCollation.Collation, Nullable: nullable}, nil
+	fail := func() error {
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1.Type, v2.Type)
 	}
-	if sqltypes.IsNumber(v1.Type) || sqltypes.IsNumber(v2.Type) {
+
+	out = Type{Nullable: v1.Nullable || v2.Nullable}
+
+	switch {
+	case sqltypes.IsTextOrBinary(v1.Type) && sqltypes.IsTextOrBinary(v2.Type):
+		out.Type = sqltypes.VarChar
+		mergedCollation, _, _, ferr := mergeCollations(typedCoercionCollation(v1.Type, v1.Coll), typedCoercionCollation(v2.Type, v2.Coll), v1.Type, v2.Type)
+		if err != nil {
+			return Type{}, ferr
+		}
+		out.Coll = mergedCollation.Collation
+		return
+
+	case sqltypes.IsDateOrTime(v1.Type):
+		out.Coll = collations.CollationBinaryID
+		out.Type = v1.Type
+		return
+
+	case sqltypes.IsDateOrTime(v2.Type):
+		out.Coll = collations.CollationBinaryID
+		out.Type = v2.Type
+		return
+
+	case sqltypes.IsNumber(v1.Type) || sqltypes.IsNumber(v2.Type):
+		out.Coll = collations.CollationBinaryID
 		switch {
-		case sqltypes.IsText(v1.Type) || sqltypes.IsBinary(v1.Type) || sqltypes.IsText(v2.Type) || sqltypes.IsBinary(v2.Type):
-			return Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID, Nullable: nullable}, nil
-		case sqltypes.IsFloat(v2.Type) || v2.Type == sqltypes.Decimal || sqltypes.IsFloat(v1.Type) || v1.Type == sqltypes.Decimal:
-			return Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID, Nullable: nullable}, nil
+		case sqltypes.IsTextOrBinary(v1.Type) || sqltypes.IsFloat(v1.Type) || sqltypes.IsDecimal(v1.Type) ||
+			sqltypes.IsTextOrBinary(v2.Type) || sqltypes.IsFloat(v2.Type) || sqltypes.IsDecimal(v2.Type):
+			out.Type = sqltypes.Float64
+			return
 		case sqltypes.IsSigned(v1.Type):
 			switch {
 			case sqltypes.IsUnsigned(v2.Type):
-				return Type{Type: sqltypes.Uint64, Coll: collations.CollationBinaryID, Nullable: nullable}, nil
+				out.Type = sqltypes.Uint64
+				return
 			case sqltypes.IsSigned(v2.Type):
-				return Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID, Nullable: nullable}, nil
+				out.Type = sqltypes.Int64
+				return
 			default:
-				return Type{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2.Type)
+				return Type{}, fail()
 			}
 		case sqltypes.IsUnsigned(v1.Type):
 			switch {
 			case sqltypes.IsSigned(v2.Type) || sqltypes.IsUnsigned(v2.Type):
-				return Type{Type: sqltypes.Uint64, Coll: collations.CollationBinaryID, Nullable: nullable}, nil
+				out.Type = sqltypes.Uint64
+				return
 			default:
-				return Type{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
+				return Type{}, fail()
 			}
 		}
 	}
-	return Type{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
+
+	return Type{}, fail()
 }
