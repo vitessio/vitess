@@ -224,15 +224,15 @@ func findDefault(vTbl *vindexes.Table, pCol sqlparser.IdentifierCI) sqlparser.Ex
 	panic(vterrors.VT03014(pCol.String(), vTbl.Name.String()))
 }
 
+type uComp struct {
+	idx int
+	def sqlparser.Expr
+}
+
 func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sqlparser.Values) (comps []*sqlparser.ComparisonExpr, err error) {
 	noOfUniqKeys := len(vTbl.UniqueKeys)
 	if noOfUniqKeys == 0 {
 		return nil, nil
-	}
-
-	type uComp struct {
-		idx int
-		def sqlparser.Expr
 	}
 
 	type uIdx struct {
@@ -248,40 +248,12 @@ func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sq
 		skipKey := false
 		for _, expr := range uniqKey {
 			var offsets []uComp
-			col, isCol := expr.(*sqlparser.ColName)
-			if isCol {
-				var def sqlparser.Expr
-				idx := ins.Columns.FindColumn(col.Name)
-				if idx == -1 {
-					def = findDefault(vTbl, col.Name)
-					if def == nil {
-						// default value is empty, nothing to compare as it will always be false.
-						skipKey = true
-						break
-					}
-				}
-				offsets = append(offsets, uComp{idx, def})
-			} else {
-				err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-					col, ok := node.(*sqlparser.ColName)
-					if !ok {
-						return true, nil
-					}
-					var def sqlparser.Expr
-					idx := ins.Columns.FindColumn(col.Name)
-					if idx == -1 {
-						def = findDefault(vTbl, col.Name)
-						// no default, replace it with null value.
-						if def == nil {
-							def = &sqlparser.NullVal{}
-						}
-					}
-					offsets = append(offsets, uComp{idx, def})
-					return false, nil
-				}, expr)
-				if err != nil {
-					return nil, err
-				}
+			offsets, skipKey, err = createUniqueKeyComp(ins, expr, vTbl)
+			if err != nil {
+				return nil, err
+			}
+			if skipKey {
+				break
 			}
 			uIndexes = append(uIndexes, offsets)
 			uColTuple = append(uColTuple, expr)
@@ -322,6 +294,41 @@ func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sq
 		compExprs = append(compExprs, sqlparser.NewComparisonExpr(sqlparser.InOp, allColTuples[i], valTuple, nil))
 	}
 	return compExprs, nil
+}
+
+func createUniqueKeyComp(ins *sqlparser.Insert, expr sqlparser.Expr, vTbl *vindexes.Table) ([]uComp, bool, error) {
+	col, isCol := expr.(*sqlparser.ColName)
+	if isCol {
+		var def sqlparser.Expr
+		idx := ins.Columns.FindColumn(col.Name)
+		if idx == -1 {
+			def = findDefault(vTbl, col.Name)
+			if def == nil {
+				// default value is empty, nothing to compare as it will always be false.
+				return nil, true, nil
+			}
+		}
+		return []uComp{{idx, def}}, false, nil
+	}
+	var offsets []uComp
+	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		col, ok := node.(*sqlparser.ColName)
+		if !ok {
+			return true, nil
+		}
+		var def sqlparser.Expr
+		idx := ins.Columns.FindColumn(col.Name)
+		if idx == -1 {
+			def = findDefault(vTbl, col.Name)
+			// no default, replace it with null value.
+			if def == nil {
+				def = &sqlparser.NullVal{}
+			}
+		}
+		offsets = append(offsets, uComp{idx, def})
+		return false, nil
+	}, expr)
+	return offsets, false, err
 }
 
 func checkAndCreateInsertOperator(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, vTbl *vindexes.Table, routing Routing) (ops.Operator, error) {
