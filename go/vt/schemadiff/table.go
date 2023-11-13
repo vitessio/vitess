@@ -1196,11 +1196,14 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	}
 	t1ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}
 	t2ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}
+	t2ConstraintsCountMap := map[string]int{}
 	for _, constraint := range t1Constraints {
 		t1ConstraintsMap[normalizeConstraintName(constraint)] = constraint
 	}
 	for _, constraint := range t2Constraints {
-		t2ConstraintsMap[normalizeConstraintName(constraint)] = constraint
+		constraintName := normalizeConstraintName(constraint)
+		t2ConstraintsMap[constraintName] = constraint
+		t2ConstraintsCountMap[constraintName]++
 	}
 
 	dropConstraintStatement := func(constraint *sqlparser.ConstraintDefinition) *sqlparser.DropKey {
@@ -1213,12 +1216,22 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	// evaluate dropped constraints
 	//
 	for _, t1Constraint := range t1Constraints {
-		if _, ok := t2ConstraintsMap[normalizeConstraintName(t1Constraint)]; !ok {
+		// Due to how we normalize the constraint string (e.g. in ConstraintNamesIgnoreAll we
+		// completely discard the constraint name), it's possible to have multiple constraints under
+		// the same string. Effectively, this means the schema design has duplicate/redundant constraints,
+		// which of course is poor design -- but still valid.
+		// To deal with dropping constraints, we need to not only account for the _existence_ of a constraint,
+		// but also to _how many times_ it appears.
+		constraintName := normalizeConstraintName(t1Constraint)
+		if t2ConstraintsCountMap[constraintName] == 0 {
 			// constraint exists in t1 but not in t2, hence it is dropped
 			dropConstraint := dropConstraintStatement(t1Constraint)
 			alterTable.AlterOptions = append(alterTable.AlterOptions, dropConstraint)
+		} else {
+			t2ConstraintsCountMap[constraintName]--
 		}
 	}
+	// t2ConstraintsCountMap should not be used henceforth.
 
 	for _, t2Constraint := range t2Constraints {
 		normalizedT2ConstraintName := normalizeConstraintName(t2Constraint)
