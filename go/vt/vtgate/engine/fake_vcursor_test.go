@@ -814,13 +814,13 @@ func expectResult(t *testing.T, result, want *sqltypes.Result) {
 	fieldsResult := fmt.Sprintf("%v", result.Fields)
 	fieldsWant := fmt.Sprintf("%v", want.Fields)
 	if fieldsResult != fieldsWant {
-		t.Errorf("%s (mismatch in Fields):\n%s\nwant:\n%s", msg, fieldsResult, fieldsWant)
+		t.Errorf("mismatch in Fields\n%s\nwant:\n%s", fieldsResult, fieldsWant)
 	}
 
 	rowsResult := fmt.Sprintf("%v", result.Rows)
 	rowsWant := fmt.Sprintf("%v", want.Rows)
 	if rowsResult != rowsWant {
-		t.Errorf("%s (mismatch in Rows):\n%s\nwant:\n%s", msg, rowsResult, rowsWant)
+		t.Errorf("mismatch in Rows:\n%s\nwant:\n%s", rowsResult, rowsWant)
 	}
 }
 
