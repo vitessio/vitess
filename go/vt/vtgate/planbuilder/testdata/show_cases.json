@@ -729,9 +729,9 @@
       "Instructions": {
         "OperatorType": "Rows",
         "Fields": {
-          "Error": "VARCHAR",
-          "Foreign Key Mode": "VARCHAR",
-          "Keyspace Name": "VARCHAR",
+          "Comment": "VARCHAR",
+          "Foreign Key": "VARCHAR",
+          "Keyspace": "VARCHAR",
           "Sharded": "VARCHAR"
         },
         "RowCount": 7
