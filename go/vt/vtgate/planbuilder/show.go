@@ -661,7 +661,7 @@ func buildVschemaKeyspacesPlan(vschema plancontext.VSchema) (engine.Primitive, e
 		rows = append(rows, row)
 	}
 
-	return engine.NewRowsPrimitive(rows, buildVarCharFields("Keyspace Name", "Sharded", "Foreign Key Mode", "Error")), nil
+	return engine.NewRowsPrimitive(rows, buildVarCharFields("Keyspace", "Sharded", "Foreign Key", "Comment")), nil
 }
 
 func buildVschemaTablesPlan(vschema plancontext.VSchema) (engine.Primitive, error) {

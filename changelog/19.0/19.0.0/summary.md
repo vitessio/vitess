@@ -6,7 +6,7 @@
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
   - **[Docker](#docker)**
     - [New MySQL Image](#mysql-image)
-  - **[VTGate](#vtgate)**
+  - **[Query Compatibility](#query-compatibility)**
     - [`SHOW VSCHEMA KEYSPACES` Query](#show-vschema-keyspaces)
 
 ## <a id="major-changes"/>Major Changes
@@ -24,13 +24,13 @@ This lightweight image is a replacement of `vitess/lite` to only run `mysqld`.
 
 Several tags are available to let you choose what version of MySQL you want to use: `vitess/mysql:8.0.30`, `vitess/mysql:8.0.34`.
 
-### <a id="vtgate"/>VTGate
+### <a id="query-compatibility"/>Query Compatibility
 
 #### <a id="show-vschema-keyspaces"/>`SHOW VSCHEMA KEYSPACES` Query
 
 A SQL query, `SHOW VSCHEMA KEYSPACES` is now supported in Vitess. This query prints the vschema information
 for all the keyspaces. It is useful for seeing the foreign key mode, whether the keyspace is sharded, and if there is an
-error in the keyspace.
+error in the VSchema for the keyspace.
 
 An example output of the query looks like - 
 ```sql
