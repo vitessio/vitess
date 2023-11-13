@@ -28,6 +28,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 var _ Primitive = (*HashJoin)(nil)
@@ -67,16 +68,18 @@ type (
 	}
 
 	hashJoinProbeTable struct {
-		innerMap map[evalengine.HashCode][]probeTableEntry
+		innerMap map[vthash.Hash]*probeTableEntry
 
 		coll           collations.ID
 		typ            querypb.Type
 		lhsKey, rhsKey int
 		cols           []int
+		hasher         vthash.Hasher
 	}
 
 	probeTableEntry struct {
 		row  sqltypes.Row
+		next *probeTableEntry
 		seen bool
 	}
 )
@@ -128,13 +131,13 @@ func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 	var lfields []*querypb.Field
 	var mu sync.Mutex
 	err := vcursor.StreamExecutePrimitive(ctx, hj.Left, bindVars, wantfields, func(result *sqltypes.Result) error {
+		mu.Lock()
+		defer mu.Unlock()
 		if len(lfields) == 0 && len(result.Fields) != 0 {
 			lfields = result.Fields
 		}
 		for _, current := range result.Rows {
-			mu.Lock()
 			err := pt.addLeftRow(current)
-			mu.Unlock()
 			if err != nil {
 				return err
 			}
@@ -149,15 +152,15 @@ func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 	sendFields.Store(wantfields)
 
 	err = vcursor.StreamExecutePrimitive(ctx, hj.Right, bindVars, sendFields.Load(), func(result *sqltypes.Result) error {
+		mu.Lock()
+		defer mu.Unlock()
 		// compare the results coming from the RHS with the probe-table
 		res := &sqltypes.Result{}
 		if len(result.Fields) != 0 && sendFields.CompareAndSwap(true, false) {
 			res.Fields = joinFields(lfields, result.Fields, hj.Cols)
 		}
 		for _, currentRHSRow := range result.Rows {
-			mu.Lock()
 			results, err := pt.get(currentRHSRow)
-			mu.Unlock()
 			if err != nil {
 				return err
 			}
@@ -256,24 +259,38 @@ func (hj *HashJoin) description() PrimitiveDescription {
 
 func newHashJoinProbeTable(coll collations.ID, typ querypb.Type, lhsKey, rhsKey int, cols []int) *hashJoinProbeTable {
 	return &hashJoinProbeTable{
-		innerMap: map[evalengine.HashCode][]probeTableEntry{},
+		innerMap: map[vthash.Hash]*probeTableEntry{},
 		coll:     coll,
 		typ:      typ,
 		lhsKey:   lhsKey,
 		rhsKey:   rhsKey,
 		cols:     cols,
+		hasher:   vthash.New(),
 	}
 }
 
 func (pt *hashJoinProbeTable) addLeftRow(r sqltypes.Row) error {
-	h, err := evalengine.NullsafeHashcode(r[pt.lhsKey], pt.coll, pt.typ)
+	hash, err := pt.hash(r[pt.lhsKey])
 	if err != nil {
 		return err
 	}
-
-	pt.innerMap[h] = append(pt.innerMap[h], probeTableEntry{row: r})
+	pt.innerMap[hash] = &probeTableEntry{
+		row:  r,
+		next: pt.innerMap[hash],
+	}
 
 	return nil
+}
+
+func (pt *hashJoinProbeTable) hash(val sqltypes.Value) (vthash.Hash, error) {
+	err := evalengine.NullsafeHashcode128(&pt.hasher, val, pt.coll, pt.typ)
+	if err != nil {
+		return vthash.Hash{}, err
+	}
+
+	res := pt.hasher.Sum128()
+	pt.hasher.Reset()
+	return res, nil
 }
 
 func (pt *hashJoinProbeTable) get(rrow sqltypes.Row) (result []sqltypes.Row, err error) {
@@ -282,30 +299,24 @@ func (pt *hashJoinProbeTable) get(rrow sqltypes.Row) (result []sqltypes.Row, err
 		return
 	}
 
-	h, err := evalengine.NullsafeHashcode(val, pt.coll, pt.typ)
+	hash, err := pt.hash(val)
 	if err != nil {
 		return nil, err
 	}
 
-	for idx, entry := range pt.innerMap[h] {
-		cmp, err := evalengine.NullsafeCompare(val, entry.row[pt.lhsKey], pt.coll)
-		if err != nil {
-			return nil, err
-		}
-		if cmp == 0 {
-			pt.innerMap[h][idx].seen = true
-			result = append(result, joinRows(entry.row, rrow, pt.cols))
-		}
+	for e := pt.innerMap[hash]; e != nil; e = e.next {
+		e.seen = true
+		result = append(result, joinRows(e.row, rrow, pt.cols))
 	}
 
 	return
 }
 
 func (pt *hashJoinProbeTable) notFetched() (rows []sqltypes.Row) {
-	for _, v := range pt.innerMap {
-		for _, entry := range v {
-			if !entry.seen {
-				rows = append(rows, joinRows(entry.row, nil, pt.cols))
+	for _, e := range pt.innerMap {
+		for ; e != nil; e = e.next {
+			if !e.seen {
+				rows = append(rows, joinRows(e.row, nil, pt.cols))
 			}
 		}
 	}

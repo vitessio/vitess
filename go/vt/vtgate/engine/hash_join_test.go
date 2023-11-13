@@ -22,8 +22,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 func TestHashJoinVariations(t *testing.T) {
@@ -111,12 +113,6 @@ func TestHashJoinVariations(t *testing.T) {
 	}}
 
 	for _, tc := range tests {
-		jn := &HashJoin{
-			Opcode: tc.typ,
-			Cols:   []int{-1, -2, 1, 2},
-			LHSKey: tc.lhs,
-			RHSKey: tc.rhs,
-		}
 
 		var fields []*querypb.Field
 		var first, last func() Primitive
@@ -136,6 +132,18 @@ func TestHashJoinVariations(t *testing.T) {
 
 		expected := sqltypes.MakeTestResult(fields, tc.expected...)
 
+		typ, err := evalengine.CoerceTypes(typeForOffset(tc.lhs), typeForOffset(tc.rhs))
+		require.NoError(t, err)
+
+		jn := &HashJoin{
+			Opcode:         tc.typ,
+			Cols:           []int{-1, -2, 1, 2},
+			LHSKey:         tc.lhs,
+			RHSKey:         tc.rhs,
+			Collation:      typ.Coll,
+			ComparisonType: typ.Type,
+		}
+
 		t.Run(tc.name, func(t *testing.T) {
 			jn.Left = first()
 			jn.Right = last()
@@ -150,5 +158,16 @@ func TestHashJoinVariations(t *testing.T) {
 			require.NoError(t, err)
 			expectResultAnyOrder(t, r, expected)
 		})
+	}
+}
+
+func typeForOffset(i int) evalengine.Type {
+	switch i {
+	case 0:
+		return evalengine.Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}
+	case 1:
+		return evalengine.Type{Type: sqltypes.VarChar, Coll: collations.Default()}
+	default:
+		panic(i)
 	}
 }
