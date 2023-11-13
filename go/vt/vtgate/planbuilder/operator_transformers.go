@@ -139,9 +139,10 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 
 		childEngine := childLP.Primitive()
 		children = append(children, &engine.FkChild{
-			BVName: child.BVName,
-			Cols:   child.Cols,
-			Exec:   childEngine,
+			BVName:         child.BVName,
+			Cols:           child.Cols,
+			NonLiteralInfo: child.NonLiteralInfo,
+			Exec:           childEngine,
 		})
 	}
 
@@ -269,12 +270,11 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 
 	for idx, order := range ordering.Order {
 		typ, _ := ctx.SemTable.TypeForExpr(order.SimplifiedExpr)
-		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
-			Col:               ordering.Offset[idx],
-			WeightStringCol:   ordering.WOffset[idx],
-			Desc:              order.Inner.Direction == sqlparser.DescOrder,
-			StarColFixedIndex: ordering.Offset[idx],
-			Type:              typ,
+		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, evalengine.OrderByParams{
+			Col:             ordering.Offset[idx],
+			WeightStringCol: ordering.WOffset[idx],
+			Desc:            order.Inner.Direction == sqlparser.DescOrder,
+			Type:            typ,
 		})
 	}
 
@@ -500,7 +500,7 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 	eroute, err := routeToEngineRoute(ctx, op, hints)
 	for _, order := range op.Ordering {
 		typ, _ := ctx.SemTable.TypeForExpr(order.AST)
-		eroute.OrderBy = append(eroute.OrderBy, engine.OrderByParams{
+		eroute.OrderBy = append(eroute.OrderBy, evalengine.OrderByParams{
 			Col:             order.Offset,
 			WeightStringCol: order.WOffset,
 			Desc:            order.Direction == sqlparser.DescOrder,

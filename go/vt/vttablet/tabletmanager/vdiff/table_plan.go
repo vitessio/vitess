@@ -88,14 +88,14 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 			}
 		case *sqlparser.AliasedExpr:
 			var targetCol *sqlparser.ColName
-			if !selExpr.As.IsEmpty() {
-				targetCol = &sqlparser.ColName{Name: selExpr.As}
-			} else {
+			if selExpr.As.IsEmpty() {
 				if colAs, ok := selExpr.Expr.(*sqlparser.ColName); ok {
 					targetCol = colAs
 				} else {
 					return nil, fmt.Errorf("expression needs an alias: %v", sqlparser.String(selExpr))
 				}
+			} else {
+				targetCol = &sqlparser.ColName{Name: selExpr.As}
 			}
 			// If the input was "select a as b", then source will use "a" and target will use "b".
 			sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, selExpr)
@@ -157,7 +157,7 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 		return nil, err
 	}
 	// Remove in_keyrange. It's not understood by mysql.
-	sourceSelect.Where = sel.Where //removeKeyrange(sel.Where)
+	sourceSelect.Where = sel.Where // removeKeyrange(sel.Where)
 	// The source should also perform the group by.
 	sourceSelect.GroupBy = sel.GroupBy
 	sourceSelect.OrderBy = tp.orderBy
@@ -186,8 +186,8 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 			switch ct := expr.(type) {
 			case *sqlparser.ColName:
 				colname = ct.Name.String()
-			case *sqlparser.FuncExpr: //eg. weight_string()
-				//no-op
+			case *sqlparser.FuncExpr: // eg. weight_string()
+				// no-op
 			default:
 				log.Warningf("Not considering column %v for PK, type %v not handled", selExpr, ct)
 			}

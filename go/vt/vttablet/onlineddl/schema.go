@@ -202,6 +202,7 @@ const (
 	`
 	sqlUpdateSchemaAnalysis = `UPDATE _vt.schema_migrations
 			SET added_unique_keys=%a, removed_unique_keys=%a, removed_unique_key_names=%a,
+			removed_foreign_key_names=%a,
 			dropped_no_default_column_names=%a, expanded_column_names=%a,
 			revertible_notes=%a
 		WHERE

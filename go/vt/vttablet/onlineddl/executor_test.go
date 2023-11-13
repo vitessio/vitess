@@ -318,3 +318,41 @@ func TestAddInstantAlgorithm(t *testing.T) {
 		})
 	}
 }
+
+func TestDuplicateCreateTable(t *testing.T) {
+	e := Executor{}
+	ctx := context.Background()
+	onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "something", Strategy: "vitess", Options: "--unsafe-allow-foreign-keys"}
+
+	tcases := []struct {
+		sql           string
+		newName       string
+		expectSQL     string
+		expectMapSize int
+	}{
+		{
+			sql:       "create table t (id int primary key)",
+			newName:   "mytable",
+			expectSQL: "create table mytable (\n\tid int primary key\n)",
+		},
+		{
+			sql:           "create table t (id int primary key, i int, constraint f foreign key (i) references parent (id) on delete cascade)",
+			newName:       "mytable",
+			expectSQL:     "create table mytable (\n\tid int primary key,\n\ti int,\n\tconstraint f_bjj16562shq086ozik3zf6kjg foreign key (i) references parent (id) on delete cascade\n)",
+			expectMapSize: 1,
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			originalCreateTable, newCreateTable, constraintMap, err := e.duplicateCreateTable(ctx, onlineDDL, tcase.sql, tcase.newName)
+			assert.NoError(t, err)
+			assert.NotNil(t, originalCreateTable)
+			assert.NotNil(t, newCreateTable)
+			assert.NotNil(t, constraintMap)
+
+			newSQL := sqlparser.String(newCreateTable)
+			assert.Equal(t, tcase.expectSQL, newSQL)
+			assert.Equal(t, tcase.expectMapSize, len(constraintMap))
+		})
+	}
+}

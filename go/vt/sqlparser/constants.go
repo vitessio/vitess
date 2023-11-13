@@ -309,6 +309,7 @@ const (
 	VitessTargetStr            = " vitess_target"
 	VitessVariablesStr         = " vitess_metadata variables"
 	VschemaTablesStr           = " vschema tables"
+	VschemaKeyspacesStr        = " vschema keyspaces"
 	VschemaVindexesStr         = " vschema vindexes"
 	WarningsStr                = " warnings"
 
@@ -881,6 +882,7 @@ const (
 	VitessTarget
 	VitessVariables
 	VschemaTables
+	VschemaKeyspaces
 	VschemaVindexes
 	Warnings
 	Keyspace

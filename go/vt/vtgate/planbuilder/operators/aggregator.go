@@ -121,7 +121,13 @@ func (a *Aggregator) isDerived() bool {
 	return a.DT != nil
 }
 
-func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr, _ bool) int {
+func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr, underRoute bool) int {
+	if underRoute && a.isDerived() {
+		// We don't want to use columns on this operator if it's a derived table under a route.
+		// In this case, we need to add a Projection on top of this operator to make the column available
+		return -1
+	}
+
 	expr := a.DT.RewriteExpression(ctx, in)
 	if offset, found := canReuseColumn(ctx, a.Columns, expr, extractExpr); found {
 		return offset

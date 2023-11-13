@@ -263,7 +263,7 @@ func MustReloadSchemaOnDDL(sql string, dbname string) bool {
 			if table.IsEmpty() {
 				continue
 			}
-			if !table.Qualifier.IsEmpty() && table.Qualifier.String() != dbname {
+			if table.Qualifier.NotEmpty() && table.Qualifier.String() != dbname {
 				continue
 			}
 			tableName := table.Name.String()
