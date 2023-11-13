@@ -5684,5 +5684,80 @@
         "Table": "dual, unsharded_a"
       }
     }
+  },
+  {
+    "comment": "column with qualifier is correctly used",
+    "query": "select u.foo, ue.foo as apa from user u, user_extra ue order by foo ",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select u.foo, ue.foo as apa from user u, user_extra ue order by foo ",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.foo, weight_string(u.foo) from `user` as u where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select u.foo, weight_string(u.foo) from `user` as u order by foo asc",
+            "ResultColumns": 1,
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.foo as apa from user_extra as ue where 1 != 1",
+            "Query": "select ue.foo as apa from user_extra as ue",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select u.foo, ue.foo as apa from user u, user_extra ue order by foo ",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.foo, weight_string(u.foo) from `user` as u where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select u.foo, weight_string(u.foo) from `user` as u order by foo asc",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.foo as apa from user_extra as ue where 1 != 1",
+            "Query": "select ue.foo as apa from user_extra as ue",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    }
   }
 ]

@@ -151,17 +151,14 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 	}
 	for _, group := range sel.GroupBy {
 		selectExprIdx, aliasExpr := qp.FindSelectExprIndexForExpr(group)
-		expr, weightStrExpr, err := qp.GetSimplifiedExpr(group)
-		if err != nil {
-			return nil, err
-		}
+		weightStrExpr := qp.GetSimplifiedExpr(group)
 		err = checkForInvalidGroupingExpressions(weightStrExpr)
 		if err != nil {
 			return nil, err
 		}
 
 		groupBy := GroupBy{
-			Inner:         expr,
+			Inner:         group,
 			WeightStrExpr: weightStrExpr,
 			InnerIndex:    selectExprIdx,
 			aliasedExpr:   aliasExpr,
@@ -274,17 +271,14 @@ func CreateQPFromUnion(union *sqlparser.Union) (*QueryProjection, error) {
 func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy) error {
 	canPushDownSorting := true
 	for _, order := range orderBy {
-		expr, weightStrExpr, err := qp.GetSimplifiedExpr(order.Expr)
-		if err != nil {
-			return err
-		}
+		weightStrExpr := qp.GetSimplifiedExpr(order.Expr)
 		if sqlparser.IsNull(weightStrExpr) {
 			// ORDER BY null can safely be ignored
 			continue
 		}
 		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
 			Inner: &sqlparser.Order{
-				Expr:      expr,
+				Expr:      order.Expr,
 				Direction: order.Direction,
 			},
 			WeightStrExpr: weightStrExpr,
@@ -360,34 +354,47 @@ func (qp *QueryProjection) isExprInGroupByExprs(expr SelectExpr) bool {
 }
 
 // GetSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
-func (qp *QueryProjection) GetSimplifiedExpr(e sqlparser.Expr) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr, err error) {
+func (qp *QueryProjection) GetSimplifiedExpr(e sqlparser.Expr) (found sqlparser.Expr) {
+	if qp == nil {
+		return e
+	}
 	// If the ORDER BY is against a column alias, we need to remember the expression
 	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
 	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
 
-	colExpr, isColName := e.(*sqlparser.ColName)
-	if !isColName {
-		return e, e, nil
+	in, isColName := e.(*sqlparser.ColName)
+	if !(isColName && in.Qualifier.IsEmpty()) {
+		// we are only interested in unqualified column names. if it's not a column name and not unqualified, we're done
+		return e
 	}
 
-	if sqlparser.IsNull(e) {
-		return e, nil, nil
-	}
-
-	if colExpr.Qualifier.IsEmpty() {
-		for _, selectExpr := range qp.SelectExprs {
-			aliasedExpr, isAliasedExpr := selectExpr.Col.(*sqlparser.AliasedExpr)
-			if !isAliasedExpr {
+	for _, selectExpr := range qp.SelectExprs {
+		ae, ok := selectExpr.Col.(*sqlparser.AliasedExpr)
+		if !ok {
+			continue
+		}
+		aliased := !ae.As.IsEmpty()
+		if aliased {
+			if in.Name.Equal(ae.As) {
+				return ae.Expr
+			}
+		} else {
+			seCol, ok := ae.Expr.(*sqlparser.ColName)
+			if !ok {
 				continue
 			}
-			isAliasExpr := !aliasedExpr.As.IsEmpty()
-			if isAliasExpr && colExpr.Name.Equal(aliasedExpr.As) {
-				return e, aliasedExpr.Expr, nil
+			if seCol.Name.Equal(in.Name) {
+				// If the column name matches, we have a match, even if the table name is not listed
+				return ae.Expr
 			}
 		}
 	}
 
-	return e, e, nil
+	if found == nil {
+		found = e
+	}
+
+	return found
 }
 
 // toString should only be used for tests
