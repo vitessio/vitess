@@ -115,7 +115,7 @@ func (hj *HashJoin) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
 	for _, cmp := range hj.JoinComparisons {
 		lOffset := hj.LHS.AddColumn(ctx, true, false, aeWrap(cmp.LHS))
 		hj.LHSKeys = append(hj.LHSKeys, lOffset)
-		rOffset := hj.LHS.AddColumn(ctx, true, false, aeWrap(cmp.RHS))
+		rOffset := hj.RHS.AddColumn(ctx, true, false, aeWrap(cmp.RHS))
 		hj.RHSKeys = append(hj.RHSKeys, rOffset)
 	}
 

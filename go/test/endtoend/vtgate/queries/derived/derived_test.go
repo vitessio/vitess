@@ -92,7 +92,6 @@ func TestDerivedTableColumns(t *testing.T) {
 // We do this by not using the apply join we usually use, and instead use the hash join engine primitive
 // These tests exercise these situations
 func TestDerivedTablesWithLimit(t *testing.T) {
-	t.Skip("failing")
 	// We need full type info before planning this, so we wait for the schema tracker
 	require.NoError(t,
 		utils.WaitForAuthoritative(t, keyspaceName, "user", clusterInstance.VtgateProcess.ReadVSchema))
@@ -100,14 +99,16 @@ func TestDerivedTablesWithLimit(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.AssertMatches(
-		`SELECT u.id FROM
+	mcmp.Exec("insert into user(id, name) values(6,'pikachu')")
+
+	mcmp.AssertMatchesNoOrder(
+		`SELECT u.id, m.id FROM
 	            (SELECT id, name FROM user LIMIT 10) AS u JOIN
 	            (SELECT id, user_id FROM music LIMIT 10) as m on u.id = m.user_id`,
-		`[[INT64(5)] [INT64(4)] [INT64(3)] [INT64(2)] [INT64(1)]]`)
+		`[[INT64(1) INT64(1)] [INT64(5) INT64(2)] [INT64(1) INT64(3)] [INT64(2) INT64(4)] [INT64(3) INT64(5)] [INT64(5) INT64(7)] [INT64(4) INT64(6)]]`)
 
-	mcmp.AssertMatches(
-		`SELECT u.id FROM user AS u LEFT JOIN 
+	mcmp.AssertMatchesNoOrder(
+		`SELECT u.id, m.id FROM user AS u LEFT JOIN 
                 (SELECT id, user_id FROM music LIMIT 10) as m on u.id = m.user_id`,
-		`[[INT64(5)] [INT64(4)] [INT64(3)] [INT64(2)] [INT64(1)]]`)
+		`[[INT64(1) INT64(1)] [INT64(5) INT64(2)] [INT64(1) INT64(3)] [INT64(2) INT64(4)] [INT64(3) INT64(5)] [INT64(5) INT64(7)] [INT64(4) INT64(6)] [INT64(6) NULL]]`)
 }
