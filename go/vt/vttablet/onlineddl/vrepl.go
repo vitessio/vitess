@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -247,11 +248,41 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 	return uniqueKeys, nil
 }
 
+// isFastAnalyzeTableSupported checks if the underlying MySQL server supports 'fast_analyze_table',
+// introduced by a fork of MySQL: https://github.com/planetscale/mysql-server/commit/c8a9d93686358dabfba8f3dc5cc0621e3149fe78
+// When `fast_analyze_table=1`, an `ANALYZE TABLE` command only analyzes the clustering index (normally the `PRIMARY KEY`).
+// This is useful when you want to get a better estimate of the number of table rows, as fast as possible.
+func (v *VRepl) isFastAnalyzeTableSupported(ctx context.Context, conn *dbconnpool.DBConnection) (isSupported bool, err error) {
+	rs, err := conn.ExecuteFetch(sqlShowVariablesLikeFastAnalyzeTable, math.MaxInt64, true)
+	if err != nil {
+		return false, err
+	}
+	return len(rs.Rows) > 0, nil
+}
+
 // executeAnalyzeTable runs an ANALYZE TABLE command
 func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) error {
+	fastAnalyzeTableSupported, err := v.isFastAnalyzeTableSupported(ctx, conn)
+	if err != nil {
+		return err
+	}
+	if fastAnalyzeTableSupported {
+		// This code is only applicable when MySQL supports the 'fast_analyze_table' variable. This variable
+		// does not exist in vanilla MySQL.
+		// See  https://github.com/planetscale/mysql-server/commit/c8a9d93686358dabfba8f3dc5cc0621e3149fe78
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps1.
+		if _, err := conn.ExecuteFetch(sqlEnableFastAnalyzeTable, 1, false); err != nil {
+			return err
+		}
+		log.Infof("@@fast_analyze_table enabled")
+		defer conn.ExecuteFetch(sqlDisableFastAnalyzeTable, 1, false)
+	}
+
 	parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTable, tableName)
-	_, err := conn.ExecuteFetch(parsed.Query, 1, false)
-	return err
+	if _, err := conn.ExecuteFetch(parsed.Query, 1, false); err != nil {
+		return err
+	}
+	return nil
 }
 
 // readTableStatus reads table status information
