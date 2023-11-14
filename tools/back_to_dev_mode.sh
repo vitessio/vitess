@@ -48,7 +48,6 @@ fi
 function doBackToDevMode () {
   # Preparing the "dev mode" commit
   updateJava $DEV_VERSION
-  updateDockerReleaseScript $DEV_VERSION
   updateVersionGo $DEV_VERSION
 
   git add --all

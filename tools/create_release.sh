@@ -61,7 +61,6 @@ function createRelease () {
   # Preparing the release commit
   updateVitessExamples $RELEASE_VERSION $VTOP_VERSION
   updateJava $RELEASE_VERSION
-  updateDockerReleaseScript $RELEASE_VERSION
   updateVersionGo $RELEASE_VERSION
 
   ## Create the commit for this release and tag it
