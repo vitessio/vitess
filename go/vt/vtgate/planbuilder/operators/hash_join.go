@@ -314,3 +314,14 @@ func (hj *HashJoin) addColumn(ctx *plancontext.PlanningContext, in sqlparser.Exp
 		Info:     &EvalEngine{EExpr: eexpr},
 	}
 }
+
+// JoinPredicate produces an AST representation of the join condition this join has
+func (hj *HashJoin) JoinPredicate() sqlparser.Expr {
+	exprs := slice.Map(hj.JoinComparisons, func(from Comparison) sqlparser.Expr {
+		return &sqlparser.ComparisonExpr{
+			Left:  from.LHS,
+			Right: from.RHS,
+		}
+	})
+	return sqlparser.AndExpressions(exprs...)
+}

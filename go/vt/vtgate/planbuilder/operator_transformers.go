@@ -832,13 +832,20 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 		joinOp = engine.LeftJoin
 	}
 
+	var missingTypes []string
+
 	ltyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].LHS)
 	if !found {
-		return nil, vterrors.VT12001("missing type information")
+		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].LHS))
 	}
 	rtyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].RHS)
 	if !found {
-		return nil, vterrors.VT12001("missing type information")
+		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].RHS))
+	}
+
+	if len(missingTypes) > 0 {
+		return nil, vterrors.VT12001(
+			fmt.Sprintf("missing type information for [%s]", strings.Join(missingTypes, ", ")))
 	}
 
 	comparisonType, err := evalengine.CoerceTypes(ltyp, rtyp)
@@ -854,6 +861,7 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 			Cols:           op.ColumnOffsets,
 			LHSKey:         op.LHSKeys[0],
 			RHSKey:         op.RHSKeys[0],
+			ASTPred:        op.JoinPredicate(),
 			Collation:      comparisonType.Coll,
 			ComparisonType: comparisonType.Type,
 		},
