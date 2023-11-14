@@ -21,14 +21,12 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func start(t *testing.T) (utils.MySQLCompare, func()) {
@@ -205,23 +203,31 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 	require.Contains(t, err.Error(), "specifying two different database in the query is not supported")
 }
 
-func TestInfrSchemaAndUnionAll(t *testing.T) {
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--planner-version=gen4")
-	require.NoError(t,
-		clusterInstance.RestartVtgate())
+func TestJoinWithSingleShardQueryOnRHS(t *testing.T) {
+	// This test checks that we can run queries like this, where the RHS is a single shard query
+	mcmp, closer := start(t)
+	defer closer()
 
-	vtConnParams := clusterInstance.GetVTParams(keyspaceName)
-	vtConnParams.DbName = keyspaceName
-	conn, err := mysql.Connect(context.Background(), &vtConnParams)
-	require.NoError(t, err)
+	query := `SELECT
+        c.column_name as column_name,
+        c.data_type as data_type,
+        c.table_name as table_name,
+        c.table_schema as table_schema
+FROM
+        information_schema.columns c
+        JOIN (
+          SELECT
+            table_name
+          FROM
+            information_schema.tables
+          WHERE
+            table_schema != 'information_schema'
+          LIMIT
+            1
+        ) AS tables ON tables.table_name = c.table_name
+ORDER BY
+        c.table_name`
 
-	for _, workload := range []string{"oltp", "olap"} {
-		t.Run(workload, func(t *testing.T) {
-			utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
-			utils.Exec(t, conn, "start transaction")
-			utils.Exec(t, conn, `select connection_id()`)
-			utils.Exec(t, conn, `(select 'corder' from t1 limit 1) union all (select 'customer' from t7_xxhash limit 1)`)
-			utils.Exec(t, conn, "rollback")
-		})
-	}
+	res := utils.Exec(t, mcmp.VtConn, query)
+	require.NotEmpty(t, res.Rows)
 }
