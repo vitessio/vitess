@@ -95,6 +95,8 @@ There are 3 foreign key modes now supported in Vitess -
 3. `disallow` -
    In this mode Vitess explicitly disallows any DDL statements that try to create a foreign key constraint. This mode is equivalent to running VTGate with the flag `--foreign_key_mode=disallow`.
 
+In addition to query support, there is a new flag to `MoveTables` called `--atomic-copy` which should be used to import data into Vitess from databases which have foreign keys defined in the schema.
+
 #### Upgrade process
 
 After upgrading from v17 to v18, users should specify the correct foreign key mode for all their keyspaces in the VSchema using the new property.
