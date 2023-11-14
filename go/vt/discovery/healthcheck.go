@@ -92,6 +92,14 @@ var (
 
 	// How much to sleep between each check.
 	waitAvailableTabletInterval = 100 * time.Millisecond
+
+	// HealthCheckCacheTemplate uses healthCheckTemplate with the `HealthCheck Tablet - Cache` title to create the
+	// HTML code required to render the cache of the HealthCheck.
+	HealthCheckCacheTemplate = fmt.Sprintf(healthCheckTemplate, "HealthCheck Tablet - Cache")
+
+	// HealthCheckHealthyTemplate uses healthCheckTemplate with the `HealthCheck Tablet - Healthy Tablets` title to
+	// create the HTML code required to render the list of healthy tablets from the HealthCheck.
+	HealthCheckHealthyTemplate = fmt.Sprintf(healthCheckTemplate, "HealthCheck Tablet - Healthy Tablets")
 )
 
 // See the documentation for NewHealthCheck below for an explanation of these parameters.
@@ -104,8 +112,9 @@ const (
 	// DefaultTopologyWatcherRefreshInterval is used as the default value for
 	// the refresh interval of a topology watcher.
 	DefaultTopologyWatcherRefreshInterval = 1 * time.Minute
-	// HealthCheckTemplate is the HTML code to display a TabletsCacheStatusList
-	HealthCheckTemplate = `
+	// healthCheckTemplate is the HTML code to display a TabletsCacheStatusList, it takes a parameter for the title
+	// as the template can be used for both HealthCheck's cache and healthy tablets list.
+	healthCheckTemplate = `
 <style>
   table {
     border-collapse: collapse;
@@ -117,7 +126,7 @@ const (
 </style>
 <table class="refreshRequired">
   <tr>
-    <th colspan="5">HealthCheck Tablet Cache</th>
+    <th colspan="5">%s</th>
   </tr>
   <tr>
     <th>Cell</th>
@@ -192,6 +201,9 @@ type HealthCheck interface {
 
 	// CacheStatus returns a displayable version of the health check cache.
 	CacheStatus() TabletsCacheStatusList
+
+	// HealthyStatus returns a displayable version of the health check healthy list.
+	HealthyStatus() TabletsCacheStatusList
 
 	// CacheStatusMap returns a map of the health check cache.
 	CacheStatusMap() map[string]*TabletsCacheStatus
@@ -622,26 +634,53 @@ func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
 	return tcsl
 }
 
+// HealthyStatus returns a displayable version of the cache.
+func (hc *HealthCheckImpl) HealthyStatus() TabletsCacheStatusList {
+	tcsMap := hc.HealthyStatusMap()
+	tcsl := make(TabletsCacheStatusList, 0, len(tcsMap))
+	for _, tcs := range tcsMap {
+		tcsl = append(tcsl, tcs)
+	}
+	sort.Sort(tcsl)
+	return tcsl
+}
+
 func (hc *HealthCheckImpl) CacheStatusMap() map[string]*TabletsCacheStatus {
 	tcsMap := make(map[string]*TabletsCacheStatus)
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 	for _, ths := range hc.healthData {
 		for _, th := range ths {
-			key := fmt.Sprintf("%v.%v.%v.%v", th.Tablet.Alias.Cell, th.Target.Keyspace, th.Target.Shard, th.Target.TabletType.String())
-			var tcs *TabletsCacheStatus
-			var ok bool
-			if tcs, ok = tcsMap[key]; !ok {
-				tcs = &TabletsCacheStatus{
-					Cell:   th.Tablet.Alias.Cell,
-					Target: th.Target,
-				}
-				tcsMap[key] = tcs
-			}
-			tcs.TabletsStats = append(tcs.TabletsStats, th)
+			tabletHealthToTabletCacheStatus(th, tcsMap)
 		}
 	}
 	return tcsMap
+}
+
+func (hc *HealthCheckImpl) HealthyStatusMap() map[string]*TabletsCacheStatus {
+	tcsMap := make(map[string]*TabletsCacheStatus)
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	for _, ths := range hc.healthy {
+		for _, th := range ths {
+			tabletHealthToTabletCacheStatus(th, tcsMap)
+		}
+	}
+	return tcsMap
+}
+
+func tabletHealthToTabletCacheStatus(th *TabletHealth, tcsMap map[string]*TabletsCacheStatus) {
+	key := fmt.Sprintf("%v.%v.%v.%v", th.Tablet.Alias.Cell, th.Target.Keyspace, th.Target.Shard, th.Target.TabletType.String())
+	var tcs *TabletsCacheStatus
+	var ok bool
+	if tcs, ok = tcsMap[key]; !ok {
+		tcs = &TabletsCacheStatus{
+			Cell:   th.Tablet.Alias.Cell,
+			Target: th.Target,
+		}
+		tcsMap[key] = tcs
+	}
+	tcs.TabletsStats = append(tcs.TabletsStats, th)
 }
 
 // Close stops the healthcheck.
