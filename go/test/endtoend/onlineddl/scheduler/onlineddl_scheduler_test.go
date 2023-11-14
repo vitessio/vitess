@@ -941,20 +941,24 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
-	// Constraints
-	t.Run("CREATE TABLE with CHECK constraint", func(t *testing.T) {
-		query := `create table with_constraint (id int primary key, check ((id >= 0)))`
-		uuid := testOnlineDDLStatement(t, createParams(query, ddlStrategy, "vtgate", "chk_", "", false))
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-		t.Run("ensure constraint name is rewritten", func(t *testing.T) {
-			// Since we did not provide a name for the CHECK constraint, MySQL will
-			// name it `with_constraint_chk_1`. But we expect Online DDL to explicitly
-			// modify the constraint name, specifically to get rid of the <table-name> prefix,
-			// so that we don't get into https://bugs.mysql.com/bug.php?id=107772 situation.
-			createStatement := getCreateTableStatement(t, shards[0].Vttablets[0], "with_constraint")
-			assert.NotContains(t, createStatement, "with_constraint_chk")
+	checkConstraintCapable, err := capableOf(mysql.CheckConstraintsCapability) // 8.0.16 and above
+	require.NoError(t, err)
+	if checkConstraintCapable {
+		// Constraints
+		t.Run("CREATE TABLE with CHECK constraint", func(t *testing.T) {
+			query := `create table with_constraint (id int primary key, check ((id >= 0)))`
+			uuid := testOnlineDDLStatement(t, createParams(query, ddlStrategy, "vtgate", "chk_", "", false))
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			t.Run("ensure constraint name is rewritten", func(t *testing.T) {
+				// Since we did not provide a name for the CHECK constraint, MySQL will
+				// name it `with_constraint_chk_1`. But we expect Online DDL to explicitly
+				// modify the constraint name, specifically to get rid of the <table-name> prefix,
+				// so that we don't get into https://bugs.mysql.com/bug.php?id=107772 situation.
+				createStatement := getCreateTableStatement(t, shards[0].Vttablets[0], "with_constraint")
+				assert.NotContains(t, createStatement, "with_constraint_chk")
+			})
 		})
-	})
+	}
 
 	// INSTANT DDL
 	instantDDLCapable, err := capableOf(mysql.InstantAddLastColumnFlavorCapability)
