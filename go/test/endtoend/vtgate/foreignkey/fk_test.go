@@ -880,6 +880,13 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_multicol_t16 (id, cola, colb) values (1,1,1),(2,2,2)",
 				"update fk_multicol_t15 set cola = 3, colb = (id * 2) - 2",
 			},
+		}, {
+			name: "Update that sets to 0 and -0 values",
+			queries: []string{
+				"insert into fk_t15 (id, col) values (1,'-0'), (2, '0'), (3, '5'), (4, '-5')",
+				"insert into fk_t16 (id, col) values (1,'-0'), (2, '0'), (3, '5'), (4, '-5')",
+				"update fk_t15 set col = col * (col - (col))",
+			},
 		},
 	}
 
