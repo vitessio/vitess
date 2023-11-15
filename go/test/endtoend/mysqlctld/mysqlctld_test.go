@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
+	"vitess.io/vitess/go/vt/proto/mysqlctl"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
@@ -168,4 +169,11 @@ func TestVersionString(t *testing.T) {
 	version, err := client.VersionString(context.Background())
 	require.NoError(t, err)
 	require.NotEmpty(t, version)
+}
+
+func TestReadBinlogFilesTimestamps(t *testing.T) {
+	client, err := mysqlctlclient.New("unix", primaryTablet.MysqlctldProcess.SocketFile)
+	require.NoError(t, err)
+	_, err = client.ReadBinlogFilesTimestamps(context.Background(), &mysqlctl.ReadBinlogFilesTimestampsRequest{})
+	require.ErrorContains(t, err, "empty binlog list in ReadBinlogFilesTimestampsRequest")
 }
