@@ -29,6 +29,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -341,19 +342,35 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		}
 		req.BinlogFileNames = append(req.BinlogFileNames, fullPath)
 	}
+	skipBinlogTimestampsDueToIncompatibility := false
 	resp, err := params.Mysqld.ReadBinlogFilesTimestamps(ctx, req)
 	if err != nil {
-		return false, vterrors.Wrapf(err, "reading timestamps from binlog files %v", binaryLogsToBackup)
+		if strings.Contains(err.Error(), "rpc error: code = Unimplemented") {
+			// Backwards compatibility fix. This is v18, potentially calling a v17 server, which does not yet
+			// implement ReadBinlogFilesTimestamps() gRPC.
+			skipBinlogTimestampsDueToIncompatibility = true
+		} else {
+			return false, vterrors.Wrapf(err, "reading timestamps from binlog files %v", binaryLogsToBackup)
+		}
 	}
-	if resp.FirstTimestampBinlog == "" || resp.LastTimestampBinlog == "" {
-		return false, vterrors.Errorf(vtrpc.Code_ABORTED, "empty binlog name in response. Request=%v, Response=%v", req, resp)
-	}
-	log.Infof("ReadBinlogFilesTimestampsResponse: %+v", resp)
-	incrDetails := &IncrementalBackupDetails{
-		FirstTimestamp:       FormatRFC3339(protoutil.TimeFromProto(resp.FirstTimestamp).UTC()),
-		FirstTimestampBinlog: filepath.Base(resp.FirstTimestampBinlog),
-		LastTimestamp:        FormatRFC3339(protoutil.TimeFromProto(resp.LastTimestamp).UTC()),
-		LastTimestampBinlog:  filepath.Base(resp.LastTimestampBinlog),
+
+	var incrDetails *IncrementalBackupDetails
+	if skipBinlogTimestampsDueToIncompatibility {
+		incrDetails = &IncrementalBackupDetails{
+			FirstTimestamp: FormatRFC3339(time.Time{}), // zero timestamp
+			LastTimestamp:  FormatRFC3339(time.Time{}), // zero timestamp
+		}
+	} else {
+		if resp.FirstTimestampBinlog == "" || resp.LastTimestampBinlog == "" {
+			return false, vterrors.Errorf(vtrpc.Code_ABORTED, "empty binlog name in response. Request=%v, Response=%v", req, resp)
+		}
+		log.Infof("ReadBinlogFilesTimestampsResponse: %+v", resp)
+		incrDetails = &IncrementalBackupDetails{
+			FirstTimestamp:       FormatRFC3339(protoutil.TimeFromProto(resp.FirstTimestamp).UTC()),
+			FirstTimestampBinlog: filepath.Base(resp.FirstTimestampBinlog),
+			LastTimestamp:        FormatRFC3339(protoutil.TimeFromProto(resp.LastTimestamp).UTC()),
+			LastTimestampBinlog:  filepath.Base(resp.LastTimestampBinlog),
+		}
 	}
 	// It's worthwhile we explain the difference between params.IncrementalFromPos and incrementalBackupFromPosition.
 	// params.IncrementalFromPos is supplied by the user. They want an incremental backup that covers that position.
