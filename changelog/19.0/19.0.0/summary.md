@@ -4,6 +4,7 @@
 
 - **[Major Changes](#major-changes)**
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [VTTablet Flags](#vttablet-flags)
   - **[Docker](#docker)**
     - [New MySQL Image](#mysql-image)
   - **[Query Compatibility](#query-compatibility)**
@@ -14,6 +15,12 @@
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions
 
 - The `MYSQL_FLAVOR` environment variable is now removed from all Docker Images.
+
+#### <a id="vttablet-flags"/>VTTablet Flags
+
+- The following flags — which were deprecated in Vitess 7.0 — have been removed:
+`--vreplication_healthcheck_topology_refresh`, `--vreplication_healthcheck_retry_delay`, and `--vreplication_healthcheck_timeout`.
+- The `--vreplication_tablet_type` flag is now deprecated and ignored.
 
 ### <a id="docker"/>Docker
 

@@ -437,11 +437,8 @@ func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *tra
 	if ts.optCells != "" {
 		cells = strings.Split(ts.optCells, ",")
 	}
-	// FIXME: currently there is a default setting in the tablet that is used if user does not specify a tablet type,
-	// we use the value specified in the tablet flag `-vreplication_tablet_type`
-	// but ideally we should populate the vreplication table with a default value when we setup the workflow
 	if tabletTypes == "" {
-		tabletTypes = "PRIMARY,REPLICA"
+		tabletTypes = "in_order:REPLICA,PRIMARY" // default
 	}
 
 	var wg sync.WaitGroup
