@@ -56,8 +56,6 @@ var (
 	vtgateUser      = "vtgate_user"
 	vtgatePassword  = "password123"
 	commonTabletArg = []string{
-		"--vreplication_healthcheck_topology_refresh", "1s",
-		"--vreplication_healthcheck_retry_delay", "1s",
 		"--vreplication_retry_delay", "1s",
 		"--degraded_threshold", "5s",
 		"--lock_tables_timeout", "5s",
