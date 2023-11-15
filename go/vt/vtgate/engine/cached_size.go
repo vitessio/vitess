@@ -145,7 +145,7 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(144)
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
@@ -1005,6 +1005,25 @@ func (cached *Send) CachedSize(alloc bool) int64 {
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
+	return size
+}
+func (cached *Sequential) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Sources []vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Sources)) * int64(16))
+		for _, elem := range cached.Sources {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
 	return size
 }
 func (cached *SessionPrimitive) CachedSize(alloc bool) int64 {

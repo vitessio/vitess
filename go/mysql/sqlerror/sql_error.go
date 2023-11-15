@@ -243,6 +243,7 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.CharacterSetMismatch:         {num: ERCharacterSetMismatch, state: SSUnknownSQLState},
 	vterrors.WrongParametersToNativeFct:   {num: ERWrongParametersToNativeFct, state: SSUnknownSQLState},
 	vterrors.KillDeniedError:              {num: ERKillDenied, state: SSUnknownSQLState},
+	vterrors.BadNullError:                 {num: ERBadNullError, state: SSConstraintViolation},
 }
 
 func getStateToMySQLState(state vterrors.State) mysqlCode {
