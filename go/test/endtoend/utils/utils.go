@@ -283,11 +283,10 @@ func WaitForKsError(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string
 }
 
 // WaitForTableDeletions waits for a table to be deleted
-func WaitForTableDeletions(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl string) error {
-	timeout := time.After(60 * time.Second)
+func WaitForTableDeletions(ctx context.Context, t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl string) error {
 	for {
 		select {
-		case <-timeout:
+		case <-ctx.Done():
 			return fmt.Errorf("schema tracking still found the table '%s'", tbl)
 		default:
 			res, err := vtgateProcess.ReadVSchema()
