@@ -41592,6 +41592,9 @@ export namespace vschema {
 
         /** Column invisible */
         invisible?: (boolean|null);
+
+        /** Column default */
+        "default"?: (string|null);
     }
 
     /** Represents a Column. */
@@ -41611,6 +41614,9 @@ export namespace vschema {
 
         /** Column invisible. */
         public invisible: boolean;
+
+        /** Column default. */
+        public default: string;
 
         /**
          * Creates a new Column instance using the specified properties.

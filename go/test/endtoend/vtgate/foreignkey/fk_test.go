@@ -986,3 +986,164 @@ func TestCyclicFks(t *testing.T) {
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, "insert into fk_t10(id, col) values (1, 1)")
 	require.ErrorContains(t, err, "VT09019: uks has cyclic foreign keys")
 }
+
+func TestReplace(t *testing.T) {
+	t.Skip("replace engine marked for failure, hence skipping this.")
+	// Wait for schema-tracking to be complete.
+	waitForSchemaTrackingForFkTables(t)
+	// Remove all the foreign key constraints for all the replicas.
+	// We can then verify that the replica, and the primary have the same data, to ensure
+	// that none of the queries ever lead to cascades/updates on MySQL level.
+	for _, ks := range []string{shardedKs, unshardedKs} {
+		replicas := getReplicaTablets(ks)
+		for _, replica := range replicas {
+			removeAllForeignKeyConstraints(t, replica, ks)
+		}
+	}
+
+	mcmp1, _ := start(t)
+	//	defer closer1()
+	_ = utils.Exec(t, mcmp1.VtConn, "use `uks`")
+
+	mcmp2, _ := start(t)
+	//	defer closer2()
+	_ = utils.Exec(t, mcmp2.VtConn, "use `uks`")
+
+	_ = utils.Exec(t, mcmp1.VtConn, "insert into fk_t2 values(1,5), (2,5)")
+
+	done := false
+	go func() {
+		number := 1
+		for !done {
+			query := fmt.Sprintf("replace /* g1q1 - %d */ into fk_t2 values(5,5)", number)
+			_, _ = utils.ExecAllowError(t, mcmp1.VtConn, query)
+			number++
+		}
+	}()
+
+	go func() {
+		number := 1
+		for !done {
+			query := fmt.Sprintf("replace /* q1 - %d */ into fk_t3 values(3,5)", number)
+			_, _ = utils.ExecAllowError(t, mcmp2.VtConn, query)
+
+			query = fmt.Sprintf("replace /* q2 - %d */ into fk_t3 values(4,5)", number)
+			_, _ = utils.ExecAllowError(t, mcmp2.VtConn, query)
+			number++
+		}
+	}()
+
+	totalTime := time.After(1 * time.Minute)
+	for !done {
+		select {
+		case <-totalTime:
+			done = true
+		case <-time.After(10 * time.Millisecond):
+			validateReplication(t)
+		}
+	}
+}
+
+func TestReplaceExplicit(t *testing.T) {
+	t.Skip("explicit delete-insert in transaction fails, hence skipping")
+	// Wait for schema-tracking to be complete.
+	waitForSchemaTrackingForFkTables(t)
+	// Remove all the foreign key constraints for all the replicas.
+	// We can then verify that the replica, and the primary have the same data, to ensure
+	// that none of the queries ever lead to cascades/updates on MySQL level.
+	for _, ks := range []string{shardedKs, unshardedKs} {
+		replicas := getReplicaTablets(ks)
+		for _, replica := range replicas {
+			removeAllForeignKeyConstraints(t, replica, ks)
+		}
+	}
+
+	mcmp1, _ := start(t)
+	//	defer closer1()
+	_ = utils.Exec(t, mcmp1.VtConn, "use `uks`")
+
+	mcmp2, _ := start(t)
+	//	defer closer2()
+	_ = utils.Exec(t, mcmp2.VtConn, "use `uks`")
+
+	_ = utils.Exec(t, mcmp1.VtConn, "insert into fk_t2 values(1,5), (2,5)")
+
+	done := false
+	go func() {
+		number := 0
+		for !done {
+			number++
+			_, _ = utils.ExecAllowError(t, mcmp1.VtConn, "begin")
+			query := fmt.Sprintf("delete /* g1q1 - %d */ from fk_t2 where id = 5", number)
+			_, err := utils.ExecAllowError(t, mcmp1.VtConn, query)
+			if err != nil {
+				_, _ = utils.ExecAllowError(t, mcmp1.VtConn, "rollback")
+				continue
+			}
+			query = fmt.Sprintf("insert /* g1q1 - %d */ into fk_t2 values(5,5)", number)
+			_, err = utils.ExecAllowError(t, mcmp1.VtConn, query)
+			if err != nil {
+				_, _ = utils.ExecAllowError(t, mcmp1.VtConn, "rollback")
+				continue
+			}
+			_, _ = utils.ExecAllowError(t, mcmp1.VtConn, "commit")
+		}
+	}()
+
+	go func() {
+		number := 0
+		for !done {
+			number++
+			_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "begin")
+			query := fmt.Sprintf("delete /* g1q1 - %d */ from fk_t3 where id = 3 or col = 5", number)
+			_, err := utils.ExecAllowError(t, mcmp2.VtConn, query)
+			if err != nil {
+				_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "rollback")
+			} else {
+				query = fmt.Sprintf("insert /* g1q1 - %d */ into fk_t3 values(3,5)", number)
+				_, err = utils.ExecAllowError(t, mcmp2.VtConn, query)
+				if err != nil {
+					_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "rollback")
+				} else {
+					_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "commit")
+				}
+			}
+
+			_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "begin")
+			query = fmt.Sprintf("delete /* g1q1 - %d */ from fk_t3 where id = 4 or col = 5", number)
+			_, err = utils.ExecAllowError(t, mcmp2.VtConn, query)
+			if err != nil {
+				_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "rollback")
+				continue
+			}
+			query = fmt.Sprintf("insert /* g1q1 - %d */ into fk_t3 values(4,5)", number)
+			_, err = utils.ExecAllowError(t, mcmp2.VtConn, query)
+			if err != nil {
+				_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "rollback")
+				continue
+			}
+			_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "commit")
+		}
+	}()
+
+	totalTime := time.After(1 * time.Minute)
+	for !done {
+		select {
+		case <-totalTime:
+			done = true
+		case <-time.After(10 * time.Millisecond):
+			validateReplication(t)
+		}
+	}
+}
+
+// TestReplaceWithFK tests that replace into work as expected when foreign key management is enabled in Vitess.
+func TestReplaceWithFK(t *testing.T) {
+	mcmp, closer := start(t)
+	conn := mcmp.VtConn
+	defer closer()
+
+	// replace some data.
+	_, err := utils.ExecAllowError(t, conn, `replace into t1(id, col) values (1, 1)`)
+	require.ErrorContains(t, err, "VT12001: unsupported: REPLACE INTO with sharded keyspace (errno 1235) (sqlstate 42000)")
+}

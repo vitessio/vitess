@@ -19,7 +19,6 @@ package planbuilder
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -62,7 +61,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 		return nil, err
 	}
 
-	if err = errOutIfPlanCannotBeConstructed(ctx, tblInfo.GetVindexTable(), insStmt, ctx.SemTable.ForeignKeysPresent()); err != nil {
+	if err = errOutIfPlanCannotBeConstructed(ctx, tblInfo.GetVindexTable()); err != nil {
 		return nil, err
 	}
 
@@ -84,17 +83,11 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
 }
 
-func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vindexes.Table, insStmt *sqlparser.Insert, fkPlanNeeded bool) error {
-	if vTbl.Keyspace.Sharded && ctx.SemTable.NotUnshardedErr != nil {
-		return ctx.SemTable.NotUnshardedErr
-	}
-	if insStmt.Action != sqlparser.ReplaceAct {
+func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vindexes.Table) error {
+	if !vTbl.Keyspace.Sharded {
 		return nil
 	}
-	if fkPlanNeeded {
-		return vterrors.VT12001("REPLACE INTO with foreign keys")
-	}
-	return nil
+	return ctx.SemTable.NotUnshardedErr
 }
 
 func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
