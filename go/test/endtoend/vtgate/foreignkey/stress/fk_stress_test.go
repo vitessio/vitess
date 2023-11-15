@@ -704,6 +704,12 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 			require.NoError(t, err)
 		}
 	})
+	t.Run("waiting for vschema deletions to apply", func(t *testing.T) {
+		for _, tableName := range tableNames {
+			err := utils.WaitForTableDeletions(t, clusterInstance.VtgateProcess, keyspaceName, tableName)
+			require.NoError(t, err)
+		}
+	})
 	t.Run("creating tables", func(t *testing.T) {
 		// Create the stress tables
 		var b strings.Builder

@@ -282,6 +282,28 @@ func WaitForKsError(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string
 	}
 }
 
+// WaitForTableDeletions waits for a table to be deleted
+func WaitForTableDeletions(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl string) error {
+	timeout := time.After(60 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("schema tracking still found the table '%s'", tbl)
+		default:
+			res, err := vtgateProcess.ReadVSchema()
+			require.NoError(t, err, res)
+			keyspacesMap := convertToMap(*res)["keyspaces"]
+			ksMap := convertToMap(keyspacesMap)[ks]
+			tablesMap := convertToMap(ksMap)["tables"]
+			_, isPresent := convertToMap(tablesMap)[tbl]
+			if !isPresent {
+				return nil
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
 // WaitForColumn waits for a table's column to be present
 func WaitForColumn(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
 	timeout := time.After(60 * time.Second)
