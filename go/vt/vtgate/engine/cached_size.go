@@ -290,7 +290,7 @@ func (cached *FkChild) CachedSize(alloc bool) int64 {
 	}
 	// field NonLiteralInfo []vitess.io/vitess/go/vt/vtgate/engine.NonLiteralUpdateInfo
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.NonLiteralInfo)) * int64(32))
+		size += hack.RuntimeAllocSize(int64(cap(cached.NonLiteralInfo)) * int64(40))
 		for _, elem := range cached.NonLiteralInfo {
 			size += elem.CachedSize(false)
 		}
@@ -625,7 +625,7 @@ func (cached *NonLiteralUpdateInfo) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
 	// field UpdateExprBvName string
 	size += hack.RuntimeAllocSize(int64(len(cached.UpdateExprBvName)))
