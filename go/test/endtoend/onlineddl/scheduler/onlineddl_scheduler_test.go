@@ -2147,7 +2147,7 @@ func testForeignKeys(t *testing.T) {
 		},
 		{
 			name:                      "drop foreign key from a child",
-			sql:                       "alter table child_table DROP FOREIGN KEY child_parent_fk",
+			sql:                       "alter table child_table DROP FOREIGN KEY <childTableConstraintName>", // See "getting child_table constraint name" test step below.
 			allowForeignKeys:          true,
 			expectHint:                "child_hint",
 			onlyIfFKOnlineDDLPossible: true,
@@ -2212,6 +2212,19 @@ func testForeignKeys(t *testing.T) {
 					})
 				}
 			})
+			t.Run("getting child_table constraint name", func(t *testing.T) {
+				// Due to how OnlineDDL works, the name of the foreign key constraint will not be the one we used in the CREATE TABLE statement.
+				// There's a specific test where we drop said constraint. So speficially for that test (or any similar future tests), we need to dynamically
+				// evaluate the constraint name.
+				rs := onlineddl.VtgateExecQuery(t, &vtParams, "select CONSTRAINT_NAME from information_schema.REFERENTIAL_CONSTRAINTS where TABLE_NAME='child_table'", "")
+				assert.Equal(t, 1, len(rs.Rows))
+				row := rs.Named().Row()
+				assert.NotNil(t, row)
+				childTableConstraintName := row.AsString("CONSTRAINT_NAME", "")
+				assert.NotEmpty(t, childTableConstraintName)
+				testcase.sql = strings.ReplaceAll(testcase.sql, "<childTableConstraintName>", childTableConstraintName)
+			})
+
 			var uuid string
 			t.Run("run migration", func(t *testing.T) {
 				if testcase.allowForeignKeys {
