@@ -192,7 +192,11 @@ func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor 
 			// This is required for example when we receive an updated float value of -0, but
 			// the column being updated is a varchar column, then if we don't coerce the value of -0 to
 			// varchar, MySQL ends up setting it to '0' instead of '-0'.
-			finalVal, err := evalengine.CoerceTo(row[info.UpdateExprCol], selectionRes.Fields[info.ExprCol].Type)
+			finalVal := row[info.UpdateExprCol]
+			var err error
+			if !finalVal.IsNull() {
+				finalVal, err = evalengine.CoerceTo(finalVal, selectionRes.Fields[info.ExprCol].Type)
+			}
 			if err != nil {
 				return err
 			}
