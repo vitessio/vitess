@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
@@ -41,6 +42,12 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 )
+
+func TestFormatRFC3339(t *testing.T) {
+	var tm time.Time
+	res := FormatRFC3339(tm)
+	assert.Equal(t, "0001-01-01T00:00:00Z", res)
+}
 
 // TestBackupExecutesBackupWithScopedParams tests that Backup passes
 // a Scope()-ed stats to backupengine ExecuteBackup.
