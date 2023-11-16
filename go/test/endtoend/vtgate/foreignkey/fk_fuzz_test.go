@@ -123,7 +123,7 @@ func (fz *fuzzer) generateQuery() []string {
 }
 
 func getInsertType() string {
-	return "insert"
+	return []string{"insert", "replace"}[rand.Intn(2)]
 }
 
 // generateInsertDMLQuery generates an INSERT query from the parameters for the fuzzer.

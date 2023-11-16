@@ -1153,4 +1153,20 @@ func TestReplaceWithFK(t *testing.T) {
 	// replace some data.
 	_, err := utils.ExecAllowError(t, conn, `replace into t1(id, col) values (1, 1)`)
 	require.ErrorContains(t, err, "VT12001: unsupported: REPLACE INTO with sharded keyspace (errno 1235) (sqlstate 42000)")
+
+	_ = utils.Exec(t, conn, `use uks`)
+
+	_ = utils.Exec(t, conn, `replace into u_t1(id, col1) values (1, 1), (2, 1)`)
+	// u_t1: (1,1) (2,1)
+
+	_ = utils.Exec(t, conn, `replace into u_t2(id, col2) values (1, 1), (2, 1)`)
+	// u_t1: (1,1) (2,1)
+	// u_t2: (1,1) (2,1)
+
+	_ = utils.Exec(t, conn, `replace into u_t1(id, col1) values (2, 2)`)
+	// u_t1: (1,1) (2,2)
+	// u_t2: (1,null) (2,null)
+
+	utils.AssertMatches(t, conn, `select * from u_t1`, `[[INT64(1) INT64(1)] [INT64(2) INT64(2)]]`)
+	utils.AssertMatches(t, conn, `select * from u_t2`, `[[INT64(1) NULL] [INT64(2) NULL]]`)
 }
