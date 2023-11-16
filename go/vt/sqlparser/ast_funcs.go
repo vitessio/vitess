@@ -1325,6 +1325,16 @@ func (lock Lock) ToString() string {
 		return NoLockStr
 	case ForUpdateLock:
 		return ForUpdateStr
+	case ForUpdateLockNoWait:
+		return ForUpdateNoWaitStr
+	case ForUpdateLockSkipLocked:
+		return ForUpdateSkipLockedStr
+	case ForShareLock:
+		return ForShareStr
+	case ForShareLockNoWait:
+		return ForShareNoWaitStr
+	case ForShareLockSkipLocked:
+		return ForShareSkipLockedStr
 	case ShareModeLock:
 		return ShareModeStr
 	default:
