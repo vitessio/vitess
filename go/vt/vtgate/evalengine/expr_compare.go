@@ -114,7 +114,7 @@ func (compareNullSafeEQ) compare(left, right eval) (boolean, error) {
 }
 
 func typeIsTextual(tt sqltypes.Type) bool {
-	return sqltypes.IsText(tt) || sqltypes.IsBinary(tt) || tt == sqltypes.Time
+	return sqltypes.IsTextOrBinary(tt) || tt == sqltypes.Time
 }
 
 func compareAsStrings(l, r sqltypes.Type) bool {

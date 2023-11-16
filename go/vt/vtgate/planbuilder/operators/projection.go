@@ -263,14 +263,14 @@ func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return -1
 }
 
-func (p *Projection) addProjExpr(pe *ProjExpr) (int, error) {
+func (p *Projection) addProjExpr(pe ...*ProjExpr) (int, error) {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
 		return 0, err
 	}
 
 	offset := len(ap)
-	ap = append(ap, pe)
+	ap = append(ap, pe...)
 	p.Columns = ap
 
 	return offset, nil
@@ -471,7 +471,7 @@ func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *r
 	}
 
 	if !needed {
-		return p.Source, rewrite.NewTree("removed projection only passing through the input", p), nil
+		return p.Source, rewrite.NewTree("removed projection only passing through the input"), nil
 	}
 
 	switch src := p.Source.(type) {
@@ -517,7 +517,7 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, join *App
 	}
 	join.Columns = newColumns
 	join.JoinColumns = newColumnsAST
-	return join, rewrite.NewTree("remove projection from before join", join), nil
+	return join, rewrite.NewTree("remove projection from before join"), nil
 }
 
 func (p *Projection) compactWithRoute(ctx *plancontext.PlanningContext, rb *Route) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -538,7 +538,7 @@ func (p *Projection) compactWithRoute(ctx *plancontext.PlanningContext, rb *Rout
 	}
 
 	if len(columns) == len(ap) {
-		return rb, rewrite.NewTree("remove projection from before route", rb), nil
+		return rb, rewrite.NewTree("remove projection from before route"), nil
 	}
 	rb.ResultColumns = len(columns)
 	return rb, rewrite.SameTree, nil
@@ -561,7 +561,7 @@ func (p *Projection) needsEvaluation(ctx *plancontext.PlanningContext, e sqlpars
 	return false
 }
 
-func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) {
+func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
 		panic(err)
@@ -597,6 +597,7 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) {
 			EExpr: eexpr,
 		}
 	}
+	return nil
 }
 
 func (p *Projection) introducesTableID() semantics.TableSet {

@@ -255,5 +255,5 @@ func compactUnion(u *Union) *rewrite.ApplyResult {
 
 	u.Sources = newSources
 	u.Selects = newSelects
-	return rewrite.NewTree("merged UNIONs", u)
+	return rewrite.NewTree("merged UNIONs")
 }

@@ -75,7 +75,7 @@ func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (resul
 		result = newFilter(result, ctx.SemTable.AndExpressions(unresolved...))
 	}
 
-	changed = rewrite.NewTree("solved query graph", result)
+	changed = rewrite.NewTree("solved query graph")
 	return
 }
 
@@ -365,16 +365,18 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op ops.Operator) b
 func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, inner bool) (ops.Operator, *rewrite.ApplyResult, error) {
 	newPlan := mergeJoinInputs(ctx, lhs, rhs, joinPredicates, newJoinMerge(joinPredicates, inner))
 	if newPlan != nil {
-		return newPlan, rewrite.NewTree("merge routes into single operator", newPlan), nil
+		return newPlan, rewrite.NewTree("merge routes into single operator"), nil
 	}
 
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
-		if !inner {
-			return nil, nil, vterrors.VT12001("LEFT JOIN with LIMIT on the outer side")
-		}
-
-		if requiresSwitchingSides(ctx, lhs) {
-			return nil, nil, vterrors.VT12001("JOIN between derived tables with LIMIT")
+		if !inner || requiresSwitchingSides(ctx, lhs) {
+			// we can't switch sides, so let's see if we can use a HashJoin to solve it
+			join := NewHashJoin(lhs, rhs, !inner)
+			for _, pred := range joinPredicates {
+				join.AddJoinPredicate(ctx, pred)
+			}
+			ctx.SemTable.QuerySignature.HashJoin = true
+			return join, rewrite.NewTree("use a hash join because we have LIMIT on the LHS"), nil
 		}
 
 		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)
@@ -382,7 +384,7 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 		if err != nil {
 			return nil, nil, err
 		}
-		return newOp, rewrite.NewTree("logical join to applyJoin, switching side because LIMIT", newOp), nil
+		return newOp, rewrite.NewTree("logical join to applyJoin, switching side because LIMIT"), nil
 	}
 
 	join := NewApplyJoin(Clone(lhs), Clone(rhs), nil, !inner)
@@ -390,7 +392,7 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 	if err != nil {
 		return nil, nil, err
 	}
-	return newOp, rewrite.NewTree("logical join to applyJoin ", newOp), nil
+	return newOp, rewrite.NewTree("logical join to applyJoin "), nil
 }
 
 func operatorsToRoutes(a, b ops.Operator) (*Route, *Route) {
