@@ -527,7 +527,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select 1 from tbl10 where 1 != 1",
-                            "Query": "select 1 from tbl10 lock in share mode",
+                            "Query": "select 1 from tbl10 where not (tbl10.col) <=> ('foo') lock in share mode",
                             "Table": "tbl10"
                           },
                           {
@@ -558,7 +558,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update tbl10 set col = 'foo'",
+            "Query": "update tbl10 set tbl10.col = 'foo'",
             "Table": "tbl10"
           }
         ]
@@ -806,7 +806,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = u_tbl2.col1 + 'bar' where 1 != 1",
-            "Query": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = u_tbl2.col1 + 'bar' where u_tbl2.col1 + 'bar' is not null and u_tbl2.id = 1 and u_tbl1.col1 is null limit 1 lock in share mode",
+            "Query": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = u_tbl2.col1 + 'bar' where u_tbl2.col1 + 'bar' is not null and not (u_tbl2.col2) <=> (u_tbl2.col1 + 'bar') and u_tbl2.id = 1 and u_tbl1.col1 is null limit 1 lock in share mode",
             "Table": "u_tbl1, u_tbl2"
           },
           {
@@ -821,8 +821,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col2, col2 <=> u_tbl2.col1 + 'bar', u_tbl2.col1 + 'bar' from u_tbl2 where 1 != 1",
-                "Query": "select col2, col2 <=> u_tbl2.col1 + 'bar', u_tbl2.col1 + 'bar' from u_tbl2 where u_tbl2.id = 1 for update",
+                "FieldQuery": "select col2, u_tbl2.col2 <=> u_tbl2.col1 + 'bar', u_tbl2.col1 + 'bar' from u_tbl2 where 1 != 1",
+                "Query": "select col2, u_tbl2.col2 <=> u_tbl2.col1 + 'bar', u_tbl2.col1 + 'bar' from u_tbl2 where u_tbl2.id = 1 for update",
                 "Table": "u_tbl2"
               },
               {
@@ -858,7 +858,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_tbl2 set m = 2, col2 = u_tbl2.col1 + 'bar' where u_tbl2.id = 1",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_tbl2 set m = 2, u_tbl2.col2 = u_tbl2.col1 + 'bar' where u_tbl2.id = 1",
                 "Table": "u_tbl2"
               }
             ]
@@ -1284,7 +1284,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select tbl3.colx from tbl3 where 1 != 1",
-                            "Query": "select tbl3.colx from tbl3 where tbl3.colx + 10 is not null and tbl3.coly = 10 lock in share mode",
+                            "Query": "select tbl3.colx from tbl3 where tbl3.colx + 10 is not null and not (tbl3.coly) <=> (tbl3.colx + 10) and tbl3.coly = 10 lock in share mode",
                             "Table": "tbl3"
                           },
                           {
@@ -1315,7 +1315,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ tbl3 set coly = tbl3.colx + 10 where tbl3.coly = 10",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ tbl3 set tbl3.coly = tbl3.colx + 10 where tbl3.coly = 10",
             "Table": "tbl3"
           }
         ]
@@ -1364,7 +1364,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select 1 from tbl3 where 1 != 1",
-                            "Query": "select 1 from tbl3 where tbl3.coly = 10 lock in share mode",
+                            "Query": "select 1 from tbl3 where not (tbl3.coly) <=> (20) and tbl3.coly = 10 lock in share mode",
                             "Table": "tbl3"
                           },
                           {
@@ -1395,7 +1395,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update tbl3 set coly = 20 where tbl3.coly = 10",
+            "Query": "update tbl3 set tbl3.coly = 20 where tbl3.coly = 10",
             "Table": "tbl3"
           }
         ]
@@ -1444,7 +1444,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = 'foo' where 1 != 1",
-                "Query": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = 'foo' where (u_tbl8.col8) in ::fkc_vals and u_tbl9.col9 is null limit 1 lock in share mode",
+                "Query": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = 'foo' where not (u_tbl8.col8) <=> ('foo') and (u_tbl8.col8) in ::fkc_vals and u_tbl9.col9 is null limit 1 lock in share mode",
                 "Table": "u_tbl8, u_tbl9"
               },
               {
@@ -1456,7 +1456,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_tbl8 set col8 = 'foo' where (u_tbl8.col8) in ::fkc_vals",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_tbl8 set u_tbl8.col8 = 'foo' where (u_tbl8.col8) in ::fkc_vals",
                 "Table": "u_tbl8"
               }
             ]
@@ -1520,7 +1520,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = 'foo' where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = 'foo' where (u_tbl4.col4) in ::fkc_vals and u_tbl3.col3 is null limit 1 lock in share mode",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = 'foo' where not (u_tbl4.col4) <=> ('foo') and (u_tbl4.col4) in ::fkc_vals and u_tbl3.col3 is null limit 1 lock in share mode",
                 "Table": "u_tbl3, u_tbl4"
               },
               {
@@ -1544,7 +1544,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_tbl4 set col4 = 'foo' where (u_tbl4.col4) in ::fkc_vals",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_tbl4 set u_tbl4.col4 = 'foo' where (u_tbl4.col4) in ::fkc_vals",
                 "Table": "u_tbl4"
               }
             ]
@@ -1609,7 +1609,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :v1 where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :v1 where (u_tbl4.col4) in ::fkc_vals and :v1 is not null and u_tbl3.col3 is null limit 1 lock in share mode",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :v1 where not (u_tbl4.col4) <=> (:v1) and (u_tbl4.col4) in ::fkc_vals and :v1 is not null and u_tbl3.col3 is null limit 1 lock in share mode",
                 "Table": "u_tbl3, u_tbl4"
               },
               {
@@ -1633,7 +1633,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_tbl4 set col4 = :v1 where (u_tbl4.col4) in ::fkc_vals",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_tbl4 set u_tbl4.col4 = :v1 where (u_tbl4.col4) in ::fkc_vals",
                 "Table": "u_tbl4"
               }
             ]
@@ -2121,7 +2121,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :fkc_upd where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :fkc_upd where (u_tbl4.col4) in ::fkc_vals and :fkc_upd is not null and u_tbl3.col3 is null limit 1 lock in share mode",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :fkc_upd where not (u_tbl4.col4) <=> (:fkc_upd) and (u_tbl4.col4) in ::fkc_vals and :fkc_upd is not null and u_tbl3.col3 is null limit 1 lock in share mode",
                 "Table": "u_tbl3, u_tbl4"
               },
               {
@@ -2145,7 +2145,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_tbl4 set col4 = :fkc_upd where (u_tbl4.col4) in ::fkc_vals",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_tbl4 set u_tbl4.col4 = :fkc_upd where (u_tbl4.col4) in ::fkc_vals",
                 "Table": "u_tbl4"
               }
             ]
@@ -2297,7 +2297,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where 1 != 1",
-            "Query": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl2.colc - 2 is not null and u_multicol_tbl2.id = 7 and u_multicol_tbl1.cola is null and u_multicol_tbl1.colb is null limit 1 lock in share mode",
+            "Query": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl2.colc - 2 is not null and not (u_multicol_tbl2.cola, u_multicol_tbl2.colb) <=> (2, u_multicol_tbl2.colc - 2) and u_multicol_tbl2.id = 7 and u_multicol_tbl1.cola is null and u_multicol_tbl1.colb is null limit 1 lock in share mode",
             "Table": "u_multicol_tbl1, u_multicol_tbl2"
           },
           {
@@ -2312,8 +2312,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select cola, colb, cola <=> 2, 2, colb <=> u_multicol_tbl2.colc - 2, u_multicol_tbl2.colc - 2 from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb, cola <=> 2, 2, colb <=> u_multicol_tbl2.colc - 2, u_multicol_tbl2.colc - 2 from u_multicol_tbl2 where u_multicol_tbl2.id = 7 for update",
+                "FieldQuery": "select cola, colb, u_multicol_tbl2.cola <=> 2, 2, u_multicol_tbl2.colb <=> u_multicol_tbl2.colc - 2, u_multicol_tbl2.colc - 2 from u_multicol_tbl2 where 1 != 1",
+                "Query": "select cola, colb, u_multicol_tbl2.cola <=> 2, 2, u_multicol_tbl2.colb <=> u_multicol_tbl2.colc - 2, u_multicol_tbl2.colc - 2 from u_multicol_tbl2 where u_multicol_tbl2.id = 7 for update",
                 "Table": "u_multicol_tbl2"
               },
               {
@@ -2356,7 +2356,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_multicol_tbl2 set cola = 2, colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl2.id = 7",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_multicol_tbl2 set u_multicol_tbl2.cola = 2, u_multicol_tbl2.colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl2.id = 7",
                 "Table": "u_multicol_tbl2"
               }
             ]
