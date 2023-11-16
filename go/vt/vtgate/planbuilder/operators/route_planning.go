@@ -149,6 +149,7 @@ func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete
 }
 
 func getUpdateVindexInformation(
+	ctx *plancontext.PlanningContext,
 	updStmt *sqlparser.Update,
 	vindexTable *vindexes.Table,
 	tableID semantics.TableSet,
@@ -163,7 +164,7 @@ func getUpdateVindexInformation(
 		return nil, nil, "", nil, err
 	}
 
-	changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex, err := buildChangedVindexesValues(updStmt, vindexTable, primaryVindex.Columns, assignments)
+	changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex, err := buildChangedVindexesValues(ctx, updStmt, vindexTable, primaryVindex.Columns, assignments)
 	if err != nil {
 		return nil, nil, "", nil, err
 	}
@@ -350,7 +351,7 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op ops.Operator) b
 	_ = rewrite.Visit(op, func(current ops.Operator) error {
 		horizon, isHorizon := current.(*Horizon)
 
-		if isHorizon && horizon.IsDerived() && !horizon.IsMergeable(ctx) {
+		if isHorizon && !horizon.IsMergeable(ctx) {
 			required = true
 			return io.EOF
 		}
@@ -369,11 +370,11 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
 		if !inner {
-			return nil, nil, vterrors.VT12001("LEFT JOIN with derived tables")
+			return nil, nil, vterrors.VT12001("LEFT JOIN with LIMIT on the outer side")
 		}
 
 		if requiresSwitchingSides(ctx, lhs) {
-			return nil, nil, vterrors.VT12001("JOIN between derived tables")
+			return nil, nil, vterrors.VT12001("JOIN between derived tables with LIMIT")
 		}
 
 		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)
@@ -381,7 +382,7 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 		if err != nil {
 			return nil, nil, err
 		}
-		return newOp, rewrite.NewTree("logical join to applyJoin, switching side because derived table", newOp), nil
+		return newOp, rewrite.NewTree("logical join to applyJoin, switching side because LIMIT", newOp), nil
 	}
 
 	join := NewApplyJoin(Clone(lhs), Clone(rhs), nil, !inner)

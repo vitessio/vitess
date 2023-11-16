@@ -63,7 +63,7 @@ func Append(buf *strings.Builder, node SQLNode) {
 		Builder: buf,
 		fast:    true,
 	}
-	node.formatFast(tbuf)
+	node.FormatFast(tbuf)
 }
 
 // IndexColumn describes a column or expression in an index definition with optional length (for column)
@@ -163,7 +163,7 @@ const (
 	FloatVal
 	HexNum
 	HexVal
-	BitVal
+	BitNum
 	DateVal
 	TimeVal
 	TimestampVal
@@ -400,7 +400,7 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 
 // TableName returns a TableName pointing to this table expr
 func (node *AliasedTableExpr) TableName() (TableName, error) {
-	if !node.As.IsEmpty() {
+	if node.As.NotEmpty() {
 		return TableName{Name: node.As}, nil
 	}
 
@@ -515,9 +515,9 @@ func NewHexLiteral(in string) *Literal {
 	return &Literal{Type: HexVal, Val: in}
 }
 
-// NewBitLiteral builds a new BitVal containing a bit literal.
+// NewBitLiteral builds a new BitNum containing a bit literal.
 func NewBitLiteral(in string) *Literal {
-	return &Literal{Type: BitVal, Val: in}
+	return &Literal{Type: BitNum, Val: in}
 }
 
 // NewDateLiteral builds a new Date.
@@ -583,8 +583,8 @@ func (node *Literal) SQLType() sqltypes.Type {
 		return sqltypes.HexNum
 	case HexVal:
 		return sqltypes.HexVal
-	case BitVal:
-		return sqltypes.HexNum
+	case BitNum:
+		return sqltypes.BitNum
 	case DateVal:
 		return sqltypes.Date
 	case TimeVal:
@@ -868,6 +868,11 @@ func (node IdentifierCI) IsEmpty() bool {
 	return node.val == ""
 }
 
+// NonEmpty returns true if the name is not empty.
+func (node IdentifierCI) NotEmpty() bool {
+	return !node.IsEmpty()
+}
+
 // String returns the unescaped column name. It must
 // not be used for SQL generation. Use sqlparser.String
 // instead. The Stringer conformance is for usage
@@ -933,6 +938,11 @@ func NewIdentifierCS(str string) IdentifierCS {
 // IsEmpty returns true if TabIdent is empty.
 func (node IdentifierCS) IsEmpty() bool {
 	return node.v == ""
+}
+
+// NonEmpty returns true if TabIdent is not empty.
+func (node IdentifierCS) NotEmpty() bool {
+	return !node.IsEmpty()
 }
 
 // String returns the unescaped table name. It must
@@ -1929,6 +1939,8 @@ func (ty ShowCommandType) ToString() string {
 		return VitessVariablesStr
 	case VschemaTables:
 		return VschemaTablesStr
+	case VschemaKeyspaces:
+		return VschemaKeyspacesStr
 	case VschemaVindexes:
 		return VschemaVindexesStr
 	case Warnings:
@@ -2099,7 +2111,7 @@ func GetAllSelects(selStmt SelectStatement) []*Select {
 
 // ColumnName returns the alias if one was provided, otherwise prints the AST
 func (ae *AliasedExpr) ColumnName() string {
-	if !ae.As.IsEmpty() {
+	if ae.As.NotEmpty() {
 		return ae.As.String()
 	}
 
@@ -2131,7 +2143,7 @@ func RemoveKeyspace(in SQLNode) {
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
 		switch col := node.(type) {
 		case *ColName:
-			if !col.Qualifier.Qualifier.IsEmpty() {
+			if col.Qualifier.Qualifier.NotEmpty() {
 				col.Qualifier.Qualifier = NewIdentifierCS("")
 			}
 		}
@@ -2495,4 +2507,8 @@ func IsLiteral(expr Expr) bool {
 	default:
 		return false
 	}
+}
+
+func (ct *ColumnType) Invisible() bool {
+	return ct.Options.Invisible != nil && *ct.Options.Invisible
 }

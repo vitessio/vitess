@@ -111,12 +111,228 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 		return nil, err
 	}
 
-	vindexTable, routing, err := buildVindexTableForDML(ctx, tableInfo, qt, "insert")
+	vTbl, routing, err := buildVindexTableForDML(ctx, tableInfo, qt, "insert")
 	if err != nil {
 		return nil, err
 	}
 
-	insOp, err := createInsertOperator(ctx, ins, vindexTable, routing)
+	deleteBeforeInsert := false
+	if ins.Action == sqlparser.ReplaceAct &&
+		(ctx.SemTable.ForeignKeysPresent() || vTbl.Keyspace.Sharded) &&
+		(len(vTbl.PrimaryKey) > 0 || len(vTbl.UniqueKeys) > 0) {
+		// this needs a delete before insert as there can be row clash which needs to be deleted first.
+		ins.Action = sqlparser.InsertAct
+		deleteBeforeInsert = true
+	}
+
+	insOp, err := checkAndCreateInsertOperator(ctx, ins, vTbl, routing)
+	if err != nil {
+		return nil, err
+	}
+
+	if !deleteBeforeInsert {
+		return insOp, nil
+	}
+
+	rows, isRows := ins.Rows.(sqlparser.Values)
+	if !isRows {
+		return nil, vterrors.VT12001("REPLACE INTO using select statement")
+	}
+
+	pkCompExpr := pkCompExpression(vTbl, ins, rows)
+	uniqKeyCompExprs, err := uniqKeyCompExpressions(vTbl, ins, rows)
+	if err != nil {
+		return nil, err
+	}
+
+	whereExpr := getWhereCondExpr(append(uniqKeyCompExprs, pkCompExpr))
+
+	delStmt := &sqlparser.Delete{
+		TableExprs: sqlparser.TableExprs{sqlparser.CloneRefOfAliasedTableExpr(ins.Table)},
+		Where:      sqlparser.NewWhere(sqlparser.WhereClause, whereExpr),
+	}
+	delOp, err := createOpFromStmt(ctx, delStmt, false, "")
+	if err != nil {
+		return nil, err
+	}
+	return &Sequential{Sources: []ops.Operator{delOp, insOp}}, nil
+}
+
+func getWhereCondExpr(compExprs []*sqlparser.ComparisonExpr) sqlparser.Expr {
+	var outputExpr sqlparser.Expr
+	for _, expr := range compExprs {
+		if expr == nil {
+			continue
+		}
+		if outputExpr == nil {
+			outputExpr = expr
+			continue
+		}
+		outputExpr = &sqlparser.OrExpr{
+			Left:  outputExpr,
+			Right: expr,
+		}
+	}
+	return outputExpr
+}
+
+func pkCompExpression(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sqlparser.Values) *sqlparser.ComparisonExpr {
+	if len(vTbl.PrimaryKey) == 0 {
+		return nil
+	}
+	type pComp struct {
+		idx int
+		def sqlparser.Expr
+	}
+	var pIndexes []pComp
+	var pColTuple sqlparser.ValTuple
+	for _, pCol := range vTbl.PrimaryKey {
+		var def sqlparser.Expr
+		idx := ins.Columns.FindColumn(pCol)
+		if idx == -1 {
+			def = findDefault(vTbl, pCol)
+			if def == nil {
+				// If default value is empty, nothing to compare as it will always be false.
+				return nil
+			}
+		}
+		pIndexes = append(pIndexes, pComp{idx, def})
+		pColTuple = append(pColTuple, sqlparser.NewColName(pCol.String()))
+	}
+
+	var pValTuple sqlparser.ValTuple
+	for _, row := range rows {
+		var rowTuple sqlparser.ValTuple
+		for _, pIdx := range pIndexes {
+			if pIdx.idx == -1 {
+				rowTuple = append(rowTuple, pIdx.def)
+			} else {
+				rowTuple = append(rowTuple, row[pIdx.idx])
+			}
+		}
+		pValTuple = append(pValTuple, rowTuple)
+	}
+	return sqlparser.NewComparisonExpr(sqlparser.InOp, pColTuple, pValTuple, nil)
+}
+
+func findDefault(vTbl *vindexes.Table, pCol sqlparser.IdentifierCI) sqlparser.Expr {
+	for _, column := range vTbl.Columns {
+		if column.Name.Equal(pCol) {
+			return column.Default
+		}
+	}
+	panic(vterrors.VT03014(pCol.String(), vTbl.Name.String()))
+}
+
+type uComp struct {
+	idx int
+	def sqlparser.Expr
+}
+
+func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sqlparser.Values) (comps []*sqlparser.ComparisonExpr, err error) {
+	noOfUniqKeys := len(vTbl.UniqueKeys)
+	if noOfUniqKeys == 0 {
+		return nil, nil
+	}
+
+	type uIdx struct {
+		Indexes [][]uComp
+		uniqKey sqlparser.Exprs
+	}
+
+	allIndexes := make([]uIdx, 0, noOfUniqKeys)
+	allColTuples := make([]sqlparser.ValTuple, 0, noOfUniqKeys)
+	for _, uniqKey := range vTbl.UniqueKeys {
+		var uIndexes [][]uComp
+		var uColTuple sqlparser.ValTuple
+		skipKey := false
+		for _, expr := range uniqKey {
+			var offsets []uComp
+			offsets, skipKey, err = createUniqueKeyComp(ins, expr, vTbl)
+			if err != nil {
+				return nil, err
+			}
+			if skipKey {
+				break
+			}
+			uIndexes = append(uIndexes, offsets)
+			uColTuple = append(uColTuple, expr)
+		}
+		if skipKey {
+			continue
+		}
+		allIndexes = append(allIndexes, uIdx{uIndexes, uniqKey})
+		allColTuples = append(allColTuples, uColTuple)
+	}
+
+	allValTuples := make([]sqlparser.ValTuple, len(allColTuples))
+	for _, row := range rows {
+		for i, uk := range allIndexes {
+			var rowTuple sqlparser.ValTuple
+			for j, offsets := range uk.Indexes {
+				colIdx := 0
+				valExpr := sqlparser.CopyOnRewrite(uk.uniqKey[j], nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+					_, isCol := cursor.Node().(*sqlparser.ColName)
+					if !isCol {
+						return
+					}
+					if offsets[colIdx].idx == -1 {
+						cursor.Replace(offsets[colIdx].def)
+					} else {
+						cursor.Replace(row[offsets[colIdx].idx])
+					}
+					colIdx++
+				}, nil).(sqlparser.Expr)
+				rowTuple = append(rowTuple, valExpr)
+			}
+			allValTuples[i] = append(allValTuples[i], rowTuple)
+		}
+	}
+
+	compExprs := make([]*sqlparser.ComparisonExpr, 0, noOfUniqKeys)
+	for i, valTuple := range allValTuples {
+		compExprs = append(compExprs, sqlparser.NewComparisonExpr(sqlparser.InOp, allColTuples[i], valTuple, nil))
+	}
+	return compExprs, nil
+}
+
+func createUniqueKeyComp(ins *sqlparser.Insert, expr sqlparser.Expr, vTbl *vindexes.Table) ([]uComp, bool, error) {
+	col, isCol := expr.(*sqlparser.ColName)
+	if isCol {
+		var def sqlparser.Expr
+		idx := ins.Columns.FindColumn(col.Name)
+		if idx == -1 {
+			def = findDefault(vTbl, col.Name)
+			if def == nil {
+				// default value is empty, nothing to compare as it will always be false.
+				return nil, true, nil
+			}
+		}
+		return []uComp{{idx, def}}, false, nil
+	}
+	var offsets []uComp
+	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		col, ok := node.(*sqlparser.ColName)
+		if !ok {
+			return true, nil
+		}
+		var def sqlparser.Expr
+		idx := ins.Columns.FindColumn(col.Name)
+		if idx == -1 {
+			def = findDefault(vTbl, col.Name)
+			// no default, replace it with null value.
+			if def == nil {
+				def = &sqlparser.NullVal{}
+			}
+		}
+		offsets = append(offsets, uComp{idx, def})
+		return false, nil
+	}, expr)
+	return offsets, false, err
+}
+
+func checkAndCreateInsertOperator(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, vTbl *vindexes.Table, routing Routing) (ops.Operator, error) {
+	insOp, err := createInsertOperator(ctx, ins, vTbl, routing)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +345,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	}
 
 	// Find the foreign key mode and for unmanaged foreign-key-mode, we don't need to do anything.
-	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
+	ksMode, err := ctx.VSchema.ForeignKeyMode(vTbl.Keyspace.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -139,13 +355,18 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 
 	parentFKs := ctx.SemTable.GetParentForeignKeysList()
 	childFks := ctx.SemTable.GetChildForeignKeysList()
-	if len(childFks) == 0 && len(parentFKs) == 0 {
-		return insOp, nil
-	}
 	if len(parentFKs) > 0 {
 		return nil, vterrors.VT12002()
 	}
-	return nil, vterrors.VT12001("ON DUPLICATE KEY UPDATE with foreign keys")
+	if len(childFks) > 0 {
+		if ins.Action == sqlparser.ReplaceAct {
+			return nil, vterrors.VT12001("REPLACE INTO with foreign keys")
+		}
+		if len(ins.OnDup) > 0 {
+			return nil, vterrors.VT12001("ON DUPLICATE KEY UPDATE with foreign keys")
+		}
+	}
+	return insOp, nil
 }
 
 func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.Insert, vTbl *vindexes.Table, routing Routing) (ops.Operator, error) {
@@ -174,7 +395,7 @@ func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.I
 	}
 
 	// modify column list or values for autoincrement column.
-	autoIncGen, err := modifyForAutoinc(insStmt, vTbl)
+	autoIncGen, err := modifyForAutoinc(ctx, insStmt, vTbl)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +407,7 @@ func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.I
 	insOp.ColVindexes = getColVindexes(insOp)
 	switch rows := insStmt.Rows.(type) {
 	case sqlparser.Values:
-		route.Source, err = insertRowsPlan(insOp, insStmt, rows)
+		route.Source, err = insertRowsPlan(ctx, insOp, insStmt, rows)
 		if err != nil {
 			return nil, err
 		}
@@ -277,7 +498,7 @@ func columnMismatch(gen *Generate, ins *sqlparser.Insert, sel sqlparser.SelectSt
 	return false
 }
 
-func insertRowsPlan(insOp *Insert, ins *sqlparser.Insert, rows sqlparser.Values) (*Insert, error) {
+func insertRowsPlan(ctx *plancontext.PlanningContext, insOp *Insert, ins *sqlparser.Insert, rows sqlparser.Values) (*Insert, error) {
 	for _, row := range rows {
 		if len(ins.Columns) != len(row) {
 			return nil, vterrors.VT03006()
@@ -300,7 +521,10 @@ func insertRowsPlan(insOp *Insert, ins *sqlparser.Insert, rows sqlparser.Values)
 			routeValues[vIdx][colIdx] = make([]evalengine.Expr, len(rows))
 			colNum, _ := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
-				innerpv, err := evalengine.Translate(row[colNum], nil)
+				innerpv, err := evalengine.Translate(row[colNum], &evalengine.Config{
+					ResolveType: ctx.SemTable.TypeForExpr,
+					Collation:   ctx.SemTable.Collation,
+				})
 				if err != nil {
 					return nil, err
 				}
@@ -401,7 +625,7 @@ func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) *sql
 
 // modifyForAutoinc modifies the AST and the plan to generate necessary autoinc values.
 // For row values cases, bind variable names are generated using baseName.
-func modifyForAutoinc(ins *sqlparser.Insert, vTable *vindexes.Table) (*Generate, error) {
+func modifyForAutoinc(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, vTable *vindexes.Table) (*Generate, error) {
 	if vTable.AutoIncrement == nil {
 		return nil, nil
 	}
@@ -415,20 +639,23 @@ func modifyForAutoinc(ins *sqlparser.Insert, vTable *vindexes.Table) (*Generate,
 		gen.Offset = colNum
 		gen.added = newColAdded
 	case sqlparser.Values:
-		autoIncValues := make([]evalengine.Expr, 0, len(rows))
+		autoIncValues := make(sqlparser.ValTuple, 0, len(rows))
 		for rowNum, row := range rows {
 			// Support the DEFAULT keyword by treating it as null
 			if _, ok := row[colNum].(*sqlparser.Default); ok {
 				row[colNum] = &sqlparser.NullVal{}
 			}
-			expr, err := evalengine.Translate(row[colNum], nil)
-			if err != nil {
-				return nil, err
-			}
-			autoIncValues = append(autoIncValues, expr)
+			autoIncValues = append(autoIncValues, row[colNum])
 			row[colNum] = sqlparser.NewArgument(engine.SeqVarName + strconv.Itoa(rowNum))
 		}
-		gen.Values = evalengine.NewTupleExpr(autoIncValues...)
+		var err error
+		gen.Values, err = evalengine.Translate(autoIncValues, &evalengine.Config{
+			ResolveType: ctx.SemTable.TypeForExpr,
+			Collation:   ctx.SemTable.Collation,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 	return gen, nil
 }

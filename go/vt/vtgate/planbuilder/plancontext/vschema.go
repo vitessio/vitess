@@ -57,6 +57,9 @@ type VSchema interface {
 	// ForeignKeyMode returns the foreign_key flag value
 	ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
 
+	// KeyspaceError returns any error in the keyspace vschema.
+	KeyspaceError(keyspace string) error
+
 	// GetVSchema returns the latest cached vindexes.VSchema
 	GetVSchema() *vindexes.VSchema
 

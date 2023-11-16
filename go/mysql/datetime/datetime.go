@@ -94,8 +94,8 @@ func (t Time) FormatDecimal() decimal.Decimal {
 	return dec
 }
 
-func (t Time) ToDateTime() (out DateTime) {
-	return NewDateTimeFromStd(t.ToStdTime(time.Local))
+func (t Time) ToDateTime(now time.Time) (out DateTime) {
+	return NewDateTimeFromStd(t.ToStdTime(now))
 }
 
 func (t Time) IsZero() bool {
@@ -244,12 +244,12 @@ func (d Date) Hash(h *vthash.Hasher) {
 	h.Write8(d.day)
 }
 
-func (dt Date) Weekday() time.Weekday {
-	return dt.ToStdTime(time.Local).Weekday()
+func (d Date) Weekday() time.Weekday {
+	return d.ToStdTime(time.Local).Weekday()
 }
 
-func (dt Date) Yearday() int {
-	return dt.ToStdTime(time.Local).YearDay()
+func (d Date) Yearday() int {
+	return d.ToStdTime(time.Local).YearDay()
 }
 
 func (d Date) ISOWeek() (int, int) {
@@ -406,12 +406,24 @@ func (t Time) ToDuration() time.Duration {
 }
 
 func (t Time) toStdTime(year int, month time.Month, day int, loc *time.Location) (out time.Time) {
-	return time.Date(year, month, day, 0, 0, 0, 0, loc).Add(t.ToDuration())
+	hours := t.Hour()
+	minutes := t.Minute()
+	secs := t.Second()
+	nsecs := t.Nanosecond()
+
+	if t.Neg() {
+		hours = -hours
+		minutes = -minutes
+		secs = -secs
+		nsecs = -nsecs
+	}
+
+	return time.Date(year, month, day, hours, minutes, secs, nsecs, loc)
 }
 
-func (t Time) ToStdTime(loc *time.Location) (out time.Time) {
-	year, month, day := time.Now().Date()
-	return t.toStdTime(year, month, day, loc)
+func (t Time) ToStdTime(now time.Time) (out time.Time) {
+	year, month, day := now.Date()
+	return t.toStdTime(year, month, day, now.Location())
 }
 
 func (t Time) AddInterval(itv *Interval, stradd bool) (Time, uint8, bool) {
@@ -432,7 +444,7 @@ func (d Date) ToStdTime(loc *time.Location) (out time.Time) {
 	return time.Date(d.Year(), time.Month(d.Month()), d.Day(), 0, 0, 0, 0, loc)
 }
 
-func (dt DateTime) ToStdTime(loc *time.Location) time.Time {
+func (dt DateTime) ToStdTime(now time.Time) time.Time {
 	zerodate := dt.Date.IsZero()
 	zerotime := dt.Time.IsZero()
 
@@ -440,12 +452,12 @@ func (dt DateTime) ToStdTime(loc *time.Location) time.Time {
 	case zerodate && zerotime:
 		return time.Time{}
 	case zerodate:
-		return dt.Time.ToStdTime(loc)
+		return dt.Time.ToStdTime(now)
 	case zerotime:
-		return dt.Date.ToStdTime(loc)
+		return dt.Date.ToStdTime(now.Location())
 	default:
 		year, month, day := dt.Date.Year(), time.Month(dt.Date.Month()), dt.Date.Day()
-		return dt.Time.toStdTime(year, month, day, loc)
+		return dt.Time.toStdTime(year, month, day, now.Location())
 	}
 }
 
@@ -515,7 +527,10 @@ func (dt DateTime) Compare(dt2 DateTime) int {
 		// if we're comparing a time to a datetime, we need to normalize them
 		// both into datetimes; this normalization is not trivial because negative
 		// times result in a date change, so let the standard library handle this
-		return dt.ToStdTime(time.Local).Compare(dt2.ToStdTime(time.Local))
+
+		// Using the current time is OK here since the comparison is relative
+		now := time.Now()
+		return dt.ToStdTime(now).Compare(dt2.ToStdTime(now))
 	}
 	if cmp := dt.Date.Compare(dt2.Date); cmp != 0 {
 		return cmp
@@ -547,9 +562,10 @@ func (dt DateTime) Round(p int) (r DateTime) {
 	r = dt
 	if n == 1e9 {
 		r.Time.nanosecond = 0
-		return NewDateTimeFromStd(r.ToStdTime(time.Local).Add(time.Second))
+		r.addInterval(&Interval{timeparts: timeparts{sec: 1}, unit: IntervalSecond})
+	} else {
+		r.Time.nanosecond = uint32(n)
 	}
-	r.Time.nanosecond = uint32(n)
 	return r
 }
 

@@ -302,6 +302,10 @@
           "columns": [
             {
               "name": "col"
+            },
+            {
+              "name": "secret",
+              "invisible": true
             }
           ],
           "column_list_authoritative": true
@@ -756,7 +760,12 @@
         "u_tbl6": {},
         "u_tbl7": {},
         "u_tbl8": {},
-        "u_tbl9": {},
+        "u_tbl9": {
+          "columns": [
+            {"name": "foo"},
+            {"name": "bar", "default": "1"}
+          ]
+        },
         "u_tbl": {},
         "u_multicol_tbl1": {},
         "u_multicol_tbl2": {},

@@ -77,7 +77,7 @@ func handleAliasedExpr(vTbl *DerivedTable, expr *sqlparser.AliasedExpr, cols sql
 		return
 	}
 
-	if !expr.As.IsEmpty() {
+	if expr.As.NotEmpty() {
 		vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
 		return
 	}
@@ -137,8 +137,12 @@ func (dt *DerivedTable) Name() (sqlparser.TableName, error) {
 	return dt.ASTNode.TableName()
 }
 
-func (dt *DerivedTable) GetExpr() *sqlparser.AliasedTableExpr {
+func (dt *DerivedTable) getAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return dt.ASTNode
+}
+
+func (dt *DerivedTable) canShortCut() shortCut {
+	panic(vterrors.VT12001("should not be called"))
 }
 
 // GetVindexTable implements the TableInfo interface
@@ -157,7 +161,7 @@ func (dt *DerivedTable) getColumns() []ColumnInfo {
 }
 
 func (dt *DerivedTable) hasStar() bool {
-	return dt.tables.NonEmpty()
+	return dt.tables.NotEmpty()
 }
 
 // GetTables implements the TableInfo interface

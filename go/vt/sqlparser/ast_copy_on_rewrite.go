@@ -5128,6 +5128,7 @@ func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, 
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
+		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
 		var changedFrom bool
 		_From := make([]TableExpr, len(n.From))
 		for x, el := range n.From {
@@ -5140,20 +5141,19 @@ func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, 
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
 		_SelectExprs, changedSelectExprs := c.copyOnRewriteSelectExprs(n.SelectExprs, n)
 		_Where, changedWhere := c.copyOnRewriteRefOfWhere(n.Where, n)
-		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
 		_GroupBy, changedGroupBy := c.copyOnRewriteGroupBy(n.GroupBy, n)
 		_Having, changedHaving := c.copyOnRewriteRefOfWhere(n.Having, n)
 		_Windows, changedWindows := c.copyOnRewriteNamedWindows(n.Windows, n)
 		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
 		_Into, changedInto := c.copyOnRewriteRefOfSelectInto(n.Into, n)
-		if changedFrom || changedComments || changedSelectExprs || changedWhere || changedWith || changedGroupBy || changedHaving || changedWindows || changedOrderBy || changedLimit || changedInto {
+		if changedWith || changedFrom || changedComments || changedSelectExprs || changedWhere || changedGroupBy || changedHaving || changedWindows || changedOrderBy || changedLimit || changedInto {
 			res := *n
+			res.With, _ = _With.(*With)
 			res.From = _From
 			res.Comments, _ = _Comments.(*ParsedComments)
 			res.SelectExprs, _ = _SelectExprs.(SelectExprs)
 			res.Where, _ = _Where.(*Where)
-			res.With, _ = _With.(*With)
 			res.GroupBy, _ = _GroupBy.(GroupBy)
 			res.Having, _ = _Having.(*Where)
 			res.Windows, _ = _Windows.(NamedWindows)
@@ -5977,18 +5977,18 @@ func (c *cow) copyOnRewriteRefOfUnion(n *Union, parent SQLNode) (out SQLNode, ch
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
+		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
 		_Left, changedLeft := c.copyOnRewriteSelectStatement(n.Left, n)
 		_Right, changedRight := c.copyOnRewriteSelectStatement(n.Right, n)
 		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
-		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
 		_Into, changedInto := c.copyOnRewriteRefOfSelectInto(n.Into, n)
-		if changedLeft || changedRight || changedOrderBy || changedWith || changedLimit || changedInto {
+		if changedWith || changedLeft || changedRight || changedOrderBy || changedLimit || changedInto {
 			res := *n
+			res.With, _ = _With.(*With)
 			res.Left, _ = _Left.(SelectStatement)
 			res.Right, _ = _Right.(SelectStatement)
 			res.OrderBy, _ = _OrderBy.(OrderBy)
-			res.With, _ = _With.(*With)
 			res.Limit, _ = _Limit.(*Limit)
 			res.Into, _ = _Into.(*SelectInto)
 			out = &res
@@ -6570,18 +6570,18 @@ func (c *cow) copyOnRewriteRefOfWith(n *With, parent SQLNode) (out SQLNode, chan
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		var changedctes bool
-		_ctes := make([]*CommonTableExpr, len(n.ctes))
-		for x, el := range n.ctes {
+		var changedCTEs bool
+		_CTEs := make([]*CommonTableExpr, len(n.CTEs))
+		for x, el := range n.CTEs {
 			this, changed := c.copyOnRewriteRefOfCommonTableExpr(el, n)
-			_ctes[x] = this.(*CommonTableExpr)
+			_CTEs[x] = this.(*CommonTableExpr)
 			if changed {
-				changedctes = true
+				changedCTEs = true
 			}
 		}
-		if changedctes {
+		if changedCTEs {
 			res := *n
-			res.ctes = _ctes
+			res.CTEs = _CTEs
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)

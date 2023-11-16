@@ -126,6 +126,8 @@ message AutoIncrement {
 message Column {
   string name = 1;
   query.Type type = 2;
+  bool invisible = 3;
+  string default = 4;
 }
 
 // SrvVSchema is the roll-up of all the Keyspace schema for a cell.

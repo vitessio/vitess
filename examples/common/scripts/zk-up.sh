@@ -19,7 +19,6 @@
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
 cell=${CELL:-'test'}
-
 # Start ZooKeeper servers.
 # The "zkctl init" command won't return until the server is able to contact its
 # peers, so we need to start them all in the background and then wait for them.
@@ -32,7 +31,7 @@ for zkid in $zkids; do
     echo "    $VTDATAROOT/$zkdir"
     action='start'
   fi
-  zkctl -zk.myid $zkid -zk.cfg $zkcfg -log_dir $VTDATAROOT/tmp $action \
+  zkctl --zk.myid $zkid --zk.cfg $zkcfg --log_dir $VTDATAROOT/tmp $action \
     > $VTDATAROOT/tmp/zkctl_$zkid.out 2>&1 &
   pids[$zkid]=$!
 done

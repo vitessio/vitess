@@ -672,14 +672,14 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 			}
 		case *sqlparser.AliasedExpr:
 			var targetCol *sqlparser.ColName
-			if !selExpr.As.IsEmpty() {
-				targetCol = &sqlparser.ColName{Name: selExpr.As}
-			} else {
+			if selExpr.As.IsEmpty() {
 				if colAs, ok := selExpr.Expr.(*sqlparser.ColName); ok {
 					targetCol = colAs
 				} else {
 					return nil, fmt.Errorf("expression needs an alias: %v", sqlparser.String(selExpr))
 				}
+			} else {
+				targetCol = &sqlparser.ColName{Name: selExpr.As}
 			}
 			// If the input was "select a as b", then source will use "a" and target will use "b".
 			sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, selExpr)
@@ -780,7 +780,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	for _, participant := range participants {
 		prims = append(prims, participant)
 	}
-	ob := make([]engine.OrderByParams, 0, len(comparePKs))
+	ob := make([]evalengine.OrderByParams, 0, len(comparePKs))
 	for _, cpk := range comparePKs {
 		weightStringCol := -1
 		// if the collation is nil or unknown, use binary collation to compare as bytes
@@ -788,7 +788,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 		if cpk.collation != collations.Unknown {
 			t.Coll = cpk.collation
 		}
-		ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: t})
+		ob = append(ob, evalengine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: t})
 	}
 	return &engine.MergeSort{
 		Primitives: prims,
@@ -810,7 +810,8 @@ func (df *vdiff) selectTablets(ctx context.Context, ts *trafficSwitcher) error {
 			if ts.ExternalTopo() != nil {
 				sourceTopo = ts.ExternalTopo()
 			}
-			tp, err := discovery.NewTabletPicker(ctx, sourceTopo, []string{df.sourceCell}, df.sourceCell, df.ts.SourceKeyspaceName(), shard, df.tabletTypesStr, discovery.TabletPickerOptions{})
+			tp, err := discovery.NewTabletPicker(ctx, sourceTopo, []string{df.sourceCell}, df.sourceCell,
+				df.ts.SourceKeyspaceName(), shard, df.tabletTypesStr, discovery.TabletPickerOptions{})
 			if err != nil {
 				return err
 			}
@@ -827,8 +828,18 @@ func (df *vdiff) selectTablets(ctx context.Context, ts *trafficSwitcher) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		includeNonServingTablets := false
+		if df.ts.workflowType == binlogdatapb.VReplicationWorkflowType_Reshard {
+			// For resharding, the target shards could be non-serving if traffic has already been switched once.
+			// When shards are created their IsPrimaryServing attribute is set to true. However, when the traffic is switched
+			// it is set to false for the shards we are switching from. We don't have a way to know if we have
+			// switched or not, so we just include non-serving tablets for all reshards.
+			includeNonServingTablets = true
+		}
 		err2 = df.forAll(df.targets, func(shard string, target *shardStreamer) error {
-			tp, err := discovery.NewTabletPicker(ctx, df.ts.TopoServer(), []string{df.targetCell}, df.targetCell, df.ts.TargetKeyspaceName(), shard, df.tabletTypesStr, discovery.TabletPickerOptions{})
+			tp, err := discovery.NewTabletPicker(ctx, df.ts.TopoServer(), []string{df.targetCell}, df.targetCell,
+				df.ts.TargetKeyspaceName(), shard, df.tabletTypesStr,
+				discovery.TabletPickerOptions{IncludeNonServingTablets: includeNonServingTablets})
 			if err != nil {
 				return err
 			}

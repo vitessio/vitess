@@ -2711,11 +2711,11 @@ func CloneRefOfSelect(n *Select) *Select {
 	}
 	out := *n
 	out.Cache = CloneRefOfBool(n.Cache)
+	out.With = CloneRefOfWith(n.With)
 	out.From = CloneSliceOfTableExpr(n.From)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
 	out.Where = CloneRefOfWhere(n.Where)
-	out.With = CloneRefOfWith(n.With)
 	out.GroupBy = CloneGroupBy(n.GroupBy)
 	out.Having = CloneRefOfWhere(n.Having)
 	out.Windows = CloneNamedWindows(n.Windows)
@@ -3117,10 +3117,10 @@ func CloneRefOfUnion(n *Union) *Union {
 		return nil
 	}
 	out := *n
+	out.With = CloneRefOfWith(n.With)
 	out.Left = CloneSelectStatement(n.Left)
 	out.Right = CloneSelectStatement(n.Right)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
-	out.With = CloneRefOfWith(n.With)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	out.Into = CloneRefOfSelectInto(n.Into)
 	return &out
@@ -3395,7 +3395,7 @@ func CloneRefOfWith(n *With) *With {
 		return nil
 	}
 	out := *n
-	out.ctes = CloneSliceOfRefOfCommonTableExpr(n.ctes)
+	out.CTEs = CloneSliceOfRefOfCommonTableExpr(n.CTEs)
 	return &out
 }
 

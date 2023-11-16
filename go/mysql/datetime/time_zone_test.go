@@ -18,9 +18,49 @@ package datetime
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestDST(t *testing.T) {
+	testCases := []struct {
+		time     Time
+		year     int
+		month    time.Month
+		day      int
+		tz       string
+		expected string
+	}{
+		{
+			time: Time{hour: 130, minute: 34, second: 58},
+			year: 2023, month: 10, day: 24,
+			tz:       "Europe/Madrid",
+			expected: "2023-10-29T10:34:58+01:00",
+		},
+		{
+			time: Time{hour: 130, minute: 34, second: 58},
+			year: 2023, month: 10, day: 29,
+			tz:       "Europe/Madrid",
+			expected: "2023-11-03T10:34:58+01:00",
+		},
+		{
+			time: Time{hour: 130 | negMask, minute: 34, second: 58},
+			year: 2023, month: 11, day: 03,
+			tz:       "Europe/Madrid",
+			expected: "2023-10-28T13:25:02+02:00",
+		},
+	}
+
+	for _, tc := range testCases {
+		tz, err := ParseTimeZone(tc.tz)
+		require.NoError(t, err)
+
+		got := tc.time.toStdTime(tc.year, tc.month, tc.day, tz)
+		assert.Equal(t, tc.expected, got.Format(time.RFC3339))
+	}
+}
 
 func TestParseTimeZone(t *testing.T) {
 	testCases := []struct {

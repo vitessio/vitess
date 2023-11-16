@@ -1781,7 +1781,6 @@ func (s *Server) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowReques
 		log.Errorf("Error executing vdiff show action: %v", output.err)
 		return nil, output.err
 	}
-
 	return &vtctldatapb.VDiffShowResponse{
 		TabletResponses: output.responses,
 	}, nil
@@ -2940,9 +2939,18 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 
 // switchReads is a generic way of switching read traffic for a workflow.
 func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State, timeout time.Duration, cancel bool, direction TrafficSwitchDirection) (*[]string, error) {
-	roTypesToSwitchStr := topoproto.MakeStringTypeCSV(req.TabletTypes)
+	var roTabletTypes []topodatapb.TabletType
+	// When we are switching all traffic we also get the primary tablet type, which we need to
+	// filter out for switching reads.
+	for _, tabletType := range req.TabletTypes {
+		if tabletType != topodatapb.TabletType_PRIMARY {
+			roTabletTypes = append(roTabletTypes, tabletType)
+		}
+	}
+
+	roTypesToSwitchStr := topoproto.MakeStringTypeCSV(roTabletTypes)
 	var switchReplica, switchRdonly bool
-	for _, roType := range req.TabletTypes {
+	for _, roType := range roTabletTypes {
 		switch roType {
 		case topodatapb.TabletType_REPLICA:
 			switchReplica = true
@@ -2953,14 +2961,13 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (*[]string, error) {
-		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, fmt.Sprintf("%s: %v", message, err))
-		ts.Logger().Error(werr)
-		return nil, werr
+		ts.Logger().Error(err)
+		return nil, err
 	}
 
 	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, ts.optCells, state.String())
 	if !switchReplica && !switchRdonly {
-		return handleError("invalid tablet types", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet types must be REPLICA or RDONLY: %s", roTypesToSwitchStr))
+		return handleError("invalid tablet types", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet types must be REPLICA or RDONLY: %s", roTypesToSwitchStr))
 	}
 	if !ts.isPartialMigration { // shard level traffic switching is all or nothing
 		if direction == DirectionBackward && switchReplica && len(state.ReplicaCellsSwitched) == 0 {
@@ -2987,7 +2994,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 			return nil, err
 		}
 		if !rdonlyTabletsExist {
-			req.TabletTypes = append(req.TabletTypes, topodatapb.TabletType_RDONLY)
+			roTabletTypes = append(roTabletTypes, topodatapb.TabletType_RDONLY)
 		}
 	}
 
@@ -3020,13 +3027,13 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		if ts.isPartialMigration {
 			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overridden for reads AND writes in the ShardRoutingRule created when switching writes.")
-		} else if err := sw.switchTableReads(ctx, cells, req.TabletTypes, direction); err != nil {
+		} else if err := sw.switchTableReads(ctx, cells, roTabletTypes, direction); err != nil {
 			return handleError("failed to switch read traffic for the tables", err)
 		}
 		return sw.logs(), nil
 	}
 	ts.Logger().Infof("About to switchShardReads: %+v, %+s, %+v", cells, roTypesToSwitchStr, direction)
-	if err := sw.switchShardReads(ctx, cells, req.TabletTypes, direction); err != nil {
+	if err := sw.switchShardReads(ctx, cells, roTabletTypes, direction); err != nil {
 		return handleError("failed to switch read traffic for the shards", err)
 	}
 

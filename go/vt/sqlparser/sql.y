@@ -703,11 +703,11 @@ load_statement:
 with_clause:
   WITH with_list
   {
-	$$ = &With{ctes: $2, Recursive: false}
+	$$ = &With{CTEs: $2, Recursive: false}
   }
 | WITH RECURSIVE with_list
   {
-	$$ = &With{ctes: $3, Recursive: true}
+	$$ = &With{CTEs: $3, Recursive: true}
   }
 
 with_clause_opt:
@@ -1689,11 +1689,11 @@ text_literal
   }
 | BITNUM
   {
-  	$$ = NewBitLiteral($1[2:])
+  	$$ = NewBitLiteral($1)
   }
 | BIT_LITERAL
   {
-	$$ = NewBitLiteral($1)
+	$$ = NewBitLiteral("0b" + $1)
   }
 | VALUE_ARG
   {
@@ -1701,7 +1701,7 @@ text_literal
   }
 | underscore_charsets BIT_LITERAL %prec UNARY
   {
-  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral("0b" + $2)}
   }
 | underscore_charsets HEXNUM %prec UNARY
   {
@@ -1709,7 +1709,7 @@ text_literal
   }
 | underscore_charsets BITNUM %prec UNARY
   {
-  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2[2:])}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
   }
 | underscore_charsets HEX %prec UNARY
   {
@@ -4127,6 +4127,10 @@ show_statement:
 | SHOW VSCHEMA TABLES
   {
     $$ = &Show{&ShowBasic{Command: VschemaTables}}
+  }
+| SHOW VSCHEMA KEYSPACES
+  {
+    $$ = &Show{&ShowBasic{Command: VschemaKeyspaces}}
   }
 | SHOW VSCHEMA VINDEXES
   {
