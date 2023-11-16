@@ -481,16 +481,7 @@ func buildChildUpdOpForSetNull(
 			Right: compExpr,
 		}
 	}
-	// We only reach this code if foreign key checks are either unspecified or on.
-	// If foreign key checks are explicity turned on, then we should add the set_var parsed comment too
-	// since underlying MySQL might have foreign_key_checks as off.
-	// We run with foreign key checks on because the update might still fail on MySQL due to a child table
-	// with RESTRICT constraints.
-	var parsedComments *sqlparser.ParsedComments
-	fkState := ctx.VSchema.GetForeignKeyChecksState()
-	if fkState != nil && *fkState {
-		parsedComments = parsedComments.SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, "On").Parsed()
-	}
+	parsedComments := getParsedCommentsForFkChecks(ctx)
 	childUpdStmt := &sqlparser.Update{
 		Exprs:      childUpdateExprs,
 		Comments:   parsedComments,
@@ -498,6 +489,20 @@ func buildChildUpdOpForSetNull(
 		Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: childWhereExpr},
 	}
 	return createOpFromStmt(ctx, childUpdStmt, false, "")
+}
+
+// getParsedCommentsForFkChecks gets the parsed comments to be set on a child query related to foreign_key_checks session variable.
+// We only use this function if foreign key checks are either unspecified or on.
+// If foreign key checks are explicity turned on, then we should add the set_var parsed comment too
+// since underlying MySQL might have foreign_key_checks as off.
+// We run with foreign key checks on because the DML might still fail on MySQL due to a child table
+// with RESTRICT constraints.
+func getParsedCommentsForFkChecks(ctx *plancontext.PlanningContext) (parsedComments *sqlparser.ParsedComments) {
+	fkState := ctx.VSchema.GetForeignKeyChecksState()
+	if fkState != nil && *fkState {
+		parsedComments = parsedComments.SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, "On").Parsed()
+	}
+	return parsedComments
 }
 
 // createFKVerifyOp creates the verify operator for the parent foreign key constraints.
