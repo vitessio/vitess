@@ -574,12 +574,22 @@ const (
 			_vt.copy_state
 		WHERE vrepl_id=%a
 		`
-	sqlSwapTables         = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
-	sqlRenameTable        = "RENAME TABLE `%a` TO `%a`"
-	sqlLockTwoTablesWrite = "LOCK TABLES `%a` WRITE, `%a` WRITE"
-	sqlUnlockTables       = "UNLOCK TABLES"
-	sqlCreateSentryTable  = "CREATE TABLE IF NOT EXISTS `%a` (id INT PRIMARY KEY)"
-	sqlFindProcess        = "SELECT id, Info as info FROM information_schema.processlist WHERE id=%a AND Info LIKE %a"
+	sqlSwapTables              = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
+	sqlRenameTable             = "RENAME TABLE `%a` TO `%a`"
+	sqlLockTwoTablesWrite      = "LOCK TABLES `%a` WRITE, `%a` WRITE"
+	sqlUnlockTables            = "UNLOCK TABLES"
+	sqlCreateSentryTable       = "CREATE TABLE IF NOT EXISTS `%a` (id INT PRIMARY KEY)"
+	sqlFindProcess             = "SELECT id, Info as info FROM information_schema.processlist WHERE id=%a AND Info LIKE %a"
+	sqlFindProcessByInfo       = "SELECT id, Info as info FROM information_schema.processlist WHERE Info LIKE %a and id != connection_id()"
+	sqlProcessWithLocksOnTable = `
+		SELECT
+			DISTINCT innodb_trx.trx_mysql_thread_id
+		from
+			performance_schema.data_locks
+			join information_schema.innodb_trx on (data_locks.ENGINE_TRANSACTION_ID=innodb_trx.trx_id)
+		where
+			data_locks.OBJECT_SCHEMA=database() AND data_locks.OBJECT_NAME=%a
+	`
 )
 
 var (
