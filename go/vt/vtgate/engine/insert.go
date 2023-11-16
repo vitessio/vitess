@@ -102,6 +102,8 @@ type (
 		// This will avoid locking by the select table.
 		ForceNonStreaming bool
 
+		PreventAutoCommit bool
+
 		// Insert needs tx handling
 		txNeeded
 	}
@@ -958,6 +960,7 @@ func (ins *Insert) description() PrimitiveDescription {
 		"QueryTimeout":         ins.QueryTimeout,
 		"InsertIgnore":         ins.Ignore,
 		"InputAsNonStreaming":  ins.ForceNonStreaming,
+		"NoAutoCommit":         ins.PreventAutoCommit,
 	}
 
 	if len(ins.VindexValues) > 0 {
@@ -1041,7 +1044,7 @@ func (ins *Insert) executeUnshardedTableQuery(ctx context.Context, vcursor VCurs
 	if err != nil {
 		return 0, nil, err
 	}
-	qr, err := execShard(ctx, ins, vcursor, query, bindVars, rss[0], true, true /* canAutocommit */)
+	qr, err := execShard(ctx, ins, vcursor, query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */)
 	if err != nil {
 		return 0, nil, err
 	}

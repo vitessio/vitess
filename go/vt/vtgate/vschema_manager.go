@@ -210,19 +210,37 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 		// Now that we have ensured that all the tables are created, we can start populating the foreign keys
 		// in the tables.
 		for tblName, tblInfo := range m {
+			rTbl, err := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
+			if err != nil {
+				log.Errorf("error finding routed table %s: %v", tblName, err)
+				continue
+			}
 			for _, fkDef := range tblInfo.ForeignKeys {
 				parentTbl, err := vschema.FindRoutedTable(ksName, fkDef.ReferenceDefinition.ReferencedTable.Name.String(), topodatapb.TabletType_PRIMARY)
 				if err != nil {
 					log.Errorf("error finding parent table %s: %v", fkDef.ReferenceDefinition.ReferencedTable.Name.String(), err)
 					continue
 				}
-				childTbl, err := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
-				if err != nil {
-					log.Errorf("error finding child table %s: %v", tblName, err)
-					continue
+				rTbl.ParentForeignKeys = append(rTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
+				parentTbl.ChildForeignKeys = append(parentTbl.ChildForeignKeys, vindexes.NewChildFkInfo(rTbl, fkDef))
+			}
+			for _, idxDef := range tblInfo.Indexes {
+				switch idxDef.Info.Type {
+				case sqlparser.IndexTypePrimary:
+					for _, idxCol := range idxDef.Columns {
+						rTbl.PrimaryKey = append(rTbl.PrimaryKey, idxCol.Column)
+					}
+				case sqlparser.IndexTypeUnique:
+					var uniqueKey sqlparser.Exprs
+					for _, idxCol := range idxDef.Columns {
+						if idxCol.Expression == nil {
+							uniqueKey = append(uniqueKey, sqlparser.NewColName(idxCol.Column.String()))
+						} else {
+							uniqueKey = append(uniqueKey, idxCol.Expression)
+						}
+					}
+					rTbl.UniqueKeys = append(rTbl.UniqueKeys, uniqueKey)
 				}
-				childTbl.ParentForeignKeys = append(childTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
-				parentTbl.ChildForeignKeys = append(parentTbl.ChildForeignKeys, vindexes.NewChildFkInfo(childTbl, fkDef))
 			}
 		}
 
