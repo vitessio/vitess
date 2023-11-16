@@ -1692,7 +1692,111 @@
   {
     "comment": "replace with fk reference unsupported",
     "query": "replace into u_tbl1 (id, col1) values (1, 2)",
-    "plan": "VT12001: unsupported: REPLACE INTO with foreign keys"
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "replace into u_tbl1 (id, col1) values (1, 2)",
+      "Instructions": {
+        "OperatorType": "Sequential",
+        "Inputs": [
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
+                "Query": "select col1 from u_tbl1 where (id) in ((1)) for update",
+                "Table": "u_tbl1"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "FkCascade",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "Selection",
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
+                    "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                    "Table": "u_tbl2"
+                  },
+                  {
+                    "InputName": "CascadeChild-1",
+                    "OperatorType": "Update",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "BvName": "fkc_vals1",
+                    "Cols": [
+                      0
+                    ],
+                    "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals1",
+                    "Table": "u_tbl3"
+                  },
+                  {
+                    "InputName": "Parent",
+                    "OperatorType": "Delete",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from u_tbl2 where (col2) in ::fkc_vals",
+                    "Table": "u_tbl2"
+                  }
+                ]
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl1 where (id) in ((1))",
+                "Table": "u_tbl1"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Insert",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "NoAutoCommit": true,
+            "Query": "insert /*+ SET_VAR(foreign_key_checks=On) */ into u_tbl1(id, col1) values (1, 2)",
+            "TableName": "u_tbl1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl1",
+        "unsharded_fk_allow.u_tbl2",
+        "unsharded_fk_allow.u_tbl3"
+      ]
+    }
   },
   {
     "comment": "update on a multicol foreign key that set nulls and then cascades",

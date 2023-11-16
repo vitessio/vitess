@@ -207,7 +207,23 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_multicol_tbl2", createFkDefinition([]string{"cola", "colb"}, "u_multicol_tbl1", []string{"cola", "colb"}, sqlparser.SetNull, sqlparser.SetNull))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_multicol_tbl3", createFkDefinition([]string{"cola", "colb"}, "u_multicol_tbl2", []string{"cola", "colb"}, sqlparser.Cascade, sqlparser.Cascade))
+
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "fk_t3", createFkDefinition([]string{"col"}, "fk_t2", []string{"col2"}, sqlparser.SetNull, sqlparser.SetNull))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "fk_t4", createFkDefinition([]string{"col3"}, "fk_t3", []string{"col2"}, sqlparser.SetNull, sqlparser.SetNull))
+		_ = vschema.AddPrimaryKey("unsharded_fk_allow", "fk_t2", []string{"id"})
+		_ = vschema.AddPrimaryKey("unsharded_fk_allow", "fk_t3", []string{"id"})
+		_ = vschema.AddPrimaryKey("unsharded_fk_allow", "fk_t4", []string{"id"})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "fk_t3", sqlparser.Exprs{sqlparser.NewColName("col")})
 	}
+
+	_ = vschema.AddPrimaryKey("unsharded_fk_allow", "u_tbl1", []string{"id"})
+	_ = vschema.AddPrimaryKey("unsharded_fk_allow", "u_tbl9", []string{"id"})
+	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("col9")})
+	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{&sqlparser.BinaryExpr{Operator: sqlparser.MultOp, Left: sqlparser.NewColName("col9"), Right: sqlparser.NewColName("foo")}})
+	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("col9"), sqlparser.NewColName("foo")})
+	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("foo"), sqlparser.NewColName("bar")})
+	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("bar"), sqlparser.NewColName("col9")})
+	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl8", sqlparser.Exprs{sqlparser.NewColName("col8")})
 }
 
 func TestSystemTables57(t *testing.T) {

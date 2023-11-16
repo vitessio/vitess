@@ -2863,6 +2863,17 @@ func (e *Executor) executeCreateDDLActionMigration(ctx context.Context, onlineDD
 			}
 		}
 	}
+	if originalCreateTable, ok := ddlStmt.(*sqlparser.CreateTable); ok {
+		newCreateTable := sqlparser.CloneRefOfCreateTable(originalCreateTable)
+		// Rewrite this CREATE TABLE statement such that CONSTRAINT names are edited,
+		// specifically removing any <tablename> prefix.
+		if _, err := e.validateAndEditCreateTableStatement(ctx, onlineDDL, newCreateTable); err != nil {
+			return failMigration(err)
+		}
+		ddlStmt = newCreateTable
+		onlineDDL.SQL = sqlparser.String(newCreateTable)
+	}
+
 	// from now on, whether a VIEW or a TABLE, they get the same treatment
 
 	sentryArtifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())

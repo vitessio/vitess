@@ -1690,9 +1690,113 @@
     "plan": "VT12002: unsupported: cross-shard foreign keys"
   },
   {
-    "comment": "replace with fk reference unsupported",
+    "comment": "replace into with table having primary key",
     "query": "replace into u_tbl1 (id, col1) values (1, 2)",
-    "plan": "VT12001: unsupported: REPLACE INTO with foreign keys"
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "replace into u_tbl1 (id, col1) values (1, 2)",
+      "Instructions": {
+        "OperatorType": "Sequential",
+        "Inputs": [
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
+                "Query": "select col1 from u_tbl1 where (id) in ((1)) for update",
+                "Table": "u_tbl1"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "FkCascade",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "Selection",
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
+                    "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                    "Table": "u_tbl2"
+                  },
+                  {
+                    "InputName": "CascadeChild-1",
+                    "OperatorType": "Update",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "BvName": "fkc_vals1",
+                    "Cols": [
+                      0
+                    ],
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1",
+                    "Table": "u_tbl3"
+                  },
+                  {
+                    "InputName": "Parent",
+                    "OperatorType": "Delete",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "Query": "delete from u_tbl2 where (col2) in ::fkc_vals",
+                    "Table": "u_tbl2"
+                  }
+                ]
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl1 where (id) in ((1))",
+                "Table": "u_tbl1"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Insert",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "NoAutoCommit": true,
+            "Query": "insert into u_tbl1(id, col1) values (1, 2)",
+            "TableName": "u_tbl1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl1",
+        "unsharded_fk_allow.u_tbl2",
+        "unsharded_fk_allow.u_tbl3"
+      ]
+    }
   },
   {
     "comment": "update on a multicol foreign key that set nulls and then cascades",
@@ -2256,6 +2360,80 @@
         "unsharded_fk_allow.u_multicol_tbl1",
         "unsharded_fk_allow.u_multicol_tbl2",
         "unsharded_fk_allow.u_multicol_tbl3"
+      ]
+    }
+  },
+  {
+    "comment": "replace into with table having unique key and primary key",
+    "query": "replace into u_tbl9(id, col9) values (1, 10),(2, 20),(3, 30)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "replace into u_tbl9(id, col9) values (1, 10),(2, 20),(3, 30)",
+      "Instructions": {
+        "OperatorType": "Sequential",
+        "Inputs": [
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
+                "Query": "select col9 from u_tbl9 where (col9) in ((10), (20), (30)) or (col9 * foo) in ((10 * null), (20 * null), (30 * null)) or (bar, col9) in ((1, 10), (1, 20), (1, 30)) or (id) in ((1), (2), (3)) for update",
+                "Table": "u_tbl9"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals",
+                "Table": "u_tbl8"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl9 where (col9) in ((10), (20), (30)) or (col9 * foo) in ((10 * null), (20 * null), (30 * null)) or (bar, col9) in ((1, 10), (1, 20), (1, 30)) or (id) in ((1), (2), (3))",
+                "Table": "u_tbl9"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Insert",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "NoAutoCommit": true,
+            "Query": "insert into u_tbl9(id, col9) values (1, 10), (2, 20), (3, 30)",
+            "TableName": "u_tbl9"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl8",
+        "unsharded_fk_allow.u_tbl9"
       ]
     }
   },
