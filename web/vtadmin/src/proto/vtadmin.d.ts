@@ -27597,8 +27597,8 @@ export namespace tabletmanagerdata {
         /** VDiffReportOptions format */
         format?: (string|null);
 
-        /** VDiffReportOptions max_report_sample_rows */
-        max_report_sample_rows?: (number|Long|null);
+        /** VDiffReportOptions max_sample_rows */
+        max_sample_rows?: (number|Long|null);
     }
 
     /** Represents a VDiffReportOptions. */
@@ -27619,8 +27619,8 @@ export namespace tabletmanagerdata {
         /** VDiffReportOptions format. */
         public format: string;
 
-        /** VDiffReportOptions max_report_sample_rows. */
-        public max_report_sample_rows: (number|Long);
+        /** VDiffReportOptions max_sample_rows. */
+        public max_sample_rows: (number|Long);
 
         /**
          * Creates a new VDiffReportOptions instance using the specified properties.

@@ -121,10 +121,10 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 			UpdateTableStats:      *updateTableStats,
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-			OnlyPks:             *onlyPks,
-			DebugQuery:          *debugQuery,
-			Format:              format,
-			MaxReportSampleRows: 10,
+			OnlyPks:       *onlyPks,
+			DebugQuery:    *debugQuery,
+			Format:        format,
+			MaxSampleRows: 10,
 		},
 	}
 
