@@ -84,11 +84,9 @@ func NewResilientServer(ctx context.Context, base *topo.Server, counterPrefix st
 		log.Fatalf("srv_topo_cache_refresh must be less than or equal to srv_topo_cache_ttl")
 	}
 
-	var metric string
-	if counterPrefix == "" {
+	metric := ""
+	if counterPrefix != "" {
 		metric = counterPrefix + "Counts"
-	} else {
-		metric = ""
 	}
 	counts := stats.NewCountersWithSingleLabel(metric, "Resilient srvtopo server operations", "type")
 
