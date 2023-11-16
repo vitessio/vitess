@@ -1,4 +1,8 @@
 Executes a cluster management command on the remote vtctld server.
+If there are no running vtctld servers -- for example when bootstrapping
+a new Vitess cluster -- you can specify a --server value of 'internal'.
+When doing so, you would use the --topo* flags so that the client can
+connect directly to the topo server(s).
 
 Usage:
   vtctldclient [flags]
@@ -126,6 +130,9 @@ Flags:
       --security_policy string                 the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --server string                          server to use for the connection (required)
       --stderrthreshold severityFlag           logs at or above this threshold go to stderr (default 1)
+      --topo-global-root string                the path of the global topology data in the global topology server (default "/vitess/global")
+      --topo-global-server-address strings     the address of the global topology server(s) (default [localhost:2379])
+      --topo-implementation string             the topology implementation to use (default "etcd2")
   -v, --v Level                                log level for V logs
       --version                                version for vtctldclient
       --vmodule vModuleFlag                    comma-separated list of pattern=N settings for file-filtered logging
