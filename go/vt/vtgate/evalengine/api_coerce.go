@@ -37,13 +37,13 @@ func CoerceTypes(v1, v2 Type) (out Type, err error) {
 		return v1, nil
 	}
 	if sqltypes.IsNull(v1.Type) || sqltypes.IsNull(v2.Type) {
-		return Type{Type: sqltypes.Null, Coll: collations.CollationBinaryID, Nullable: true}, nil
+		return Type{Type: sqltypes.Null, Coll: collations.CollationBinaryID}, nil
 	}
 	fail := func() error {
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1.Type, v2.Type)
 	}
 
-	out = Type{Nullable: v1.Nullable || v2.Nullable}
+	out = Type{NotNullable: v1.NotNullable && v2.NotNullable}
 
 	switch {
 	case sqltypes.IsTextOrBinary(v1.Type) && sqltypes.IsTextOrBinary(v2.Type):

@@ -100,9 +100,11 @@ func (env *ExpressionEnv) TypeOf(expr Expr) (Type, error) {
 		return Type{}, err
 	}
 	return Type{
-		Type:     ty.Type,
-		Coll:     ty.Col.Collation,
-		Nullable: ty.Flag&flagNullable != 0,
+		Type:        ty.Type,
+		Coll:        ty.Col.Collation,
+		NotNullable: ty.Flag&flagNullable == 0,
+		Size:        ty.Size,
+		Scale:       ty.Scale,
 	}, nil
 }
 

@@ -89,9 +89,9 @@ func TestDistinct(t *testing.T) {
 					collID = collations.CollationBinaryID
 				}
 				t := evalengine.Type{
-					Type:     tc.inputs.Fields[i].Type,
-					Coll:     collID,
-					Nullable: false,
+					Type:        tc.inputs.Fields[i].Type,
+					Coll:        collID,
+					NotNullable: true,
 				}
 				checkCols = append(checkCols, CheckCol{
 					Col:  i,

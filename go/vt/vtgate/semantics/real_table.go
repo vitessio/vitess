@@ -136,8 +136,11 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 		cols = append(cols, ColumnInfo{
 			Name: col.Name.String(),
 			Type: evalengine.Type{
-				Type: col.Type,
-				Coll: collation,
+				Type:        col.Type,
+				Coll:        collation,
+				NotNullable: col.NotNullable,
+				Size:        col.Size,
+				Scale:       col.Scale,
 			},
 			Invisible: col.Invisible,
 		})

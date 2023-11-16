@@ -19,6 +19,7 @@ package schema
 import (
 	"context"
 	"maps"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -311,16 +312,44 @@ func getColumns(tblSpec *sqlparser.TableSpec) []vindexes.Column {
 	cols := make([]vindexes.Column, 0, len(tblSpec.Columns))
 	for _, column := range tblSpec.Columns {
 		colCollation := getColumnCollation(tblCollation, column)
+		size := getColumnNumber(column.Type.Length)
+		scale := getColumnNumber(column.Type.Scale)
+		nullable := getColumnNullable(column.Type.Options.Null)
 		cols = append(cols,
 			vindexes.Column{
 				Name:          column.Name,
 				Type:          column.Type.SQLType(),
 				CollationName: colCollation,
-				Invisible:     column.Type.Invisible(),
 				Default:       column.Type.Options.Default,
+				Invisible:     column.Type.Invisible(),
+				Size:          size,
+				Scale:         scale,
+				NotNullable:   !nullable,
+				Values:        column.Type.EnumValues,
 			})
 	}
 	return cols
+}
+
+func getColumnNullable(null *bool) bool {
+	if null == nil {
+		return true
+	}
+	return *null
+}
+
+func getColumnNumber(lit *sqlparser.Literal) int32 {
+	if lit == nil {
+		return 0
+	}
+	if lit.Type != sqlparser.IntVal {
+		return 0
+	}
+	val, err := strconv.ParseInt(lit.Val, 10, 32)
+	if err != nil {
+		return 0
+	}
+	return int32(val)
 }
 
 func getForeignKeys(tblSpec *sqlparser.TableSpec) []*sqlparser.ForeignKeyDefinition {
@@ -353,7 +382,13 @@ func getTableCollation(tblSpec *sqlparser.TableSpec) string {
 
 func getColumnCollation(defaultCollation string, column *sqlparser.ColumnDefinition) string {
 	if column.Type.Options == nil || column.Type.Options.Collate == "" {
-		return defaultCollation
+		switch strings.ToLower(column.Type.Type) {
+		case "enum", "set", "text", "tinytext", "mediumtext", "longtext", "varchar", "char":
+			return defaultCollation
+		case "json":
+			return "utf8mb4_bin"
+		}
+		return "binary"
 	}
 	return column.Type.Options.Collate
 }

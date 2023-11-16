@@ -65,7 +65,9 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 			}
 		}
 		type_ := code.Type(inputType)
-		t.m[node] = evalengine.Type{Type: type_, Coll: collations.DefaultCollationForType(type_)}
+		_, isCount := node.(*sqlparser.Count)
+		_, isCountStart := node.(*sqlparser.CountStar)
+		t.m[node] = evalengine.Type{Type: type_, Coll: collations.DefaultCollationForType(type_), NotNullable: isCount || isCountStart}
 	}
 	return nil
 }

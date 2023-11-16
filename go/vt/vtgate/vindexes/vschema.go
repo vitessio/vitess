@@ -188,7 +188,12 @@ type Column struct {
 	Default       sqlparser.Expr         `json:"default,omitempty"`
 
 	// Invisible marks this as a column that will not be automatically included in `*` projections
-	Invisible bool `json:"invisible"`
+	Invisible   bool  `json:"invisible,omitempty"`
+	Size        int32 `json:"size,omitempty"`
+	Scale       int32 `json:"scale,omitempty"`
+	NotNullable bool  `json:"not_nullable,omitempty"`
+	// Values contains the list of values for enum and set types.
+	Values []string `json:"values,omitempty"`
 }
 
 // MarshalJSON returns a JSON representation of Column.
@@ -639,7 +644,17 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				}
 			}
 			colNames[name.Lowered()] = true
-			t.Columns = append(t.Columns, Column{Name: name, Type: col.Type, Invisible: col.Invisible, Default: colDefault})
+			t.Columns = append(t.Columns, Column{
+				Name:          name,
+				Type:          col.Type,
+				CollationName: col.CollationName,
+				Default:       colDefault,
+				Invisible:     col.Invisible,
+				Size:          col.Size,
+				Scale:         col.Scale,
+				NotNullable:   col.NotNullable,
+				Values:        col.Values,
+			})
 		}
 
 		// Initialize ColumnVindexes.

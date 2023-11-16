@@ -41595,6 +41595,21 @@ export namespace vschema {
 
         /** Column default */
         "default"?: (string|null);
+
+        /** Column collation_name */
+        collation_name?: (string|null);
+
+        /** Column size */
+        size?: (number|null);
+
+        /** Column scale */
+        scale?: (number|null);
+
+        /** Column not_nullable */
+        not_nullable?: (boolean|null);
+
+        /** Column values */
+        values?: (string[]|null);
     }
 
     /** Represents a Column. */
@@ -41617,6 +41632,21 @@ export namespace vschema {
 
         /** Column default. */
         public default: string;
+
+        /** Column collation_name. */
+        public collation_name: string;
+
+        /** Column size. */
+        public size: number;
+
+        /** Column scale. */
+        public scale: number;
+
+        /** Column not_nullable. */
+        public not_nullable: boolean;
+
+        /** Column values. */
+        public values: string[];
 
         /**
          * Creates a new Column instance using the specified properties.
