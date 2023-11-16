@@ -22,6 +22,9 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+// Errors added to the list of variables below must be added to the Errors slice a little below in this same file.
+// This will enable the auto-documentation of error code in the website repository.
+
 var (
 	VT03001 = errorWithState("VT03001", vtrpcpb.Code_INVALID_ARGUMENT, SyntaxError, "aggregate functions take a single argument '%s'", "This aggregation function only takes a single argument.")
 	VT03002 = errorWithState("VT03002", vtrpcpb.Code_INVALID_ARGUMENT, ForbidSchemaChange, "changing schema from '%s' to '%s' is not allowed", "This schema change is not allowed. You cannot change the keyspace of a table.")
@@ -99,6 +102,8 @@ var (
 	VT14004 = errorWithoutState("VT14004", vtrpcpb.Code_UNAVAILABLE, "cannot find keyspace for: %s", "The specified keyspace could not be found.")
 	VT14005 = errorWithoutState("VT14005", vtrpcpb.Code_UNAVAILABLE, "cannot lookup sidecar database for keyspace: %s", "Failed to read sidecar database identifier.")
 
+	// Errors is a list of errors that must match all the variables
+	// defined above to enable auto-documentation of error codes.
 	Errors = []func(args ...any) *VitessError{
 		VT03001,
 		VT03002,
@@ -154,6 +159,7 @@ var (
 		VT09016,
 		VT09017,
 		VT09018,
+		VT09019,
 		VT10001,
 		VT10002,
 		VT12001,
