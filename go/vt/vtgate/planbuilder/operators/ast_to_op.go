@@ -165,7 +165,7 @@ func (jpc *joinPredicateCollector) inspectPredicate(
 	// then we can use this predicate to connect the subquery to the outer query
 	if !deps.IsSolvedBy(jpc.subqID) && deps.IsSolvedBy(jpc.totalID) {
 		jpc.predicates = append(jpc.predicates, predicate)
-		jc, err := BreakExpressionInLHSandRHS(ctx, predicate, jpc.outerID)
+		jc, err := breakExpressionInLHSandRHSForApplyJoin(ctx, predicate, jpc.outerID)
 		if err != nil {
 			return err
 		}

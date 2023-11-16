@@ -72,10 +72,10 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 	}
 
 	if op == horizon.Source {
-		return op, rewrite.NewTree("removed UNION horizon not used", op), nil
+		return op, rewrite.NewTree("removed UNION horizon not used"), nil
 	}
 
-	return op, rewrite.NewTree("expand UNION horizon into smaller components", op), nil
+	return op, rewrite.NewTree("expand UNION horizon into smaller components"), nil
 }
 
 func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel *sqlparser.Select) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -126,7 +126,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		extracted = append(extracted, "Limit")
 	}
 
-	return op, rewrite.NewTree(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", ")), op), nil
+	return op, rewrite.NewTree(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", "))), nil
 }
 
 func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out ops.Operator) {
