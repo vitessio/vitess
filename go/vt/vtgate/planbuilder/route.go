@@ -39,10 +39,6 @@ type route struct {
 	// executed by this route.
 	Select sqlparser.SelectStatement
 
-	// condition stores the AST condition that will be used
-	// to resolve the ERoute Values field.
-	condition sqlparser.Expr
-
 	// eroute is the primitive being built.
 	eroute *engine.Route
 
@@ -58,12 +54,7 @@ func (rb *route) Primitive() engine.Primitive {
 	return rb.enginePrimitive
 }
 
-// SetLimit adds a LIMIT clause to the route.
-func (rb *route) SetLimit(limit *sqlparser.Limit) {
-	rb.Select.SetLimit(limit)
-}
-
-// WireupGen4 implements the logicalPlan interface
+// Wireup implements the logicalPlan interface
 func (rb *route) Wireup(ctx *plancontext.PlanningContext) error {
 	rb.prepareTheAST()
 
@@ -110,16 +101,6 @@ func (rb *route) Wireup(ctx *plancontext.PlanningContext) error {
 	return nil
 }
 
-// ContainsTables implements the logicalPlan interface
-func (rb *route) ContainsTables() semantics.TableSet {
-	return rb.tables
-}
-
-// OutputColumns implements the logicalPlan interface
-func (rb *route) OutputColumns() []sqlparser.SelectExpr {
-	return sqlparser.GetFirstSelect(rb.Select).SelectExprs
-}
-
 // prepareTheAST does minor fixups of the SELECT struct before producing the query string
 func (rb *route) prepareTheAST() {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
@@ -145,19 +126,6 @@ func (rb *route) prepareTheAST() {
 		}
 		return true, nil
 	}, rb.Select)
-}
-
-// Rewrite implements the logicalPlan interface
-func (rb *route) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 0 {
-		return vterrors.VT13001("route: wrong number of inputs")
-	}
-	return nil
-}
-
-// Inputs implements the logicalPlan interface
-func (rb *route) Inputs() []logicalPlan {
-	return []logicalPlan{}
 }
 
 func (rb *route) isSingleShard() bool {

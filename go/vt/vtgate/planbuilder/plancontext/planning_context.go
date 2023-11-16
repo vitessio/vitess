@@ -31,30 +31,32 @@ type PlanningContext struct {
 	// e.g. [FROM tblA JOIN tblB ON a.colA = b.colB] will be rewritten to [FROM tblB WHERE :a_colA = b.colB],
 	// if we assume that tblB is on the RHS of the join. This last predicate in the WHERE clause is added to the
 	// map below
-	JoinPredicates     map[sqlparser.Expr][]sqlparser.Expr
-	SkipPredicates     map[sqlparser.Expr]any
-	PlannerVersion     querypb.ExecuteOptions_PlannerVersion
-	RewriteDerivedExpr bool
+	JoinPredicates map[sqlparser.Expr][]sqlparser.Expr
+	SkipPredicates map[sqlparser.Expr]any
+	PlannerVersion querypb.ExecuteOptions_PlannerVersion
 
 	// If we during planning have turned this expression into an argument name,
 	// we can continue using the same argument name
 	ReservedArguments map[sqlparser.Expr]string
 
-	// DelegateAggregation tells us when we are allowed to split an aggregation across vtgate and mysql
-	// We aggregate within a shard, and then at the vtgate level we aggregate the incoming shard aggregates
-	DelegateAggregation bool
-
 	// VerifyAllFKs tells whether we need verification for all the fk constraints on VTGate.
 	// This is required for queries we are running with /*+ SET_VAR(foreign_key_checks=OFF) */
 	VerifyAllFKs bool
 
-	// ParentFKToIgnore stores a specific parent foreign key that we would need to ignore while planning
-	// a certain query. This field is used in UPDATE CASCADE planning, wherein while planning the child update
-	// query, we need to ignore the parent foreign key constraint that caused the cascade in question.
-	ParentFKToIgnore string
+	// Projected subqueries that have been merged
+	MergedSubqueries []*sqlparser.Subquery
+
+	// CurrentPhase keeps track of how far we've gone in the planning process
+	// The type should be operators.Phase, but depending on that would lead to circular dependencies
+	CurrentPhase int
 }
 
-func CreatePlanningContext(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema VSchema, version querypb.ExecuteOptions_PlannerVersion) (*PlanningContext, error) {
+func CreatePlanningContext(stmt sqlparser.Statement,
+	reservedVars *sqlparser.ReservedVars,
+
+	vschema VSchema,
+	version querypb.ExecuteOptions_PlannerVersion,
+) (*PlanningContext, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
@@ -79,17 +81,24 @@ func CreatePlanningContext(stmt sqlparser.Statement, reservedVars *sqlparser.Res
 	}, nil
 }
 
-func (ctx *PlanningContext) IsSubQueryToReplace(e sqlparser.Expr) bool {
-	ext, ok := e.(*sqlparser.Subquery)
-	if !ok {
-		return false
-	}
-	for _, extractedSubq := range ctx.SemTable.GetSubqueryNeedingRewrite() {
-		if extractedSubq.Merged && ctx.SemTable.EqualsExpr(extractedSubq.Subquery, ext) {
-			return true
+func (ctx *PlanningContext) GetReservedArgumentFor(expr sqlparser.Expr) string {
+	for key, name := range ctx.ReservedArguments {
+		if ctx.SemTable.EqualsExpr(key, expr) {
+			return name
 		}
 	}
-	return false
+	var bvName string
+	switch expr := expr.(type) {
+	case *sqlparser.ColName:
+		bvName = ctx.ReservedVars.ReserveColName(expr)
+	case *sqlparser.Subquery:
+		bvName = ctx.ReservedVars.ReserveSubQuery()
+	default:
+		bvName = ctx.ReservedVars.ReserveVariable(sqlparser.CompliantString(expr))
+	}
+	ctx.ReservedArguments[expr] = bvName
+
+	return bvName
 }
 
 func (ctx *PlanningContext) GetArgumentFor(expr sqlparser.Expr, f func() string) string {

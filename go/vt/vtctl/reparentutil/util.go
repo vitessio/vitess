@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -39,6 +40,12 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+var (
+	reparentShardOpTimings = stats.NewTimings("reparent_shard_operation_timings", "Timings of reparent shard operations", "Operation")
+	failureResult          = "failure"
+	successResult          = "success"
 )
 
 // ChooseNewPrimary finds a tablet that should become a primary after reparent.

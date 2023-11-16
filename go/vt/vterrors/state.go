@@ -47,6 +47,7 @@ const (
 	WrongValueCountOnRow
 	WrongValue
 	WrongArguments
+	BadNullError
 
 	// failed precondition
 	NoDB

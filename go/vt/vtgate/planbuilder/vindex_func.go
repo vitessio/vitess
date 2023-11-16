@@ -20,8 +20,6 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -56,11 +54,6 @@ var colnames = []string{
 // Primitive implements the logicalPlan interface
 func (vf *vindexFunc) Primitive() engine.Primitive {
 	return vf.eVindexFunc
-}
-
-// WireupGen4 implements the logicalPlan interface
-func (vf *vindexFunc) Wireup(*plancontext.PlanningContext) error {
-	return nil
 }
 
 // SupplyProjection pushes the given aliased expression into the fields and cols slices of the
@@ -105,24 +98,6 @@ func (err UnsupportedSupplyWeightString) Error() string {
 	return fmt.Sprintf("cannot do collation on %s", err.Type)
 }
 
-// Rewrite implements the logicalPlan interface
-func (vf *vindexFunc) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 0 {
-		return vterrors.VT13001("vindexFunc: wrong number of inputs")
-	}
-	return nil
-}
-
-// ContainsTables implements the logicalPlan interface
-func (vf *vindexFunc) ContainsTables() semantics.TableSet {
-	return vf.tableID
-}
-
-// Inputs implements the logicalPlan interface
-func (vf *vindexFunc) Inputs() []logicalPlan {
-	return []logicalPlan{}
-}
-
 func vindexColumnToIndex(column *sqlparser.ColName) int {
 	switch column.Name.String() {
 	case "id":
@@ -140,13 +115,4 @@ func vindexColumnToIndex(column *sqlparser.ColName) int {
 	default:
 		return -1
 	}
-}
-
-// OutputColumns implements the logicalPlan interface
-func (vf *vindexFunc) OutputColumns() []sqlparser.SelectExpr {
-	exprs := make([]sqlparser.SelectExpr, 0, len(colnames))
-	for _, field := range vf.eVindexFunc.Fields {
-		exprs = append(exprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewColName(field.Name)})
-	}
-	return exprs
 }

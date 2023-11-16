@@ -3,11 +3,12 @@ package vtgate
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -80,6 +81,27 @@ func TestVSchemaUpdate(t *testing.T) {
 		ChildColumns:  sqlparserCols1,
 		ParentColumns: sqlparserCols1,
 	})
+
+	idxTbl1 := &vindexes.Table{
+		Name:                    sqlparser.NewIdentifierCS("idxTbl1"),
+		Keyspace:                ks,
+		ColumnListAuthoritative: true,
+		PrimaryKey:              sqlparser.Columns{sqlparser.NewIdentifierCI("a")},
+		UniqueKeys: []sqlparser.Exprs{
+			{sqlparser.NewColName("b")},
+			{sqlparser.NewColName("c"), sqlparser.NewColName("d")},
+		},
+	}
+	idxTbl2 := &vindexes.Table{
+		Name:                    sqlparser.NewIdentifierCS("idxTbl2"),
+		Keyspace:                ks,
+		ColumnListAuthoritative: true,
+		PrimaryKey:              sqlparser.Columns{sqlparser.NewIdentifierCI("a")},
+		UniqueKeys: []sqlparser.Exprs{
+			{&sqlparser.BinaryExpr{Operator: sqlparser.DivOp, Left: sqlparser.NewColName("b"), Right: sqlparser.NewIntLiteral("2")}},
+			{sqlparser.NewColName("c"), &sqlparser.BinaryExpr{Operator: sqlparser.PlusOp, Left: sqlparser.NewColName("d"), Right: sqlparser.NewColName("e")}},
+		},
+	}
 
 	tcases := []struct {
 		name           string
@@ -189,43 +211,20 @@ func TestVSchemaUpdate(t *testing.T) {
 			Keyspaces: map[string]*vschemapb.Keyspace{
 				"ks": {
 					Sharded:        false,
-					ForeignKeyMode: vschemapb.Keyspace_FK_MANAGED,
+					ForeignKeyMode: vschemapb.Keyspace_managed,
 					Tables: map[string]*vschemapb.Table{
-						"t1": {
-							Columns: []*vschemapb.Column{
-								{
-									Name: "id",
-									Type: querypb.Type_INT64,
-								},
-							},
-						},
-						"t2": {
-							Columns: []*vschemapb.Column{
-								{
-									Name: "id",
-									Type: querypb.Type_INT64,
-								},
-							},
-						},
+						"t1": {Columns: []*vschemapb.Column{{Name: "id", Type: querypb.Type_INT64}}},
+						"t2": {Columns: []*vschemapb.Column{{Name: "id", Type: querypb.Type_INT64}}},
 						"multicol_t1": {
 							Columns: []*vschemapb.Column{
-								{
-									Name: "uid",
-									Type: querypb.Type_INT64,
-								}, {
-									Name: "name",
-									Type: querypb.Type_VARCHAR,
-								},
+								{Name: "uid", Type: querypb.Type_INT64},
+								{Name: "name", Type: querypb.Type_VARCHAR},
 							},
-						}, "multicol_t2": {
+						},
+						"multicol_t2": {
 							Columns: []*vschemapb.Column{
-								{
-									Name: "uid",
-									Type: querypb.Type_INT64,
-								}, {
-									Name: "name",
-									Type: querypb.Type_VARCHAR,
-								},
+								{Name: "uid", Type: querypb.Type_INT64},
+								{Name: "name", Type: querypb.Type_VARCHAR},
 							},
 						},
 					},
@@ -237,7 +236,7 @@ func TestVSchemaUpdate(t *testing.T) {
 			Keyspaces: map[string]*vindexes.KeyspaceSchema{
 				"ks": {
 					Keyspace:       ks,
-					ForeignKeyMode: vschemapb.Keyspace_FK_MANAGED,
+					ForeignKeyMode: vschemapb.Keyspace_managed,
 					Vindexes:       map[string]vindexes.Vindex{},
 					Tables: map[string]*vindexes.Table{
 						"t1":          vindexTable_t1,
@@ -248,6 +247,69 @@ func TestVSchemaUpdate(t *testing.T) {
 				},
 			},
 		},
+	}, {
+		name:           "indexes in schema using columns",
+		currentVSchema: &vindexes.VSchema{},
+		schema: map[string]*vindexes.TableInfo{
+			"idxTbl1": {
+				Indexes: []*sqlparser.IndexDefinition{{
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypePrimary},
+					Columns: []*sqlparser.IndexColumn{
+						{Column: sqlparser.NewIdentifierCI("a")},
+					},
+				}, {
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypeUnique},
+					Columns: []*sqlparser.IndexColumn{
+						{Column: sqlparser.NewIdentifierCI("b")},
+					},
+				}, {
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypeDefault},
+					Columns: []*sqlparser.IndexColumn{
+						{Column: sqlparser.NewIdentifierCI("x")},
+						{Column: sqlparser.NewIdentifierCI("y")},
+					},
+				}, {
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypeUnique},
+					Columns: []*sqlparser.IndexColumn{
+						{Column: sqlparser.NewIdentifierCI("c")},
+						{Column: sqlparser.NewIdentifierCI("d")},
+					},
+				}},
+			},
+		},
+		srvVschema: makeTestSrvVSchema("ks", false, nil),
+		expected:   makeTestVSchema("ks", false, map[string]*vindexes.Table{"idxTbl1": idxTbl1}),
+	}, {
+		name:           "indexes in schema using expressions",
+		currentVSchema: &vindexes.VSchema{},
+		schema: map[string]*vindexes.TableInfo{
+			"idxTbl2": {
+				Indexes: []*sqlparser.IndexDefinition{{
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypePrimary},
+					Columns: []*sqlparser.IndexColumn{
+						{Column: sqlparser.NewIdentifierCI("a")},
+					},
+				}, {
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypeUnique},
+					Columns: []*sqlparser.IndexColumn{
+						{Expression: &sqlparser.BinaryExpr{Operator: sqlparser.DivOp, Left: sqlparser.NewColName("b"), Right: sqlparser.NewIntLiteral("2")}},
+					},
+				}, {
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypeDefault},
+					Columns: []*sqlparser.IndexColumn{
+						{Expression: &sqlparser.BinaryExpr{Operator: sqlparser.PlusOp, Left: sqlparser.NewColName("x"), Right: sqlparser.NewColName("y")}},
+					},
+				}, {
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypeUnique},
+					Columns: []*sqlparser.IndexColumn{
+						{Column: sqlparser.NewIdentifierCI("c")},
+						{Expression: &sqlparser.BinaryExpr{Operator: sqlparser.PlusOp, Left: sqlparser.NewColName("d"), Right: sqlparser.NewColName("e")}},
+					},
+				}},
+			},
+		},
+		srvVschema: makeTestSrvVSchema("ks", false, nil),
+		expected:   makeTestVSchema("ks", false, map[string]*vindexes.Table{"idxTbl2": idxTbl2}),
 	}}
 
 	vm := &VSchemaManager{}
@@ -379,7 +441,7 @@ func makeTestVSchema(ks string, sharded bool, tbls map[string]*vindexes.Table) *
 			Sharded: sharded,
 		},
 		// Default foreign key mode
-		ForeignKeyMode: vschemapb.Keyspace_FK_UNMANAGED,
+		ForeignKeyMode: vschemapb.Keyspace_unmanaged,
 		Tables:         tbls,
 		Vindexes:       map[string]vindexes.Vindex{},
 	}
@@ -401,7 +463,7 @@ func makeTestSrvVSchema(ks string, sharded bool, tbls map[string]*vschemapb.Tabl
 		Sharded: sharded,
 		Tables:  tbls,
 		// Default foreign key mode
-		ForeignKeyMode: vschemapb.Keyspace_FK_UNMANAGED,
+		ForeignKeyMode: vschemapb.Keyspace_unmanaged,
 	}
 	return &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{ks: keyspaceSchema},
@@ -421,3 +483,102 @@ func (f *fakeSchema) Views(string) map[string]sqlparser.SelectStatement {
 }
 
 var _ SchemaInfo = (*fakeSchema)(nil)
+
+func TestMarkErrorIfCyclesInFk(t *testing.T) {
+	ksName := "ks"
+	keyspace := &vindexes.Keyspace{
+		Name: ksName,
+	}
+	tests := []struct {
+		name       string
+		getVschema func() *vindexes.VSchema
+		errWanted  string
+	}{
+		{
+			name: "Has a cycle",
+			getVschema: func() *vindexes.VSchema {
+				vschema := &vindexes.VSchema{
+					Keyspaces: map[string]*vindexes.KeyspaceSchema{
+						ksName: {
+							ForeignKeyMode: vschemapb.Keyspace_managed,
+							Tables: map[string]*vindexes.Table{
+								"t1": {
+									Name:     sqlparser.NewIdentifierCS("t1"),
+									Keyspace: keyspace,
+								},
+								"t2": {
+									Name:     sqlparser.NewIdentifierCS("t2"),
+									Keyspace: keyspace,
+								},
+								"t3": {
+									Name:     sqlparser.NewIdentifierCS("t3"),
+									Keyspace: keyspace,
+								},
+							},
+						},
+					},
+				}
+				_ = vschema.AddForeignKey("ks", "t2", createFkDefinition([]string{"col"}, "t1", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
+				_ = vschema.AddForeignKey("ks", "t3", createFkDefinition([]string{"col"}, "t2", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
+				_ = vschema.AddForeignKey("ks", "t1", createFkDefinition([]string{"col"}, "t3", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
+				return vschema
+			},
+			errWanted: "VT09019: ks has cyclic foreign keys",
+		},
+		{
+			name: "No cycle",
+			getVschema: func() *vindexes.VSchema {
+				vschema := &vindexes.VSchema{
+					Keyspaces: map[string]*vindexes.KeyspaceSchema{
+						ksName: {
+							ForeignKeyMode: vschemapb.Keyspace_managed,
+							Tables: map[string]*vindexes.Table{
+								"t1": {
+									Name:     sqlparser.NewIdentifierCS("t1"),
+									Keyspace: keyspace,
+								},
+								"t2": {
+									Name:     sqlparser.NewIdentifierCS("t2"),
+									Keyspace: keyspace,
+								},
+								"t3": {
+									Name:     sqlparser.NewIdentifierCS("t3"),
+									Keyspace: keyspace,
+								},
+							},
+						},
+					},
+				}
+				_ = vschema.AddForeignKey("ks", "t2", createFkDefinition([]string{"col"}, "t1", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
+				_ = vschema.AddForeignKey("ks", "t3", createFkDefinition([]string{"col"}, "t2", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
+				return vschema
+			},
+			errWanted: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vschema := tt.getVschema()
+			markErrorIfCyclesInFk(vschema)
+			if tt.errWanted != "" {
+				require.EqualError(t, vschema.Keyspaces[ksName].Error, tt.errWanted)
+				return
+			}
+			require.NoError(t, vschema.Keyspaces[ksName].Error)
+		})
+	}
+}
+
+// createFkDefinition is a helper function to create a Foreign key definition struct from the columns used in it provided as list of strings.
+func createFkDefinition(childCols []string, parentTableName string, parentCols []string, onUpdate, onDelete sqlparser.ReferenceAction) *sqlparser.ForeignKeyDefinition {
+	pKs, pTbl, _ := sqlparser.ParseTable(parentTableName)
+	return &sqlparser.ForeignKeyDefinition{
+		Source: sqlparser.MakeColumns(childCols...),
+		ReferenceDefinition: &sqlparser.ReferenceDefinition{
+			ReferencedTable:   sqlparser.NewTableNameWithQualifier(pTbl, pKs),
+			ReferencedColumns: sqlparser.MakeColumns(parentCols...),
+			OnUpdate:          onUpdate,
+			OnDelete:          onDelete,
+		},
+	}
+}

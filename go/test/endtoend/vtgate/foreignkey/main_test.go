@@ -25,31 +25,68 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	vtParams        mysql.ConnParams
-	mysqlParams     mysql.ConnParams
-	shardedKs       = "ks"
-	unshardedKs     = "uks"
-	Cell            = "test"
-	//go:embed sharded_schema.sql
-	shardedSchemaSQL string
+	clusterInstance   *cluster.LocalProcessCluster
+	vtParams          mysql.ConnParams
+	mysqlParams       mysql.ConnParams
+	vtgateGrpcAddress string
+	shardedKs         = "ks"
+	unshardedKs       = "uks"
+	Cell              = "test"
 
-	//go:embed unsharded_schema.sql
-	unshardedSchemaSQL string
+	//go:embed schema.sql
+	schemaSQL string
 
 	//go:embed sharded_vschema.json
 	shardedVSchema string
 
 	//go:embed unsharded_vschema.json
 	unshardedVSchema string
+
+	fkTables = []string{"fk_t1", "fk_t2", "fk_t3", "fk_t4", "fk_t5", "fk_t6", "fk_t7",
+		"fk_t10", "fk_t11", "fk_t12", "fk_t13", "fk_t15", "fk_t16", "fk_t17", "fk_t18", "fk_t19", "fk_t20",
+		"fk_multicol_t1", "fk_multicol_t2", "fk_multicol_t3", "fk_multicol_t4", "fk_multicol_t5", "fk_multicol_t6", "fk_multicol_t7",
+		"fk_multicol_t10", "fk_multicol_t11", "fk_multicol_t12", "fk_multicol_t13", "fk_multicol_t15", "fk_multicol_t16", "fk_multicol_t17", "fk_multicol_t18", "fk_multicol_t19"}
+	fkReferences = []fkReference{
+		{parentTable: "fk_t1", childTable: "fk_t2"},
+		{parentTable: "fk_t2", childTable: "fk_t7"},
+		{parentTable: "fk_t2", childTable: "fk_t3"},
+		{parentTable: "fk_t3", childTable: "fk_t4"},
+		{parentTable: "fk_t3", childTable: "fk_t6"},
+		{parentTable: "fk_t4", childTable: "fk_t5"},
+		{parentTable: "fk_t10", childTable: "fk_t11"},
+		{parentTable: "fk_t11", childTable: "fk_t12"},
+		{parentTable: "fk_t11", childTable: "fk_t13"},
+		{parentTable: "fk_t15", childTable: "fk_t16"},
+		{parentTable: "fk_t16", childTable: "fk_t17"},
+		{parentTable: "fk_t17", childTable: "fk_t18"},
+		{parentTable: "fk_t17", childTable: "fk_t19"},
+		{parentTable: "fk_multicol_t1", childTable: "fk_multicol_t2"},
+		{parentTable: "fk_multicol_t2", childTable: "fk_multicol_t7"},
+		{parentTable: "fk_multicol_t2", childTable: "fk_multicol_t3"},
+		{parentTable: "fk_multicol_t3", childTable: "fk_multicol_t4"},
+		{parentTable: "fk_multicol_t3", childTable: "fk_multicol_t6"},
+		{parentTable: "fk_multicol_t4", childTable: "fk_multicol_t5"},
+		{parentTable: "fk_multicol_t10", childTable: "fk_multicol_t11"},
+		{parentTable: "fk_multicol_t11", childTable: "fk_multicol_t12"},
+		{parentTable: "fk_multicol_t11", childTable: "fk_multicol_t13"},
+		{parentTable: "fk_multicol_t15", childTable: "fk_multicol_t16"},
+		{parentTable: "fk_multicol_t16", childTable: "fk_multicol_t17"},
+		{parentTable: "fk_multicol_t17", childTable: "fk_multicol_t18"},
+		{parentTable: "fk_multicol_t17", childTable: "fk_multicol_t19"},
+	}
 )
+
+// fkReference stores a foreign key reference from one table to another.
+type fkReference struct {
+	parentTable string
+	childTable  string
+}
 
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
@@ -68,21 +105,21 @@ func TestMain(m *testing.M) {
 		// Start keyspace
 		sKs := &cluster.Keyspace{
 			Name:      shardedKs,
-			SchemaSQL: shardedSchemaSQL,
+			SchemaSQL: schemaSQL,
 			VSchema:   shardedVSchema,
 		}
 
-		err = clusterInstance.StartKeyspace(*sKs, []string{"-80", "80-"}, 0, false)
+		err = clusterInstance.StartKeyspace(*sKs, []string{"-80", "80-"}, 1, false)
 		if err != nil {
 			return 1
 		}
 
 		uKs := &cluster.Keyspace{
 			Name:      unshardedKs,
-			SchemaSQL: unshardedSchemaSQL,
+			SchemaSQL: schemaSQL,
 			VSchema:   unshardedVSchema,
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*uKs, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*uKs, 1, false)
 		if err != nil {
 			return 1
 		}
@@ -101,8 +138,9 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
+		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
 
-		connParams, closer, err := utils.NewMySQL(clusterInstance, shardedKs, shardedSchemaSQL)
+		connParams, closer, err := utils.NewMySQL(clusterInstance, shardedKs, schemaSQL)
 		if err != nil {
 			fmt.Println(err)
 			return 1
@@ -121,23 +159,19 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll := func() {
 		_ = utils.Exec(t, mcmp.VtConn, "use `ks/-80`")
 		tables := []string{"t4", "t3", "t2", "t1", "multicol_tbl2", "multicol_tbl1"}
-		for i := 20; i > 0; i-- {
-			tables = append(tables, fmt.Sprintf("fk_t%v", i))
-		}
+		tables = append(tables, fkTables...)
 		for _, table := range tables {
-			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+			_, _ = mcmp.ExecAndIgnore("delete /*+ SET_VAR(foreign_key_checks=OFF) */ from " + table)
 		}
 		_ = utils.Exec(t, mcmp.VtConn, "use `ks/80-`")
 		for _, table := range tables {
-			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+			_, _ = mcmp.ExecAndIgnore("delete /*+ SET_VAR(foreign_key_checks=OFF) */ from " + table)
 		}
 		_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
 		tables = []string{"u_t1", "u_t2", "u_t3"}
-		for i := 20; i > 0; i-- {
-			tables = append(tables, fmt.Sprintf("fk_t%v", i))
-		}
+		tables = append(tables, fkTables...)
 		for _, table := range tables {
-			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+			_, _ = mcmp.ExecAndIgnore("delete /*+ SET_VAR(foreign_key_checks=OFF) */ from " + table)
 		}
 		_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
 	}

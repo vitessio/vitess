@@ -133,7 +133,6 @@ if [ $tablet_role = "externalprimary" ]; then
                       --enable_replication_reporter=false \
                       --enforce_strict_trans_tables=false \
                       --track_schema_versions=true \
-                      --vreplication_tablet_type=primary \
                       --watch_replication_stream=true"
 else
     external_db_args="--init_db_name_override $DB_NAME \
@@ -154,7 +153,6 @@ exec $VTROOT/bin/vttablet \
   --port $web_port \
   --grpc_port $grpc_port \
   --service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
-  --vtctld_addr "http://vtctld:$WEB_PORT/" \
   --init_keyspace $keyspace \
   --init_shard $shard \
   --backup_storage_implementation file \

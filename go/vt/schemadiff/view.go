@@ -26,6 +26,8 @@ type AlterViewEntityDiff struct {
 	from      *CreateViewEntity
 	to        *CreateViewEntity
 	alterView *sqlparser.AlterView
+
+	canonicalStatementString string
 }
 
 // IsEmpty implements EntityDiff
@@ -68,11 +70,16 @@ func (d *AlterViewEntityDiff) StatementString() (s string) {
 }
 
 // CanonicalStatementString implements EntityDiff
-func (d *AlterViewEntityDiff) CanonicalStatementString() (s string) {
-	if stmt := d.Statement(); stmt != nil {
-		s = sqlparser.CanonicalString(stmt)
+func (d *AlterViewEntityDiff) CanonicalStatementString() string {
+	if d == nil {
+		return ""
 	}
-	return s
+	if d.canonicalStatementString == "" {
+		if stmt := d.Statement(); stmt != nil {
+			d.canonicalStatementString = sqlparser.CanonicalString(stmt)
+		}
+	}
+	return d.canonicalStatementString
 }
 
 // SubsequentDiff implements EntityDiff
@@ -86,6 +93,8 @@ func (d *AlterViewEntityDiff) SetSubsequentDiff(EntityDiff) {
 
 type CreateViewEntityDiff struct {
 	createView *sqlparser.CreateView
+
+	canonicalStatementString string
 }
 
 // IsEmpty implements EntityDiff
@@ -129,11 +138,16 @@ func (d *CreateViewEntityDiff) StatementString() (s string) {
 }
 
 // CanonicalStatementString implements EntityDiff
-func (d *CreateViewEntityDiff) CanonicalStatementString() (s string) {
-	if stmt := d.Statement(); stmt != nil {
-		s = sqlparser.CanonicalString(stmt)
+func (d *CreateViewEntityDiff) CanonicalStatementString() string {
+	if d == nil {
+		return ""
 	}
-	return s
+	if d.canonicalStatementString == "" {
+		if stmt := d.Statement(); stmt != nil {
+			d.canonicalStatementString = sqlparser.CanonicalString(stmt)
+		}
+	}
+	return d.canonicalStatementString
 }
 
 // SubsequentDiff implements EntityDiff
@@ -148,6 +162,8 @@ func (d *CreateViewEntityDiff) SetSubsequentDiff(EntityDiff) {
 type DropViewEntityDiff struct {
 	from     *CreateViewEntity
 	dropView *sqlparser.DropView
+
+	canonicalStatementString string
 }
 
 // IsEmpty implements EntityDiff
@@ -182,11 +198,16 @@ func (d *DropViewEntityDiff) DropView() *sqlparser.DropView {
 }
 
 // CanonicalStatementString implements EntityDiff
-func (d *DropViewEntityDiff) CanonicalStatementString() (s string) {
-	if stmt := d.Statement(); stmt != nil {
-		s = sqlparser.CanonicalString(stmt)
+func (d *DropViewEntityDiff) CanonicalStatementString() string {
+	if d == nil {
+		return ""
 	}
-	return s
+	if d.canonicalStatementString == "" {
+		if stmt := d.Statement(); stmt != nil {
+			d.canonicalStatementString = sqlparser.CanonicalString(stmt)
+		}
+	}
+	return d.canonicalStatementString
 }
 
 // StatementString implements EntityDiff

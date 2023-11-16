@@ -116,8 +116,6 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			setIntVal(tsv.SetStreamPoolSize)
 		case "TxPoolSize":
 			setIntVal(tsv.SetTxPoolSize)
-		case "QueryCacheCapacity":
-			setIntVal(tsv.SetQueryPlanCacheCap)
 		case "MaxResultSize":
 			setIntVal(tsv.SetMaxResultSize)
 		case "WarnResultSize":

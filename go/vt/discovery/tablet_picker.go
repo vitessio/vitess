@@ -90,8 +90,9 @@ func SetTabletPickerRetryDelay(delay time.Duration) {
 }
 
 type TabletPickerOptions struct {
-	CellPreference string
-	TabletOrder    string
+	CellPreference           string
+	TabletOrder              string
+	IncludeNonServingTablets bool
 }
 
 func parseTabletPickerCellPreferenceString(str string) (TabletPickerCellPreference, error) {
@@ -135,6 +136,9 @@ type TabletPicker struct {
 	inOrder       bool
 	cellPref      TabletPickerCellPreference
 	localCellInfo localCellInfo
+	// This map is keyed on the results of TabletAlias.String().
+	ignoreTablets map[string]struct{}
+	options       TabletPickerOptions
 }
 
 // NewTabletPicker returns a TabletPicker.
@@ -144,8 +148,12 @@ func NewTabletPicker(
 	cells []string,
 	localCell, keyspace, shard, tabletTypesStr string,
 	options TabletPickerOptions,
+	ignoreTablets ...*topodatapb.TabletAlias,
 ) (*TabletPicker, error) {
 	// Keep inOrder parsing here for backward compatability until TabletPickerTabletOrder is fully adopted.
+	if tabletTypesStr == "" {
+		tabletTypesStr = "replica,rdonly,primary"
+	}
 	tabletTypes, inOrder, err := ParseTabletTypesAndOrder(tabletTypesStr)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to parse list of tablet types: %v", tabletTypesStr)
@@ -216,7 +224,7 @@ func NewTabletPicker(
 		}
 	}
 
-	return &TabletPicker{
+	tp := &TabletPicker{
 		ts:            ts,
 		cells:         dedupeCells(cells),
 		localCellInfo: localCellInfo{localCell: localCell, cellsInAlias: aliasCellMap},
@@ -225,7 +233,16 @@ func NewTabletPicker(
 		tabletTypes:   tabletTypes,
 		inOrder:       inOrder,
 		cellPref:      cellPref,
-	}, nil
+		ignoreTablets: make(map[string]struct{}, len(ignoreTablets)),
+		options:       options,
+	}
+
+	for _, ignoreTablet := range ignoreTablets {
+		tp.ignoreTablets[ignoreTablet.String()] = struct{}{}
+	}
+
+	return tp, nil
+
 }
 
 // dedupeCells is used to remove duplicates in the cell list in case it is passed in
@@ -278,6 +295,40 @@ func (tp *TabletPicker) orderByTabletType(candidates []*topo.TabletInfo) []*topo
 	return candidates
 }
 
+func (tp *TabletPicker) sortCandidates(ctx context.Context, candidates []*topo.TabletInfo) []*topo.TabletInfo {
+	if tp.cellPref == TabletPickerCellPreference_PreferLocalWithAlias {
+		sameCellCandidates, sameAliasCandidates, allOtherCandidates := tp.prioritizeTablets(candidates)
+
+		if tp.inOrder {
+			sameCellCandidates = tp.orderByTabletType(sameCellCandidates)
+			sameAliasCandidates = tp.orderByTabletType(sameAliasCandidates)
+			allOtherCandidates = tp.orderByTabletType(allOtherCandidates)
+		} else {
+			// Randomize candidates
+			rand.Shuffle(len(sameCellCandidates), func(i, j int) {
+				sameCellCandidates[i], sameCellCandidates[j] = sameCellCandidates[j], sameCellCandidates[i]
+			})
+			rand.Shuffle(len(sameAliasCandidates), func(i, j int) {
+				sameAliasCandidates[i], sameAliasCandidates[j] = sameAliasCandidates[j], sameAliasCandidates[i]
+			})
+			rand.Shuffle(len(allOtherCandidates), func(i, j int) {
+				allOtherCandidates[i], allOtherCandidates[j] = allOtherCandidates[j], allOtherCandidates[i]
+			})
+		}
+
+		candidates = append(sameCellCandidates, sameAliasCandidates...)
+		candidates = append(candidates, allOtherCandidates...)
+	} else if tp.inOrder {
+		candidates = tp.orderByTabletType(candidates)
+	} else {
+		// Randomize candidates.
+		rand.Shuffle(len(candidates), func(i, j int) {
+			candidates[i], candidates[j] = candidates[j], candidates[i]
+		})
+	}
+	return candidates
+}
+
 // PickForStreaming picks a tablet that is healthy and serving.
 // Selection is based on CellPreference.
 // See prioritizeTablets for prioritization logic.
@@ -291,36 +342,7 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 		default:
 		}
 		candidates := tp.GetMatchingTablets(ctx)
-		if tp.cellPref == TabletPickerCellPreference_PreferLocalWithAlias {
-			sameCellCandidates, sameAliasCandidates, allOtherCandidates := tp.prioritizeTablets(candidates)
-
-			if tp.inOrder {
-				sameCellCandidates = tp.orderByTabletType(sameCellCandidates)
-				sameAliasCandidates = tp.orderByTabletType(sameAliasCandidates)
-				allOtherCandidates = tp.orderByTabletType(allOtherCandidates)
-			} else {
-				// Randomize candidates
-				rand.Shuffle(len(sameCellCandidates), func(i, j int) {
-					sameCellCandidates[i], sameCellCandidates[j] = sameCellCandidates[j], sameCellCandidates[i]
-				})
-				rand.Shuffle(len(sameAliasCandidates), func(i, j int) {
-					sameAliasCandidates[i], sameAliasCandidates[j] = sameAliasCandidates[j], sameAliasCandidates[i]
-				})
-				rand.Shuffle(len(allOtherCandidates), func(i, j int) {
-					allOtherCandidates[i], allOtherCandidates[j] = allOtherCandidates[j], allOtherCandidates[i]
-				})
-			}
-
-			candidates = append(sameCellCandidates, sameAliasCandidates...)
-			candidates = append(candidates, allOtherCandidates...)
-		} else if tp.inOrder {
-			candidates = tp.orderByTabletType(candidates)
-		} else {
-			// Randomize candidates.
-			rand.Shuffle(len(candidates), func(i, j int) {
-				candidates[i], candidates[j] = candidates[j], candidates[i]
-			})
-		}
+		candidates = tp.sortCandidates(ctx, candidates)
 		if len(candidates) == 0 {
 			// If no viable candidates were found, sleep and try again.
 			tp.incNoTabletFoundStat()
@@ -335,7 +357,7 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			}
 			continue
 		}
-		log.Infof("Tablet picker found a healthy serving tablet for streaming: %s", candidates[0].Tablet.String())
+		log.Infof("Tablet picker found a healthy tablet for streaming: %s", candidates[0].Tablet.String())
 		return candidates[0].Tablet, nil
 	}
 }
@@ -355,7 +377,9 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 			log.Errorf("Error getting shard %s/%s: %v", tp.keyspace, tp.shard, err)
 			return nil
 		}
-		aliases = append(aliases, si.PrimaryAlias)
+		if _, ignore := tp.ignoreTablets[si.PrimaryAlias.String()]; !ignore {
+			aliases = append(aliases, si.PrimaryAlias)
+		}
 	} else {
 		actualCells := make([]string, 0)
 		for _, cell := range tp.cells {
@@ -391,7 +415,9 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 				continue
 			}
 			for _, node := range sri.Nodes {
-				aliases = append(aliases, node.TabletAlias)
+				if _, ignore := tp.ignoreTablets[node.TabletAlias.String()]; !ignore {
+					aliases = append(aliases, node.TabletAlias)
+				}
 			}
 		}
 	}
@@ -425,7 +451,10 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 				shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				defer cancel()
 				if err := conn.StreamHealth(shortCtx, func(shr *querypb.StreamHealthResponse) error {
-					if shr != nil && shr.Serving && shr.RealtimeStats != nil && shr.RealtimeStats.HealthError == "" {
+					if shr != nil &&
+						(shr.Serving || tp.options.IncludeNonServingTablets) &&
+						shr.RealtimeStats != nil &&
+						shr.RealtimeStats.HealthError == "" {
 						return io.EOF // End the stream
 					}
 					return vterrors.New(vtrpcpb.Code_INTERNAL, "tablet is not healthy and serving")

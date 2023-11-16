@@ -48,6 +48,10 @@ func TestExpandStar(t *testing.T) {
 				}, {
 					Name: sqlparser.NewIdentifierCI("c"),
 					Type: sqltypes.VarChar,
+				}, {
+					Name:      sqlparser.NewIdentifierCI("secret"),
+					Type:      sqltypes.Decimal,
+					Invisible: true,
 				}},
 				ColumnListAuthoritative: true,
 			},
@@ -172,14 +176,14 @@ func TestExpandStar(t *testing.T) {
 		expSQL: "select 1 from t1 join t5 on t1.b = t5.b having t1.b = 12",
 	}, {
 		sql:    "select * from (select 12) as t",
-		expSQL: "select t.`12` from (select 12 from dual) as t",
+		expSQL: "select `12` from (select 12 from dual) as t",
 	}, {
 		sql:    "SELECT * FROM (SELECT *, 12 AS foo FROM t3) as results",
 		expSQL: "select * from (select *, 12 as foo from t3) as results",
 	}, {
 		// if we are only star-expanding authoritative tables, we don't need to stop the expansion
 		sql:    "SELECT * FROM (SELECT t2.*, 12 AS foo FROM t3, t2) as results",
-		expSQL: "select results.c1, results.c2, results.foo from (select t2.c1 as c1, t2.c2 as c2, 12 as foo from t3, t2) as results",
+		expSQL: "select c1, c2, foo from (select t2.c1 as c1, t2.c2 as c2, 12 as foo from t3, t2) as results",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
@@ -441,6 +445,131 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 					semTable.RecursiveDeps(selectStatement.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
 				)
 			}
+		})
+	}
+}
+
+func TestRewriteNot(t *testing.T) {
+	ks := &vindexes.Keyspace{
+		Name:    "main",
+		Sharded: false,
+	}
+	schemaInfo := &FakeSI{
+		Tables: map[string]*vindexes.Table{
+			"t1": {
+				Keyspace: ks,
+				Name:     sqlparser.NewIdentifierCS("t1"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewIdentifierCI("a"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewIdentifierCI("b"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewIdentifierCI("c"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: true,
+			},
+		},
+	}
+	cDB := "db"
+	tcases := []struct {
+		sql      string
+		expected string
+	}{{
+		sql:      "select a,b,c from t1 where not a = 12",
+		expected: "select a, b, c from t1 where a != 12",
+	}, {
+		sql:      "select a from t1 where not a > 12",
+		expected: "select a from t1 where a <= 12",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.Parse(tcase.sql)
+			require.NoError(t, err)
+			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
+			require.True(t, isSelectStatement, "analyzer expects a select statement")
+			st, err := Analyze(selectStatement, cDB, schemaInfo)
+
+			require.NoError(t, err)
+			require.NoError(t, st.NotUnshardedErr)
+			require.NoError(t, st.NotSingleRouteErr)
+			assert.Equal(t, tcase.expected, sqlparser.String(selectStatement))
+		})
+	}
+}
+
+// TestConstantFolding tests that the rewriter is able to do various constant foldings properly.
+func TestConstantFolding(t *testing.T) {
+	ks := &vindexes.Keyspace{
+		Name:    "main",
+		Sharded: false,
+	}
+	schemaInfo := &FakeSI{
+		Tables: map[string]*vindexes.Table{
+			"t1": {
+				Keyspace: ks,
+				Name:     sqlparser.NewIdentifierCS("t1"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewIdentifierCI("a"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewIdentifierCI("b"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewIdentifierCI("c"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: true,
+			},
+		},
+	}
+	cDB := "db"
+	tcases := []struct {
+		sql    string
+		expSQL string
+	}{{
+		sql:    "select 1 from t1 where (a, b) in ::fkc_vals and (2 is null or (1 is null or a in (1)))",
+		expSQL: "select 1 from t1 where (a, b) in ::fkc_vals and a in (1)",
+	}, {
+		sql:    "select 1 from t1 where (false or (false or a in (1)))",
+		expSQL: "select 1 from t1 where a in (1)",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.Parse(tcase.sql)
+			require.NoError(t, err)
+			_, err = Analyze(ast, cDB, schemaInfo)
+			require.NoError(t, err)
+			require.Equal(t, tcase.expSQL, sqlparser.String(ast))
+		})
+	}
+}
+
+// TestCTEToDerivedTableRewrite checks that CTEs are correctly rewritten to derived tables
+func TestCTEToDerivedTableRewrite(t *testing.T) {
+	cDB := "db"
+	tcases := []struct {
+		sql    string
+		expSQL string
+	}{{
+		sql:    "with x as (select 1 as id) select * from x",
+		expSQL: "select id from (select 1 as id from dual) as x",
+	}, {
+		sql:    "with x as (select 1 as id), z as (select id + 1 from x) select * from z",
+		expSQL: "select `id + 1` from (select id + 1 from (select 1 as id from dual) as x) as z",
+	}, {
+		sql:    "with x(id) as (select 1) select * from x",
+		expSQL: "select id from (select 1 from dual) as x(id)",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.Parse(tcase.sql)
+			require.NoError(t, err)
+			_, err = Analyze(ast, cDB, fakeSchemaInfo())
+			require.NoError(t, err)
+			require.Equal(t, tcase.expSQL, sqlparser.String(ast))
 		})
 	}
 }

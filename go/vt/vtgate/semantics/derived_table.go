@@ -22,6 +22,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -35,13 +36,13 @@ type DerivedTable struct {
 	isAuthoritative bool
 
 	recursive []TableSet
-	types     []*Type
+	types     []evalengine.Type
 }
 
 type unionInfo struct {
 	isAuthoritative bool
 	recursive       []TableSet
-	types           []*Type
+	types           []evalengine.Type
 	exprs           sqlparser.SelectExprs
 }
 
@@ -54,7 +55,7 @@ func createDerivedTableForExpressions(
 	org originable,
 	expanded bool,
 	recursiveDeps []TableSet,
-	types []*Type,
+	types []evalengine.Type,
 ) *DerivedTable {
 	vTbl := &DerivedTable{isAuthoritative: expanded, recursive: recursiveDeps, types: types}
 	for i, selectExpr := range expressions {
@@ -76,7 +77,7 @@ func handleAliasedExpr(vTbl *DerivedTable, expr *sqlparser.AliasedExpr, cols sql
 		return
 	}
 
-	if !expr.As.IsEmpty() {
+	if expr.As.NotEmpty() {
 		vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
 		return
 	}
@@ -136,8 +137,12 @@ func (dt *DerivedTable) Name() (sqlparser.TableName, error) {
 	return dt.ASTNode.TableName()
 }
 
-func (dt *DerivedTable) GetExpr() *sqlparser.AliasedTableExpr {
+func (dt *DerivedTable) getAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return dt.ASTNode
+}
+
+func (dt *DerivedTable) canShortCut() shortCut {
+	panic(vterrors.VT12001("should not be called"))
 }
 
 // GetVindexTable implements the TableInfo interface
@@ -156,7 +161,7 @@ func (dt *DerivedTable) getColumns() []ColumnInfo {
 }
 
 func (dt *DerivedTable) hasStar() bool {
-	return dt.tables.NonEmpty()
+	return dt.tables.NotEmpty()
 }
 
 // GetTables implements the TableInfo interface

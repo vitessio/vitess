@@ -352,15 +352,16 @@ func TestOpenTsdbTimings(t *testing.T) {
 }
 
 func checkOutput(t *testing.T, statName string, wantJSON string) {
-	backend := &openTSDBBackend{
+	b := &backend{
 		prefix:     "vtgate",
 		commonTags: map[string]string{"host": "localhost"},
 	}
 	timestamp := int64(1234)
 
-	dc := &dataCollector{
-		settings:  backend,
-		timestamp: timestamp,
+	dc := &collector{
+		commonTags: b.commonTags,
+		prefix:     b.prefix,
+		timestamp:  timestamp,
 	}
 	found := false
 	expvar.Do(func(kv expvar.KeyValue) {
@@ -368,9 +369,9 @@ func checkOutput(t *testing.T, statName string, wantJSON string) {
 			found = true
 
 			dc.addExpVar(kv)
-			sort.Sort(byMetric(dc.dataPoints))
+			sort.Sort(byMetric(dc.data))
 
-			gotBytes, err := json.MarshalIndent(dc.dataPoints, "", "  ")
+			gotBytes, err := json.MarshalIndent(dc.data, "", "  ")
 			if err != nil {
 				t.Errorf("Failed to marshal json: %v", err)
 				return

@@ -21,11 +21,14 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -49,6 +52,11 @@ var _ SessionActions = (*noopVCursor)(nil)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
+	inTx bool
+}
+
+func (t *noopVCursor) Commit(ctx context.Context) error {
+	return nil
 }
 
 func (t *noopVCursor) GetUDV(key string) *querypb.BindVariable {
@@ -57,7 +65,7 @@ func (t *noopVCursor) GetUDV(key string) *querypb.BindVariable {
 }
 
 func (t *noopVCursor) InTransaction() bool {
-	return false
+	return t.inTx
 }
 
 func (t *noopVCursor) SetCommitOrder(co vtgatepb.CommitOrder) {
@@ -86,6 +94,18 @@ func (t *noopVCursor) RemoveAdvisoryLock(name string) {
 
 func (t *noopVCursor) ReleaseLock(context.Context) error {
 	// TODO implement me
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetWarmingReadsPercent() int {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetWarmingReadsChannel() chan bool {
+	panic("implement me")
+}
+
+func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	panic("implement me")
 }
 
@@ -156,7 +176,7 @@ func (t *noopVCursor) SetDDLStrategy(strategy string) {
 }
 
 func (t *noopVCursor) GetDDLStrategy() string {
-	panic("implement me")
+	return ""
 }
 
 func (t *noopVCursor) SetMigrationContext(migrationContext string) {
@@ -389,6 +409,15 @@ type loggingVCursor struct {
 	shardSession []*srvtopo.ResolvedShard
 }
 
+func (f *loggingVCursor) HasCreatedTempTable() {
+	f.log = append(f.log, "temp table getting created")
+}
+
+func (f *loggingVCursor) Commit(_ context.Context) error {
+	f.log = append(f.log, "commit")
+	return nil
+}
+
 func (f *loggingVCursor) GetUDV(key string) *querypb.BindVariable {
 	// TODO implement me
 	panic("implement me")
@@ -479,6 +508,18 @@ func (f *loggingVCursor) GetKeyspace() string {
 
 func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {
 	f.warnings = append(f.warnings, warning)
+}
+
+func (f *loggingVCursor) GetWarmingReadsPercent() int {
+	return 0
+}
+
+func (f *loggingVCursor) GetWarmingReadsChannel() chan bool {
+	return make(chan bool)
+}
+
+func (f *loggingVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
+	return f
 }
 
 func (f *loggingVCursor) Execute(ctx context.Context, method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
@@ -768,10 +809,39 @@ func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
 	return nil, nil
 }
 
-func expectResult(t *testing.T, msg string, result, want *sqltypes.Result) {
+func expectResult(t *testing.T, result, want *sqltypes.Result) {
 	t.Helper()
-	if !reflect.DeepEqual(result, want) {
-		t.Errorf("%s:\n%v\nwant:\n%v", msg, result, want)
+	fieldsResult := fmt.Sprintf("%v", result.Fields)
+	fieldsWant := fmt.Sprintf("%v", want.Fields)
+	if fieldsResult != fieldsWant {
+		t.Errorf("mismatch in Fields\n%s\nwant:\n%s", fieldsResult, fieldsWant)
+	}
+
+	rowsResult := fmt.Sprintf("%v", result.Rows)
+	rowsWant := fmt.Sprintf("%v", want.Rows)
+	if rowsResult != rowsWant {
+		t.Errorf("mismatch in Rows:\n%s\nwant:\n%s", rowsResult, rowsWant)
+	}
+}
+
+func expectResultAnyOrder(t *testing.T, result, want *sqltypes.Result) {
+	t.Helper()
+	f := func(a, b sqltypes.Row) int {
+		for i := range a {
+			l := a[i].RawStr()
+			r := b[i].RawStr()
+			x := strings.Compare(l, r)
+			if x == 0 {
+				continue
+			}
+			return x
+		}
+		return 0
+	}
+	slices.SortFunc(result.Rows, f)
+	slices.SortFunc(want.Rows, f)
+	if diff := cmp.Diff(want, result); diff != "" {
+		t.Errorf("result: %+v, want %+v\ndiff: %s", result, want, diff)
 	}
 }
 

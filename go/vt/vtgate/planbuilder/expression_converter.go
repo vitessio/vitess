@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -40,7 +39,7 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 	)
 	switch node := astExpr.(type) {
 	case *sqlparser.Literal:
-		//set autocommit = 'on'
+		// set autocommit = 'on'
 		if node.Type == sqlparser.StrVal {
 			switch strings.ToLower(node.Val) {
 			case "on":
@@ -50,7 +49,7 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 			}
 		}
 	case *sqlparser.ColName:
-		//set autocommit = on
+		// set autocommit = on
 		switch node.Name.Lowered() {
 		case "on":
 			return ON
@@ -87,7 +86,7 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 		if !strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
 			return nil, err
 		}
-		evalExpr = evalengine.NewColumn(len(ec.tabletExpressions), sqltypes.Unknown, collations.Unknown)
+		evalExpr = evalengine.NewColumn(len(ec.tabletExpressions), evalengine.UnknownType(), nil)
 		ec.tabletExpressions = append(ec.tabletExpressions, astExpr)
 	}
 	return evalExpr, nil

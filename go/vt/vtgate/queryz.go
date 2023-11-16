@@ -24,8 +24,6 @@ import (
 
 	"github.com/google/safehtml/template"
 
-	"vitess.io/vitess/go/cache"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
@@ -129,7 +127,7 @@ func (s *queryzSorter) Len() int           { return len(s.rows) }
 func (s *queryzSorter) Swap(i, j int)      { s.rows[i], s.rows[j] = s.rows[j], s.rows[i] }
 func (s *queryzSorter) Less(i, j int) bool { return s.less(s.rows[i], s.rows[j]) }
 
-func queryzHandler(plans cache.Cache, w http.ResponseWriter, r *http.Request) {
+func queryzHandler(e *Executor, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
@@ -145,8 +143,7 @@ func queryzHandler(plans cache.Cache, w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	plans.ForEach(func(value any) bool {
-		plan := value.(*engine.Plan)
+	e.ForEachPlan(func(plan *engine.Plan) bool {
 		Value := &queryzRow{
 			Query: logz.Wrappable(sqlparser.TruncateForUI(plan.Original)),
 		}

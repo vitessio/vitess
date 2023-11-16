@@ -133,16 +133,19 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *With) Format(buf *TrackedBuffer) {
+	if len(node.CTEs) == 0 {
+		return
+	}
 	buf.astPrintf(node, "with ")
 
 	if node.Recursive {
 		buf.astPrintf(node, "recursive ")
 	}
-	ctesLength := len(node.ctes)
+	ctesLength := len(node.CTEs)
 	for i := 0; i < ctesLength-1; i++ {
-		buf.astPrintf(node, "%v, ", node.ctes[i])
+		buf.astPrintf(node, "%v, ", node.CTEs[i])
 	}
-	buf.astPrintf(node, "%v", node.ctes[ctesLength-1])
+	buf.astPrintf(node, "%v", node.CTEs[ctesLength-1])
 }
 
 // Format formats the node.
@@ -243,8 +246,12 @@ func (node *AlterVschema) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "alter vschema on %v drop vindex %v", node.Table, node.VindexSpec.Name)
 	case AddSequenceDDLAction:
 		buf.astPrintf(node, "alter vschema add sequence %v", node.Table)
+	case DropSequenceDDLAction:
+		buf.astPrintf(node, "alter vschema drop sequence %v", node.Table)
 	case AddAutoIncDDLAction:
 		buf.astPrintf(node, "alter vschema on %v add auto_increment %v", node.Table, node.AutoIncSpec)
+	case DropAutoIncDDLAction:
+		buf.astPrintf(node, "alter vschema on %v drop auto_increment %v", node.Table, node.AutoIncSpec)
 	default:
 		buf.astPrintf(node, "%s table %v", node.Action.ToString(), node.Table)
 	}
@@ -824,16 +831,24 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (ii *IndexInfo) Format(buf *TrackedBuffer) {
-	if !ii.ConstraintName.IsEmpty() {
+	if ii.ConstraintName.NotEmpty() {
 		buf.astPrintf(ii, "constraint %v ", ii.ConstraintName)
 	}
-	if ii.Primary {
-		buf.astPrintf(ii, "%s", ii.Type)
-	} else {
-		buf.astPrintf(ii, "%s", ii.Type)
-		if !ii.Name.IsEmpty() {
-			buf.astPrintf(ii, " %v", ii.Name)
-		}
+	switch ii.Type {
+	case IndexTypePrimary:
+		buf.astPrintf(ii, "%s %s", keywordStrings[PRIMARY], keywordStrings[KEY])
+		return
+	case IndexTypeDefault:
+		buf.astPrintf(ii, "%s", keywordStrings[KEY])
+	case IndexTypeUnique:
+		buf.astPrintf(ii, "%s %s", keywordStrings[UNIQUE], keywordStrings[KEY])
+	case IndexTypeSpatial:
+		buf.astPrintf(ii, "%s %s", keywordStrings[SPATIAL], keywordStrings[KEY])
+	case IndexTypeFullText:
+		buf.astPrintf(ii, "%s %s", keywordStrings[FULLTEXT], keywordStrings[KEY])
+	}
+	if ii.Name.NotEmpty() {
+		buf.astPrintf(ii, " %v", ii.Name)
 	}
 }
 
@@ -868,7 +883,7 @@ func (node VindexParam) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (c *ConstraintDefinition) Format(buf *TrackedBuffer) {
-	if !c.Name.IsEmpty() {
+	if c.Name.NotEmpty() {
 		buf.astPrintf(c, "constraint %v ", c.Name)
 	}
 	c.Details.Format(buf)
@@ -1056,8 +1071,12 @@ func (node *CallProc) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *OtherRead) Format(buf *TrackedBuffer) {
-	buf.literal("otherread")
+func (node *Analyze) Format(buf *TrackedBuffer) {
+	buf.literal("analyze ")
+	if node.IsLocal {
+		buf.literal("local ")
+	}
+	buf.astPrintf(node, "table %v", node.Table)
 }
 
 // Format formats the node.
@@ -1095,7 +1114,7 @@ func (node *StarExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *AliasedExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v", node.Expr)
-	if !node.As.IsEmpty() {
+	if node.As.NotEmpty() {
 		buf.astPrintf(node, " as %v", node.As)
 	}
 }
@@ -1144,7 +1163,7 @@ func (node TableExprs) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v%v", node.Expr, node.Partitions)
-	if !node.As.IsEmpty() {
+	if node.As.NotEmpty() {
 		buf.astPrintf(node, " as %v", node.As)
 		if len(node.Columns) != 0 {
 			buf.astPrintf(node, "%v", node.Columns)
@@ -1170,7 +1189,7 @@ func (node TableName) Format(buf *TrackedBuffer) {
 	if node.IsEmpty() {
 		return
 	}
-	if !node.Qualifier.IsEmpty() {
+	if node.Qualifier.NotEmpty() {
 		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
 	buf.astPrintf(node, "%v", node.Name)
@@ -1298,12 +1317,10 @@ func (node *Literal) Format(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
 		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Bytes()).EncodeSQL(buf)
-	case IntVal, FloatVal, DecimalVal, HexNum:
+	case IntVal, FloatVal, DecimalVal, HexNum, BitNum:
 		buf.astPrintf(node, "%#s", node.Val)
 	case HexVal:
 		buf.astPrintf(node, "X'%#s'", node.Val)
-	case BitVal:
-		buf.astPrintf(node, "B'%#s'", node.Val)
 	case DateVal:
 		buf.astPrintf(node, "date'%#s'", node.Val)
 	case TimeVal:
@@ -1527,7 +1544,7 @@ func (node *CollateExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *FuncExpr) Format(buf *TrackedBuffer) {
-	if !node.Qualifier.IsEmpty() {
+	if node.Qualifier.NotEmpty() {
 		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
 	// Function names should not be back-quoted even
@@ -1581,7 +1598,7 @@ func (node *JSONStorageSizeExpr) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *OverClause) Format(buf *TrackedBuffer) {
 	buf.WriteString("over")
-	if !node.WindowName.IsEmpty() {
+	if node.WindowName.NotEmpty() {
 		buf.astPrintf(node, " %v", node.WindowName)
 	}
 	if node.WindowSpec != nil {
@@ -1591,7 +1608,7 @@ func (node *OverClause) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *WindowSpecification) Format(buf *TrackedBuffer) {
-	if !node.Name.IsEmpty() {
+	if node.Name.NotEmpty() {
 		buf.astPrintf(node, " %v", node.Name)
 	}
 	if node.PartitionClause != nil {
@@ -2003,7 +2020,7 @@ func (node *ShowBasic) Format(buf *TrackedBuffer) {
 	if !node.Tbl.IsEmpty() {
 		buf.astPrintf(node, " from %v", node.Tbl)
 	}
-	if !node.DbName.IsEmpty() {
+	if node.DbName.NotEmpty() {
 		buf.astPrintf(node, " from %v", node.DbName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
@@ -2053,7 +2070,7 @@ func (node *CreateDatabase) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *AlterDatabase) Format(buf *TrackedBuffer) {
 	buf.literal("alter database")
-	if !node.DBName.IsEmpty() {
+	if node.DBName.NotEmpty() {
 		buf.astPrintf(node, " %v", node.DBName)
 	}
 	if node.UpdateDataDirectory {
@@ -2337,7 +2354,7 @@ func (node *DropColumn) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *DropKey) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "drop %s", node.Type.ToString())
-	if !node.Name.IsEmpty() {
+	if node.Name.NotEmpty() {
 		buf.astPrintf(node, " %v", node.Name)
 	}
 }
@@ -2416,14 +2433,6 @@ func (node *RenameTable) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "%s%v to %v", prefix, pair.FromTable, pair.ToTable)
 		prefix = ", "
 	}
-}
-
-// Format formats the node.
-// If an extracted subquery is still in the AST when we print it,
-// it will be formatted as if the subquery has been extracted, and instead
-// show up like argument comparisons
-func (node *ExtractedSubquery) Format(buf *TrackedBuffer) {
-	node.alternative.Format(buf)
 }
 
 func (node *JSONTableExpr) Format(buf *TrackedBuffer) {

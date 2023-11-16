@@ -17,6 +17,7 @@ limitations under the License.
 package vthash
 
 import (
+	"vitess.io/vitess/go/vt/vthash/highway"
 	"vitess.io/vitess/go/vt/vthash/metro"
 )
 
@@ -27,4 +28,13 @@ func New() Hasher {
 	h := Hasher{}
 	h.Reset()
 	return h
+}
+
+type Hasher256 = highway.Digest
+type Hash256 = [32]byte
+
+var defaultHash256Key = [32]byte{}
+
+func New256() *Hasher256 {
+	return highway.New(defaultHash256Key)
 }

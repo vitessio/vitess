@@ -17,6 +17,8 @@ limitations under the License.
 package zkctl
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -33,6 +35,15 @@ func TestLifeCycle(t *testing.T) {
 	myID := 255
 
 	zkConf := MakeZkConfigFromString(config, uint32(myID))
+	zkExtraConfLine := "tcpKeepAlive=true"
+	zkConf.Extra = []string{zkExtraConfLine}
+
+	if zkObservedConf, err := MakeZooCfg([]string{zkConf.ConfigFile()}, zkConf, "header"); err != nil {
+		t.Fatalf("MakeZooCfg err: %v", err)
+	} else if !strings.Contains(string(zkObservedConf), fmt.Sprintf("\n%s\n", zkExtraConfLine)) {
+		t.Fatalf("Expected zkExtraConfLine in zkObservedConf")
+	}
+
 	zkd := NewZkd(zkConf)
 	if err := zkd.Init(); err != nil {
 		t.Fatalf("Init() err: %v", err)
@@ -49,4 +60,5 @@ func TestLifeCycle(t *testing.T) {
 	if err := zkd.Teardown(); err != nil {
 		t.Fatalf("Teardown() err: %v", err)
 	}
+
 }

@@ -21,11 +21,10 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 type earlyRewriter struct {
@@ -48,6 +47,10 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		handleOrderBy(r, cursor, node)
 	case *sqlparser.OrExpr:
 		rewriteOrExpr(cursor, node)
+	case *sqlparser.AndExpr:
+		rewriteAndExpr(cursor, node)
+	case *sqlparser.NotExpr:
+		rewriteNotExpr(cursor, node)
 	case sqlparser.GroupBy:
 		r.clause = "group statement"
 	case *sqlparser.Literal:
@@ -56,8 +59,56 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		return handleCollateExpr(r, node)
 	case *sqlparser.ComparisonExpr:
 		return handleComparisonExpr(cursor, node)
+	case *sqlparser.With:
+		return r.handleWith(node)
+	case *sqlparser.AliasedTableExpr:
+		return r.handleAliasedTable(node)
 	}
 	return nil
+}
+
+func (r *earlyRewriter) handleAliasedTable(node *sqlparser.AliasedTableExpr) error {
+	tbl, ok := node.Expr.(sqlparser.TableName)
+	if !ok || tbl.Qualifier.NotEmpty() {
+		return nil
+	}
+	scope := r.scoper.currentScope()
+	cte := scope.findCTE(tbl.Name.String())
+	if cte == nil {
+		return nil
+	}
+	if node.As.IsEmpty() {
+		node.As = tbl.Name
+	}
+	node.Expr = &sqlparser.DerivedTable{
+		Select: cte.Subquery.Select,
+	}
+	if len(cte.Columns) > 0 {
+		node.Columns = cte.Columns
+	}
+	return nil
+}
+
+func (r *earlyRewriter) handleWith(node *sqlparser.With) error {
+	scope := r.scoper.currentScope()
+	for _, cte := range node.CTEs {
+		err := scope.addCTE(cte)
+		if err != nil {
+			return err
+		}
+	}
+	node.CTEs = nil
+	return nil
+}
+
+func rewriteNotExpr(cursor *sqlparser.Cursor, node *sqlparser.NotExpr) {
+	cmp, ok := node.Expr.(*sqlparser.ComparisonExpr)
+	if !ok {
+		return
+	}
+
+	cmp.Operator = sqlparser.Inverse(cmp.Operator)
+	cursor.Replace(cmp)
 }
 
 func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
@@ -73,7 +124,7 @@ func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
 		return err
 	}
 
-	// since the binder has already been over the join, we need to invoke it again so it
+	// since the binder has already been over the join, we need to invoke it again, so it
 	// can bind columns to the right tables
 	sqlparser.Rewrite(node.Condition.On, nil, func(cursor *sqlparser.Cursor) bool {
 		innerErr := r.binder.up(cursor)
@@ -123,8 +174,47 @@ func handleOrderBy(r *earlyRewriter, cursor *sqlparser.Cursor, node sqlparser.Or
 func rewriteOrExpr(cursor *sqlparser.Cursor, node *sqlparser.OrExpr) {
 	newNode := rewriteOrFalse(*node)
 	if newNode != nil {
-		cursor.Replace(newNode)
+		cursor.ReplaceAndRevisit(newNode)
 	}
+}
+
+// rewriteAndExpr rewrites AND expressions when either side is TRUE.
+func rewriteAndExpr(cursor *sqlparser.Cursor, node *sqlparser.AndExpr) {
+	newNode := rewriteAndTrue(*node)
+	if newNode != nil {
+		cursor.ReplaceAndRevisit(newNode)
+	}
+}
+
+func rewriteAndTrue(andExpr sqlparser.AndExpr) sqlparser.Expr {
+	// we are looking for the pattern `WHERE c = 1 AND 1 = 1`
+	isTrue := func(subExpr sqlparser.Expr) bool {
+		evalEnginePred, err := evalengine.Translate(subExpr, nil)
+		if err != nil {
+			return false
+		}
+
+		env := evalengine.EmptyExpressionEnv()
+		res, err := env.Evaluate(evalEnginePred)
+		if err != nil {
+			return false
+		}
+
+		boolValue, err := res.Value(collations.Default()).ToBool()
+		if err != nil {
+			return false
+		}
+
+		return boolValue
+	}
+
+	if isTrue(andExpr.Left) {
+		return andExpr.Right
+	} else if isTrue(andExpr.Right) {
+		return andExpr.Left
+	}
+
+	return nil
 }
 
 // handleLiteral processes literals within the context of ORDER BY expressions.
@@ -299,7 +389,7 @@ func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.E
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
 	}
 
-	if !aliasedExpr.As.IsEmpty() {
+	if aliasedExpr.As.NotEmpty() {
 		return sqlparser.NewColName(aliasedExpr.As.String()), nil
 	}
 
@@ -563,6 +653,9 @@ func (e *expanderState) processColumnsFor(tbl TableInfo) error {
 outer:
 	// in this first loop we just find columns used in any JOIN USING used on this table
 	for _, col := range tbl.getColumns() {
+		if col.Invisible {
+			continue
+		}
 		ts, found := usingCols[col.Name]
 		if found {
 			for i, ts := range ts.Constituents() {
@@ -579,6 +672,10 @@ outer:
 
 	// and this time around we are printing any columns not involved in any JOIN USING
 	for _, col := range tbl.getColumns() {
+		if col.Invisible {
+			continue
+		}
+
 		if ts, found := usingCols[col.Name]; found && currTable.IsSolvedBy(ts) {
 			continue
 		}
@@ -599,8 +696,7 @@ type expanderState struct {
 // addColumn adds columns to the expander state. If we have vschema info about the query,
 // we also store which columns were expanded
 func (e *expanderState) addColumn(col ColumnInfo, tbl TableInfo, tblName sqlparser.TableName) {
-	tableAliased := !tbl.GetExpr().As.IsEmpty()
-	withQualifier := e.needsQualifier || tableAliased
+	withQualifier := e.needsQualifier
 	var colName *sqlparser.ColName
 	var alias sqlparser.IdentifierCI
 	if withQualifier {

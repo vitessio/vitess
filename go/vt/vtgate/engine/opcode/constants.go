@@ -33,17 +33,23 @@ const (
 	PulloutIn
 	PulloutNotIn
 	PulloutExists
+	PulloutNotExists
 )
 
 var pulloutName = map[PulloutOpcode]string{
-	PulloutValue:  "PulloutValue",
-	PulloutIn:     "PulloutIn",
-	PulloutNotIn:  "PulloutNotIn",
-	PulloutExists: "PulloutExists",
+	PulloutValue:     "PulloutValue",
+	PulloutIn:        "PulloutIn",
+	PulloutNotIn:     "PulloutNotIn",
+	PulloutExists:    "PulloutExists",
+	PulloutNotExists: "PulloutNotExists",
 }
 
 func (code PulloutOpcode) String() string {
 	return pulloutName[code]
+}
+
+func (code PulloutOpcode) NeedsListArg() bool {
+	return code == PulloutIn || code == PulloutNotIn
 }
 
 // MarshalJSON serializes the PulloutOpcode as a JSON string.
@@ -68,6 +74,7 @@ const (
 	AggregateAnyValue
 	AggregateCountStar
 	AggregateGroupConcat
+	AggregateAvg
 	_NumOfOpCodes // This line must be last of the opcodes!
 )
 
@@ -79,6 +86,7 @@ var (
 		AggregateCountStar:     sqltypes.Int64,
 		AggregateSumDistinct:   sqltypes.Decimal,
 		AggregateSum:           sqltypes.Decimal,
+		AggregateAvg:           sqltypes.Decimal,
 		AggregateGtid:          sqltypes.VarChar,
 	}
 )
@@ -90,6 +98,7 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"sum":   AggregateSum,
 	"min":   AggregateMin,
 	"max":   AggregateMax,
+	"avg":   AggregateAvg,
 	// These functions don't exist in mysql, but are used
 	// to display the plan.
 	"count_distinct": AggregateCountDistinct,
@@ -111,6 +120,7 @@ var AggregateName = map[AggregateOpcode]string{
 	AggregateCountStar:     "count_star",
 	AggregateGroupConcat:   "group_concat",
 	AggregateAnyValue:      "any_value",
+	AggregateAvg:           "avg",
 }
 
 func (code AggregateOpcode) String() string {
@@ -133,13 +143,19 @@ func (code AggregateOpcode) Type(typ querypb.Type) querypb.Type {
 	case AggregateUnassigned:
 		return sqltypes.Null
 	case AggregateGroupConcat:
+		if typ == sqltypes.Unknown {
+			return sqltypes.Unknown
+		}
 		if sqltypes.IsBinary(typ) {
 			return sqltypes.Blob
 		}
 		return sqltypes.Text
 	case AggregateMax, AggregateMin, AggregateAnyValue:
 		return typ
-	case AggregateSumDistinct, AggregateSum:
+	case AggregateSumDistinct, AggregateSum, AggregateAvg:
+		if typ == sqltypes.Unknown {
+			return sqltypes.Unknown
+		}
 		if sqltypes.IsIntegral(typ) || sqltypes.IsDecimal(typ) {
 			return sqltypes.Decimal
 		}

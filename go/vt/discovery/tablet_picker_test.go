@@ -31,6 +31,11 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+const (
+	contextTimeout    = 5 * time.Second
+	numTestIterations = 50
+)
+
 func TestPickPrimary(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -359,6 +364,61 @@ func TestPickCellPreferenceLocalAlias(t *testing.T) {
 	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
 }
 
+// TestPickUsingCellAsAlias confirms that when the tablet picker is
+// given a cell name that is an alias, it will choose a tablet that
+// exists within a cell that is part of the alias.
+func TestPickUsingCellAsAlias(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	// The test env puts all cells into an alias called "cella".
+	// We're also going to specify an optional extraCell that is NOT
+	// added to the alias.
+	te := newPickerTestEnv(t, ctx, []string{"cell1", "cell2", "cell3"}, "xtracell")
+	// Specify the alias as the cell.
+	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"cella"}, "cell1", te.keyspace, te.shard, "replica", TabletPickerOptions{})
+	require.NoError(t, err)
+
+	// Create a tablet in one of the main cells, it should be
+	// picked as it is part of the cella alias. This tablet is
+	// NOT part of the talbet picker's local cell (cell1) so it
+	// will not be given local preference.
+	want := addTablet(ctx, te, 101, topodatapb.TabletType_REPLICA, "cell2", true, true)
+	defer deleteTablet(t, te, want)
+	// Create a tablet in an extra cell which is thus NOT part of
+	// the cella alias so it should NOT be picked.
+	noWant := addTablet(ctx, te, 102, topodatapb.TabletType_REPLICA, "xtracell", true, true)
+	defer deleteTablet(t, te, noWant)
+	// Try it many times to be sure we don't ever pick the wrong one.
+	for i := 0; i < 100; i++ {
+		tablet, err := tp.PickForStreaming(ctx)
+		require.NoError(t, err)
+		assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
+	}
+}
+
+func TestPickWithIgnoreList(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	te := newPickerTestEnv(t, ctx, []string{"cell1", "cell2"})
+
+	want := addTablet(ctx, te, 101, topodatapb.TabletType_REPLICA, "cell1", true, true)
+	defer deleteTablet(t, te, want)
+
+	dontWant := addTablet(ctx, te, 102, topodatapb.TabletType_REPLICA, "cell1", true, true)
+	defer deleteTablet(t, te, dontWant)
+
+	// Specify the alias as the cell.
+	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"cella"}, "cell1", te.keyspace, te.shard, "replica", TabletPickerOptions{}, dontWant.GetAlias())
+	require.NoError(t, err)
+
+	// Try it many times to be sure we don't ever pick from the ignore list.
+	for i := 0; i < 100; i++ {
+		tablet, err := tp.PickForStreaming(ctx)
+		require.NoError(t, err)
+		require.False(t, proto.Equal(dontWant, tablet), "Picked the tablet we shouldn't have: %v", dontWant)
+	}
+}
+
 func TestPickUsingCellAliasOnlySpecified(t *testing.T) {
 	ctx := utils.LeakCheckContextTimeout(t, 200*time.Millisecond)
 
@@ -536,6 +596,72 @@ func TestPickFallbackType(t *testing.T) {
 	assert.True(t, proto.Equal(primaryTablet, tablet), "Pick: %v, want %v", tablet, primaryTablet)
 }
 
+// TestPickNonServingTablets validates that non serving tablets are included when the
+// IncludeNonServingTablets option is set. Unhealthy tablets should not be picked, irrespective of this option.
+func TestPickNonServingTablets(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	cells := []string{"cell1", "cell2"}
+	localCell := cells[0]
+	tabletTypes := "replica,primary"
+	options := TabletPickerOptions{}
+	te := newPickerTestEnv(t, ctx, cells)
+
+	// Tablet should be selected as it is healthy and serving.
+	primaryTablet := addTablet(ctx, te, 100, topodatapb.TabletType_PRIMARY, localCell, true, true)
+	defer deleteTablet(t, te, primaryTablet)
+
+	// Tablet should not be selected as it is unhealthy.
+	replicaTablet := addTablet(ctx, te, 200, topodatapb.TabletType_REPLICA, localCell, false, false)
+	defer deleteTablet(t, te, replicaTablet)
+
+	// Tablet should be selected because the IncludeNonServingTablets option is set and it is healthy.
+	replicaTablet2 := addTablet(ctx, te, 300, topodatapb.TabletType_REPLICA, localCell, false, true)
+	defer deleteTablet(t, te, replicaTablet2)
+
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, contextTimeout)
+	defer cancel()
+	_, err := te.topoServ.UpdateShardFields(ctx, te.keyspace, te.shard, func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = primaryTablet.Alias
+		return nil
+	})
+	require.NoError(t, err)
+
+	tp, err := NewTabletPicker(ctx, te.topoServ, cells, localCell, te.keyspace, te.shard, tabletTypes, options)
+	require.NoError(t, err)
+	ctx2, cancel2 := context.WithTimeout(ctx, contextTimeout)
+	defer cancel2()
+	tablet, err := tp.PickForStreaming(ctx2)
+	require.NoError(t, err)
+	// IncludeNonServingTablets is false: only the healthy serving tablet should be picked.
+	assert.True(t, proto.Equal(primaryTablet, tablet), "Pick: %v, want %v", tablet, primaryTablet)
+
+	options.IncludeNonServingTablets = true
+	tp, err = NewTabletPicker(ctx, te.topoServ, cells, localCell, te.keyspace, te.shard, tabletTypes, options)
+	require.NoError(t, err)
+	ctx3, cancel3 := context.WithTimeout(ctx, contextTimeout)
+	defer cancel3()
+	var picked1, picked2, picked3 bool
+	// IncludeNonServingTablets is true: both the healthy tablets should be picked even though one is not serving.
+	for i := 0; i < numTestIterations; i++ {
+		tablet, err := tp.PickForStreaming(ctx3)
+		require.NoError(t, err)
+		if proto.Equal(tablet, primaryTablet) {
+			picked1 = true
+		}
+		if proto.Equal(tablet, replicaTablet) {
+			picked2 = true
+		}
+		if proto.Equal(tablet, replicaTablet2) {
+			picked3 = true
+		}
+	}
+	assert.True(t, picked1)
+	assert.False(t, picked2)
+	assert.True(t, picked3)
+}
+
 type pickerTestEnv struct {
 	t        *testing.T
 	keyspace string
@@ -545,15 +671,20 @@ type pickerTestEnv struct {
 	topoServ *topo.Server
 }
 
-func newPickerTestEnv(t *testing.T, ctx context.Context, cells []string) *pickerTestEnv {
+// newPickerTestEnv creates a test environment for TabletPicker tests.
+// It creates a cell alias called 'cella' which contains all of the
+// provided cells. However, if any optional extraCells are provided, those
+// are NOT added to the cell alias.
+func newPickerTestEnv(t *testing.T, ctx context.Context, cells []string, extraCells ...string) *pickerTestEnv {
+	allCells := append(cells, extraCells...)
 	te := &pickerTestEnv{
 		t:        t,
 		keyspace: "ks",
 		shard:    "0",
 		cells:    cells,
-		topoServ: memorytopo.NewServer(ctx, cells...),
+		topoServ: memorytopo.NewServer(ctx, allCells...),
 	}
-	// create cell alias
+	// Create cell alias containing the cells (but NOT the extraCells).
 	err := te.topoServ.CreateCellsAlias(ctx, "cella", &topodatapb.CellsAlias{
 		Cells: cells,
 	})

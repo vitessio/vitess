@@ -53,6 +53,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAlterView(in)
 	case *AlterVschema:
 		return CloneRefOfAlterVschema(in)
+	case *Analyze:
+		return CloneRefOfAnalyze(in)
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
 	case *AnyValue:
@@ -165,8 +167,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfExtractFuncExpr(in)
 	case *ExtractValueExpr:
 		return CloneRefOfExtractValueExpr(in)
-	case *ExtractedSubquery:
-		return CloneRefOfExtractedSubquery(in)
 	case *FirstOrLastValueExpr:
 		return CloneRefOfFirstOrLastValueExpr(in)
 	case *Flush:
@@ -361,8 +361,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfOrderByOption(in)
 	case *OtherAdmin:
 		return CloneRefOfOtherAdmin(in)
-	case *OtherRead:
-		return CloneRefOfOtherRead(in)
 	case *OverClause:
 		return CloneRefOfOverClause(in)
 	case *ParenTableExpr:
@@ -719,6 +717,16 @@ func CloneRefOfAlterVschema(n *AlterVschema) *AlterVschema {
 	out.VindexSpec = CloneRefOfVindexSpec(n.VindexSpec)
 	out.VindexCols = CloneSliceOfIdentifierCI(n.VindexCols)
 	out.AutoIncSpec = CloneRefOfAutoIncSpec(n.AutoIncSpec)
+	return &out
+}
+
+// CloneRefOfAnalyze creates a deep clone of the input.
+func CloneRefOfAnalyze(n *Analyze) *Analyze {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Table = CloneTableName(n.Table)
 	return &out
 }
 
@@ -1312,19 +1320,6 @@ func CloneRefOfExtractValueExpr(n *ExtractValueExpr) *ExtractValueExpr {
 	out := *n
 	out.Fragment = CloneExpr(n.Fragment)
 	out.XPathExpr = CloneExpr(n.XPathExpr)
-	return &out
-}
-
-// CloneRefOfExtractedSubquery creates a deep clone of the input.
-func CloneRefOfExtractedSubquery(n *ExtractedSubquery) *ExtractedSubquery {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Original = CloneExpr(n.Original)
-	out.Subquery = CloneRefOfSubquery(n.Subquery)
-	out.OtherSide = CloneExpr(n.OtherSide)
-	out.alternative = CloneExpr(n.alternative)
 	return &out
 }
 
@@ -2356,15 +2351,6 @@ func CloneRefOfOtherAdmin(n *OtherAdmin) *OtherAdmin {
 	return &out
 }
 
-// CloneRefOfOtherRead creates a deep clone of the input.
-func CloneRefOfOtherRead(n *OtherRead) *OtherRead {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
-}
-
 // CloneRefOfOverClause creates a deep clone of the input.
 func CloneRefOfOverClause(n *OverClause) *OverClause {
 	if n == nil {
@@ -2725,11 +2711,11 @@ func CloneRefOfSelect(n *Select) *Select {
 	}
 	out := *n
 	out.Cache = CloneRefOfBool(n.Cache)
+	out.With = CloneRefOfWith(n.With)
 	out.From = CloneSliceOfTableExpr(n.From)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
 	out.Where = CloneRefOfWhere(n.Where)
-	out.With = CloneRefOfWith(n.With)
 	out.GroupBy = CloneGroupBy(n.GroupBy)
 	out.Having = CloneRefOfWhere(n.Having)
 	out.Windows = CloneNamedWindows(n.Windows)
@@ -3131,10 +3117,10 @@ func CloneRefOfUnion(n *Union) *Union {
 		return nil
 	}
 	out := *n
+	out.With = CloneRefOfWith(n.With)
 	out.Left = CloneSelectStatement(n.Left)
 	out.Right = CloneSelectStatement(n.Right)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
-	out.With = CloneRefOfWith(n.With)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	out.Into = CloneRefOfSelectInto(n.Into)
 	return &out
@@ -3409,7 +3395,7 @@ func CloneRefOfWith(n *With) *With {
 		return nil
 	}
 	out := *n
-	out.ctes = CloneSliceOfRefOfCommonTableExpr(n.ctes)
+	out.CTEs = CloneSliceOfRefOfCommonTableExpr(n.CTEs)
 	return &out
 }
 
@@ -3852,8 +3838,6 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfExtractFuncExpr(in)
 	case *ExtractValueExpr:
 		return CloneRefOfExtractValueExpr(in)
-	case *ExtractedSubquery:
-		return CloneRefOfExtractedSubquery(in)
 	case *FirstOrLastValueExpr:
 		return CloneRefOfFirstOrLastValueExpr(in)
 	case *FuncExpr:
@@ -4138,6 +4122,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfAlterView(in)
 	case *AlterVschema:
 		return CloneRefOfAlterVschema(in)
+	case *Analyze:
+		return CloneRefOfAnalyze(in)
 	case *Begin:
 		return CloneRefOfBegin(in)
 	case *CallProc:
@@ -4180,8 +4166,6 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfLockTables(in)
 	case *OtherAdmin:
 		return CloneRefOfOtherAdmin(in)
-	case *OtherRead:
-		return CloneRefOfOtherRead(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
 	case *PurgeBinaryLogs:

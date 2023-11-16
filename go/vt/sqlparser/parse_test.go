@@ -527,7 +527,7 @@ var (
 		output: "select `name`, numbers from (select * from users) as x(`name`, numbers)",
 	}, {
 		input:  "select 0b010, 0b0111, b'0111', b'011'",
-		output: "select B'010', B'0111', B'0111', B'011' from dual",
+		output: "select 0b010, 0b0111, 0b0111, 0b011 from dual",
 	}, {
 		input:  "select 0x010, 0x0111, x'0111'",
 		output: "select 0x010, 0x0111, X'0111' from dual",
@@ -1130,9 +1130,10 @@ var (
 		input: "select /* hex caps */ X'F0a1' from t",
 	}, {
 		input:  "select /* bit literal */ b'0101' from t",
-		output: "select /* bit literal */ B'0101' from t",
+		output: "select /* bit literal */ 0b0101 from t",
 	}, {
-		input: "select /* bit literal caps */ B'010011011010' from t",
+		input:  "select /* bit literal caps */ B'010011011010' from t",
+		output: "select /* bit literal caps */ 0b010011011010 from t",
 	}, {
 		input: "select /* 0x */ 0xf0 from t",
 	}, {
@@ -1537,13 +1538,17 @@ var (
 	}, {
 		input: "alter table a alter index x visible, alter index x2 invisible",
 	}, {
-		input: "alter table a add spatial key foo (column1)",
+		input:  "alter table a add spatial key foo (column1)",
+		output: "alter table a add spatial key foo (column1)",
 	}, {
-		input: "alter table a add fulltext key foo (column1), order by a, b, c",
+		input:  "alter table a add fulltext key foo (column1), order by a, b, c",
+		output: "alter table a add fulltext key foo (column1), order by a, b, c",
 	}, {
-		input: "alter table a add unique key foo (column1)",
+		input:  "alter table a add unique key foo (column1)",
+		output: "alter table a add unique key foo (column1)",
 	}, {
-		input: "alter /*vt+ strategy=online */ table a add unique key foo (column1)",
+		input:  "alter /*vt+ strategy=online */ table a add unique key foo (column1)",
+		output: "alter /*vt+ strategy=online */ table a add unique key foo (column1)",
 	}, {
 		input: "alter table a change column s foo int default 1 after x",
 	}, {
@@ -1665,13 +1670,13 @@ var (
 	}, {
 		input: "alter table a add column (id int, id2 char(23))",
 	}, {
-		input: "alter table a add index idx (id)",
+		input: "alter table a add key idx (id)",
 	}, {
-		input: "alter table a add fulltext index idx (id)",
+		input: "alter table a add fulltext key idx (id)",
 	}, {
-		input: "alter table a add spatial index idx (id)",
+		input: "alter table a add spatial key idx (id)",
 	}, {
-		input: "alter table a add fulltext index idx (id)",
+		input: "alter table a add fulltext key idx (id)",
 	}, {
 		input: "alter table a add foreign key (id) references f (id)",
 	}, {
@@ -1683,7 +1688,8 @@ var (
 	}, {
 		input: "alter table a add constraint b primary key (id)",
 	}, {
-		input: "alter table a add constraint b unique key (id)",
+		input:  "alter table a add constraint b unique key (id)",
+		output: "alter table a add constraint b unique key (id)",
 	}, {
 		input:  "alter table t add column iii int signed not null",
 		output: "alter table t add column iii int not null",
@@ -1838,7 +1844,7 @@ var (
 		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 	}, {
 		input:  "create table a (b1 bool NOT NULL PRIMARY KEY, b2 boolean not null references b (a) on delete restrict, KEY b2_idx(b))",
-		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null references b (a) on delete restrict,\n\tKEY b2_idx (b)\n)",
+		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null references b (a) on delete restrict,\n\tkey b2_idx (b)\n)",
 	}, {
 		input: "create temporary table a (\n\tid bigint\n)",
 	}, {
@@ -2010,28 +2016,28 @@ var (
 		ignoreNormalizerTest: true,
 	}, {
 		input:  "create index a on b (col1)",
-		output: "alter table b add index a (col1)",
+		output: "alter table b add key a (col1)",
 	}, {
 		input:  "create unique index a on b (col1)",
-		output: "alter table b add unique index a (col1)",
+		output: "alter table b add unique key a (col1)",
 	}, {
 		input:  "create unique index a using foo on b (col1 desc)",
-		output: "alter table b add unique index a (col1 desc) using foo",
+		output: "alter table b add unique key a (col1 desc) using foo",
 	}, {
 		input:  "create fulltext index a on b (col1) with parser a",
-		output: "alter table b add fulltext index a (col1) with parser a",
+		output: "alter table b add fulltext key a (col1) with parser a",
 	}, {
 		input:  "create spatial index a on b (col1)",
-		output: "alter table b add spatial index a (col1)",
+		output: "alter table b add spatial key a (col1)",
 	}, {
 		input:  "create fulltext index a on b (col1) key_block_size=12 with parser a comment 'string' algorithm inplace lock none",
-		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string', algorithm = inplace, lock none",
+		output: "alter table b add fulltext key a (col1) key_block_size 12 with parser a comment 'string', algorithm = inplace, lock none",
 	}, {
 		input:  "create index a on b ((col1 + col2), (col1*col2))",
-		output: "alter table b add index a ((col1 + col2), (col1 * col2))",
+		output: "alter table b add key a ((col1 + col2), (col1 * col2))",
 	}, {
 		input:  "create fulltext index b using btree on A (col1 desc, col2) algorithm = inplace lock = none",
-		output: "alter table A add fulltext index b (col1 desc, col2) using btree, algorithm = inplace, lock none",
+		output: "alter table A add fulltext key b (col1 desc, col2) using btree, algorithm = inplace, lock none",
 	}, {
 		input: "create algorithm = merge sql security definer view a as select * from e",
 	}, {
@@ -2121,8 +2127,12 @@ var (
 		input:  "drop index `PRIMARY` on a lock none",
 		output: "alter table a drop primary key, lock none",
 	}, {
-		input:  "analyze table a",
-		output: "otherread",
+		input: "analyze table a",
+	}, {
+		input:  "analyze NO_WRITE_TO_BINLOG table a",
+		output: "analyze local table a",
+	}, {
+		input: "analyze local table a",
 	}, {
 		input: "flush tables",
 	}, {
@@ -2369,6 +2379,8 @@ var (
 		input: "show vitess_targets",
 	}, {
 		input: "show vschema tables",
+	}, {
+		input: "show vschema keyspaces",
 	}, {
 		input: "show vschema vindexes",
 	}, {
@@ -4085,7 +4097,7 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "create table A (\n\tB int\n)",
 	}, {
 		input:  "create index b on A (col1 desc)",
-		output: "alter table A add index b (col1 desc)",
+		output: "alter table A add key b (col1 desc)",
 	}, {
 		input:  "alter table A foo",
 		output: "alter table A",
@@ -4664,8 +4676,24 @@ func TestCreateTable(t *testing.T) {
 	fulltext key fts (full_name),
 	unique key by_username (username),
 	unique key by_username2 (username),
-	unique index by_username3 (username),
+	unique key by_username3 (username),
 	index by_status (status_nonkeyword),
+	key by_full_name (full_name)
+)`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar,
+	email varchar,
+	full_name varchar,
+	geom point not null,
+	status_nonkeyword varchar,
+	primary key (id),
+	spatial key geom (geom),
+	fulltext key fts (full_name),
+	unique key by_username (username),
+	unique key by_username2 (username),
+	unique key by_username3 (username),
+	key by_status (status_nonkeyword),
 	key by_full_name (full_name)
 )`,
 		},
@@ -4676,7 +4704,14 @@ func TestCreateTable(t *testing.T) {
 	username varchar,
 	unique key by_username (username) visible,
 	unique key by_username2 (username) invisible,
-	unique index by_username3 (username)
+	unique key by_username3 (username)
+)`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar,
+	unique key by_username (username) visible,
+	unique key by_username2 (username) invisible,
+	unique key by_username3 (username)
 )`,
 		},
 		// test adding engine attributes
@@ -4685,7 +4720,13 @@ func TestCreateTable(t *testing.T) {
 	id int auto_increment,
 	username varchar,
 	unique key by_username (username) engine_attribute '{}' secondary_engine_attribute '{}',
-	unique index by_username3 (username)
+	unique key by_username3 (username)
+)`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar,
+	unique key by_username (username) engine_attribute '{}' secondary_engine_attribute '{}',
+	unique key by_username3 (username)
 )`,
 		},
 		// test defining SRID
@@ -4728,8 +4769,8 @@ func TestCreateTable(t *testing.T) {
 	primary key (id) using BTREE,
 	unique key by_username (username) using HASH,
 	unique key by_username2 (username) using OTHER,
-	unique index by_username3 (username) using XYZ,
-	index by_status (status_nonkeyword) using PDQ,
+	unique key by_username3 (username) using XYZ,
+	key by_status (status_nonkeyword) using PDQ,
 	key by_full_name (full_name) using OTHER
 )`,
 		},
@@ -4741,8 +4782,8 @@ func TestCreateTable(t *testing.T) {
 	email varchar,
 	primary key (id) comment 'hi',
 	unique key by_username (username) key_block_size 8,
-	unique index by_username4 (username) comment 'hi' using BTREE,
-	unique index by_username4 (username) using BTREE key_block_size 4 comment 'hi'
+	unique key by_username4 (username) comment 'hi' using BTREE,
+	unique key by_username4 (username) using BTREE key_block_size 4 comment 'hi'
 )`,
 		},
 		{
@@ -4766,11 +4807,25 @@ func TestCreateTable(t *testing.T) {
 )`,
 		},
 		{
-			input: "create table t2 (\n\tid int not null,\n\textra tinyint(1) as (id = 1) stored,\n\tPRIMARY KEY (id)\n)",
+			input:  "create table t2 (\n\tid int not null,\n\textra tinyint(1) as (id = 1) stored,\n\tPRIMARY KEY (id)\n)",
+			output: "create table t2 (\n\tid int not null,\n\textra tinyint(1) as (id = 1) stored,\n\tprimary key (id)\n)",
 		},
 		// multi-column indexes
 		{
 			input: `create table t (
+	id int auto_increment,
+	username varchar,
+	email varchar,
+	full_name varchar,
+	a int,
+	b int,
+	c int,
+	primary key (id, username),
+	unique key by_abc (a, b, c),
+	unique key (a, b, c),
+	key by_email (email(10), username)
+)`,
+			output: `create table t (
 	id int auto_increment,
 	username varchar,
 	email varchar,
@@ -4962,7 +5017,7 @@ func TestCreateTable(t *testing.T) {
 	` + "`" + `s3` + "`" + ` varchar default null,
 	s4 timestamp default current_timestamp(),
 	s41 timestamp default now(),
-	s5 bit(1) default B'0'
+	s5 bit(1) default 0b0
 )`,
 		}, {
 			// test non_reserved word in column name
@@ -5556,6 +5611,14 @@ partition by list (val)
 	primary key (id),
 	key email_idx (email, (if(username = '', nickname, username)))
 )`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar(64),
+	nickname varchar(64),
+	email varchar(64),
+	primary key (id),
+	key email_idx (email, (if(username = '', nickname, username)))
+)`,
 		},
 		{
 			input: `create table entries (
@@ -5567,10 +5630,10 @@ partition by list (val)
 	labels json default null,
 	spec json default null,
 	salaryInfo json default null,
-	PRIMARY KEY (namespace, uid),
-	UNIQUE KEY namespaced_name (namespace, place),
-	UNIQUE KEY unique_uid (uid),
-	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt')))
+	primary key (namespace, uid),
+	unique key namespaced_name (namespace, place),
+	unique key unique_uid (uid),
+	key entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt')))
 ) ENGINE InnoDB,
   CHARSET utf8mb4,
   COLLATE utf8mb4_bin`,
@@ -5582,7 +5645,7 @@ partition by list (val)
 )`,
 			output: `create table t1 (
 	j JSON,
-	INDEX i1 ((json_value(j, '$.id' returning UNSIGNED)))
+	key i1 ((json_value(j, '$.id' returning UNSIGNED)))
 )`,
 		}, {
 			input: `CREATE TABLE entries (
@@ -5608,10 +5671,10 @@ partition by list (val)
 	labels json default null,
 	spec json default null,
 	salaryInfo json default null,
-	PRIMARY KEY (namespace, uid),
-	UNIQUE KEY namespaced_employee (namespace, employee),
-	UNIQUE KEY unique_uid (uid),
-	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt' returning datetime)))
+	primary key (namespace, uid),
+	unique key namespaced_employee (namespace, employee),
+	unique key unique_uid (uid),
+	key entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt' returning datetime)))
 ) ENGINE InnoDB,
   CHARSET utf8mb4,
   COLLATE utf8mb4_bin`,
@@ -5678,7 +5741,7 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 		},
 		{
 			input:  "create table t (id int, info JSON, INDEX zips((CAST(info->'$.field' AS unsigned ARRAY))))",
-			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tINDEX zips ((cast(info -> '$.field' as unsigned array)))\n)",
+			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tkey zips ((cast(info -> '$.field' as unsigned array)))\n)",
 		},
 	}
 	for _, test := range createTableQueries {

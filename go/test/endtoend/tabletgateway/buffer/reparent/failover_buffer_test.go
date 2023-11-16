@@ -51,7 +51,7 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 	primary.VttabletProcess.QueryTablet(demoteQuery, keyspaceUnshardedName, true)
 
 	// Wait for replica to catch up to primary.
-	cluster.WaitForReplicationPos(t, primary, replica, "localhost", 60.0)
+	cluster.WaitForReplicationPos(t, primary, replica, false, time.Minute)
 
 	duration := time.Since(start)
 	minUnavailabilityInS := 1.0

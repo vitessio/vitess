@@ -66,7 +66,7 @@ mysql --table < ../common/select_customer0_data.sql
 # We expect this to fail due to the denied tables
 # rules in place.
 # For some reason this succeeds...
-# $(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
+$(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
 
 ./205_clean_commerce.sh
 # We expect this to fail as the keyspace is now gone.

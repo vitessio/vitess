@@ -19,63 +19,114 @@ package operators
 import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// Phase defines the different planning phases to go through to produce an optimized plan for the input query.
-type Phase struct {
-	Name string
-	// action is the action to be taken before calling plan optimization operation.
-	action func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error)
+type (
+	Phase int
+)
+
+const (
+	physicalTransform Phase = iota
+	initialPlanning
+	pullDistinctFromUnion
+	delegateAggregation
+	addAggrOrdering
+	cleanOutPerfDistinct
+	subquerySettling
+	DONE
+)
+
+func (p Phase) String() string {
+	switch p {
+	case physicalTransform:
+		return "physicalTransform"
+	case initialPlanning:
+		return "initial horizon planning optimization"
+	case pullDistinctFromUnion:
+		return "pull distinct from UNION1"
+	case delegateAggregation:
+		return "split aggregation between vtgate and mysql"
+	case addAggrOrdering:
+		return "optimize aggregations with ORDER BY"
+	case cleanOutPerfDistinct:
+		return "optimize Distinct operations"
+	case subquerySettling:
+		return "settle subqueries"
+	default:
+		panic(vterrors.VT13001("unhandled default case"))
+	}
 }
 
-// getPhases returns the phases the planner will go through.
-// It's used to control so rewriters collaborate correctly
-func getPhases() []Phase {
-	return []Phase{{
-		// Initial optimization
-		Name: "initial horizon planning optimization phase",
-	}, {
-		Name: "pull distinct from UNION",
-		// to make it easier to compact UNIONs together, we keep the `distinct` flag in the UNION op until this
-		// phase. Here we will place a DISTINCT op on top of the UNION, and turn the UNION into a UNION ALL
-		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-			return pullDistinctFromUNION(op)
-		},
-	}, {
-		// after the initial pushing down of aggregations and filtering, we add columns for the filter ops that
-		// need it their inputs, and then we start splitting the aggregation
-		// so parts run on MySQL and parts run on VTGate
-		Name: "add filter columns to projection or aggregation",
-		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-			ctx.DelegateAggregation = true
-			return addColumnsToInput(ctx, op)
-		},
-	}, {
-		// addOrderBysForAggregations runs after we have pushed aggregations as far down as they'll go
-		// addOrderBysForAggregations will find Aggregators that have not been pushed under routes and
-		// add the necessary Ordering operators for them
-		Name:   "add ORDER BY to aggregations above the route and add GROUP BY to aggregations on the RHS of join",
-		action: addOrderBysForAggregations,
-	}, {
-		Name: "remove Distinct operator that are not required and still above a route",
-		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-			return rewrite.BottomUp(op, TableID, func(innerOp ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
-				d, ok := innerOp.(*Distinct)
-				if !ok || d.Required {
-					return innerOp, rewrite.SameTree, nil
-				}
-
-				return d.Source, rewrite.NewTree("removed distinct not required that was not pushed under route", d), nil
-			}, stopAtRoute)
-		},
-	}}
+func (p Phase) shouldRun(s semantics.QuerySignature) bool {
+	switch p {
+	case pullDistinctFromUnion:
+		return s.Union
+	case delegateAggregation:
+		return s.Aggregation
+	case addAggrOrdering:
+		return s.Aggregation
+	case cleanOutPerfDistinct:
+		return s.Distinct
+	case subquerySettling:
+		return s.SubQueries
+	default:
+		return true
+	}
 }
 
-func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+func (p Phase) act(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+	switch p {
+	case pullDistinctFromUnion:
+		return pullDistinctFromUNION(ctx, op)
+	case delegateAggregation:
+		return enableDelegateAggregation(ctx, op)
+	case addAggrOrdering:
+		return addOrderingForAllAggregations(ctx, op)
+	case cleanOutPerfDistinct:
+		return removePerformanceDistinctAboveRoute(ctx, op)
+	case subquerySettling:
+		return settleSubqueries(ctx, op), nil
+	default:
+		return op, nil
+	}
+}
+
+type phaser struct {
+	current Phase
+}
+
+func (p *phaser) next(ctx *plancontext.PlanningContext) Phase {
+	for phas := p.current; phas < DONE; phas++ {
+		if phas.shouldRun(ctx.SemTable.QuerySignature) {
+			p.current = p.current + 1
+			return phas
+		}
+	}
+	return DONE
+}
+
+func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+	return rewrite.BottomUp(op, TableID, func(innerOp ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
+		d, ok := innerOp.(*Distinct)
+		if !ok || d.Required {
+			return innerOp, rewrite.SameTree, nil
+		}
+
+		return d.Source, rewrite.NewTree("removed distinct not required that was not pushed under route"), nil
+	}, stopAtRoute)
+}
+
+func enableDelegateAggregation(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+	return addColumnsToInput(ctx, op)
+}
+
+// addOrderingForAllAggregations is run we have pushed down Aggregators as far down as possible.
+func addOrderingForAllAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		aggrOp, ok := in.(*Aggregator)
 		if !ok {
@@ -86,28 +137,34 @@ func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Opera
 		if err != nil {
 			return nil, nil, err
 		}
-		if !requireOrdering {
-			return in, rewrite.SameTree, nil
+
+		var res *rewrite.ApplyResult
+		if requireOrdering {
+			addOrderingFor(aggrOp)
+			res = rewrite.NewTree("added ordering before aggregation")
 		}
-		orderBys := slice.Map(aggrOp.Grouping, func(from GroupBy) ops.OrderBy {
-			return from.AsOrderBy()
-		})
-		if aggrOp.DistinctExpr != nil {
-			orderBys = append(orderBys, ops.OrderBy{
-				Inner: &sqlparser.Order{
-					Expr: aggrOp.DistinctExpr,
-				},
-				SimplifiedExpr: aggrOp.DistinctExpr,
-			})
-		}
-		aggrOp.Source = &Ordering{
-			Source: aggrOp.Source,
-			Order:  orderBys,
-		}
-		return in, rewrite.NewTree("added ordering before aggregation", in), nil
+		return in, res, nil
 	}
 
 	return rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
+}
+
+func addOrderingFor(aggrOp *Aggregator) {
+	orderBys := slice.Map(aggrOp.Grouping, func(from GroupBy) ops.OrderBy {
+		return from.AsOrderBy()
+	})
+	if aggrOp.DistinctExpr != nil {
+		orderBys = append(orderBys, ops.OrderBy{
+			Inner: &sqlparser.Order{
+				Expr: aggrOp.DistinctExpr,
+			},
+			SimplifiedExpr: aggrOp.DistinctExpr,
+		})
+	}
+	aggrOp.Source = &Ordering{
+		Source: aggrOp.Source,
+		Order:  orderBys,
+	}
 }
 
 func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) (bool, error) {
@@ -120,10 +177,7 @@ func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) (bool, erro
 	if len(requiredOrder) == 0 {
 		return false, nil
 	}
-	srcOrdering, err := in.Source.GetOrdering()
-	if err != nil {
-		return false, err
-	}
+	srcOrdering := in.Source.GetOrdering(ctx)
 	if len(srcOrdering) < len(requiredOrder) {
 		return true, nil
 	}

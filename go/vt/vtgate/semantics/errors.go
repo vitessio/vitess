@@ -34,6 +34,36 @@ type (
 		error
 		bug()
 	}
+
+	SQLCalcFoundRowsUsageError     struct{}
+	UnionWithSQLCalcFoundRowsError struct{}
+	MissingInVSchemaError          struct{ Table TableInfo }
+	CantUseOptionHereError         struct{ Msg string }
+	TableNotUpdatableError         struct{ Table string }
+	UnsupportedNaturalJoinError    struct{ JoinExpr *sqlparser.JoinTableExpr }
+	NotSequenceTableError          struct{ Table string }
+	NextWithMultipleTablesError    struct{ CountTables int }
+	LockOnlyWithDualError          struct{ Node *sqlparser.LockingFunc }
+	JSONTablesError                struct{ Table string }
+	QualifiedOrderInUnionError     struct{ Table string }
+	BuggyError                     struct{ Msg string }
+	UnsupportedConstruct           struct{ errString string }
+	AmbiguousColumnError           struct{ Column string }
+	SubqueryColumnCountError       struct{ Expected int }
+	ColumnsMissingInSchemaError    struct{}
+
+	UnsupportedMultiTablesInUpdateError struct {
+		ExprCount int
+		NotAlias  bool
+	}
+	UnionColumnsDoNotMatchError struct {
+		FirstProj  int
+		SecondProj int
+	}
+	ColumnNotFoundError struct {
+		Column *sqlparser.ColName
+		Table  *sqlparser.TableName
+	}
 )
 
 func eprintf(e error, format string, args ...any) string {
@@ -49,11 +79,6 @@ func eprintf(e error, format string, args ...any) string {
 // Specific error implementations follow
 
 // UnionColumnsDoNotMatchError
-type UnionColumnsDoNotMatchError struct {
-	FirstProj  int
-	SecondProj int
-}
-
 func (e *UnionColumnsDoNotMatchError) ErrorState() vterrors.State {
 	return vterrors.WrongNumberOfColumnsInSelect
 }
@@ -67,11 +92,6 @@ func (e *UnionColumnsDoNotMatchError) Error() string {
 }
 
 // UnsupportedMultiTablesInUpdateError
-type UnsupportedMultiTablesInUpdateError struct {
-	ExprCount int
-	NotAlias  bool
-}
-
 func (e *UnsupportedMultiTablesInUpdateError) Error() string {
 	switch {
 	case e.NotAlias:
@@ -84,10 +104,6 @@ func (e *UnsupportedMultiTablesInUpdateError) Error() string {
 func (e *UnsupportedMultiTablesInUpdateError) unsupported() {}
 
 // UnsupportedNaturalJoinError
-type UnsupportedNaturalJoinError struct {
-	JoinExpr *sqlparser.JoinTableExpr
-}
-
 func (e *UnsupportedNaturalJoinError) Error() string {
 	return eprintf(e, "%s", e.JoinExpr.Join.ToString())
 }
@@ -95,9 +111,6 @@ func (e *UnsupportedNaturalJoinError) Error() string {
 func (e *UnsupportedNaturalJoinError) unsupported() {}
 
 // UnionWithSQLCalcFoundRowsError
-type UnionWithSQLCalcFoundRowsError struct {
-}
-
 func (e *UnionWithSQLCalcFoundRowsError) Error() string {
 	return eprintf(e, "SQL_CALC_FOUND_ROWS not supported with union")
 }
@@ -105,10 +118,6 @@ func (e *UnionWithSQLCalcFoundRowsError) Error() string {
 func (e *UnionWithSQLCalcFoundRowsError) unsupported() {}
 
 // TableNotUpdatableError
-type TableNotUpdatableError struct {
-	Table string
-}
-
 func (e *TableNotUpdatableError) Error() string {
 	return eprintf(e, "The target table %s of the UPDATE is not updatable", e.Table)
 }
@@ -122,9 +131,6 @@ func (e *TableNotUpdatableError) ErrorCode() vtrpcpb.Code {
 }
 
 // SQLCalcFoundRowsUsageError
-type SQLCalcFoundRowsUsageError struct {
-}
-
 func (e *SQLCalcFoundRowsUsageError) Error() string {
 	return eprintf(e, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
 }
@@ -134,10 +140,6 @@ func (e *SQLCalcFoundRowsUsageError) ErrorCode() vtrpcpb.Code {
 }
 
 // CantUseOptionHereError
-type CantUseOptionHereError struct {
-	Msg string
-}
-
 func (e *CantUseOptionHereError) Error() string {
 	return eprintf(e, "Incorrect usage/placement of '%s'", e.Msg)
 }
@@ -151,10 +153,6 @@ func (e *CantUseOptionHereError) ErrorCode() vtrpcpb.Code {
 }
 
 // MissingInVSchemaError
-type MissingInVSchemaError struct {
-	Table TableInfo
-}
-
 func (e *MissingInVSchemaError) Error() string {
 	tableName, _ := e.Table.Name()
 	return eprintf(e, "Table information is not provided in vschema for table `%s`", sqlparser.String(tableName))
@@ -165,10 +163,6 @@ func (e *MissingInVSchemaError) ErrorCode() vtrpcpb.Code {
 }
 
 // NotSequenceTableError
-type NotSequenceTableError struct {
-	Table string
-}
-
 func (e *NotSequenceTableError) Error() string {
 	return eprintf(e, "NEXT used on a non-sequence table `%s`", e.Table)
 }
@@ -178,10 +172,6 @@ func (e *NotSequenceTableError) ErrorCode() vtrpcpb.Code {
 }
 
 // NextWithMultipleTablesError
-type NextWithMultipleTablesError struct {
-	CountTables int
-}
-
 func (e *NextWithMultipleTablesError) Error() string {
 	return eprintf(e, "Next statement should not contain multiple tables: found %d tables", e.CountTables)
 }
@@ -189,10 +179,6 @@ func (e *NextWithMultipleTablesError) Error() string {
 func (e *NextWithMultipleTablesError) bug() {}
 
 // LockOnlyWithDualError
-type LockOnlyWithDualError struct {
-	Node *sqlparser.LockingFunc
-}
-
 func (e *LockOnlyWithDualError) Error() string {
 	return eprintf(e, "%v allowed only with dual", sqlparser.String(e.Node))
 }
@@ -202,19 +188,11 @@ func (e *LockOnlyWithDualError) ErrorCode() vtrpcpb.Code {
 }
 
 // QualifiedOrderInUnionError
-type QualifiedOrderInUnionError struct {
-	Table string
-}
-
 func (e *QualifiedOrderInUnionError) Error() string {
 	return eprintf(e, "Table `%s` from one of the SELECTs cannot be used in global ORDER clause", e.Table)
 }
 
 // JSONTablesError
-type JSONTablesError struct {
-	Table string
-}
-
 func (e *JSONTablesError) Error() string {
 	return eprintf(e, "json_table expressions")
 }
@@ -222,10 +200,6 @@ func (e *JSONTablesError) Error() string {
 func (e *JSONTablesError) unsupported() {}
 
 // BuggyError is used for checking conditions that should never occur
-type BuggyError struct {
-	Msg string
-}
-
 func (e *BuggyError) Error() string {
 	return eprintf(e, e.Msg)
 }
@@ -233,11 +207,6 @@ func (e *BuggyError) Error() string {
 func (e *BuggyError) bug() {}
 
 // ColumnNotFoundError
-type ColumnNotFoundError struct {
-	Column *sqlparser.ColName
-	Table  *sqlparser.TableName
-}
-
 func (e *ColumnNotFoundError) Error() string {
 	if e.Table == nil {
 		return eprintf(e, "column '%s' not found", sqlparser.String(e.Column))
@@ -254,10 +223,6 @@ func (e *ColumnNotFoundError) ErrorState() vterrors.State {
 }
 
 // AmbiguousColumnError
-type AmbiguousColumnError struct {
-	Column string
-}
-
 func (e *AmbiguousColumnError) Error() string {
 	return eprintf(e, "Column '%s' in field list is ambiguous", e.Column)
 }
@@ -270,10 +235,6 @@ func (e *AmbiguousColumnError) ErrorCode() vtrpcpb.Code {
 	return vtrpcpb.Code_INVALID_ARGUMENT
 }
 
-type UnsupportedConstruct struct {
-	errString string
-}
-
 func (e *UnsupportedConstruct) unsupported() {}
 
 func (e *UnsupportedConstruct) ErrorCode() vtrpcpb.Code {
@@ -282,4 +243,21 @@ func (e *UnsupportedConstruct) ErrorCode() vtrpcpb.Code {
 
 func (e *UnsupportedConstruct) Error() string {
 	return eprintf(e, e.errString)
+}
+
+func (e *SubqueryColumnCountError) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_INVALID_ARGUMENT
+}
+
+func (e *SubqueryColumnCountError) Error() string {
+	return fmt.Sprintf("Operand should contain %d column(s)", e.Expected)
+}
+
+// MissingInVSchemaError
+func (e *ColumnsMissingInSchemaError) Error() string {
+	return "VT09015: schema tracking required"
+}
+
+func (e *ColumnsMissingInSchemaError) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_INVALID_ARGUMENT
 }

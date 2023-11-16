@@ -301,6 +301,18 @@ func (cached *AlterVschema) CachedSize(alloc bool) int64 {
 	size += cached.AutoIncSpec.CachedSize(true)
 	return size
 }
+func (cached *Analyze) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
+	size += cached.Table.CachedSize(false)
+	return size
+}
 func (cached *AndExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1315,34 +1327,6 @@ func (cached *ExtractValueExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *ExtractedSubquery) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(112)
-	}
-	// field Original vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Original.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field Subquery *vitess.io/vitess/go/vt/sqlparser.Subquery
-	size += cached.Subquery.CachedSize(true)
-	// field OtherSide vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.OtherSide.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field hasValuesArg string
-	size += hack.RuntimeAllocSize(int64(len(cached.hasValuesArg)))
-	// field argName string
-	size += hack.RuntimeAllocSize(int64(len(cached.argName)))
-	// field alternative vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.alternative.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	return size
-}
 func (cached *FirstOrLastValueExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1804,10 +1788,8 @@ func (cached *IndexInfo) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(80)
 	}
-	// field Type string
-	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
 	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
 	size += cached.Name.CachedSize(false)
 	// field ConstraintName vitess.io/vitess/go/vt/sqlparser.IdentifierCI
@@ -3613,6 +3595,8 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	}
 	// field Cache *bool
 	size += hack.RuntimeAllocSize(int64(1))
+	// field With *vitess.io/vitess/go/vt/sqlparser.With
+	size += cached.With.CachedSize(true)
 	// field From []vitess.io/vitess/go/vt/sqlparser.TableExpr
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.From)) * int64(16))
@@ -3635,8 +3619,6 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	}
 	// field Where *vitess.io/vitess/go/vt/sqlparser.Where
 	size += cached.Where.CachedSize(true)
-	// field With *vitess.io/vitess/go/vt/sqlparser.With
-	size += cached.With.CachedSize(true)
 	// field GroupBy vitess.io/vitess/go/vt/sqlparser.GroupBy
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.GroupBy)) * int64(16))
@@ -4209,6 +4191,8 @@ func (cached *Union) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(96)
 	}
+	// field With *vitess.io/vitess/go/vt/sqlparser.With
+	size += cached.With.CachedSize(true)
 	// field Left vitess.io/vitess/go/vt/sqlparser.SelectStatement
 	if cc, ok := cached.Left.(cachedObject); ok {
 		size += cc.CachedSize(true)
@@ -4224,8 +4208,6 @@ func (cached *Union) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
-	// field With *vitess.io/vitess/go/vt/sqlparser.With
-	size += cached.With.CachedSize(true)
 	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
 	size += cached.Limit.CachedSize(true)
 	// field Into *vitess.io/vitess/go/vt/sqlparser.SelectInto
@@ -4572,10 +4554,10 @@ func (cached *With) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(32)
 	}
-	// field ctes []*vitess.io/vitess/go/vt/sqlparser.CommonTableExpr
+	// field CTEs []*vitess.io/vitess/go/vt/sqlparser.CommonTableExpr
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.ctes)) * int64(8))
-		for _, elem := range cached.ctes {
+		size += hack.RuntimeAllocSize(int64(cap(cached.CTEs)) * int64(8))
+		for _, elem := range cached.CTEs {
 			size += elem.CachedSize(true)
 		}
 	}

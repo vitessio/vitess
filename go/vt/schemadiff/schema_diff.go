@@ -17,7 +17,9 @@ limitations under the License.
 package schemadiff
 
 import (
+	"context"
 	"fmt"
+	"sort"
 
 	"vitess.io/vitess/go/mathutil"
 )
@@ -68,6 +70,16 @@ func (d *DiffDependency) Type() DiffDependencyType {
 	return d.typ
 }
 
+// IsInOrder returns true if this dependency indicates a known order
+func (d *DiffDependency) IsInOrder() bool {
+	return d.typ >= DiffDependencyInOrderCompletion
+}
+
+// IsSequential returns true if this is a sequential dependency
+func (d *DiffDependency) IsSequential() bool {
+	return d.typ >= DiffDependencySequentialExecution
+}
+
 /*
 The below is adapted from https://yourbasic.org/golang/generate-permutation-slice-string/
 Licensed under https://creativecommons.org/licenses/by/3.0/
@@ -76,31 +88,74 @@ Modified to have an early break
 
 // permutateDiffs calls `callback` with each permutation of a. If the function returns `true`, that means
 // the callback has returned `true` for an early break, thus possibly not all permutations have been evaluated.
-func permutateDiffs(a []EntityDiff, callback func([]EntityDiff) (earlyBreak bool)) (earlyBreak bool) {
-	if len(a) == 0 {
-		return false
+func permutateDiffs(ctx context.Context, diffs []EntityDiff, callback func([]EntityDiff) (earlyBreak bool)) (earlyBreak bool, err error) {
+	if len(diffs) == 0 {
+		return false, nil
 	}
-	return permDiff(a, callback, 0)
+	// Sort by a heristic (DROPs first, ALTERs next, CREATEs last). This ordering is then used first in the permutation
+	// search and serves as seed for the rest of permutations.
+
+	return permDiff(ctx, diffs, callback, 0)
 }
 
 // permDiff is a recursive function to permutate given `a` and call `callback` for each permutation.
 // If `callback` returns `true`, then so does this function, and this indicates a request for an early
 // break, in which case this function will not be called again.
-func permDiff(a []EntityDiff, callback func([]EntityDiff) (earlyBreak bool), i int) (earlyBreak bool) {
-	if i > len(a) {
-		return callback(a)
+func permDiff(ctx context.Context, a []EntityDiff, callback func([]EntityDiff) (earlyBreak bool), i int) (earlyBreak bool, err error) {
+	if err := ctx.Err(); err != nil {
+		return true, err // early break
 	}
-	if permDiff(a, callback, i+1) {
-		return true
+	if i > len(a) {
+		return callback(a), nil
+	}
+	if brk, err := permDiff(ctx, a, callback, i+1); brk {
+		return true, err
 	}
 	for j := i + 1; j < len(a); j++ {
+		// An optimization: we don't really need all possible permutations. We can skip some of the recursive search.
+		// We know we begin with a heuristic order where DROP VIEW comes first, then DROP TABLE, then ALTER TABLE & VIEW,
+		// then CREATE TABLE, then CREATE VIEW. And the entities in that initial order are sorted by dependency. That's
+		// thank's to Schema's UnorderedDiffs() existing heuristic.
+		// Now, some pairs of statements should be permutated, but some others will have absolutely no advantage to permutate.
+		// For example, a DROP VIEW and CREATE VIEW: there's no advantage to permutate the two. If the initial order is
+		// inapplicable, then so will be the permutated order.
+		// The next section identifies some no-brainers conditions for skipping swapping of elements.
+		// There could be even more fine grained scenarios, which we can deal with in the future.
+		iIsCreateDropView := false
+		iIsTable := false
+		switch a[i].(type) {
+		case *DropViewEntityDiff, *CreateViewEntityDiff:
+			iIsCreateDropView = true
+		case *DropTableEntityDiff, *AlterTableEntityDiff, *CreateTableEntityDiff:
+			iIsTable = true
+		}
+
+		jIsCreateDropView := false
+		jIsTable := false
+		switch a[j].(type) {
+		case *DropViewEntityDiff, *CreateViewEntityDiff:
+			jIsCreateDropView = true
+		case *DropTableEntityDiff, *AlterTableEntityDiff, *CreateTableEntityDiff:
+			jIsTable = true
+		}
+
+		if iIsCreateDropView && jIsCreateDropView {
+			continue
+		}
+		if iIsCreateDropView && jIsTable {
+			continue
+		}
+		if iIsTable && jIsCreateDropView {
+			continue
+		}
+		// End of optimization
 		a[i], a[j] = a[j], a[i]
-		if permDiff(a, callback, i+1) {
-			return true
+		if brk, err := permDiff(ctx, a, callback, i+1); brk {
+			return true, err
 		}
 		a[i], a[j] = a[j], a[i]
 	}
-	return false
+	return false, nil
 }
 
 // SchemaDiff is a rich diff between two schemas. It includes the following:
@@ -232,10 +287,15 @@ func (d *SchemaDiff) HasSequentialExecutionDependencies() bool {
 
 // OrderedDiffs returns the list of diff in applicable order, if possible. This is a linearized representation
 // where diffs may be applied in-order one after another, keeping the schema in valid state at all times.
-func (d *SchemaDiff) OrderedDiffs() ([]EntityDiff, error) {
-	lastGoodSchema := d.schema
+func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
+	lastGoodSchema := d.schema.copy()
 	var orderedDiffs []EntityDiff
 	m := d.r.Map()
+
+	unorderedDiffsMap := map[string]int{}
+	for i, diff := range d.UnorderedDiffs() {
+		unorderedDiffsMap[diff.CanonicalStatementString()] = i
+	}
 	// The order of classes in the quivalence relation is, generally speaking, loyal to the order of original diffs.
 	for _, class := range d.r.OrderedClasses() {
 		classDiffs := []EntityDiff{}
@@ -247,15 +307,18 @@ func (d *SchemaDiff) OrderedDiffs() ([]EntityDiff, error) {
 			}
 			classDiffs = append(classDiffs, diff)
 		}
+		sort.SliceStable(classDiffs, func(i, j int) bool {
+			return unorderedDiffsMap[classDiffs[i].CanonicalStatementString()] < unorderedDiffsMap[classDiffs[j].CanonicalStatementString()]
+		})
+
 		// We will now permutate the diffs in this equivalence class, and hopefully find
 		// a valid permutation (one where if we apply the diffs in-order, the schema remains valid throughout the process)
-		foundValidPathForClass := permutateDiffs(classDiffs, func(permutatedDiffs []EntityDiff) bool {
-			permutationSchema := lastGoodSchema
+		foundValidPathForClass, err := permutateDiffs(ctx, classDiffs, func(permutatedDiffs []EntityDiff) bool {
+			permutationSchema := lastGoodSchema.copy()
 			// We want to apply the changes one by one, and validate the schema after each change
-			var err error
 			for i := range permutatedDiffs {
-				permutationSchema, err = permutationSchema.Apply(permutatedDiffs[i : i+1])
-				if err != nil {
+				// apply inline
+				if err := permutationSchema.apply(permutatedDiffs[i : i+1]); err != nil {
 					// permutation is invalid
 					return false // continue searching
 				}
@@ -265,6 +328,9 @@ func (d *SchemaDiff) OrderedDiffs() ([]EntityDiff, error) {
 			lastGoodSchema = permutationSchema
 			return true // early break! No need to keep searching
 		})
+		if err != nil {
+			return nil, err
+		}
 		if !foundValidPathForClass {
 			// In this equivalence class, there is no valid permutation. We cannot linearize the diffs.
 			return nil, &ImpossibleApplyDiffOrderError{
@@ -272,6 +338,7 @@ func (d *SchemaDiff) OrderedDiffs() ([]EntityDiff, error) {
 				ConflictingDiffs: classDiffs,
 			}
 		}
+
 		// Done taking care of this equivalence class.
 	}
 	return orderedDiffs, nil

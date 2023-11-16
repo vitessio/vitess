@@ -17,11 +17,14 @@ limitations under the License.
 package gc
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/vt/schema"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNextTableToPurge(t *testing.T) {
@@ -249,4 +252,88 @@ func TestShouldTransitionTable(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCheckTables(t *testing.T) {
+	collector := &TableGC{
+		isOpen:        0,
+		purgingTables: map[string]bool{},
+	}
+	var err error
+	collector.lifecycleStates, err = schema.ParseGCLifecycle("hold,purge,evac,drop")
+	require.NoError(t, err)
+
+	gcTables := []*gcTable{
+		{
+			tableName:   "_vt_something_that_isnt_a_gc_table",
+			isBaseTable: true,
+		},
+		{
+			tableName:   "_vt_HOLD_11111111111111111111111111111111_20990920093324", // 2099 is in the far future
+			isBaseTable: true,
+		},
+		{
+			tableName:   "_vt_HOLD_22222222222222222222222222222222_20200920093324",
+			isBaseTable: true,
+		},
+		{
+			tableName:   "_vt_DROP_33333333333333333333333333333333_20200919083451",
+			isBaseTable: true,
+		},
+		{
+			tableName:   "_vt_DROP_44444444444444444444444444444444_20200919083451",
+			isBaseTable: false,
+		},
+	}
+	// one gcTable above is irrelevant, does not have a GC table name
+	// one will not transition: its date is 2099
+	expectResponses := len(gcTables) - 2
+	expectDropTables := []*gcTable{
+		{
+			tableName:   "_vt_DROP_33333333333333333333333333333333_20200919083451",
+			isBaseTable: true,
+		},
+		{
+			tableName:   "_vt_DROP_44444444444444444444444444444444_20200919083451",
+			isBaseTable: false,
+		},
+	}
+	expectTransitionRequests := []*transitionRequest{
+		{
+			fromTableName: "_vt_HOLD_22222222222222222222222222222222_20200920093324",
+			isBaseTable:   true,
+			toGCState:     schema.PurgeTableGCState,
+			uuid:          "22222222222222222222222222222222",
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	dropTablesChan := make(chan *gcTable)
+	transitionRequestsChan := make(chan *transitionRequest)
+
+	err = collector.checkTables(ctx, gcTables, dropTablesChan, transitionRequestsChan)
+	assert.NoError(t, err)
+
+	var responses int
+	var foundDropTables []*gcTable
+	var foundTransitionRequests []*transitionRequest
+	for {
+		if responses == expectResponses {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			assert.FailNow(t, "timeout")
+			return
+		case gcTable := <-dropTablesChan:
+			responses++
+			foundDropTables = append(foundDropTables, gcTable)
+		case request := <-transitionRequestsChan:
+			responses++
+			foundTransitionRequests = append(foundTransitionRequests, request)
+		}
+	}
+	assert.ElementsMatch(t, expectDropTables, foundDropTables)
+	assert.ElementsMatch(t, expectTransitionRequests, foundTransitionRequests)
 }

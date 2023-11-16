@@ -178,7 +178,7 @@ demo:
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
 		--in ./go/... \
-		--gen vitess.io/vitess/go/pools.Setting \
+		--gen vitess.io/vitess/go/pools/smartconnpool.Setting \
 		--gen vitess.io/vitess/go/vt/schema.DDLStrategySetting \
 		--gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
 		--gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
@@ -278,7 +278,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=22
+BOOTSTRAP_VERSION=25
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -323,6 +323,13 @@ $(DOCKER_BASE_TARGETS): docker_base_%:
 	${call build_docker_image,docker/base/Dockerfile.$*,vitess/base:$*}
 
 docker_base_all: docker_base $(DOCKER_BASE_TARGETS)
+
+DOCKER_MYSQL_VERSIONS = 8.0.30 8.0.34
+docker_mysql:
+	for i in $(DOCKER_MYSQL_VERSIONS); do echo "building vitess/mysql:$$i"; ${call build_docker_image,docker/mysql/Dockerfile.$$i,vitess/mysql:$$i} || exit 1; done
+
+docker_mysql_push:
+	for i in $(DOCKER_MYSQL_VERSIONS); do echo "pushing vitess/mysql:$$i"; docker push vitess/mysql:$$i || exit 1; done
 
 docker_lite:
 	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
@@ -384,6 +391,9 @@ back_to_dev_mode:
 tools:
 	echo $$(date): Installing dependencies
 	./bootstrap.sh
+
+clean_tools:
+	./tools/remove_dependencies.sh
 
 minimaltools:
 	echo $$(date): Installing minimal dependencies

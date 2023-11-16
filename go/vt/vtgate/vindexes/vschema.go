@@ -118,6 +118,12 @@ type Table struct {
 
 	ChildForeignKeys  []ChildFKInfo  `json:"child_foreign_keys,omitempty"`
 	ParentForeignKeys []ParentFKInfo `json:"parent_foreign_keys,omitempty"`
+
+	// index can be columns or expression.
+	// For Primary key, functional indexes are not allowed, therefore it will only be columns.
+	// MySQL error message: ERROR 3756 (HY000): The primary key cannot be a functional index
+	PrimaryKey sqlparser.Columns `json:"primary_key,omitempty"`
+	UniqueKeys []sqlparser.Exprs `json:"unique_keys,omitempty"`
 }
 
 // GetTableName gets the sqlparser.TableName for the vindex Table.
@@ -148,6 +154,7 @@ type ColumnVindex struct {
 type TableInfo struct {
 	Columns     []Column
 	ForeignKeys []*sqlparser.ForeignKeyDefinition
+	Indexes     []*sqlparser.IndexDefinition
 }
 
 // IsUnique is used to tell whether the ColumnVindex
@@ -178,17 +185,30 @@ type Column struct {
 	Name          sqlparser.IdentifierCI `json:"name"`
 	Type          querypb.Type           `json:"type"`
 	CollationName string                 `json:"collation_name"`
+	Default       sqlparser.Expr         `json:"default,omitempty"`
+
+	// Invisible marks this as a column that will not be automatically included in `*` projections
+	Invisible bool `json:"invisible"`
 }
 
 // MarshalJSON returns a JSON representation of Column.
 func (col *Column) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Name string `json:"name"`
-		Type string `json:"type,omitempty"`
+	cj := struct {
+		Name      string `json:"name"`
+		Type      string `json:"type,omitempty"`
+		Invisible bool   `json:"invisible,omitempty"`
+		Default   string `json:"default,omitempty"`
 	}{
 		Name: col.Name.String(),
 		Type: querypb.Type_name[int32(col.Type)],
-	})
+	}
+	if col.Invisible {
+		cj.Invisible = true
+	}
+	if col.Default != nil {
+		cj.Default = sqlparser.String(col.Default)
+	}
+	return json.Marshal(cj)
 }
 
 // KeyspaceSchema contains the schema(table) for a keyspace.
@@ -326,7 +346,7 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 				Name:    ksname,
 				Sharded: ks.Sharded,
 			},
-			ForeignKeyMode: replaceDefaultForeignKeyMode(ks.ForeignKeyMode),
+			ForeignKeyMode: replaceUnspecifiedForeignKeyMode(ks.ForeignKeyMode),
 			Tables:         make(map[string]*Table),
 			Vindexes:       make(map[string]Vindex),
 		}
@@ -335,10 +355,10 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	}
 }
 
-// replaceDefaultForeignKeyMode replaces the default value of the foreign key mode enum with the default we want to keep.
-func replaceDefaultForeignKeyMode(fkMode vschemapb.Keyspace_ForeignKeyMode) vschemapb.Keyspace_ForeignKeyMode {
-	if fkMode == vschemapb.Keyspace_FK_DEFAULT {
-		return vschemapb.Keyspace_FK_UNMANAGED
+// replaceUnspecifiedForeignKeyMode replaces the default value of the foreign key mode enum with the default we want to keep.
+func replaceUnspecifiedForeignKeyMode(fkMode vschemapb.Keyspace_ForeignKeyMode) vschemapb.Keyspace_ForeignKeyMode {
+	if fkMode == vschemapb.Keyspace_unspecified {
+		return vschemapb.Keyspace_unmanaged
 	}
 	return fkMode
 }
@@ -609,8 +629,17 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 					tname,
 				)
 			}
+			var colDefault sqlparser.Expr
+			if col.Default != "" {
+				var err error
+				colDefault, err = sqlparser.ParseExpr(col.Default)
+				if err != nil {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"could not parse the '%s' column's default expression '%s' for table '%s'", col.Name, col.Default, tname)
+				}
+			}
 			colNames[name.Lowered()] = true
-			t.Columns = append(t.Columns, Column{Name: name, Type: col.Type})
+			t.Columns = append(t.Columns, Column{Name: name, Type: col.Type, Invisible: col.Invisible, Default: colDefault})
 		}
 
 		// Initialize ColumnVindexes.

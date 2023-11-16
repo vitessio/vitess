@@ -42,6 +42,7 @@ type TopoProcess struct {
 	Binary             string
 	DataDirectory      string
 	LogDirectory       string
+	ErrorLog           string
 	ListenClientURL    string
 	AdvertiseClientURL string
 	Port               int
@@ -94,8 +95,10 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 	}
 
 	topo.proc.Stderr = errFile
+	topo.ErrorLog = errFile.Name()
 
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
+	topo.proc.Env = append(topo.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Starting etcd with command: %v", strings.Join(topo.proc.Args, " "))
 
@@ -125,6 +128,12 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 		}
 		select {
 		case err := <-topo.exit:
+			errBytes, ferr := os.ReadFile(topo.ErrorLog)
+			if ferr == nil {
+				log.Errorf("%s error log contents:\n%s", topo.Binary, string(errBytes))
+			} else {
+				log.Errorf("Failed to read the %s error log file %q: %v", topo.Binary, topo.ErrorLog, ferr)
+			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", topo.Binary, err)
 		default:
 			time.Sleep(300 * time.Millisecond)
@@ -136,10 +145,10 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 
 // SetupZookeeper spawns a new zookeeper topo service and initializes it with the defaults.
 // The service is kept running in the background until TearDown() is called.
-func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) (err error) {
+func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) error {
 	host, err := os.Hostname()
 	if err != nil {
-		return
+		return err
 	}
 
 	topo.ZKPorts = fmt.Sprintf("%d:%d:%d", cluster.GetAndReservePort(), cluster.GetAndReservePort(), topo.Port)
@@ -151,16 +160,21 @@ func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) (err error
 		"init",
 	)
 
-	errFile, _ := os.Create(path.Join(topo.DataDirectory, "topo-stderr.txt"))
+	err = os.MkdirAll(topo.LogDirectory, 0755)
+	if err != nil {
+		log.Errorf("Failed to create log directory for zookeeper: %v", err)
+		return err
+	}
+	errFile, err := os.Create(path.Join(topo.LogDirectory, "topo-stderr.txt"))
+	if err != nil {
+		log.Errorf("Failed to create file for zookeeper stderr: %v", err)
+		return err
+	}
 	topo.proc.Stderr = errFile
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 
 	log.Infof("Starting zookeeper with args %v", strings.Join(topo.proc.Args, " "))
-	err = topo.proc.Run()
-	if err != nil {
-		return
-	}
-	return
+	return topo.proc.Run()
 }
 
 // ConsulConfigs are the configurations that are added the config files which are used by consul
@@ -184,13 +198,25 @@ type PortsInfo struct {
 func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 	topo.VerifyURL = fmt.Sprintf("http://%s:%d/v1/kv/?keys", topo.Host, topo.Port)
 
-	_ = os.MkdirAll(topo.LogDirectory, os.ModePerm)
-	_ = os.MkdirAll(topo.DataDirectory, os.ModePerm)
+	err = os.MkdirAll(topo.LogDirectory, os.ModePerm)
+	if err != nil {
+		log.Errorf("Failed to create directory for consul logs: %v", err)
+		return
+	}
+	err = os.MkdirAll(topo.DataDirectory, os.ModePerm)
+	if err != nil {
+		log.Errorf("Failed to create directory for consul data: %v", err)
+		return
+	}
 
 	configFile := path.Join(os.Getenv("VTDATAROOT"), "consul.json")
 
 	logFile := path.Join(topo.LogDirectory, "/consul.log")
-	_, _ = os.Create(logFile)
+	_, err = os.Create(logFile)
+	if err != nil {
+		log.Errorf("Failed to create file for consul logs: %v", err)
+		return
+	}
 
 	var config []byte
 	configs := ConsulConfigs{
@@ -224,7 +250,11 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 		"-config-file", configFile,
 	)
 
-	errFile, _ := os.Create(path.Join(topo.DataDirectory, "topo-stderr.txt"))
+	errFile, err := os.Create(path.Join(topo.LogDirectory, "topo-stderr.txt"))
+	if err != nil {
+		log.Errorf("Failed to create file for consul stderr: %v", err)
+		return
+	}
 	topo.proc.Stderr = errFile
 
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)

@@ -27,6 +27,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestInsertNeg(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "insert ignore into t10(id, sharding_key, col1, col2, col3) values(10, 20, 'a', 1, 2), (20, -20, 'b', 3, 4), (30, -40, 'c', 6, 7), (40, 60, 'd', 4, 10)")
+	utils.Exec(t, conn, "insert ignore into t10(id, sharding_key, col1, col2, col3) values(1, 2, 'a', 1, 2), (2, -2, 'b', -3, 4), (3, -4, 'c', 6, -7), (4, 6, 'd', 4, -10)")
+}
+
 func TestSelectNull(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()

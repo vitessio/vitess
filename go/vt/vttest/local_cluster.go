@@ -290,6 +290,18 @@ func (db *LocalCluster) MySQLAppDebugConnParams() mysql.ConnParams {
 	return connParams
 }
 
+// MySQLCleanConnParams returns connection params that can be used to connect
+// directly to MySQL, even if there's a toxyproxy instance on the way.
+func (db *LocalCluster) MySQLCleanConnParams() mysql.ConnParams {
+	mysqlctl := db.mysql
+	if toxiproxy, ok := mysqlctl.(*Toxiproxyctl); ok {
+		mysqlctl = toxiproxy.mysqlctl
+	}
+	connParams := mysqlctl.Params(db.DbName())
+	connParams.Charset = db.Config.Charset
+	return connParams
+}
+
 // SimulateMySQLHang simulates a scenario where the backend MySQL stops all data from flowing through.
 // Please ensure to `defer db.StopSimulateMySQLHang()` after calling this method.
 func (db *LocalCluster) SimulateMySQLHang() error {
@@ -661,7 +673,7 @@ func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
 	args := []string{"ReloadSchemaKeyspace", "--include_primary=true", keyspace}
-	fmt.Printf("Reloading keyspace schema %v", args)
+	log.Infof("Reloading keyspace schema %v", args)
 
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
 		log.Info(e)

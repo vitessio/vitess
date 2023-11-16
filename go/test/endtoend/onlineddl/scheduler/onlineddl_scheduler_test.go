@@ -363,6 +363,9 @@ func testScheduler(t *testing.T) {
 		createViewDependsOnExtraColumn = `
 			CREATE VIEW t1_test_view AS SELECT id, extra_column FROM t1_test
 		`
+		alterNonexistent = `
+				ALTER TABLE nonexistent FORCE
+		`
 	)
 
 	testReadTimestamp := func(t *testing.T, uuid string, timestampColumn string) (timestamp string) {
@@ -884,6 +887,79 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
+	t.Run("Cleanup artifacts", func(t *testing.T) {
+		// Create a migration with a low --retain-artifacts value.
+		// We will cancel the migration and expect the artifact to be cleaned.
+		t.Run("start migration", func(t *testing.T) {
+			t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion --retain-artifacts=1s", "vtctl", "", "", true)) // skip wait
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		})
+		var artifacts []string
+		t.Run("validate artifact exists", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			row := rs.Named().Row()
+			require.NotNil(t, row)
+
+			artifacts = textutil.SplitDelimitedList(row.AsString("artifacts", ""))
+			assert.NotEmpty(t, artifacts)
+			assert.Equal(t, 1, len(artifacts))
+			checkTable(t, artifacts[0], true)
+
+			retainArtifactsSeconds := row.AsInt64("retain_artifacts_seconds", 0)
+			assert.Equal(t, int64(1), retainArtifactsSeconds) // due to --retain-artifacts=1s
+		})
+		t.Run("cancel migration", func(t *testing.T) {
+			onlineddl.CheckCancelMigration(t, &vtParams, shards, t1uuid, true)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusCancelled)
+		})
+		t.Run("wait for cleanup", func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), normalWaitTime)
+			defer cancel()
+
+			for {
+				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				require.NotNil(t, rs)
+				row := rs.Named().Row()
+				require.NotNil(t, row)
+				if !row["cleanup_timestamp"].IsNull() {
+					// This is what we've been waiting for
+					break
+				}
+				select {
+				case <-ctx.Done():
+					assert.Fail(t, "timeout waiting for cleanup")
+					return
+				case <-time.After(time.Second):
+				}
+			}
+		})
+		t.Run("validate artifact does not exist", func(t *testing.T) {
+			checkTable(t, artifacts[0], false)
+		})
+	})
+
+	checkConstraintCapable, err := capableOf(mysql.CheckConstraintsCapability) // 8.0.16 and above
+	require.NoError(t, err)
+	if checkConstraintCapable {
+		// Constraints
+		t.Run("CREATE TABLE with CHECK constraint", func(t *testing.T) {
+			query := `create table with_constraint (id int primary key, check ((id >= 0)))`
+			uuid := testOnlineDDLStatement(t, createParams(query, ddlStrategy, "vtgate", "chk_", "", false))
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			t.Run("ensure constraint name is rewritten", func(t *testing.T) {
+				// Since we did not provide a name for the CHECK constraint, MySQL will
+				// name it `with_constraint_chk_1`. But we expect Online DDL to explicitly
+				// modify the constraint name, specifically to get rid of the <table-name> prefix,
+				// so that we don't get into https://bugs.mysql.com/bug.php?id=107772 situation.
+				createStatement := getCreateTableStatement(t, shards[0].Vttablets[0], "with_constraint")
+				assert.NotContains(t, createStatement, "with_constraint_chk")
+			})
+		})
+	}
+
 	// INSTANT DDL
 	instantDDLCapable, err := capableOf(mysql.InstantAddLastColumnFlavorCapability)
 	require.NoError(t, err)
@@ -906,6 +982,22 @@ func testScheduler(t *testing.T) {
 			})
 		})
 	}
+	// Failure scenarios
+	t.Run("fail nonexistent", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, createParams(alterNonexistent, "vitess", "vtgate", "", "", false))
+
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			message := row["message"].ToString()
+			require.Contains(t, message, "errno 1146")
+		}
+	})
+
 	// 'mysql' strategy
 	t.Run("mysql strategy", func(t *testing.T) {
 		t.Run("declarative", func(t *testing.T) {
@@ -1984,10 +2076,11 @@ func testForeignKeys(t *testing.T) {
 	)
 
 	type testCase struct {
-		name             string
-		sql              string
-		allowForeignKeys bool
-		expectHint       string
+		name                      string
+		sql                       string
+		allowForeignKeys          bool
+		expectHint                string
+		onlyIfFKOnlineDDLPossible bool
 	}
 	var testCases = []testCase{
 		{
@@ -2014,10 +2107,11 @@ func testForeignKeys(t *testing.T) {
 			// on vanilla MySQL, this migration ends with the child_table referencing the old, original table, and not to the new table now called parent_table.
 			// This is a fundamental foreign key limitation, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/
 			// However, this tests is still valid in the sense that it lets us modify the parent table in the first place.
-			name:             "modify parent, trivial",
-			sql:              "alter table parent_table engine=innodb",
-			allowForeignKeys: true,
-			expectHint:       "parent_hint_col",
+			name:                      "modify parent, trivial",
+			sql:                       "alter table parent_table engine=innodb",
+			allowForeignKeys:          true,
+			expectHint:                "parent_hint_col",
+			onlyIfFKOnlineDDLPossible: true,
 		},
 		{
 			// on vanilla MySQL, this migration ends with two tables, the original and the new child_table, both referencing parent_table. This has
@@ -2026,10 +2120,11 @@ func testForeignKeys(t *testing.T) {
 			// This is a fundamental foreign key limitation, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/
 			// However, this tests is still valid in the sense that it lets us modify the child table in the first place.
 			// A valid use case: using FOREIGN_KEY_CHECKS=0  at all times.
-			name:             "modify child, trivial",
-			sql:              "alter table child_table engine=innodb",
-			allowForeignKeys: true,
-			expectHint:       "REFERENCES `parent_table`",
+			name:                      "modify child, trivial",
+			sql:                       "alter table child_table engine=innodb",
+			allowForeignKeys:          true,
+			expectHint:                "REFERENCES `parent_table`",
+			onlyIfFKOnlineDDLPossible: true,
 		},
 		{
 			// on vanilla MySQL, this migration ends with two tables, the original and the new child_table, both referencing parent_table. This has
@@ -2038,10 +2133,11 @@ func testForeignKeys(t *testing.T) {
 			// This is a fundamental foreign key limitation, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/
 			// However, this tests is still valid in the sense that it lets us modify the child table in the first place.
 			// A valid use case: using FOREIGN_KEY_CHECKS=0  at all times.
-			name:             "add foreign key to child",
-			sql:              "alter table child_table add CONSTRAINT another_fk FOREIGN KEY (parent_id) REFERENCES parent_table(id) ON DELETE CASCADE",
-			allowForeignKeys: true,
-			expectHint:       "another_fk",
+			name:                      "add foreign key to child",
+			sql:                       "alter table child_table add CONSTRAINT another_fk FOREIGN KEY (parent_id) REFERENCES parent_table(id) ON DELETE CASCADE",
+			allowForeignKeys:          true,
+			expectHint:                "another_fk",
+			onlyIfFKOnlineDDLPossible: true,
 		},
 		{
 			name:             "add foreign key to table which wasn't a child before",
@@ -2049,7 +2145,33 @@ func testForeignKeys(t *testing.T) {
 			allowForeignKeys: true,
 			expectHint:       "new_fk",
 		},
+		{
+			name:                      "drop foreign key from a child",
+			sql:                       "alter table child_table DROP FOREIGN KEY <childTableConstraintName>", // See "getting child_table constraint name" test step below.
+			allowForeignKeys:          true,
+			expectHint:                "child_hint",
+			onlyIfFKOnlineDDLPossible: true,
+		},
 	}
+
+	fkOnlineDDLPossible := false
+	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
+		// Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
+		// However, Online DDL is made possible in via these changes: https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps1.
+		// Said changes introduce a new global/session boolean variable named 'rename_table_preserve_foreign_key'. It defaults 'false'/0 for backwards compatibility.
+		// When enabled, a `RENAME TABLE` to a FK parent "pins" the children's foreign keys to the table name rather than the table pointer. Which means after the RENAME,
+		// the children will point to the newly instated table rather than the original, renamed table.
+		// (Note: this applies to a particular type of RENAME where we swap tables, see the above blog post).
+		// For FK children, the MySQL changes simply ignore any Vitess-internal table.
+		//
+		// In this stress test, we enable Online DDL if the variable 'rename_table_preserve_foreign_key' is present. The Online DDL mechanism will in turn
+		// query for this variable, and manipulate it, when starting the migration and when cutting over.
+		rs, err := shards[0].Vttablets[0].VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
+		require.NoError(t, err)
+		fkOnlineDDLPossible = len(rs.Rows) > 0
+		t.Logf("MySQL support for 'rename_table_preserve_foreign_key': %v", fkOnlineDDLPossible)
+	})
 
 	createParams := func(ddlStatement string, ddlStrategy string, executeStrategy string, expectHint string, expectError string, skipWait bool) *testOnlineDDLStatementParams {
 		return &testOnlineDDLStatementParams{
@@ -2071,6 +2193,10 @@ func testForeignKeys(t *testing.T) {
 	}
 	for _, testcase := range testCases {
 		t.Run(testcase.name, func(t *testing.T) {
+			if testcase.onlyIfFKOnlineDDLPossible && !fkOnlineDDLPossible {
+				t.Skipf("skipped because backing database does not support 'rename_table_preserve_foreign_key'")
+				return
+			}
 			t.Run("create tables", func(t *testing.T) {
 				for _, statement := range createStatements {
 					t.Run(statement, func(t *testing.T) {
@@ -2086,6 +2212,19 @@ func testForeignKeys(t *testing.T) {
 					})
 				}
 			})
+			t.Run("getting child_table constraint name", func(t *testing.T) {
+				// Due to how OnlineDDL works, the name of the foreign key constraint will not be the one we used in the CREATE TABLE statement.
+				// There's a specific test where we drop said constraint. So speficially for that test (or any similar future tests), we need to dynamically
+				// evaluate the constraint name.
+				rs := onlineddl.VtgateExecQuery(t, &vtParams, "select CONSTRAINT_NAME from information_schema.REFERENTIAL_CONSTRAINTS where TABLE_NAME='child_table'", "")
+				assert.Equal(t, 1, len(rs.Rows))
+				row := rs.Named().Row()
+				assert.NotNil(t, row)
+				childTableConstraintName := row.AsString("CONSTRAINT_NAME", "")
+				assert.NotEmpty(t, childTableConstraintName)
+				testcase.sql = strings.ReplaceAll(testcase.sql, "<childTableConstraintName>", childTableConstraintName)
+			})
+
 			var uuid string
 			t.Run("run migration", func(t *testing.T) {
 				if testcase.allowForeignKeys {
@@ -2221,7 +2360,7 @@ func testRevertMigration(t *testing.T, params *testRevertMigrationParams) (uuid 
 	return uuid
 }
 
-// checkTable checks the number of tables in the first two shards.
+// checkTable checks the number of tables in all shards
 func checkTable(t *testing.T, showTableName string, expectExists bool) bool {
 	expectCount := 0
 	if expectExists {

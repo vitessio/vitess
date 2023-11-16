@@ -20,9 +20,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -957,7 +959,7 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
 		successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
-		successCount := successfulRecoveriesMap[recoveryName]
+		successCount := getIntFromValue(successfulRecoveriesMap[recoveryName])
 		if successCount == countExpected {
 			return
 		}
@@ -965,8 +967,98 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	}
 	vars := vtorcInstance.GetVars()
 	successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
-	successCount := successfulRecoveriesMap[recoveryName]
+	successCount := getIntFromValue(successfulRecoveriesMap[recoveryName])
 	assert.EqualValues(t, countExpected, successCount)
+}
+
+// WaitForSuccessfulPRSCount waits until the given keyspace-shard's count of successful prs runs matches the count expected.
+func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyspace, shard string, countExpected int) {
+	t.Helper()
+	timeout := 15 * time.Second
+	startTime := time.Now()
+	mapKey := fmt.Sprintf("%v.%v.success", keyspace, shard)
+	for time.Since(startTime) < timeout {
+		vars := vtorcInstance.GetVars()
+		prsCountsMap := vars["planned_reparent_counts"].(map[string]interface{})
+		successCount := getIntFromValue(prsCountsMap[mapKey])
+		if successCount == countExpected {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	vars := vtorcInstance.GetVars()
+	prsCountsMap := vars["planned_reparent_counts"].(map[string]interface{})
+	successCount := getIntFromValue(prsCountsMap[mapKey])
+	assert.EqualValues(t, countExpected, successCount)
+}
+
+// WaitForSuccessfulERSCount waits until the given keyspace-shard's count of successful ers runs matches the count expected.
+func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyspace, shard string, countExpected int) {
+	t.Helper()
+	timeout := 15 * time.Second
+	startTime := time.Now()
+	mapKey := fmt.Sprintf("%v.%v.success", keyspace, shard)
+	for time.Since(startTime) < timeout {
+		vars := vtorcInstance.GetVars()
+		ersCountsMap := vars["emergency_reparent_counts"].(map[string]interface{})
+		successCount := getIntFromValue(ersCountsMap[mapKey])
+		if successCount == countExpected {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	vars := vtorcInstance.GetVars()
+	ersCountsMap := vars["emergency_reparent_counts"].(map[string]interface{})
+	successCount := getIntFromValue(ersCountsMap[mapKey])
+	assert.EqualValues(t, countExpected, successCount)
+}
+
+// getIntFromValue is a helper function to get an integer from the given value.
+// If it is convertible to a float, then we round the number to the nearest integer.
+// If the value is not numeric at all, we return 0.
+func getIntFromValue(val any) int {
+	value := reflect.ValueOf(val)
+	if value.CanFloat() {
+		return int(math.Round(value.Float()))
+	}
+	if value.CanInt() {
+		return int(value.Int())
+	}
+	return 0
+}
+
+// WaitForDetectedProblems waits until the given analysis code, alias, keyspace and shard count matches the count expected.
+func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, code, alias, ks, shard string, expect int) {
+	t.Helper()
+	key := strings.Join([]string{code, alias, ks, shard}, ".")
+	timeout := 15 * time.Second
+	startTime := time.Now()
+
+	for time.Since(startTime) < timeout {
+		vars := vtorcInstance.GetVars()
+		problems := vars["DetectedProblems"].(map[string]interface{})
+		actual := getIntFromValue(problems[key])
+		if actual == expect {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+
+	vars := vtorcInstance.GetVars()
+	problems := vars["DetectedProblems"].(map[string]interface{})
+	actual, ok := problems[key]
+	actual = getIntFromValue(actual)
+
+	assert.True(t, ok,
+		"The metric DetectedProblems[%s] should exist but does not (all problems: %+v)",
+		key, problems,
+	)
+
+	assert.EqualValues(t, expect, actual,
+		"The metric DetectedProblems[%s] should be %v but is %v (all problems: %+v)",
+		key, expect, actual,
+		problems,
+	)
 }
 
 // WaitForTabletType waits for the tablet to reach a certain type.

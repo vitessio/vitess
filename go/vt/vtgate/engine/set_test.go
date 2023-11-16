@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 
@@ -108,7 +107,7 @@ func TestSetTable(t *testing.T) {
 		setOps: []SetOp{
 			&UserDefinedVariable{
 				Name: "x",
-				Expr: evalengine.NewColumn(0, sqltypes.Unknown, collations.Unknown),
+				Expr: evalengine.NewColumn(0, evalengine.UnknownType(), nil),
 			},
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(

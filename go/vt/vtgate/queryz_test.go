@@ -46,7 +46,7 @@ func TestQueryzHandler(t *testing.T) {
 	sql := "select id from user where id = 1"
 	_, err := executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
-	executor.plans.Wait()
+	time.Sleep(100 * time.Millisecond)
 	plan1 := assertCacheContains(t, executor, nil, "select id from `user` where id = 1")
 	plan1.ExecTime = uint64(1 * time.Millisecond)
 
@@ -54,7 +54,7 @@ func TestQueryzHandler(t *testing.T) {
 	sql = "select id from user"
 	_, err = executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
-	executor.plans.Wait()
+	time.Sleep(100 * time.Millisecond)
 	plan2 := assertCacheContains(t, executor, nil, "select id from `user`")
 	plan2.ExecTime = uint64(1 * time.Second)
 
@@ -64,7 +64,7 @@ func TestQueryzHandler(t *testing.T) {
 		"name": sqltypes.BytesBindVariable([]byte("myname")),
 	})
 	require.NoError(t, err)
-	executor.plans.Wait()
+	time.Sleep(100 * time.Millisecond)
 	plan3 := assertCacheContains(t, executor, nil, "insert into `user`(id, `name`) values (:id, :name)")
 
 	// vindex insert from above execution
@@ -82,7 +82,7 @@ func TestQueryzHandler(t *testing.T) {
 	plan3.ExecTime = uint64(100 * time.Millisecond)
 	plan4.ExecTime = uint64(200 * time.Millisecond)
 
-	queryzHandler(executor.plans, resp, req)
+	queryzHandler(executor, resp, req)
 	body, _ := io.ReadAll(resp.Body)
 	planPattern1 := []string{
 		`<tr class="low">`,

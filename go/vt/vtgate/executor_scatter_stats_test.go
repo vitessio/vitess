@@ -19,6 +19,7 @@ package vtgate
 import (
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -67,7 +68,7 @@ func TestScatterStatsHttpWriting(t *testing.T) {
 	_, err = executor.Execute(ctx, nil, "TestExecutorResultsExceeded", session, query4, nil)
 	require.NoError(t, err)
 
-	executor.plans.Wait()
+	time.Sleep(500 * time.Millisecond)
 
 	recorder := httptest.NewRecorder()
 	executor.WriteScatterStats(recorder)

@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -106,6 +108,12 @@ func (ts *tableStreamer) Stream() error {
 	}
 
 	if _, err := conn.ExecuteFetch("set names 'binary'", 1, false); err != nil {
+		return err
+	}
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout), 1, false); err != nil {
+		return err
+	}
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout), 1, false); err != nil {
 		return err
 	}
 

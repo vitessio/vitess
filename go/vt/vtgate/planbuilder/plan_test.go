@@ -77,6 +77,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "select_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "symtab_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "unsupported_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "unknown_schema_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "vindex_func_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "wireup_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "memory_sort_cases.json", testOutputTempDir, vschemaWrapper, false)
@@ -95,6 +96,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "reference_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "vexplain_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "misc_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "cte_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 // TestForeignKeyPlanning tests the planning of foreign keys in a managed mode by Vitess.
@@ -102,7 +104,8 @@ func TestForeignKeyPlanning(t *testing.T) {
 	vschema := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, vschema)
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
-		V: vschema,
+		V:           vschema,
+		TestBuilder: TestBuilder,
 	}
 
 	testOutputTempDir := makeTestOutput(t)
@@ -155,6 +158,8 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		// u_tbl8(col8)  -> u_tbl6(col6)  Cascade Null.
 		// u_tbl4(col4)  -> u_tbl7(col7)  Cascade Cascade.
 		// u_tbl9(col9)  -> u_tbl4(col4)  Restrict Restrict.
+		// u_multicol_tbl2(cola, colb)  -> u_multicol_tbl1(cola, colb)  Null Null.
+		// u_multicol_tbl3(cola, colb)  -> u_multicol_tbl2(cola, colb)  Cascade Cascade.
 
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl2", createFkDefinition([]string{"col2"}, "u_tbl1", []string{"col1"}, sqlparser.Cascade, sqlparser.Cascade))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl9", createFkDefinition([]string{"col9"}, "u_tbl1", []string{"col1"}, sqlparser.SetNull, sqlparser.NoAction))
@@ -166,7 +171,27 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl8", createFkDefinition([]string{"col8"}, "u_tbl6", []string{"col6"}, sqlparser.Cascade, sqlparser.CASCADE))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl4", createFkDefinition([]string{"col4"}, "u_tbl7", []string{"col7"}, sqlparser.Cascade, sqlparser.Cascade))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl9", createFkDefinition([]string{"col9"}, "u_tbl4", []string{"col4"}, sqlparser.Restrict, sqlparser.Restrict))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl", createFkDefinition([]string{"col"}, "sharded_fk_allow.s_tbl", []string{"col"}, sqlparser.Restrict, sqlparser.Restrict))
+
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_multicol_tbl2", createFkDefinition([]string{"cola", "colb"}, "u_multicol_tbl1", []string{"cola", "colb"}, sqlparser.SetNull, sqlparser.SetNull))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_multicol_tbl3", createFkDefinition([]string{"cola", "colb"}, "u_multicol_tbl2", []string{"cola", "colb"}, sqlparser.Cascade, sqlparser.Cascade))
+
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "fk_t3", createFkDefinition([]string{"col"}, "fk_t2", []string{"col2"}, sqlparser.SetNull, sqlparser.SetNull))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "fk_t4", createFkDefinition([]string{"col3"}, "fk_t3", []string{"col2"}, sqlparser.SetNull, sqlparser.SetNull))
+		_ = vschema.AddPrimaryKey("unsharded_fk_allow", "fk_t2", []string{"id"})
+		_ = vschema.AddPrimaryKey("unsharded_fk_allow", "fk_t3", []string{"id"})
+		_ = vschema.AddPrimaryKey("unsharded_fk_allow", "fk_t4", []string{"id"})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "fk_t3", sqlparser.Exprs{sqlparser.NewColName("col")})
 	}
+
+	_ = vschema.AddPrimaryKey("unsharded_fk_allow", "u_tbl1", []string{"id"})
+	_ = vschema.AddPrimaryKey("unsharded_fk_allow", "u_tbl9", []string{"id"})
+	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("col9")})
+	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{&sqlparser.BinaryExpr{Operator: sqlparser.MultOp, Left: sqlparser.NewColName("col9"), Right: sqlparser.NewColName("foo")}})
+	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("col9"), sqlparser.NewColName("foo")})
+	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("foo"), sqlparser.NewColName("bar")})
+	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("bar"), sqlparser.NewColName("col9")})
+	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl8", sqlparser.Exprs{sqlparser.NewColName("col8")})
 }
 
 func TestSystemTables57(t *testing.T) {
@@ -206,7 +231,8 @@ func TestOne(t *testing.T) {
 	lv := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, lv)
 	vschema := &vschemawrapper.VSchemaWrapper{
-		V: lv,
+		V:           lv,
+		TestBuilder: TestBuilder,
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)
@@ -257,6 +283,8 @@ func TestOneWithUserAsDefault(t *testing.T) {
 }
 
 func TestOneWithTPCHVSchema(t *testing.T) {
+	reset := oprewriters.EnableDebugPrinting()
+	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/tpch_schema.json", true),
 		SysVarEnabled: true,
@@ -502,10 +530,11 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 
 // createFkDefinition is a helper function to create a Foreign key definition struct from the columns used in it provided as list of strings.
 func createFkDefinition(childCols []string, parentTableName string, parentCols []string, onUpdate, onDelete sqlparser.ReferenceAction) *sqlparser.ForeignKeyDefinition {
+	pKs, pTbl, _ := sqlparser.ParseTable(parentTableName)
 	return &sqlparser.ForeignKeyDefinition{
 		Source: sqlparser.MakeColumns(childCols...),
 		ReferenceDefinition: &sqlparser.ReferenceDefinition{
-			ReferencedTable:   sqlparser.NewTableName(parentTableName),
+			ReferencedTable:   sqlparser.NewTableNameWithQualifier(pTbl, pKs),
 			ReferencedColumns: sqlparser.MakeColumns(parentCols...),
 			OnUpdate:          onUpdate,
 			OnDelete:          onDelete,
@@ -518,6 +547,7 @@ type (
 		Comment string          `json:"comment,omitempty"`
 		Query   string          `json:"query,omitempty"`
 		Plan    json.RawMessage `json:"plan,omitempty"`
+		Skip    bool            `json:"skip,omitempty"`
 	}
 )
 
@@ -548,7 +578,14 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemawrapper.VS
 			t.Run(testName, func(t *testing.T) {
 				compare, s := jsondiff.Compare(tcase.Plan, []byte(out), &opts)
 				if compare != jsondiff.FullMatch {
-					t.Errorf("%s\nDiff:\n%s\n[%s] \n[%s]", filename, s, tcase.Plan, out)
+					message := fmt.Sprintf("%s\nDiff:\n%s\n[%s] \n[%s]", filename, s, tcase.Plan, out)
+					if tcase.Skip {
+						t.Skip(message)
+					} else {
+						t.Errorf(message)
+					}
+				} else if tcase.Skip {
+					t.Errorf("query is correct even though it is skipped:\n %s", tcase.Query)
 				}
 				current.Plan = []byte(out)
 			})

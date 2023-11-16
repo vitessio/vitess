@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -114,34 +116,45 @@ func bindvarForType(t querypb.Type) *querypb.BindVariable {
 
 // TryStreamExecute performs a streaming exec.
 func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	joinVars := make(map[string]*querypb.BindVariable)
+	var mu sync.Mutex
+	// We need to use this atomic since we're also reading this
+	// value outside of it being locked with the mu lock.
+	// This is still racy, but worst case it means that we may
+	// retrieve the right hand side fields twice instead of once.
+	var fieldsSent atomic.Bool
+	fieldsSent.Store(!wantfields)
 	err := vcursor.StreamExecutePrimitive(ctx, jn.Left, bindVars, wantfields, func(lresult *sqltypes.Result) error {
+		joinVars := make(map[string]*querypb.BindVariable)
 		for _, lrow := range lresult.Rows {
 			for k, col := range jn.Vars {
 				joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
 			}
-			rowSent := false
-			err := vcursor.StreamExecutePrimitive(ctx, jn.Right, combineVars(bindVars, joinVars), wantfields, func(rresult *sqltypes.Result) error {
+			var rowSent atomic.Bool
+			err := vcursor.StreamExecutePrimitive(ctx, jn.Right, combineVars(bindVars, joinVars), !fieldsSent.Load(), func(rresult *sqltypes.Result) error {
+				// This needs to be locking since it's not safe to just use
+				// fieldsSent. This is because we can't have a race between
+				// checking fieldsSent and then actually calling the callback
+				// and in parallel another goroutine doing the same. That
+				// can lead to out of order execution of the callback. So the callback
+				// itself and the check need to be covered by the same lock.
+				mu.Lock()
+				defer mu.Unlock()
 				result := &sqltypes.Result{}
-				if wantfields {
-					// This code is currently unreachable because the first result
-					// will always be just the field info, which will cause the outer
-					// wantfields code path to be executed. But this may change in the future.
-					wantfields = false
+				if fieldsSent.CompareAndSwap(false, true) {
 					result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
 				}
 				for _, rrow := range rresult.Rows {
 					result.Rows = append(result.Rows, joinRows(lrow, rrow, jn.Cols))
 				}
 				if len(rresult.Rows) != 0 {
-					rowSent = true
+					rowSent.Store(true)
 				}
 				return callback(result)
 			})
 			if err != nil {
 				return err
 			}
-			if jn.Opcode == LeftJoin && !rowSent {
+			if jn.Opcode == LeftJoin && !rowSent.Load() {
 				result := &sqltypes.Result{}
 				result.Rows = [][]sqltypes.Value{joinRows(
 					lrow,
@@ -151,8 +164,15 @@ func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 				return callback(result)
 			}
 		}
-		if wantfields {
-			wantfields = false
+		// This needs to be locking since it's not safe to just use
+		// fieldsSent. This is because we can't have a race between
+		// checking fieldsSent and then actually calling the callback
+		// and in parallel another goroutine doing the same. That
+		// can lead to out of order execution of the callback. So the callback
+		// itself and the check need to be covered by the same lock.
+		mu.Lock()
+		defer mu.Unlock()
+		if fieldsSent.CompareAndSwap(false, true) {
 			for k := range jn.Vars {
 				joinVars[k] = sqltypes.NullBindVariable
 			}
@@ -205,7 +225,7 @@ func joinFields(lfields, rfields []*querypb.Field, cols []int) []*querypb.Field 
 	return fields
 }
 
-func joinRows(lrow, rrow []sqltypes.Value, cols []int) []sqltypes.Value {
+func joinRows(lrow, rrow sqltypes.Row, cols []int) sqltypes.Row {
 	row := make([]sqltypes.Value, len(cols))
 	for i, index := range cols {
 		if index < 0 {

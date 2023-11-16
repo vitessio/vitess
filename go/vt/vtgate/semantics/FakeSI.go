@@ -17,9 +17,12 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -28,8 +31,10 @@ var _ SchemaInformation = (*FakeSI)(nil)
 
 // FakeSI is a fake SchemaInformation for testing
 type FakeSI struct {
-	Tables       map[string]*vindexes.Table
-	VindexTables map[string]vindexes.Vindex
+	Tables           map[string]*vindexes.Table
+	VindexTables     map[string]vindexes.Vindex
+	KsForeignKeyMode map[string]vschemapb.Keyspace_ForeignKeyMode
+	KsError          map[string]error
 }
 
 // FindTableOrVindex implements the SchemaInformation interface
@@ -41,6 +46,28 @@ func (s *FakeSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Tab
 	return nil, s.VindexTables[sqlparser.String(tablename)], "", 0, nil, nil
 }
 
-func (FakeSI) ConnCollation() collations.ID {
+func (*FakeSI) ConnCollation() collations.ID {
 	return 45
+}
+
+func (s *FakeSI) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
+	if s.KsForeignKeyMode != nil {
+		fkMode, isPresent := s.KsForeignKeyMode[keyspace]
+		if !isPresent {
+			return vschemapb.Keyspace_unspecified, fmt.Errorf("%v keyspace not found", keyspace)
+		}
+		return fkMode, nil
+	}
+	return vschemapb.Keyspace_unmanaged, nil
+}
+
+func (s *FakeSI) KeyspaceError(keyspace string) error {
+	if s.KsError != nil {
+		fkErr, isPresent := s.KsError[keyspace]
+		if !isPresent {
+			return fmt.Errorf("%v keyspace not found", keyspace)
+		}
+		return fkErr
+	}
+	return nil
 }

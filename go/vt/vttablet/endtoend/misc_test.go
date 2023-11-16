@@ -185,8 +185,7 @@ func TestIntegrityError(t *testing.T) {
 }
 
 func TestTrailingComment(t *testing.T) {
-	vstart := framework.DebugVars()
-	v1 := framework.FetchInt(vstart, "QueryCacheLength")
+	v1 := framework.Server.QueryPlanCacheLen()
 
 	bindVars := map[string]*querypb.BindVariable{"ival": sqltypes.Int64BindVariable(1)}
 	client := framework.NewClient()
@@ -201,7 +200,7 @@ func TestTrailingComment(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		v2 := framework.FetchInt(framework.DebugVars(), "QueryCacheLength")
+		v2 := framework.Server.QueryPlanCacheLen()
 		if v2 != v1+1 {
 			t.Errorf("QueryCacheLength(%s): %d, want %d", query, v2, v1+1)
 		}
@@ -1005,20 +1004,8 @@ func TestTuple(t *testing.T) {
 		"__vals": {
 			Type: querypb.Type_TUPLE,
 			Values: []*querypb.Value{
-				{
-					Type: querypb.Type_TUPLE,
-					Values: []*querypb.Value{
-						{Type: querypb.Type_INT64, Value: []byte("100")},
-						{Type: querypb.Type_INT64, Value: []byte("103")},
-					},
-				},
-				{
-					Type: querypb.Type_TUPLE,
-					Values: []*querypb.Value{
-						{Type: querypb.Type_INT64, Value: []byte("87")},
-						{Type: querypb.Type_INT64, Value: []byte("4473")},
-					},
-				},
+				sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(100), sqltypes.NewInt64(103)}),
+				sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(87), sqltypes.NewInt64(4473)}),
 			},
 		},
 	}
@@ -1038,20 +1025,8 @@ func TestTuple(t *testing.T) {
 		"__vals": {
 			Type: querypb.Type_TUPLE,
 			Values: []*querypb.Value{
-				{
-					Type: querypb.Type_TUPLE,
-					Values: []*querypb.Value{
-						{Type: querypb.Type_INT64, Value: []byte("100")},
-						{Type: querypb.Type_INT64, Value: []byte("103")},
-					},
-				},
-				{
-					Type: querypb.Type_TUPLE,
-					Values: []*querypb.Value{
-						{Type: querypb.Type_INT64, Value: []byte("193")},
-						{Type: querypb.Type_INT64, Value: []byte("235")},
-					},
-				},
+				sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(100), sqltypes.NewInt64(103)}),
+				sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(193), sqltypes.NewInt64(235)}),
 			},
 		},
 	}

@@ -157,9 +157,11 @@ func (tenv *testEnv) addTablet(t *testing.T, id int, keyspace, shard string) *fa
 		panic(err)
 	}
 
+	vrdbClient := binlogplayer.NewMockDBClient(t)
+	vrdbClient.Tag = fmt.Sprintf("tablet:%d", id)
 	tenv.tmc.tablets[id] = &fakeTabletConn{
 		tablet:     tablet,
-		vrdbClient: binlogplayer.NewMockDBClient(t),
+		vrdbClient: vrdbClient,
 	}
 
 	dbClientFactory := func() binlogplayer.DBClient {
@@ -476,5 +478,15 @@ func (tmc *fakeTMClient) VReplicationWaitForPos(ctx context.Context, tablet *top
 func (tmc *fakeTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	return &querypb.QueryResult{
 		RowsAffected: 1,
+	}, nil
+}
+
+func (tmc *fakeTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+	return &tabletmanagerdatapb.VDiffResponse{
+		Id:        1,
+		VdiffUuid: req.VdiffUuid,
+		Output: &querypb.QueryResult{
+			RowsAffected: 1,
+		},
 	}, nil
 }

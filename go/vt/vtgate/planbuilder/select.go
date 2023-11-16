@@ -38,17 +38,6 @@ func gen4SelectStmtPlanner(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
-	switch node := stmt.(type) {
-	case *sqlparser.Select:
-		if node.With != nil {
-			return nil, vterrors.VT12001("WITH expression in SELECT statement")
-		}
-	case *sqlparser.Union:
-		if node.With != nil {
-			return nil, vterrors.VT12001("WITH expression in UNION statement")
-		}
-	}
-
 	sel, isSel := stmt.(*sqlparser.Select)
 	if isSel {
 		// handle dual table for processing at vtgate.
@@ -85,6 +74,7 @@ func gen4SelectStmtPlanner(
 
 	if shouldRetryAfterPredicateRewriting(plan) {
 		// by transforming the predicates to CNF, the planner will sometimes find better plans
+		// TODO: this should move to the operator side of planning
 		plan2, tablesUsed := gen4PredicateRewrite(stmt, getPlan)
 		if plan2 != nil {
 			return newPlanResult(plan2.Primitive(), tablesUsed...), nil
@@ -213,7 +203,7 @@ func newBuildSelectPlan(
 		if err != nil {
 			return nil, nil, err
 		}
-		plan = pushCommentDirectivesOnPlan(plan, selStmt)
+		setCommentDirectivesOnPlan(plan, selStmt)
 		return plan, tablesUsed, err
 	}
 
@@ -232,18 +222,7 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	optimizePlan(plan)
-
-	if sel, isSel := selStmt.(*sqlparser.Select); isSel {
-		if err = setMiscFunc(plan, sel); err != nil {
-			return nil, nil, err
-		}
-	}
-
-	if err = plan.Wireup(ctx); err != nil {
-		return nil, nil, err
-	}
-	return pushCommentDirectivesOnPlan(plan, selStmt), operators.TablesUsed(op), nil
+	return plan, operators.TablesUsed(op), nil
 }
 
 func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars) (ops.Operator, error) {
@@ -253,109 +232,6 @@ func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.Se
 	}
 
 	return operators.PlanQuery(ctx, selStmt)
-}
-
-// optimizePlan removes unnecessary simpleProjections that have been created while planning
-func optimizePlan(plan logicalPlan) {
-	for _, lp := range plan.Inputs() {
-		optimizePlan(lp)
-	}
-
-	this, ok := plan.(*simpleProjection)
-	if !ok {
-		return
-	}
-
-	input, ok := this.input.(*simpleProjection)
-	if !ok {
-		return
-	}
-
-	for i, col := range this.eSimpleProj.Cols {
-		this.eSimpleProj.Cols[i] = input.eSimpleProj.Cols[col]
-	}
-	this.input = input.input
-}
-
-func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
-	if limit == nil {
-		return plan, nil
-	}
-	rb, ok := plan.(*route)
-	if ok && rb.isSingleShard() {
-		rb.SetLimit(limit)
-		return plan, nil
-	}
-
-	lPlan, err := createLimit(plan, limit)
-	if err != nil {
-		return nil, err
-	}
-
-	// visit does not modify the plan.
-	_, err = visit(lPlan, setUpperLimit)
-	if err != nil {
-		return nil, err
-	}
-	return lPlan, nil
-}
-
-func planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, in sqlparser.SelectStatement, truncateColumns bool) (logicalPlan, error) {
-	switch node := in.(type) {
-	case *sqlparser.Select:
-		hp := horizonPlanning{
-			sel: node,
-		}
-
-		replaceSubQuery(ctx, node)
-		var err error
-		plan, err = hp.planHorizon(ctx, plan, truncateColumns)
-		if err != nil {
-			return nil, err
-		}
-		plan, err = planLimit(node.Limit, plan)
-		if err != nil {
-			return nil, err
-		}
-	case *sqlparser.Union:
-		var err error
-		rb, isRoute := plan.(*route)
-		if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
-			return nil, ctx.SemTable.NotSingleRouteErr
-		}
-		if isRoute && rb.isSingleShard() {
-			err = planSingleRoutePlan(node, rb)
-		} else {
-			plan, err = planOrderByOnUnion(ctx, plan, node)
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		plan, err = planLimit(node.Limit, plan)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return plan, nil
-
-}
-
-func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, union *sqlparser.Union) (logicalPlan, error) {
-	qp, err := operators.CreateQPFromSelectStatement(ctx, union)
-	if err != nil {
-		return nil, err
-	}
-	hp := horizonPlanning{
-		qp: qp,
-	}
-	if len(qp.OrderExprs) > 0 {
-		plan, err = hp.planOrderBy(ctx, qp.OrderExprs, plan)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return plan, nil
 }
 
 func isOnlyDual(sel *sqlparser.Select) bool {
@@ -394,38 +270,6 @@ func shouldRetryAfterPredicateRewriting(plan logicalPlan) bool {
 	return opcode == engine.DBA &&
 		len(sysTableTableName) == 0 &&
 		len(sysTableTableSchema) == 0
-}
-
-func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
-	_, err := visit(in, func(plan logicalPlan) (bool, logicalPlan, error) {
-		switch node := plan.(type) {
-		case *route:
-			err := copyCommentsAndLocks(node.Select, sel, node.eroute.Opcode)
-			if err != nil {
-				return false, nil, err
-			}
-			return true, node, nil
-		}
-		return true, plan, nil
-	})
-
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func copyCommentsAndLocks(statement sqlparser.SelectStatement, sel *sqlparser.Select, opcode engine.Opcode) error {
-	query := sqlparser.GetFirstSelect(statement)
-	query.Comments = sel.Comments
-	query.Lock = sel.Lock
-	if sel.Into != nil {
-		if opcode != engine.Unsharded {
-			return vterrors.VT12001("INTO on sharded keyspace")
-		}
-		query.Into = sel.Into
-	}
-	return nil
 }
 
 func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engine.Primitive, error) {

@@ -118,22 +118,18 @@ func UpdateShardRecords(
 	if err := ts.UpdateDisableQueryService(ctx, keyspace, shards, servedType, cells, disableQueryService); err != nil {
 		return err
 	}
-
 	for i, si := range shards {
 		updatedShard, err := ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
 			if clearSourceShards {
 				si.SourceShards = nil
 			}
-
 			return nil
 		})
 
 		if err != nil {
 			return err
 		}
-
 		shards[i] = updatedShard
-
 		// For 'to' shards, refresh to make them serve. The 'from' shards will
 		// be refreshed after traffic has migrated.
 		if !isFrom {
@@ -142,7 +138,6 @@ func UpdateShardRecords(
 			}
 		}
 	}
-
 	return nil
 }
 

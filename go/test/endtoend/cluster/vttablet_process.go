@@ -42,7 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-const vttabletStateTimeout = 30 * time.Second
+const vttabletStateTimeout = 60 * time.Second
 
 // VttabletProcess is a generic handle for a running vttablet .
 // It can be spawned manually
@@ -58,6 +58,7 @@ type VttabletProcess struct {
 	Shard                       string
 	CommonArg                   VtctlProcess
 	LogDir                      string
+	ErrorLog                    string
 	TabletHostname              string
 	Keyspace                    string
 	TabletType                  string
@@ -71,15 +72,15 @@ type VttabletProcess struct {
 	QueryzURL                   string
 	StatusDetailsURL            string
 	SupportsBackup              bool
+	ExplicitServingStatus       bool
 	ServingStatus               string
 	DbPassword                  string
 	DbPort                      int
-	VreplicationTabletType      string
 	DbFlavor                    string
 	Charset                     string
 	ConsolidationsURL           string
 
-	//Extra Args to be set before starting the vttablet process
+	// Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
 	proc *exec.Cmd
@@ -107,11 +108,15 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--backup_storage_implementation", vttablet.BackupStorageImplementation,
 		"--file_backup_storage_root", vttablet.FileBackupStorageRoot,
 		"--service_map", vttablet.ServiceMap,
-		"--vtctld_addr", vttablet.VtctldAddress,
-		"--vtctld_addr", vttablet.VtctldAddress,
-		"--vreplication_tablet_type", vttablet.VreplicationTabletType,
 		"--db_charset", vttablet.Charset,
 	)
+	if v, err := GetMajorVersion("vttablet"); err != nil {
+		return err
+	} else if v >= 18 {
+		vttablet.proc.Args = append(vttablet.proc.Args, "--bind-address", "127.0.0.1")
+		vttablet.proc.Args = append(vttablet.proc.Args, "--grpc_bind_address", "127.0.0.1")
+	}
+
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--test.coverprofile="+getCoveragePath("vttablet.out"))
 	}
@@ -130,8 +135,10 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	fname := path.Join(vttablet.LogDir, vttablet.TabletPath+"-vttablet-stderr.txt")
 	errFile, _ := os.Create(fname)
 	vttablet.proc.Stderr = errFile
+	vttablet.ErrorLog = errFile.Name()
 
 	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
+	vttablet.proc.Env = append(vttablet.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Running vttablet with command: %v", strings.Join(vttablet.proc.Args, " "))
 
@@ -149,7 +156,15 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	}()
 
 	if vttablet.ServingStatus != "" {
-		if err = vttablet.WaitForTabletStatus(vttablet.ServingStatus); err != nil {
+		// If the tablet has an explicit serving status we use the serving status
+		// otherwise we wait for any serving status to show up in the healthcheck.
+		var servingStatus []string
+		if vttablet.ExplicitServingStatus {
+			servingStatus = append(servingStatus, vttablet.ServingStatus)
+		} else {
+			servingStatus = append(servingStatus, "SERVING", "NOT_SERVING")
+		}
+		if err = vttablet.WaitForTabletStatuses(servingStatus); err != nil {
 			errFileContent, _ := os.ReadFile(fname)
 			if errFileContent != nil {
 				log.Infof("vttablet error:\n%s\n", string(errFileContent))
@@ -297,6 +312,12 @@ func (vttablet *VttabletProcess) WaitForTabletStatusesForTimeout(expectedStatuse
 		}
 		select {
 		case err := <-vttablet.exit:
+			errBytes, ferr := os.ReadFile(vttablet.ErrorLog)
+			if ferr == nil {
+				log.Errorf("vttablet error log contents:\n%s", string(errBytes))
+			} else {
+				log.Errorf("Failed to read the vttablet error log file %q: %v", vttablet.ErrorLog, ferr)
+			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
 		default:
 			time.Sleep(300 * time.Millisecond)
@@ -636,7 +657,6 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 		ServingStatus:               "NOT_SERVING",
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
-		VreplicationTabletType:      "replica",
 		TabletUID:                   tabletUID,
 		Charset:                     charset,
 	}

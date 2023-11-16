@@ -463,7 +463,7 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 			continue
 		}
 		for _, idx := range ddl.GetTableSpec().Indexes {
-			if !idx.Info.Primary {
+			if idx.Info.Type != sqlparser.IndexTypePrimary {
 				continue
 			}
 			for _, col := range idx.Columns {
@@ -846,7 +846,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			fallthrough
 		case sqlparser.HexVal:
 			fallthrough
-		case sqlparser.BitVal:
+		case sqlparser.BitNum:
 			colTypes = append(colTypes, querypb.Type_INT32)
 		case sqlparser.StrVal:
 			colTypes = append(colTypes, querypb.Type_VARCHAR)

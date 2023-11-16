@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/safehtml/template"
@@ -35,7 +36,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -1214,7 +1214,6 @@ func TestExecutorOther(t *testing.T) {
 	}
 
 	stmts := []string{
-		"analyze table t1",
 		"describe select * from t1",
 		"explain select * from t1",
 		"repair table t1",
@@ -1372,8 +1371,6 @@ func TestExecutorDDL(t *testing.T) {
 }
 
 func TestExecutorDDLFk(t *testing.T) {
-	executor, _, _, sbc, ctx := createExecutorEnv(t)
-
 	mName := "TestExecutorDDLFk"
 	stmts := []string{
 		"create table t1(id bigint primary key, foreign key (id) references t2(id))",
@@ -1383,6 +1380,7 @@ func TestExecutorDDLFk(t *testing.T) {
 	for _, stmt := range stmts {
 		for _, fkMode := range []string{"allow", "disallow"} {
 			t.Run(stmt+fkMode, func(t *testing.T) {
+				executor, _, _, sbc, ctx := createExecutorEnv(t)
 				sbc.ExecCount.Store(0)
 				foreignKeyMode = fkMode
 				_, err := executor.Execute(ctx, nil, mName, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
@@ -1665,13 +1663,9 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	}
 }
 
-func assertCacheSize(t *testing.T, c cache.Cache, expected int) {
+func assertCacheSize(t *testing.T, c *PlanCache, expected int) {
 	t.Helper()
-	var size int
-	c.ForEach(func(_ any) bool {
-		size++
-		return true
-	})
+	size := c.Len()
 	if size != expected {
 		t.Errorf("getPlan() expected cache to have size %d, but got: %d", expected, size)
 	}
@@ -1682,8 +1676,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *vcursorImpl, sql string)
 
 	var plan *engine.Plan
 	if vc == nil {
-		e.plans.ForEach(func(x any) bool {
-			p := x.(*engine.Plan)
+		e.ForEachPlan(func(p *engine.Plan) bool {
 			if p.Original == sql {
 				plan = p
 			}
@@ -1691,9 +1684,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *vcursorImpl, sql string)
 		})
 	} else {
 		h := e.hashPlan(context.Background(), vc, sql)
-		if p, ok := e.plans.Get(h); ok {
-			plan = p.(*engine.Plan)
-		}
+		plan, _ = e.plans.Get(h, e.epoch.Load())
 	}
 	require.Truef(t, plan != nil, "plan not found for query: %s", sql)
 	return plan
@@ -1712,7 +1703,7 @@ func getPlanCached(t *testing.T, ctx context.Context, e *Executor, vcursor *vcur
 	require.NoError(t, err)
 
 	// Wait for cache to settle
-	e.plans.Wait()
+	time.Sleep(100 * time.Millisecond)
 	return plan, logStats
 }
 
@@ -2147,7 +2138,7 @@ func TestServingKeyspaces(t *testing.T) {
 	hc.BroadcastAll()
 
 	// Clear plan cache, to force re-planning of the query.
-	executor.plans.Clear()
+	executor.ClearPlans()
 	require.ElementsMatch(t, []string{"TestUnsharded"}, gw.GetServingKeyspaces())
 	result, err = executor.Execute(ctx, nil, "TestServingKeyspaces", NewSafeSession(&vtgatepb.Session{}), "select keyspace_name from dual", nil)
 	require.NoError(t, err)
@@ -2197,7 +2188,6 @@ func TestExecutorOtherRead(t *testing.T) {
 	}
 
 	stmts := []string{
-		"analyze table t1",
 		"describe select * from t1",
 		"explain select * from t1",
 		"do 1",
@@ -2229,6 +2219,55 @@ func TestExecutorOtherRead(t *testing.T) {
 	}
 }
 
+func TestExecutorAnalyze(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup, _ := createExecutorEnv(t)
+
+	type cnts struct {
+		Sbc1Cnt      int64
+		Sbc2Cnt      int64
+		SbcLookupCnt int64
+	}
+
+	tcs := []struct {
+		targetStr string
+
+		wantCnts cnts
+	}{{
+		targetStr: "TestExecutor[-]",
+		wantCnts:  cnts{Sbc1Cnt: 1, Sbc2Cnt: 1},
+	}, {
+		targetStr: KsTestUnsharded,
+		wantCnts:  cnts{SbcLookupCnt: 1},
+	}, {
+		targetStr: "TestExecutor",
+		wantCnts:  cnts{Sbc1Cnt: 1, Sbc2Cnt: 1},
+	}, {
+		targetStr: "TestExecutor/-20",
+		wantCnts:  cnts{Sbc1Cnt: 1},
+	}, {
+		targetStr: "TestExecutor[00]",
+		wantCnts:  cnts{Sbc1Cnt: 1},
+	}}
+
+	stmt := "analyze table t1"
+	for _, tc := range tcs {
+		t.Run(tc.targetStr, func(t *testing.T) {
+			sbc1.ExecCount.Store(0)
+			sbc2.ExecCount.Store(0)
+			sbclookup.ExecCount.Store(0)
+
+			_, err := executor.Execute(context.Background(), nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+			require.NoError(t, err)
+
+			utils.MustMatch(t, tc.wantCnts, cnts{
+				Sbc1Cnt:      sbc1.ExecCount.Load(),
+				Sbc2Cnt:      sbc2.ExecCount.Load(),
+				SbcLookupCnt: sbclookup.ExecCount.Load(),
+			}, "count did not match")
+		})
+	}
+}
+
 func TestExecutorVExplain(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
@@ -2249,7 +2288,7 @@ func TestExecutorVExplain(t *testing.T) {
 
 	result, err = executorExec(ctx, executor, session, "vexplain plan select 42", bindVars)
 	require.NoError(t, err)
-	expected := `[[VARCHAR("{\n\t\"OperatorType\": \"Projection\",\n\t\"Expressions\": [\n\t\t\"INT64(42) as 42\"\n\t],\n\t\"Inputs\": [\n\t\t{\n\t\t\t\"OperatorType\": \"SingleRow\"\n\t\t}\n\t]\n}")]]`
+	expected := `[[VARCHAR("{\n\t\"OperatorType\": \"Projection\",\n\t\"Expressions\": [\n\t\t\"42 as 42\"\n\t],\n\t\"Inputs\": [\n\t\t{\n\t\t\t\"OperatorType\": \"SingleRow\"\n\t\t}\n\t]\n}")]]`
 	require.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
 }
 

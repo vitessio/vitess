@@ -20,7 +20,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -40,8 +39,8 @@ type (
 	}
 )
 
-var _ Expr = (*ConvertExpr)(nil)
-var _ Expr = (*ConvertUsingExpr)(nil)
+var _ IR = (*ConvertExpr)(nil)
+var _ IR = (*ConvertUsingExpr)(nil)
 
 func (c *ConvertExpr) returnUnsupportedError() error {
 	var err error
@@ -125,12 +124,12 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		case p > 6:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for 'CONVERT'. Maximum is 6.", p)
 		}
-		if dt := evalToDateTime(e, c.Length); dt != nil {
+		if dt := evalToDateTime(e, c.Length, env.now); dt != nil {
 			return dt, nil
 		}
 		return nil, nil
 	case "DATE":
-		if d := evalToDate(e); d != nil {
+		if d := evalToDate(e, env.now); d != nil {
 			return d, nil
 		}
 		return nil, nil
@@ -145,39 +144,6 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	case "YEAR":
 		return nil, c.returnUnsupportedError()
-	default:
-		panic("BUG: sqlparser emitted unknown type")
-	}
-}
-
-func (c *ConvertExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	tt, f := c.Inner.typeof(env, fields)
-
-	switch c.Type {
-	case "BINARY":
-		return c.convertToBinaryType(tt), f
-	case "CHAR", "NCHAR":
-		return c.convertToCharType(tt), f | flagNullable
-	case "DECIMAL":
-		return sqltypes.Decimal, f
-	case "DOUBLE", "REAL":
-		return sqltypes.Float64, f
-	case "FLOAT":
-		return sqltypes.Float32, f
-	case "SIGNED", "SIGNED INTEGER":
-		return sqltypes.Int64, f
-	case "UNSIGNED", "UNSIGNED INTEGER":
-		return sqltypes.Uint64, f
-	case "JSON":
-		return sqltypes.TypeJSON, f
-	case "DATE":
-		return sqltypes.Date, f
-	case "DATETIME":
-		return sqltypes.Datetime, f
-	case "TIME":
-		return sqltypes.Time, f
-	case "YEAR":
-		return sqltypes.Year, f
 	default:
 		panic("BUG: sqlparser emitted unknown type")
 	}
@@ -292,11 +258,6 @@ func (c *ConvertUsingExpr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 	return e, nil
-}
-
-func (c *ConvertUsingExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := c.Inner.typeof(env, fields)
-	return sqltypes.VarChar, f | flagNullable
 }
 
 func (conv *ConvertUsingExpr) compile(c *compiler) (ctype, error) {

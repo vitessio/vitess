@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -207,13 +208,13 @@ func TestQueryExecutorPlans(t *testing.T) {
 	}, {
 		input: "create index a on user(id)",
 		dbResponses: []dbResponse{{
-			query:  "alter table `user` add index a (id)",
+			query:  "alter table `user` add key a (id)",
 			result: emptyResult,
 		}},
 		resultWant: emptyResult,
 		planWant:   "DDL",
-		logWant:    "alter table `user` add index a (id)",
-		inTxWant:   "alter table `user` add index a (id)",
+		logWant:    "alter table `user` add key a (id)",
+		inTxWant:   "alter table `user` add key a (id)",
 	}, {
 		input: "create index a on user(id1 + id2)",
 		dbResponses: []dbResponse{{
@@ -319,7 +320,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 				assert.True(t, vterrors.Equals(err, tcase.errorWant))
 			}
 			// Wait for the existing query to be processed by the cache
-			tsv.QueryPlanCacheWait()
+			time.Sleep(100 * time.Millisecond)
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
@@ -412,7 +413,7 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 
 			// Wait for the existing query to be processed by the cache
-			tsv.QueryPlanCacheWait()
+			time.Sleep(100 * time.Millisecond)
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
@@ -1526,7 +1527,7 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 
 func newTestQueryExecutorStreaming(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutorStreaming")
-	plan, err := tsv.qe.GetStreamPlan(sql)
+	plan, err := tsv.qe.GetStreamPlan(ctx, logStats, sql, false)
 	if err != nil {
 		panic(err)
 	}

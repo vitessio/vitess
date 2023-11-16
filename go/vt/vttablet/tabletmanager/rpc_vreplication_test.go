@@ -18,11 +18,14 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"runtime/debug"
 	"strings"
 	"testing"
+
+	"vitess.io/vitess/go/vt/vttablet"
 
 	"github.com/stretchr/testify/require"
 
@@ -51,7 +54,7 @@ const (
 	checkForFrozenWorkflow   = "select 1 from _vt.vreplication where db_name='vt_%s' and message='FROZEN' and workflow_sub_type != 1"
 	freezeWorkflow           = "update _vt.vreplication set message = 'FROZEN' where db_name='vt_%s' and workflow='%s'"
 	checkForJournal          = "/select val from _vt.resharding_journal where id="
-	getWorkflowStatus        = "select id, workflow, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags, workflow_type, workflow_sub_type from _vt.vreplication where workflow = '%s' and db_name = 'vt_%s'"
+	getWorkflowStatus        = "select id, workflow, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags, workflow_type, workflow_sub_type, time_heartbeat, defer_secondary_keys, component_throttled, time_throttled, rows_copied from _vt.vreplication where workflow = '%s' and db_name = 'vt_%s'"
 	getWorkflowState         = "select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1"
 	getCopyState             = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
 	getNumCopyStateTable     = "select count(distinct table_name) from _vt.copy_state where vrepl_id=1"
@@ -83,7 +86,9 @@ var (
 			},
 		},
 	}
-	position = fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition)
+	position           = fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition)
+	setNetReadTimeout  = fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout)
+	setNetWriteTimeout = fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout)
 )
 
 // TestCreateVReplicationWorkflow tests the query generated
@@ -299,10 +304,10 @@ func TestMoveTables(t *testing.T) {
 		tenv.tmc.setVReplicationExecResults(ftc.tablet, fmt.Sprintf(getWorkflowStatus, wf, targetKs),
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
-					"id|workflow|source|pos|stop_pos|max_replication_log|state|db_name|time_updated|transaction_timestamp|message|tags|workflow_type|workflow_sub_type",
-					"int64|varchar|blob|varchar|varchar|int64|varchar|varchar|int64|int64|varchar|varchar|int64|int64",
+					"id|workflow|source|pos|stop_pos|max_replication_log|state|db_name|time_updated|transaction_timestamp|message|tags|workflow_type|workflow_sub_type|time_heartbeat|defer_secondary_keys|component_throttled|time_throttled|rows_copied",
+					"int64|varchar|blob|varchar|varchar|int64|varchar|varchar|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|int64|int64",
 				),
-				fmt.Sprintf("1|%s|%s|%s|NULL|0|running|vt_%s|1686577659|0|||1|0", wf, bls, position, targetKs),
+				fmt.Sprintf("1|%s|%s|%s|NULL|0|running|vt_%s|1686577659|0|||1|0|0|0||0|10", wf, bls, position, targetKs),
 			),
 		)
 		tenv.tmc.setVReplicationExecResults(ftc.tablet, getLatestCopyState, &sqltypes.Result{})
@@ -323,6 +328,8 @@ func TestMoveTables(t *testing.T) {
 		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(updatePickedSourceTablet, tenv.cells[0], sourceTabletUID), &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(setSessionTZ, &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(setNames, &sqltypes.Result{}, nil)
+		ftc.vrdbClient.ExpectRequest(setNetReadTimeout, &sqltypes.Result{}, nil)
+		ftc.vrdbClient.ExpectRequest(setNetWriteTimeout, &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(getRowsCopied,
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -428,10 +435,10 @@ func TestMoveTables(t *testing.T) {
 	tenv.tmc.setVReplicationExecResults(sourceTablet.tablet, fmt.Sprintf(getWorkflowStatus, workflow.ReverseWorkflowName(wf), sourceKs),
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
-				"id|workflow|source|pos|stop_pos|max_replication_log|state|db_name|time_updated|transaction_timestamp|message|tags|workflow_type|workflow_sub_type",
-				"int64|varchar|blob|varchar|varchar|int64|varchar|varchar|int64|int64|varchar|varchar|int64|int64",
+				"id|workflow|source|pos|stop_pos|max_replication_log|state|db_name|time_updated|transaction_timestamp|message|tags|workflow_type|workflow_sub_type|time_heartbeat|defer_secondary_keys|component_throttled|time_throttled|rows_copied",
+				"int64|varchar|blob|varchar|varchar|int64|varchar|varchar|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|int64|int64",
 			),
-			fmt.Sprintf("1|%s|%s|%s|NULL|0|running|vt_%s|1686577659|0|||1|0", workflow.ReverseWorkflowName(wf), bls, position, sourceKs),
+			fmt.Sprintf("1|%s|%s|%s|NULL|0|running|vt_%s|1686577659|0|||1|0|0|0||0|10", workflow.ReverseWorkflowName(wf), bls, position, sourceKs),
 		),
 	)
 
@@ -472,10 +479,10 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 		keyspace, shard)
 	selectRes := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|source|cell|tablet_types",
-			"int64|varchar|varchar|varchar",
+			"id|source|cell|tablet_types|state|message",
+			"int64|varchar|varchar|varchar|varchar|varbinary",
 		),
-		fmt.Sprintf("%d|%s|%s|%s", vreplID, blsStr, cells[0], tabletTypes[0]),
+		fmt.Sprintf("%d|%s|%s|%s|Running|", vreplID, blsStr, cells[0], tabletTypes[0]),
 	)
 	idQuery, err := sqlparser.ParseAndBind("select id from _vt.vreplication where id = %a",
 		sqltypes.Int64BindVariable(int64(vreplID)))
@@ -497,61 +504,79 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			name: "update cells",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow: workflow,
+				State:    binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				Cells:    []string{"zone2"},
 				// TabletTypes is an empty value, so the current value should be cleared
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Stopped', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '' where id in (%d)`,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '' where id in (%d)`,
 				keyspace, shard, "zone2", vreplID),
 		},
 		{
 			name: "update cells, NULL tablet_types",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:    workflow,
+				State:       binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				Cells:       []string{"zone3"},
 				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}, // So keep the current value of replica
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Stopped', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
 				keyspace, shard, "zone3", tabletTypes[0], vreplID),
 		},
 		{
 			name: "update tablet_types",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:                  workflow,
+				State:                     binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
 				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA},
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Stopped', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '', tablet_types = '%s' where id in (%d)`,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '', tablet_types = '%s' where id in (%d)`,
 				keyspace, shard, "in_order:rdonly,replica", vreplID),
 		},
 		{
 			name: "update tablet_types, NULL cells",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:    workflow,
+				State:       binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				Cells:       textutil.SimulatedNullStringSlice, // So keep the current value of zone1
 				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Stopped', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
 				keyspace, shard, cells[0], "rdonly", vreplID),
 		},
 		{
 			name: "update on_ddl",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow: workflow,
+				State:    binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				OnDdl:    binlogdatapb.OnDDLAction_EXEC,
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Stopped', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}} on_ddl:%s', cell = '', tablet_types = '' where id in (%d)`,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}} on_ddl:%s', cell = '', tablet_types = '' where id in (%d)`,
 				keyspace, shard, binlogdatapb.OnDDLAction_EXEC.String(), vreplID),
 		},
 		{
 			name: "update cell,tablet_types,on_ddl",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:    workflow,
+				State:       binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				Cells:       []string{"zone1", "zone2", "zone3"},
 				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_PRIMARY},
 				OnDdl:       binlogdatapb.OnDDLAction_EXEC_IGNORE,
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Stopped', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}} on_ddl:%s', cell = '%s', tablet_types = '%s' where id in (%d)`,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}} on_ddl:%s', cell = '%s', tablet_types = '%s' where id in (%d)`,
 				keyspace, shard, binlogdatapb.OnDDLAction_EXEC_IGNORE.String(), "zone1,zone2,zone3", "rdonly,replica,primary", vreplID),
+		},
+		{
+			name: "update state",
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+				Workflow:    workflow,
+				State:       binlogdatapb.VReplicationWorkflowState_Stopped,
+				Cells:       textutil.SimulatedNullStringSlice,
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
+				OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+			},
+			query: fmt.Sprintf(`update _vt.vreplication set state = '%s', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
+				binlogdatapb.VReplicationWorkflowState_Stopped.String(), keyspace, shard, cells[0], tabletTypes[0], vreplID),
 		},
 	}
 
@@ -568,8 +593,6 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			require.NotNil(t, tt.request, "No request provided")
 			require.NotEqual(t, "", tt.query, "No expected query provided")
 
-			tt.request.State = binlogdatapb.VReplicationWorkflowState_Stopped
-
 			// These are the same for each RPC call.
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(selectQuery, selectRes, nil)
@@ -583,6 +606,232 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			_, err = tenv.tmc.tablets[tabletUID].tm.UpdateVReplicationWorkflow(ctx, tt.request)
 			tenv.tmc.tablets[tabletUID].vrdbClient.Wait()
 			require.ErrorIs(t, err, errShortCircuit)
+		})
+	}
+}
+
+// TestSourceShardSelection tests the RPC calls made by VtctldServer to tablet
+// managers include the correct set of BLS settings.
+//
+// errShortCircuit is intentionally injected into the MoveTables workflow to
+// short-circuit the workflow after we've validated everything we wanted to in
+// the test.
+func TestSourceShardSelection(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sourceKs := "sourceks"
+	sourceShard0 := "-55"
+	sourceShard1 := "55-aa"
+	sourceShard2 := "aa-"
+	sourceTabletUID0 := 200
+	sourceTabletUID1 := 201
+	sourceTabletUID2 := 202
+
+	targetKs := "targetks"
+	targetShard0 := "-80"
+	targetShard1 := "80-"
+	targetTabletUID0 := 300
+	targetTabletUID1 := 301
+
+	wf := "testwf"
+
+	tenv := newTestEnv(t, ctx, sourceKs, []string{sourceShard0, sourceShard1, sourceShard2})
+	defer tenv.close()
+
+	sourceTablets := map[int]*fakeTabletConn{
+		sourceTabletUID0: tenv.addTablet(t, sourceTabletUID0, sourceKs, sourceShard0),
+		sourceTabletUID1: tenv.addTablet(t, sourceTabletUID1, sourceKs, sourceShard1),
+		sourceTabletUID2: tenv.addTablet(t, sourceTabletUID2, sourceKs, sourceShard2),
+	}
+	for _, st := range sourceTablets {
+		defer tenv.deleteTablet(st.tablet)
+	}
+
+	targetTablets := map[int]*fakeTabletConn{
+		targetTabletUID0: tenv.addTablet(t, targetTabletUID0, targetKs, targetShard0),
+		targetTabletUID1: tenv.addTablet(t, targetTabletUID1, targetKs, targetShard1),
+	}
+	for _, tt := range targetTablets {
+		defer tenv.deleteTablet(tt.tablet)
+	}
+
+	ws := workflow.NewServer(tenv.ts, tenv.tmc)
+
+	tenv.ts.SaveVSchema(ctx, sourceKs, &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id",
+					Name:   "hash",
+				}},
+			},
+		},
+	})
+	tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id",
+					Name:   "hash",
+				}},
+			},
+		},
+	})
+
+	tests := []struct {
+		name    string
+		req     *vtctldatapb.MoveTablesCreateRequest
+		schema  *tabletmanagerdatapb.SchemaDefinition
+		vschema *vschemapb.Keyspace
+		streams map[int][]string
+	}{
+		{
+			name: "same primary vindexes, use intersecting source shards",
+			req: &vtctldatapb.MoveTablesCreateRequest{
+				SourceKeyspace: sourceKs,
+				TargetKeyspace: targetKs,
+				Workflow:       wf,
+				Cells:          tenv.cells,
+				AllTables:      true,
+				AutoStart:      false,
+			},
+			streams: map[int][]string{
+				targetTabletUID0: {
+					sourceShard0,
+					sourceShard1,
+				},
+				targetTabletUID1: {
+					sourceShard1,
+					sourceShard2,
+				},
+			},
+		},
+		{
+			name: "different primary vindexes, use all source shards",
+			req: &vtctldatapb.MoveTablesCreateRequest{
+				SourceKeyspace: sourceKs,
+				TargetKeyspace: targetKs,
+				Workflow:       wf,
+				Cells:          tenv.cells,
+				AllTables:      true,
+				AutoStart:      false,
+			},
+			vschema: &vschemapb.Keyspace{
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "xxhash",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Column: "id",
+							Name:   "hash",
+						}},
+					},
+				},
+			},
+			streams: map[int][]string{
+				targetTabletUID0: {
+					sourceShard0,
+					sourceShard1,
+					sourceShard2,
+				},
+				targetTabletUID1: {
+					sourceShard0,
+					sourceShard1,
+					sourceShard2,
+				},
+			},
+		},
+	}
+
+	for _, tt := range targetTablets {
+		tenv.tmc.setVReplicationExecResults(tt.tablet, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'",
+			targetKs, wf), &sqltypes.Result{})
+		tenv.tmc.setVReplicationExecResults(tt.tablet, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and message='FROZEN' and workflow_sub_type != 1",
+			targetKs), &sqltypes.Result{})
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// This is needed because MockDBClient uses t.Fatal()
+			// which doesn't play well with subtests.
+			defer func() {
+				if err := recover(); err != nil {
+					t.Errorf("Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
+				}
+			}()
+
+			require.NotNil(t, tt.req, "No MoveTablesCreate request provided")
+			require.NotEmpty(t, tt.streams, "No expected streams provided")
+
+			if tt.schema == nil {
+				tt.schema = defaultSchema
+			}
+			tenv.tmc.SetSchema(tt.schema)
+
+			if tt.vschema != nil {
+				tenv.ts.SaveVSchema(ctx, targetKs, tt.vschema)
+			}
+
+			for uid, streams := range tt.streams {
+				tt := targetTablets[uid]
+				for i, sourceShard := range streams {
+					tt.vrdbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+					var err error
+					if i == len(streams)-1 {
+						// errShortCircuit is intentionally injected into the MoveTables
+						// workflow to short-circuit the workflow after we've validated
+						// everything we wanted to in the test.
+						err = errShortCircuit
+					}
+					tt.vrdbClient.ExpectRequest(
+						fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(id, \'%s.hash\', \'%s\')\"}}', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 0)`,
+							insertVReplicationPrefix, wf, sourceKs, sourceShard, targetKs, tt.tablet.Shard, tenv.cells[0], tenv.dbName),
+						&sqltypes.Result{InsertID: uint64(i + 1)},
+						err,
+					)
+					if errors.Is(err, errShortCircuit) {
+						break
+					}
+					tt.vrdbClient.ExpectRequest(getAutoIncrementStep, &sqltypes.Result{}, nil)
+					tt.vrdbClient.ExpectRequest(
+						fmt.Sprintf("select * from _vt.vreplication where id = %d", uint64(i+1)),
+						sqltypes.MakeTestResult(
+							sqltypes.MakeTestFields(
+								"id|source|state",
+								"int64|varchar|varchar",
+							),
+							fmt.Sprintf("%d|%s|Stopped", uint64(i+1), fmt.Sprintf(`keyspace:"%s" shard:"%s" filter:{rules:{match:"t1" filter:"select * from t1 where in_keyrange(id, '%s.hash', '%s')"}}`, sourceKs, sourceShard, targetKs, tt.tablet.Shard)),
+						),
+						nil,
+					)
+				}
+			}
+
+			_, err := ws.MoveTablesCreate(ctx, tt.req)
+			for _, tt := range targetTablets {
+				tt.vrdbClient.Wait()
+			}
+			// errShortCircuit is intentionally injected into the MoveTables
+			// workflow to short-circuit the workflow after we've validated
+			// everything we wanted to in the test.
+			require.ErrorContains(t, err, fmt.Sprintf("%s\n%s", errShortCircuit.Error(), errShortCircuit.Error()))
 		})
 	}
 }
@@ -668,6 +917,8 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 		&sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(setSessionTZ, &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(setNames, &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(setNetReadTimeout, &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(setNetWriteTimeout, &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(getRowsCopied,
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(

@@ -29,6 +29,7 @@ import (
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -37,7 +38,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
@@ -663,17 +663,8 @@ func TestStreamBuffering(t *testing.T) {
 }
 
 func TestStreamLimitOffset(t *testing.T) {
-	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
-
-	// This test is similar to TestStreamUnsharded except that it returns a Result > 10 bytes,
-	// such that the splitting of the Result into multiple Result responses gets tested.
-	sbc1.SetResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "weight_string(id)", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
-		},
-		Rows: [][]sqltypes.Value{{
+	returnRows := map[string][]sqltypes.Row{
+		"-20": [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewVarChar("1234"),
 			sqltypes.NULL,
@@ -682,20 +673,30 @@ func TestStreamLimitOffset(t *testing.T) {
 			sqltypes.NewVarChar("4567"),
 			sqltypes.NULL,
 		}},
-	}})
-
-	sbc2.SetResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "weight_string(id)", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
-		},
-		Rows: [][]sqltypes.Value{{
+		"40-60": [][]sqltypes.Value{{
 			sqltypes.NewInt32(2),
 			sqltypes.NewVarChar("2345"),
 			sqltypes.NULL,
 		}},
-	}})
+		"80-a0": [][]sqltypes.Value{{
+			sqltypes.NewInt32(3),
+			sqltypes.NewVarChar("3456"),
+			sqltypes.NULL,
+		}},
+	}
+
+	executor, _ := createExecutorEnvCallback(t, func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		if ks == KsTestSharded {
+			conn.SetResults([]*sqltypes.Result{{
+				Fields: []*querypb.Field{
+					{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+					{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+					{Name: "weight_string(id)", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+				},
+				Rows: returnRows[shard],
+			}})
+		}
+	})
 
 	results := make(chan *sqltypes.Result, 10)
 	session := &vtgatepb.Session{
@@ -722,11 +723,11 @@ func TestStreamLimitOffset(t *testing.T) {
 		},
 
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(1),
-			sqltypes.NewVarChar("1234"),
+			sqltypes.NewInt32(3),
+			sqltypes.NewVarChar("3456"),
 		}, {
-			sqltypes.NewInt32(1),
-			sqltypes.NewVarChar("foo"),
+			sqltypes.NewInt32(4),
+			sqltypes.NewVarChar("4567"),
 		}},
 	}
 	var gotResults []*sqltypes.Result
@@ -1027,7 +1028,7 @@ func TestLastInsertIDInVirtualTable(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "select * from (select last_insert_id()) as t", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select t.`last_insert_id()` from (select :__lastInsertId as `last_insert_id()` from dual) as t",
+		Sql:           "select `last_insert_id()` from (select :__lastInsertId as `last_insert_id()` from dual) as t",
 		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
 	}}
 
@@ -1561,8 +1562,10 @@ func TestStreamSelectIN(t *testing.T) {
 
 func createExecutor(ctx context.Context, serv *sandboxTopo, cell string, resolver *Resolver) *Executor {
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
-	return NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
+	plans := DefaultPlanCache()
+	ex := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
+	ex.SetQueryLogger(queryLogger)
+	return ex
 }
 
 func TestSelectScatter(t *testing.T) {
@@ -3184,10 +3187,10 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 		})
 		count++
 	}
-
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
-	executor := NewExecutor(ctx, serv, cell, resolver, true, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, queryLogger)
+	plans := DefaultPlanCache()
+	executor := NewExecutor(ctx, serv, cell, resolver, true, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
+	executor.SetQueryLogger(queryLogger)
 	defer executor.Close()
 	// some sleep for all goroutines to start
 	time.Sleep(100 * time.Millisecond)
@@ -4066,6 +4069,17 @@ func TestSelectAggregationRandom(t *testing.T) {
 	assert.Equal(t, `[[DECIMAL(10) DECIMAL(1) DECIMAL(10.0000)]]`, fmt.Sprintf("%v", rs.Rows))
 }
 
+func TestSelectDateTypes(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+	executor.normalize = true
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	qr, err := executor.Execute(context.Background(), nil, "TestSelectDateTypes", session, "select '2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month))-1 month", nil)
+	require.NoError(t, err)
+	require.Equal(t, sqltypes.Char, qr.Fields[0].Type)
+	require.Equal(t, `[[CHAR("2020-12-01")]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
 func TestSelectHexAndBit(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 	executor.normalize = true
@@ -4077,7 +4091,7 @@ func TestSelectHexAndBit(t *testing.T) {
 
 	qr, err = executor.Execute(context.Background(), nil, "TestSelectHexAndBit", session, "select 1 + 0b1001, 1 + b'1001', 1 + 0x9, 1 + x'09'", nil)
 	require.NoError(t, err)
-	require.Equal(t, `[[UINT64(10) UINT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, `[[INT64(10) INT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 // TestSelectCFC tests validates that cfc vindex plan gets cached and same plan is getting reused.
@@ -4094,12 +4108,12 @@ func TestSelectCFC(t *testing.T) {
 	for {
 		select {
 		case <-timeout:
-			t.Fatal("not able to cache a plan withing 10 seconds.")
+			t.Fatal("not able to cache a plan within 30 seconds.")
 		case <-time.After(5 * time.Millisecond):
 			// should be able to find cache entry before the timeout.
 			cacheItems := executor.debugCacheEntries()
 			for _, item := range cacheItems {
-				if strings.Contains(item.Key, "c2 from tbl_cfc where c1 like") {
+				if strings.Contains(item.Original, "c2 from tbl_cfc where c1 like") {
 					return
 				}
 			}
@@ -4119,7 +4133,7 @@ func TestSelectView(t *testing.T) {
 	_, err = executor.Execute(context.Background(), nil, "TestSelectView", session, "select * from user_details_view", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select user_details_view.id, user_details_view.col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = user_extra.user_id) as user_details_view",
+		Sql:           "select id, col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = user_extra.user_id) as user_details_view",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc.Queries)
@@ -4128,7 +4142,7 @@ func TestSelectView(t *testing.T) {
 	_, err = executor.Execute(context.Background(), nil, "TestSelectView", session, "select * from user_details_view where id = 2", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select user_details_view.id, user_details_view.col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = :id /* INT64 */ and `user`.id = user_extra.user_id) as user_details_view",
+		Sql: "select id, col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = :id /* INT64 */ and `user`.id = user_extra.user_id) as user_details_view",
 		BindVariables: map[string]*querypb.BindVariable{
 			"id": sqltypes.Int64BindVariable(2),
 		},
@@ -4141,7 +4155,7 @@ func TestSelectView(t *testing.T) {
 	bvtg1, _ := sqltypes.BuildBindVariable([]int64{1, 2, 3, 4, 5})
 	bvals, _ := sqltypes.BuildBindVariable([]int64{1, 2})
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select user_details_view.id, user_details_view.col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id in ::__vals and `user`.id = user_extra.user_id) as user_details_view",
+		Sql: "select id, col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id in ::__vals and `user`.id = user_extra.user_id) as user_details_view",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1":   bvtg1,
 			"__vals": bvals,
@@ -4150,7 +4164,125 @@ func TestSelectView(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc.Queries)
 }
 
+func TestWarmingReads(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	executor, primary, replica := createExecutorEnvWithPrimaryReplicaConn(t, ctx, 100)
+
+	executor.normalize = true
+	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	// Since queries on the replica will run in a separate go-routine, we need sycnronization for the Queries field in the sandboxconn.
+	replica.RequireQueriesLocking()
+
+	_, err := executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select age, city from `user`"},
+	}
+	utils.MustMatch(t, wantQueries, primary.GetQueries())
+	primary.ClearQueries()
+
+	waitUntilQueryCount(t, replica, 1)
+	wantQueriesReplica := []*querypb.BoundQuery{
+		{Sql: "select age, city from `user`/* warming read */"},
+	}
+	utils.MustMatch(t, wantQueriesReplica, replica.GetQueries())
+	replica.ClearQueries()
+
+	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user /* already has a comment */ ", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{
+		{Sql: "select age, city from `user` /* already has a comment */"},
+	}
+	utils.MustMatch(t, wantQueries, primary.GetQueries())
+	primary.ClearQueries()
+
+	waitUntilQueryCount(t, replica, 1)
+	wantQueriesReplica = []*querypb.BoundQuery{
+		{Sql: "select age, city from `user` /* already has a comment *//* warming read */"},
+	}
+	utils.MustMatch(t, wantQueriesReplica, replica.GetQueries())
+	replica.ClearQueries()
+
+	_, err = executor.Execute(ctx, nil, "TestSelect", session, "insert into user (age, city) values (5, 'Boston')", map[string]*querypb.BindVariable{})
+	waitUntilQueryCount(t, replica, 0)
+	require.NoError(t, err)
+	require.Nil(t, replica.GetQueries())
+
+	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "update user set age=5 where city='Boston'", map[string]*querypb.BindVariable{})
+	waitUntilQueryCount(t, replica, 0)
+	require.NoError(t, err)
+	require.Nil(t, replica.GetQueries())
+
+	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "delete from user where city='Boston'", map[string]*querypb.BindVariable{})
+	waitUntilQueryCount(t, replica, 0)
+	require.NoError(t, err)
+	require.Nil(t, replica.GetQueries())
+	primary.ClearQueries()
+
+	executor, primary, replica = createExecutorEnvWithPrimaryReplicaConn(t, ctx, 0)
+	replica.RequireQueriesLocking()
+	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{
+		{Sql: "select age, city from `user`"},
+	}
+	utils.MustMatch(t, wantQueries, primary.GetQueries())
+	waitUntilQueryCount(t, replica, 0)
+	require.Nil(t, replica.GetQueries())
+}
+
+// waitUntilQueryCount waits until the number of queries run on the tablet reach the specified count.
+func waitUntilQueryCount(t *testing.T, tab *sandboxconn.SandboxConn, count int) {
+	timeout := time.After(1 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("Timed out waiting for tablet %v query count to reach %v", topoproto.TabletAliasString(tab.Tablet().Alias), count)
+		default:
+			time.Sleep(10 * time.Millisecond)
+			if len(tab.GetQueries()) == count {
+				return
+			}
+		}
+	}
+}
+
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	os.Exit(m.Run())
+}
+
+func TestStreamJoinQuery(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	// Special setup: Don't use createExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
+	s := createSandbox(KsTestSharded)
+	s.VSchema = executorVSchema
+	u.VSchema = unshardedVSchema
+	serv := newSandboxForCells(ctx, []string{cell})
+	resolver := newTestResolver(ctx, hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	for _, shard := range shards {
+		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+	}
+	executor := createExecutor(ctx, serv, cell, resolver)
+	defer executor.Close()
+
+	sql := "select u.foo, u.apa, ue.bar, ue.apa from user u join user_extra ue on u.foo = ue.bar"
+	result, err := executorStream(ctx, executor, sql)
+	require.NoError(t, err)
+	wantResult := &sqltypes.Result{
+		Fields: append(sandboxconn.SingleRowResult.Fields, sandboxconn.SingleRowResult.Fields...),
+	}
+	wantRow := append(sandboxconn.StreamRowResult.Rows[0], sandboxconn.StreamRowResult.Rows[0]...)
+	for i := 0; i < 64; i++ {
+		wantResult.Rows = append(wantResult.Rows, wantRow)
+	}
+	require.Equal(t, len(wantResult.Rows), len(result.Rows))
+	for idx := 0; idx < 64; idx++ {
+		utils.MustMatch(t, wantResult.Rows[idx], result.Rows[idx], "mismatched on: ", strconv.Itoa(idx))
+	}
 }

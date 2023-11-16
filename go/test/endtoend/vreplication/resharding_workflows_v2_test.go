@@ -69,7 +69,7 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, "")
 	catchup(t, targetTab1, workflowName, "Reshard")
 	catchup(t, targetTab2, workflowName, "Reshard")
-	vdiff1(t, ksWorkflow, "")
+	vdiffSideBySide(t, ksWorkflow, "")
 	return nil
 }
 
@@ -84,7 +84,7 @@ func createMoveTablesWorkflow(t *testing.T, tables string) {
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, tables)
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
-	vdiff1(t, ksWorkflow, "")
+	vdiffSideBySide(t, ksWorkflow, "")
 }
 
 func tstWorkflowAction(t *testing.T, action, tabletTypes, cells string) error {
@@ -218,7 +218,7 @@ func validateReadsRoute(t *testing.T, tabletTypes string, tablet *cluster.Vttabl
 	for _, tt := range []string{"replica", "rdonly"} {
 		destination := fmt.Sprintf("%s:%s@%s", tablet.Keyspace, tablet.Shard, tt)
 		if strings.Contains(tabletTypes, tt) {
-			require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, tablet, destination, readQuery, readQuery))
+			assertQueryExecutesOnTablet(t, vtgateConn, tablet, destination, readQuery, readQuery)
 		}
 	}
 }
@@ -233,17 +233,17 @@ func validateReadsRouteToTarget(t *testing.T, tabletTypes string) {
 
 func validateWritesRouteToSource(t *testing.T) {
 	insertQuery := "insert into customer(name, cid) values('tempCustomer2', 200)"
-	matchInsertQuery := "insert into customer(name, cid) values"
-	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, sourceTab, "customer", insertQuery, matchInsertQuery))
+	matchInsertQuery := "insert into customer(`name`, cid) values"
+	assertQueryExecutesOnTablet(t, vtgateConn, sourceTab, "customer", insertQuery, matchInsertQuery)
 	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
 }
 
 func validateWritesRouteToTarget(t *testing.T) {
 	insertQuery := "insert into customer(name, cid) values('tempCustomer3', 101)"
-	matchInsertQuery := "insert into customer(name, cid) values"
-	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, targetTab2, "customer", insertQuery, matchInsertQuery))
+	matchInsertQuery := "insert into customer(`name`, cid) values"
+	assertQueryExecutesOnTablet(t, vtgateConn, targetTab2, "customer", insertQuery, matchInsertQuery)
 	insertQuery = "insert into customer(name, cid) values('tempCustomer3', 102)"
-	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, targetTab1, "customer", insertQuery, matchInsertQuery))
+	assertQueryExecutesOnTablet(t, vtgateConn, targetTab1, "customer", insertQuery, matchInsertQuery)
 	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
 }
 
@@ -399,10 +399,10 @@ func testReplicatingWithPKEnumCols(t *testing.T) {
 	insertQuery := "insert into customer(cid, name, typ, sport, meta) values(2, 'Paül','soho','cricket',convert(x'7b7d' using utf8mb4))"
 	execVtgateQuery(t, vtgateConn, sourceKs, deleteQuery)
 	waitForNoWorkflowLag(t, vc, targetKs, workflowName)
-	vdiff1(t, ksWorkflow, "")
+	vdiffSideBySide(t, ksWorkflow, "")
 	execVtgateQuery(t, vtgateConn, sourceKs, insertQuery)
 	waitForNoWorkflowLag(t, vc, targetKs, workflowName)
-	vdiff1(t, ksWorkflow, "")
+	vdiffSideBySide(t, ksWorkflow, "")
 }
 
 func testReshardV2Workflow(t *testing.T) {
@@ -733,7 +733,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 		catchup(t, targetTab1, workflow, workflowType)
 		catchup(t, targetTab2, workflow, workflowType)
-		vdiff1(t, ksWorkflow, "")
+		vdiffSideBySide(t, ksWorkflow, "")
 	}
 
 	var switchReadsFollowedBySwitchWrites = func() {

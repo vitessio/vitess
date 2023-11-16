@@ -25,7 +25,6 @@ import (
 )
 
 type AnalysisCode string
-type StructureAnalysisCode string
 
 const (
 	NoProblem                              AnalysisCode = "NoProblem"
@@ -60,6 +59,8 @@ const (
 	GraceFulPrimaryTakeover                AnalysisCode = "GracefulPrimaryTakeover"
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
 )
+
+type StructureAnalysisCode string
 
 const (
 	StatementAndMixedLoggingReplicasStructureWarning     StructureAnalysisCode = "StatementAndMixedLoggingReplicasStructureWarning"

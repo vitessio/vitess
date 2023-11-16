@@ -63,6 +63,17 @@ var (
 
 	countPendingRecoveries = stats.NewGauge("PendingRecoveries", "Count of the number of pending recoveries")
 
+	// detectedProblems is used to track the number of detected problems.
+	//
+	// When an issue is active it will be set to 1, when it is no longer active
+	// it will be reset back to 0.
+	detectedProblems = stats.NewGaugesWithMultiLabels("DetectedProblems", "Count of the different detected problems", []string{
+		"Analysis",
+		"TabletAlias",
+		"Keyspace",
+		"Shard",
+	})
+
 	// recoveriesCounter counts the number of recoveries that VTOrc has performed
 	recoveriesCounter = stats.NewCountersWithSingleLabel("RecoveriesCount", "Count of the different recoveries performed", "RecoveryType", actionableRecoveriesNames...)
 
@@ -755,17 +766,42 @@ func CheckAndRecover() {
 		log.Error(err)
 		return
 	}
+
+	// Regardless of if the problem is solved or not we want to monitor active
+	// issues, we use a map of labels and set a counter to `1` for each problem
+	// then we reset any counter that is not present in the current analysis.
+	active := make(map[string]struct{})
+	for _, e := range replicationAnalysis {
+		if e.Analysis != inst.NoProblem {
+			names := [...]string{
+				string(e.Analysis),
+				e.AnalyzedInstanceAlias,
+				e.AnalyzedKeyspace,
+				e.AnalyzedShard,
+			}
+
+			key := detectedProblems.GetLabelName(names[:]...)
+			active[key] = struct{}{}
+			detectedProblems.Set(names[:], 1)
+		}
+	}
+
+	// Reset any non-active problems.
+	for key := range detectedProblems.Counts() {
+		if _, ok := active[key]; !ok {
+			detectedProblems.ResetKey(key)
+		}
+	}
+
 	// intentionally iterating entries in random order
 	for _, j := range rand.Perm(len(replicationAnalysis)) {
 		analysisEntry := replicationAnalysis[j]
 
 		go func() {
-			err = executeCheckAndRecoverFunction(analysisEntry)
-			if err != nil {
+			if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {
 				log.Error(err)
 			}
 		}()
-
 	}
 }
 

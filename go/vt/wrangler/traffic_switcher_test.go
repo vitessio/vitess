@@ -891,7 +891,11 @@ func testTableMigrateOneToMany(t *testing.T, keepData, keepRoutingRules bool) {
 			"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
 			"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
 			"Denied tables [t1,t2] will be removed from:",
-			"	Keyspace ks1 Shard 0 Tablet 10")
+			"	Keyspace ks1 Shard 0 Tablet 10",
+			"Denied tables [t1,t2] will be removed from:",
+			"	Keyspace ks2 Shard -80 Tablet 20",
+			"	Keyspace ks2 Shard 80- Tablet 30",
+		)
 	}
 	wantdryRunDropSources = append(wantdryRunDropSources, "Delete reverse vreplication streams on source:",
 		"	Keyspace ks1 Shard 0 Workflow test_reverse DbName vt_ks1 Tablet 10",
@@ -921,7 +925,11 @@ func testTableMigrateOneToMany(t *testing.T, keepData, keepRoutingRules bool) {
 			"Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
 			"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
 			"Denied tables [t1,t2] will be removed from:",
-			"	Keyspace ks1 Shard 0 Tablet 10")
+			"	Keyspace ks1 Shard 0 Tablet 10",
+			"Denied tables [t1,t2] will be removed from:",
+			"	Keyspace ks2 Shard -80 Tablet 20",
+			"	Keyspace ks2 Shard 80- Tablet 30",
+		)
 	}
 	wantdryRunRenameSources = append(wantdryRunRenameSources, "Delete reverse vreplication streams on source:",
 		"	Keyspace ks1 Shard 0 Workflow test_reverse DbName vt_ks1 Tablet 10",
