@@ -279,7 +279,7 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 		fkChildren = append(fkChildren, fkChild)
 	}
 
-	selectionOp, err := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, updStmt.OrderBy, nil, sqlparser.ForUpdateLock)
+	selectionOp, err := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, updStmt.OrderBy, nil, sqlparser.ForUpdateLockNoWait)
 	if err != nil {
 		return nil, err
 	}
@@ -626,7 +626,7 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 		sqlparser.NewWhere(sqlparser.WhereClause, whereCond),
 		nil,
 		sqlparser.NewLimitWithoutOffset(1),
-		sqlparser.ShareModeLock)
+		sqlparser.ForShareLockNoWait)
 }
 
 // Each child foreign key constraint is verified by a join query of the form:
@@ -696,7 +696,7 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updSt
 		sqlparser.NewWhere(sqlparser.WhereClause, whereCond),
 		nil,
 		sqlparser.NewLimitWithoutOffset(1),
-		sqlparser.ShareModeLock)
+		sqlparser.ForShareLockNoWait)
 }
 
 // nullSafeNotInComparison is used to compare the child columns in the foreign key constraint aren't the same as the updateExpressions exactly.
