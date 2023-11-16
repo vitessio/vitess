@@ -98,7 +98,7 @@ const (
 	`
 	sqlSetMigrationReadyToComplete = `UPDATE _vt.schema_migrations SET
 			ready_to_complete=1,
-			ready_to_complete_timestamp=NOW(6)
+			ready_to_complete_timestamp=IFNULL(ready_to_complete_timestamp, NOW(6))
 		WHERE
 			migration_uuid=%a
 	`
@@ -290,7 +290,9 @@ const (
 	sqlSelectRunningMigrations = `SELECT
 			migration_uuid,
 			postpone_completion,
+			force_cutover,
 			cutover_attempts,
+			ifnull(timestampdiff(second, ready_to_complete_timestamp, now()), 0) as seconds_since_ready_to_complete,
 			ifnull(timestampdiff(second, last_cutover_attempt_timestamp, now()), 0) as seconds_since_last_cutover_attempt,
 			timestampdiff(second, started_timestamp, now()) as elapsed_seconds
 		FROM _vt.schema_migrations
