@@ -198,6 +198,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		allowForeignKeys     bool
 		analyzeTable         bool
 		cutOverThreshold     time.Duration
+		forceCutOverAfter    time.Duration
 		expireArtifacts      time.Duration
 		runtimeOptions       string
 		expectError          string
@@ -321,6 +322,13 @@ func TestParseDDLStrategy(t *testing.T) {
 			cutOverThreshold: 5 * time.Minute,
 		},
 		{
+			strategyVariable:  "vitess --force-cut-over-after=3m",
+			strategy:          DDLStrategyVitess,
+			options:           "--force-cut-over-after=3m",
+			runtimeOptions:    "",
+			forceCutOverAfter: 3 * time.Minute,
+		},
+		{
 			strategyVariable: "vitess --retain-artifacts=4m",
 			strategy:         DDLStrategyVitess,
 			options:          "--retain-artifacts=4m",
@@ -372,6 +380,9 @@ func TestParseDDLStrategy(t *testing.T) {
 			cutOverThreshold, err := setting.CutOverThreshold()
 			assert.NoError(t, err)
 			assert.Equal(t, ts.cutOverThreshold, cutOverThreshold)
+			forceCutOverAfter, err := setting.ForceCutOverAfter()
+			assert.NoError(t, err)
+			assert.Equal(t, ts.forceCutOverAfter, forceCutOverAfter)
 
 			runtimeOptions := strings.Join(setting.RuntimeOptions(), " ")
 			assert.Equal(t, ts.runtimeOptions, runtimeOptions)
