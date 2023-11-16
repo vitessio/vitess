@@ -93,7 +93,7 @@ func TestUpdateEqual(t *testing.T) {
 	})
 
 	// Failure case
-	upd.Values = []evalengine.Expr{evalengine.NewBindVar("aa", evalengine.UnknownType())}
+	upd.Values = []evalengine.Expr{evalengine.NewBindVar("aa", evalengine.Type{})}
 	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `query arguments missing for aa`)
 }

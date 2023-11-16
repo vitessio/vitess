@@ -54,14 +54,57 @@ type ctype struct {
 }
 
 type Type struct {
-	Type        sqltypes.Type
-	Coll        collations.ID
-	Size, Scale int32
-	NotNullable bool
+	typ         sqltypes.Type
+	collation   collations.ID
+	nullable    bool
+	init        bool
+	size, scale int32
 }
 
-func UnknownType() Type {
-	return Type{Type: sqltypes.Unknown, Coll: collations.Unknown}
+func NewType(t sqltypes.Type, collation collations.ID) Type {
+	// New types default to being nullable
+	return NewTypeEx(t, collation, true, 0, 0)
+}
+
+func NewTypeEx(t sqltypes.Type, collation collations.ID, nullable bool, size, scale int32) Type {
+	return Type{
+		typ:       t,
+		collation: collation,
+		nullable:  nullable,
+		init:      true,
+		size:      size,
+		scale:     scale,
+	}
+}
+
+func (t *Type) Type() sqltypes.Type {
+	if t.init {
+		return t.typ
+	}
+	return sqltypes.Unknown
+}
+
+func (t *Type) Collation() collations.ID {
+	return t.collation
+}
+
+func (t *Type) Size() int32 {
+	return t.size
+}
+
+func (t *Type) Scale() int32 {
+	return t.scale
+}
+
+func (t *Type) Nullable() bool {
+	if t.init {
+		return t.nullable
+	}
+	return true // nullable by default for unknown types
+}
+
+func (t *Type) Valid() bool {
+	return t.init
 }
 
 func (ct ctype) nullable() bool {

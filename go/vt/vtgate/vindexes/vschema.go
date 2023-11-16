@@ -25,9 +25,11 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqlescape"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
@@ -188,10 +190,10 @@ type Column struct {
 	Default       sqlparser.Expr         `json:"default,omitempty"`
 
 	// Invisible marks this as a column that will not be automatically included in `*` projections
-	Invisible   bool  `json:"invisible,omitempty"`
-	Size        int32 `json:"size,omitempty"`
-	Scale       int32 `json:"scale,omitempty"`
-	NotNullable bool  `json:"not_nullable,omitempty"`
+	Invisible bool  `json:"invisible,omitempty"`
+	Size      int32 `json:"size,omitempty"`
+	Scale     int32 `json:"scale,omitempty"`
+	Nullable  bool  `json:"nullable,omitempty"`
 	// Values contains the list of values for enum and set types.
 	Values []string `json:"values,omitempty"`
 }
@@ -214,6 +216,17 @@ func (col *Column) MarshalJSON() ([]byte, error) {
 		cj.Default = sqlparser.String(col.Default)
 	}
 	return json.Marshal(cj)
+}
+
+func (col *Column) ToEvalengineType() evalengine.Type {
+	collation := collations.DefaultCollationForType(col.Type)
+	if sqltypes.IsText(col.Type) {
+		coll, found := collations.Local().LookupID(col.CollationName)
+		if found {
+			collation = coll
+		}
+	}
+	return evalengine.NewTypeEx(col.Type, collation, col.Nullable, col.Size, col.Scale)
 }
 
 // KeyspaceSchema contains the schema(table) for a keyspace.
@@ -652,7 +665,7 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				Invisible:     col.Invisible,
 				Size:          col.Size,
 				Scale:         col.Scale,
-				NotNullable:   col.NotNullable,
+				Nullable:      col.Nullable,
 				Values:        col.Values,
 			})
 		}

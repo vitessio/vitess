@@ -58,7 +58,7 @@ func createCol(name string, typ int, collation string, def string, size, scale i
 		Default:       expr,
 		Size:          size,
 		Scale:         scale,
-		NotNullable:   notNullable,
+		Nullable:      !notNullable,
 		Values:        vals,
 	}
 }

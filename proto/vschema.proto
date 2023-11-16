@@ -131,7 +131,7 @@ message Column {
   string collation_name = 5;
   int32 size = 6;
   int32 scale = 7;
-  bool not_nullable = 8;
+  bool nullable = 8;
   // values contains the list of values for an enum or set column.
   repeated string values = 9;
 }

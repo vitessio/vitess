@@ -37,21 +37,16 @@ func newTyper() *typer {
 }
 
 func (t *typer) exprType(expr sqlparser.Expr) evalengine.Type {
-	res, ok := t.m[expr]
-	if ok {
-		return res
-	}
-
-	return evalengine.UnknownType()
+	return t.m[expr]
 }
 
 func (t *typer) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Literal:
-		t.m[node] = evalengine.Type{Type: node.SQLType(), Coll: collations.DefaultCollationForType(node.SQLType())}
+		t.m[node] = evalengine.NewType(node.SQLType(), collations.DefaultCollationForType(node.SQLType()))
 	case *sqlparser.Argument:
 		if node.Type >= 0 {
-			t.m[node] = evalengine.Type{Type: node.Type, Coll: collations.DefaultCollationForType(node.Type)}
+			t.m[node] = evalengine.NewType(node.Type, collations.DefaultCollationForType(node.Type))
 		}
 	case sqlparser.AggrFunc:
 		code, ok := opcode.SupportedAggregates[node.AggrName()]
@@ -61,13 +56,13 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 		inputType := sqltypes.Unknown
 		if arg := node.GetArg(); arg != nil {
 			if tt, ok := t.m[arg]; ok {
-				inputType = tt.Type
+				inputType = tt.Type()
 			}
 		}
 		type_ := code.Type(inputType)
 		_, isCount := node.(*sqlparser.Count)
 		_, isCountStart := node.(*sqlparser.CountStar)
-		t.m[node] = evalengine.Type{Type: type_, Coll: collations.DefaultCollationForType(type_), NotNullable: isCount || isCountStart}
+		t.m[node] = evalengine.NewTypeEx(type_, collations.DefaultCollationForType(type_), !(isCount || isCountStart), 0, 0)
 	}
 	return nil
 }

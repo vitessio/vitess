@@ -324,7 +324,7 @@ func getColumns(tblSpec *sqlparser.TableSpec) []vindexes.Column {
 				Invisible:     column.Type.Invisible(),
 				Size:          size,
 				Scale:         scale,
-				NotNullable:   !nullable,
+				Nullable:      nullable,
 				Values:        column.Type.EnumValues,
 			})
 	}

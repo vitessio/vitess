@@ -88,14 +88,9 @@ func TestDistinct(t *testing.T) {
 				if sqltypes.IsNumber(tc.inputs.Fields[i].Type) {
 					collID = collations.CollationBinaryID
 				}
-				t := evalengine.Type{
-					Type:        tc.inputs.Fields[i].Type,
-					Coll:        collID,
-					NotNullable: true,
-				}
 				checkCols = append(checkCols, CheckCol{
 					Col:  i,
-					Type: t,
+					Type: evalengine.NewTypeEx(tc.inputs.Fields[i].Type, collID, false, 0, 0),
 				})
 			}
 		}
@@ -140,7 +135,6 @@ func TestWeightStringFallBack(t *testing.T) {
 	checkCols := []CheckCol{{
 		Col:   0,
 		WsCol: &offsetOne,
-		Type:  evalengine.UnknownType(),
 	}}
 	input := r("myid|weightstring(myid)",
 		"varchar|varbinary",
@@ -165,6 +159,5 @@ func TestWeightStringFallBack(t *testing.T) {
 	utils.MustMatch(t, []CheckCol{{
 		Col:   0,
 		WsCol: &offsetOne,
-		Type:  evalengine.UnknownType(),
 	}}, distinct.CheckCols, "checkCols should not be updated")
 }

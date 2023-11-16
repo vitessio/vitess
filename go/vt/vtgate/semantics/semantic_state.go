@@ -612,14 +612,10 @@ func (st *SemTable) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
 	ws, isWS := e.(*sqlparser.WeightStringFuncExpr)
 	if isWS {
 		wt, _ := st.TypeForExpr(ws.Expr)
-		return evalengine.Type{
-			Type:        sqltypes.VarBinary,
-			Coll:        collations.CollationBinaryID,
-			NotNullable: wt.NotNullable,
-		}, true
+		return evalengine.NewTypeEx(sqltypes.VarBinary, collations.CollationBinaryID, wt.Nullable(), 0, 0), true
 	}
 
-	return evalengine.UnknownType(), false
+	return evalengine.Type{}, false
 }
 
 // NeedsWeightString returns true if the given expression needs weight_string to do safe comparisons
@@ -632,7 +628,7 @@ func (st *SemTable) NeedsWeightString(e sqlparser.Expr) bool {
 		if !found {
 			return true
 		}
-		return typ.Coll == collations.Unknown && !sqltypes.IsNumber(typ.Type)
+		return typ.Collation() == collations.Unknown && !sqltypes.IsNumber(typ.Type())
 	}
 }
 

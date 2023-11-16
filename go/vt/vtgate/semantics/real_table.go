@@ -19,12 +19,9 @@ package semantics
 import (
 	"strings"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -125,23 +122,10 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 	nameMap := map[string]any{}
 	cols := make([]ColumnInfo, 0, len(tbl.Columns))
 	for _, col := range tbl.Columns {
-		collation := collations.DefaultCollationForType(col.Type)
-		if sqltypes.IsText(col.Type) {
-			coll, found := collations.Local().LookupID(col.CollationName)
-			if found {
-				collation = coll
-			}
-		}
 
 		cols = append(cols, ColumnInfo{
-			Name: col.Name.String(),
-			Type: evalengine.Type{
-				Type:        col.Type,
-				Coll:        collation,
-				NotNullable: col.NotNullable,
-				Size:        col.Size,
-				Scale:       col.Scale,
-			},
+			Name:      col.Name.String(),
+			Type:      col.ToEvalengineType(),
 			Invisible: col.Invisible,
 		})
 		nameMap[col.Name.String()] = nil

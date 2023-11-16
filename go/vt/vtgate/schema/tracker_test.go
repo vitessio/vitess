@@ -192,14 +192,14 @@ func TestTableTracking(t *testing.T) {
 		updTbl:   []string{"t1", "t2"},
 		expTbl: map[string][]vindexes.Column{
 			"prior": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT32, CollationName: "binary"}},
-			"t1":    {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary"}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50}, {Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARCHAR, Size: 50, NotNullable: true, Default: &sqlparser.Literal{Val: "a@b.com"}}},
+			"t1":    {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary"}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50}, {Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: false, Default: &sqlparser.Literal{Val: "a@b.com"}}},
 			"t2":    {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, Size: 50}},
 		},
 	}, {
 		testName: "delete prior, updated t2 and new t3",
 		updTbl:   []string{"prior", "t2", "t3"},
 		expTbl: map[string][]vindexes.Column{
-			"t1": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary"}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50}, {Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARCHAR, Size: 50, NotNullable: true, Default: &sqlparser.Literal{Val: "a@b.com"}}},
+			"t1": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary"}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50}, {Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: false, Default: &sqlparser.Literal{Val: "a@b.com"}}},
 			"t2": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, Size: 50}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50}},
 			"t3": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME, CollationName: "binary", Size: 0}},
 		},
@@ -207,7 +207,7 @@ func TestTableTracking(t *testing.T) {
 		testName: "new t4",
 		updTbl:   []string{"t4"},
 		expTbl: map[string][]vindexes.Column{
-			"t1": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary"}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50}, {Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARCHAR, Size: 50, NotNullable: true, Default: &sqlparser.Literal{Val: "a@b.com"}}},
+			"t1": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary"}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50}, {Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: false, Default: &sqlparser.Literal{Val: "a@b.com"}}},
 			"t2": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, Size: 50}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50}},
 			"t3": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME, CollationName: "binary", Size: 0}},
 			"t4": {{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50}},
@@ -292,7 +292,7 @@ func TestFKInfoRetrieval(t *testing.T) {
 		testName: "initial table load",
 		expTbl: map[string][]vindexes.Column{
 			"my_tbl": {
-				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", NotNullable: true},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", Nullable: false},
 				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, CollationName: "latin1_swedish_ci", Default: &sqlparser.NullVal{}},
 				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, Size: 100, CollationName: "binary", Default: &sqlparser.NullVal{}},
 			},
@@ -302,12 +302,12 @@ func TestFKInfoRetrieval(t *testing.T) {
 		updTbl:   []string{"my_child_tbl"},
 		expTbl: map[string][]vindexes.Column{
 			"my_tbl": {
-				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", NotNullable: true},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", Nullable: false},
 				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, CollationName: "latin1_swedish_ci", Default: &sqlparser.NullVal{}},
 				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, Size: 100, CollationName: "binary", Default: &sqlparser.NullVal{}},
 			},
 			"my_child_tbl": {
-				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", NotNullable: true},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", Nullable: false},
 				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, CollationName: "latin1_swedish_ci", Default: &sqlparser.NullVal{}},
 				{Name: sqlparser.NewIdentifierCI("code"), Type: querypb.Type_VARCHAR, Size: 6, CollationName: "utf8mb4_0900_ai_ci", Default: &sqlparser.NullVal{}},
 				{Name: sqlparser.NewIdentifierCI("my_id"), Type: querypb.Type_INT64, CollationName: "binary", Default: &sqlparser.NullVal{}},
@@ -349,7 +349,7 @@ func TestIndexInfoRetrieval(t *testing.T) {
 		testName: "initial table load",
 		expTbl: map[string][]vindexes.Column{
 			"my_tbl": {
-				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", NotNullable: true},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", Nullable: false},
 				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci", Size: 50, Default: &sqlparser.NullVal{}},
 				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "binary", Size: 100, Default: &sqlparser.NullVal{}},
 			},
@@ -365,7 +365,7 @@ func TestIndexInfoRetrieval(t *testing.T) {
 		updTbl:   []string{"my_tbl"},
 		expTbl: map[string][]vindexes.Column{
 			"my_tbl": {
-				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", NotNullable: true},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", Nullable: false},
 				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci", Size: 50, Default: &sqlparser.NullVal{}},
 				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "binary", Size: 100, Default: &sqlparser.NullVal{}},
 			},

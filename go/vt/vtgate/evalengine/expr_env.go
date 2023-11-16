@@ -99,13 +99,7 @@ func (env *ExpressionEnv) TypeOf(expr Expr) (Type, error) {
 	if err != nil {
 		return Type{}, err
 	}
-	return Type{
-		Type:        ty.Type,
-		Coll:        ty.Col.Collation,
-		NotNullable: ty.Flag&flagNullable == 0,
-		Size:        ty.Size,
-		Scale:       ty.Scale,
-	}, nil
+	return NewTypeEx(ty.Type, ty.Col.Collation, ty.Flag&flagNullable != 0, ty.Size, ty.Scale), nil
 }
 
 func (env *ExpressionEnv) SetTime(now time.Time) {

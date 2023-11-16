@@ -41605,8 +41605,8 @@ export namespace vschema {
         /** Column scale */
         scale?: (number|null);
 
-        /** Column not_nullable */
-        not_nullable?: (boolean|null);
+        /** Column nullable */
+        nullable?: (boolean|null);
 
         /** Column values */
         values?: (string[]|null);
@@ -41642,8 +41642,8 @@ export namespace vschema {
         /** Column scale. */
         public scale: number;
 
-        /** Column not_nullable. */
-        public not_nullable: boolean;
+        /** Column nullable. */
+        public nullable: boolean;
 
         /** Column values. */
         public values: string[];

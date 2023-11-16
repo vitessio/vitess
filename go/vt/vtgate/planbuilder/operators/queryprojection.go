@@ -115,7 +115,7 @@ func (aggr Aggr) NeedsWeightString(ctx *plancontext.PlanningContext) bool {
 
 func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) evalengine.Type {
 	if aggr.Func == nil {
-		return evalengine.UnknownType()
+		return evalengine.Type{}
 	}
 	switch aggr.OpCode {
 	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
@@ -123,7 +123,7 @@ func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) evalengine.T
 		return typ
 
 	}
-	return evalengine.UnknownType()
+	return evalengine.Type{}
 }
 
 // NewGroupBy creates a new group by from the given fields.
