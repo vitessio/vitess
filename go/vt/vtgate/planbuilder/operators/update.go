@@ -549,14 +549,14 @@ func createFKVerifyOp(
 
 // Each parent foreign key constraint is verified by an anti join query of the form:
 // select 1 from child_tbl left join parent_tbl on <parent_child_columns with new value expressions, remaining fk columns join>
-// where <parent columns are null> and <unchanged child columns not null> and <updated expressions not null> and <clause same as original update> limit 1
+// where <parent columns are null> and <unchanged child columns not null> and <updated expressions not null> and <clause same as original update> and <comparison of updated expression with original values> limit 1
 // E.g:
 // Child (c1, c2) references Parent (p1, p2)
 // update Child set c1 = c2 + 1 where id = 1
 // verify query:
 // select 1 from Child left join Parent on Parent.p1 = Child.c2 + 1 and Parent.p2 = Child.c2
 // where Parent.p1 is null and Parent.p2 is null and Child.id = 1 and Child.c2 + 1 is not null
-// and Child.c2 is not null
+// and Child.c2 is not null and not ((Child.c1) <=> (Child.c2 + 1))
 // limit 1
 func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, pFK vindexes.ParentFKInfo) (ops.Operator, error) {
 	childTblExpr := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
@@ -567,6 +567,8 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 	parentTbl := pFK.Table.GetTableName()
 	var whereCond sqlparser.Expr
 	var joinCond sqlparser.Expr
+	var notEqualColNames sqlparser.ValTuple
+	var notEqualExprs sqlparser.ValTuple
 	for idx, column := range pFK.ChildColumns {
 		var matchedExpr *sqlparser.UpdateExpr
 		for _, updateExpr := range updStmt.Exprs {
@@ -595,7 +597,9 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 				Right:    sqlparser.NewColNameWithQualifier(pFK.ChildColumns[idx].String(), childTbl),
 			}
 		} else {
+			notEqualColNames = append(notEqualColNames, prefixColNames(childTbl, matchedExpr.Name))
 			prefixedMatchExpr := prefixColNames(childTbl, matchedExpr.Expr)
+			notEqualExprs = append(notEqualExprs, prefixedMatchExpr)
 			joinExpr = &sqlparser.ComparisonExpr{
 				Operator: sqlparser.EqualOp,
 				Left:     sqlparser.NewColNameWithQualifier(pFK.ParentColumns[idx].String(), parentTbl),
@@ -616,6 +620,16 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 		}
 		joinCond = &sqlparser.AndExpr{Left: joinCond, Right: joinExpr}
 		whereCond = &sqlparser.AndExpr{Left: whereCond, Right: predicate}
+	}
+	whereCond = &sqlparser.AndExpr{
+		Left: whereCond,
+		Right: &sqlparser.NotExpr{
+			Expr: &sqlparser.ComparisonExpr{
+				Operator: sqlparser.NullSafeEqualOp,
+				Left:     notEqualColNames,
+				Right:    notEqualExprs,
+			},
+		},
 	}
 	// add existing where condition on the update statement
 	if updStmt.Where != nil {
