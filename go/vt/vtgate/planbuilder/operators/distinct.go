@@ -46,7 +46,7 @@ type (
 	}
 )
 
-func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) {
+func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
 	columns := d.GetColumns(ctx)
 	for idx, col := range columns {
 		e, err := d.QP.GetSimplifiedExpr(ctx, col.Expr)
@@ -68,6 +68,7 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) {
 			Type:  typ,
 		})
 	}
+	return nil
 }
 
 func (d *Distinct) Clone(inputs []ops.Operator) ops.Operator {

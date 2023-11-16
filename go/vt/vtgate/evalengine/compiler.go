@@ -67,7 +67,7 @@ func (ct ctype) nullable() bool {
 }
 
 func (ct ctype) isTextual() bool {
-	return sqltypes.IsText(ct.Type) || sqltypes.IsBinary(ct.Type)
+	return sqltypes.IsTextOrBinary(ct.Type)
 }
 
 func (ct ctype) isHexOrBitLiteral() bool {

@@ -152,7 +152,7 @@ func TestSemiJoinStreamExecute(t *testing.T) {
 		`StreamExecute bv: type:VARCHAR value:"c" false`,
 		`StreamExecute bv: type:VARCHAR value:"d" false`,
 	})
-	expectResult(t, "jn.Execute", r, sqltypes.MakeTestResult(
+	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col1|col2|col3",
 			"int64|varchar|varchar",

@@ -96,15 +96,18 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Opera
 	}
 }
 
-// getPhases returns the ordered phases that the planner will undergo.
-// These phases ensure the appropriate collaboration between rewriters.
-func getPhases(ctx *plancontext.PlanningContext) (phases []Phase) {
-	for p := Phase(0); p < DONE; p++ {
-		if p.shouldRun(ctx.SemTable.QuerySignature) {
-			phases = append(phases, p)
+type phaser struct {
+	current Phase
+}
+
+func (p *phaser) next(ctx *plancontext.PlanningContext) Phase {
+	for phas := p.current; phas < DONE; phas++ {
+		if phas.shouldRun(ctx.SemTable.QuerySignature) {
+			p.current = p.current + 1
+			return phas
 		}
 	}
-	return
+	return DONE
 }
 
 func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
@@ -114,7 +117,7 @@ func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op ops.
 			return innerOp, rewrite.SameTree, nil
 		}
 
-		return d.Source, rewrite.NewTree("removed distinct not required that was not pushed under route", d), nil
+		return d.Source, rewrite.NewTree("removed distinct not required that was not pushed under route"), nil
 	}, stopAtRoute)
 }
 
@@ -138,7 +141,7 @@ func addOrderingForAllAggregations(ctx *plancontext.PlanningContext, root ops.Op
 		var res *rewrite.ApplyResult
 		if requireOrdering {
 			addOrderingFor(aggrOp)
-			res = rewrite.NewTree("added ordering before aggregation", in)
+			res = rewrite.NewTree("added ordering before aggregation")
 		}
 		return in, res, nil
 	}
