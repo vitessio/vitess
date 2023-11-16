@@ -335,6 +335,7 @@ func addNonLiteralUpdExprToSelect(ctx *plancontext.PlanningContext, updExpr *sql
 	info := engine.NonLiteralUpdateInfo{
 		CompExprCol:   -1,
 		UpdateExprCol: -1,
+		ExprCol:       -1,
 	}
 	// Add the expressions to the select expressions. We make sure to reuse the offset if it has already been added once.
 	for idx, selectExpr := range exprs {
@@ -343,6 +344,9 @@ func addNonLiteralUpdExprToSelect(ctx *plancontext.PlanningContext, updExpr *sql
 		}
 		if ctx.SemTable.EqualsExpr(selectExpr.(*sqlparser.AliasedExpr).Expr, updExpr.Expr) {
 			info.UpdateExprCol = idx
+		}
+		if ctx.SemTable.EqualsExpr(selectExpr.(*sqlparser.AliasedExpr).Expr, updExpr.Name) {
+			info.ExprCol = idx
 		}
 	}
 	// If the expression doesn't exist, then we add the expression and store the offset.
@@ -353,6 +357,10 @@ func addNonLiteralUpdExprToSelect(ctx *plancontext.PlanningContext, updExpr *sql
 	if info.UpdateExprCol == -1 {
 		info.UpdateExprCol = len(exprs)
 		exprs = append(exprs, aeWrap(updExpr.Expr))
+	}
+	if info.ExprCol == -1 {
+		info.ExprCol = len(exprs)
+		exprs = append(exprs, aeWrap(updExpr.Name))
 	}
 	return info, exprs
 }
