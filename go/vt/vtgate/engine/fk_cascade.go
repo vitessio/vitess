@@ -25,6 +25,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // FkChild contains the Child Primitive to be executed collecting the values from the Selection Primitive using the column indexes.
@@ -40,14 +41,16 @@ type FkChild struct {
 }
 
 // NonLiteralUpdateInfo stores the information required to process non-literal update queries.
-// It stores 3 information-
-// 1. UpdateExprCol- The index of the updated expression in the select query.
-// 2. UpdateExprBvName- The bind variable name to store the updated expression into.
-// 3. CompExprCol- The index of the comparison expression in the select query to know if the row value is actually being changed or not.
+// It stores 4 information-
+// 1. ExprCol- The index of the column being updated in the select query.
+// 2. CompExprCol- The index of the comparison expression in the select query to know if the row value is actually being changed or not.
+// 3. UpdateExprCol- The index of the updated expression in the select query.
+// 4. UpdateExprBvName- The bind variable name to store the updated expression into.
 type NonLiteralUpdateInfo struct {
+	ExprCol          int
+	CompExprCol      int
 	UpdateExprCol    int
 	UpdateExprBvName string
-	CompExprCol      int
 }
 
 // FkCascade is a primitive that implements foreign key cascading using Selection as values required to execute the FkChild Primitives.
@@ -185,7 +188,19 @@ func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor 
 
 		// Next, we need to copy the updated expressions value into the bind variables map.
 		for _, info := range child.NonLiteralInfo {
-			bindVars[info.UpdateExprBvName] = sqltypes.ValueBindVariable(row[info.UpdateExprCol])
+			// Type case the value to that of the column that we are updating.
+			// This is required for example when we receive an updated float value of -0, but
+			// the column being updated is a varchar column, then if we don't coerce the value of -0 to
+			// varchar, MySQL ends up setting it to '0' instead of '-0'.
+			finalVal := row[info.UpdateExprCol]
+			if !finalVal.IsNull() {
+				var err error
+				finalVal, err = evalengine.CoerceTo(finalVal, selectionRes.Fields[info.ExprCol].Type)
+				if err != nil {
+					return err
+				}
+			}
+			bindVars[info.UpdateExprBvName] = sqltypes.ValueBindVariable(finalVal)
 		}
 		_, err := vcursor.ExecutePrimitive(ctx, child.Exec, bindVars, wantfields)
 		if err != nil {
