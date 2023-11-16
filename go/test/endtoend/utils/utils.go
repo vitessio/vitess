@@ -255,29 +255,21 @@ func WaitForAuthoritative(t *testing.T, ks, tbl string, readVSchema func() (*int
 }
 
 // WaitForKsError waits for the ks error field to be populated and returns it.
-func WaitForKsError(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string) string {
+func WaitForVschemaCondition(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string, conditionMet func(t *testing.T, keyspace map[string]interface{}) bool) {
 	timeout := time.After(60 * time.Second)
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("schema tracking did not find error in '%s'", ks)
-			return ""
+			t.Fatalf("schema tracking did not met the condition within the time for keyspace: %s", ks)
 		default:
 			res, err := vtgateProcess.ReadVSchema()
 			require.NoError(t, err, res)
 			kss := convertToMap(*res)["keyspaces"]
 			ksMap := convertToMap(convertToMap(kss)[ks])
-			ksErr, fieldPresent := ksMap["error"]
-			if !fieldPresent {
-				time.Sleep(100 * time.Millisecond)
-				continue
+			if conditionMet(t, ksMap) {
+				return
 			}
-			errString, isErr := ksErr.(string)
-			if !isErr {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			return errString
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }

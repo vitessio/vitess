@@ -978,20 +978,39 @@ func TestCyclicFks(t *testing.T) {
 
 	// Create a cyclic foreign key constraint.
 	utils.Exec(t, mcmp.VtConn, "alter table fk_t10 add constraint test_cyclic_fks foreign key (col) references fk_t12 (col) on delete cascade on update cascade")
-	defer func() {
-		utils.Exec(t, mcmp.VtConn, "alter table fk_t10 drop foreign key test_cyclic_fks")
-	}()
+
+	matchKsError := func(t *testing.T, keyspace map[string]interface{}) bool {
+		ksErr, fieldPresent := keyspace["error"]
+		if !fieldPresent {
+			return false
+		}
+		errString, isErr := ksErr.(string)
+		if !isErr {
+			return false
+		}
+		// Make sure Vschema has the error for cyclic foreign keys.
+		assert.Contains(t, errString, "VT09019: keyspace 'uks' has cyclic foreign keys")
+		return true
+	}
 
 	// Wait for schema-tracking to be complete.
-	ksErr := utils.WaitForKsError(t, clusterInstance.VtgateProcess, unshardedKs)
-	// Make sure Vschema has the error for cyclic foreign keys.
-	assert.Contains(t, ksErr, "VT09019: uks has cyclic foreign keys")
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, unshardedKs, matchKsError)
 
 	// Ensure that the Vitess database is originally empty
 	ensureDatabaseState(t, mcmp.VtConn, true)
 
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, "insert into fk_t10(id, col) values (1, 1)")
-	require.ErrorContains(t, err, "VT09019: uks has cyclic foreign keys")
+	require.ErrorContains(t, err, "VT09019: keyspace 'uks' has cyclic foreign keys")
+
+	// Drop the cyclic foreign key constraint.
+	utils.Exec(t, mcmp.VtConn, "alter table fk_t10 drop foreign key test_cyclic_fks")
+
+	// Wait for schema-tracking to be complete.
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, unshardedKs, func(t *testing.T, keyspace map[string]interface{}) bool {
+		_, fieldPresent := keyspace["error"]
+		return !fieldPresent
+	})
+
 }
 
 func TestReplace(t *testing.T) {

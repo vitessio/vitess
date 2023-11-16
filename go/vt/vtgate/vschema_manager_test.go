@@ -523,7 +523,7 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				_ = vschema.AddForeignKey("ks", "t1", createFkDefinition([]string{"col"}, "t3", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
 				return vschema
 			},
-			errWanted: "VT09019: ks has cyclic foreign keys",
+			errWanted: "VT09019: keyspace 'ks' has cyclic foreign keys",
 		},
 		{
 			name: "No cycle",
