@@ -428,6 +428,11 @@ func (gw *TabletGateway) TabletsCacheStatus() discovery.TabletsCacheStatusList {
 	return gw.hc.CacheStatus()
 }
 
+// TabletsHealthyStatus returns a displayable version of the health check healthy list.
+func (gw *TabletGateway) TabletsHealthyStatus() discovery.TabletsCacheStatusList {
+	return gw.hc.HealthyStatus()
+}
+
 func (gw *TabletGateway) updateDefaultConnCollation(tablet *topodatapb.Tablet) {
 	if atomic.CompareAndSwapUint32(&gw.defaultConnCollation, 0, tablet.DefaultConnCollation) {
 		return
