@@ -95,11 +95,11 @@ var (
 
 	// HealthCheckCacheTemplate uses healthCheckTemplate with the `HealthCheck Tablet - Cache` title to create the
 	// HTML code required to render the cache of the HealthCheck.
-	HealthCheckCacheTemplate = fmt.Sprintf(healthCheckTemplate, "HealthCheck Tablet - Cache")
+	HealthCheckCacheTemplate = fmt.Sprintf(healthCheckTemplate, "HealthCheck - Cache")
 
 	// HealthCheckHealthyTemplate uses healthCheckTemplate with the `HealthCheck Tablet - Healthy Tablets` title to
 	// create the HTML code required to render the list of healthy tablets from the HealthCheck.
-	HealthCheckHealthyTemplate = fmt.Sprintf(healthCheckTemplate, "HealthCheck Tablet - Healthy Tablets")
+	HealthCheckHealthyTemplate = fmt.Sprintf(healthCheckTemplate, "HealthCheck - Healthy Tablets")
 )
 
 // See the documentation for NewHealthCheck below for an explanation of these parameters.
