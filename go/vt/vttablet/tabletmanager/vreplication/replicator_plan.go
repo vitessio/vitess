@@ -196,6 +196,7 @@ type TablePlan struct {
 	Insert           *sqlparser.ParsedQuery
 	Update           *sqlparser.ParsedQuery
 	Delete           *sqlparser.ParsedQuery
+	MultiDelete      *sqlparser.ParsedQuery
 	Fields           []*querypb.Field
 	EnumValuesMap    map[string](map[string]string)
 	ConvertIntToEnum map[string]bool
@@ -452,6 +453,9 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 	if (len(tp.TablePlanBuilder.pkCols) + len(tp.TablePlanBuilder.extraSourcePkCols)) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "bulk delete is only supported for tables with a single primary key column")
 	}
+	if tp.MultiDelete == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "plan has no bulk delete query")
+	}
 	pkIndex := -1
 	pkVals := make([]sqltypes.Value, 0, len(rowDeletes))
 	for _, rowDelete := range rowDeletes {
@@ -470,12 +474,7 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 	if err != nil {
 		return nil, err
 	}
-	parsed := sqlparser.BuildParsedQuery("delete from %s where %s in %a",
-		sqlparser.String(tp.TablePlanBuilder.name),
-		sqlparser.String(tp.TablePlanBuilder.pkCols[0].colName),
-		"::pks",
-	)
-	query, err := parsed.GenerateQuery(map[string]*querypb.BindVariable{"pks": pksBV}, nil)
+	query, err := tp.MultiDelete.GenerateQuery(map[string]*querypb.BindVariable{"bulk_pks": pksBV}, nil)
 	if err != nil {
 		return nil, err
 	}

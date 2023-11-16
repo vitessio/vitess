@@ -27,10 +27,12 @@ import (
 const (
 	VReplicationExperimentalFlagOptimizeInserts           = int64(1)
 	VReplicationExperimentalFlagAllowNoBlobBinlogRowImage = int64(2)
+	VReplicationExperimentalFlagVPlayerBatching           = int64(3)
 )
 
 var (
-	VReplicationExperimentalFlags = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
+	// Default flags. Enable vplayer batching by default for testing.
+	VReplicationExperimentalFlags = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage | VReplicationExperimentalFlagVPlayerBatching
 	VReplicationNetReadTimeout    = 300
 	VReplicationNetWriteTimeout   = 600
 	CopyPhaseDuration             = 1 * time.Hour
