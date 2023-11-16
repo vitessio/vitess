@@ -329,6 +329,13 @@ func TestParseDDLStrategy(t *testing.T) {
 			forceCutOverAfter: 3 * time.Minute,
 		},
 		{
+			strategyVariable: "vitess --force-cut-over-after=r3m",
+			strategy:         DDLStrategyVitess,
+			options:          "--force-cut-over-after=3m",
+			runtimeOptions:   "",
+			expectError:      "time: invalid duration",
+		},
+		{
 			strategyVariable: "vitess --retain-artifacts=4m",
 			strategy:         DDLStrategyVitess,
 			options:          "--retain-artifacts=4m",

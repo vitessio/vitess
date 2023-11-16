@@ -118,6 +118,9 @@ func ParseDDLStrategy(strategyVariable string) (*DDLStrategySetting, error) {
 	if _, err := setting.RetainArtifactsDuration(); err != nil {
 		return nil, err
 	}
+	if _, err := setting.ForceCutOverAfter(); err != nil {
+		return nil, err
+	}
 
 	switch setting.Strategy {
 	case DDLStrategyVitess, DDLStrategyOnline, DDLStrategyMySQL, DDLStrategyDirect:
