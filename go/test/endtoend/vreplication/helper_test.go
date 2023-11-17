@@ -28,7 +28,6 @@ import (
 	"os/exec"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -752,7 +751,7 @@ func getRowCount(t *testing.T, vtgateConn *mysql.Conn, table string) (int, error
 	if qr == nil {
 		return 0, fmt.Errorf("query failed %s", query)
 	}
-	numRows, err := strconv.Atoi(qr.Rows[0][0].ToString())
+	numRows, err := qr.Rows[0][0].ToInt()
 	return numRows, err
 }
 
@@ -874,7 +873,7 @@ func (lg *loadGenerator) waitForCount(want int64) {
 	}
 }
 
-// used during debugging tests
+// appendToQueryLog is useful when debugging tests.
 func appendToQueryLog(msg string) {
 	file, err := os.OpenFile(queryLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {

@@ -462,6 +462,8 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	return executeQuery(conn, query)
 }
 
+// QueryTabletMultiple lets you execute multiple queries -- without any
+// results -- against the tablet.
 func (vttablet *VttabletProcess) QueryTabletMultiple(queries []string, keyspace string, useDb bool) error {
 	if !useDb {
 		keyspace = ""

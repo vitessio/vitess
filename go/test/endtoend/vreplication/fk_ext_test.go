@@ -24,11 +24,11 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/log"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -89,7 +89,7 @@ innodb, to confirm that vtgate's fkmanaged mode is working properly.
 func TestFKExt(t *testing.T) {
 	setSidecarDBName("_vt")
 
-	// ensure that there are multiple copy phase cycles per table
+	// Ensure that there are multiple copy phase cycles per table.
 	extraVTTabletArgs = append(extraVTTabletArgs, "--vstream_packet_size=256", "--queryserver-config-schema-change-signal")
 	extraVTGateArgs = append(extraVTGateArgs, "--schema_change_signal=true", "--planner-version", "Gen4")
 	defer func() { extraVTTabletArgs = nil }()
@@ -141,7 +141,8 @@ func TestFKExt(t *testing.T) {
 	})
 
 	t.Run("Materialize parent and copy tables without constraints", func(t *testing.T) {
-		// Materialize the tables from target2Keyspace to target1Keyspace. Stream only from replicas, one shard with constraints dropped.
+		// Materialize the tables from target2Keyspace to target1Keyspace. Stream only from replicas, one
+		// shard with constraints dropped.
 		materializeTables(t)
 	})
 	lg.SetDBStrategy("vtgate", fkextConfig.target2KeyspaceName)
@@ -199,7 +200,7 @@ func compareRowCounts(t *testing.T, keyspace string, sourceShards, targetShards 
 	log.Infof("Comparing row counts for keyspace %s, source shards: %v, target shards: %v", keyspace, sourceShards, targetShards)
 	lg.Stop()
 	defer lg.Start()
-	if err := waitForCondition("load generator to stop", func() bool { return lg.State() == "stopped" }, 10*time.Second); err != nil {
+	if err := waitForCondition("load generator to stop", func() bool { return lg.State() == LoadGeneratorStateStopped }, 10*time.Second); err != nil {
 		return err
 	}
 
@@ -217,8 +218,7 @@ func compareRowCounts(t *testing.T, keyspace string, sourceShards, targetShards 
 		if err != nil {
 			return 0, err
 		}
-		count, _ := qr.Rows[0][0].ToInt64()
-		return count, nil
+		return qr.Rows[0][0].ToInt64()
 	}
 
 	var sourceParentCount, sourceChildCount int64
@@ -238,7 +238,8 @@ func compareRowCounts(t *testing.T, keyspace string, sourceShards, targetShards 
 	log.Infof("Source parent count: %d, child count: %d, target parent count: %d, child count: %d.",
 		sourceParentCount, sourceChildCount, targetParentCount, targetChildCount)
 	if sourceParentCount != targetParentCount || sourceChildCount != targetChildCount {
-		return fmt.Errorf("source and target counts do not match")
+		return fmt.Errorf(fmt.Sprintf("source and target row counts do not match; source parent count: %d, target parent count: %d, source child count: %d, target child count: %d",
+			sourceParentCount, targetParentCount, sourceChildCount, targetChildCount))
 	}
 	return nil
 }
@@ -285,8 +286,11 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	rs.Complete()
 }
 
-// load generator is expected to be stopped before calling this
+// validateMaterializeRowCounts expects the Load generator to be stopped before calling it.
 func validateMaterializeRowCounts(t *testing.T) {
+	if lg.State() != LoadGeneratorStateStopped {
+		t.Fatal("Load generator was unexpectedly still running when validateMaterializeRowCounts was called -- this will produce unreliable results.")
+	}
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	parentRowCount, err := getRowCount(t, vtgateConn, "target2.parent")
@@ -326,7 +330,6 @@ func moveKeyspace(t *testing.T) {
 	shard := "-80"
 	tabletId := fmt.Sprintf("%s-%d", fkextConfig.cell, 301)
 	replicaTab := vc.Cells[fkextConfig.cell].Keyspaces[fkextConfig.target2KeyspaceName].Shards[shard].Tablets[tabletId].Vttablet
-	_ = replicaTab
 	dropReplicaConstraints(t, fkextConfig.target2KeyspaceName, replicaTab)
 	doMoveTables(t, fkextConfig.target1KeyspaceName, fkextConfig.target2KeyspaceName, "move", "replica", targetTabs, false)
 }

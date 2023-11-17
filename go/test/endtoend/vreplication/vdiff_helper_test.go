@@ -260,6 +260,11 @@ func execVDiffWithRetry(t *testing.T, expectError bool, useVtctldClient bool, ar
 		var err error
 		retry := false
 		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 			if retry {
 				time.Sleep(vdiffRetryInterval)
 			}

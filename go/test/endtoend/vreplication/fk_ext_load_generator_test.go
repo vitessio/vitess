@@ -26,15 +26,19 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 )
 
 const (
+	// Only used when debugging tests.
 	queryLog = "queries.txt"
+
+	LoadGeneratorStateLoading = "loading"
+	LoadGeneratorStateRunning = "running"
+	LoadGeneratorStateStopped = "stopped"
 
 	dataLoadTimeout = 1 * time.Minute
 	tickInterval    = 1 * time.Second
@@ -50,7 +54,7 @@ const (
 
 // ILoadGenerator is an interface for load generators that we will use to simulate different types of loads.
 type ILoadGenerator interface {
-	Init(ctx context.Context, vc *VitessCluster) // nme & description only for logging.
+	Init(ctx context.Context, vc *VitessCluster) // name & description only for logging.
 	Teardown()
 
 	// "direct", use direct db connection to primary, only for unsharded keyspace.
@@ -68,12 +72,10 @@ type ILoadGenerator interface {
 	Start() error // start populating additional data.
 	Stop() error  // stop populating additional data.
 
-	// implementation will decide which table to wait for extra rows on.
+	// Implementation will decide which table to wait for extra rows on.
 	WaitForAdditionalRows(count int) error
 	// table == "", implementation will decide which table to get rows from, same table as in WaitForAdditionalRows().
 	GetRowCount(table string) (int, error)
-	// list of tables used by implementation with number of rows.
-	//GetTables() ([]string, []int, error)
 }
 
 var lg ILoadGenerator
@@ -88,7 +90,6 @@ type LoadGenerator struct {
 	overrideConstraints bool
 	keyspace            string
 	tables              []string
-	tableNumRows        []int
 }
 
 // SimpleLoadGenerator, which has a single parent table and a single child table for which different types
@@ -119,10 +120,6 @@ func (lg *SimpleLoadGenerator) GetRowCount(table string) (int, error) {
 	return lg.getNumRows(vtgateConn, table), nil
 }
 
-func (lg *SimpleLoadGenerator) GetTables() ([]string, []int, error) {
-	return nil, nil, nil
-}
-
 func (lg *SimpleLoadGenerator) getVtgateConn(ctx context.Context) (*mysql.Conn, error) {
 	vtParams := mysql.ConnParams{
 		Host:  lg.vc.ClusterConfig.hostname,
@@ -150,7 +147,7 @@ func (lg *SimpleLoadGenerator) WaitForAdditionalRows(count int) error {
 	for {
 		select {
 		case <-shortCtx.Done():
-			t.Fatalf("Timed out waiting for additional rows")
+			t.Fatalf("Timed out waiting for additional rows in %q table", "parent")
 		default:
 			numRows := lg.getNumRows(vtgateConn, "parent")
 			if numRows >= numRowsStart+count {
@@ -256,8 +253,8 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 }
 
 func (lg *SimpleLoadGenerator) Load() error {
-	lg.state = "loading"
-	defer func() { lg.state = "stopped" }()
+	lg.state = LoadGeneratorStateLoading
+	defer func() { lg.state = LoadGeneratorStateStopped }()
 	log.Infof("Inserting initial FK data")
 	var queries = []string{
 		"insert into parent values(1, 'parent1'), (2, 'parent2');",
@@ -272,14 +269,14 @@ func (lg *SimpleLoadGenerator) Load() error {
 }
 
 func (lg *SimpleLoadGenerator) Start() error {
-	if lg.state == "running" {
+	if lg.state == LoadGeneratorStateRunning {
 		log.Infof("Load generator already running")
 		return nil
 	}
-	lg.state = "running"
+	lg.state = LoadGeneratorStateRunning
 	go func() {
 		defer func() {
-			lg.state = "stopped"
+			lg.state = LoadGeneratorStateStopped
 			log.Infof("Load generator stopped")
 		}()
 		lg.runCtx, lg.runCtxCancel = context.WithCancel(lg.ctx)
@@ -292,7 +289,7 @@ func (lg *SimpleLoadGenerator) Start() error {
 		log.Infof("Load generator starting")
 		for i := 0; ; i++ {
 			if i%1000 == 0 {
-				// log occasionally to show that the test is still running ...
+				// Log occasionally to show that the test is still running.
 				log.Infof("Load simulation iteration %d", i)
 			}
 			select {
@@ -323,7 +320,7 @@ func (lg *SimpleLoadGenerator) Start() error {
 }
 
 func (lg *SimpleLoadGenerator) Stop() error {
-	if lg.state == "stopped" {
+	if lg.state == LoadGeneratorStateStopped {
 		log.Infof("Load generator already stopped")
 		return nil
 	}
@@ -331,12 +328,12 @@ func (lg *SimpleLoadGenerator) Stop() error {
 		log.Infof("Canceling load generator")
 		lg.runCtxCancel()
 	}
-	// wait for ch to be closed with a timeout
+	// Wait for ch to be closed or we hit a timeout.
 	timeout := vdiffTimeout
 	select {
 	case <-lg.ch:
 		log.Infof("Load generator stopped")
-		lg.state = "stopped"
+		lg.state = LoadGeneratorStateStopped
 		return nil
 	case <-time.After(timeout):
 		log.Infof("Timed out waiting for load generator to stop")
@@ -347,7 +344,7 @@ func (lg *SimpleLoadGenerator) Stop() error {
 func (lg *SimpleLoadGenerator) Init(ctx context.Context, vc *VitessCluster) {
 	lg.ctx = ctx
 	lg.vc = vc
-	lg.state = "stopped"
+	lg.state = LoadGeneratorStateStopped
 	lg.currentParentId = 100
 	lg.currentChildId = 100
 	lg.ch = make(chan bool)
@@ -358,8 +355,8 @@ func (lg *SimpleLoadGenerator) Teardown() {
 	// noop
 }
 
-func (lg *SimpleLoadGenerator) SetDBStrategy(direct, keyspace string) {
-	lg.dbStrategy = direct
+func (lg *SimpleLoadGenerator) SetDBStrategy(strategy, keyspace string) {
+	lg.dbStrategy = strategy
 	lg.keyspace = keyspace
 }
 
@@ -392,7 +389,7 @@ func (lg *SimpleLoadGenerator) insert() {
 	}
 	require.NoError(t, err)
 	require.NotNil(t, qr)
-	// insert one or more children, some with valid foreign keys, some without.
+	// Insert one or more children, some with valid foreign keys, some without.
 	for i := 0; i < rand.Intn(4)+1; i++ {
 		currentChildId++
 		if i == 3 && lg.overrideConstraints {
@@ -447,7 +444,8 @@ func (lg *SimpleLoadGenerator) delete() {
 	require.NoError(lg.vc.t, err)
 }
 
-// FIXME: following three functions are copied over from vtgate test utility functions in `go/test/endtoend/utils/utils.go`
+// FIXME: following three functions are copied over from vtgate test utility functions in
+// `go/test/endtoend/utils/utils.go`.
 // We will to refactor and then reuse the same functionality from vtgate tests, in the near future.
 
 func convertToMap(input interface{}) map[string]interface{} {
@@ -466,13 +464,13 @@ func getTableT2Map(res *interface{}, ks, tbl string) map[string]interface{} {
 // waitForColumn waits for a table's column to be present in the vschema because vtgate's foreign key managed mode
 // expects the column to be present in the vschema before it can be used in a foreign key constraint.
 func waitForColumn(t *testing.T, vtgateProcess *cluster.VtgateProcess, ks, tbl, col string) error {
-	timeout := time.After(60 * time.Second)
+	timeout := time.After(defaultTimeout)
 	for {
 		select {
 		case <-timeout:
 			return fmt.Errorf("schema tracking did not find column '%s' in table '%s'", col, tbl)
 		default:
-			time.Sleep(1 * time.Second)
+			time.Sleep(defaultTick)
 			res, err := vtgateProcess.ReadVSchema()
 			require.NoError(t, err, res)
 			t2Map := getTableT2Map(res, ks, tbl)
