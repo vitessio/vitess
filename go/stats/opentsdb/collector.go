@@ -17,7 +17,6 @@ limitations under the License.
 package opentsdb
 
 import (
-	"bytes"
 	"encoding/json"
 	"expvar"
 	"strings"
@@ -65,7 +64,7 @@ func (dc *collector) addFloat(metric string, val float64, tags map[string]string
 	// Also make everything lowercase, since opentsdb is case sensitive and lowercase
 	// simplifies the convention.
 	sanitize := func(text string) string {
-		var b bytes.Buffer
+		var b strings.Builder
 		for _, r := range text {
 			if unicode.IsDigit(r) || unicode.IsLetter(r) || r == '-' || r == '_' || r == '/' || r == '.' {
 				b.WriteRune(r)

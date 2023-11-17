@@ -17,7 +17,6 @@ limitations under the License.
 package sqltypes
 
 import (
-	"bytes"
 	crand "crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -155,13 +154,13 @@ func TestTuple(vals ...Value) Value {
 // PrintResults prints []*Results into a string.
 // This function should only be used for testing.
 func PrintResults(results []*Result) string {
-	b := new(bytes.Buffer)
+	var b strings.Builder
 	for i, r := range results {
 		if i == 0 {
-			fmt.Fprintf(b, "%v", r)
+			fmt.Fprintf(&b, "%v", r)
 			continue
 		}
-		fmt.Fprintf(b, ", %v", r)
+		fmt.Fprintf(&b, ", %v", r)
 	}
 	return b.String()
 }
