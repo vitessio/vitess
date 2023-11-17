@@ -3225,7 +3225,6 @@ func TestPlayerBulkDelete(t *testing.T) {
 			expectData(t, tcases.table, tcases.data)
 		}
 	}
-	//stats := globalStats.controllers[int32(vrId)].blpStats
 }
 
 func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {

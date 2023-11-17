@@ -623,9 +623,10 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 	mainClusterConfig.vreplicationCompressGTID = true
 	oldVTTabletExtraArgs := extraVTTabletArgs
-	// Disable the bulk delete vplayer optimization in this test, which is enabled by default, to confirm that we
+	// Enable the bulk delete vplayer optimization in this test, which is disabled by default, to confirm that we
 	// don't have a regression due to the bulk delete functionality  of this functionality.
-	extraVTTabletArgs = append(extraVTTabletArgs, fmt.Sprintf("--vreplication_experimental_flags=%d", vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts))
+	extraVTTabletArgs = append(extraVTTabletArgs, fmt.Sprintf("--vreplication_experimental_flags=%d",
+		vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching))
 	defer func() {
 		mainClusterConfig.vreplicationCompressGTID = false
 		extraVTTabletArgs = oldVTTabletExtraArgs
@@ -784,7 +785,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 		// insert multiple rows in the loadtest table and immediately delete them to confirm that bulk delete
 		// works the same way with the vplayer optimization enabled and disabled. Currently this optimization
-		// is enabled by default, but disabled in TestCellAliasVreplicationWorkflow.
+		// is disabled by default, but enabled in TestCellAliasVreplicationWorkflow.
 		execVtgateQuery(t, vtgateConn, sourceKs, "insert into loadtest(id, name) values(10001, 'tempCustomer'), (10002, 'tempCustomer2'), (10003, 'tempCustomer3'), (10004, 'tempCustomer4')")
 		execVtgateQuery(t, vtgateConn, sourceKs, "delete from loadtest where id > 10000")
 

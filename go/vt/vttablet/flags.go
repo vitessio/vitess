@@ -33,7 +33,7 @@ const (
 
 var (
 	// Default flags. Enable vplayer batching by default for testing.
-	VReplicationExperimentalFlags = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage | VReplicationExperimentalFlagVPlayerBatching
+	VReplicationExperimentalFlags = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
 	VReplicationNetReadTimeout    = 300
 	VReplicationNetWriteTimeout   = 600
 	CopyPhaseDuration             = 1 * time.Hour
