@@ -733,25 +733,33 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 		return secondaryKeys, err
 	}
 	createTable, ok := parsedDDL.(*sqlparser.CreateTable)
-	tableSpec := createTable.GetTableSpec()
 	// createTable or createTable.TableSpec should never be nil
 	// if it was a valid cast, but check to be extra safe.
-	if !ok || createTable == nil || tableSpec == nil {
+	if !ok || createTable == nil || createTable.GetTableSpec() == nil {
 		return nil, fmt.Errorf("could not determine CREATE TABLE statement from table schema %q", tableSchema)
-
 	}
 
-	log.Errorf("CreateTable: %s", sqlparser.String(createTable))
-	constraints := make([]string, 0, len(tableSpec.Constraints))
+	tableSpec := createTable.GetTableSpec()
+	fkIndexCols := make(map[string]bool)
 	for _, constraint := range tableSpec.Constraints {
-		constraints = append(constraints, sqlparser.String(constraint))
+		if fkDef, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); ok {
+			fkCols := make([]string, len(fkDef.Source))
+			for i, fkCol := range fkDef.Source {
+				fkCols[i] = fkCol.Lowered()
+			}
+			fkIndexCols[strings.Join(fkCols, ",")] = true
+		}
 	}
-	log.Errorf("TableSpec constraints: %s", strings.Join(constraints, ","))
-
 	for _, index := range tableSpec.Indexes {
-		// If this is a secondary index that is not needed for Foreign Keys.
 		if index.Info.Type != sqlparser.IndexTypePrimary {
-			log.Errorf("Found secondary key %q on table %q: %+v", index.Info.Name, tableName, index)
+			cols := make([]string, len(index.Columns))
+			for i, col := range index.Columns {
+				cols[i] = col.Column.Lowered()
+			}
+			if fkIndexCols[strings.Join(cols, ",")] {
+				// This index is needed for a FK constraint so we cannot drop it.
+				continue
+			}
 			secondaryKeys = append(secondaryKeys, index)
 		}
 	}
