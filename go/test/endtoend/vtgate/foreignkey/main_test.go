@@ -17,6 +17,7 @@ limitations under the License.
 package foreignkey
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -157,22 +158,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		_ = utils.Exec(t, mcmp.VtConn, "use `ks/-80`")
-		tables := []string{"t4", "t3", "t2", "t1", "multicol_tbl2", "multicol_tbl1"}
-		tables = append(tables, fkTables...)
-		for _, table := range tables {
-			_, _ = mcmp.ExecAndIgnore("delete /*+ SET_VAR(foreign_key_checks=OFF) */ from " + table)
-		}
-		_ = utils.Exec(t, mcmp.VtConn, "use `ks/80-`")
-		for _, table := range tables {
-			_, _ = mcmp.ExecAndIgnore("delete /*+ SET_VAR(foreign_key_checks=OFF) */ from " + table)
-		}
-		_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
-		tables = []string{"u_t1", "u_t2", "u_t3"}
-		tables = append(tables, fkTables...)
-		for _, table := range tables {
-			_, _ = mcmp.ExecAndIgnore("delete /*+ SET_VAR(foreign_key_checks=OFF) */ from " + table)
-		}
+		clearOutAllData(t, mcmp.VtConn, mcmp.MySQLConn)
 		_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
 	}
 
@@ -182,5 +168,37 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 		deleteAll()
 		mcmp.Close()
 		cluster.PanicHandler(t)
+	}
+}
+
+func startBenchmark(b *testing.B) {
+	ctx := context.Background()
+	vtConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(b, err)
+	mysqlConn, err := mysql.Connect(ctx, &mysqlParams)
+	require.NoError(b, err)
+
+	clearOutAllData(b, vtConn, mysqlConn)
+}
+
+func clearOutAllData(t testing.TB, vtConn *mysql.Conn, mysqlConn *mysql.Conn) {
+	_ = utils.Exec(t, vtConn, "use `ks/-80`")
+	tables := []string{"t4", "t3", "t2", "t1", "multicol_tbl2", "multicol_tbl1"}
+	tables = append(tables, fkTables...)
+	for _, table := range tables {
+		_, _ = utils.ExecAllowError(t, vtConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+		_, _ = utils.ExecAllowError(t, mysqlConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+	}
+	_ = utils.Exec(t, vtConn, "use `ks/80-`")
+	for _, table := range tables {
+		_, _ = utils.ExecAllowError(t, vtConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+		_, _ = utils.ExecAllowError(t, mysqlConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+	}
+	_ = utils.Exec(t, vtConn, "use `uks`")
+	tables = []string{"u_t1", "u_t2", "u_t3"}
+	tables = append(tables, fkTables...)
+	for _, table := range tables {
+		_, _ = utils.ExecAllowError(t, vtConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+		_, _ = utils.ExecAllowError(t, mysqlConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
 	}
 }

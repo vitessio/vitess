@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math/rand"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -75,7 +76,7 @@ func convertIntValueToString(value int) string {
 
 // waitForSchemaTrackingForFkTables waits for schema tracking to have run and seen the tables used
 // for foreign key tests.
-func waitForSchemaTrackingForFkTables(t *testing.T) {
+func waitForSchemaTrackingForFkTables(t testing.TB) {
 	err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, shardedKs, "fk_t1", "col")
 	require.NoError(t, err)
 	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, shardedKs, "fk_t18", "col")
@@ -238,7 +239,7 @@ func verifyDataIsCorrect(t *testing.T, mcmp utils.MySQLCompare, concurrency int)
 }
 
 // verifyDataMatches verifies that the two list of results are the same.
-func verifyDataMatches(t *testing.T, resOne []*sqltypes.Result, resTwo []*sqltypes.Result) {
+func verifyDataMatches(t testing.TB, resOne []*sqltypes.Result, resTwo []*sqltypes.Result) {
 	require.EqualValues(t, len(resTwo), len(resOne), "Res 1 - %v, Res 2 - %v", resOne, resTwo)
 	for idx, resultOne := range resOne {
 		resultTwo := resTwo[idx]
@@ -255,4 +256,23 @@ func collectFkTablesState(conn *mysql.Conn) []*sqltypes.Result {
 		tablesData = append(tablesData, res)
 	}
 	return tablesData
+}
+
+func validateReplication(t *testing.T) {
+	for _, keyspace := range clusterInstance.Keyspaces {
+		for _, shard := range keyspace.Shards {
+			for _, vttablet := range shard.Vttablets {
+				if vttablet.Type != "primary" {
+					checkReplicationHealthy(t, vttablet)
+				}
+			}
+		}
+	}
+}
+
+// compareResultRows compares the rows of the two results provided.
+func compareResultRows(resOne *sqltypes.Result, resTwo *sqltypes.Result) bool {
+	return slices.EqualFunc(resOne.Rows, resTwo.Rows, func(a, b sqltypes.Row) bool {
+		return sqltypes.RowEqual(a, b)
+	})
 }
