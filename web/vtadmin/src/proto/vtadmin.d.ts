@@ -41592,6 +41592,9 @@ export namespace vschema {
 
         /** Column invisible */
         invisible?: (boolean|null);
+
+        /** Column default */
+        "default"?: (string|null);
     }
 
     /** Represents a Column. */
@@ -41611,6 +41614,9 @@ export namespace vschema {
 
         /** Column invisible. */
         public invisible: boolean;
+
+        /** Column default. */
+        public default: string;
 
         /**
          * Creates a new Column instance using the specified properties.
@@ -42783,6 +42789,9 @@ export namespace vtctldata {
 
         /** SchemaMigration ready_to_complete_at */
         ready_to_complete_at?: (vttime.ITime|null);
+
+        /** SchemaMigration removed_foreign_key_names */
+        removed_foreign_key_names?: (string|null);
     }
 
     /** Represents a SchemaMigration. */
@@ -42952,6 +42961,9 @@ export namespace vtctldata {
 
         /** SchemaMigration ready_to_complete_at. */
         public ready_to_complete_at?: (vttime.ITime|null);
+
+        /** SchemaMigration removed_foreign_key_names. */
+        public removed_foreign_key_names: string;
 
         /**
          * Creates a new SchemaMigration instance using the specified properties.

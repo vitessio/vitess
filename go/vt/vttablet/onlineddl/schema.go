@@ -202,6 +202,7 @@ const (
 	`
 	sqlUpdateSchemaAnalysis = `UPDATE _vt.schema_migrations
 			SET added_unique_keys=%a, removed_unique_keys=%a, removed_unique_key_names=%a,
+			removed_foreign_key_names=%a,
 			dropped_no_default_column_names=%a, expanded_column_names=%a,
 			revertible_notes=%a
 		WHERE
@@ -527,6 +528,9 @@ const (
 	sqlShowVariablesLikePreserveForeignKey = "show global variables like 'rename_table_preserve_foreign_key'"
 	sqlEnablePreserveForeignKey            = "set @@rename_table_preserve_foreign_key = 1"
 	sqlDisablePreserveForeignKey           = "set @@rename_table_preserve_foreign_key = 0"
+	sqlShowVariablesLikeFastAnalyzeTable   = "show global variables like 'fast_analyze_table'"
+	sqlEnableFastAnalyzeTable              = "set @@fast_analyze_table = 1"
+	sqlDisableFastAnalyzeTable             = "set @@fast_analyze_table = 0"
 	sqlGetAutoIncrement                    = `
 		SELECT
 			AUTO_INCREMENT

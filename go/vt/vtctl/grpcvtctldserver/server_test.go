@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -57,7 +58,6 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
-	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 func init() {
@@ -6820,6 +6820,149 @@ func TestGetTablets(t *testing.T) {
 				},
 			},
 			expected:  []*topodatapb.Tablet{},
+			shouldErr: false,
+		},
+		{
+			name:  "tablet type filter",
+			cells: []string{"cell1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-80",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  101,
+					},
+					Keyspace: "ks1",
+					Shard:    "-80",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  200,
+					},
+					Keyspace: "ks1",
+					Shard:    "80-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  201,
+					},
+					Keyspace: "ks1",
+					Shard:    "80-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-80",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  200,
+					},
+					Keyspace: "ks1",
+					Shard:    "80-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "keyspace, shard, and tablet type filter",
+			cells: []string{"cell1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-80",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  101,
+					},
+					Keyspace: "ks1",
+					Shard:    "-80",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  200,
+					},
+					Keyspace: "ks1",
+					Shard:    "80-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  201,
+					},
+					Keyspace: "ks1",
+					Shard:    "80-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  300,
+					},
+					Keyspace: "ks2",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  301,
+					},
+					Keyspace: "ks2",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Keyspace:   "ks1",
+				Shard:      "-80",
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-80",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
 			shouldErr: false,
 		},
 	}

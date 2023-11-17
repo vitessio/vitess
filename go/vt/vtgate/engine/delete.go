@@ -130,6 +130,7 @@ func (del *Delete) description() PrimitiveDescription {
 		"OwnedVindexQuery":     del.OwnedVindexQuery,
 		"MultiShardAutocommit": del.MultiShardAutocommit,
 		"QueryTimeout":         del.QueryTimeout,
+		"NoAutoCommit":         del.PreventAutoCommit,
 	}
 
 	addFieldsIfNotEmpty(del.DML, other)

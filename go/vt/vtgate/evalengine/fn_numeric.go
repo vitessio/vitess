@@ -1342,7 +1342,7 @@ func (call *builtinConv) eval(env *ExpressionEnv) (eval, error) {
 	} else {
 		out = strconv.AppendUint(out, u, int(toBase))
 	}
-	return newEvalText(upcaseASCII(out), defaultCoercionCollation(call.collate)), nil
+	return newEvalText(upcaseASCII(out), typedCoercionCollation(sqltypes.VarChar, call.collate)), nil
 }
 
 func (expr *builtinConv) compile(c *compiler) (ctype, error) {
@@ -1383,7 +1383,7 @@ func (expr *builtinConv) compile(c *compiler) (ctype, error) {
 		c.asm.Fn_CONV_bu(3, 2)
 	}
 
-	col := defaultCoercionCollation(expr.collate)
+	col := typedCoercionCollation(t, expr.collate)
 	c.asm.Fn_CONV_uc(t, col)
 	c.asm.jumpDestination(skip)
 

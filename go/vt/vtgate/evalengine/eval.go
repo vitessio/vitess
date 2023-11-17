@@ -238,7 +238,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			fval, _ := fastparse.ParseFloat64(v.RawStr())
 			return newEvalFloat(fval), nil
 		default:
-			e, err := valueToEval(v, defaultCoercionCollation(collation))
+			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation))
 			if err != nil {
 				return nil, err
 			}
@@ -265,7 +265,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			fval, _ := fastparse.ParseFloat64(v.RawStr())
 			dec = decimal.NewFromFloat(fval)
 		default:
-			e, err := valueToEval(v, defaultCoercionCollation(collation))
+			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation))
 			if err != nil {
 				return nil, err
 			}
@@ -285,7 +285,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			i, err := fastparse.ParseInt64(v.RawStr(), 10)
 			return newEvalInt64(i), err
 		default:
-			e, err := valueToEval(v, defaultCoercionCollation(collation))
+			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation))
 			if err != nil {
 				return nil, err
 			}
@@ -304,7 +304,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			u, err := fastparse.ParseUint64(v.RawStr(), 10)
 			return newEvalUint64(u), err
 		default:
-			e, err := valueToEval(v, defaultCoercionCollation(collation))
+			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation))
 			if err != nil {
 				return nil, err
 			}
@@ -312,18 +312,18 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			return newEvalUint64(uint64(i.i)), nil
 		}
 
-	case sqltypes.IsText(typ) || sqltypes.IsBinary(typ):
+	case sqltypes.IsTextOrBinary(typ):
 		switch {
 		case v.IsText() || v.IsBinary():
-			return newEvalRaw(v.Type(), v.Raw(), defaultCoercionCollation(collation)), nil
+			return newEvalRaw(v.Type(), v.Raw(), typedCoercionCollation(v.Type(), collation)), nil
 		case sqltypes.IsText(typ):
-			e, err := valueToEval(v, defaultCoercionCollation(collation))
+			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation))
 			if err != nil {
 				return nil, err
 			}
 			return evalToVarchar(e, collation, true)
 		default:
-			e, err := valueToEval(v, defaultCoercionCollation(collation))
+			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation))
 			if err != nil {
 				return nil, err
 			}
@@ -333,7 +333,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 	case typ == sqltypes.TypeJSON:
 		return json.NewFromSQL(v)
 	case typ == sqltypes.Date:
-		e, err := valueToEval(v, defaultCoercionCollation(collation))
+		e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation))
 		if err != nil {
 			return nil, err
 		}
@@ -344,7 +344,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 		}
 		return d, nil
 	case typ == sqltypes.Datetime || typ == sqltypes.Timestamp:
-		e, err := valueToEval(v, defaultCoercionCollation(collation))
+		e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation))
 		if err != nil {
 			return nil, err
 		}
@@ -355,7 +355,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 		}
 		return dt, nil
 	case typ == sqltypes.Time:
-		e, err := valueToEval(v, defaultCoercionCollation(collation))
+		e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation))
 		if err != nil {
 			return nil, err
 		}

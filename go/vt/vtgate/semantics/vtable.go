@@ -94,7 +94,7 @@ func (v *vTableInfo) getColumns() []ColumnInfo {
 }
 
 func (v *vTableInfo) hasStar() bool {
-	return v.tables.NonEmpty()
+	return v.tables.NotEmpty()
 }
 
 // GetTables implements the TableInfo interface

@@ -19,7 +19,7 @@ package sqltypes
 import (
 	"fmt"
 	"io"
-	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"text/scanner"
@@ -127,6 +127,12 @@ func (e *RowMismatchError) Error() string {
 	return fmt.Sprintf("results differ: %v\n\twant: %v\n\tgot:  %v", e.err, e.want, e.got)
 }
 
+func RowEqual(want, got Row) bool {
+	return slices.EqualFunc(want, got, func(a, b Value) bool {
+		return a.Equal(b)
+	})
+}
+
 func RowsEquals(want, got []Row) error {
 	if len(want) != len(got) {
 		return &RowMismatchError{
@@ -143,7 +149,7 @@ func RowsEquals(want, got []Row) error {
 			if matched[i] {
 				continue
 			}
-			if reflect.DeepEqual(aa, bb) {
+			if RowEqual(aa, bb) {
 				matched[i] = true
 				ok = true
 				break

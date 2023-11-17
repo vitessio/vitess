@@ -31,7 +31,7 @@ type JoinOp interface {
 	SetRHS(ops.Operator)
 	MakeInner()
 	IsInner() bool
-	AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error
+	AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr)
 }
 
 func AddPredicate(
@@ -79,10 +79,7 @@ func AddPredicate(
 			return newFilter(join, expr)
 		}
 
-		err := join.AddJoinPredicate(ctx, expr)
-		if err != nil {
-			panic(err)
-		}
+		join.AddJoinPredicate(ctx, expr)
 
 		return join
 	}

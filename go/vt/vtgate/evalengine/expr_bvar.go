@@ -70,7 +70,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 
 		tuple := make([]eval, 0, len(bvar.Values))
 		for _, value := range bvar.Values {
-			e, err := valueToEval(sqltypes.MakeTrusted(value.Type, value.Value), defaultCoercionCollation(collations.CollationForType(value.Type, bv.Collation)))
+			e, err := valueToEval(sqltypes.MakeTrusted(value.Type, value.Value), typedCoercionCollation(value.Type, collations.CollationForType(value.Type, bv.Collation)))
 			if err != nil {
 				return nil, err
 			}
@@ -86,7 +86,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 		if bv.typed() {
 			typ = bv.Type
 		}
-		return valueToEval(sqltypes.MakeTrusted(typ, bvar.Value), defaultCoercionCollation(collations.CollationForType(typ, bv.Collation)))
+		return valueToEval(sqltypes.MakeTrusted(typ, bvar.Value), typedCoercionCollation(typ, collations.CollationForType(typ, bv.Collation)))
 	}
 }
 
@@ -110,7 +110,7 @@ func (bv *BindVariable) typeof(env *ExpressionEnv) (ctype, error) {
 	case sqltypes.BitNum:
 		return ctype{Type: sqltypes.VarBinary, Flag: flagBit, Col: collationNumeric}, nil
 	default:
-		return ctype{Type: tt, Flag: 0, Col: defaultCoercionCollation(collations.CollationForType(tt, bv.Collation))}, nil
+		return ctype{Type: tt, Flag: 0, Col: typedCoercionCollation(tt, collations.CollationForType(tt, bv.Collation))}, nil
 	}
 }
 
@@ -119,7 +119,7 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 
 	if bvar.typed() {
 		typ.Type = bvar.Type
-		typ.Col = defaultCoercionCollation(collations.CollationForType(bvar.Type, bvar.Collation))
+		typ.Col = typedCoercionCollation(bvar.Type, collations.CollationForType(bvar.Type, bvar.Collation))
 	} else if c.dynamicTypes != nil {
 		typ = c.dynamicTypes[bvar.dynamicTypeOffset]
 	} else {

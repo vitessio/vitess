@@ -139,8 +139,8 @@ func (pt *probeTable) equal(a, b sqltypes.Row) (bool, error) {
 	for i, checkCol := range pt.checkCols {
 		cmp, err := evalengine.NullsafeCompare(a[i], b[i], checkCol.Type.Coll)
 		if err != nil {
-			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
-			if !isComparisonErr || checkCol.WsCol == nil {
+			_, isCollErr := err.(evalengine.UnsupportedCollationError)
+			if !isCollErr || checkCol.WsCol == nil {
 				return false, err
 			}
 			checkCol = checkCol.SwitchToWeightString()

@@ -65,7 +65,9 @@ func planQuery(ctx *plancontext.PlanningContext, root ops.Operator) (output ops.
 // smaller operators and try to push these down as far as possible
 func runPhases(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.Operator, err error) {
 	op = root
-	for _, phase := range getPhases(ctx) {
+
+	p := phaser{}
+	for phase := p.next(ctx); phase != DONE; phase = p.next(ctx) {
 		ctx.CurrentPhase = int(phase)
 		if rewrite.DebugOperatorTree {
 			fmt.Printf("PHASE: %s\n", phase.String())
@@ -134,7 +136,7 @@ func pushLockAndComment(l *LockAndComment) (ops.Operator, *rewrite.ApplyResult, 
 	case *Route:
 		src.Comments = l.Comments
 		src.Lock = l.Lock
-		return src, rewrite.NewTree("put lock and comment into route", l), nil
+		return src, rewrite.NewTree("put lock and comment into route"), nil
 	default:
 		inputs := src.Inputs()
 		for i, op := range inputs {
@@ -145,7 +147,7 @@ func pushLockAndComment(l *LockAndComment) (ops.Operator, *rewrite.ApplyResult, 
 			}
 		}
 		src.SetInputs(inputs)
-		return src, rewrite.NewTree("pushed down lock and comments", l), nil
+		return src, rewrite.NewTree("pushed down lock and comments"), nil
 	}
 }
 
@@ -256,7 +258,7 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *
 	}
 	// all projections can be pushed to the outer
 	sq.Outer, p.Source = p, sq.Outer
-	return sq, rewrite.NewTree("push projection into outer side of subquery", p), nil
+	return sq, rewrite.NewTree("push projection into outer side of subquery"), nil
 }
 
 func pushProjectionInVindex(
@@ -271,7 +273,7 @@ func pushProjectionInVindex(
 	for _, pe := range ap {
 		src.AddColumn(ctx, true, false, aeWrap(pe.EvalExpr))
 	}
-	return src, rewrite.NewTree("push projection into vindex", p), nil
+	return src, rewrite.NewTree("push projection into vindex"), nil
 }
 
 func (p *projector) add(pe *ProjExpr, col *sqlparser.IdentifierCI) {
@@ -331,7 +333,7 @@ func pushProjectionInApplyJoin(
 		return nil, nil, err
 	}
 
-	return src, rewrite.NewTree("split projection to either side of join", src), nil
+	return src, rewrite.NewTree("split projection to either side of join"), nil
 }
 
 // splitProjectionAcrossJoin creates JoinPredicates for all projections,
@@ -521,7 +523,7 @@ func setUpperLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 				Pushed: false,
 			}
 			op.Source = newSrc
-			result = result.Merge(rewrite.NewTree("push limit under route", newSrc))
+			result = result.Merge(rewrite.NewTree("push limit under route"))
 			return rewrite.SkipChildren
 		default:
 			return rewrite.VisitChildren
@@ -544,12 +546,12 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operat
 			// ApplyJoin is stable in regard to the columns coming from the LHS,
 			// so if all the ordering columns come from the LHS, we can push down the Ordering there
 			src.LHS, in.Source = in, src.LHS
-			return src, rewrite.NewTree("push down ordering on the LHS of a join", in), nil
+			return src, rewrite.NewTree("push down ordering on the LHS of a join"), nil
 		}
 	case *Ordering:
 		// we'll just remove the order underneath. The top order replaces whatever was incoming
 		in.Source = src.Source
-		return in, rewrite.NewTree("remove double ordering", src), nil
+		return in, rewrite.NewTree("remove double ordering"), nil
 	case *Projection:
 		// we can move ordering under a projection if it's not introducing a column we're sorting by
 		for _, by := range in.Order {
@@ -573,7 +575,7 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operat
 			}
 		}
 		src.Outer, in.Source = in, src.Outer
-		return src, rewrite.NewTree("push ordering into outer side of subquery", in), nil
+		return src, rewrite.NewTree("push ordering into outer side of subquery"), nil
 	case *SubQuery:
 		outerTableID := TableID(src.Outer)
 		for _, order := range in.Order {
@@ -583,7 +585,7 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operat
 			}
 		}
 		src.Outer, in.Source = in, src.Outer
-		return src, rewrite.NewTree("push ordering into outer side of subquery", in), nil
+		return src, rewrite.NewTree("push ordering into outer side of subquery"), nil
 	}
 	return in, rewrite.SameTree, nil
 }
@@ -662,7 +664,7 @@ func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, ag
 		order.Source = aggrSource.Source
 		aggrSource.Source = nil // removing from plan tree
 		aggregator.Source = order
-		return aggregator, rewrite.NewTree("push ordering under aggregation, removing extra ordering", aggregator), nil
+		return aggregator, rewrite.NewTree("push ordering under aggregation, removing extra ordering"), nil
 	}
 	return rewrite.Swap(order, aggregator, "push ordering under aggregation")
 }
@@ -719,7 +721,7 @@ func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, 
 			}
 		}
 		src.Outer, in.Source = in, src.Outer
-		return src, rewrite.NewTree("push filter to outer query in subquery container", in), nil
+		return src, rewrite.NewTree("push filter to outer query in subquery container"), nil
 	}
 
 	return in, rewrite.SameTree, nil
@@ -756,7 +758,7 @@ func tryPushDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := in.Source.(type) {
 	case *Route:
 		if isDistinct(src.Source) && src.IsSingleShard() {
-			return src, rewrite.NewTree("distinct not needed", in), nil
+			return src, rewrite.NewTree("distinct not needed"), nil
 		}
 		if src.IsSingleShard() || !in.Required {
 			return rewrite.Swap(in, src, "push distinct under route")
@@ -769,31 +771,31 @@ func tryPushDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
 		src.Source = &Distinct{Source: src.Source}
 		in.PushedPerformance = true
 
-		return in, rewrite.NewTree("added distinct under route - kept original", src), nil
+		return in, rewrite.NewTree("added distinct under route - kept original"), nil
 	case *Distinct:
 		src.Required = false
 		src.PushedPerformance = false
-		return src, rewrite.NewTree("remove double distinct", src), nil
+		return src, rewrite.NewTree("remove double distinct"), nil
 	case *Union:
 		for i := range src.Sources {
 			src.Sources[i] = &Distinct{Source: src.Sources[i]}
 		}
 		in.PushedPerformance = true
 
-		return in, rewrite.NewTree("push down distinct under union", src), nil
+		return in, rewrite.NewTree("push down distinct under union"), nil
 	case *ApplyJoin:
 		src.LHS = &Distinct{Source: src.LHS}
 		src.RHS = &Distinct{Source: src.RHS}
 		in.PushedPerformance = true
 
 		if in.Required {
-			return in, rewrite.NewTree("push distinct under join - kept original", in.Source), nil
+			return in, rewrite.NewTree("push distinct under join - kept original"), nil
 		}
 
-		return in.Source, rewrite.NewTree("push distinct under join", in.Source), nil
+		return in.Source, rewrite.NewTree("push distinct under join"), nil
 	case *Ordering:
 		in.Source = src.Source
-		return in, rewrite.NewTree("remove ordering under distinct", in), nil
+		return in, rewrite.NewTree("remove ordering under distinct"), nil
 	}
 
 	return in, rewrite.SameTree, nil
@@ -835,19 +837,19 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator, *r
 	if len(sources) == 1 {
 		result := sources[0].(*Route)
 		if result.IsSingleShard() || !op.distinct {
-			return result, rewrite.NewTree("push union under route", op), nil
+			return result, rewrite.NewTree("push union under route"), nil
 		}
 
 		return &Distinct{
 			Source:   result,
 			Required: true,
-		}, rewrite.NewTree("push union under route", op), nil
+		}, rewrite.NewTree("push union under route"), nil
 	}
 
 	if len(sources) == len(op.Sources) {
 		return op, rewrite.SameTree, nil
 	}
-	return newUnion(sources, selects, op.unionColumns, op.distinct), rewrite.NewTree("merge union inputs", op), nil
+	return newUnion(sources, selects, op.unionColumns, op.distinct), rewrite.NewTree("merge union inputs"), nil
 }
 
 // addTruncationOrProjectionToReturnOutput uses the original Horizon to make sure that the output columns line up with what the user asked for

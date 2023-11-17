@@ -68,7 +68,7 @@ func (c *Column) typeof(env *ExpressionEnv) (ctype, error) {
 
 		return ctype{
 			Type: field.Type,
-			Col:  defaultCoercionCollation(collations.ID(field.Charset)),
+			Col:  typedCoercionCollation(field.Type, collations.ID(field.Charset)),
 			Flag: f,
 		}, nil
 	}

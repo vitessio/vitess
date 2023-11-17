@@ -68,9 +68,30 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator) (
 		return transformFkVerify(ctx, op)
 	case *operators.InsertSelection:
 		return transformInsertionSelection(ctx, op)
+	case *operators.HashJoin:
+		return transformHashJoin(ctx, op)
+	case *operators.Sequential:
+		return transformSequential(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequential) (logicalPlan, error) {
+	var lps []logicalPlan
+	for _, source := range op.Sources {
+		lp, err := transformToLogicalPlan(ctx, source)
+		if err != nil {
+			return nil, err
+		}
+		if ins, ok := lp.(*insert); ok {
+			ins.eInsert.PreventAutoCommit = true
+		}
+		lps = append(lps, lp)
+	}
+	return &sequential{
+		sources: lps,
+	}, nil
 }
 
 func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators.InsertSelection) (logicalPlan, error) {
@@ -139,9 +160,10 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 
 		childEngine := childLP.Primitive()
 		children = append(children, &engine.FkChild{
-			BVName: child.BVName,
-			Cols:   child.Cols,
-			Exec:   childEngine,
+			BVName:         child.BVName,
+			Cols:           child.Cols,
+			NonLiteralInfo: child.NonLiteralInfo,
+			Exec:           childEngine,
 		})
 	}
 
@@ -269,12 +291,11 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 
 	for idx, order := range ordering.Order {
 		typ, _ := ctx.SemTable.TypeForExpr(order.SimplifiedExpr)
-		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
-			Col:               ordering.Offset[idx],
-			WeightStringCol:   ordering.WOffset[idx],
-			Desc:              order.Inner.Direction == sqlparser.DescOrder,
-			StarColFixedIndex: ordering.Offset[idx],
-			Type:              typ,
+		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, evalengine.OrderByParams{
+			Col:             ordering.Offset[idx],
+			WeightStringCol: ordering.WOffset[idx],
+			Desc:            order.Inner.Direction == sqlparser.DescOrder,
+			Type:            typ,
 		})
 	}
 
@@ -500,7 +521,7 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 	eroute, err := routeToEngineRoute(ctx, op, hints)
 	for _, order := range op.Ordering {
 		typ, _ := ctx.SemTable.TypeForExpr(order.AST)
-		eroute.OrderBy = append(eroute.OrderBy, engine.OrderByParams{
+		eroute.OrderBy = append(eroute.OrderBy, evalengine.OrderByParams{
 			Col:             order.Offset,
 			WeightStringCol: order.WOffset,
 			Desc:            order.Direction == sqlparser.DescOrder,
@@ -790,4 +811,59 @@ func createLimit(input logicalPlan, limit *sqlparser.Limit) (logicalPlan, error)
 	}
 
 	return plan, nil
+}
+
+func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin) (logicalPlan, error) {
+	lhs, err := transformToLogicalPlan(ctx, op.LHS)
+	if err != nil {
+		return nil, err
+	}
+	rhs, err := transformToLogicalPlan(ctx, op.RHS)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(op.LHSKeys) != 1 {
+		return nil, vterrors.VT12001("hash joins must have exactly one join predicate")
+	}
+
+	joinOp := engine.InnerJoin
+	if op.LeftJoin {
+		joinOp = engine.LeftJoin
+	}
+
+	var missingTypes []string
+
+	ltyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].LHS)
+	if !found {
+		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].LHS))
+	}
+	rtyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].RHS)
+	if !found {
+		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].RHS))
+	}
+
+	if len(missingTypes) > 0 {
+		return nil, vterrors.VT12001(
+			fmt.Sprintf("missing type information for [%s]", strings.Join(missingTypes, ", ")))
+	}
+
+	comparisonType, err := evalengine.CoerceTypes(ltyp, rtyp)
+	if err != nil {
+		return nil, err
+	}
+
+	return &hashJoin{
+		lhs: lhs,
+		rhs: rhs,
+		inner: &engine.HashJoin{
+			Opcode:         joinOp,
+			Cols:           op.ColumnOffsets,
+			LHSKey:         op.LHSKeys[0],
+			RHSKey:         op.RHSKeys[0],
+			ASTPred:        op.JoinPredicate(),
+			Collation:      comparisonType.Coll,
+			ComparisonType: comparisonType.Type,
+		},
+	}, nil
 }

@@ -181,16 +181,16 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.O
 		}
 
 		// We need to select all the parent columns for the foreign key constraint, to use in the update of the child table.
-		cols, exprs := selectParentColumns(fk, len(selectExprs))
-		selectExprs = append(selectExprs, exprs...)
+		var offsets []int
+		offsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs)
 
-		fkChild, err := createFkChildForDelete(ctx, fk, cols)
+		fkChild, err := createFkChildForDelete(ctx, fk, offsets)
 		if err != nil {
 			return nil, err
 		}
 		fkChildren = append(fkChildren, fkChild)
 	}
-	selectionOp, err := createSelectionOp(ctx, selectExprs, delStmt.TableExprs, delStmt.Where, nil, sqlparser.ForUpdateLock)
+	selectionOp, err := createSelectionOp(ctx, selectExprs, delStmt.TableExprs, delStmt.Where, nil, nil, sqlparser.ForUpdateLock)
 	if err != nil {
 		return nil, err
 	}
