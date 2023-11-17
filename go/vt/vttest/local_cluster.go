@@ -18,7 +18,6 @@ package vttest
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -173,12 +172,12 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 	// Write the schema if set.
 	if schema != "" {
 		ksDir := path.Join(schemaDir, keyspace)
-		err := os.Mkdir(ksDir, os.ModeDir|0775)
+		err := os.Mkdir(ksDir, os.ModeDir|0o775)
 		if err != nil {
 			return err
 		}
 		fileName := path.Join(ksDir, "schema.sql")
-		err = os.WriteFile(fileName, []byte(schema), 0666)
+		err = os.WriteFile(fileName, []byte(schema), 0o666)
 		if err != nil {
 			return err
 		}
@@ -191,7 +190,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(vschemaFilePath, vschemaJSON, 0644); err != nil {
+		if err := os.WriteFile(vschemaFilePath, vschemaJSON, 0o644); err != nil {
 			return err
 		}
 	}
@@ -554,6 +553,7 @@ func (db *LocalCluster) createVTSchema() error {
 	}
 	return nil
 }
+
 func (db *LocalCluster) createDatabases() error {
 	log.Info("Creating databases in cluster...")
 
@@ -697,7 +697,7 @@ func dirExist(dir string) bool {
 // statements in the SQL file.
 func LoadSQLFile(filename, sourceroot string) ([]string, error) {
 	var (
-		cmd  bytes.Buffer
+		cmd  strings.Builder
 		sql  []string
 		inSQ bool
 		inDQ bool
