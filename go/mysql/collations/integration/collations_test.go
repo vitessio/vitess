@@ -59,7 +59,7 @@ func getSQLQueries(t *testing.T, testfile string) []string {
 	defer tf.Close()
 
 	var chunks []string
-	var curchunk bytes.Buffer
+	var curchunk strings.Builder
 
 	addchunk := func() {
 		if curchunk.Len() > 0 {
@@ -219,8 +219,8 @@ func TestCollationsOnMysqld(t *testing.T) {
 }
 
 func TestRemoteKanaSensitivity(t *testing.T) {
-	var Kana1 = []byte("の東京ノ")
-	var Kana2 = []byte("ノ東京の")
+	Kana1 := []byte("の東京ノ")
+	Kana2 := []byte("ノ東京の")
 
 	testRemoteComparison(t, nil, []testcmp{
 		{"utf8mb4_0900_as_cs", Kana1, Kana2},

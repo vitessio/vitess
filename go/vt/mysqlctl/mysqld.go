@@ -780,7 +780,7 @@ func (mysqld *Mysqld) initConfig(cnf *Mycnf, outFile string) error {
 		return err
 	}
 
-	return os.WriteFile(outFile, []byte(configData), 0664)
+	return os.WriteFile(outFile, []byte(configData), 0o664)
 }
 
 func (mysqld *Mysqld) getMycnfTemplate() string {
@@ -791,7 +791,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 		}
 		return string(data) // use only specified template
 	}
-	myTemplateSource := new(bytes.Buffer)
+	var myTemplateSource strings.Builder
 	myTemplateSource.WriteString("[mysqld]\n")
 	myTemplateSource.WriteString(config.MycnfDefault)
 

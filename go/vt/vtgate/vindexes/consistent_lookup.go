@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -433,7 +434,7 @@ func (lu *clCommon) MarshalJSON() ([]byte, error) {
 }
 
 func (lu *clCommon) generateLockLookup() string {
-	var buf bytes.Buffer
+	var buf strings.Builder
 	fmt.Fprintf(&buf, "select %s from %s", lu.lkp.To, lu.lkp.Table)
 	lu.addWhere(&buf, lu.lkp.FromColumns)
 	fmt.Fprintf(&buf, " for update")
@@ -441,7 +442,7 @@ func (lu *clCommon) generateLockLookup() string {
 }
 
 func (lu *clCommon) generateLockOwner() string {
-	var buf bytes.Buffer
+	var buf strings.Builder
 	fmt.Fprintf(&buf, "select %s from %s", lu.ownerColumns[0], lu.ownerTable)
 	lu.addWhere(&buf, lu.ownerColumns)
 	// We can lock in share mode because we only want to check
@@ -452,7 +453,7 @@ func (lu *clCommon) generateLockOwner() string {
 }
 
 func (lu *clCommon) generateInsertLookup() string {
-	var buf bytes.Buffer
+	var buf strings.Builder
 	fmt.Fprintf(&buf, "insert into %s(", lu.lkp.Table)
 	for _, col := range lu.lkp.FromColumns {
 		fmt.Fprintf(&buf, "%s, ", col)
@@ -466,13 +467,13 @@ func (lu *clCommon) generateInsertLookup() string {
 }
 
 func (lu *clCommon) generateUpdateLookup() string {
-	var buf bytes.Buffer
+	var buf strings.Builder
 	fmt.Fprintf(&buf, "update %s set %s=:%s", lu.lkp.Table, lu.lkp.To, lu.lkp.To)
 	lu.addWhere(&buf, lu.lkp.FromColumns)
 	return buf.String()
 }
 
-func (lu *clCommon) addWhere(buf *bytes.Buffer, cols []string) {
+func (lu *clCommon) addWhere(buf *strings.Builder, cols []string) {
 	buf.WriteString(" where ")
 	for colIdx, column := range cols {
 		if colIdx != 0 {
