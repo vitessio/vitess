@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"vitess.io/vitess/go/vt/vttablet"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -280,9 +281,9 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	// can perform a simple bulk delete using an IN clause.
 	// TODO: we should ensure that the total size of the statement does not
 	// exceed mysqld's max allowed packet size.
-	if (len(tplan.TablePlanBuilder.pkCols)+len(tplan.TablePlanBuilder.extraSourcePkCols)) == 1 &&
-		len(rowEvent.RowChanges) > 0 && (rowEvent.RowChanges[0].Before != nil && rowEvent.RowChanges[0].After == nil) &&
-		tplan.Delete != nil {
+	if vttablet.VReplicationExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 &&
+		len(rowEvent.RowChanges) > 1 && (rowEvent.RowChanges[0].Before != nil && rowEvent.RowChanges[0].After == nil) &&
+		tplan.MultiDelete != nil {
 		tplan.applyBulkDeleteChanges(rowEvent.RowChanges, applyFunc)
 	} else {
 		for _, change := range rowEvent.RowChanges {
