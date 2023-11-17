@@ -544,6 +544,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				tablets = append(tablets, primary)
 				dbProcesses = append(dbProcesses, proc)
 				primaryTabletUID = primary.Vttablet.TabletUID
+				primary.Vttablet.IsPrimary = true
 			}
 
 			for i := 0; i < numReplicas; i++ {
@@ -795,7 +796,7 @@ func (vc *VitessCluster) getPrimaryTablet(t *testing.T, ksName, shardName string
 				continue
 			}
 			for _, tablet := range shard.Tablets {
-				if strings.EqualFold(tablet.Vttablet.TabletType, "primary") {
+				if tablet.Vttablet.IsPrimary {
 					return tablet.Vttablet
 				}
 			}

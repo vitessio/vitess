@@ -79,6 +79,7 @@ type VttabletProcess struct {
 	DbFlavor                    string
 	Charset                     string
 	ConsolidationsURL           string
+	IsPrimary                   bool
 
 	// Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
