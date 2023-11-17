@@ -795,7 +795,7 @@ func (vc *VitessCluster) getPrimaryTablet(t *testing.T, ksName, shardName string
 				continue
 			}
 			for _, tablet := range shard.Tablets {
-				if strings.EqualFold(tablet.Vttablet.TabletType, "primary") && strings.EqualFold(tablet.Vttablet.GetTabletStatus(), "SERVING") {
+				if strings.EqualFold(tablet.Vttablet.TabletType, "primary") {
 					return tablet.Vttablet
 				}
 			}
