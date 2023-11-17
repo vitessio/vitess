@@ -425,52 +425,37 @@ func getOptimizerHint(initialPos int, commentStr string) (pos int, ohNameStart i
 // skipUntilParenthesisEnd reads the comment string given the initial position and skips over until
 // it has seen the end of opening bracket.
 func skipUntilParenthesisEnd(pos int, commentStr string) int {
-	// This is a problem of bracket matching. We solve this using a stack, because strings are also part of the comment
-	// that can also have '(' and ')' characters. So we can't just skip over until we see a closing parenthesis.
-	// Initialize a stack with opening bracket.
-	stack := []byte{'('}
 	for pos < len(commentStr) {
 		switch commentStr[pos] {
-		case '(':
-			// If we see an opening bracket, we put it into the stack
-			// only if we aren't currently reading a string.
-			if stack[len(stack)-1] == '(' {
-				stack = append(stack, '(')
-			}
 		case ')':
-			// If we see a closing bracket, we try to remove an opening
-			// bracket from the stack.
-			if stack[len(stack)-1] == '(' {
-				stack = stack[:len(stack)-1]
-			}
-		case '\'':
-			// If we see a single quote character, then it can either
-			// signify the ending of a previously started string, it could be
-			// part of a string that is encased in double quotes, or it could
-			// be the start of a new string.
-			if stack[len(stack)-1] == '\'' {
-				stack = stack[:len(stack)-1]
-			} else if stack[len(stack)-1] != '"' {
-				stack = append(stack, '\'')
-			}
-		case '"':
-			// If we see a double quote character, then it can either
-			// signify the ending of a previously started string, it could be
-			// part of a string that is encased in single quotes, or it could
-			// be the start of a new string.
-			if stack[len(stack)-1] == '"' {
-				stack = stack[:len(stack)-1]
-			} else if stack[len(stack)-1] != '\'' {
-				stack = append(stack, '"')
-			}
-		}
-		// The first time the stack becomes empty, signifies the ending of the parenthesis we set out to match.
-		if len(stack) == 0 {
+			// If we see a closing bracket, we have found the ending of our parenthesis.
 			return pos
+		case '\'':
+			// If we see a single quote character, then it signifies the start of a new string.
+			// We wait until we see the end of this string.
+			pos++
+			pos = skipUntilCharacter(pos, commentStr, '\'')
+		case '"':
+			// If we see a double quote character, then it signifies the start of a new string.
+			// We wait until we see the end of this string.
+			pos++
+			pos = skipUntilCharacter(pos, commentStr, '"')
 		}
 		pos++
 	}
 
+	return pos
+}
+
+// skipUntilCharacter skips until the given character has been seen in the comment string, given the starting position.
+func skipUntilCharacter(pos int, commentStr string, ch byte) int {
+	for pos < len(commentStr) {
+		if commentStr[pos] != ch {
+			pos++
+			continue
+		}
+		break
+	}
 	return pos
 }
 
