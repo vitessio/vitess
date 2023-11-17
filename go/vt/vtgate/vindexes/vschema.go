@@ -656,6 +656,10 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 						"could not parse the '%s' column's default expression '%s' for table '%s'", col.Name, col.Default, tname)
 				}
 			}
+			nullable := true
+			if col.Nullable != nil {
+				nullable = *col.Nullable
+			}
 			colNames[name.Lowered()] = true
 			t.Columns = append(t.Columns, Column{
 				Name:          name,
@@ -665,7 +669,7 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				Invisible:     col.Invisible,
 				Size:          col.Size,
 				Scale:         col.Scale,
-				Nullable:      col.Nullable,
+				Nullable:      nullable,
 				Values:        col.Values,
 			})
 		}

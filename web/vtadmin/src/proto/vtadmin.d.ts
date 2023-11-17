@@ -41643,10 +41643,13 @@ export namespace vschema {
         public scale: number;
 
         /** Column nullable. */
-        public nullable: boolean;
+        public nullable?: (boolean|null);
 
         /** Column values. */
         public values: string[];
+
+        /** Column _nullable. */
+        public _nullable?: "nullable";
 
         /**
          * Creates a new Column instance using the specified properties.

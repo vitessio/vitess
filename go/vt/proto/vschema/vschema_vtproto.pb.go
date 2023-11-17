@@ -217,7 +217,10 @@ func (m *Column) CloneVT() *Column {
 		CollationName: m.CollationName,
 		Size:          m.Size,
 		Scale:         m.Scale,
-		Nullable:      m.Nullable,
+	}
+	if rhs := m.Nullable; rhs != nil {
+		tmpVal := *rhs
+		r.Nullable = &tmpVal
 	}
 	if rhs := m.Values; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
@@ -806,9 +809,9 @@ func (m *Column) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0x4a
 		}
 	}
-	if m.Nullable {
+	if m.Nullable != nil {
 		i--
-		if m.Nullable {
+		if *m.Nullable {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -1270,7 +1273,7 @@ func (m *Column) SizeVT() (n int) {
 	if m.Scale != 0 {
 		n += 1 + sov(uint64(m.Scale))
 	}
-	if m.Nullable {
+	if m.Nullable != nil {
 		n += 2
 	}
 	if len(m.Values) > 0 {
@@ -2922,7 +2925,8 @@ func (m *Column) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.Nullable = bool(v != 0)
+			b := bool(v != 0)
+			m.Nullable = &b
 		case 9:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Values", wireType)
