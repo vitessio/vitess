@@ -17,7 +17,6 @@ limitations under the License.
 package schemadiff
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -613,7 +612,7 @@ func (s *Schema) ToQueries() []string {
 
 // ToSQL returns a SQL blob with ordered sequence of queries which can be applied to create the schema
 func (s *Schema) ToSQL() string {
-	var buf bytes.Buffer
+	var buf strings.Builder
 	for _, query := range s.ToQueries() {
 		buf.WriteString(query)
 		buf.WriteString(";\n")

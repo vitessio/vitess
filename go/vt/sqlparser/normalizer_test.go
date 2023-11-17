@@ -17,12 +17,12 @@ limitations under the License.
 package sqlparser
 
 import (
-	"bytes"
 	"fmt"
 	"math/rand"
 	"reflect"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -625,7 +625,7 @@ values
 
 func BenchmarkNormalizeTPCCInsert(b *testing.B) {
 	generateInsert := func(rows int) string {
-		var query bytes.Buffer
+		var query strings.Builder
 		query.WriteString("INSERT IGNORE INTO customer0 (c_id, c_d_id, c_w_id, c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_since, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_payment_cnt, c_delivery_cnt, c_data) values ")
 		for i := 0; i < rows; i++ {
 			fmt.Fprintf(&query, "(%d, %d, %d, '%s','OE','%s','%s', '%s', '%s', '%s', '%s','%s',NOW(),'%s',50000,%f,-10,10,1,0,'%s' )",
