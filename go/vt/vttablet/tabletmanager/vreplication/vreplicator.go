@@ -733,14 +733,25 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 		return secondaryKeys, err
 	}
 	createTable, ok := parsedDDL.(*sqlparser.CreateTable)
+	tableSpec := createTable.GetTableSpec()
 	// createTable or createTable.TableSpec should never be nil
 	// if it was a valid cast, but check to be extra safe.
-	if !ok || createTable == nil || createTable.GetTableSpec() == nil {
+	if !ok || createTable == nil || tableSpec == nil {
 		return nil, fmt.Errorf("could not determine CREATE TABLE statement from table schema %q", tableSchema)
+
 	}
 
-	for _, index := range createTable.GetTableSpec().Indexes {
+	log.Errorf("CreateTable: %s", sqlparser.String(createTable))
+	constraints := make([]string, 0, len(tableSpec.Constraints))
+	for _, constraint := range tableSpec.Constraints {
+		constraints = append(constraints, sqlparser.String(constraint))
+	}
+	log.Errorf("TableSpec constraints: %s", strings.Join(constraints, ","))
+
+	for _, index := range tableSpec.Indexes {
+		// If this is a secondary index that is not needed for Foreign Keys.
 		if index.Info.Type != sqlparser.IndexTypePrimary {
+			log.Errorf("Found secondary key %q on table %q: %+v", index.Info.Name, tableName, index)
 			secondaryKeys = append(secondaryKeys, index)
 		}
 	}
