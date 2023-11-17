@@ -89,6 +89,8 @@ func waitForSchemaTrackingForFkTables(t testing.TB) {
 	require.NoError(t, err)
 	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedKs, "fk_t11", "col")
 	require.NoError(t, err)
+	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, unshardedUnmanagedKs, "fk_t11", "col")
+	require.NoError(t, err)
 }
 
 // getReplicaTablets gets all the replica tablets.

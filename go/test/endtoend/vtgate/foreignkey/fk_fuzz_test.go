@@ -705,17 +705,27 @@ func BenchmarkFkFuzz(b *testing.B) {
 		// Connect to Vitess managed foreign keys keyspace and run all the queries
 		vtConn, err := mysql.Connect(context.Background(), &vtParams)
 		require.NoError(b, err)
-		utils.Exec(b, vtConn, "use `uks`")
+		utils.Exec(b, vtConn, fmt.Sprintf("use `%v`", unshardedKs))
 		b.Run("Vitess Managed Foreign Keys", func(b *testing.B) {
 			runQueries(b, vtConn, queries)
+		})
+
+		// Connect to Vitess managed foreign keys keyspace and run all the queries
+		vtUnmanagedConn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(b, err)
+		utils.Exec(b, vtUnmanagedConn, fmt.Sprintf("use `%v`", unshardedUnmanagedKs))
+		b.Run("Vitess Unmanaged Foreign Keys", func(b *testing.B) {
+			runQueries(b, vtUnmanagedConn, queries)
 		})
 
 		// Verify that the data in MySQL and Vitess matches. This ensures, we ended up running the same set of queries with the same outputs.
 		for _, table := range fkTables {
 			query := fmt.Sprintf("SELECT * FROM %v ORDER BY id", table)
-			resOne, _ := vtConn.ExecuteFetch(query, 10000, true)
-			resTwo, _ := mysqlConn.ExecuteFetch(query, 10000, true)
-			require.True(b, compareResultRows(resOne, resTwo), "Results for %v don't match\nVitess Managed\n%v\nMySQL\n%v", table, resOne, resTwo)
+			resVitessManaged, _ := vtConn.ExecuteFetch(query, 10000, true)
+			resMySQL, _ := mysqlConn.ExecuteFetch(query, 10000, true)
+			resVitessUnmanaged, _ := vtUnmanagedConn.ExecuteFetch(query, 10000, true)
+			require.True(b, compareResultRows(resVitessManaged, resMySQL), "Results for %v don't match\nVitess Managed\n%v\nMySQL\n%v", table, resVitessManaged, resMySQL)
+			require.True(b, compareResultRows(resVitessUnmanaged, resMySQL), "Results for %v don't match\nVitess Unmanaged\n%v\nMySQL\n%v", table, resVitessUnmanaged, resMySQL)
 		}
 	}
 }
