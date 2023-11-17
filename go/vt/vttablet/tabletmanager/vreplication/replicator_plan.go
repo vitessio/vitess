@@ -29,7 +29,6 @@ import (
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -478,7 +477,6 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 	if err != nil {
 		return nil, err
 	}
-	log.Errorf("DEBUG: applyBulkDeleteChanges: %s", query)
 	return executor(query)
 }
 

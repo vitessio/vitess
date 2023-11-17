@@ -27,17 +27,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buger/jsonparser"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/tidwall/gjson"
-
-	"github.com/buger/jsonparser"
+	"vitess.io/vitess/go/vt/vttablet"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -622,8 +622,13 @@ func testVStreamCellFlag(t *testing.T) {
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 	mainClusterConfig.vreplicationCompressGTID = true
+	oldVTTabletExtraArgs := extraVTTabletArgs
+	// Disable the bulk delete vplayer optimization in this test, which is enabled by default, to confirm that we
+	// don't have a regression due to the bulk delete functionality  of this functionality.
+	extraVTTabletArgs = append(extraVTTabletArgs, fmt.Sprintf("--vreplication_experimental_flags=%d", vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts))
 	defer func() {
 		mainClusterConfig.vreplicationCompressGTID = false
+		extraVTTabletArgs = oldVTTabletExtraArgs
 	}()
 	vc = NewVitessCluster(t, "TestCellAliasVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
@@ -777,6 +782,12 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		}
 		require.Equal(t, true, dec80Replicated)
 
+		// insert multiple rows in the loadtest table and immediately delete them to confirm that bulk delete
+		// works the same way with the vplayer optimization enabled and disabled. Currently this optimization
+		// is enabled by default, but disabled in TestCellAliasVreplicationWorkflow.
+		execVtgateQuery(t, vtgateConn, sourceKs, "insert into loadtest(id, name) values(10001, 'tempCustomer'), (10002, 'tempCustomer2'), (10003, 'tempCustomer3'), (10004, 'tempCustomer4')")
+		execVtgateQuery(t, vtgateConn, sourceKs, "delete from loadtest where id > 10000")
+
 		// Confirm that all partial query metrics get updated when we are testing the noblob mode.
 		t.Run("validate partial query counts", func(t *testing.T) {
 			if !isBinlogRowImageNoBlob(t, productTab) {
@@ -925,6 +936,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			assertQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2)
 
 			execVtgateQuery(t, vtgateConn, "customer", "delete from customer where name like 'tempCustomer%'")
+
 			waitForRowCountInTablet(t, customerTab1, "customer", "customer", 1)
 			waitForRowCountInTablet(t, customerTab2, "customer", "customer", 2)
 			waitForRowCount(t, vtgateConn, "customer", "customer.customer", 3)
