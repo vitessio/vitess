@@ -569,10 +569,32 @@ func (sb *shardBuffer) drain(q []*entry, err error) {
 	sb.timeoutThread.stop()
 
 	start := sb.timeNow()
-	// TODO(mberlin): Parallelize the drain by pumping the data through a channel.
-	for _, e := range q {
-		sb.unblockAndWait(e, err, true /* releaseSlot */, true /* blockingWait */)
+
+	// Parallelize the drain by pumping the data through a channel.
+	entryChan := make(chan *entry, len(q))
+
+	parallelism := min(bufferDrainConcurrency, len(q))
+
+	var wg sync.WaitGroup
+	wg.Add(parallelism)
+
+	for i := 0; i < parallelism; i++ {
+		go func() {
+			for _, e := range q {
+				sb.unblockAndWait(e, err, true /* releaseSlot */, true /* blockingWait */)
+			}
+
+			wg.Done()
+		}()
 	}
+
+	for _, e := range q {
+		entryChan <- e
+	}
+
+	close(entryChan)
+	wg.Wait()
+
 	d := sb.timeNow().Sub(start)
 	log.Infof("Draining finished for shard: %s Took: %v for: %d requests.", topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d, len(q))
 	requestsDrained.Add(sb.statsKey, int64(len(q)))
