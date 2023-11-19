@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
@@ -126,13 +127,29 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.Var(&currentConfig.Oltp.TxTimeoutSeconds, currentConfig.Oltp.TxTimeoutSeconds.Name(), "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
 	currentConfig.GracePeriods.ShutdownSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.GracePeriods.ShutdownSeconds.Name(), defaultConfig.GracePeriods.TransitionSeconds.Get())
 	fs.Var(&currentConfig.GracePeriods.ShutdownSeconds, currentConfig.GracePeriods.ShutdownSeconds.Name(), "how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.")
-	fs.IntVar(&currentConfig.Oltp.MaxRows, "queryserver-config-max-result-size", defaultConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
-	fs.IntVar(&currentConfig.Oltp.WarnRows, "queryserver-config-warn-result-size", defaultConfig.Oltp.WarnRows, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
+
+	currentConfig.Oltp.MaxRows = viperutil.Configure("vttablet.queryserver.max-result-size", viperutil.Options[int64]{
+		FlagName: "queryserver-config-max-result-size",
+		Default:  10000,
+		Dynamic:  true,
+	})
+	fs.Int64("queryserver-config-max-result-size", currentConfig.Oltp.MaxRows.Default(), "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
+
+	currentConfig.Oltp.WarnRows = viperutil.Configure("vttalbet.queryserver.warn-result-size", viperutil.Options[int64]{
+		FlagName: "queryserver-config-warn-result-size",
+		Dynamic:  true,
+	})
+	fs.Int64("queryserver-config-warn-result-size", currentConfig.Oltp.WarnRows.Default(), "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
+
 	fs.BoolVar(&currentConfig.PassthroughDML, "queryserver-config-passthrough-dmls", defaultConfig.PassthroughDML, "query server pass through all dml statements without rewriting")
 
 	fs.IntVar(&currentConfig.StreamBufferSize, "queryserver-config-stream-buffer-size", defaultConfig.StreamBufferSize, "query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream_buffer_size.")
 
-	fs.Int64Var(&currentConfig.QueryCacheMemory, "queryserver-config-query-cache-memory", defaultConfig.QueryCacheMemory, "query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
+	currentConfig.QueryCacheMemory = viperutil.Configure("vttablet.queryserver.query-cache.memory", viperutil.Options[int64]{
+		FlagName: "queryserver-config-query-cache-memory",
+		Default:  32 * 1024 * 1024, // 32 mb for our query cache
+	})
+	fs.Int64("queryserver-config-query-cache-memory", currentConfig.QueryCacheMemory.Default(), "query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 
 	currentConfig.SchemaReloadIntervalSeconds = defaultConfig.SchemaReloadIntervalSeconds.Clone()
 	fs.Var(&currentConfig.SchemaReloadIntervalSeconds, currentConfig.SchemaReloadIntervalSeconds.Name(), "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
@@ -221,6 +238,12 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.EnableViews, "queryserver-enable-views", false, "Enable views support in vttablet.")
 
 	fs.BoolVar(&currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics include a label that identifies the workload")
+
+	viperutil.BindFlags(fs,
+		currentConfig.QueryCacheMemory,
+		currentConfig.Oltp.MaxRows,
+		currentConfig.Oltp.WarnRows,
+	)
 }
 
 var (
@@ -325,7 +348,7 @@ type TabletConfig struct {
 	StreamBufferSize                        int                               `json:"streamBufferSize,omitempty"`
 	ConsolidatorStreamTotalSize             int64                             `json:"consolidatorStreamTotalSize,omitempty"`
 	ConsolidatorStreamQuerySize             int64                             `json:"consolidatorStreamQuerySize,omitempty"`
-	QueryCacheMemory                        int64                             `json:"queryCacheMemory,omitempty"`
+	QueryCacheMemory                        viperutil.Value[int64]            `json:"queryCacheMemory,omitempty"`
 	QueryCacheDoorkeeper                    bool                              `json:"queryCacheDoorkeeper,omitempty"`
 	SchemaReloadIntervalSeconds             flagutil.DeprecatedFloat64Seconds `json:"schemaReloadIntervalSeconds,omitempty"`
 	SignalSchemaChangeReloadIntervalSeconds flagutil.DeprecatedFloat64Seconds `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
@@ -456,21 +479,21 @@ func (cfg *OlapConfig) MarshalJSON() ([]byte, error) {
 
 // OltpConfig contains the config for oltp settings.
 type OltpConfig struct {
-	QueryTimeoutSeconds flagutil.DeprecatedFloat64Seconds `json:"queryTimeoutSeconds,omitempty"`
-	TxTimeoutSeconds    flagutil.DeprecatedFloat64Seconds `json:"txTimeoutSeconds,omitempty"`
-	MaxRows             int                               `json:"maxRows,omitempty"`
-	WarnRows            int                               `json:"warnRows,omitempty"`
+	QueryTimeoutSeconds flagutil.DeprecatedFloat64Seconds
+	TxTimeoutSeconds    flagutil.DeprecatedFloat64Seconds
+	MaxRows             viperutil.Value[int64]
+	WarnRows            viperutil.Value[int64]
 }
 
 func (cfg *OltpConfig) MarshalJSON() ([]byte, error) {
-	type Proxy OltpConfig
-
 	tmp := struct {
-		Proxy
+		MaxRows             int64  `json:"maxRows,omitempty"`
+		WarnRows            int64  `json:"warnRows,omitempty"`
 		QueryTimeoutSeconds string `json:"queryTimeoutSeconds,omitempty"`
 		TxTimeoutSeconds    string `json:"txTimeoutSeconds,omitempty"`
 	}{
-		Proxy: Proxy(*cfg),
+		MaxRows:  cfg.MaxRows.Get(),
+		WarnRows: cfg.WarnRows.Get(),
 	}
 
 	if d := cfg.QueryTimeoutSeconds.Get(); d != 0 {
@@ -766,7 +789,6 @@ var defaultConfig = TabletConfig{
 	Oltp: OltpConfig{
 		QueryTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-query-timeout", 30*time.Second),
 		TxTimeoutSeconds:    flagutil.NewDeprecatedFloat64Seconds("queryserver-config-transaction-timeout", 30*time.Second),
-		MaxRows:             10000,
 	},
 	Healthcheck: HealthcheckConfig{
 		IntervalSeconds:           flagutil.NewDeprecatedFloat64Seconds("health_check_interval", 20*time.Second),
@@ -804,7 +826,7 @@ var defaultConfig = TabletConfig{
 	// great (the overhead makes the final packets on the wire about twice
 	// bigger than this).
 	StreamBufferSize: 32 * 1024,
-	QueryCacheMemory: 32 * 1024 * 1024, // 32 mb for our query cache
+	// QueryCacheMemory: 32 * 1024 * 1024, // 32 mb for our query cache
 	// The doorkeeper for the plan cache is disabled by default in endtoend tests to ensure
 	// results are consistent between runs.
 	QueryCacheDoorkeeper:        !servenv.TestingEndtoend,

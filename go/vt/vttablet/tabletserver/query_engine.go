@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -170,8 +171,8 @@ type QueryEngine struct {
 	txSerializer *txserializer.TxSerializer
 
 	// Vars
-	maxResultSize    atomic.Int64
-	warnResultSize   atomic.Int64
+	maxResultSize    viperutil.Value[int64]
+	warnResultSize   viperutil.Value[int64]
 	streamBufferSize atomic.Int64
 	// tableaclExemptCount count the number of accesses allowed
 	// based on membership in the superuser ACL
@@ -211,12 +212,12 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 
 	// Cache for query plans: user configured size with a doorkeeper by default to prevent one-off queries
 	// from thrashing the cache.
-	qe.plans = theine.NewStore[PlanCacheKey, *TabletPlan](config.QueryCacheMemory, config.QueryCacheDoorkeeper)
+	qe.plans = theine.NewStore[PlanCacheKey, *TabletPlan](config.QueryCacheMemory.Get(), config.QueryCacheDoorkeeper)
 
 	// cache for connection settings: default to 1/4th of the size for the query cache and do
 	// not use a doorkeeper because custom connection settings are rarely one-off and we always
 	// want to cache them
-	var settingsCacheMemory = config.QueryCacheMemory / 4
+	var settingsCacheMemory = config.QueryCacheMemory.Get() / 4
 	qe.settings = theine.NewStore[SettingsCacheKey, *smartconnpool.Setting](settingsCacheMemory, false)
 
 	qe.schema.Store(&currentSchema{
@@ -255,16 +256,16 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 		}
 	}
 
-	qe.maxResultSize.Store(int64(config.Oltp.MaxRows))
-	qe.warnResultSize.Store(int64(config.Oltp.WarnRows))
+	qe.maxResultSize = config.Oltp.MaxRows
+	qe.warnResultSize = config.Oltp.WarnRows
 	qe.streamBufferSize.Store(int64(config.StreamBufferSize))
 
 	planbuilder.PassthroughDMLs = config.PassthroughDML
 
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
-	env.Exporter().NewGaugeFunc("MaxResultSize", "Query engine max result size", qe.maxResultSize.Load)
-	env.Exporter().NewGaugeFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Load)
+	env.Exporter().NewGaugeFunc("MaxResultSize", "Query engine max result size", qe.maxResultSize.Get)
+	env.Exporter().NewGaugeFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Get)
 	env.Exporter().NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Load)
 	env.Exporter().NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Load)
 

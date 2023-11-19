@@ -731,7 +731,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 }
 
 func (qre *QueryExecutor) execDMLLimit(conn *StatefulConnection) (*sqltypes.Result, error) {
-	maxrows := qre.tsv.qe.maxResultSize.Load()
+	maxrows := qre.tsv.qe.maxResultSize.Get()
 	qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 	result, err := qre.txFetch(conn, true)
 	if err != nil {
@@ -750,7 +750,7 @@ func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "caller id: %s: row count exceeded %d", callerID.Username, maxrows)
 	}
-	warnThreshold := qre.tsv.qe.warnResultSize.Load()
+	warnThreshold := qre.tsv.qe.warnResultSize.Get()
 	if warnThreshold > 0 && count > warnThreshold {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 		qre.tsv.Stats().Warnings.Add("ResultsExceeded", 1)
@@ -1060,7 +1060,7 @@ func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.Conn) error {
 }
 
 func (qre *QueryExecutor) getSelectLimit() int64 {
-	return qre.tsv.qe.maxResultSize.Load()
+	return qre.tsv.qe.maxResultSize.Get()
 }
 
 func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields bool) (*sqltypes.Result, error) {
@@ -1073,7 +1073,7 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields
 	qre.tsv.statelessql.Add(qd)
 	defer qre.tsv.statelessql.Remove(qd)
 
-	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
 }
 
 func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {
@@ -1086,7 +1086,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	qre.tsv.statefulql.Add(qd)
 	defer qre.tsv.statefulql.Remove(qd)
 
-	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
