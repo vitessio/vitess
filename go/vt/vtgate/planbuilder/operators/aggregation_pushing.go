@@ -116,12 +116,12 @@ func pushAggregationThroughSubquery(
 	src.Outer = pushedAggr
 
 	if !rootAggr.Original {
-		return src, rewrite.NewTree("push Aggregation under subquery - keep original", rootAggr), nil
+		return src, rewrite.NewTree("push Aggregation under subquery - keep original"), nil
 	}
 
 	rootAggr.aggregateTheAggregates()
 
-	return rootAggr, rewrite.NewTree("push Aggregation under subquery", rootAggr), nil
+	return rootAggr, rewrite.NewTree("push Aggregation under subquery"), nil
 }
 
 func (a *Aggregator) aggregateTheAggregates() {
@@ -161,10 +161,10 @@ func pushAggregationThroughRoute(
 	if !aggregator.Original {
 		// we only keep the root aggregation, if this aggregator was created
 		// by splitting one and pushing under a join, we can get rid of this one
-		return aggregator.Source, rewrite.NewTree("push aggregation under route - remove original", aggregator), nil
+		return aggregator.Source, rewrite.NewTree("push aggregation under route - remove original"), nil
 	}
 
-	return aggregator, rewrite.NewTree("push aggregation under route - keep original", aggregator), nil
+	return aggregator, rewrite.NewTree("push aggregation under route - keep original"), nil
 }
 
 // pushAggregations splits aggregations between the original aggregator and the one we are pushing down
@@ -264,10 +264,10 @@ withNextColumn:
 	if !aggregator.Original {
 		// we only keep the root aggregation, if this aggregator was created
 		// by splitting one and pushing under a join, we can get rid of this one
-		return aggregator.Source, rewrite.NewTree("push aggregation under filter - remove original", aggregator), nil
+		return aggregator.Source, rewrite.NewTree("push aggregation under filter - remove original"), nil
 	}
 	aggregator.aggregateTheAggregates()
-	return aggregator, rewrite.NewTree("push aggregation under filter - keep original", aggregator), nil
+	return aggregator, rewrite.NewTree("push aggregation under filter - keep original"), nil
 }
 
 func collectColNamesNeeded(ctx *plancontext.PlanningContext, f *Filter) (columnsNeeded []*sqlparser.ColName) {
@@ -411,12 +411,12 @@ func pushAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *Aggr
 	if !rootAggr.Original {
 		// we only keep the root aggregation, if this aggregator was created
 		// by splitting one and pushing under a join, we can get rid of this one
-		return output, rewrite.NewTree("push Aggregation under join - keep original", rootAggr), nil
+		return output, rewrite.NewTree("push Aggregation under join - keep original"), nil
 	}
 
 	rootAggr.aggregateTheAggregates()
 	rootAggr.Source = output
-	return rootAggr, rewrite.NewTree("push Aggregation under join", rootAggr), nil
+	return rootAggr, rewrite.NewTree("push Aggregation under join"), nil
 }
 
 var errAbortAggrPushing = fmt.Errorf("abort aggregation pushing")
@@ -473,7 +473,7 @@ func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Agg
 				RHSExpr:  expr,
 			})
 		case deps.IsSolvedBy(lhs.tableID.Merge(rhs.tableID)):
-			jc, err := BreakExpressionInLHSandRHS(ctx, groupBy.SimplifiedExpr, lhs.tableID)
+			jc, err := breakExpressionInLHSandRHSForApplyJoin(ctx, groupBy.SimplifiedExpr, lhs.tableID)
 			if err != nil {
 				return nil, err
 			}
@@ -877,5 +877,5 @@ func splitAvgAggregations(ctx *plancontext.PlanningContext, aggr *Aggregator) (o
 	aggr.Columns = append(aggr.Columns, columns...)
 	aggr.Aggregations = append(aggr.Aggregations, aggregations...)
 
-	return proj, rewrite.NewTree("split avg aggregation", proj), nil
+	return proj, rewrite.NewTree("split avg aggregation"), nil
 }

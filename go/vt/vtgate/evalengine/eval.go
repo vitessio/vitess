@@ -312,7 +312,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			return newEvalUint64(uint64(i.i)), nil
 		}
 
-	case sqltypes.IsText(typ) || sqltypes.IsBinary(typ):
+	case sqltypes.IsTextOrBinary(typ):
 		switch {
 		case v.IsText() || v.IsBinary():
 			return newEvalRaw(v.Type(), v.Raw(), typedCoercionCollation(v.Type(), collation)), nil

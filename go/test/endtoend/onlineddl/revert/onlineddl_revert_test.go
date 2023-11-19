@@ -428,7 +428,20 @@ func testRevertible(t *testing.T) {
 					droppedNoDefaultColumnNames := row.AsString("dropped_no_default_column_names", "")
 					expandedColumnNames := row.AsString("expanded_column_names", "")
 
-					assert.Equal(t, testcase.removedForeignKeyNames, removeBackticks(removedForeignKeyNames))
+					// Online DDL renames constraint names, and keeps the original name as a prefix.
+					// The name of e.g. "some_fk_2_" might turn into "some_fk_2_518ubnm034rel35l1m0u1dc7m"
+					expectRemovedForeignKeyNames := strings.Split(testcase.removedForeignKeyNames, ",")
+					actualRemovedForeignKeyNames := strings.Split(removeBackticks(removedForeignKeyNames), ",")
+					assert.Equal(t, len(expectRemovedForeignKeyNames), len(actualRemovedForeignKeyNames))
+					for _, actualRemovedForeignKeyName := range actualRemovedForeignKeyNames {
+						found := false
+						for _, expectRemovedForeignKeyName := range expectRemovedForeignKeyNames {
+							if strings.HasPrefix(actualRemovedForeignKeyName, expectRemovedForeignKeyName) {
+								found = true
+							}
+						}
+						assert.Truef(t, found, "unexpected FK name", "%s", actualRemovedForeignKeyName)
+					}
 					assert.Equal(t, testcase.removedUniqueKeyNames, removeBackticks(removedUniqueKeyNames))
 					assert.Equal(t, testcase.droppedNoDefaultColumnNames, removeBackticks(droppedNoDefaultColumnNames))
 					assert.Equal(t, testcase.expandedColumnNames, removeBackticks(expandedColumnNames))
@@ -466,7 +479,8 @@ func testRevertible(t *testing.T) {
 				droppedNoDefaultColumnNames := row.AsString("dropped_no_default_column_names", "")
 				expandedColumnNames := row.AsString("expanded_column_names", "")
 
-				assert.Equal(t, "some_fk_2", removeBackticks(removedForeignKeyNames))
+				// Online DDL renames constraint names, and keeps the original name as a prefix. The name will be e.g. some_fk_2_518ubnm034rel35l1m0u1dc7m
+				assert.Contains(t, removeBackticks(removedForeignKeyNames), "some_fk_2")
 				assert.Equal(t, "", removeBackticks(removedUniqueKeyNames))
 				assert.Equal(t, "", removeBackticks(droppedNoDefaultColumnNames))
 				assert.Equal(t, "", removeBackticks(expandedColumnNames))

@@ -1056,6 +1056,25 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
+	checkConstraintCapable, err := capableOf(mysql.CheckConstraintsCapability) // 8.0.16 and above
+	require.NoError(t, err)
+	if checkConstraintCapable {
+		// Constraints
+		t.Run("CREATE TABLE with CHECK constraint", func(t *testing.T) {
+			query := `create table with_constraint (id int primary key, check ((id >= 0)))`
+			uuid := testOnlineDDLStatement(t, createParams(query, ddlStrategy, "vtgate", "chk_", "", false))
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			t.Run("ensure constraint name is rewritten", func(t *testing.T) {
+				// Since we did not provide a name for the CHECK constraint, MySQL will
+				// name it `with_constraint_chk_1`. But we expect Online DDL to explicitly
+				// modify the constraint name, specifically to get rid of the <table-name> prefix,
+				// so that we don't get into https://bugs.mysql.com/bug.php?id=107772 situation.
+				createStatement := getCreateTableStatement(t, shards[0].Vttablets[0], "with_constraint")
+				assert.NotContains(t, createStatement, "with_constraint_chk")
+			})
+		})
+	}
+
 	// INSTANT DDL
 	instantDDLCapable, err := capableOf(mysql.InstantAddLastColumnFlavorCapability)
 	require.NoError(t, err)
@@ -2243,7 +2262,7 @@ func testForeignKeys(t *testing.T) {
 		},
 		{
 			name:                      "drop foreign key from a child",
-			sql:                       "alter table child_table DROP FOREIGN KEY child_parent_fk",
+			sql:                       "alter table child_table DROP FOREIGN KEY <childTableConstraintName>", // See "getting child_table constraint name" test step below.
 			allowForeignKeys:          true,
 			expectHint:                "child_hint",
 			onlyIfFKOnlineDDLPossible: true,
@@ -2308,6 +2327,19 @@ func testForeignKeys(t *testing.T) {
 					})
 				}
 			})
+			t.Run("getting child_table constraint name", func(t *testing.T) {
+				// Due to how OnlineDDL works, the name of the foreign key constraint will not be the one we used in the CREATE TABLE statement.
+				// There's a specific test where we drop said constraint. So speficially for that test (or any similar future tests), we need to dynamically
+				// evaluate the constraint name.
+				rs := onlineddl.VtgateExecQuery(t, &vtParams, "select CONSTRAINT_NAME from information_schema.REFERENTIAL_CONSTRAINTS where TABLE_NAME='child_table'", "")
+				assert.Equal(t, 1, len(rs.Rows))
+				row := rs.Named().Row()
+				assert.NotNil(t, row)
+				childTableConstraintName := row.AsString("CONSTRAINT_NAME", "")
+				assert.NotEmpty(t, childTableConstraintName)
+				testcase.sql = strings.ReplaceAll(testcase.sql, "<childTableConstraintName>", childTableConstraintName)
+			})
+
 			var uuid string
 			t.Run("run migration", func(t *testing.T) {
 				if testcase.allowForeignKeys {
@@ -2443,7 +2475,7 @@ func testRevertMigration(t *testing.T, params *testRevertMigrationParams) (uuid 
 	return uuid
 }
 
-// checkTable checks the number of tables in the first two shards.
+// checkTable checks the number of tables in all shards
 func checkTable(t *testing.T, showTableName string, expectExists bool) bool {
 	expectCount := 0
 	if expectExists {

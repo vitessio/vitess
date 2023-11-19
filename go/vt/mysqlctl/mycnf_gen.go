@@ -19,11 +19,11 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"bytes"
 	"crypto/rand"
 	"fmt"
 	"math/big"
 	"path"
+	"strings"
 	"text/template"
 
 	"github.com/spf13/pflag"
@@ -54,9 +54,7 @@ const (
 	innodbLogSubdir  = "innodb/logs"
 )
 
-var (
-	tabletDir string
-)
+var tabletDir string
 
 func init() {
 	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient"} {
@@ -149,8 +147,8 @@ func (cnf *Mycnf) fillMycnfTemplate(tmplSrc string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	mycnfData := new(bytes.Buffer)
-	err = myTemplate.Execute(mycnfData, cnf)
+	var mycnfData strings.Builder
+	err = myTemplate.Execute(&mycnfData, cnf)
 	if err != nil {
 		return "", err
 	}

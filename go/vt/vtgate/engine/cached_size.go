@@ -145,7 +145,7 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(144)
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
@@ -280,13 +280,20 @@ func (cached *FkChild) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field BVName string
 	size += hack.RuntimeAllocSize(int64(len(cached.BVName)))
 	// field Cols []int
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(8))
+	}
+	// field NonLiteralInfo []vitess.io/vitess/go/vt/vtgate/engine.NonLiteralUpdateInfo
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.NonLiteralInfo)) * int64(40))
+		for _, elem := range cached.NonLiteralInfo {
+			size += elem.CachedSize(false)
+		}
 	}
 	// field Exec vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Exec.(cachedObject); ok {
@@ -610,6 +617,18 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(27))
 	}
+	return size
+}
+func (cached *NonLiteralUpdateInfo) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field UpdateExprBvName string
+	size += hack.RuntimeAllocSize(int64(len(cached.UpdateExprBvName)))
 	return size
 }
 func (cached *OnlineDDL) CachedSize(alloc bool) int64 {
@@ -986,6 +1005,25 @@ func (cached *Send) CachedSize(alloc bool) int64 {
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
+	return size
+}
+func (cached *Sequential) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Sources []vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Sources)) * int64(16))
+		for _, elem := range cached.Sources {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
 	return size
 }
 func (cached *SessionPrimitive) CachedSize(alloc bool) int64 {

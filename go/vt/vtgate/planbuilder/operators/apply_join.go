@@ -148,18 +148,16 @@ func (aj *ApplyJoin) IsInner() bool {
 	return !aj.LeftJoin
 }
 
-func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 	aj.Predicate = ctx.SemTable.AndExpressions(expr, aj.Predicate)
 
-	col, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(aj.LHS))
+	col, err := breakExpressionInLHSandRHSForApplyJoin(ctx, expr, TableID(aj.LHS))
 	if err != nil {
-		return err
+		panic(err)
 	}
 	aj.JoinPredicates = append(aj.JoinPredicates, col)
 	rhs := aj.RHS.AddPredicate(ctx, col.RHSExpr)
 	aj.RHS = rhs
-
-	return nil
 }
 
 func (aj *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
@@ -203,7 +201,7 @@ func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sq
 	case deps.IsSolvedBy(rhs):
 		col.RHSExpr = e
 	case deps.IsSolvedBy(both):
-		col, err = BreakExpressionInLHSandRHS(ctx, e, TableID(aj.LHS))
+		col, err = breakExpressionInLHSandRHSForApplyJoin(ctx, e, TableID(aj.LHS))
 		if err != nil {
 			return JoinColumn{}, err
 		}
@@ -243,7 +241,7 @@ func (aj *ApplyJoin) AddColumn(
 	return offset
 }
 
-func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) {
+func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
 	for _, col := range aj.JoinColumns {
 		// Read the type description for JoinColumn to understand the following code
 		for _, lhsExpr := range col.LHSExprs {
@@ -272,6 +270,8 @@ func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) {
 		offset := aj.LHS.AddColumn(ctx, true, false, aeWrap(lhsExpr.Expr))
 		aj.Vars[lhsExpr.Name] = offset
 	}
+
+	return nil
 }
 
 func (aj *ApplyJoin) addOffset(offset int) {

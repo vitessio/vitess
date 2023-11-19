@@ -17,7 +17,6 @@ limitations under the License.
 package key
 
 import (
-	"bytes"
 	"encoding/hex"
 	"math/rand"
 	"sort"
@@ -48,7 +47,7 @@ type Destination interface {
 
 // DestinationsString returns a printed version of the destination array.
 func DestinationsString(destinations []Destination) string {
-	var buffer bytes.Buffer
+	var buffer strings.Builder
 	buffer.WriteString("Destinations:")
 	for i, d := range destinations {
 		if i > 0 {
@@ -177,7 +176,7 @@ func (d DestinationExactKeyRanges) Resolve(allShards []*topodatapb.ShardReferenc
 
 // String is part of the Destination interface.
 func (d DestinationExactKeyRanges) String() string {
-	var buffer bytes.Buffer
+	var buffer strings.Builder
 	buffer.WriteString("DestinationExactKeyRanges(")
 	for i, kr := range d {
 		if i > 0 {
@@ -246,7 +245,7 @@ func (d DestinationKeyRanges) Resolve(allShards []*topodatapb.ShardReference, ad
 
 // String is part of the Destination interface.
 func (d DestinationKeyRanges) String() string {
-	var buffer bytes.Buffer
+	var buffer strings.Builder
 	buffer.WriteString("DestinationKeyRanges(")
 	for i, kr := range d {
 		if i > 0 {
@@ -318,7 +317,7 @@ func (d DestinationKeyspaceIDs) Resolve(allShards []*topodatapb.ShardReference, 
 
 // String is part of the Destination interface.
 func (d DestinationKeyspaceIDs) String() string {
-	var buffer bytes.Buffer
+	var buffer strings.Builder
 	buffer.WriteString("DestinationKeyspaceIDs(")
 	for i, ksid := range d {
 		if i > 0 {

@@ -55,7 +55,7 @@ func TestInsertUnsharded(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: dummy_insert {} true true`,
 	})
-	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 4})
+	expectResult(t, result, &sqltypes.Result{InsertID: 4})
 
 	// Failure cases
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
@@ -117,7 +117,7 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 	})
 
 	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
-	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 4})
+	expectResult(t, result, &sqltypes.Result{InsertID: 4})
 }
 
 func TestInsertUnshardedGenerate_Zeros(t *testing.T) {
@@ -170,7 +170,7 @@ func TestInsertUnshardedGenerate_Zeros(t *testing.T) {
 	})
 
 	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
-	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 4})
+	expectResult(t, result, &sqltypes.Result{InsertID: 4})
 }
 
 func TestInsertShardedSimple(t *testing.T) {
@@ -462,7 +462,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 	})
 
 	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
-	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 2})
+	expectResult(t, result, &sqltypes.Result{InsertID: 2})
 }
 
 func TestInsertShardedOwned(t *testing.T) {
@@ -1797,7 +1797,7 @@ func TestInsertSelectGenerate(t *testing.T) {
 	})
 
 	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
-	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 2})
+	expectResult(t, result, &sqltypes.Result{InsertID: 2})
 }
 
 func TestStreamingInsertSelectGenerate(t *testing.T) {
@@ -1893,7 +1893,7 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 	})
 
 	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
-	expectResult(t, "Execute", output, &sqltypes.Result{InsertID: 2})
+	expectResult(t, output, &sqltypes.Result{InsertID: 2})
 }
 
 func TestInsertSelectGenerateNotProvided(t *testing.T) {
@@ -1981,7 +1981,7 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 	})
 
 	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
-	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 10})
+	expectResult(t, result, &sqltypes.Result{InsertID: 10})
 }
 
 func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
@@ -2073,7 +2073,7 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 	})
 
 	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
-	expectResult(t, "Execute", output, &sqltypes.Result{InsertID: 10})
+	expectResult(t, output, &sqltypes.Result{InsertID: 10})
 }
 
 func TestInsertSelectUnowned(t *testing.T) {

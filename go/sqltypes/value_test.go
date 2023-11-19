@@ -463,13 +463,13 @@ func TestEncode(t *testing.T) {
 		outASCII: "'YQ=='",
 	}}
 	for _, tcase := range testcases {
-		buf := &bytes.Buffer{}
-		tcase.in.EncodeSQL(buf)
+		var buf strings.Builder
+		tcase.in.EncodeSQL(&buf)
 		if tcase.outSQL != buf.String() {
 			t.Errorf("%v.EncodeSQL = %q, want %q", tcase.in, buf.String(), tcase.outSQL)
 		}
-		buf = &bytes.Buffer{}
-		tcase.in.EncodeASCII(buf)
+		buf.Reset()
+		tcase.in.EncodeASCII(&buf)
 		if tcase.outASCII != buf.String() {
 			t.Errorf("%v.EncodeASCII = %q, want %q", tcase.in, buf.String(), tcase.outASCII)
 		}

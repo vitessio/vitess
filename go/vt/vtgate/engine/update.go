@@ -204,6 +204,7 @@ func (upd *Update) description() PrimitiveDescription {
 		"OwnedVindexQuery":     upd.OwnedVindexQuery,
 		"MultiShardAutocommit": upd.MultiShardAutocommit,
 		"QueryTimeout":         upd.QueryTimeout,
+		"NoAutoCommit":         upd.PreventAutoCommit,
 	}
 
 	addFieldsIfNotEmpty(upd.DML, other)

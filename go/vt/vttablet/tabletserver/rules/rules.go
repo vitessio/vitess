@@ -27,15 +27,14 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-//-----------------------------------------------
+// -----------------------------------------------
 
 const (
 	bufferedTableRuleName = "buffered_table"
@@ -189,7 +188,7 @@ func (qrs *Rules) GetAction(
 	return QRContinue, nil, 0, ""
 }
 
-//-----------------------------------------------
+// -----------------------------------------------
 
 // Rule represents one rule (conditions-action).
 // Name is meant to uniquely identify a rule.
@@ -561,7 +560,7 @@ func bvMatch(bvcond BindVarCond, bindVars map[string]*querypb.BindVariable) bool
 	return bvcond.value.eval(bv, bvcond.op, bvcond.onMismatch)
 }
 
-//-----------------------------------------------
+// -----------------------------------------------
 // Support types for Rule
 
 // Action speficies the list of actions to perform
@@ -852,13 +851,13 @@ func getint64(val *querypb.BindVariable) (iv int64, status int) {
 
 // TODO(sougou): this is inefficient. Optimize to use []byte.
 func getstring(val *querypb.BindVariable) (s string, status int) {
-	if sqltypes.IsIntegral(val.Type) || sqltypes.IsFloat(val.Type) || sqltypes.IsText(val.Type) || sqltypes.IsBinary(val.Type) {
+	if sqltypes.IsIntegral(val.Type) || sqltypes.IsFloat(val.Type) || sqltypes.IsTextOrBinary(val.Type) {
 		return string(val.Value), QROK
 	}
 	return "", QRMismatch
 }
 
-//-----------------------------------------------
+// -----------------------------------------------
 // Support functions for JSON
 
 // MapStrOperator maps a string representation to an Operator.

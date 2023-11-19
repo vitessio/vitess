@@ -28,6 +28,7 @@ import (
 )
 
 const foreignKeyConstraintValues = "fkc_vals"
+const foreignKeyUpdateExpr = "fkc_upd"
 
 // translateQueryToOp creates an operator tree that represents the input SELECT or UNION query
 func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op ops.Operator, err error) {
@@ -164,7 +165,7 @@ func (jpc *joinPredicateCollector) inspectPredicate(
 	// then we can use this predicate to connect the subquery to the outer query
 	if !deps.IsSolvedBy(jpc.subqID) && deps.IsSolvedBy(jpc.totalID) {
 		jpc.predicates = append(jpc.predicates, predicate)
-		jc, err := BreakExpressionInLHSandRHS(ctx, predicate, jpc.outerID)
+		jc, err := breakExpressionInLHSandRHSForApplyJoin(ctx, predicate, jpc.outerID)
 		if err != nil {
 			return err
 		}
@@ -213,7 +214,10 @@ func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement
 	// we should augment the semantic analysis to also tell us whether the given query has any cross shard parent foreign keys to validate.
 	// If there are, then we have to run the query with FOREIGN_KEY_CHECKS off because we can't be sure if the DML will succeed on MySQL with the checks on.
 	// So, we should set VerifyAllFKs to true. i.e. we should add `|| ctx.SemTable.RequireForeignKeyChecksOff()` to the below condition.
-	ctx.VerifyAllFKs = verifyAllFKs
+	if verifyAllFKs {
+		// If ctx.VerifyAllFKs is already true we don't want to turn it off.
+		ctx.VerifyAllFKs = verifyAllFKs
+	}
 
 	// From all the parent foreign keys involved, we should remove the one that we need to ignore.
 	err = ctx.SemTable.RemoveParentForeignKey(fkToIgnore)
@@ -397,6 +401,7 @@ func createSelectionOp(
 	selectExprs []sqlparser.SelectExpr,
 	tableExprs sqlparser.TableExprs,
 	where *sqlparser.Where,
+	orderBy sqlparser.OrderBy,
 	limit *sqlparser.Limit,
 	lock sqlparser.Lock,
 ) (ops.Operator, error) {
@@ -404,20 +409,10 @@ func createSelectionOp(
 		SelectExprs: selectExprs,
 		From:        tableExprs,
 		Where:       where,
+		OrderBy:     orderBy,
 		Limit:       limit,
 		Lock:        lock,
 	}
 	// There are no foreign keys to check for a select query, so we can pass anything for verifyAllFKs and fkToIgnore.
 	return createOpFromStmt(ctx, selectionStmt, false /* verifyAllFKs */, "" /* fkToIgnore */)
-}
-
-func selectParentColumns(fk vindexes.ChildFKInfo, lastOffset int) ([]int, []sqlparser.SelectExpr) {
-	var cols []int
-	var exprs []sqlparser.SelectExpr
-	for _, column := range fk.ParentColumns {
-		cols = append(cols, lastOffset)
-		exprs = append(exprs, aeWrap(sqlparser.NewColName(column.String())))
-		lastOffset++
-	}
-	return cols, exprs
 }

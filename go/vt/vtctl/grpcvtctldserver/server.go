@@ -2049,7 +2049,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 
 		tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
 		for _, ti := range tabletMap {
-			if req.TabletType != 0 && ti.Type != req.TabletType {
+			if req.TabletType != topodatapb.TabletType_UNKNOWN && ti.Type != req.TabletType {
 				continue
 			}
 			adjustTypeForStalePrimary(ti, truePrimaryTimestamp)
@@ -2117,7 +2117,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 		if req.Keyspace != "" && tablet.Keyspace != req.Keyspace {
 			continue
 		}
-		if req.TabletType != 0 && tablet.Type != req.TabletType {
+		if req.TabletType != topodatapb.TabletType_UNKNOWN && tablet.Type != req.TabletType {
 			continue
 		}
 

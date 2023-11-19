@@ -40,13 +40,13 @@ sleep 5
 
 # Add the CellInfo description for the cell.
 # If the node already exists, it's fine, means we used existing data.
-echo "add $cell CellInfo"
+echo "add ${cell} CellInfo"
 set +e
 # shellcheck disable=SC2086
-vtctl $TOPOLOGY_FLAGS VtctldCommand AddCellInfo \
-  --root "vitess/$cell" \
+command vtctldclient --server internal --topo-implementation consul --topo-global-server "${CONSUL_SERVER}:${consul_http_port}"  AddCellInfo \
+  --root "/vitess/${cell}" \
   --server-address "${CONSUL_SERVER}:${consul_http_port}" \
-  "$cell"
+  "${cell}"
 set -e
 
 echo "consul start done..."

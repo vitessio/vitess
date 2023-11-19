@@ -24,13 +24,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/vt/vthash"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 func TestHashCodes(t *testing.T) {
@@ -197,7 +195,7 @@ func coerceTo(v1, v2 sqltypes.Type) (sqltypes.Type, error) {
 	if sqltypes.IsNull(v1) || sqltypes.IsNull(v2) {
 		return sqltypes.Null, nil
 	}
-	if (sqltypes.IsText(v1) || sqltypes.IsBinary(v1)) && (sqltypes.IsText(v2) || sqltypes.IsBinary(v2)) {
+	if (sqltypes.IsTextOrBinary(v1)) && (sqltypes.IsTextOrBinary(v2)) {
 		return sqltypes.VarChar, nil
 	}
 	if sqltypes.IsDateOrTime(v1) {
@@ -209,7 +207,7 @@ func coerceTo(v1, v2 sqltypes.Type) (sqltypes.Type, error) {
 
 	if sqltypes.IsNumber(v1) || sqltypes.IsNumber(v2) {
 		switch {
-		case sqltypes.IsText(v1) || sqltypes.IsBinary(v1) || sqltypes.IsText(v2) || sqltypes.IsBinary(v2):
+		case sqltypes.IsTextOrBinary(v1) || sqltypes.IsTextOrBinary(v2):
 			return sqltypes.Float64, nil
 		case sqltypes.IsFloat(v2) || v2 == sqltypes.Decimal || sqltypes.IsFloat(v1) || v1 == sqltypes.Decimal:
 			return sqltypes.Float64, nil

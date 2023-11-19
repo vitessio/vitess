@@ -333,7 +333,6 @@ func TestMain(m *testing.M) {
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 			"--watch_replication_stream",
-			"--vreplication_tablet_type", "primary",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 
@@ -701,6 +700,14 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 	t.Run("dropping tables", func(t *testing.T) {
 		for _, tableName := range reverseTableNames {
 			err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, "drop table if exists "+tableName)
+			require.NoError(t, err)
+		}
+	})
+	t.Run("waiting for vschema deletions to apply", func(t *testing.T) {
+		timeoutCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+		defer cancel()
+		for _, tableName := range tableNames {
+			err := utils.WaitForTableDeletions(timeoutCtx, t, clusterInstance.VtgateProcess, keyspaceName, tableName)
 			require.NoError(t, err)
 		}
 	})
