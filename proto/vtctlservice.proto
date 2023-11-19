@@ -66,6 +66,8 @@ service Vtctld {
   rpc CleanupSchemaMigration(vtctldata.CleanupSchemaMigrationRequest) returns (vtctldata.CleanupSchemaMigrationResponse) {};
   // CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
   rpc CompleteSchemaMigration(vtctldata.CompleteSchemaMigrationRequest) returns (vtctldata.CompleteSchemaMigrationResponse) {};
+  // ForceCutOverSchemaMigration marks a schema migration for forced cut-over.
+  rpc ForceCutOverSchemaMigration(vtctldata.ForceCutOverSchemaMigrationRequest) returns (vtctldata.ForceCutOverSchemaMigrationResponse) {};
   // CreateKeyspace creates the specified keyspace in the topology. For a
   // SNAPSHOT keyspace, the request must specify the name of a base keyspace,
   // as well as a snapshot time.

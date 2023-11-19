@@ -171,6 +171,8 @@ type VtctldClient interface {
 	CleanupSchemaMigration(ctx context.Context, in *vtctldata.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CleanupSchemaMigrationResponse, error)
 	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
 	CompleteSchemaMigration(ctx context.Context, in *vtctldata.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CompleteSchemaMigrationResponse, error)
+	// ForceCutOverSchemaMigration marks a schema migration for forced cut-over.
+	ForceCutOverSchemaMigration(ctx context.Context, in *vtctldata.ForceCutOverSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.ForceCutOverSchemaMigrationResponse, error)
 	// CreateKeyspace creates the specified keyspace in the topology. For a
 	// SNAPSHOT keyspace, the request must specify the name of a base keyspace,
 	// as well as a snapshot time.
@@ -608,6 +610,15 @@ func (c *vtctldClient) CleanupSchemaMigration(ctx context.Context, in *vtctldata
 func (c *vtctldClient) CompleteSchemaMigration(ctx context.Context, in *vtctldata.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CompleteSchemaMigrationResponse, error) {
 	out := new(vtctldata.CompleteSchemaMigrationResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/CompleteSchemaMigration", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ForceCutOverSchemaMigration(ctx context.Context, in *vtctldata.ForceCutOverSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.ForceCutOverSchemaMigrationResponse, error) {
+	out := new(vtctldata.ForceCutOverSchemaMigrationResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ForceCutOverSchemaMigration", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1558,6 +1569,8 @@ type VtctldServer interface {
 	CleanupSchemaMigration(context.Context, *vtctldata.CleanupSchemaMigrationRequest) (*vtctldata.CleanupSchemaMigrationResponse, error)
 	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
 	CompleteSchemaMigration(context.Context, *vtctldata.CompleteSchemaMigrationRequest) (*vtctldata.CompleteSchemaMigrationResponse, error)
+	// ForceCutOverSchemaMigration marks a schema migration for forced cut-over.
+	ForceCutOverSchemaMigration(context.Context, *vtctldata.ForceCutOverSchemaMigrationRequest) (*vtctldata.ForceCutOverSchemaMigrationResponse, error)
 	// CreateKeyspace creates the specified keyspace in the topology. For a
 	// SNAPSHOT keyspace, the request must specify the name of a base keyspace,
 	// as well as a snapshot time.
@@ -1879,6 +1892,9 @@ func (UnimplementedVtctldServer) CleanupSchemaMigration(context.Context, *vtctld
 }
 func (UnimplementedVtctldServer) CompleteSchemaMigration(context.Context, *vtctldata.CompleteSchemaMigrationRequest) (*vtctldata.CompleteSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CompleteSchemaMigration not implemented")
+}
+func (UnimplementedVtctldServer) ForceCutOverSchemaMigration(context.Context, *vtctldata.ForceCutOverSchemaMigrationRequest) (*vtctldata.ForceCutOverSchemaMigrationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ForceCutOverSchemaMigration not implemented")
 }
 func (UnimplementedVtctldServer) CreateKeyspace(context.Context, *vtctldata.CreateKeyspaceRequest) (*vtctldata.CreateKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateKeyspace not implemented")
@@ -2405,6 +2421,24 @@ func _Vtctld_CompleteSchemaMigration_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).CompleteSchemaMigration(ctx, req.(*vtctldata.CompleteSchemaMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ForceCutOverSchemaMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ForceCutOverSchemaMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ForceCutOverSchemaMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ForceCutOverSchemaMigration",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ForceCutOverSchemaMigration(ctx, req.(*vtctldata.ForceCutOverSchemaMigrationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4222,6 +4256,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CompleteSchemaMigration",
 			Handler:    _Vtctld_CompleteSchemaMigration_Handler,
+		},
+		{
+			MethodName: "ForceCutOverSchemaMigration",
+			Handler:    _Vtctld_ForceCutOverSchemaMigration_Handler,
 		},
 		{
 			MethodName: "CreateKeyspace",
