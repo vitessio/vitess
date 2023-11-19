@@ -568,7 +568,7 @@ func testScheduler(t *testing.T) {
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				forceCutOver := row.AsInt64("force_cutover", 0)
-				assert.Equal(t, int64(0), forceCutOver)
+				assert.Equal(t, int64(0), forceCutOver) // disabled
 			}
 		})
 		t.Run("attempt to complete", func(t *testing.T) {
@@ -576,7 +576,7 @@ func testScheduler(t *testing.T) {
 		})
 		t.Run("cut-over fail due to timeout", func(t *testing.T) {
 			waitForMessage(t, t1uuid, "due to context deadline exceeded")
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusRunning)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusRunning)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 		})
@@ -588,7 +588,7 @@ func testScheduler(t *testing.T) {
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				forceCutOver := row.AsInt64("force_cutover", 0)
-				assert.Equal(t, int64(1), forceCutOver)
+				assert.Equal(t, int64(1), forceCutOver) // enabled
 			}
 		})
 		t.Run("expect completion", func(t *testing.T) {
