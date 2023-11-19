@@ -4672,6 +4672,7 @@ func (e *Executor) ForceMigrationCutOver(ctx context.Context, uuid string) (resu
 	if err != nil {
 		return nil, err
 	}
+	e.triggerNextCheckInterval()
 	log.Infof("ForceMigrationCutOver: migration %s marked for forced cut-over", uuid)
 	return rs, nil
 }
