@@ -169,6 +169,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateForceCutOver = `UPDATE _vt.schema_migrations
+			SET force_cutover=1
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateLaunchMigration = `UPDATE _vt.schema_migrations
 			SET postpone_launch=0
 		WHERE

@@ -4643,6 +4643,39 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 	return rs, nil
 }
 
+// ForceMigrationCutOver markes the given migration for forced cut-over. This has two implications:
+//   - No backoff for the given migration's cut-over (cut-over will be attempted at the next scheduler cycle,
+//     irrespective of how many cut-over attempts have been made and when these attempts have been made).
+//   - During the cut-over, Online DDL will try and temrinate all existing queries on the migrated table, and
+//     transactions (killing their connections) holding a lock on the migrated table. This is likely to cause the
+//     cut-over to succeed. Of course, it's not guaranteed, and it's possible that next cut-over will fail.
+//     The force_cutover flag, once set, remains set, and so all future cut-over attempts will again KILL interfering
+//     queries and connections.
+func (e *Executor) ForceMigrationCutOver(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+	if atomic.LoadInt64(&e.isOpen) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
+	}
+	if !schema.IsOnlineDDLUUID(uuid) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in FORCE_CUTOVER: %s", uuid)
+	}
+	log.Infof("ForceMigrationCutOver: request to force cut-over migration %s", uuid)
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	query, err := sqlparser.ParseAndBind(sqlUpdateForceCutOver,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return nil, err
+	}
+	rs, err := e.execQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("ForceMigrationCutOver: migration %s marked for forced cut-over", uuid)
+	return rs, nil
+}
+
 // CompleteMigration clears the postpone_completion flag for a given migration, assuming it was set in the first place
 func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
