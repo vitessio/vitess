@@ -302,13 +302,48 @@ func TestDeferSecondaryKeys(t *testing.T) {
 		{
 			name:       "2SK:1FK",
 			tableName:  "t1",
-			initialDDL: "create table t1 (id int not null, c1 int default null, c2 int default null, t2_id int not null, primary key (id), key c1 (c1), key c2 (c2), foreign key (t2_id) references t2(id))",
+			initialDDL: "create table t1 (id int not null, c1 int default null, c2 int default null, t2_id int not null, primary key (id), key c1 (c1), key c2 (c2), foreign key (t2_id) references t2 (id))",
 			// Secondary key t2_id is needed to enforce the FK constraint so we do not drop it.
 			strippedDDL:  "create table t1 (id int not null, c1 int default null, c2 int default null, t2_id int not null, primary key (id), key t2_id (t2_id), constraint t1_ibfk_1 foreign key (t2_id) references t2 (id))",
 			actionDDL:    "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 			preStashHook: func() error {
-				_, err := dbClient.ExecuteFetch("create table t2 (id int not null, c1 int not null, primary key (id))", 1)
+				if _, err := dbClient.ExecuteFetch("drop table if exists t2", 1); err != nil {
+					return err
+				}
+				_, err = dbClient.ExecuteFetch("create table t2 (id int not null, c1 int not null, primary key (id))", 1)
+				return err
+			},
+		},
+		{
+			name:       "3SK:2FK",
+			tableName:  "t1",
+			initialDDL: "create table t1 (id int not null, id2 int default null, c1 int default null, c2 int default null, c3 int default null, t2_id int not null, t2_id2 int not null, primary key (id), key c1 (c1), key c2 (c2), foreign key (t2_id) references t2 (id), key c3 (c3), foreign key (t2_id2) references t2 (id2))",
+			// Secondary keys t2_id and t2_id2 are needed to enforce the FK constraint so we do not drop them.
+			strippedDDL:  "create table t1 (id int not null, id2 int default null, c1 int default null, c2 int default null, c3 int default null, t2_id int not null, t2_id2 int not null, primary key (id), key t2_id (t2_id), key t2_id2 (t2_id2), constraint t1_ibfk_1 foreign key (t2_id) references t2 (id), constraint t1_ibfk_2 foreign key (t2_id2) references t2 (id2))",
+			actionDDL:    "alter table %s.t1 add key c1 (c1), add key c2 (c2), add key c3 (c3)",
+			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+			preStashHook: func() error {
+				if _, err := dbClient.ExecuteFetch("drop table if exists t2", 1); err != nil {
+					return err
+				}
+				_, err = dbClient.ExecuteFetch("create table t2 (id int not null, id2 int default null, c1 int not null, primary key (id), key (id2))", 1)
+				return err
+			},
+		},
+		{
+			name:       "5SK:2FK_multi-column",
+			tableName:  "t1",
+			initialDDL: "create table t1 (id int not null, id2 int default null, c1 int default null, c2 int default null, c3 int default null, t2_id int not null, t2_id2 int not null, primary key (id), key c1 (c1), key c2 (c2), key t2_cs (c1,c2), key t2_ids (t2_id,t2_id2), foreign key (t2_id,t2_id2) references t2 (id, id2), key c3 (c3), foreign key (c1, c2) references t2 (c1, c2))",
+			// Secondary keys t2_ids and t2_cs are needed to enforce the FK constraint so we do not drop them.
+			strippedDDL:  "create table t1 (id int not null, id2 int default null, c1 int default null, c2 int default null, c3 int default null, t2_id int not null, t2_id2 int not null, primary key (id), key t2_cs (c1,c2), key t2_ids (t2_id,t2_id2), constraint t1_ibfk_1 foreign key (t2_id, t2_id2) references t2 (id, id2), constraint t1_ibfk_2 foreign key (c1, c2) references t2 (c1, c2))",
+			actionDDL:    "alter table %s.t1 add key c1 (c1), add key c2 (c2), add key c3 (c3)",
+			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+			preStashHook: func() error {
+				if _, err := dbClient.ExecuteFetch("drop table if exists t2", 1); err != nil {
+					return err
+				}
+				_, err = dbClient.ExecuteFetch("create table t2 (id int not null, id2 int not null, c1 int not null, c2 int not null, primary key (id,id2), key (c1,c2))", 1)
 				return err
 			},
 		},
@@ -441,7 +476,8 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			vr.WorkflowType = tcase.WorkflowType
 
 			if tcase.preStashHook != nil {
-				tcase.preStashHook()
+				err = tcase.preStashHook()
+				require.NoError(t, err, "error executing pre stash hook: %v", err)
 			}
 
 			// Create the table.
@@ -475,7 +511,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 
 			if tcase.postStashHook != nil {
 				err = tcase.postStashHook()
-				require.NoError(t, err)
+				require.NoError(t, err, "error executing post stash hook: %v", err)
 
 				// We should still NOT have any secondary keys because there's still
 				// a running controller/vreplicator in the copy phase.
