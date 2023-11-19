@@ -289,6 +289,8 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 		alterType = "unthrottle"
 	case UnthrottleAllMigrationType:
 		alterType = "unthrottle all"
+	case ForceCutOverMigrationType:
+		alterType = "force_cutover"
 	}
 	buf.astPrintf(node, " %#s", alterType)
 	if node.Expire != "" {
