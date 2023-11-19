@@ -200,6 +200,29 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
 	}
 }
 
+func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
+	ctx, cancel := context.WithTimeout(context.Background(), normalWaitTime)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			message := row.AsString("message", "")
+			if strings.Contains(message, messageSubstring) {
+				return
+			}
+		}
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+		}
+		require.NoError(t, ctx.Err())
+	}
+}
+
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
@@ -366,6 +389,9 @@ func testScheduler(t *testing.T) {
 		alterNonexistent = `
 				ALTER TABLE nonexistent FORCE
 		`
+		populateT1Statement = `
+			insert into t1_test values (1, 'new_row')
+		`
 	)
 
 	testReadTimestamp := func(t *testing.T, uuid string, timestampColumn string) (timestamp string) {
@@ -498,6 +524,45 @@ func testScheduler(t *testing.T) {
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		})
+		t.Run("check postpone_completion", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeCompletion := row.AsInt64("postpone_completion", 0)
+				assert.Equal(t, int64(1), postponeCompletion)
+			}
+		})
+		t.Run("complete", func(t *testing.T) {
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+		t.Run("check no postpone_completion", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeCompletion := row.AsInt64("postpone_completion", 0)
+				assert.Equal(t, int64(0), postponeCompletion)
+			}
+		})
+	})
+
+	t.Run("force_cutover", func(t *testing.T) {
+		t.Run("populate t1_test", func(t *testing.T) {
+			onlineddl.VtgateExecQuery(t, &vtParams, populateT1Statement, "")
+		})
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
+
+		t.Run("wait for t1 running", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		})
+		commitTransactionChan := make(chan any)
+		transactionErrorChan := make(chan error)
+		t.Run("locking table rows", func(t *testing.T) {
+			go runInTransaction(t, shards[0].Vttablets[0], "select * from t1_test for update", commitTransactionChan, transactionErrorChan)
+		})
 		t.Run("check no force_cutover", func(t *testing.T) {
 			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
 			require.NotNil(t, rs)
@@ -505,6 +570,15 @@ func testScheduler(t *testing.T) {
 				forceCutOver := row.AsInt64("force_cutover", 0)
 				assert.Equal(t, int64(0), forceCutOver)
 			}
+		})
+		t.Run("attempt to complete", func(t *testing.T) {
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+		})
+		t.Run("cut-over fail due to timeout", func(t *testing.T) {
+			waitForMessage(t, t1uuid, "due to context deadline exceeded")
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusRunning)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 		})
 		t.Run("force_cutover", func(t *testing.T) {
 			onlineddl.CheckForceMigrationCutOver(t, &vtParams, shards, t1uuid, true)
@@ -517,11 +591,17 @@ func testScheduler(t *testing.T) {
 				assert.Equal(t, int64(1), forceCutOver)
 			}
 		})
-		t.Run("complete", func(t *testing.T) {
-			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+		t.Run("expect completion", func(t *testing.T) {
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+		t.Run("expect transaction failure", func(t *testing.T) {
+			commitTransactionChan <- true
+			// Transaction will now attempt to commit. But we expect our "force_cutover" to have terminated
+			// the transaction's connection.
+			err := <-transactionErrorChan
+			assert.ErrorContains(t, err, "broken pipe")
 		})
 	})
 
@@ -2402,4 +2482,27 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	assert.GreaterOrEqual(t, len(queryResult.Rows[0]), 2) // table name, create statement, and if it's a view then additional columns
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
+}
+
+func runInTransaction(t *testing.T, tablet *cluster.Vttablet, query string, commitTransactionChan chan any, transactionErrorChan chan error) error {
+	conn, err := tablet.VttabletProcess.TabletConn(keyspaceName, true)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, err = conn.ExecuteFetch("begin", 0, false)
+	require.NoError(t, err)
+
+	_, err = conn.ExecuteFetch(query, 10000, false)
+	require.NoError(t, err)
+
+	if commitTransactionChan != nil {
+		// Wait for instruction to commit
+		<-commitTransactionChan
+	}
+
+	_, err = conn.ExecuteFetch("commit", 0, false)
+	if transactionErrorChan != nil {
+		transactionErrorChan <- err
+	}
+	return err
 }
