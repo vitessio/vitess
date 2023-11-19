@@ -4688,6 +4688,31 @@ func (e *Executor) ForceCutOverMigration(ctx context.Context, uuid string) (resu
 	return rs, nil
 }
 
+// ForceCutOverPendingMigrations sets force_cutover flag for all pending migrations
+func (e *Executor) ForceCutOverPendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+	if atomic.LoadInt64(&e.isOpen) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
+	}
+
+	uuids, err := e.readPendingMigrationsUUIDs(ctx)
+	if err != nil {
+		return result, err
+	}
+	log.Infof("ForceCutOverPendingMigrations: iterating %v migrations %s", len(uuids))
+
+	result = &sqltypes.Result{}
+	for _, uuid := range uuids {
+		log.Infof("ForceCutOverPendingMigrations: applying to %s", uuid)
+		res, err := e.ForceCutOverMigration(ctx, uuid)
+		if err != nil {
+			return result, err
+		}
+		result.AppendResult(res)
+	}
+	log.Infof("ForceCutOverPendingMigrations: done iterating %v migrations %s", len(uuids))
+	return result, nil
+}
+
 // CompleteMigration clears the postpone_completion flag for a given migration, assuming it was set in the first place
 func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
@@ -4759,7 +4784,7 @@ func (e *Executor) LaunchMigration(ctx context.Context, uuid string, shardsArg s
 		// Does not apply  to this shard!
 		return &sqltypes.Result{}, nil
 	}
-	log.Infof("LaunchMigration: request to execute migration %s", uuid)
+	log.Infof("LaunchMigration: request to launch migration %s", uuid)
 
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()

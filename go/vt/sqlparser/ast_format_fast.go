@@ -418,6 +418,8 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 		alterType = "unthrottle all"
 	case ForceCutOverMigrationType:
 		alterType = "force_cutover"
+	case ForceCutOverAllMigrationType:
+		alterType = "force_cutover all"
 	}
 	buf.WriteByte(' ')
 	buf.WriteString(alterType)

@@ -103,8 +103,8 @@ var (
 		RunE:                  commandOnlineDDLUnthrottle,
 	}
 	OnlineDDLForceCutOver = &cobra.Command{
-		Use:                   "force_cutover <keyspace> <uuid>",
-		Short:                 "Mark a given schema migration for corced cut-over.",
+		Use:                   "force_cutover <keyspace> <uuid|all>",
+		Short:                 "Mark a given schema migration, or all pending migration, for corced cut-over.",
 		Example:               "OnlineDDL force_cutover test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
@@ -193,12 +193,10 @@ func commandOnlineDDLCleanup(cmd *cobra.Command, args []string) error {
 }
 
 func commandOnlineDDLForceCutOver(cmd *cobra.Command, args []string) error {
-	keyspace := cmd.Flags().Arg(0)
-	uuid := cmd.Flags().Arg(1)
-	if !schema.IsOnlineDDLUUID(uuid) {
-		return fmt.Errorf("%s is not a valid UUID", uuid)
+	keyspace, uuid, err := analyzeOnlineDDLCommandWithUuidOrAllArgument(cmd)
+	if err != nil {
+		return err
 	}
-
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.ForceCutOverSchemaMigration(commandCtx, &vtctldatapb.ForceCutOverSchemaMigrationRequest{

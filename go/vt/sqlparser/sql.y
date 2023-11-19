@@ -3372,6 +3372,12 @@ alter_statement:
       UUID: string($4),
     }
   }
+| ALTER comment_opt VITESS_MIGRATION FORCE_CUTOVER ALL
+  {
+    $$ = &AlterMigration{
+      Type: ForceCutOverAllMigrationType,
+    }
+  }
 
 partitions_options_opt:
   {
