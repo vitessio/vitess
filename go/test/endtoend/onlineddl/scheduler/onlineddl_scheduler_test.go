@@ -548,63 +548,66 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
-	t.Run("force_cutover", func(t *testing.T) {
-		t.Run("populate t1_test", func(t *testing.T) {
-			onlineddl.VtgateExecQuery(t, &vtParams, populateT1Statement, "")
-		})
-		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
-
-		t.Run("wait for t1 running", func(t *testing.T) {
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
-			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-		})
-		commitTransactionChan := make(chan any)
-		transactionErrorChan := make(chan error)
-		t.Run("locking table rows", func(t *testing.T) {
-			go runInTransaction(t, shards[0].Vttablets[0], "select * from t1_test for update", commitTransactionChan, transactionErrorChan)
-		})
-		t.Run("check no force_cutover", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
-			require.NotNil(t, rs)
-			for _, row := range rs.Named().Rows {
-				forceCutOver := row.AsInt64("force_cutover", 0)
-				assert.Equal(t, int64(0), forceCutOver) // disabled
-			}
-		})
-		t.Run("attempt to complete", func(t *testing.T) {
-			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
-		})
-		t.Run("cut-over fail due to timeout", func(t *testing.T) {
-			waitForMessage(t, t1uuid, "due to context deadline exceeded")
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusRunning)
-			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
-		})
+	forceCutoverCapable, err := capableOf(mysql.PerformanceSchemaDataLocksTableCapability) // 8.0
+	require.NoError(t, err)
+	if forceCutoverCapable {
 		t.Run("force_cutover", func(t *testing.T) {
-			onlineddl.CheckForceMigrationCutOver(t, &vtParams, shards, t1uuid, true)
-		})
-		t.Run("check force_cutover", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
-			require.NotNil(t, rs)
-			for _, row := range rs.Named().Rows {
-				forceCutOver := row.AsInt64("force_cutover", 0)
-				assert.Equal(t, int64(1), forceCutOver) // enabled
-			}
-		})
-		t.Run("expect completion", func(t *testing.T) {
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
-			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
-		})
-		t.Run("expect transaction failure", func(t *testing.T) {
-			commitTransactionChan <- true
-			// Transaction will now attempt to commit. But we expect our "force_cutover" to have terminated
-			// the transaction's connection.
-			err := <-transactionErrorChan
-			assert.ErrorContains(t, err, "broken pipe")
-		})
-	})
+			t.Run("populate t1_test", func(t *testing.T) {
+				onlineddl.VtgateExecQuery(t, &vtParams, populateT1Statement, "")
+			})
+			t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
 
+			t.Run("wait for t1 running", func(t *testing.T) {
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			})
+			commitTransactionChan := make(chan any)
+			transactionErrorChan := make(chan error)
+			t.Run("locking table rows", func(t *testing.T) {
+				go runInTransaction(t, shards[0].Vttablets[0], "select * from t1_test for update", commitTransactionChan, transactionErrorChan)
+			})
+			t.Run("check no force_cutover", func(t *testing.T) {
+				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				require.NotNil(t, rs)
+				for _, row := range rs.Named().Rows {
+					forceCutOver := row.AsInt64("force_cutover", 0)
+					assert.Equal(t, int64(0), forceCutOver) // disabled
+				}
+			})
+			t.Run("attempt to complete", func(t *testing.T) {
+				onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+			})
+			t.Run("cut-over fail due to timeout", func(t *testing.T) {
+				waitForMessage(t, t1uuid, "due to context deadline exceeded")
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusRunning)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+			})
+			t.Run("force_cutover", func(t *testing.T) {
+				onlineddl.CheckForceMigrationCutOver(t, &vtParams, shards, t1uuid, true)
+			})
+			t.Run("check force_cutover", func(t *testing.T) {
+				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				require.NotNil(t, rs)
+				for _, row := range rs.Named().Rows {
+					forceCutOver := row.AsInt64("force_cutover", 0)
+					assert.Equal(t, int64(1), forceCutOver) // enabled
+				}
+			})
+			t.Run("expect completion", func(t *testing.T) {
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+			})
+			t.Run("expect transaction failure", func(t *testing.T) {
+				commitTransactionChan <- true
+				// Transaction will now attempt to commit. But we expect our "force_cutover" to have terminated
+				// the transaction's connection.
+				err := <-transactionErrorChan
+				assert.ErrorContains(t, err, "broken pipe")
+			})
+		})
+	}
 	t.Run("ALTER both tables non-concurrent", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", true)) // skip wait
 		t2uuid = testOnlineDDLStatement(t, createParams(trivialAlterT2Statement, ddlStrategy, "vtgate", "", "", true)) // skip wait

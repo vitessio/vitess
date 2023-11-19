@@ -822,23 +822,30 @@ func (e *Executor) killQueriesOnTable(ctx context.Context, tableName string) err
 			}
 		}
 	}
-	{
-		// Kill connections that have open transactions locking the table. These potentially (probably?) are not
-		// actively running a query on our table. They're doing other things while holding locks on our table.
-		query, err := sqlparser.ParseAndBind(sqlProcessWithLocksOnTable, sqltypes.StringBindVariable(tableName))
-		if err != nil {
-			return err
-		}
-		rs, err := conn.Conn.ExecuteFetch(query, math.MaxInt32, true)
-		if err != nil {
-			return err
-		}
-		log.Infof("killQueriesOnTable: found %v locking transactions", len(rs.Rows))
-		for _, row := range rs.Named().Rows {
-			threadId := row.AsInt64("trx_mysql_thread_id", 0)
-			log.Infof("killQueriesOnTable: killing connection %v with transaction on table", threadId)
-			killConnection := fmt.Sprintf("KILL %d", threadId)
-			_, _ = conn.Conn.ExecuteFetch(killConnection, 1, false)
+	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
+	capable, err := capableOf(mysql.PerformanceSchemaDataLocksTableCapability)
+	if err != nil {
+		return err
+	}
+	if capable {
+		{
+			// Kill connections that have open transactions locking the table. These potentially (probably?) are not
+			// actively running a query on our table. They're doing other things while holding locks on our table.
+			query, err := sqlparser.ParseAndBind(sqlProcessWithLocksOnTable, sqltypes.StringBindVariable(tableName))
+			if err != nil {
+				return err
+			}
+			rs, err := conn.Conn.ExecuteFetch(query, math.MaxInt32, true)
+			if err != nil {
+				return err
+			}
+			log.Infof("killQueriesOnTable: found %v locking transactions", len(rs.Rows))
+			for _, row := range rs.Named().Rows {
+				threadId := row.AsInt64("trx_mysql_thread_id", 0)
+				log.Infof("killQueriesOnTable: killing connection %v with transaction on table", threadId)
+				killConnection := fmt.Sprintf("KILL %d", threadId)
+				_, _ = conn.Conn.ExecuteFetch(killConnection, 1, false)
+			}
 		}
 	}
 	return nil
