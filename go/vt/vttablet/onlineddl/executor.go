@@ -766,8 +766,86 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 	return nil
 }
 
+func (e *Executor) killQueriesOnTable(ctx context.Context, tableName string) error {
+	log.Infof("killQueriesOnTable: %v", tableName)
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	{
+		likeVariable := "%" + tableName + "%"
+		query, err := sqlparser.ParseAndBind(sqlFindProcessByInfo, sqltypes.StringBindVariable(likeVariable))
+		if err != nil {
+			return err
+		}
+		rs, err := conn.Conn.ExecuteFetch(query, math.MaxInt32, true)
+		if err != nil {
+			return err
+		}
+
+		log.Infof("killQueriesOnTable: found %v potential queries", len(rs.Rows))
+		for _, row := range rs.Named().Rows {
+			threadId := row.AsInt64("id", 0)
+			infoQuery := row.AsString("info", "")
+			stmt, err := sqlparser.Parse(infoQuery)
+			if err != nil {
+				log.Error(vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unable to parse processlist Info query: %v", infoQuery))
+				continue
+			}
+			queryUsesTable := false
+			_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node := node.(type) {
+				case *sqlparser.TableName:
+					if node.Name.String() == tableName {
+						queryUsesTable = true
+						return false, nil
+					}
+				case *sqlparser.AliasedTableExpr:
+					if alasedTableName, ok := node.Expr.(sqlparser.TableName); ok {
+						if alasedTableName.Name.String() == tableName {
+							queryUsesTable = true
+							return false, nil
+						}
+					}
+				}
+				return true, nil
+			}, stmt)
+
+			if queryUsesTable {
+				log.Infof("killQueriesOnTable: killing query %v: %.100s", threadId, infoQuery)
+				killQuery := fmt.Sprintf("KILL QUERY %d", threadId)
+				if _, err := conn.Conn.ExecuteFetch(killQuery, 1, false); err != nil {
+					log.Error(vterrors.Errorf(vtrpcpb.Code_ABORTED, "could not kill query %v. Ignoring", threadId))
+				}
+			}
+		}
+	}
+	{
+		// Kill connections that have open transactions locking the table. These potentially (probably?) are not
+		// actively running a query on our table. They're doing other things while holding locks on our table.
+		query, err := sqlparser.ParseAndBind(sqlProcessWithLocksOnTable, sqltypes.StringBindVariable(tableName))
+		if err != nil {
+			return err
+		}
+		rs, err := conn.Conn.ExecuteFetch(query, math.MaxInt32, true)
+		if err != nil {
+			return err
+		}
+		log.Infof("killQueriesOnTable: found %v locking transactions", len(rs.Rows))
+		for _, row := range rs.Named().Rows {
+			threadId := row.AsInt64("trx_mysql_thread_id", 0)
+			log.Infof("killQueriesOnTable: killing connection %v with transaction on table", threadId)
+			killConnection := fmt.Sprintf("KILL %d", threadId)
+			_, _ = conn.Conn.ExecuteFetch(killConnection, 1, false)
+		}
+	}
+	return nil
+}
+
 // cutOverVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
-func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) error {
+func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, shouldForceCutOver bool) error {
 	if err := e.incrementCutoverAttempts(ctx, s.workflow); err != nil {
 		return err
 	}
@@ -974,6 +1052,12 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	// the table no longer exists.
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "graceful wait for buffering")
 	time.Sleep(100 * time.Millisecond)
+
+	if shouldForceCutOver {
+		if err := e.killQueriesOnTable(ctx, onlineDDL.Table); err != nil {
+			return err
+		}
+	}
 
 	if isVreplicationTestSuite {
 		// The testing suite may inject queries internally from the server via a recurring EVENT.
@@ -3544,6 +3628,46 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, onlineDDL
 	return true, nil
 }
 
+// shouldCutOverAccordingToBackoff is called when a vitess migration (ALTER TABLE) is generally ready to cut-over.
+// This function further determines whether the migration should cut-over or not, by considering:
+//   - backoff: we cut-over by increasing intervals, see `cutoverIntervals`
+//   - forced cut-over: either via `--force-cut-over-after` DDL strategy, or via user command, we override
+//     any backoff (and will also potentially KILL queries and connections holding locks on the migrated tabl)
+func shouldCutOverAccordingToBackoff(
+	shouldForceCutOverIndicator bool,
+	forceCutOverAfter time.Duration,
+	sinceReadyToComplete time.Duration,
+	sinceLastCutoverAttempt time.Duration,
+	cutoverAttempts int64,
+) (
+	shouldCutOver bool, shouldForceCutOver bool,
+) {
+	if shouldForceCutOverIndicator {
+		// That's very simple: the user indicated they want to force cut over.
+		return true, true
+	}
+	// shouldForceCutOver means the time since migration was ready to complete
+	// is beyond the --force-cut-over-after setting, or the column `force_cutover` is "1", and this means:
+	// - we do not want to backoff, we want to cutover asap
+	// - we agree to brute-force KILL any pending queries on the migrated table so as to ensure it's unlocked.
+	if forceCutOverAfter > 0 && sinceReadyToComplete > forceCutOverAfter {
+		// time since migration was ready to complete is beyond the --force-cut-over-after setting
+		return true, true
+	}
+
+	// Backoff mechanism. Do not attempt to cut-over every single minute. Check how much time passed since last cut-over attempt
+	desiredTimeSinceLastCutover := cutoverIntervals[len(cutoverIntervals)-1]
+	if int(cutoverAttempts) < len(cutoverIntervals) {
+		desiredTimeSinceLastCutover = cutoverIntervals[cutoverAttempts]
+	}
+	if sinceLastCutoverAttempt >= desiredTimeSinceLastCutover {
+		// Yes! Time since last cut-over complies with our expected cut-over interval
+		return true, false
+	}
+	// Don't cut-over yet
+	return false, false
+}
+
 // reviewRunningMigrations iterates migrations in 'running' state. Normally there's only one running, which was
 // spawned by this tablet; but vreplication migrations could also resume from failure.
 func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, cancellable []*cancellableMigration, err error) {
@@ -3577,17 +3701,27 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		uuid := row["migration_uuid"].ToString()
 		cutoverAttempts := row.AsInt64("cutover_attempts", 0)
 		sinceLastCutoverAttempt := time.Second * time.Duration(row.AsInt64("seconds_since_last_cutover_attempt", 0))
+		sinceReadyToComplete := time.Second * time.Duration(row.AsInt64("seconds_since_ready_to_complete", 0))
 		onlineDDL, migrationRow, err := e.readMigration(ctx, uuid)
 		if err != nil {
 			return countRunnning, cancellable, err
 		}
 		postponeCompletion := row.AsBool("postpone_completion", false)
+		shouldForceCutOver := row.AsBool("force_cutover", false)
 		elapsedSeconds := row.AsInt64("elapsed_seconds", 0)
+		strategySetting := onlineDDL.StrategySetting()
+		// --force-cut-over-after flag is validated when DDL strategy is first parsed.
+		// There should never be an error here. But if there is, we choose to skip it,
+		// otherwise migrations will never complete.
+		forceCutOverAfter, errForceCutOverAfter := strategySetting.ForceCutOverAfter()
+		if errForceCutOverAfter != nil {
+			forceCutOverAfter = 0
+		}
 
 		uuidsFoundRunning[uuid] = true
 
 		_ = e.updateMigrationUserThrottleRatio(ctx, uuid, currentUserThrottleRatio)
-		switch onlineDDL.StrategySetting().Strategy {
+		switch strategySetting.Strategy {
 		case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 			reviewVReplRunningMigration := func() error {
 				// We check the _vt.vreplication table
@@ -3595,7 +3729,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				if err != nil {
 					return err
 				}
-				isVreplicationTestSuite := onlineDDL.StrategySetting().IsVreplicationTestSuite()
+				isVreplicationTestSuite := strategySetting.IsVreplicationTestSuite()
 				if isVreplicationTestSuite {
 					e.triggerNextCheckInterval()
 				}
@@ -3661,22 +3795,19 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// override. Even if migration is ready, we do not complete it.
 					return nil
 				}
-				// Check how much time passed since last cut-over attempt
-				desiredTimeSinceLastCutover := cutoverIntervals[len(cutoverIntervals)-1]
-				if int(cutoverAttempts) < len(cutoverIntervals) {
-					desiredTimeSinceLastCutover = cutoverIntervals[cutoverAttempts]
-				}
-				if sinceLastCutoverAttempt < desiredTimeSinceLastCutover {
-					return nil
-				}
-				fmt.Printf("======= cutoverAttempts=%v, desiredTimeSinceLastCutover=%v, sinceLastCutoverAttempt=%v, isReady=%v\n", cutoverAttempts, desiredTimeSinceLastCutover, sinceLastCutoverAttempt, isReady)
-				if onlineDDL.StrategySetting().IsInOrderCompletion() {
+				if strategySetting.IsInOrderCompletion() {
 					if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
 						// wait for earlier pending migrations to complete
 						return nil
 					}
 				}
-				if err := e.cutOverVReplMigration(ctx, s); err != nil {
+				shouldCutOver, shouldForceCutOver := shouldCutOverAccordingToBackoff(
+					shouldForceCutOver, forceCutOverAfter, sinceReadyToComplete, sinceLastCutoverAttempt, cutoverAttempts,
+				)
+				if !shouldCutOver {
+					return nil
+				}
+				if err := e.cutOverVReplMigration(ctx, s, shouldForceCutOver); err != nil {
 					_ = e.updateMigrationMessage(ctx, uuid, err.Error())
 					log.Errorf("cutOverVReplMigration failed: err=%v", err)
 					if merr, ok := err.(*sqlerror.SQLError); ok {
