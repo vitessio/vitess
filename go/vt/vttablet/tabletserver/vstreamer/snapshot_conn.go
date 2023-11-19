@@ -19,12 +19,15 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"math"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -241,8 +244,40 @@ func (conn *snapshotConn) startSnapshotAllTables(ctx context.Context) (gtid stri
 
 	log.Infof("Locking all tables")
 	if _, err := lockConn.ExecuteFetch("FLUSH TABLES WITH READ LOCK", 1, false); err != nil {
+		attemptExplicitTablesLocks := false
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERAccessDeniedError {
+			// Access denied. On some systems this is either because the user doesn't have SUPER or RELOAD privileges.
+			// On some other systems, namely RDS, the command is just unsupported.
+			// There is an alternative way: run a `LOCK TABLES tbl1 READ, tbl2 READ, ...` for all tables. It not as
+			// efficient, and make a huge query, but still better than nothing.
+			attemptExplicitTablesLocks = true
+		}
 		log.Infof("Error locking all tables")
-		return "", err
+		if !attemptExplicitTablesLocks {
+			return "", err
+		}
+		// get list of all tables
+		rs, err := conn.ExecuteFetch("show full tables", math.MaxInt32, true)
+		if err != nil {
+			return "", err
+		}
+
+		var lockClauses []string
+		for _, row := range rs.Rows {
+			tableName := row[0].ToString()
+			tableType := row[1].ToString()
+			if tableType != "BASE TABLE" {
+				continue
+			}
+			tableName = sqlparser.String(sqlparser.NewIdentifierCS(tableName))
+			lockClause := fmt.Sprintf("%s read", tableName)
+			lockClauses = append(lockClauses, lockClause)
+		}
+		query := fmt.Sprintf("lock tables %s", strings.Join(lockClauses, ","))
+		if _, err := lockConn.ExecuteFetch(query, 1, false); err != nil {
+			log.Infof("Error explicitly locking all %v tables", len(lockClauses))
+			return "", err
+		}
 	}
 	mpos, err := lockConn.PrimaryPosition()
 	if err != nil {
