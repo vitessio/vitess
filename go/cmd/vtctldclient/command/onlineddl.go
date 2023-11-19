@@ -102,6 +102,14 @@ var (
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandOnlineDDLUnthrottle,
 	}
+	OnlineDDLForceCutOver = &cobra.Command{
+		Use:                   "force_cutover <keyspace> <uuid>",
+		Short:                 "Mark a given schema migration for corced cut-over.",
+		Example:               "OnlineDDL force_cutover test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandOnlineDDLForceCutOver,
+	}
 	OnlineDDLShow = &cobra.Command{
 		Use:   "show",
 		Short: "Display information about online DDL operations.",
@@ -168,6 +176,32 @@ func commandOnlineDDLCleanup(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.CleanupSchemaMigration(commandCtx, &vtctldatapb.CleanupSchemaMigrationRequest{
+		Keyspace: keyspace,
+		Uuid:     uuid,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
+func commandOnlineDDLForceCutOver(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+	uuid := cmd.Flags().Arg(1)
+	if !schema.IsOnlineDDLUUID(uuid) {
+		return fmt.Errorf("%s is not a valid UUID", uuid)
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.ForceCutOverSchemaMigration(commandCtx, &vtctldatapb.ForceCutOverSchemaMigrationRequest{
 		Keyspace: keyspace,
 		Uuid:     uuid,
 	})
@@ -393,6 +427,7 @@ func init() {
 	OnlineDDL.AddCommand(OnlineDDLRetry)
 	OnlineDDL.AddCommand(OnlineDDLThrottle)
 	OnlineDDL.AddCommand(OnlineDDLUnthrottle)
+	OnlineDDL.AddCommand(OnlineDDLForceCutOver)
 
 	OnlineDDLShow.Flags().BoolVar(&onlineDDLShowArgs.JSON, "json", false, "Output JSON instead of human-readable table.")
 	OnlineDDLShow.Flags().StringVar(&onlineDDLShowArgs.OrderStr, "order", "asc", "Sort the results by `id` property of the Schema migration.")
