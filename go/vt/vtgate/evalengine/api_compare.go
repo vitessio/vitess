@@ -198,8 +198,8 @@ func (obp *OrderByParams) String() string {
 		val += " ASC"
 	}
 
-	if sqltypes.IsText(obp.Type.Type) && obp.Type.Coll != collations.Unknown {
-		val += " COLLATE " + collations.Local().LookupName(obp.Type.Coll)
+	if sqltypes.IsText(obp.Type.Type()) && obp.Type.Collation() != collations.Unknown {
+		val += " COLLATE " + collations.Local().LookupName(obp.Type.Collation())
 	}
 	return val
 }
@@ -211,7 +211,7 @@ func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
 
 	if cmp == 0 {
 		var err error
-		cmp, err = NullsafeCompare(v1, v2, obp.Type.Coll)
+		cmp, err = NullsafeCompare(v1, v2, obp.Type.Collation())
 		if err != nil {
 			_, isCollationErr := err.(UnsupportedCollationError)
 			if !isCollationErr || obp.WeightStringCol == -1 {
@@ -220,7 +220,7 @@ func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
 			// in case of a comparison or collation error switch to using the weight string column for ordering
 			obp.Col = obp.WeightStringCol
 			obp.WeightStringCol = -1
-			cmp, err = NullsafeCompare(r1[obp.Col], r2[obp.Col], obp.Type.Coll)
+			cmp, err = NullsafeCompare(r1[obp.Col], r2[obp.Col], obp.Type.Collation())
 			if err != nil {
 				panic(err)
 			}
@@ -236,7 +236,7 @@ func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
 func (cmp Comparison) tinyWeighters(fields []*querypb.Field) []tinyWeighter {
 	weights := make([]tinyWeighter, 0, len(cmp))
 	for _, c := range cmp {
-		if apply := TinyWeighter(fields[c.Col], c.Type.Coll); apply != nil {
+		if apply := TinyWeighter(fields[c.Col], c.Type.Collation()); apply != nil {
 			weights = append(weights, tinyWeighter{c.Col, apply})
 		}
 	}
