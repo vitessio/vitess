@@ -157,7 +157,7 @@ func (cached *Column) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Original vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Original.(cachedObject); ok {
@@ -187,7 +187,7 @@ func (cached *CompiledExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field code []vitess.io/vitess/go/vt/vtgate/evalengine.frame
 	{
@@ -1786,7 +1786,7 @@ func (cached *typedExpr) CachedSize(alloc bool) int64 {
 	}
 	// field types []vitess.io/vitess/go/vt/vtgate/evalengine.ctype
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.types)) * int64(10))
+		size += hack.RuntimeAllocSize(int64(cap(cached.types)) * int64(20))
 	}
 	// field compiled *vitess.io/vitess/go/vt/vtgate/evalengine.CompiledExpr
 	size += cached.compiled.CachedSize(true)

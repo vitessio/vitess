@@ -322,7 +322,7 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0: utf8mb4_0900_ai_ci"
+          "0: utf8mb3_general_ci"
         ],
         "Inputs": [
           {
@@ -1138,7 +1138,7 @@
           {
             "OperatorType": "Distinct",
             "Collations": [
-              "0: utf8mb4_0900_ai_ci"
+              "0: utf8mb3_general_ci"
             ],
             "Inputs": [
               {
@@ -1218,18 +1218,18 @@
           {
             "OperatorType": "Distinct",
             "Collations": [
-              "0: utf8mb4_0900_ai_ci",
-              "1: utf8mb4_0900_ai_ci",
-              "2: utf8mb4_0900_ai_ci",
-              "3: utf8mb4_0900_ai_ci",
-              "4: utf8mb4_0900_ai_ci",
-              "5: utf8mb4_0900_ai_ci",
-              "6: utf8mb4_0900_ai_ci",
+              "0: utf8mb3_general_ci",
+              "1: utf8mb3_general_ci",
+              "2: utf8mb3_general_ci",
+              "3: utf8mb3_general_ci",
+              "4: utf8mb3_general_ci",
+              "5: utf8mb3_general_ci",
+              "6: utf8mb3_general_ci",
               "7",
               "8",
-              "9: utf8mb4_0900_ai_ci",
-              "10: utf8mb4_0900_ai_ci",
-              "11: utf8mb4_0900_ai_ci"
+              "9: utf8mb3_general_ci",
+              "10: utf8mb3_general_ci",
+              "11: utf8mb3_general_ci"
             ],
             "Inputs": [
               {

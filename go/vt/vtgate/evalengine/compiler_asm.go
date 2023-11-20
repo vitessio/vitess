@@ -3761,9 +3761,6 @@ func (asm *assembler) Fn_UNIX_TIMESTAMP0() {
 func (asm *assembler) Fn_UNIX_TIMESTAMP1() {
 	asm.emit(func(env *ExpressionEnv) int {
 		res := dateTimeUnixTimestamp(env, env.vm.stack[env.vm.sp-1])
-		if _, ok := res.(*evalInt64); !ok {
-			env.vm.err = errDeoptimize
-		}
 		env.vm.stack[env.vm.sp-1] = res
 		return 1
 	}, "FN UNIX_TIMESTAMP (SP-1)")

@@ -78,8 +78,8 @@ func (gbp GroupByParams) String() string {
 		out = fmt.Sprintf("(%d|%d)", gbp.KeyCol, gbp.WeightStringCol)
 	}
 
-	if sqltypes.IsText(gbp.Type.Type) && gbp.Type.Coll != collations.Unknown {
-		out += " COLLATE " + collations.Local().LookupName(gbp.Type.Coll)
+	if sqltypes.IsText(gbp.Type.Type()) && gbp.Type.Collation() != collations.Unknown {
+		out += " COLLATE " + collations.Local().LookupName(gbp.Type.Collation())
 	}
 
 	return out
@@ -348,14 +348,14 @@ func (oa *OrderedAggregate) nextGroupBy(currentKey, nextRow []sqltypes.Value) (n
 			return nextRow, true, nil
 		}
 
-		cmp, err := evalengine.NullsafeCompare(v1, v2, gb.Type.Coll)
+		cmp, err := evalengine.NullsafeCompare(v1, v2, gb.Type.Collation())
 		if err != nil {
 			_, isCollationErr := err.(evalengine.UnsupportedCollationError)
 			if !isCollationErr || gb.WeightStringCol == -1 {
 				return nil, false, err
 			}
 			gb.KeyCol = gb.WeightStringCol
-			cmp, err = evalengine.NullsafeCompare(currentKey[gb.WeightStringCol], nextRow[gb.WeightStringCol], gb.Type.Coll)
+			cmp, err = evalengine.NullsafeCompare(currentKey[gb.WeightStringCol], nextRow[gb.WeightStringCol], gb.Type.Collation())
 			if err != nil {
 				return nil, false, err
 			}

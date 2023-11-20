@@ -66,19 +66,6 @@ func (b *ArithmeticExpr) eval(env *ExpressionEnv) (eval, error) {
 	return b.Op.eval(left, right)
 }
 
-func makeNumericalType(t sqltypes.Type, f typeFlag) (sqltypes.Type, typeFlag) {
-	if sqltypes.IsNumber(t) {
-		return t, f
-	}
-	if t == sqltypes.VarBinary && (f&flagHex) != 0 {
-		return sqltypes.Uint64, f
-	}
-	if sqltypes.IsDateOrTime(t) {
-		return sqltypes.Int64, f | flagAmbiguousType
-	}
-	return sqltypes.Float64, f
-}
-
 func (b *ArithmeticExpr) compile(c *compiler) (ctype, error) {
 	return b.Op.compile(c, b.Left, b.Right)
 }
@@ -536,5 +523,11 @@ func (expr *NegateExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip)
-	return ctype{Type: neg, Col: collationNumeric}, nil
+	return ctype{
+		Type:  neg,
+		Flag:  arg.Flag & (flagNull | flagNullable),
+		Size:  arg.Size,
+		Scale: arg.Scale,
+		Col:   collationNumeric,
+	}, nil
 }

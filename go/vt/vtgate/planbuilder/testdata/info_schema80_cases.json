@@ -103,7 +103,7 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0: utf8mb4_0900_ai_ci"
+          "0: utf8mb3_general_ci"
         ],
         "Inputs": [
           {
@@ -146,11 +146,11 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0: utf8mb4_0900_ai_ci",
-          "1: utf8mb4_0900_ai_ci",
-          "2: utf8mb4_0900_ai_ci",
+          "0: utf8mb3_general_ci",
+          "1: utf8mb3_general_ci",
+          "2: utf8mb3_general_ci",
           "3",
-          "4: utf8mb4_0900_ai_ci",
+          "4: utf8mb3_general_ci",
           "5",
           "6",
           "7",
@@ -163,10 +163,10 @@
           "14",
           "15",
           "16",
-          "17: utf8mb4_0900_ai_ci",
+          "17: utf8mb3_general_ci",
           "18",
-          "19: utf8mb4_0900_ai_ci",
-          "20: utf8mb4_0900_ai_ci"
+          "19: utf8mb3_general_ci",
+          "20: utf8mb3_general_ci"
         ],
         "Inputs": [
           {
@@ -1065,7 +1065,7 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0: utf8mb4_0900_ai_ci"
+          "0: utf8mb3_general_ci"
         ],
         "Inputs": [
           {
@@ -1118,7 +1118,7 @@
             "InputName": "SubQuery",
             "OperatorType": "Distinct",
             "Collations": [
-              "0: utf8mb4_0900_ai_ci"
+              "0: utf8mb3_general_ci"
             ],
             "Inputs": [
               {
