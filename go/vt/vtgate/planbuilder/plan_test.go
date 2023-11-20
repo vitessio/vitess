@@ -178,6 +178,8 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		// FK from tblrefDef referencing tbl20 that is shard scoped of SET-Default types.
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tblrefDef", createFkDefinition([]string{"ref"}, "tbl20", []string{"col2"}, sqlparser.SetDefault, sqlparser.SetDefault))
 
+		addPKs(t, vschema, "sharded_fk_allow", []string{"tbl1", "tbl2", "tbl3", "tbl4", "tbl5", "tbl6", "tbl7", "tbl9", "tbl10",
+			"multicol_tbl1", "multicol_tbl2", "tblrefDef", "tbl20"})
 	}
 	if vschema.Keyspaces["unsharded_fk_allow"] != nil {
 		// u_tbl2(col2)  -> u_tbl1(col1)  Cascade.
@@ -208,22 +210,24 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_multicol_tbl2", createFkDefinition([]string{"cola", "colb"}, "u_multicol_tbl1", []string{"cola", "colb"}, sqlparser.SetNull, sqlparser.SetNull))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_multicol_tbl3", createFkDefinition([]string{"cola", "colb"}, "u_multicol_tbl2", []string{"cola", "colb"}, sqlparser.Cascade, sqlparser.Cascade))
 
-		_ = vschema.AddForeignKey("unsharded_fk_allow", "fk_t3", createFkDefinition([]string{"col"}, "fk_t2", []string{"col2"}, sqlparser.SetNull, sqlparser.SetNull))
-		_ = vschema.AddForeignKey("unsharded_fk_allow", "fk_t4", createFkDefinition([]string{"col3"}, "fk_t3", []string{"col2"}, sqlparser.SetNull, sqlparser.SetNull))
-		_ = vschema.AddPrimaryKey("unsharded_fk_allow", "fk_t2", []string{"id"})
-		_ = vschema.AddPrimaryKey("unsharded_fk_allow", "fk_t3", []string{"id"})
-		_ = vschema.AddPrimaryKey("unsharded_fk_allow", "fk_t4", []string{"id"})
-		_ = vschema.AddUniqueKey("unsharded_fk_allow", "fk_t3", sqlparser.Exprs{sqlparser.NewColName("col")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("col9")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{&sqlparser.BinaryExpr{Operator: sqlparser.MultOp, Left: sqlparser.NewColName("col9"), Right: sqlparser.NewColName("foo")}})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("col9"), sqlparser.NewColName("foo")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("foo"), sqlparser.NewColName("bar")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("bar"), sqlparser.NewColName("col9")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl8", sqlparser.Exprs{sqlparser.NewColName("col8")})
+
+		addPKs(t, vschema, "unsharded_fk_allow", []string{"u_tbl1", "u_tbl2", "u_tbl3", "u_tbl4", "u_tbl5", "u_tbl6", "u_tbl7", "u_tbl8", "u_tbl9",
+			"u_multicol_tbl1", "u_multicol_tbl2", "u_multicol_tbl3"})
 	}
 
-	_ = vschema.AddPrimaryKey("unsharded_fk_allow", "u_tbl1", []string{"id"})
-	_ = vschema.AddPrimaryKey("unsharded_fk_allow", "u_tbl9", []string{"id"})
-	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("col9")})
-	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{&sqlparser.BinaryExpr{Operator: sqlparser.MultOp, Left: sqlparser.NewColName("col9"), Right: sqlparser.NewColName("foo")}})
-	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("col9"), sqlparser.NewColName("foo")})
-	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("foo"), sqlparser.NewColName("bar")})
-	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("bar"), sqlparser.NewColName("col9")})
-	_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl8", sqlparser.Exprs{sqlparser.NewColName("col8")})
+}
+
+func addPKs(t *testing.T, vschema *vindexes.VSchema, ks string, tbls []string) {
+	for _, tbl := range tbls {
+		require.NoError(t,
+			vschema.AddPrimaryKey(ks, tbl, []string{"id"}))
+	}
 }
 
 func TestSystemTables57(t *testing.T) {

@@ -111,7 +111,7 @@
               "Sharded": true
             },
             "FieldQuery": "select colb, cola, y, colc, x from multicol_tbl1 where 1 != 1",
-            "Query": "select colb, cola, y, colc, x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update",
+            "Query": "select colb, cola, y, colc, x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update nowait",
             "Table": "multicol_tbl1",
             "Values": [
               "1",
@@ -258,7 +258,7 @@
               "Sharded": true
             },
             "FieldQuery": "select t5col5 from tbl5 where 1 != 1",
-            "Query": "select t5col5 from tbl5 for update",
+            "Query": "select t5col5 from tbl5 for update nowait",
             "Table": "tbl5"
           },
           {
@@ -274,7 +274,7 @@
             "Cols": [
               0
             ],
-            "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (tbl4.t4col4) not in (('foo'))",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (t4col4) not in (('foo'))",
             "Table": "tbl4"
           },
           {
@@ -366,7 +366,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col9 from tbl9 where 1 != 1",
-            "Query": "select col9 from tbl9 where col9 = 34 for update",
+            "Query": "select col9 from tbl9 where col9 = 34 for update nowait",
             "Table": "tbl9",
             "Values": [
               "34"
