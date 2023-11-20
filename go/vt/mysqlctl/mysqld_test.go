@@ -17,6 +17,8 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -171,4 +173,23 @@ func TestParseBinlogEntryTimestamp(t *testing.T) {
 			assert.Equal(t, tcase.tm, tm)
 		})
 	}
+}
+
+func TestCleanupLockfile(t *testing.T) {
+	t.Cleanup(func() {
+		os.Remove("mysql.sock.lock")
+	})
+	ts := "prefix"
+	// All good if no lockfile exists
+	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+
+	// If lockfile exists, but the process is not found, we clean it up.
+	os.WriteFile("mysql.sock.lock", []byte("123456789"), 0o600)
+	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	assert.NoFileExists(t, "mysql.sock.lock")
+
+	// If the lockfile exists, and the process is found, we don't clean it up.
+	os.WriteFile("mysql.sock.lock", []byte(strconv.Itoa(os.Getpid())), 0o600)
+	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	assert.FileExists(t, "mysql.sock.lock")
 }
