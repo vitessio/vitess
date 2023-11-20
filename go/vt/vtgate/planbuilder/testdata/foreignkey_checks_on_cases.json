@@ -18,7 +18,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "insert into tbl2(col2, coly) values (:_col2_0, 3)",
+        "Query": "insert /*+ SET_VAR(foreign_key_checks=On) */ into tbl2(col2, coly) values (:_col2_0, 3)",
         "TableName": "tbl2",
         "VindexValues": {
           "hash_vin": "1"
@@ -43,7 +43,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "insert into multicol_tbl2(cola, colb, colc) values (:_cola_0, :_colb_0, :_colc_0)",
+        "Query": "insert /*+ SET_VAR(foreign_key_checks=On) */ into multicol_tbl2(cola, colb, colc) values (:_cola_0, :_colb_0, :_colc_0)",
         "TableName": "multicol_tbl2",
         "VindexValues": {
           "multicolIdx": "1, 2, 3"
@@ -108,7 +108,7 @@
               3,
               4
             ],
-            "Query": "delete from multicol_tbl2 where (colb, cola, x, colc, y) in ::fkc_vals",
+            "Query": "delete /*+ SET_VAR(foreign_key_checks=ON) */ from multicol_tbl2 where (colb, cola, x, colc, y) in ::fkc_vals",
             "Table": "multicol_tbl2"
           },
           {
@@ -120,7 +120,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "delete from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
+            "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
             "Table": "multicol_tbl1",
             "Values": [
               "1",
@@ -171,7 +171,7 @@
             "Cols": [
               0
             ],
-            "Query": "delete from tbl4 where (col4) in ::fkc_vals",
+            "Query": "delete /*+ SET_VAR(foreign_key_checks=ON) */ from tbl4 where (col4) in ::fkc_vals",
             "Table": "tbl4"
           },
           {
@@ -187,7 +187,7 @@
             "Cols": [
               1
             ],
-            "Query": "delete from tbl4 where (t4col4) in ::fkc_vals1",
+            "Query": "delete /*+ SET_VAR(foreign_key_checks=ON) */ from tbl4 where (t4col4) in ::fkc_vals1",
             "Table": "tbl4"
           },
           {
@@ -199,7 +199,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "delete from tbl5",
+            "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from tbl5",
             "Table": "tbl5"
           }
         ]
@@ -249,7 +249,7 @@
             "Cols": [
               0
             ],
-            "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl8 set col8 = null where (col8) in ::fkc_vals",
             "Table": "u_tbl8"
           },
           {
@@ -261,7 +261,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "delete from u_tbl9 where col9 = 5",
+            "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from u_tbl9 where col9 = 5",
             "Table": "u_tbl9"
           }
         ]
@@ -286,7 +286,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "update u_tbl5 set col5 = 'foo' where id = 1",
+        "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl5 set col5 = 'foo' where id = 1",
         "Table": "u_tbl5"
       },
       "TablesUsed": [
@@ -328,7 +328,7 @@
             "Cols": [
               0
             ],
-            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (u_tbl3.col3) not in (('bar'))",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals and (u_tbl3.col3) not in (('bar'))",
             "Table": "u_tbl3"
           },
           {
@@ -340,7 +340,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl2 set col2 = 'bar' where id = 1",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2 set col2 = 'bar' where id = 1",
             "Table": "u_tbl2"
           }
         ]
@@ -365,7 +365,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "update u_tbl2 set col_no_ref = 'baz' where id = 1",
+        "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2 set col_no_ref = 'baz' where id = 1",
         "Table": "u_tbl2"
       },
       "TablesUsed": [
@@ -392,7 +392,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "update tbl1 set not_ref_col = 'foo' where id = 1",
+        "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl1 set not_ref_col = 'foo' where id = 1",
         "Table": "tbl1"
       },
       "TablesUsed": [
@@ -439,7 +439,7 @@
             "Cols": [
               0
             ],
-            "Query": "update tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (tbl4.t4col4) not in (('foo'))",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (tbl4.t4col4) not in (('foo'))",
             "Table": "tbl4"
           },
           {
@@ -451,7 +451,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update tbl5 set t5col5 = 'foo'",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl5 set t5col5 = 'foo'",
             "Table": "tbl5"
           }
         ]
@@ -481,7 +481,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "update tbl2 set col = 'foo'",
+        "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl2 set col = 'foo'",
         "Table": "tbl2"
       },
       "TablesUsed": [
@@ -558,7 +558,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update tbl10 set tbl10.col = 'foo'",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl10 set tbl10.col = 'foo'",
             "Table": "tbl10"
           }
         ]
@@ -612,7 +612,7 @@
             "Cols": [
               0
             ],
-            "Query": "update tbl4 set col_ref = null where (col_ref) in ::fkc_vals",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ tbl4 set col_ref = null where (col_ref) in ::fkc_vals",
             "Table": "tbl4"
           },
           {
@@ -624,7 +624,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "delete from tbl9 where col9 = 34",
+            "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from tbl9 where col9 = 34",
             "Table": "tbl9",
             "Values": [
               "34"
@@ -693,7 +693,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (u_tbl3.col3) not in (('foo'))",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (u_tbl3.col3) not in (('foo'))",
                 "Table": "u_tbl3"
               },
               {
@@ -743,7 +743,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
                 "Table": "u_tbl8"
               },
               {
@@ -755,7 +755,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (u_tbl9.col9) not in (('foo'))",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (u_tbl9.col9) not in (('foo'))",
                 "Table": "u_tbl9"
               }
             ]
@@ -769,7 +769,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl1 set col1 = 'foo'",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl1 set col1 = 'foo'",
             "Table": "u_tbl1"
           }
         ]
@@ -789,7 +789,7 @@
     "plan": "VT12001: unsupported: update with limit with foreign key constraints"
   },
   {
-    "comment": "update in a table with non-literal value - set null",
+    "comment": "update in a table with non-literal value - set null fail due to child update where condition",
     "query": "update u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
     "plan": {
       "QueryType": "UPDATE",
@@ -846,7 +846,7 @@
                     "UpdateExprBvName": "fkc_upd"
                   }
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (:fkc_upd is null or (u_tbl3.col3) not in ((:fkc_upd)))",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals and (:fkc_upd is null or (u_tbl3.col3) not in ((:fkc_upd)))",
                 "Table": "u_tbl3"
               },
               {
@@ -873,7 +873,7 @@
     }
   },
   {
-    "comment": "update in a table with non-literal value - with cascade",
+    "comment": "update in a table with non-literal value - with cascade fail as the cascade value is not known",
     "query": "update u_tbl1 set m = 2, col1 = x + 'bar' where id = 1",
     "plan": {
       "QueryType": "UPDATE",
@@ -934,7 +934,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (:fkc_upd is null or (u_tbl3.col3) not in ((:fkc_upd)))",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (:fkc_upd is null or (u_tbl3.col3) not in ((:fkc_upd)))",
                 "Table": "u_tbl3"
               },
               {
@@ -992,7 +992,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
                 "Table": "u_tbl8"
               },
               {
@@ -1004,7 +1004,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (:fkc_upd1 is null or (u_tbl9.col9) not in ((:fkc_upd1)))",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (:fkc_upd1 is null or (u_tbl9.col9) not in ((:fkc_upd1)))",
                 "Table": "u_tbl9"
               }
             ]
@@ -1033,7 +1033,7 @@
     }
   },
   {
-    "comment": "update in a table with set null, non-literal value on non-foreign key column",
+    "comment": "update in a table with set null, non-literal value on non-foreign key column - allowed",
     "query": "update u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1",
     "plan": {
       "QueryType": "UPDATE",
@@ -1066,7 +1066,7 @@
             "Cols": [
               0
             ],
-            "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (u_tbl3.col3) not in ((2))",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals and (u_tbl3.col3) not in ((2))",
             "Table": "u_tbl3"
           },
           {
@@ -1078,7 +1078,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1",
             "Table": "u_tbl2"
           }
         ]
@@ -1090,7 +1090,7 @@
     }
   },
   {
-    "comment": "update in a table with cascade, non-literal value on non-foreign key column",
+    "comment": "update in a table with cascade, non-literal value on non-foreign key column - allowed",
     "query": "update u_tbl1 set m = x + 'bar', col1 = 2 where id = 1",
     "plan": {
       "QueryType": "UPDATE",
@@ -1143,7 +1143,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (u_tbl3.col3) not in ((2))",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (u_tbl3.col3) not in ((2))",
                 "Table": "u_tbl3"
               },
               {
@@ -1193,7 +1193,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
                 "Table": "u_tbl8"
               },
               {
@@ -1205,7 +1205,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (u_tbl9.col9) not in ((2))",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (u_tbl9.col9) not in ((2))",
                 "Table": "u_tbl9"
               }
             ]
@@ -1219,7 +1219,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl1 set m = x + 'bar', col1 = 2 where id = 1",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl1 set m = x + 'bar', col1 = 2 where id = 1",
             "Table": "u_tbl1"
           }
         ]
@@ -1244,7 +1244,7 @@
     "plan": "VT12001: unsupported: foreign keys management at vitess with limit"
   },
   {
-    "comment": "update with fk on cross-shard with a update condition on non-literal value",
+    "comment": "update with fk on cross-shard with a where condition on non-literal value - disallowed",
     "query": "update tbl3 set coly = colx + 10 where coly = 10",
     "plan": {
       "QueryType": "UPDATE",
@@ -1395,7 +1395,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update tbl3 set tbl3.coly = 20 where tbl3.coly = 10",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl3 set tbl3.coly = 20 where tbl3.coly = 10",
             "Table": "tbl3"
           }
         ]
@@ -1470,7 +1470,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl6 set col6 = 'foo'",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl6 set col6 = 'foo'",
             "Table": "u_tbl6"
           }
         ]
@@ -1558,7 +1558,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl7 set col7 = 'foo'",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl7 set col7 = 'foo'",
             "Table": "u_tbl7"
           }
         ]
@@ -1647,7 +1647,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_tbl7 set col7 = :v1",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl7 set col7 = :v1",
             "Table": "u_tbl7"
           }
         ]
@@ -1679,7 +1679,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "insert into u_tbl1(id, col1, foo) values (1, 3, 'bar') on duplicate key update foo = 'baz'",
+        "Query": "insert /*+ SET_VAR(foreign_key_checks=On) */ into u_tbl1(id, col1, foo) values (1, 3, 'bar') on duplicate key update foo = 'baz'",
         "TableName": "u_tbl1"
       },
       "TablesUsed": [
@@ -1693,7 +1693,7 @@
     "plan": "VT12002: unsupported: cross-shard foreign keys"
   },
   {
-    "comment": "replace into with table having primary key",
+    "comment": "replace with fk reference unsupported",
     "query": "replace into u_tbl1 (id, col1) values (1, 2)",
     "plan": {
       "QueryType": "INSERT",
@@ -1749,7 +1749,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1",
+                    "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals1",
                     "Table": "u_tbl3"
                   },
                   {
@@ -1761,7 +1761,7 @@
                       "Sharded": false
                     },
                     "TargetTabletType": "PRIMARY",
-                    "Query": "delete from u_tbl2 where (col2) in ::fkc_vals",
+                    "Query": "delete /*+ SET_VAR(foreign_key_checks=ON) */ from u_tbl2 where (col2) in ::fkc_vals",
                     "Table": "u_tbl2"
                   }
                 ]
@@ -1789,7 +1789,7 @@
             },
             "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
-            "Query": "insert into u_tbl1(id, col1) values (1, 2)",
+            "Query": "insert /*+ SET_VAR(foreign_key_checks=On) */ into u_tbl1(id, col1) values (1, 2)",
             "TableName": "u_tbl1"
           }
         ]
@@ -1869,7 +1869,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (u_multicol_tbl2.cola, u_multicol_tbl2.colb) not in ((1, 2))",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (u_multicol_tbl2.cola, u_multicol_tbl2.colb) not in ((1, 2))",
                 "Table": "u_multicol_tbl2"
               }
             ]
@@ -1883,7 +1883,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
             "Table": "u_multicol_tbl1"
           }
         ]
@@ -1897,10 +1897,10 @@
   },
   {
     "comment": "update on a multicol foreign key that set nulls and then cascades - bindVariables",
-    "query": "update u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
+    "query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
     "plan": {
       "QueryType": "UPDATE",
-      "Original": "update u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
+      "Original": "update /*+ SET_VAR(foreign_key_checks=On) */ u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
       "Instructions": {
         "OperatorType": "FkCascade",
         "Inputs": [
@@ -1963,7 +1963,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (u_multicol_tbl2.cola, u_multicol_tbl2.colb) not in ((:v1, :v2))))",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (u_multicol_tbl2.cola, u_multicol_tbl2.colb) not in ((:v1, :v2))))",
                 "Table": "u_multicol_tbl2"
               }
             ]
@@ -1977,7 +1977,7 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
             "Table": "u_multicol_tbl1"
           }
         ]
@@ -2029,7 +2029,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "delete from tbl4 where (col4) in ::fkc_vals",
+                "Query": "delete /*+ SET_VAR(foreign_key_checks=ON) */ from tbl4 where (col4) in ::fkc_vals",
                 "Table": "tbl4"
               },
               {
@@ -2045,7 +2045,7 @@
                 "Cols": [
                   1
                 ],
-                "Query": "delete from tbl4 where (t4col4) in ::fkc_vals1",
+                "Query": "delete /*+ SET_VAR(foreign_key_checks=ON) */ from tbl4 where (t4col4) in ::fkc_vals1",
                 "Table": "tbl4"
               },
               {
@@ -2057,7 +2057,7 @@
                   "Sharded": true
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from tbl5 where id = :v1",
+                "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from tbl5 where id = :v1",
                 "Table": "tbl5"
               }
             ]
@@ -2067,380 +2067,6 @@
       "TablesUsed": [
         "sharded_fk_allow.tbl4",
         "sharded_fk_allow.tbl5"
-      ]
-    }
-  },
-  {
-    "comment": "foreign key column updated by using a column which is also getting updated",
-    "query": "update u_tbl1 set foo = 100, col1 = baz + 1 + foo where bar = 42",
-    "plan": "VT12001: unsupported: foo column referenced in foreign key column col1 is itself updated"
-  },
-  {
-    "comment": "foreign key column updated by using a column which is also getting updated - self reference column is allowed",
-    "query": "update u_tbl7 set foo = 100, col7 = baz + 1 + col7 where bar = 42",
-    "plan": {
-      "QueryType": "UPDATE",
-      "Original": "update u_tbl7 set foo = 100, col7 = baz + 1 + col7 where bar = 42",
-      "Instructions": {
-        "OperatorType": "FkCascade",
-        "Inputs": [
-          {
-            "InputName": "Selection",
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "FieldQuery": "select col7, col7 <=> baz + 1 + col7, baz + 1 + col7 from u_tbl7 where 1 != 1",
-            "Query": "select col7, col7 <=> baz + 1 + col7, baz + 1 + col7 from u_tbl7 where bar = 42 for update",
-            "Table": "u_tbl7"
-          },
-          {
-            "InputName": "CascadeChild-1",
-            "OperatorType": "FKVerify",
-            "BvName": "fkc_vals",
-            "Cols": [
-              0
-            ],
-            "NonLiteralUpdateInfo": [
-              {
-                "ExprCol": 0,
-                "CompExprCol": 1,
-                "UpdateExprCol": 2,
-                "UpdateExprBvName": "fkc_upd"
-              }
-            ],
-            "Inputs": [
-              {
-                "InputName": "VerifyParent-1",
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :fkc_upd where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :fkc_upd where not (u_tbl4.col4) <=> (:fkc_upd) and (u_tbl4.col4) in ::fkc_vals and :fkc_upd is not null and u_tbl3.col3 is null limit 1 lock in share mode",
-                "Table": "u_tbl3, u_tbl4"
-              },
-              {
-                "InputName": "VerifyChild-2",
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (:fkc_upd is null or (u_tbl9.col9) not in ((:fkc_upd))) and u_tbl4.col4 = u_tbl9.col9 limit 1 lock in share mode",
-                "Table": "u_tbl4, u_tbl9"
-              },
-              {
-                "InputName": "PostVerify",
-                "OperatorType": "Update",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set u_tbl4.col4 = :fkc_upd where (u_tbl4.col4) in ::fkc_vals",
-                "Table": "u_tbl4"
-              }
-            ]
-          },
-          {
-            "InputName": "Parent",
-            "OperatorType": "Update",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "TargetTabletType": "PRIMARY",
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl7 set foo = 100, col7 = baz + 1 + col7 where bar = 42",
-            "Table": "u_tbl7"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "unsharded_fk_allow.u_tbl3",
-        "unsharded_fk_allow.u_tbl4",
-        "unsharded_fk_allow.u_tbl7",
-        "unsharded_fk_allow.u_tbl9"
-      ]
-    }
-  },
-  {
-    "comment": "Single column updated in a multi-col table",
-    "query": "update u_multicol_tbl1 set cola = cola + 3 where id = 3",
-    "plan": {
-      "QueryType": "UPDATE",
-      "Original": "update u_multicol_tbl1 set cola = cola + 3 where id = 3",
-      "Instructions": {
-        "OperatorType": "FkCascade",
-        "Inputs": [
-          {
-            "InputName": "Selection",
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "FieldQuery": "select cola, colb, cola <=> u_multicol_tbl1.cola + 3, u_multicol_tbl1.cola + 3 from u_multicol_tbl1 where 1 != 1",
-            "Query": "select cola, colb, cola <=> u_multicol_tbl1.cola + 3, u_multicol_tbl1.cola + 3 from u_multicol_tbl1 where id = 3 for update",
-            "Table": "u_multicol_tbl1"
-          },
-          {
-            "InputName": "CascadeChild-1",
-            "OperatorType": "FkCascade",
-            "BvName": "fkc_vals",
-            "Cols": [
-              0,
-              1
-            ],
-            "NonLiteralUpdateInfo": [
-              {
-                "ExprCol": 0,
-                "CompExprCol": 2,
-                "UpdateExprCol": 3,
-                "UpdateExprBvName": "fkc_upd"
-              }
-            ],
-            "Inputs": [
-              {
-                "InputName": "Selection",
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "FieldQuery": "select cola, colb from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:fkc_upd is null or (u_multicol_tbl2.cola) not in ((:fkc_upd))) for update",
-                "Table": "u_multicol_tbl2"
-              },
-              {
-                "InputName": "CascadeChild-1",
-                "OperatorType": "Update",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "TargetTabletType": "PRIMARY",
-                "BvName": "fkc_vals1",
-                "Cols": [
-                  0,
-                  1
-                ],
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = null, colb = null where (cola, colb) in ::fkc_vals1",
-                "Table": "u_multicol_tbl3"
-              },
-              {
-                "InputName": "Parent",
-                "OperatorType": "Update",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "TargetTabletType": "PRIMARY",
-                "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (:fkc_upd is null or (u_multicol_tbl2.cola) not in ((:fkc_upd)))",
-                "Table": "u_multicol_tbl2"
-              }
-            ]
-          },
-          {
-            "InputName": "Parent",
-            "OperatorType": "Update",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "TargetTabletType": "PRIMARY",
-            "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl1 set cola = u_multicol_tbl1.cola + 3 where id = 3",
-            "Table": "u_multicol_tbl1"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "unsharded_fk_allow.u_multicol_tbl1",
-        "unsharded_fk_allow.u_multicol_tbl2",
-        "unsharded_fk_allow.u_multicol_tbl3"
-      ]
-    }
-  },
-  {
-    "comment": "updating multiple columns of a fk constraint such that one uses the other",
-    "query": "update u_multicol_tbl3 set cola = id, colb = 5 * (cola + (1 - (cola))) where id = 2",
-    "plan": "VT12001: unsupported: cola column referenced in foreign key column colb is itself updated"
-  },
-  {
-    "comment": "multicol foreign key updates with one literal and one non-literal update",
-    "query": "update u_multicol_tbl2 set cola = 2, colb = colc - (2) where id = 7",
-    "plan": {
-      "QueryType": "UPDATE",
-      "Original": "update u_multicol_tbl2 set cola = 2, colb = colc - (2) where id = 7",
-      "Instructions": {
-        "OperatorType": "FKVerify",
-        "Inputs": [
-          {
-            "InputName": "VerifyParent-1",
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where 1 != 1",
-            "Query": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl2.colc - 2 is not null and not (u_multicol_tbl2.cola, u_multicol_tbl2.colb) <=> (2, u_multicol_tbl2.colc - 2) and u_multicol_tbl2.id = 7 and u_multicol_tbl1.cola is null and u_multicol_tbl1.colb is null limit 1 lock in share mode",
-            "Table": "u_multicol_tbl1, u_multicol_tbl2"
-          },
-          {
-            "InputName": "PostVerify",
-            "OperatorType": "FkCascade",
-            "Inputs": [
-              {
-                "InputName": "Selection",
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "FieldQuery": "select cola, colb, u_multicol_tbl2.cola <=> 2, 2, u_multicol_tbl2.colb <=> u_multicol_tbl2.colc - 2, u_multicol_tbl2.colc - 2 from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb, u_multicol_tbl2.cola <=> 2, 2, u_multicol_tbl2.colb <=> u_multicol_tbl2.colc - 2, u_multicol_tbl2.colc - 2 from u_multicol_tbl2 where u_multicol_tbl2.id = 7 for update",
-                "Table": "u_multicol_tbl2"
-              },
-              {
-                "InputName": "CascadeChild-1",
-                "OperatorType": "Update",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "TargetTabletType": "PRIMARY",
-                "BvName": "fkc_vals",
-                "Cols": [
-                  0,
-                  1
-                ],
-                "NonLiteralUpdateInfo": [
-                  {
-                    "ExprCol": 0,
-                    "CompExprCol": 2,
-                    "UpdateExprCol": 3,
-                    "UpdateExprBvName": "fkc_upd"
-                  },
-                  {
-                    "ExprCol": 1,
-                    "CompExprCol": 4,
-                    "UpdateExprCol": 5,
-                    "UpdateExprBvName": "fkc_upd1"
-                  }
-                ],
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = :fkc_upd, colb = :fkc_upd1 where (cola, colb) in ::fkc_vals",
-                "Table": "u_multicol_tbl3"
-              },
-              {
-                "InputName": "Parent",
-                "OperatorType": "Update",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl2 set u_multicol_tbl2.cola = 2, u_multicol_tbl2.colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl2.id = 7",
-                "Table": "u_multicol_tbl2"
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "unsharded_fk_allow.u_multicol_tbl1",
-        "unsharded_fk_allow.u_multicol_tbl2",
-        "unsharded_fk_allow.u_multicol_tbl3"
-      ]
-    }
-  },
-  {
-    "comment": "replace into with table having unique key and primary key",
-    "query": "replace into u_tbl9(id, col9) values (1, 10),(2, 20),(3, 30)",
-    "plan": {
-      "QueryType": "INSERT",
-      "Original": "replace into u_tbl9(id, col9) values (1, 10),(2, 20),(3, 30)",
-      "Instructions": {
-        "OperatorType": "Sequential",
-        "Inputs": [
-          {
-            "OperatorType": "FkCascade",
-            "Inputs": [
-              {
-                "InputName": "Selection",
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                "Query": "select col9 from u_tbl9 where (col9) in ((10), (20), (30)) or (col9 * foo) in ((10 * null), (20 * null), (30 * null)) or (bar, col9) in ((1, 10), (1, 20), (1, 30)) or (id) in ((1), (2), (3)) for update",
-                "Table": "u_tbl9"
-              },
-              {
-                "InputName": "CascadeChild-1",
-                "OperatorType": "Update",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "TargetTabletType": "PRIMARY",
-                "BvName": "fkc_vals",
-                "Cols": [
-                  0
-                ],
-                "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals",
-                "Table": "u_tbl8"
-              },
-              {
-                "InputName": "Parent",
-                "OperatorType": "Delete",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl9 where (col9) in ((10), (20), (30)) or (col9 * foo) in ((10 * null), (20 * null), (30 * null)) or (bar, col9) in ((1, 10), (1, 20), (1, 30)) or (id) in ((1), (2), (3))",
-                "Table": "u_tbl9"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Insert",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "TargetTabletType": "PRIMARY",
-            "NoAutoCommit": true,
-            "Query": "insert into u_tbl9(id, col9) values (1, 10), (2, 20), (3, 30)",
-            "TableName": "u_tbl9"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "unsharded_fk_allow.u_tbl8",
-        "unsharded_fk_allow.u_tbl9"
       ]
     }
   },

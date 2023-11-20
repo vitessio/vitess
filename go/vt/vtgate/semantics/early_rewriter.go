@@ -107,6 +107,11 @@ func rewriteNotExpr(cursor *sqlparser.Cursor, node *sqlparser.NotExpr) {
 		return
 	}
 
+	// There is no inverse operator for NullSafeEqualOp.
+	// There doesn't exist a null safe non-equality.
+	if cmp.Operator == sqlparser.NullSafeEqualOp {
+		return
+	}
 	cmp.Operator = sqlparser.Inverse(cmp.Operator)
 	cursor.Replace(cmp)
 }
