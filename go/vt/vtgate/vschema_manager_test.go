@@ -18,11 +18,13 @@ func TestVSchemaUpdate(t *testing.T) {
 		Type: querypb.Type_INT64,
 	}}
 	cols2 := []vindexes.Column{{
-		Name: sqlparser.NewIdentifierCI("uid"),
-		Type: querypb.Type_INT64,
+		Name:     sqlparser.NewIdentifierCI("uid"),
+		Type:     querypb.Type_INT64,
+		Nullable: true,
 	}, {
-		Name: sqlparser.NewIdentifierCI("name"),
-		Type: querypb.Type_VARCHAR,
+		Name:     sqlparser.NewIdentifierCI("name"),
+		Type:     querypb.Type_VARCHAR,
+		Nullable: true,
 	}}
 	ks := &vindexes.Keyspace{Name: "ks"}
 	tblNoCol := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, ColumnListAuthoritative: true}
@@ -340,11 +342,13 @@ func TestRebuildVSchema(t *testing.T) {
 		Type: querypb.Type_INT64,
 	}}
 	cols2 := []vindexes.Column{{
-		Name: sqlparser.NewIdentifierCI("uid"),
-		Type: querypb.Type_INT64,
+		Name:     sqlparser.NewIdentifierCI("uid"),
+		Type:     querypb.Type_INT64,
+		Nullable: true,
 	}, {
-		Name: sqlparser.NewIdentifierCI("name"),
-		Type: querypb.Type_VARCHAR,
+		Name:     sqlparser.NewIdentifierCI("name"),
+		Type:     querypb.Type_VARCHAR,
+		Nullable: true,
 	}}
 	ks := &vindexes.Keyspace{Name: "ks"}
 	tblNoCol := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, ColumnListAuthoritative: true}
