@@ -192,6 +192,14 @@ func getInfoSchema57() map[string][]vindexes.Column {
 	cols = append(cols, createCol("EXTRA", 6165, "utf8mb3_general_ci", "", 255, 0, false, ""))
 	infSchema["FILES"] = cols
 	cols = []vindexes.Column{}
+	cols = append(cols, createCol("VARIABLE_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
+	cols = append(cols, createCol("VARIABLE_VALUE", 6165, "utf8mb3_general_ci", "", 1024, 0, false, ""))
+	infSchema["GLOBAL_STATUS"] = cols
+	cols = []vindexes.Column{}
+	cols = append(cols, createCol("VARIABLE_NAME", 6165, "utf8mb3_general_ci", "", 64, 0, true, ""))
+	cols = append(cols, createCol("VARIABLE_VALUE", 6165, "utf8mb3_general_ci", "", 1024, 0, false, ""))
+	infSchema["GLOBAL_VARIABLES"] = cols
+	cols = []vindexes.Column{}
 	cols = append(cols, createCol("POOL_ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol("BLOCK_ID", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))
 	cols = append(cols, createCol("SPACE", 265, "utf8mb3_general_ci", "0", 21, 0, true, ""))

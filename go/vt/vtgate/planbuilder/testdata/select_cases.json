@@ -2738,9 +2738,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-                "OrderBy": "(0|1) ASC",
-                "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+                "FieldQuery": "select id from `user` where 1 != 1",
+                "OrderBy": "0 ASC",
+                "Query": "select id from `user` order by id asc limit :__upper_limit",
                 "Table": "`user`"
               }
             ]
@@ -3574,7 +3574,7 @@
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "any_value(0) AS id",
-            "GroupBy": "(1|2)",
+            "GroupBy": "1",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -3583,9 +3583,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select music.id, music.genre, weight_string(music.genre) from music where 1 != 1 group by music.genre, weight_string(music.genre)",
-                "OrderBy": "(1|2) ASC",
-                "Query": "select music.id, music.genre, weight_string(music.genre) from music where music.genre = 'pop' group by music.genre, weight_string(music.genre) order by music.genre asc",
+                "FieldQuery": "select music.id, music.genre from music where 1 != 1 group by music.genre",
+                "OrderBy": "1 ASC",
+                "Query": "select music.id, music.genre from music where music.genre = 'pop' group by music.genre order by music.genre asc",
                 "Table": "music"
               }
             ]
@@ -3739,7 +3739,7 @@
             "InputName": "SubQuery",
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "max(0|1) AS max(music.id)",
+            "Aggregates": "max(0) AS max(music.id)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -3748,8 +3748,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(music.id), weight_string(music.id) from music where 1 != 1 group by weight_string(music.id)",
-                "Query": "select max(music.id), weight_string(music.id) from music where music.user_id in ::__vals group by weight_string(music.id)",
+                "FieldQuery": "select max(music.id) from music where 1 != 1",
+                "Query": "select max(music.id) from music where music.user_id in ::__vals",
                 "Table": "music",
                 "Values": [
                   "(5, 6)"

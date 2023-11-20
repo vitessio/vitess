@@ -44,10 +44,13 @@ func TestGenerateInfoSchemaMap(t *testing.T) {
 	collationName := collations.Local().LookupName(collations.SystemCollation.Collation)
 
 	for _, tbl := range informationSchemaTables80 {
-		b.WriteString("cols = []vindexes.Column{}\n")
 		result, err := db.Query(fmt.Sprintf("show columns from information_schema.`%s`", tbl))
-		require.NoError(t, err)
+		if err != nil {
+			t.Logf("error querying table %s: %v", tbl, err)
+			continue
+		}
 		defer result.Close()
+		b.WriteString("cols = []vindexes.Column{}\n")
 		for result.Next() {
 			var r row
 			result.Scan(&r.Field, &r.Type, &r.Null, &r.Key, &r.Default, &r.Extra)
@@ -108,6 +111,8 @@ var (
 		"ENGINES",
 		"EVENTS",
 		"FILES",
+		"GLOBAL_STATUS",
+		"GLOBAL_VARIABLES",
 		"INNODB_BUFFER_PAGE",
 		"INNODB_BUFFER_PAGE_LRU",
 		"INNODB_BUFFER_POOL_STATS",
