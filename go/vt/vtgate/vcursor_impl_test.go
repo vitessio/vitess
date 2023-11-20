@@ -258,11 +258,8 @@ func TestSetTarget(t *testing.T) {
 }
 
 func TestKeyForPlan(t *testing.T) {
-	valTrue := true
-	valFalse := false
 	type testCase struct {
 		vschema               *vindexes.VSchema
-		fkState               *bool
 		targetString          string
 		expectedPlanPrefixKey string
 	}
@@ -286,13 +283,11 @@ func TestKeyForPlan(t *testing.T) {
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "",
-		fkState:               &valTrue,
-		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+fkc:On+Query:SELECT 1",
+		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1@replica",
-		fkState:               &valFalse,
-		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+fkc:Off+Query:SELECT 1",
+		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
 	}}
 
 	for i, tc := range tests {
@@ -302,7 +297,6 @@ func TestKeyForPlan(t *testing.T) {
 			vc, err := newVCursorImpl(ss, sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4)
 			require.NoError(t, err)
 			vc.vschema = tc.vschema
-			vc.fkChecksState = tc.fkState
 
 			var buf strings.Builder
 			vc.keyForPlan(context.Background(), "SELECT 1", &buf)

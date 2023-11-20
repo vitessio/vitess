@@ -1088,13 +1088,6 @@ func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.Stri
 	_, _ = buf.WriteString(vindexes.TabletTypeSuffix[vc.tabletType])
 	_, _ = buf.WriteString("+Collate:")
 	_, _ = buf.WriteString(collations.Local().LookupName(vc.collation))
-	// The plans are going to be different based on the foreign key checks state. So we need to use that value
-	// as part of the plan's hashing key.
-	fkChecksState := vc.GetForeignKeyChecksState()
-	if fkChecksState != nil {
-		_, _ = buf.WriteString("+fkc:")
-		_, _ = buf.WriteString(sqlparser.FkChecksStateString(fkChecksState))
-	}
 
 	if vc.destination != nil {
 		switch vc.destination.(type) {
