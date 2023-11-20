@@ -137,7 +137,7 @@
               3,
               4
             ],
-            "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from multicol_tbl2 where (colb, cola, x, colc, y) in ::fkc_vals",
+            "Query": "delete /*+ SET_VAR(foreign_key_checks=ON) */ from multicol_tbl2 where (colb, cola, x, colc, y) in ::fkc_vals",
             "Table": "multicol_tbl2"
           },
           {
@@ -274,7 +274,7 @@
             "Cols": [
               0
             ],
-            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (tbl4.t4col4) not in (('foo'))",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (tbl4.t4col4) not in (('foo'))",
             "Table": "tbl4"
           },
           {
@@ -386,7 +386,7 @@
             "Cols": [
               0
             ],
-            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl4 set col_ref = null where (col_ref) in ::fkc_vals",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ tbl4 set col_ref = null where (col_ref) in ::fkc_vals",
             "Table": "tbl4"
           },
           {
