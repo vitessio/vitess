@@ -18,7 +18,6 @@ package sqlparser
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -694,7 +693,17 @@ var (
 	}, {
 		input: "select /* straight_join */ straight_join 1 from t",
 	}, {
+		input: "select /* for share */ 1 from t for share",
+	}, {
+		input: "select /* for share */ 1 from t for share nowait",
+	}, {
+		input: "select /* for share */ 1 from t for share skip locked",
+	}, {
 		input: "select /* for update */ 1 from t for update",
+	}, {
+		input: "select /* for update */ 1 from t for update nowait",
+	}, {
+		input: "select /* for update */ 1 from t for update skip locked",
 	}, {
 		input: "select /* lock in share mode */ 1 from t lock in share mode",
 	}, {
@@ -6120,7 +6129,7 @@ func BenchmarkParseStress(b *testing.B) {
 
 	for i, sql := range []string{sql1, sql2} {
 		b.Run(fmt.Sprintf("sql%d", i), func(b *testing.B) {
-			var buf bytes.Buffer
+			var buf strings.Builder
 			buf.WriteString(sql)
 			querySQL := buf.String()
 			b.ReportAllocs()
@@ -6145,7 +6154,7 @@ func BenchmarkParse3(b *testing.B) {
 
 		// Size of value is 1/10 size of query. Then we add
 		// 10 such values to the where clause.
-		var baseval bytes.Buffer
+		var baseval strings.Builder
 		for i := 0; i < benchQuerySize/100; i++ {
 			// Add an escape character: This will force the upcoming
 			// tokenizer improvement to still create a copy of the string.
@@ -6157,7 +6166,7 @@ func BenchmarkParse3(b *testing.B) {
 			}
 		}
 
-		var buf bytes.Buffer
+		var buf strings.Builder
 		buf.WriteString("select a from t1 where v = 1")
 		for i := 0; i < 10; i++ {
 			fmt.Fprintf(&buf, " and v%d = \"%d%s\"", i, i, baseval.String())

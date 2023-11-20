@@ -681,17 +681,17 @@ func isSpecialOrderBy(o ops.OrderBy) bool {
 	return isFunction && f.Name.Lowered() == "rand"
 }
 
-func (r *Route) planOffsets(ctx *plancontext.PlanningContext) {
+func (r *Route) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
 	// if operator is returning data from a single shard, we don't need to do anything more
 	if r.IsSingleShard() {
-		return
+		return nil
 	}
 
 	// if we are getting results from multiple shards, we need to do a merge-sort
 	// between them to get the final output correctly sorted
 	ordering := r.Source.GetOrdering(ctx)
 	if len(ordering) == 0 {
-		return
+		return nil
 	}
 
 	for _, order := range ordering {
@@ -713,6 +713,7 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) {
 		}
 		r.Ordering = append(r.Ordering, o)
 	}
+	return nil
 }
 
 func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {

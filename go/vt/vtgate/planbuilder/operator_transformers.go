@@ -68,6 +68,8 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator) (
 		return transformFkVerify(ctx, op)
 	case *operators.InsertSelection:
 		return transformInsertionSelection(ctx, op)
+	case *operators.HashJoin:
+		return transformHashJoin(ctx, op)
 	case *operators.Sequential:
 		return transformSequential(ctx, op)
 	}
@@ -809,4 +811,59 @@ func createLimit(input logicalPlan, limit *sqlparser.Limit) (logicalPlan, error)
 	}
 
 	return plan, nil
+}
+
+func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin) (logicalPlan, error) {
+	lhs, err := transformToLogicalPlan(ctx, op.LHS)
+	if err != nil {
+		return nil, err
+	}
+	rhs, err := transformToLogicalPlan(ctx, op.RHS)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(op.LHSKeys) != 1 {
+		return nil, vterrors.VT12001("hash joins must have exactly one join predicate")
+	}
+
+	joinOp := engine.InnerJoin
+	if op.LeftJoin {
+		joinOp = engine.LeftJoin
+	}
+
+	var missingTypes []string
+
+	ltyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].LHS)
+	if !found {
+		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].LHS))
+	}
+	rtyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].RHS)
+	if !found {
+		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].RHS))
+	}
+
+	if len(missingTypes) > 0 {
+		return nil, vterrors.VT12001(
+			fmt.Sprintf("missing type information for [%s]", strings.Join(missingTypes, ", ")))
+	}
+
+	comparisonType, err := evalengine.CoerceTypes(ltyp, rtyp)
+	if err != nil {
+		return nil, err
+	}
+
+	return &hashJoin{
+		lhs: lhs,
+		rhs: rhs,
+		inner: &engine.HashJoin{
+			Opcode:         joinOp,
+			Cols:           op.ColumnOffsets,
+			LHSKey:         op.LHSKeys[0],
+			RHSKey:         op.RHSKeys[0],
+			ASTPred:        op.JoinPredicate(),
+			Collation:      comparisonType.Coll,
+			ComparisonType: comparisonType.Type,
+		},
+	}, nil
 }

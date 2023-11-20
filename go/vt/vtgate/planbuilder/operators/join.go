@@ -82,7 +82,7 @@ func (j *Join) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite
 	if j.Predicate != nil {
 		newOp.collectPredicate(ctx, j.Predicate)
 	}
-	return newOp, rewrite.NewTree("merge querygraphs into a single one", newOp), nil
+	return newOp, rewrite.NewTree("merge querygraphs into a single one"), nil
 }
 
 func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) (ops.Operator, error) {
@@ -162,9 +162,8 @@ func (j *Join) IsInner() bool {
 	return !j.LeftJoin
 }
 
-func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 	j.Predicate = ctx.SemTable.AndExpressions(j.Predicate, expr)
-	return nil
 }
 
 func (j *Join) ShortDescription() string {

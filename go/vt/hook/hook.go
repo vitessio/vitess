@@ -17,7 +17,6 @@ limitations under the License.
 package hook
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -147,7 +146,7 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 	}
 
 	// Run it.
-	var stdout, stderr bytes.Buffer
+	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
@@ -234,7 +233,7 @@ func (hook *Hook) ExecuteAsWritePipe(out io.Writer) (io.WriteCloser, WaitFunc, i
 		return nil, nil, HOOK_GENERIC_ERROR, fmt.Errorf("failed to configure stdin: %v", err)
 	}
 	cmd.Stdout = out
-	var stderr bytes.Buffer
+	var stderr strings.Builder
 	cmd.Stderr = &stderr
 
 	// Start the process.
@@ -273,7 +272,7 @@ func (hook *Hook) ExecuteAsReadPipe(in io.Reader) (io.Reader, WaitFunc, int, err
 		return nil, nil, HOOK_GENERIC_ERROR, fmt.Errorf("failed to configure stdout: %v", err)
 	}
 	cmd.Stdin = in
-	var stderr bytes.Buffer
+	var stderr strings.Builder
 	cmd.Stderr = &stderr
 
 	// Start the process.

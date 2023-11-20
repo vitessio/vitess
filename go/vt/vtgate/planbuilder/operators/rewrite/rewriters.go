@@ -45,7 +45,6 @@ type (
 
 	Rewrite struct {
 		Message string
-		Op      ops.Operator
 	}
 
 	// VisitRule signals to the rewriter if the children of this operator should be visited or not
@@ -61,11 +60,11 @@ const (
 	SkipChildren  VisitRule = false
 )
 
-func NewTree(message string, op ops.Operator) *ApplyResult {
+func NewTree(message string) *ApplyResult {
 	if DebugOperatorTree {
 		fmt.Println(">>>>>>>> " + message)
 	}
-	return &ApplyResult{Transformations: []Rewrite{{Message: message, Op: op}}}
+	return &ApplyResult{Transformations: []Rewrite{{Message: message}}}
 }
 
 func (ar *ApplyResult) Merge(other *ApplyResult) *ApplyResult {
@@ -145,19 +144,6 @@ func FixedPointBottomUp(
 	return op, nil
 }
 
-// BottomUpAll rewrites an operator tree from the bottom up. BottomUp applies a transformation function to
-// the given operator tree from the bottom up. Each callback [f] returns a ApplyResult that is aggregated
-// into a final output indicating whether the operator tree was changed.
-func BottomUpAll(
-	root ops.Operator,
-	resolveID func(ops.Operator) semantics.TableSet,
-	visit VisitF,
-) (ops.Operator, error) {
-	return BottomUp(root, resolveID, visit, func(ops.Operator) VisitRule {
-		return VisitChildren
-	})
-}
-
 // TopDown rewrites an operator tree from the bottom up. BottomUp applies a transformation function to
 // the given operator tree from the bottom up. Each callback [f] returns a ApplyResult that is aggregated
 // into a final output indicating whether the operator tree was changed.
@@ -208,7 +194,7 @@ func Swap(parent, child ops.Operator, message string) (ops.Operator, *ApplyResul
 	child.SetInputs([]ops.Operator{parent})
 	parent.SetInputs(aInputs)
 
-	return child, NewTree(message, parent), nil
+	return child, NewTree(message), nil
 }
 
 func bottomUp(

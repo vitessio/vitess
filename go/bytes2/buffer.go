@@ -65,7 +65,7 @@ func (buf *Buffer) String() string {
 // is _not_ allocated, so modifying this buffer after calling StringUnsafe will lead
 // to undefined behavior.
 func (buf *Buffer) StringUnsafe() string {
-	return *(*string)(unsafe.Pointer(&buf.bytes))
+	return unsafe.String(unsafe.SliceData(buf.bytes), len(buf.bytes))
 }
 
 // Reset is equivalent to bytes.Buffer.Reset.

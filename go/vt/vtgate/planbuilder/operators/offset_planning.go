@@ -30,7 +30,7 @@ import (
 // planOffsets will walk the tree top down, adding offset information to columns in the tree for use in further optimization,
 func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	type offsettable interface {
-		planOffsets(ctx *plancontext.PlanningContext)
+		planOffsets(ctx *plancontext.PlanningContext) ops.Operator
 	}
 
 	visitor := func(in ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -39,7 +39,10 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 		case *Horizon:
 			return nil, nil, vterrors.VT13001(fmt.Sprintf("should not see %T here", in))
 		case offsettable:
-			op.planOffsets(ctx)
+			newOp := op.planOffsets(ctx)
+			if newOp != nil {
+				return newOp, rewrite.NewTree("new operator after offset planning"), nil
+			}
 		}
 		if err != nil {
 			return nil, nil, err
@@ -116,7 +119,7 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root ops.Operator) (ops
 			_ = sqlparser.CopyOnRewrite(expr, visitor, nil, ctx.SemTable.CopySemanticInfo)
 		}
 		if addedColumns {
-			return in, rewrite.NewTree("added columns because filter needs it", in), nil
+			return in, rewrite.NewTree("added columns because filter needs it"), nil
 		}
 
 		return in, rewrite.SameTree, nil
@@ -140,7 +143,7 @@ func pullDistinctFromUNION(_ *plancontext.PlanningContext, root ops.Operator) (o
 			Required: true,
 			Source:   union,
 		}
-		return distinct, rewrite.NewTree("pulled out DISTINCT from union", union), nil
+		return distinct, rewrite.NewTree("pulled out DISTINCT from union"), nil
 	}
 
 	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)

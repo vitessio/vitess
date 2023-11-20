@@ -78,7 +78,7 @@ func (o *Ordering) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
 	return o.Order
 }
 
-func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) {
+func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
 	for _, order := range o.Order {
 		offset := o.Source.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
 		o.Offset = append(o.Offset, offset)
@@ -92,6 +92,7 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) {
 		offset = o.Source.AddColumn(ctx, true, false, aeWrap(wsExpr))
 		o.WOffset = append(o.WOffset, offset)
 	}
+	return nil
 }
 
 func (o *Ordering) ShortDescription() string {
