@@ -1364,12 +1364,13 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "GroupBy": "0",
+        "GroupBy": "(0|1)",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
+            "JoinColumnIndexes": "L:0,L:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -1379,9 +1380,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.a from `user` where 1 != 1 group by `user`.a",
-                "OrderBy": "0 ASC",
-                "Query": "select `user`.a from `user` group by `user`.a order by `user`.a asc",
+                "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1 group by `user`.a, weight_string(`user`.a)",
+                "OrderBy": "(0|1) ASC",
+                "Query": "select `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc",
                 "Table": "`user`"
               },
               {
@@ -2280,19 +2281,21 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum_count_star(1) AS count(*)",
-        "GroupBy": "0",
+        "GroupBy": "(0|2)",
+        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
               ":2 as a",
-              "count(*) * count(*) as count(*)"
+              "count(*) * count(*) as count(*)",
+              ":3 as weight_string(`user`.a)"
             ],
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "L:0,R:0,L:1",
+                "JoinColumnIndexes": "L:0,R:0,L:1,L:2",
                 "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
@@ -2302,9 +2305,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select count(*), `user`.a from `user` where 1 != 1 group by `user`.a",
-                    "OrderBy": "1 ASC",
-                    "Query": "select count(*), `user`.a from `user` group by `user`.a order by `user`.a asc",
+                    "FieldQuery": "select count(*), `user`.a, weight_string(`user`.a) from `user` where 1 != 1 group by `user`.a, weight_string(`user`.a)",
+                    "OrderBy": "(1|2) ASC",
+                    "Query": "select count(*), `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc",
                     "Table": "`user`"
                   },
                   {
@@ -2340,19 +2343,21 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum_count(1) AS count(user_extra.a)",
-        "GroupBy": "0",
+        "GroupBy": "(0|2)",
+        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
               ":2 as a",
-              "count(*) * count(user_extra.a) as count(user_extra.a)"
+              "count(*) * count(user_extra.a) as count(user_extra.a)",
+              ":3 as weight_string(`user`.a)"
             ],
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "R:0,L:0,L:1",
+                "JoinColumnIndexes": "R:0,L:0,L:1,L:2",
                 "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
@@ -2362,9 +2367,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select count(*), `user`.a from `user` where 1 != 1 group by `user`.a",
-                    "OrderBy": "1 ASC",
-                    "Query": "select count(*), `user`.a from `user` group by `user`.a order by `user`.a asc",
+                    "FieldQuery": "select count(*), `user`.a, weight_string(`user`.a) from `user` where 1 != 1 group by `user`.a, weight_string(`user`.a)",
+                    "OrderBy": "(1|2) ASC",
+                    "Query": "select count(*), `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc",
                     "Table": "`user`"
                   },
                   {
@@ -2400,25 +2405,27 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum_count(0) AS count(u.textcol1), sum_count(1) AS count(ue.foo)",
-        "GroupBy": "2",
+        "GroupBy": "(2|3)",
+        "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
               "count(u.textcol1) * count(*) as count(u.textcol1)",
               "count(*) * count(ue.foo) as count(ue.foo)",
-              ":4 as bar"
+              ":4 as bar",
+              ":5 as weight_string(us.bar)"
             ],
             "Inputs": [
               {
                 "OperatorType": "Sort",
                 "Variant": "Memory",
-                "OrderBy": "4 ASC",
+                "OrderBy": "(4|5) ASC",
                 "Inputs": [
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "L:0,R:0,R:1,L:1,R:2",
+                    "JoinColumnIndexes": "L:0,R:0,R:1,L:1,R:2,R:3",
                     "JoinVars": {
                       "u_foo": 2
                     },
@@ -2440,13 +2447,14 @@
                         "Expressions": [
                           "count(*) * count(*) as count(*)",
                           "count(ue.foo) * count(*) as count(ue.foo)",
-                          ":3 as bar"
+                          ":3 as bar",
+                          ":4 as weight_string(us.bar)"
                         ],
                         "Inputs": [
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "L:0,R:0,L:1,R:1",
+                            "JoinColumnIndexes": "L:0,R:0,L:1,R:1,R:2",
                             "JoinVars": {
                               "ue_bar": 2
                             },
@@ -2470,8 +2478,8 @@
                                   "Name": "main",
                                   "Sharded": false
                                 },
-                                "FieldQuery": "select count(*), us.bar from unsharded as us where 1 != 1 group by us.bar",
-                                "Query": "select count(*), us.bar from unsharded as us where us.baz = :ue_bar group by us.bar",
+                                "FieldQuery": "select count(*), us.bar, weight_string(us.bar) from unsharded as us where 1 != 1 group by us.bar, weight_string(us.bar)",
+                                "Query": "select count(*), us.bar, weight_string(us.bar) from unsharded as us where us.baz = :ue_bar group by us.bar, weight_string(us.bar)",
                                 "Table": "unsharded"
                               }
                             ]
@@ -3064,24 +3072,25 @@
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "sum_count(1) AS count(u.`name`)",
-            "GroupBy": "0",
+            "GroupBy": "(0|2)",
             "Inputs": [
               {
                 "OperatorType": "Projection",
                 "Expressions": [
                   ":2 as id",
-                  "count(*) * count(u.`name`) as count(u.`name`)"
+                  "count(*) * count(u.`name`) as count(u.`name`)",
+                  ":3 as weight_string(u.id)"
                 ],
                 "Inputs": [
                   {
                     "OperatorType": "Sort",
                     "Variant": "Memory",
-                    "OrderBy": "2 ASC",
+                    "OrderBy": "(2|3) ASC",
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "R:0,L:0,R:1",
+                        "JoinColumnIndexes": "R:0,L:0,R:1,R:2",
                         "JoinVars": {
                           "ue_id": 1
                         },
@@ -3105,8 +3114,8 @@
                               "Name": "user",
                               "Sharded": true
                             },
-                            "FieldQuery": "select count(u.`name`), u.id from `user` as u where 1 != 1 group by u.id",
-                            "Query": "select count(u.`name`), u.id from `user` as u where u.id = :ue_id group by u.id",
+                            "FieldQuery": "select count(u.`name`), u.id, weight_string(u.id) from `user` as u where 1 != 1 group by u.id, weight_string(u.id)",
+                            "Query": "select count(u.`name`), u.id, weight_string(u.id) from `user` as u where u.id = :ue_id group by u.id, weight_string(u.id)",
                             "Table": "`user`",
                             "Values": [
                               ":ue_id"
@@ -3167,24 +3176,25 @@
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "sum_count_star(1) AS count(*)",
-            "GroupBy": "0",
+            "GroupBy": "(0|2)",
             "Inputs": [
               {
                 "OperatorType": "Projection",
                 "Expressions": [
                   ":2 as id",
-                  "count(*) * count(*) as count(*)"
+                  "count(*) * count(*) as count(*)",
+                  ":3 as weight_string(u.id)"
                 ],
                 "Inputs": [
                   {
                     "OperatorType": "Sort",
                     "Variant": "Memory",
-                    "OrderBy": "2 ASC",
+                    "OrderBy": "(2|3) ASC",
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "L:0,R:0,R:1",
+                        "JoinColumnIndexes": "L:0,R:0,R:1,R:2",
                         "JoinVars": {
                           "ue_id": 1
                         },
@@ -3208,8 +3218,8 @@
                               "Name": "user",
                               "Sharded": true
                             },
-                            "FieldQuery": "select count(*), u.id from `user` as u where 1 != 1 group by u.id",
-                            "Query": "select count(*), u.id from `user` as u where u.id = :ue_id group by u.id",
+                            "FieldQuery": "select count(*), u.id, weight_string(u.id) from `user` as u where 1 != 1 group by u.id, weight_string(u.id)",
+                            "Query": "select count(*), u.id, weight_string(u.id) from `user` as u where u.id = :ue_id group by u.id, weight_string(u.id)",
                             "Table": "`user`",
                             "Values": [
                               ":ue_id"
@@ -3242,13 +3252,13 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "any_value(0) AS col",
-        "GroupBy": "1",
+        "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1",
+            "JoinColumnIndexes": "L:0,L:1,L:2",
             "JoinVars": {
               "user_col": 0
             },
@@ -3261,9 +3271,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.col, `user`.id from `user` where 1 != 1 group by `user`.id, `user`.col",
-                "OrderBy": "1 ASC",
-                "Query": "select `user`.col, `user`.id from `user` group by `user`.id, `user`.col order by `user`.id asc",
+                "FieldQuery": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` where 1 != 1 group by `user`.id, `user`.col, weight_string(`user`.id)",
+                "OrderBy": "(1|2) ASC",
+                "Query": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` group by `user`.id, `user`.col, weight_string(`user`.id) order by `user`.id asc",
                 "Table": "`user`"
               },
               {
@@ -3649,25 +3659,27 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "any_value(1) AS name, sum_count(2) AS count(m.predef1)",
-        "GroupBy": "0",
+        "GroupBy": "(0|3)",
+        "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
               ":3 as id",
               ":0 as name",
-              "count(m.predef1) * count(*) as count(m.predef1)"
+              "count(m.predef1) * count(*) as count(m.predef1)",
+              ":4 as weight_string(u.id)"
             ],
             "Inputs": [
               {
                 "OperatorType": "Sort",
                 "Variant": "Memory",
-                "OrderBy": "3 ASC",
+                "OrderBy": "(3|4) ASC",
                 "Inputs": [
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "R:0,L:0,R:1,R:2",
+                    "JoinColumnIndexes": "R:0,L:0,R:1,R:2,R:3",
                     "JoinVars": {
                       "m_order": 1
                     },
@@ -3691,8 +3703,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select u.`name`, count(*), u.id from `user` as u where 1 != 1 group by u.id",
-                        "Query": "select u.`name`, count(*), u.id from `user` as u where u.id = :m_order group by u.id",
+                        "FieldQuery": "select u.`name`, count(*), u.id, weight_string(u.id) from `user` as u where 1 != 1 group by u.id, weight_string(u.id)",
+                        "Query": "select u.`name`, count(*), u.id, weight_string(u.id) from `user` as u where u.id = :m_order group by u.id, weight_string(u.id)",
                         "Table": "`user`",
                         "Values": [
                           ":m_order"
@@ -4259,25 +4271,26 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum_count_star(0) AS count(*)",
-        "GroupBy": "1",
+        "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
               "count(*) * coalesce(count(*), 1) as count(*)",
-              ":2 as col"
+              ":2 as col",
+              ":3 as weight_string(music.col)"
             ],
             "Inputs": [
               {
                 "OperatorType": "Sort",
                 "Variant": "Memory",
-                "OrderBy": "2 ASC",
+                "OrderBy": "(2|3) ASC",
                 "Inputs": [
                   {
                     "OperatorType": "Join",
                     "Variant": "LeftJoin",
-                    "JoinColumnIndexes": "L:0,R:0,R:1",
+                    "JoinColumnIndexes": "L:0,R:0,R:1,R:2",
                     "JoinVars": {
                       "user_foo": 1
                     },
@@ -4301,8 +4314,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select count(*), music.col from music where 1 != 1 group by music.col",
-                        "Query": "select count(*), music.col from music where music.bar = :user_foo group by music.col",
+                        "FieldQuery": "select count(*), music.col, weight_string(music.col) from music where 1 != 1 group by music.col, weight_string(music.col)",
+                        "Query": "select count(*), music.col, weight_string(music.col) from music where music.bar = :user_foo group by music.col, weight_string(music.col)",
                         "Table": "music"
                       }
                     ]
@@ -4393,25 +4406,26 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum_count_star(0) AS count(*)",
-        "GroupBy": "1",
+        "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
               "count(*) * coalesce(count(*), 1) as count(*)",
-              ":2 as col"
+              ":2 as col",
+              ":3 as weight_string(music.col)"
             ],
             "Inputs": [
               {
                 "OperatorType": "Sort",
                 "Variant": "Memory",
-                "OrderBy": "2 ASC",
+                "OrderBy": "(2|3) ASC",
                 "Inputs": [
                   {
                     "OperatorType": "Join",
                     "Variant": "LeftJoin",
-                    "JoinColumnIndexes": "L:0,R:0,R:1",
+                    "JoinColumnIndexes": "L:0,R:0,R:1,R:2",
                     "JoinVars": {
                       "user_foo": 1
                     },
@@ -4435,8 +4449,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select count(*), music.col from music where 1 != 1 group by music.col",
-                        "Query": "select count(*), music.col from music where music.bar = :user_foo group by music.col",
+                        "FieldQuery": "select count(*), music.col, weight_string(music.col) from music where 1 != 1 group by music.col, weight_string(music.col)",
+                        "Query": "select count(*), music.col, weight_string(music.col) from music where music.bar = :user_foo group by music.col, weight_string(music.col)",
                         "Table": "music"
                       }
                     ]
@@ -5010,14 +5024,14 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "min(1|4) AS min(user_extra.foo), max(3|5) AS max(user_extra.bar)",
-        "GroupBy": "0, 2",
+        "Aggregates": "min(1|5) AS min(user_extra.foo), max(3|6) AS max(user_extra.bar)",
+        "GroupBy": "0, (2|4)",
         "ResultColumns": 4,
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:0,R:0,L:1,R:1,R:2,R:3",
+            "JoinColumnIndexes": "L:0,R:0,L:1,R:1,L:2,R:2,R:3",
             "JoinVars": {
               "user_col": 0
             },
@@ -5030,9 +5044,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.col, `user`.bar from `user` where 1 != 1 group by `user`.col, `user`.bar",
-                "OrderBy": "0 ASC, 1 ASC",
-                "Query": "select `user`.col, `user`.bar from `user` group by `user`.col, `user`.bar order by `user`.col asc, `user`.bar asc",
+                "FieldQuery": "select `user`.col, `user`.bar, weight_string(`user`.bar) from `user` where 1 != 1 group by `user`.col, `user`.bar, weight_string(`user`.bar)",
+                "OrderBy": "0 ASC, (1|2) ASC",
+                "Query": "select `user`.col, `user`.bar, weight_string(`user`.bar) from `user` group by `user`.col, `user`.bar, weight_string(`user`.bar) order by `user`.col asc, `user`.bar asc",
                 "Table": "`user`"
               },
               {
@@ -5698,12 +5712,13 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum_count_distinct(1) AS count(distinct m.user_id), sum_sum_distinct(2) AS sum(distinct m.user_id)",
-        "GroupBy": "0",
+        "GroupBy": "(0|3)",
+        "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:0,R:0,R:1",
+            "JoinColumnIndexes": "L:0,R:0,R:1,L:1",
             "TableName": "`user`_music",
             "Inputs": [
               {
@@ -5713,9 +5728,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select u.col1 from `user` as u where 1 != 1 group by u.col1",
-                "OrderBy": "0 ASC",
-                "Query": "select u.col1 from `user` as u group by u.col1 order by u.col1 asc",
+                "FieldQuery": "select u.col1, weight_string(u.col1) from `user` as u where 1 != 1 group by u.col1, weight_string(u.col1)",
+                "OrderBy": "(0|1) ASC",
+                "Query": "select u.col1, weight_string(u.col1) from `user` as u group by u.col1, weight_string(u.col1) order by u.col1 asc",
                 "Table": "`user`"
               },
               {

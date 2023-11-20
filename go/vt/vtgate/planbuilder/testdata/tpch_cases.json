@@ -1495,7 +1495,7 @@
             "InputName": "SubQuery",
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "max(0) AS max(total_revenue)",
+            "Aggregates": "max(0|1) AS max(total_revenue)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1504,8 +1504,8 @@
                   "Name": "main",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(total_revenue) from revenue0 where 1 != 1",
-                "Query": "select max(total_revenue) from revenue0",
+                "FieldQuery": "select max(total_revenue), weight_string(total_revenue) from revenue0 where 1 != 1 group by weight_string(total_revenue)",
+                "Query": "select max(total_revenue), weight_string(total_revenue) from revenue0 group by weight_string(total_revenue)",
                 "Table": "revenue0"
               }
             ]

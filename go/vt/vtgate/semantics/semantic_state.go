@@ -176,7 +176,9 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 		st.Recursive[to] = st.RecursiveDeps(from)
 		st.Direct[to] = st.DirectDeps(from)
 		if ValidAsMapKey(from) {
-			st.ExprTypes[to] = st.ExprTypes[from]
+			if typ, found := st.ExprTypes[from]; found {
+				st.ExprTypes[to] = typ
+			}
 		}
 	}
 }
@@ -698,8 +700,7 @@ func RewriteDerivedTableExpression(expr sqlparser.Expr, vt TableInfo) sqlparser.
 // CopyExprInfo lookups src in the ExprTypes map and, if a key is found, assign
 // the corresponding Type value of src to dest.
 func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {
-	srcType, found := st.ExprTypes[src]
-	if found {
+	if srcType, found := st.ExprTypes[src]; found {
 		st.ExprTypes[dest] = srcType
 	}
 }
