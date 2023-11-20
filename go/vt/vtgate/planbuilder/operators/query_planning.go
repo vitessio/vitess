@@ -432,7 +432,7 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 			}
 
 			expr = semantics.RewriteDerivedTableExpression(expr, derivedTbl)
-			out := prefixColNames(tblName, expr)
+			out := prefixColNames(ctx, tblName, expr)
 
 			alias := sqlparser.UnescapedString(out)
 			predicate.LHSExprs[idx].Expr = sqlparser.NewColNameWithQualifier(alias, derivedTblName)
@@ -450,14 +450,14 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 
 // prefixColNames adds qualifier prefixes to all ColName:s.
 // We want to be more explicit than the user was to make sure we never produce invalid SQL
-func prefixColNames(tblName sqlparser.TableName, e sqlparser.Expr) sqlparser.Expr {
+func prefixColNames(ctx *plancontext.PlanningContext, tblName sqlparser.TableName, e sqlparser.Expr) sqlparser.Expr {
 	return sqlparser.CopyOnRewrite(e, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		col, ok := cursor.Node().(*sqlparser.ColName)
 		if !ok {
 			return
 		}
-		col.Qualifier = tblName
-	}, nil).(sqlparser.Expr)
+		cursor.Replace(sqlparser.NewColNameWithQualifier(col.Name.String(), tblName))
+	}, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
 }
 
 func createProjectionWithTheseColumns(
