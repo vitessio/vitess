@@ -1092,7 +1092,7 @@ func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.Stri
 	// as part of the plan's hashing key.
 	fkChecksState := vc.GetForeignKeyChecksState()
 	if fkChecksState != nil {
-		_, _ = buf.WriteString("+fkChecksState:")
+		_, _ = buf.WriteString("+fkc:")
 		_, _ = buf.WriteString(sqlparser.FkChecksStateString(fkChecksState))
 	}
 

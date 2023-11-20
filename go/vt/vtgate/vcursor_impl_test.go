@@ -287,12 +287,12 @@ func TestKeyForPlan(t *testing.T) {
 		vschema:               vschemaWith1KS,
 		targetString:          "",
 		fkState:               &valTrue,
-		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+fkChecksState:On+Query:SELECT 1",
+		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+fkc:On+Query:SELECT 1",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1@replica",
 		fkState:               &valFalse,
-		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+fkChecksState:Off+Query:SELECT 1",
+		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+fkc:Off+Query:SELECT 1",
 	}}
 
 	for i, tc := range tests {
