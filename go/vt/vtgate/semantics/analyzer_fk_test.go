@@ -199,12 +199,12 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
 						},
 						KsError: map[string]error{
-							"ks": fmt.Errorf("VT09019: ks has cyclic foreign keys"),
+							"ks": fmt.Errorf("VT09019: keyspace 'ks' has cyclic foreign keys"),
 						},
 					},
 				},
 			},
-			expectedErr: "VT09019: ks has cyclic foreign keys",
+			expectedErr: "VT09019: keyspace 'ks' has cyclic foreign keys",
 		},
 	}
 	for _, tt := range tests {

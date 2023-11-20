@@ -1000,20 +1000,26 @@ func TestCyclicFks(t *testing.T) {
 
 	// Create a cyclic foreign key constraint.
 	utils.Exec(t, mcmp.VtConn, "alter table fk_t10 add constraint test_cyclic_fks foreign key (col) references fk_t12 (col) on delete cascade on update cascade")
-	defer func() {
-		utils.Exec(t, mcmp.VtConn, "alter table fk_t10 drop foreign key test_cyclic_fks")
-	}()
 
 	// Wait for schema-tracking to be complete.
-	ksErr := utils.WaitForKsError(t, clusterInstance.VtgateProcess, unshardedKs)
-	// Make sure Vschema has the error for cyclic foreign keys.
-	assert.Contains(t, ksErr, "VT09019: uks has cyclic foreign keys")
+	errString := utils.WaitForKsError(t, clusterInstance.VtgateProcess, unshardedKs)
+	assert.Contains(t, errString, "VT09019: keyspace 'uks' has cyclic foreign keys")
 
 	// Ensure that the Vitess database is originally empty
 	ensureDatabaseState(t, mcmp.VtConn, true)
 
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, "insert into fk_t10(id, col) values (1, 1)")
-	require.ErrorContains(t, err, "VT09019: uks has cyclic foreign keys")
+	require.ErrorContains(t, err, "VT09019: keyspace 'uks' has cyclic foreign keys")
+
+	// Drop the cyclic foreign key constraint.
+	utils.Exec(t, mcmp.VtConn, "alter table fk_t10 drop foreign key test_cyclic_fks")
+
+	// Wait for schema-tracking to be complete.
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, unshardedKs, func(t *testing.T, keyspace map[string]interface{}) bool {
+		_, fieldPresent := keyspace["error"]
+		return !fieldPresent
+	})
+
 }
 
 func TestReplace(t *testing.T) {
@@ -1175,4 +1181,20 @@ func TestReplaceWithFK(t *testing.T) {
 	// replace some data.
 	_, err := utils.ExecAllowError(t, conn, `replace into t1(id, col) values (1, 1)`)
 	require.ErrorContains(t, err, "VT12001: unsupported: REPLACE INTO with sharded keyspace (errno 1235) (sqlstate 42000)")
+
+	_ = utils.Exec(t, conn, `use uks`)
+
+	_ = utils.Exec(t, conn, `replace into u_t1(id, col1) values (1, 1), (2, 1)`)
+	// u_t1: (1,1) (2,1)
+
+	_ = utils.Exec(t, conn, `replace into u_t2(id, col2) values (1, 1), (2, 1)`)
+	// u_t1: (1,1) (2,1)
+	// u_t2: (1,1) (2,1)
+
+	_ = utils.Exec(t, conn, `replace into u_t1(id, col1) values (2, 2)`)
+	// u_t1: (1,1) (2,2)
+	// u_t2: (1,null) (2,null)
+
+	utils.AssertMatches(t, conn, `select * from u_t1`, `[[INT64(1) INT64(1)] [INT64(2) INT64(2)]]`)
+	utils.AssertMatches(t, conn, `select * from u_t2`, `[[INT64(1) NULL] [INT64(2) NULL]]`)
 }
