@@ -1718,6 +1718,10 @@ func (i *infoSchemaWithColumns) ForeignKeyMode(keyspace string) (vschemapb.Keysp
 	return i.inner.ForeignKeyMode(keyspace)
 }
 
+func (i *infoSchemaWithColumns) GetForeignKeyChecksState() *bool {
+	return nil
+}
+
 func (i *infoSchemaWithColumns) KeyspaceError(keyspace string) error {
 	return i.inner.KeyspaceError(keyspace)
 }

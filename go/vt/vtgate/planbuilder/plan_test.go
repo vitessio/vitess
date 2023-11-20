@@ -113,6 +113,38 @@ func TestForeignKeyPlanning(t *testing.T) {
 	testFile(t, "foreignkey_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
+// TestForeignKeyChecksOn tests the planning when the session variable for foreign_key_checks is set to ON.
+func TestForeignKeyChecksOn(t *testing.T) {
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	setFks(t, vschema)
+	fkChecksState := true
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:                     vschema,
+		TestBuilder:           TestBuilder,
+		ForeignKeyChecksState: &fkChecksState,
+	}
+
+	testOutputTempDir := makeTestOutput(t)
+
+	testFile(t, "foreignkey_checks_on_cases.json", testOutputTempDir, vschemaWrapper, false)
+}
+
+// TestForeignKeyChecksOff tests the planning when the session variable for foreign_key_checks is set to OFF.
+func TestForeignKeyChecksOff(t *testing.T) {
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	setFks(t, vschema)
+	fkChecksState := false
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:                     vschema,
+		TestBuilder:           TestBuilder,
+		ForeignKeyChecksState: &fkChecksState,
+	}
+
+	testOutputTempDir := makeTestOutput(t)
+
+	testFile(t, "foreignkey_checks_off_cases.json", testOutputTempDir, vschemaWrapper, false)
+}
+
 func setFks(t *testing.T, vschema *vindexes.VSchema) {
 	if vschema.Keyspaces["sharded_fk_allow"] != nil {
 		// FK from multicol_tbl2 referencing multicol_tbl1 that is shard scoped.
