@@ -17,10 +17,10 @@ limitations under the License.
 package sqltypes
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 
@@ -418,7 +418,7 @@ func FormatBindVariables(bindVariables map[string]*querypb.BindVariable, full, a
 	}
 
 	if asJSON {
-		var buf bytes.Buffer
+		var buf strings.Builder
 		buf.WriteString("{")
 		first := true
 		for k, v := range out {

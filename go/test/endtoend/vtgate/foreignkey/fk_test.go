@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -888,6 +889,22 @@ func TestFkQueries(t *testing.T) {
 				"update fk_t15 set col = col * (col - (col))",
 			},
 		},
+		{
+			name: "Update a child table which doesn't cause an update, but parent doesn't have that value",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2)",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t11 (id, col) values (1,1),(2,2),(5,5)",
+				"update fk_t11 set col = id where id in (1, 5)",
+			},
+		},
+		{
+			name: "Update a child table from a null to a value that parent doesn't have",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(5,NULL)",
+				"update fk_t11 set col = id where id in (1, 5)",
+			},
+		},
 	}
 
 	for _, testcase := range testcases {
@@ -954,6 +971,11 @@ func TestFkOneCase(t *testing.T) {
 	ensureDatabaseState(t, mcmp.MySQLConn, true)
 
 	for _, query := range queries {
+		if strings.HasPrefix(query, "vexplain") {
+			res := utils.Exec(t, mcmp.VtConn, query)
+			log.Errorf("Query %v, Result - %v", query, res.Rows)
+			continue
+		}
 		_, _ = mcmp.ExecAllowAndCompareError(query)
 		if t.Failed() {
 			log.Errorf("Query failed - %v", query)

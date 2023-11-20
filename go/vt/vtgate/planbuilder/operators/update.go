@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -437,9 +438,7 @@ func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.Chi
 	// Because we could be updating the child to a non-null value,
 	// We have to run with foreign key checks OFF because the parent isn't guaranteed to have
 	// the data being updated to.
-	parsedComments := sqlparser.Comments{
-		"/*+ SET_VAR(foreign_key_checks=OFF) */",
-	}.Parsed()
+	parsedComments := (&sqlparser.ParsedComments{}).SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, "OFF").Parsed()
 	childUpdStmt := &sqlparser.Update{
 		Comments:   parsedComments,
 		Exprs:      childUpdateExprs,
@@ -490,12 +489,28 @@ func buildChildUpdOpForSetNull(
 			Right: compExpr,
 		}
 	}
+	parsedComments := getParsedCommentsForFkChecks(ctx)
 	childUpdStmt := &sqlparser.Update{
 		Exprs:      childUpdateExprs,
+		Comments:   parsedComments,
 		TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
 		Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: childWhereExpr},
 	}
 	return createOpFromStmt(ctx, childUpdStmt, false, "")
+}
+
+// getParsedCommentsForFkChecks gets the parsed comments to be set on a child query related to foreign_key_checks session variable.
+// We only use this function if foreign key checks are either unspecified or on.
+// If foreign key checks are explicity turned on, then we should add the set_var parsed comment too
+// since underlying MySQL might have foreign_key_checks as off.
+// We run with foreign key checks on because the DML might still fail on MySQL due to a child table
+// with RESTRICT constraints.
+func getParsedCommentsForFkChecks(ctx *plancontext.PlanningContext) (parsedComments *sqlparser.ParsedComments) {
+	fkState := ctx.VSchema.GetForeignKeyChecksState()
+	if fkState != nil && *fkState {
+		parsedComments = parsedComments.SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, "ON").Parsed()
+	}
+	return parsedComments
 }
 
 // createFKVerifyOp creates the verify operator for the parent foreign key constraints.
@@ -542,14 +557,14 @@ func createFKVerifyOp(
 
 // Each parent foreign key constraint is verified by an anti join query of the form:
 // select 1 from child_tbl left join parent_tbl on <parent_child_columns with new value expressions, remaining fk columns join>
-// where <parent columns are null> and <unchanged child columns not null> and <updated expressions not null> and <clause same as original update> limit 1
+// where <parent columns are null> and <unchanged child columns not null> and <updated expressions not null> and <clause same as original update> and <comparison of updated expression with original values> limit 1
 // E.g:
 // Child (c1, c2) references Parent (p1, p2)
 // update Child set c1 = c2 + 1 where id = 1
 // verify query:
 // select 1 from Child left join Parent on Parent.p1 = Child.c2 + 1 and Parent.p2 = Child.c2
 // where Parent.p1 is null and Parent.p2 is null and Child.id = 1 and Child.c2 + 1 is not null
-// and Child.c2 is not null
+// and Child.c2 is not null and not ((Child.c1) <=> (Child.c2 + 1))
 // limit 1
 func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, pFK vindexes.ParentFKInfo) (ops.Operator, error) {
 	childTblExpr := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
@@ -560,6 +575,8 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 	parentTbl := pFK.Table.GetTableName()
 	var whereCond sqlparser.Expr
 	var joinCond sqlparser.Expr
+	var notEqualColNames sqlparser.ValTuple
+	var notEqualExprs sqlparser.ValTuple
 	for idx, column := range pFK.ChildColumns {
 		var matchedExpr *sqlparser.UpdateExpr
 		for _, updateExpr := range updStmt.Exprs {
@@ -588,7 +605,9 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 				Right:    sqlparser.NewColNameWithQualifier(pFK.ChildColumns[idx].String(), childTbl),
 			}
 		} else {
+			notEqualColNames = append(notEqualColNames, prefixColNames(ctx, childTbl, matchedExpr.Name))
 			prefixedMatchExpr := prefixColNames(ctx, childTbl, matchedExpr.Expr)
+			notEqualExprs = append(notEqualExprs, prefixedMatchExpr)
 			joinExpr = &sqlparser.ComparisonExpr{
 				Operator: sqlparser.EqualOp,
 				Left:     sqlparser.NewColNameWithQualifier(pFK.ParentColumns[idx].String(), parentTbl),
@@ -609,6 +628,16 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 		}
 		joinCond = &sqlparser.AndExpr{Left: joinCond, Right: joinExpr}
 		whereCond = &sqlparser.AndExpr{Left: whereCond, Right: predicate}
+	}
+	whereCond = &sqlparser.AndExpr{
+		Left: whereCond,
+		Right: &sqlparser.NotExpr{
+			Expr: &sqlparser.ComparisonExpr{
+				Operator: sqlparser.NullSafeEqualOp,
+				Left:     notEqualColNames,
+				Right:    notEqualExprs,
+			},
+		},
 	}
 	// add existing where condition on the update statement
 	if updStmt.Where != nil {

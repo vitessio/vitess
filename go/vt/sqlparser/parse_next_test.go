@@ -17,7 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"bytes"
 	"io"
 	"strings"
 	"testing"
@@ -29,7 +28,7 @@ import (
 // TestParseNextValid concatenates all the valid SQL test cases and check it can read
 // them as one long string.
 func TestParseNextValid(t *testing.T) {
-	var sql bytes.Buffer
+	var sql strings.Builder
 	for _, tcase := range validSQL {
 		sql.WriteString(strings.TrimSuffix(tcase.input, ";"))
 		sql.WriteRune(';')
