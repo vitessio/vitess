@@ -297,7 +297,7 @@ func (call *builtinIsIPV4) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_IS_IPV4()
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.Int64, Flag: arg.Flag | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(arg.Flag) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func (call *builtinIsIPV4Compat) eval(env *ExpressionEnv) (eval, error) {
@@ -328,7 +328,7 @@ func (call *builtinIsIPV4Compat) compile(c *compiler) (ctype, error) {
 		c.asm.SetBool(1, false)
 	}
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Flag: arg.Flag | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(arg.Flag) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func (call *builtinIsIPV4Mapped) eval(env *ExpressionEnv) (eval, error) {
@@ -359,7 +359,7 @@ func (call *builtinIsIPV4Mapped) compile(c *compiler) (ctype, error) {
 		c.asm.SetBool(1, false)
 	}
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Flag: arg.Flag | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(arg.Flag) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func (call *builtinIsIPV6) eval(env *ExpressionEnv) (eval, error) {
@@ -391,7 +391,7 @@ func (call *builtinIsIPV6) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_IS_IPV6()
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.Int64, Flag: arg.Flag | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(arg.Flag) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func errIncorrectUUID(in []byte, f string) error {
@@ -463,7 +463,7 @@ func (call *builtinBinToUUID) compile(c *compiler) (ctype, error) {
 	}
 
 	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
-	ct := ctype{Type: sqltypes.VarChar, Flag: arg.Flag, Col: col}
+	ct := ctype{Type: sqltypes.VarChar, Flag: nullableFlags(arg.Flag), Col: col}
 
 	if len(call.Arguments) == 1 {
 		c.asm.Fn_BIN_TO_UUID0(col)
@@ -517,7 +517,7 @@ func (call *builtinIsUUID) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_IS_UUID()
 
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Flag: arg.Flag | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(arg.Flag) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func (call *builtinUUID) eval(env *ExpressionEnv) (eval, error) {
@@ -583,7 +583,7 @@ func (call *builtinUUIDToBin) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
 	}
 
-	ct := ctype{Type: sqltypes.VarBinary, Flag: arg.Flag, Col: collationBinary}
+	ct := ctype{Type: sqltypes.VarBinary, Flag: nullableFlags(arg.Flag), Col: collationBinary}
 
 	if len(call.Arguments) == 1 {
 		c.asm.Fn_UUID_TO_BIN0()

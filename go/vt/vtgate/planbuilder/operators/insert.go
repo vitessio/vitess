@@ -641,6 +641,9 @@ func modifyForAutoinc(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, v
 	case sqlparser.Values:
 		autoIncValues := make(sqlparser.ValTuple, 0, len(rows))
 		for rowNum, row := range rows {
+			if len(ins.Columns) != len(row) {
+				return nil, vterrors.VT03006()
+			}
 			// Support the DEFAULT keyword by treating it as null
 			if _, ok := row[colNum].(*sqlparser.Default); ok {
 				row[colNum] = &sqlparser.NullVal{}
