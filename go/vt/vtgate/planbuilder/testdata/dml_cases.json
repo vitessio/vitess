@@ -4892,45 +4892,45 @@
   },
   {
     "comment": "insert row values smaller than number of columns",
-    "query": "insert into unsharded(one, two, three, four) values (1, 2, 3)",
+    "query": "insert into user(one, two, three, four) values (1, 2, 3)",
     "plan": {
       "QueryType": "INSERT",
-      "Original": "insert into unsharded(one, two, three, four) values (1, 2, 3)",
+      "Original": "insert into user(one, two, three, four) values (1, 2, 3)",
       "Instructions": {
         "OperatorType": "Insert",
-        "Variant": "Unsharded",
+        "Variant": "Sharded",
         "Keyspace": {
-          "Name": "main",
-          "Sharded": false
+          "Name": "user",
+          "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "insert into unsharded(one, two, three, four) values (1, 2, 3)",
-        "TableName": "unsharded"
+        "Query": "insert into user(one, two, three, four) values (1, 2, 3)",
+        "TableName": "user"
       },
       "TablesUsed": [
-        "main.unsharded"
+        "user.user"
       ]
     }
   },
   {
     "comment": "insert row values greater than number of columns",
-    "query": "insert into unsharded(one, two, three) values (1, 2, 3, 4)",
+    "query": "insert into user(one, two, three) values (1, 2, 3, 4)",
     "plan": {
       "QueryType": "INSERT",
-      "Original": "insert into unsharded(one, two, three) values (1, 2, 3, 4)",
+      "Original": "insert into user(one, two, three) values (1, 2, 3, 4)",
       "Instructions": {
         "OperatorType": "Insert",
-        "Variant": "Unsharded",
+        "Variant": "Sharded",
         "Keyspace": {
-          "Name": "main",
-          "Sharded": false
+          "Name": "user",
+          "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "insert into unsharded(one, two, three) values (1, 2, 3, 4)",
-        "TableName": "unsharded"
+        "Query": "insert into user(one, two, three) values (1, 2, 3, 4)",
+        "TableName": "user"
       },
       "TablesUsed": [
-        "main.unsharded"
+        "user.user"
       ]
     }
   }
