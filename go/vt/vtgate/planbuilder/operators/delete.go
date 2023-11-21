@@ -22,7 +22,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -45,7 +44,7 @@ func (d *Delete) introducesTableID() semantics.TableSet {
 }
 
 // Clone implements the Operator interface
-func (d *Delete) Clone([]ops.Operator) ops.Operator {
+func (d *Delete) Clone([]Operator) Operator {
 	return &Delete{
 		QTable:           d.QTable,
 		VTable:           d.VTable,
@@ -61,7 +60,7 @@ func (d *Delete) TablesUsed() []string {
 	return nil
 }
 
-func (d *Delete) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (d *Delete) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
@@ -73,7 +72,7 @@ func (d *Delete) Statement() sqlparser.Statement {
 	return d.AST
 }
 
-func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (ops.Operator, error) {
+func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (Operator, error) {
 	tableInfo, qt, err := createQueryTableForDML(ctx, deleteStmt.TableExprs[0], deleteStmt.Where)
 	if err != nil {
 		return nil, err
@@ -116,7 +115,7 @@ func createDeleteOperator(
 	deleteStmt *sqlparser.Delete,
 	qt *QueryTable,
 	vindexTable *vindexes.Table,
-	routing Routing) (ops.Operator, error) {
+	routing Routing) (Operator, error) {
 	del := &Delete{
 		QTable: qt,
 		VTable: vindexTable,
@@ -170,7 +169,7 @@ func createDeleteOperator(
 	return sqc.getRootOperator(route, nil), nil
 }
 
-func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo) (ops.Operator, error) {
+func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo) (Operator, error) {
 	var fkChildren []*FkChild
 	var selectExprs []sqlparser.SelectExpr
 	for _, fk := range childFks {

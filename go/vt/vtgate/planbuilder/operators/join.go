@@ -19,24 +19,22 @@ package operators
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // Join represents a join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
 type Join struct {
-	LHS, RHS  ops.Operator
+	LHS, RHS  Operator
 	Predicate sqlparser.Expr
 	LeftJoin  bool
 
 	noColumns
 }
 
-var _ ops.Operator = (*Join)(nil)
+var _ Operator = (*Join)(nil)
 
 // Clone implements the Operator interface
-func (j *Join) Clone(inputs []ops.Operator) ops.Operator {
+func (j *Join) Clone(inputs []Operator) Operator {
 	clone := *j
 	clone.LHS = inputs[0]
 	clone.RHS = inputs[1]
@@ -48,30 +46,30 @@ func (j *Join) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
-func (j *Join) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (j *Join) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
 // Inputs implements the Operator interface
-func (j *Join) Inputs() []ops.Operator {
-	return []ops.Operator{j.LHS, j.RHS}
+func (j *Join) Inputs() []Operator {
+	return []Operator{j.LHS, j.RHS}
 }
 
 // SetInputs implements the Operator interface
-func (j *Join) SetInputs(ops []ops.Operator) {
+func (j *Join) SetInputs(ops []Operator) {
 	j.LHS, j.RHS = ops[0], ops[1]
 }
 
-func (j *Join) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
+func (j *Join) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult, error) {
 	if j.LeftJoin {
 		// we can't merge outer joins into a single QG
-		return j, rewrite.SameTree, nil
+		return j, NoRewrite, nil
 	}
 
 	lqg, lok := j.LHS.(*QueryGraph)
 	rqg, rok := j.RHS.(*QueryGraph)
 	if !lok || !rok {
-		return j, rewrite.SameTree, nil
+		return j, NoRewrite, nil
 	}
 
 	newOp := &QueryGraph{
@@ -82,10 +80,10 @@ func (j *Join) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite
 	if j.Predicate != nil {
 		newOp.collectPredicate(ctx, j.Predicate)
 	}
-	return newOp, rewrite.NewTree("merge querygraphs into a single one"), nil
+	return newOp, Rewrote("merge querygraphs into a single one"), nil
 }
 
-func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) (ops.Operator, error) {
+func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
 	if tableExpr.Join == sqlparser.RightJoinType {
 		lhs, rhs = rhs, lhs
 	}
@@ -98,7 +96,7 @@ func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) 
 	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: predicate}, nil
 }
 
-func createJoin(ctx *plancontext.PlanningContext, LHS, RHS ops.Operator) ops.Operator {
+func createJoin(ctx *plancontext.PlanningContext, LHS, RHS Operator) Operator {
 	lqg, lok := LHS.(*QueryGraph)
 	rqg, rok := RHS.(*QueryGraph)
 	if lok && rok {
@@ -112,7 +110,7 @@ func createJoin(ctx *plancontext.PlanningContext, LHS, RHS ops.Operator) ops.Ope
 	return &Join{LHS: LHS, RHS: RHS}
 }
 
-func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) (ops.Operator, error) {
+func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) (Operator, error) {
 	op := createJoin(ctx, lhs, rhs)
 	sqc := &SubQueryBuilder{}
 	outerID := TableID(op)
@@ -132,25 +130,25 @@ func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.Join
 	return sqc.getRootOperator(op, nil), nil
 }
 
-func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	return AddPredicate(ctx, j, expr, false, newFilter)
 }
 
 var _ JoinOp = (*Join)(nil)
 
-func (j *Join) GetLHS() ops.Operator {
+func (j *Join) GetLHS() Operator {
 	return j.LHS
 }
 
-func (j *Join) GetRHS() ops.Operator {
+func (j *Join) GetRHS() Operator {
 	return j.RHS
 }
 
-func (j *Join) SetLHS(operator ops.Operator) {
+func (j *Join) SetLHS(operator Operator) {
 	j.LHS = operator
 }
 
-func (j *Join) SetRHS(operator ops.Operator) {
+func (j *Join) SetRHS(operator Operator) {
 	j.RHS = operator
 }
 

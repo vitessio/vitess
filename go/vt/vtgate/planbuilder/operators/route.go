@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -33,7 +32,7 @@ import (
 
 type (
 	Route struct {
-		Source ops.Operator
+		Source Operator
 
 		// Routes that have been merged into this one.
 		MergedWith []*Route
@@ -189,7 +188,7 @@ func (r *Route) Cost() int {
 }
 
 // Clone implements the Operator interface
-func (r *Route) Clone(inputs []ops.Operator) ops.Operator {
+func (r *Route) Clone(inputs []Operator) Operator {
 	cloneRoute := *r
 	cloneRoute.Source = inputs[0]
 	cloneRoute.Routing = r.Routing.Clone()
@@ -197,12 +196,12 @@ func (r *Route) Clone(inputs []ops.Operator) ops.Operator {
 }
 
 // Inputs implements the Operator interface
-func (r *Route) Inputs() []ops.Operator {
-	return []ops.Operator{r.Source}
+func (r *Route) Inputs() []Operator {
+	return []Operator{r.Source}
 }
 
 // SetInputs implements the Operator interface
-func (r *Route) SetInputs(ops []ops.Operator) {
+func (r *Route) SetInputs(ops []Operator) {
 	r.Source = ops[0]
 }
 
@@ -357,7 +356,7 @@ func createRoute(
 	ctx *plancontext.PlanningContext,
 	queryTable *QueryTable,
 	solves semantics.TableSet,
-) (ops.Operator, error) {
+) (Operator, error) {
 	if queryTable.IsInfSchema {
 		return createInfSchemaRoute(ctx, queryTable)
 	}
@@ -517,7 +516,7 @@ func createAlternateRoutesFromVSchemaTable(
 	return routes, nil
 }
 
-func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	// first we see if the predicate changes how we route
 	newRouting, err := UpdateRoutingLogic(ctx, expr, r.Routing)
 	if err != nil {
@@ -530,7 +529,7 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return r
 }
 
-func createProjection(ctx *plancontext.PlanningContext, src ops.Operator) (*Projection, error) {
+func createProjection(ctx *plancontext.PlanningContext, src Operator) (*Projection, error) {
 	proj := newAliasedProjection(src)
 	cols := src.GetColumns(ctx)
 	for _, col := range cols {
@@ -572,7 +571,7 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 }
 
 type selectExpressions interface {
-	ops.Operator
+	Operator
 	addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int
 	addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) []int
 	isDerived() bool
@@ -581,7 +580,7 @@ type selectExpressions interface {
 // addColumnToInput adds a column to an operator without pushing it down.
 // It will return a bool indicating whether the addition was successful or not,
 // and an offset to where the column can be found
-func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Operator, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) (ops.Operator, bool, []int) {
+func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator Operator, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) (Operator, bool, []int) {
 	switch op := operator.(type) {
 	case *SubQuery:
 		src, added, offset := addMultipleColumnsToInput(ctx, op.Outer, reuse, addToGroupBy, exprs)
@@ -657,7 +656,7 @@ func (r *Route) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.Selec
 	return r.Source.GetSelectExprs(ctx)
 }
 
-func (r *Route) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+func (r *Route) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return r.Source.GetOrdering(ctx)
 }
 
@@ -673,7 +672,7 @@ func (r *Route) TablesUsed() []string {
 	return collect()
 }
 
-func isSpecialOrderBy(o ops.OrderBy) bool {
+func isSpecialOrderBy(o OrderBy) bool {
 	if sqlparser.IsNull(o.Inner.Expr) {
 		return true
 	}
@@ -681,7 +680,7 @@ func isSpecialOrderBy(o ops.OrderBy) bool {
 	return isFunction && f.Name.Lowered() == "rand"
 }
 
-func (r *Route) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
+func (r *Route) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	// if operator is returning data from a single shard, we don't need to do anything more
 	if r.IsSingleShard() {
 		return nil

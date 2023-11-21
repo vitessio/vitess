@@ -21,7 +21,6 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -31,7 +30,7 @@ const foreignKeyConstraintValues = "fkc_vals"
 const foreignKeyUpdateExpr = "fkc_upd"
 
 // translateQueryToOp creates an operator tree that represents the input SELECT or UNION query
-func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op ops.Operator, err error) {
+func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op Operator, err error) {
 	switch node := selStmt.(type) {
 	case *sqlparser.Select:
 		op, err = createOperatorFromSelect(ctx, node)
@@ -53,7 +52,7 @@ func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Stat
 	return op, nil
 }
 
-func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (ops.Operator, error) {
+func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (Operator, error) {
 	op, err := crossJoin(ctx, sel.From)
 	if err != nil {
 		return nil, err
@@ -79,7 +78,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 	return op, nil
 }
 
-func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (ops.Operator, error) {
+func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) (Operator, error) {
 	sqc := &SubQueryBuilder{}
 	outerID := TableID(op)
 	exprs := sqlparser.SplitAndExpression(nil, expr)
@@ -176,7 +175,7 @@ func (jpc *joinPredicateCollector) inspectPredicate(
 	return nil
 }
 
-func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (ops.Operator, error) {
+func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (Operator, error) {
 	opLHS, err := translateQueryToOp(ctx, node.Left)
 	if err != nil {
 		return nil, err
@@ -195,7 +194,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	rexprs := ctx.SemTable.SelectExprs(node.Right)
 
 	unionCols := ctx.SemTable.SelectExprs(node)
-	union := newUnion([]ops.Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, unionCols, node.Distinct)
+	union := newUnion([]Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, unionCols, node.Distinct)
 	return newHorizon(union, node), nil
 }
 
@@ -203,7 +202,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 //  1. verifyAllFKs: For this given statement, do we need to verify validity of all the foreign keys on the vtgate level.
 //  2. fkToIgnore: The foreign key constraint to specifically ignore while planning the statement. This field is used in UPDATE CASCADE planning, wherein while planning the child update
 //     query, we need to ignore the parent foreign key constraint that caused the cascade in question.
-func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement, verifyAllFKs bool, fkToIgnore string) (ops.Operator, error) {
+func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement, verifyAllFKs bool, fkToIgnore string) (Operator, error) {
 	var err error
 	ctx, err = plancontext.CreatePlanningContext(stmt, ctx.ReservedVars, ctx.VSchema, ctx.PlannerVersion)
 	if err != nil {
@@ -242,7 +241,7 @@ func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement
 	return PlanQuery(ctx, stmt)
 }
 
-func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr, onlyTable bool) (ops.Operator, error) {
+func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr, onlyTable bool) (Operator, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		return getOperatorFromAliasedTableExpr(ctx, tableExpr, onlyTable)
@@ -255,7 +254,7 @@ func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlpar
 	}
 }
 
-func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr) (ops.Operator, error) {
+func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr) (Operator, error) {
 	lhs, err := getOperatorFromTableExpr(ctx, tableExpr.LeftExpr, false)
 	if err != nil {
 		return nil, err
@@ -275,7 +274,7 @@ func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *s
 	}
 }
 
-func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.AliasedTableExpr, onlyTable bool) (ops.Operator, error) {
+func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.AliasedTableExpr, onlyTable bool) (Operator, error) {
 	tableID := ctx.SemTable.TableSetFor(tableExpr)
 	switch tbl := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
@@ -328,8 +327,8 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 	}
 }
 
-func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) (ops.Operator, error) {
-	var output ops.Operator
+func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) (Operator, error) {
+	var output Operator
 	for _, tableExpr := range exprs {
 		op, err := getOperatorFromTableExpr(ctx, tableExpr, len(exprs) == 1)
 		if err != nil {
@@ -404,7 +403,7 @@ func createSelectionOp(
 	orderBy sqlparser.OrderBy,
 	limit *sqlparser.Limit,
 	lock sqlparser.Lock,
-) (ops.Operator, error) {
+) (Operator, error) {
 	selectionStmt := &sqlparser.Select{
 		SelectExprs: selectExprs,
 		From:        tableExprs,

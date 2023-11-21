@@ -25,14 +25,13 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
 	HashJoin struct {
-		LHS, RHS ops.Operator
+		LHS, RHS Operator
 
 		// LeftJoin will be true in the case of an outer join
 		LeftJoin bool
@@ -62,10 +61,10 @@ type (
 	}
 )
 
-var _ ops.Operator = (*HashJoin)(nil)
+var _ Operator = (*HashJoin)(nil)
 var _ JoinOp = (*HashJoin)(nil)
 
-func NewHashJoin(lhs, rhs ops.Operator, outerJoin bool) *HashJoin {
+func NewHashJoin(lhs, rhs Operator, outerJoin bool) *HashJoin {
 	hj := &HashJoin{
 		LHS:      lhs,
 		RHS:      rhs,
@@ -74,7 +73,7 @@ func NewHashJoin(lhs, rhs ops.Operator, outerJoin bool) *HashJoin {
 	return hj
 }
 
-func (hj *HashJoin) Clone(inputs []ops.Operator) ops.Operator {
+func (hj *HashJoin) Clone(inputs []Operator) Operator {
 	kopy := *hj
 	kopy.LHS, kopy.RHS = inputs[0], inputs[1]
 	kopy.columns = slices.Clone(hj.columns)
@@ -83,15 +82,15 @@ func (hj *HashJoin) Clone(inputs []ops.Operator) ops.Operator {
 	return &kopy
 }
 
-func (hj *HashJoin) Inputs() []ops.Operator {
-	return []ops.Operator{hj.LHS, hj.RHS}
+func (hj *HashJoin) Inputs() []Operator {
+	return []Operator{hj.LHS, hj.RHS}
 }
 
-func (hj *HashJoin) SetInputs(operators []ops.Operator) {
+func (hj *HashJoin) SetInputs(operators []Operator) {
 	hj.LHS, hj.RHS = operators[0], operators[1]
 }
 
-func (hj *HashJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (hj *HashJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	return AddPredicate(ctx, hj, expr, false, newFilter)
 }
 
@@ -107,7 +106,7 @@ func (hj *HashJoin) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bo
 	return len(hj.columns) - 1
 }
 
-func (hj *HashJoin) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
+func (hj *HashJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	if hj.offset {
 		return nil
 	}
@@ -162,23 +161,23 @@ func (hj *HashJoin) ShortDescription() string {
 	return cmp
 }
 
-func (hj *HashJoin) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+func (hj *HashJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return nil // hash joins will never promise an output order
 }
 
-func (hj *HashJoin) GetLHS() ops.Operator {
+func (hj *HashJoin) GetLHS() Operator {
 	return hj.LHS
 }
 
-func (hj *HashJoin) GetRHS() ops.Operator {
+func (hj *HashJoin) GetRHS() Operator {
 	return hj.RHS
 }
 
-func (hj *HashJoin) SetLHS(op ops.Operator) {
+func (hj *HashJoin) SetLHS(op Operator) {
 	hj.LHS = op
 }
 
-func (hj *HashJoin) SetRHS(op ops.Operator) {
+func (hj *HashJoin) SetRHS(op Operator) {
 	hj.RHS = op
 }
 
@@ -239,7 +238,7 @@ func (hj *HashJoin) addColumn(ctx *plancontext.PlanningContext, in sqlparser.Exp
 			return true
 		}
 		deps := ctx.SemTable.RecursiveDeps(expr)
-		check := func(id semantics.TableSet, op ops.Operator, offsetter func(int) int) int {
+		check := func(id semantics.TableSet, op Operator, offsetter func(int) int) int {
 			if !deps.IsSolvedBy(id) {
 				return -1
 			}

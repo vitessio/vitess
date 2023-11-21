@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -79,13 +78,13 @@ func (i *Insert) ShortDescription() string {
 	return i.VTable.String()
 }
 
-func (i *Insert) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (i *Insert) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-var _ ops.Operator = (*Insert)(nil)
+var _ Operator = (*Insert)(nil)
 
-func (i *Insert) Clone([]ops.Operator) ops.Operator {
+func (i *Insert) Clone([]Operator) Operator {
 	return &Insert{
 		VTable:            i.VTable,
 		AST:               i.AST,
@@ -105,7 +104,7 @@ func (i *Insert) Statement() sqlparser.Statement {
 	return i.AST
 }
 
-func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.Insert) (ops.Operator, error) {
+func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.Insert) (Operator, error) {
 	tableInfo, qt, err := createQueryTableForDML(ctx, ins.Table, nil)
 	if err != nil {
 		return nil, err
@@ -155,7 +154,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	if err != nil {
 		return nil, err
 	}
-	return &Sequential{Sources: []ops.Operator{delOp, insOp}}, nil
+	return &Sequential{Sources: []Operator{delOp, insOp}}, nil
 }
 
 func getWhereCondExpr(compExprs []*sqlparser.ComparisonExpr) sqlparser.Expr {
@@ -331,7 +330,7 @@ func createUniqueKeyComp(ins *sqlparser.Insert, expr sqlparser.Expr, vTbl *vinde
 	return offsets, false, err
 }
 
-func checkAndCreateInsertOperator(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, vTbl *vindexes.Table, routing Routing) (ops.Operator, error) {
+func checkAndCreateInsertOperator(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, vTbl *vindexes.Table, routing Routing) (Operator, error) {
 	insOp, err := createInsertOperator(ctx, ins, vTbl, routing)
 	if err != nil {
 		return nil, err
@@ -369,7 +368,7 @@ func checkAndCreateInsertOperator(ctx *plancontext.PlanningContext, ins *sqlpars
 	return insOp, nil
 }
 
-func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.Insert, vTbl *vindexes.Table, routing Routing) (ops.Operator, error) {
+func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.Insert, vTbl *vindexes.Table, routing Routing) (Operator, error) {
 	if _, target := routing.(*TargetedRouting); target {
 		return nil, vterrors.VT09017("INSERT with a target destination is not allowed")
 	}

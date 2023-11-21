@@ -25,8 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -34,7 +32,7 @@ import (
 // Projection is used when we need to evaluate expressions on the vtgate
 // It uses the evalengine to accomplish its goal
 type Projection struct {
-	Source ops.Operator
+	Source Operator
 
 	// Columns contain the expressions as viewed from the outside of this operator
 	Columns ProjCols
@@ -128,7 +126,7 @@ func newProjExprWithInner(ae *sqlparser.AliasedExpr, in sqlparser.Expr) *ProjExp
 	}
 }
 
-func newAliasedProjection(src ops.Operator) *Projection {
+func newAliasedProjection(src Operator) *Projection {
 	return &Projection{
 		Source:  src,
 		Columns: AliasedProjections{},
@@ -194,7 +192,7 @@ var _ selectExpressions = (*Projection)(nil)
 
 // createSimpleProjection returns a projection where all columns are offsets.
 // used to change the name and order of the columns in the final output
-func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator) (*Projection, error) {
+func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjection, src Operator) (*Projection, error) {
 	p := newAliasedProjection(src)
 	for _, e := range qp.SelectExprs {
 		ae, err := e.GetAliasedExpr()
@@ -364,7 +362,7 @@ func (po Offset) expr()             {}
 func (po *EvalEngine) expr()        {}
 func (po SubQueryExpression) expr() {}
 
-func (p *Projection) Clone(inputs []ops.Operator) ops.Operator {
+func (p *Projection) Clone(inputs []Operator) Operator {
 	return &Projection{
 		Source:   inputs[0],
 		Columns:  p.Columns, // TODO don't think we need to deep clone here
@@ -373,15 +371,15 @@ func (p *Projection) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
-func (p *Projection) Inputs() []ops.Operator {
-	return []ops.Operator{p.Source}
+func (p *Projection) Inputs() []Operator {
+	return []Operator{p.Source}
 }
 
-func (p *Projection) SetInputs(operators []ops.Operator) {
+func (p *Projection) SetInputs(operators []Operator) {
 	p.Source = operators[0]
 }
 
-func (p *Projection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (p *Projection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	// we just pass through the predicate to our source
 	p.Source = p.Source.AddPredicate(ctx, expr)
 	return p
@@ -412,7 +410,7 @@ func (p *Projection) GetSelectExprs(*plancontext.PlanningContext) sqlparser.Sele
 	}
 }
 
-func (p *Projection) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+func (p *Projection) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return p.Source.GetOrdering(ctx)
 }
 
@@ -454,10 +452,10 @@ func (p *Projection) ShortDescription() string {
 	return strings.Join(result, ", ")
 }
 
-func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
+func (p *Projection) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult, error) {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
-		return p, rewrite.SameTree, nil
+		return p, NoRewrite, nil
 	}
 
 	// for projections that are not derived tables, we can check if it is safe to remove or not
@@ -471,7 +469,7 @@ func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *r
 	}
 
 	if !needed {
-		return p.Source, rewrite.NewTree("removed projection only passing through the input"), nil
+		return p.Source, Rewrote("removed projection only passing through the input"), nil
 	}
 
 	switch src := p.Source.(type) {
@@ -480,13 +478,13 @@ func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *r
 	case *ApplyJoin:
 		return p.compactWithJoin(ctx, src)
 	}
-	return p, rewrite.SameTree, nil
+	return p, NoRewrite, nil
 }
 
-func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, join *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
+func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, join *ApplyJoin) (Operator, *ApplyResult, error) {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
-		return p, rewrite.SameTree, nil
+		return p, NoRewrite, nil
 	}
 
 	var newColumns []int
@@ -499,37 +497,37 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, join *App
 		case nil:
 			if !ctx.SemTable.EqualsExprWithDeps(col.EvalExpr, col.ColExpr) {
 				// the inner expression is different from what we are presenting to the outside - this means we need to evaluate
-				return p, rewrite.SameTree, nil
+				return p, NoRewrite, nil
 			}
 			offset := slices.IndexFunc(join.JoinColumns, func(jc JoinColumn) bool {
 				return ctx.SemTable.EqualsExprWithDeps(jc.Original.Expr, col.ColExpr)
 			})
 			if offset < 0 {
-				return p, rewrite.SameTree, nil
+				return p, NoRewrite, nil
 			}
 			if len(join.Columns) > 0 {
 				newColumns = append(newColumns, join.Columns[offset])
 			}
 			newColumnsAST = append(newColumnsAST, join.JoinColumns[offset])
 		default:
-			return p, rewrite.SameTree, nil
+			return p, NoRewrite, nil
 		}
 	}
 	join.Columns = newColumns
 	join.JoinColumns = newColumnsAST
-	return join, rewrite.NewTree("remove projection from before join"), nil
+	return join, Rewrote("remove projection from before join"), nil
 }
 
-func (p *Projection) compactWithRoute(ctx *plancontext.PlanningContext, rb *Route) (ops.Operator, *rewrite.ApplyResult, error) {
+func (p *Projection) compactWithRoute(ctx *plancontext.PlanningContext, rb *Route) (Operator, *ApplyResult, error) {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
-		return p, rewrite.SameTree, nil
+		return p, NoRewrite, nil
 	}
 
 	for i, col := range ap {
 		offset, ok := col.Info.(Offset)
 		if !ok || int(offset) != i {
-			return p, rewrite.SameTree, nil
+			return p, NoRewrite, nil
 		}
 	}
 	columns := rb.GetColumns(ctx)
@@ -538,10 +536,10 @@ func (p *Projection) compactWithRoute(ctx *plancontext.PlanningContext, rb *Rout
 	}
 
 	if len(columns) == len(ap) {
-		return rb, rewrite.NewTree("remove projection from before route"), nil
+		return rb, Rewrote("remove projection from before route"), nil
 	}
 	rb.ResultColumns = len(columns)
-	return rb, rewrite.SameTree, nil
+	return rb, NoRewrite, nil
 }
 
 // needsEvaluation finds the expression given by this argument and checks if the inside and outside expressions match
@@ -561,7 +559,7 @@ func (p *Projection) needsEvaluation(ctx *plancontext.PlanningContext, e sqlpars
 	return false
 }
 
-func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
+func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
 		panic(err)

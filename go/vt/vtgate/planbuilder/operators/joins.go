@@ -18,17 +18,16 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type JoinOp interface {
-	ops.Operator
-	GetLHS() ops.Operator
-	GetRHS() ops.Operator
-	SetLHS(ops.Operator)
-	SetRHS(ops.Operator)
+	Operator
+	GetLHS() Operator
+	GetRHS() Operator
+	SetLHS(Operator)
+	SetRHS(Operator)
 	MakeInner()
 	IsInner() bool
 	AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr)
@@ -39,8 +38,8 @@ func AddPredicate(
 	join JoinOp,
 	expr sqlparser.Expr,
 	joinPredicates bool,
-	newFilter func(ops.Operator, sqlparser.Expr) ops.Operator,
-) ops.Operator {
+	newFilter func(Operator, sqlparser.Expr) Operator,
+) Operator {
 	deps := ctx.SemTable.RecursiveDeps(expr)
 	switch {
 	case deps.IsSolvedBy(TableID(join.GetLHS())):

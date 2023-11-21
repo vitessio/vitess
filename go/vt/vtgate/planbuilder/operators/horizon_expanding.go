@@ -23,12 +23,10 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
+func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (Operator, *ApplyResult, error) {
 	statement := horizon.selectStatement()
 	switch sel := statement.(type) {
 	case *sqlparser.Select:
@@ -39,7 +37,7 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (ops.Oper
 	return nil, nil, vterrors.VT13001(fmt.Sprintf("unexpected statement type %T", statement))
 }
 
-func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, union *sqlparser.Union) (ops.Operator, *rewrite.ApplyResult, error) {
+func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, union *sqlparser.Union) (Operator, *ApplyResult, error) {
 	op := horizon.Source
 
 	qp, err := horizon.getQP(ctx)
@@ -72,13 +70,13 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 	}
 
 	if op == horizon.Source {
-		return op, rewrite.NewTree("removed UNION horizon not used"), nil
+		return op, Rewrote("removed UNION horizon not used"), nil
 	}
 
-	return op, rewrite.NewTree("expand UNION horizon into smaller components"), nil
+	return op, Rewrote("expand UNION horizon into smaller components"), nil
 }
 
-func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel *sqlparser.Select) (ops.Operator, *rewrite.ApplyResult, error) {
+func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel *sqlparser.Select) (Operator, *ApplyResult, error) {
 	op := createProjectionFromSelect(ctx, horizon)
 
 	qp, err := horizon.getQP(ctx)
@@ -126,10 +124,10 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		extracted = append(extracted, "Limit")
 	}
 
-	return op, rewrite.NewTree(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", "))), nil
+	return op, Rewrote(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", "))), nil
 }
 
-func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out ops.Operator) {
+func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out Operator) {
 	qp, err := horizon.getQP(ctx)
 	if err != nil {
 		panic(err)
@@ -172,7 +170,7 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 	return createProjectionForSimpleAggregation(ctx, a, qp)
 }
 
-func createProjectionForSimpleAggregation(ctx *plancontext.PlanningContext, a *Aggregator, qp *QueryProjection) ops.Operator {
+func createProjectionForSimpleAggregation(ctx *plancontext.PlanningContext, a *Aggregator, qp *QueryProjection) Operator {
 outer:
 	for colIdx, expr := range qp.SelectExprs {
 		ae, err := expr.GetAliasedExpr()
@@ -206,7 +204,7 @@ outer:
 	return a
 }
 
-func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) ops.Operator {
+func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) Operator {
 	p := newAliasedProjection(a)
 	p.DT = a.DT
 	for _, expr := range qp.SelectExprs {
@@ -231,7 +229,7 @@ func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) o
 	return p
 }
 
-func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator) *Projection {
+func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProjection, src Operator) *Projection {
 	// first we need to check if we have all columns or there are still unexpanded stars
 	aes, err := slice.MapWithError(qp.SelectExprs, func(from SelectExpr) (*sqlparser.AliasedExpr, error) {
 		ae, ok := from.Col.(*sqlparser.AliasedExpr)
@@ -273,7 +271,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 	return proj
 }
 
-func newStarProjection(src ops.Operator, qp *QueryProjection) *Projection {
+func newStarProjection(src Operator, qp *QueryProjection) *Projection {
 	cols := sqlparser.SelectExprs{}
 
 	for _, expr := range qp.SelectExprs {

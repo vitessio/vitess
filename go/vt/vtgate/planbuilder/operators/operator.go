@@ -41,8 +41,6 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -58,7 +56,7 @@ type (
 )
 
 // PlanQuery creates a query plan for a given SQL statement
-func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (result ops.Operator, err error) {
+func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (result Operator, err error) {
 	defer PanicHandler(&err)
 
 	op, err := translateQueryToOp(ctx, stmt)
@@ -66,9 +64,9 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (resu
 		return nil, err
 	}
 
-	if rewrite.DebugOperatorTree {
+	if DebugOperatorTree {
 		fmt.Println("Initial tree:")
-		fmt.Println(ops.ToTree(op))
+		fmt.Println(ToTree(op))
 	}
 
 	if op, err = compact(ctx, op); err != nil {
@@ -104,12 +102,12 @@ func PanicHandler(err *error) {
 }
 
 // Inputs implements the Operator interface
-func (noInputs) Inputs() []ops.Operator {
+func (noInputs) Inputs() []Operator {
 	return nil
 }
 
 // SetInputs implements the Operator interface
-func (noInputs) SetInputs(ops []ops.Operator) {
+func (noInputs) SetInputs(ops []Operator) {
 	if len(ops) > 0 {
 		panic("the noInputs operator does not have inputs")
 	}
@@ -133,12 +131,12 @@ func (noColumns) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectEx
 }
 
 // AddPredicate implements the Operator interface
-func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) ops.Operator {
+func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) Operator {
 	panic(vterrors.VT13001("the noColumns operator cannot accept predicates"))
 }
 
 // tryTruncateColumnsAt will see if we can truncate the columns by just asking the operator to do it for us
-func tryTruncateColumnsAt(op ops.Operator, truncateAt int) bool {
+func tryTruncateColumnsAt(op Operator, truncateAt int) bool {
 	type columnTruncator interface {
 		setTruncateColumnCount(offset int)
 	}
@@ -164,7 +162,7 @@ func tryTruncateColumnsAt(op ops.Operator, truncateAt int) bool {
 	}
 }
 
-func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op ops.Operator) sqlparser.SelectExprs {
+func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op Operator) sqlparser.SelectExprs {
 	columns := op.GetColumns(ctx)
 	selExprs := slice.Map(columns, func(from *sqlparser.AliasedExpr) sqlparser.SelectExpr {
 		return from

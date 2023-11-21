@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -33,7 +32,7 @@ type (
 	// ApplyJoin is a nested loop join - for each row on the LHS,
 	// we'll execute the plan on the RHS, feeding data from left to right
 	ApplyJoin struct {
-		LHS, RHS ops.Operator
+		LHS, RHS Operator
 
 		// LeftJoin will be true in the case of an outer join
 		LeftJoin bool
@@ -86,7 +85,7 @@ type (
 	}
 )
 
-func NewApplyJoin(lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
+func NewApplyJoin(lhs, rhs Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
 	return &ApplyJoin{
 		LHS:       lhs,
 		RHS:       rhs,
@@ -97,7 +96,7 @@ func NewApplyJoin(lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin
 }
 
 // Clone implements the Operator interface
-func (aj *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
+func (aj *ApplyJoin) Clone(inputs []Operator) Operator {
 	kopy := *aj
 	kopy.LHS = inputs[0]
 	kopy.RHS = inputs[1]
@@ -110,33 +109,33 @@ func (aj *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
 	return &kopy
 }
 
-func (aj *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (aj *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	return AddPredicate(ctx, aj, expr, false, newFilter)
 }
 
 // Inputs implements the Operator interface
-func (aj *ApplyJoin) Inputs() []ops.Operator {
-	return []ops.Operator{aj.LHS, aj.RHS}
+func (aj *ApplyJoin) Inputs() []Operator {
+	return []Operator{aj.LHS, aj.RHS}
 }
 
 // SetInputs implements the Operator interface
-func (aj *ApplyJoin) SetInputs(inputs []ops.Operator) {
+func (aj *ApplyJoin) SetInputs(inputs []Operator) {
 	aj.LHS, aj.RHS = inputs[0], inputs[1]
 }
 
-func (aj *ApplyJoin) GetLHS() ops.Operator {
+func (aj *ApplyJoin) GetLHS() Operator {
 	return aj.LHS
 }
 
-func (aj *ApplyJoin) GetRHS() ops.Operator {
+func (aj *ApplyJoin) GetRHS() Operator {
 	return aj.RHS
 }
 
-func (aj *ApplyJoin) SetLHS(operator ops.Operator) {
+func (aj *ApplyJoin) SetLHS(operator Operator) {
 	aj.LHS = operator
 }
 
-func (aj *ApplyJoin) SetRHS(operator ops.Operator) {
+func (aj *ApplyJoin) SetRHS(operator Operator) {
 	aj.RHS = operator
 }
 
@@ -173,7 +172,7 @@ func (aj *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.
 	return transformColumnsToSelectExprs(ctx, aj)
 }
 
-func (aj *ApplyJoin) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+func (aj *ApplyJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return aj.LHS.GetOrdering(ctx)
 }
 
@@ -241,7 +240,7 @@ func (aj *ApplyJoin) AddColumn(
 	return offset
 }
 
-func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
+func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	for _, col := range aj.JoinColumns {
 		// Read the type description for JoinColumn to understand the following code
 		for _, lhsExpr := range col.LHSExprs {

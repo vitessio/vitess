@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -35,7 +34,7 @@ type (
 	// Both all aggregations and no grouping, and the inverse
 	// of all grouping and no aggregations are valid configurations of this operator
 	Aggregator struct {
-		Source  ops.Operator
+		Source  Operator
 		Columns []*sqlparser.AliasedExpr
 
 		Grouping     []GroupBy
@@ -60,7 +59,7 @@ type (
 	}
 )
 
-func (a *Aggregator) Clone(inputs []ops.Operator) ops.Operator {
+func (a *Aggregator) Clone(inputs []Operator) Operator {
 	kopy := *a
 	kopy.Source = inputs[0]
 	kopy.Columns = slices.Clone(a.Columns)
@@ -69,18 +68,18 @@ func (a *Aggregator) Clone(inputs []ops.Operator) ops.Operator {
 	return &kopy
 }
 
-func (a *Aggregator) Inputs() []ops.Operator {
-	return []ops.Operator{a.Source}
+func (a *Aggregator) Inputs() []Operator {
+	return []Operator{a.Source}
 }
 
-func (a *Aggregator) SetInputs(operators []ops.Operator) {
+func (a *Aggregator) SetInputs(operators []Operator) {
 	if len(operators) != 1 {
 		panic(fmt.Sprintf("unexpected number of operators as input in aggregator: %d", len(operators)))
 	}
 	a.Source = operators[0]
 }
 
-func (a *Aggregator) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (a *Aggregator) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	return &Filter{
 		Source:     a,
 		Predicates: []sqlparser.Expr{expr},
@@ -254,11 +253,11 @@ func (a *Aggregator) ShortDescription() string {
 	return fmt.Sprintf("%s%s group by %s", org, strings.Join(columns, ", "), strings.Join(grouping, ","))
 }
 
-func (a *Aggregator) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+func (a *Aggregator) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return a.Source.GetOrdering(ctx)
 }
 
-func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
+func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	if a.offsetPlanned {
 		return nil
 	}
@@ -408,7 +407,7 @@ func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliased
 // SplitAggregatorBelowRoute returns the aggregator that will live under the Route.
 // This is used when we are splitting the aggregation so one part is done
 // at the mysql level and one part at the vtgate level
-func (a *Aggregator) SplitAggregatorBelowRoute(input []ops.Operator) *Aggregator {
+func (a *Aggregator) SplitAggregatorBelowRoute(input []Operator) *Aggregator {
 	newOp := a.Clone(input).(*Aggregator)
 	newOp.Pushed = false
 	newOp.Original = false
@@ -420,4 +419,4 @@ func (a *Aggregator) introducesTableID() semantics.TableSet {
 	return a.DT.introducesTableID()
 }
 
-var _ ops.Operator = (*Aggregator)(nil)
+var _ Operator = (*Aggregator)(nil)

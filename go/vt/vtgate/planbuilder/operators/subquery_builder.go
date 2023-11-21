@@ -19,7 +19,6 @@ package operators
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -32,7 +31,7 @@ type SubQueryBuilder struct {
 	outerID semantics.TableSet
 }
 
-func (sqb *SubQueryBuilder) getRootOperator(op ops.Operator, decorator func(operator ops.Operator) ops.Operator) ops.Operator {
+func (sqb *SubQueryBuilder) getRootOperator(op Operator, decorator func(operator Operator) Operator) Operator {
 	if len(sqb.Inner) == 0 {
 		return op
 	}

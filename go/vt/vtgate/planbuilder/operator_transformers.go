@@ -30,13 +30,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator) (logicalPlan, error) {
+func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Operator) (logicalPlan, error) {
 	switch op := op.(type) {
 	case *operators.Route:
 		return transformRoutePlan(ctx, op)
@@ -544,7 +542,7 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 }
 
 func buildInsertLogicalPlan(
-	rb *operators.Route, op ops.Operator, stmt *sqlparser.Insert,
+	rb *operators.Route, op operators.Operator, stmt *sqlparser.Insert,
 	hints *queryHints,
 ) (logicalPlan, error) {
 	ins := op.(*operators.Insert)
@@ -635,7 +633,7 @@ func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 func buildUpdateLogicalPlan(
 	ctx *plancontext.PlanningContext,
 	rb *operators.Route,
-	dmlOp ops.Operator,
+	dmlOp operators.Operator,
 	stmt *sqlparser.Update,
 	hints *queryHints,
 ) (logicalPlan, error) {
@@ -670,7 +668,7 @@ func buildUpdateLogicalPlan(
 func buildDeleteLogicalPlan(
 	ctx *plancontext.PlanningContext,
 	rb *operators.Route,
-	dmlOp ops.Operator,
+	dmlOp operators.Operator,
 	hints *queryHints,
 ) (logicalPlan, error) {
 	del := dmlOp.(*operators.Delete)
@@ -739,7 +737,7 @@ func updateSelectedVindexPredicate(op *operators.Route) sqlparser.Expr {
 
 func getAllTableNames(op *operators.Route) ([]string, error) {
 	tableNameMap := map[string]any{}
-	err := rewrite.Visit(op, func(op ops.Operator) error {
+	err := operators.Visit(op, func(op operators.Operator) error {
 		tbl, isTbl := op.(*operators.Table)
 		var name string
 		if isTbl {
@@ -764,7 +762,7 @@ func getAllTableNames(op *operators.Route) ([]string, error) {
 }
 
 func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (logicalPlan, error) {
-	sources, err := slice.MapWithError(op.Sources, func(src ops.Operator) (logicalPlan, error) {
+	sources, err := slice.MapWithError(op.Sources, func(src operators.Operator) (logicalPlan, error) {
 		plan, err := transformToLogicalPlan(ctx, src)
 		if err != nil {
 			return nil, err

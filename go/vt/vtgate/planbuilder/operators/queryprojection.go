@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -47,7 +46,7 @@ type (
 		HasAggr      bool
 		Distinct     bool
 		groupByExprs []GroupBy
-		OrderExprs   []ops.OrderBy
+		OrderExprs   []OrderBy
 		HasStar      bool
 
 		// AddedColumn keeps a counter for expressions added to solve HAVING expressions the user is not selecting
@@ -148,8 +147,8 @@ func NewAggr(opCode opcode.AggregateOpcode, f sqlparser.AggrFunc, original *sqlp
 	}
 }
 
-func (b GroupBy) AsOrderBy() ops.OrderBy {
-	return ops.OrderBy{
+func (b GroupBy) AsOrderBy() OrderBy {
+	return OrderBy{
 		Inner: &sqlparser.Order{
 			Expr:      b.Inner,
 			Direction: sqlparser.AscOrder,
@@ -381,7 +380,7 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 		if !es.add(ctx, simpleExpr) {
 			continue
 		}
-		qp.OrderExprs = append(qp.OrderExprs, ops.OrderBy{
+		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
 			Inner:          sqlparser.CloneRefOfOrder(order),
 			SimplifiedExpr: simpleExpr,
 		})
