@@ -41,7 +41,7 @@ import (
 // The mysql.ConnParams to connect to the new database is returned, along with a function to
 // teardown the database.
 func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...string) (mysql.ConnParams, func(), error) {
-	mysqlParam, _, closer, error := NewMySQLWithMysqld(cluster.GetAndReservePort(), cluster.Hostname, dbName, schemaSQL...)
+	mysqlParam, _, closer, _, error := NewMySQLWithMysqld(cluster.GetAndReservePort(), cluster.Hostname, dbName, schemaSQL...)
 	return mysqlParam, closer, error
 }
 
@@ -62,24 +62,24 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (
 	return mysqlctl.NewMysqld(&cfg), mycnf, nil
 }
 
-func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) (mysql.ConnParams, *mysqlctl.Mysqld, func(), error) {
+func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) (mysql.ConnParams, *mysqlctl.Mysqld, func(), string, error) {
 	mysqlDir, err := createMySQLDir()
 	if err != nil {
-		return mysql.ConnParams{}, nil, nil, err
+		return mysql.ConnParams{}, nil, nil, "", err
 	}
 	initMySQLFile, err := createInitSQLFile(mysqlDir, dbName)
 	if err != nil {
-		return mysql.ConnParams{}, nil, nil, err
+		return mysql.ConnParams{}, nil, nil, "", err
 	}
 
 	mysqlPort := port
 	mysqld, mycnf, err := CreateMysqldAndMycnf(0, "", mysqlPort)
 	if err != nil {
-		return mysql.ConnParams{}, nil, nil, err
+		return mysql.ConnParams{}, nil, nil, "", err
 	}
 	err = initMysqld(mysqld, mycnf, initMySQLFile)
 	if err != nil {
-		return mysql.ConnParams{}, nil, nil, err
+		return mysql.ConnParams{}, nil, nil, "", err
 	}
 
 	params := mysql.ConnParams{
@@ -91,13 +91,13 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 	for _, sql := range schemaSQL {
 		err = prepareMySQLWithSchema(params, sql)
 		if err != nil {
-			return mysql.ConnParams{}, nil, nil, err
+			return mysql.ConnParams{}, nil, nil, "", err
 		}
 	}
 	return params, mysqld, func() {
 		ctx := context.Background()
 		_ = mysqld.Teardown(ctx, mycnf, true)
-	}, nil
+	}, mysqlDir, nil
 }
 
 func createMySQLDir() (string, error) {

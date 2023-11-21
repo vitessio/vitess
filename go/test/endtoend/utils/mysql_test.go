@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 
 		var closer func()
 		var err error
-		mysqlParams, mysqld, closer, err = NewMySQLWithMysqld(clusterInstance.GetAndReservePort(), clusterInstance.Hostname, keyspaceName, schemaSQL)
+		mysqlParams, mysqld, closer, _, err = NewMySQLWithMysqld(clusterInstance.GetAndReservePort(), clusterInstance.Hostname, keyspaceName, schemaSQL)
 		if err != nil {
 			fmt.Println(err)
 			return 1
