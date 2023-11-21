@@ -522,7 +522,7 @@ func (mysqld *Mysqld) wait(ctx context.Context, cnf *Mycnf, params *mysql.ConnPa
 // flushed - on the order of 20-30 minutes.
 //
 // If a mysqlctld address is provided in a flag, Shutdown will run remotely.
-func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool) error {
+func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool, shutdownTimeout time.Duration) error {
 	log.Infof("Mysqld.Shutdown")
 
 	// Execute as remote action on mysqlctld if requested.
@@ -581,7 +581,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		defer os.Remove(cnf)
 		args := []string{
 			"--defaults-extra-file=" + cnf,
-			"--shutdown-timeout=300",
+			fmt.Sprintf("--shutdown-timeout=%d", int(shutdownTimeout.Seconds())),
 			"--connect-timeout=30",
 			"--wait=10",
 			"shutdown",
@@ -1024,9 +1024,9 @@ func (mysqld *Mysqld) createTopDir(cnf *Mycnf, dir string) error {
 }
 
 // Teardown will shutdown the running daemon, and delete the root directory.
-func (mysqld *Mysqld) Teardown(ctx context.Context, cnf *Mycnf, force bool) error {
+func (mysqld *Mysqld) Teardown(ctx context.Context, cnf *Mycnf, force bool, shutdownTimeout time.Duration) error {
 	log.Infof("mysqlctl.Teardown")
-	if err := mysqld.Shutdown(ctx, cnf, true); err != nil {
+	if err := mysqld.Shutdown(ctx, cnf, true, shutdownTimeout); err != nil {
 		log.Warningf("failed mysqld shutdown: %v", err.Error())
 		if !force {
 			return err

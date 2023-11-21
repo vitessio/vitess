@@ -45,8 +45,9 @@ var (
 	mysqlSocket string
 
 	// mysqlctl init flags
-	waitTime      = 5 * time.Minute
-	initDBSQLFile string
+	waitTime         = 5 * time.Minute
+	shutdownWaitTime = 5 * time.Minute
+	initDBSQLFile    string
 
 	Main = &cobra.Command{
 		Use:   "mysqlctld",
@@ -84,8 +85,9 @@ func init() {
 	Main.Flags().IntVar(&mysqlPort, "mysql_port", mysqlPort, "MySQL port")
 	Main.Flags().Uint32Var(&tabletUID, "tablet_uid", tabletUID, "Tablet UID")
 	Main.Flags().StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file")
-	Main.Flags().DurationVar(&waitTime, "wait_time", waitTime, "How long to wait for mysqld startup or shutdown")
+	Main.Flags().DurationVar(&waitTime, "wait_time", waitTime, "How long to wait for mysqld startup")
 	Main.Flags().StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "Path to .sql file to run after mysqld initialization")
+	Main.Flags().DurationVar(&shutdownWaitTime, "shutdown-wait-time", shutdownWaitTime, "How long to wait for mysqld shutdown")
 
 	acl.RegisterFlags(Main.Flags())
 }
@@ -154,8 +156,9 @@ func run(cmd *cobra.Command, args []string) error {
 	// Take mysqld down with us on SIGTERM before entering lame duck.
 	servenv.OnTermSync(func() {
 		log.Infof("mysqlctl received SIGTERM, shutting down mysqld first")
-		ctx := context.Background()
-		if err := mysqld.Shutdown(ctx, cnf, true); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownWaitTime+10*time.Second)
+		defer cancel()
+		if err := mysqld.Shutdown(ctx, cnf, true, shutdownWaitTime); err != nil {
 			log.Errorf("failed to shutdown mysqld: %v", err)
 		}
 	})

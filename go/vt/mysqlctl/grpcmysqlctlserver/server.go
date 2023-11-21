@@ -22,9 +22,11 @@ package grpcmysqlctlserver
 
 import (
 	"context"
+	"time"
 
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 )
@@ -41,9 +43,18 @@ func (s *server) Start(ctx context.Context, request *mysqlctlpb.StartRequest) (*
 	return &mysqlctlpb.StartResponse{}, s.mysqld.Start(ctx, s.cnf, request.MysqldArgs...)
 }
 
+const mysqlShutdownTimeout = 5 * time.Minute
+
 // Shutdown implements the server side of the MysqlctlClient interface.
 func (s *server) Shutdown(ctx context.Context, request *mysqlctlpb.ShutdownRequest) (*mysqlctlpb.ShutdownResponse, error) {
-	return &mysqlctlpb.ShutdownResponse{}, s.mysqld.Shutdown(ctx, s.cnf, request.WaitForMysqld)
+	timeout, ok, err := protoutil.DurationFromProto(request.MysqlShutdownTimeout)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		timeout = mysqlShutdownTimeout
+	}
+	return &mysqlctlpb.ShutdownResponse{}, s.mysqld.Shutdown(ctx, s.cnf, request.WaitForMysqld, timeout)
 }
 
 // RunMysqlUpgrade implements the server side of the MysqlctlClient interface.

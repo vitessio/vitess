@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -96,7 +97,7 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 	}
 	return params, mysqld, func() {
 		ctx := context.Background()
-		_ = mysqld.Teardown(ctx, mycnf, true)
+		_ = mysqld.Teardown(ctx, mycnf, true, 30*time.Second)
 	}, nil
 }
 
