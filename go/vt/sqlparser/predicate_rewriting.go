@@ -98,10 +98,12 @@ func simplifyNot(expr *NotExpr) (Expr, rewriteState) {
 	return expr, noChange{}
 }
 
-// ExtractINFromOR TODO:
+// ExtractINFromOR rewrites the OR expression into an IN clause.
+// Each side of each ORs has to be an equality comparison expression and the column names have to
+// match for all sides of each comparison.
+// This rewriter takes a query that looks like this WHERE a = 1 and b = 11 or a = 2 and b = 12 or a = 3 and b = 13
+// And rewrite that to WHERE (a, b) IN ((1,11), (2,12), (3,13))
 func ExtractINFromOR(expr *OrExpr) []Expr {
-	// This rewriter takes a query that looks like this WHERE a = 1 and b = 11 or a = 2 and b = 12 or a = 3 and b = 13
-	// And rewrite that to WHERE (a, b) IN ((1,11), (2,12), (3,13))
 	var varNames []*ColName
 	var values []Exprs
 	orSlice := orToSlice(expr)
