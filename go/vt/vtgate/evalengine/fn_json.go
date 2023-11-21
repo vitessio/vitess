@@ -431,7 +431,7 @@ func (call *builtinJSONContainsPath) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.Fn_JSON_CONTAINS_PATH(match, paths)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | flagNullable}, nil
 }
 
 type jsonMatch int8

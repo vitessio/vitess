@@ -271,7 +271,7 @@ func (call *builtinASCII) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_ASCII()
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: str.Flag}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(str.Flag)}, nil
 }
 
 func charOrd(b []byte, coll collations.ID) int64 {
@@ -331,7 +331,7 @@ func (call *builtinOrd) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_ORD(col)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: str.Flag}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(str.Flag)}, nil
 }
 
 // maxRepeatLength is the maximum number of times a string can be repeated.
@@ -784,7 +784,7 @@ func (call builtinPad) compile(c *compiler) (ctype, error) {
 		c.asm.Fn_RPAD(col)
 	}
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarChar, Col: col}, nil
+	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
 }
 
 func strcmpCollate(left, right []byte, col collations.ID) int64 {
@@ -886,7 +886,7 @@ func (expr *builtinStrcmp) compile(c *compiler) (ctype, error) {
 
 	c.asm.Strcmp(mcol)
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(lt.Flag | rt.Flag)}, nil
 }
 
 func (call builtinTrim) eval(env *ExpressionEnv) (eval, error) {
@@ -975,7 +975,7 @@ func (call builtinTrim) compile(c *compiler) (ctype, error) {
 			c.asm.Fn_TRIM1(col)
 		}
 		c.asm.jumpDestination(skip1)
-		return ctype{Type: sqltypes.VarChar, Col: col}, nil
+		return ctype{Type: sqltypes.VarChar, Flag: nullableFlags(str.Flag), Col: col}, nil
 	}
 
 	pat, err := call.Arguments[1].compile(c)
@@ -1006,7 +1006,7 @@ func (call builtinTrim) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.VarChar, Col: col}, nil
+	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
 }
 
 type builtinConcat struct {
