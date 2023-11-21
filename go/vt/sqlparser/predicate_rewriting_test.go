@@ -178,6 +178,10 @@ func TestExtractINFromOR(in *testing.T) {
 	}, {
 		in:       "(a = 5 and b = 1 or b = 2 and a = 6 or b = 3 and a = 4)",
 		expected: "<nil>",
+	}, {
+		// this has too many OR expressions in it, so we don't even try the CNF rewriting
+		in:       "a = 1 and b = 41 or a = 2 and b = 42 or a = 3 and b = 43 or a = 4 and b = 44 or a = 5 and b = 45",
+		expected: "toto",
 	}}
 
 	for _, tc := range tests {
