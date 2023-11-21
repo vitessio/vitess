@@ -119,7 +119,7 @@ func (call *builtinToBase64) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_TO_BASE64(t, col)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: t, Col: col}, nil
+	return ctype{Type: t, Flag: nullableFlags(str.Flag), Col: col}, nil
 }
 
 func (call *builtinFromBase64) eval(env *ExpressionEnv) (eval, error) {
@@ -172,5 +172,5 @@ func (call *builtinFromBase64) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_FROM_BASE64(t)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: t, Col: collationBinary}, nil
+	return ctype{Type: t, Flag: nullableFlags(str.Flag), Col: collationBinary}, nil
 }

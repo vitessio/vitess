@@ -298,7 +298,7 @@ func (expr *BitwiseExpr) compileBinary(c *compiler, asm_ins_bb, asm_ins_uu func(
 
 	asm_ins_uu()
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Uint64, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}, nil
 }
 
 func (expr *BitwiseExpr) compileShift(c *compiler, i int) (ctype, error) {
@@ -327,8 +327,8 @@ func (expr *BitwiseExpr) compileShift(c *compiler, i int) (ctype, error) {
 		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
 	}
 
-	_ = c.compileToBitwiseUint64(lt, 2)
-	_ = c.compileToUint64(rt, 1)
+	lt = c.compileToBitwiseUint64(lt, 2)
+	rt = c.compileToUint64(rt, 1)
 
 	if i < 0 {
 		c.asm.BitShiftLeft_uu()
@@ -337,7 +337,7 @@ func (expr *BitwiseExpr) compileShift(c *compiler, i int) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Uint64, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}, nil
 }
 
 func (expr *BitwiseExpr) compile(c *compiler) (ctype, error) {
