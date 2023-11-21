@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -28,6 +29,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
@@ -53,6 +55,7 @@ var (
 	tableACLConfigReloadInterval time.Duration
 	tabletPath                   string
 	tabletConfig                 string
+	dbaGrantWaitTime             = 10 * time.Second
 
 	tm *tabletmanager.TabletManager
 
@@ -116,6 +119,10 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if err := waitForDBAGrants(config, dbaGrantWaitTime); err != nil {
+		return err
+	}
+
 	ts := topo.Open()
 	qsc, err := createTabletServer(context.Background(), config, ts, tabletAlias)
 	if err != nil {
@@ -167,6 +174,34 @@ func run(cmd *cobra.Command, args []string) error {
 	servenv.RunDefault()
 
 	return nil
+}
+
+func waitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) error {
+	if waitTime == 0 {
+		return nil
+	}
+	timeout := time.After(waitTime)
+	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
+	defer cancel()
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("waited %v for dba user to have the required permissions", waitTime)
+		default:
+			conn, err := dbconnpool.NewDBConnection(ctx, config.DB.DbaConnector())
+			if err != nil {
+				break
+			}
+			res, err := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
+			if err != nil {
+				break
+			}
+			if res != nil && len(res.Rows) > 0 && len(res.Rows[0]) > 0 && strings.Contains(res.Rows[0][0].ToString(), "SUPER") {
+				return nil
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *mysqlctl.Mycnf, error) {
@@ -273,4 +308,5 @@ func init() {
 	Main.Flags().DurationVar(&tableACLConfigReloadInterval, "table-acl-config-reload-interval", tableACLConfigReloadInterval, "Ticker to reload ACLs. Duration flag, format e.g.: 30s. Default: do not reload")
 	Main.Flags().StringVar(&tabletPath, "tablet-path", tabletPath, "tablet alias")
 	Main.Flags().StringVar(&tabletConfig, "tablet_config", tabletConfig, "YAML file config for tablet")
+	Main.Flags().DurationVar(&dbaGrantWaitTime, "dba-grant-wait-time", dbaGrantWaitTime, "Time to wait for dba user to be granted the required permissions. Setting the value to 0 disable the wait.")
 }

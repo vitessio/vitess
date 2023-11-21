@@ -55,7 +55,7 @@ func TestMycnf(t *testing.T) {
 	}
 	mycnf := NewMycnf(uid, 0)
 	mycnf.Path = MycnfPath
-	mycnf, err = ReadMycnf(mycnf)
+	mycnf, err = ReadMycnf(mycnf, 0)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)
 	} else {
@@ -112,7 +112,7 @@ func NoTestMycnfHook(t *testing.T) {
 	}
 	mycnf := NewMycnf(uid, 0)
 	mycnf.Path = cnf.Path
-	mycnf, err = ReadMycnf(mycnf)
+	mycnf, err = ReadMycnf(mycnf, 0)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)
 	} else {
