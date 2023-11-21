@@ -176,7 +176,7 @@ func TestExtractINFromOR(in *testing.T) {
 		in:       "(a in (1, 5) and B or C and a in (5, 7))",
 		expected: "a in (1, 5, 7)",
 	}, {
-		in:       "(a = 1 and b = 41) or (a = 2 and b = 42) or (a = 3 and b = 43) or (a = 4 and b = 44)",
+		in:       "(a = 5 and b = 1 or b = 2 and a = 6 or b = 3 and a = 4)",
 		expected: "<nil>",
 	}}
 

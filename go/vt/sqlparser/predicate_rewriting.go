@@ -20,6 +20,10 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+// This is the number of OR expressions in a predicate that will disable the CNF
+// rewrite because we don't want to send large queries to MySQL
+const CNFOrLimit = 5
+
 // RewritePredicate walks the input AST and rewrites any boolean logic into a simpler form
 // This simpler form is CNF plus logic for extracting predicates from OR, plus logic for turning ORs into IN
 // Note: In order to re-plan, we need to empty the accumulated metadata in the AST,
@@ -34,7 +38,7 @@ func RewritePredicate(ast SQLNode) SQLNode {
 		return true, nil
 	}, ast)
 
-	allowCNF := count < 4
+	allowCNF := count < CNFOrLimit
 
 	for {
 		printExpr(ast)
