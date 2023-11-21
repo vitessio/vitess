@@ -461,13 +461,13 @@ func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Agg
 		case deps.IsSolvedBy(lhs.tableID):
 			lhs.addGrouping(ctx, groupBy)
 			groupingJCs = append(groupingJCs, JoinColumn{
-				Original: aeWrap(groupBy.Inner),
+				Original: groupBy.Inner,
 				LHSExprs: []BindVarExpr{{Expr: expr}},
 			})
 		case deps.IsSolvedBy(rhs.tableID):
 			rhs.addGrouping(ctx, groupBy)
 			groupingJCs = append(groupingJCs, JoinColumn{
-				Original: aeWrap(groupBy.Inner),
+				Original: groupBy.Inner,
 				RHSExpr:  expr,
 			})
 		case deps.IsSolvedBy(lhs.tableID.Merge(rhs.tableID)):
@@ -564,7 +564,7 @@ func (ab *aggBuilder) leftCountStar(ctx *plancontext.PlanningContext) *sqlparser
 	ae, created := ab.lhs.countStar(ctx)
 	if created {
 		ab.joinColumns = append(ab.joinColumns, JoinColumn{
-			Original: ae,
+			Original: ae.Expr,
 			LHSExprs: []BindVarExpr{{Expr: ae.Expr}},
 		})
 	}
@@ -575,7 +575,7 @@ func (ab *aggBuilder) rightCountStar(ctx *plancontext.PlanningContext) *sqlparse
 	ae, created := ab.rhs.countStar(ctx)
 	if created {
 		ab.joinColumns = append(ab.joinColumns, JoinColumn{
-			Original: ae,
+			Original: ae.Expr,
 			RHSExpr:  ae.Expr,
 		})
 	}
@@ -630,7 +630,7 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 func (ab *aggBuilder) pushThroughLeft(aggr Aggr) {
 	ab.lhs.pushThroughAggr(aggr)
 	ab.joinColumns = append(ab.joinColumns, JoinColumn{
-		Original: aggr.Original,
+		Original: aggr.Original.Expr,
 		LHSExprs: []BindVarExpr{{Expr: aggr.Original.Expr}},
 	})
 }
@@ -638,7 +638,7 @@ func (ab *aggBuilder) pushThroughLeft(aggr Aggr) {
 func (ab *aggBuilder) pushThroughRight(aggr Aggr) {
 	ab.rhs.pushThroughAggr(aggr)
 	ab.joinColumns = append(ab.joinColumns, JoinColumn{
-		Original: aggr.Original,
+		Original: aggr.Original.Expr,
 		RHSExpr:  aggr.Original.Expr,
 	})
 }

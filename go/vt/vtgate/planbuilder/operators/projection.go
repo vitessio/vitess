@@ -500,7 +500,7 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, join *App
 				return p, NoRewrite, nil
 			}
 			offset := slices.IndexFunc(join.JoinColumns, func(jc JoinColumn) bool {
-				return ctx.SemTable.EqualsExprWithDeps(jc.Original.Expr, col.ColExpr)
+				return ctx.SemTable.EqualsExprWithDeps(jc.Original, col.ColExpr)
 			})
 			if offset < 0 {
 				return p, NoRewrite, nil

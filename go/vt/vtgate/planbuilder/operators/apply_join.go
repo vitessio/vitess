@@ -71,7 +71,7 @@ type (
 	//     so they can be used for the result of this expression that is using data from both sides.
 	//     All fields will be used for these
 	JoinColumn struct {
-		Original *sqlparser.AliasedExpr // this is the original expression being passed through
+		Original sqlparser.Expr // this is the original expression being passed through
 		LHSExprs []BindVarExpr
 		RHSExpr  sqlparser.Expr
 		GroupBy  bool // if this is true, we need to push this down to our inputs with addToGroupBy set to true
@@ -177,16 +177,16 @@ func (aj *ApplyJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 }
 
 func joinColumnToAliasedExpr(c JoinColumn) *sqlparser.AliasedExpr {
-	return c.Original
+	return aeWrap(c.Original)
 }
 
 func joinColumnToExpr(column JoinColumn) sqlparser.Expr {
-	return column.Original.Expr
+	return column.Original
 }
 
 func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sqlparser.AliasedExpr, e sqlparser.Expr, addToGroupBy bool) (col JoinColumn, err error) {
 	defer func() {
-		col.Original = orig
+		col.Original = orig.Expr
 	}()
 	lhs := TableID(aj.LHS)
 	rhs := TableID(aj.RHS)
