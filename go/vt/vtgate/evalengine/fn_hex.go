@@ -79,7 +79,7 @@ func (call *builtinHex) compile(c *compiler) (ctype, error) {
 
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: t, Col: col}, nil
+	return ctype{Type: t, Flag: nullableFlags(str.Flag), Col: col}, nil
 }
 
 type builtinUnhex struct {
