@@ -1,7 +1,7 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "query": "SELECT COUNT(*) FROM music WHERE (music.user_id = 1 AND music.name = 'test' OR music.user_id = 2 AND music.name = 'test2' OR music.user_id = 3 AND music.name = 'test3' OR music.user_id = 4 AND music.name = 'test4' OR music.user_id = 5 AND music.name = 'test5') AND music.other = false GROUP BY user_id, name",
     "plan": {
 
     }
