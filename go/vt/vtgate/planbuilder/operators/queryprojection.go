@@ -71,9 +71,6 @@ type (
 		// The index at which the user expects to see this column. Set to nil, if the user does not ask for it
 		InnerIndex *int
 
-		// The original aliased expression that this group by is referring
-		aliasedExpr *sqlparser.AliasedExpr
-
 		// points to the column on the same aggregator
 		ColOffset int
 		WSOffset  int
@@ -126,11 +123,10 @@ func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) evalengine.T
 }
 
 // NewGroupBy creates a new group by from the given fields.
-func NewGroupBy(inner, simplified sqlparser.Expr, aliasedExpr *sqlparser.AliasedExpr) GroupBy {
+func NewGroupBy(inner, simplified sqlparser.Expr) GroupBy {
 	return GroupBy{
 		Inner:          inner,
 		SimplifiedExpr: simplified,
-		aliasedExpr:    aliasedExpr,
 		ColOffset:      -1,
 		WSOffset:       -1,
 	}
@@ -154,26 +150,6 @@ func (b GroupBy) AsOrderBy() OrderBy {
 			Direction: sqlparser.AscOrder,
 		},
 		SimplifiedExpr: b.SimplifiedExpr,
-	}
-}
-
-func (b GroupBy) AsAliasedExpr() *sqlparser.AliasedExpr {
-	if b.aliasedExpr != nil {
-		return b.aliasedExpr
-	}
-	col, isColName := b.Inner.(*sqlparser.ColName)
-	if isColName && b.SimplifiedExpr != b.Inner {
-		return &sqlparser.AliasedExpr{
-			Expr: b.SimplifiedExpr,
-			As:   col.Name,
-		}
-	}
-	if !isColName && b.SimplifiedExpr != b.Inner {
-		panic("this should not happen - different inner and weighStringExpr and not a column alias")
-	}
-
-	return &sqlparser.AliasedExpr{
-		Expr: b.SimplifiedExpr,
 	}
 }
 
@@ -315,7 +291,7 @@ func containsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node.(type) {
 		case *sqlparser.Offset:
-			// offsets here indicate that a possible aggregation has already been handled by an input
+			// offsets here indicate that a possible aggregation has already been handled by an input,
 			// so we don't need to worry about aggregation in the original
 			return false, nil
 		case sqlparser.AggrFunc:
@@ -435,7 +411,7 @@ func (qp *QueryProjection) calculateDistinct(ctx *plancontext.PlanningContext) e
 func (qp *QueryProjection) addGroupBy(ctx *plancontext.PlanningContext, groupBy sqlparser.GroupBy) error {
 	es := &expressionSet{}
 	for _, group := range groupBy {
-		selectExprIdx, aliasExpr := qp.FindSelectExprIndexForExpr(ctx, group)
+		selectExprIdx := qp.FindSelectExprIndexForExpr(ctx, group)
 		simpleExpr, err := qp.GetSimplifiedExpr(ctx, group)
 		if err != nil {
 			return err
@@ -449,7 +425,7 @@ func (qp *QueryProjection) addGroupBy(ctx *plancontext.PlanningContext, groupBy 
 			continue
 		}
 
-		groupBy := NewGroupBy(group, simpleExpr, aliasExpr)
+		groupBy := NewGroupBy(group, simpleExpr)
 		groupBy.InnerIndex = selectExprIdx
 
 		qp.groupByExprs = append(qp.groupByExprs, groupBy)
@@ -808,7 +784,7 @@ func createAggrFromAggrFunc(fnc sqlparser.AggrFunc, aliasedExpr *sqlparser.Alias
 
 // FindSelectExprIndexForExpr returns the index of the given expression in the select expressions, if it is part of it
 // returns -1 otherwise.
-func (qp *QueryProjection) FindSelectExprIndexForExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (*int, *sqlparser.AliasedExpr) {
+func (qp *QueryProjection) FindSelectExprIndexForExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr) *int {
 	colExpr, isCol := expr.(*sqlparser.ColName)
 
 	for idx, selectExpr := range qp.SelectExprs {
@@ -819,14 +795,14 @@ func (qp *QueryProjection) FindSelectExprIndexForExpr(ctx *plancontext.PlanningC
 		if isCol {
 			isAliasExpr := aliasedExpr.As.NotEmpty()
 			if isAliasExpr && colExpr.Name.Equal(aliasedExpr.As) {
-				return &idx, aliasedExpr
+				return &idx
 			}
 		}
 		if ctx.SemTable.EqualsExprWithDeps(aliasedExpr.Expr, expr) {
-			return &idx, aliasedExpr
+			return &idx
 		}
 	}
-	return nil, nil
+	return nil
 }
 
 // OldAlignGroupByAndOrderBy TODO Remove once all of horizon planning is done on the operators
@@ -919,7 +895,7 @@ func (qp *QueryProjection) GetColumnCount() int {
 
 func (qp *QueryProjection) orderByOverlapWithSelectExpr(ctx *plancontext.PlanningContext) bool {
 	for _, expr := range qp.OrderExprs {
-		idx, _ := qp.FindSelectExprIndexForExpr(ctx, expr.SimplifiedExpr)
+		idx := qp.FindSelectExprIndexForExpr(ctx, expr.SimplifiedExpr)
 		if idx != nil {
 			return true
 		}
@@ -949,7 +925,7 @@ func (qp *QueryProjection) useGroupingOverDistinct(ctx *plancontext.PlanningCont
 		if found != -1 {
 			continue
 		}
-		groupBy := NewGroupBy(ae.Expr, sExpr, ae)
+		groupBy := NewGroupBy(ae.Expr, sExpr)
 		selectExprIdx := idx
 		groupBy.InnerIndex = &selectExprIdx
 

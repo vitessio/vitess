@@ -190,7 +190,7 @@ func pushAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, 
 		// doing the aggregating on the vtgate level instead
 		// Adding to group by can be done only once even though there are multiple distinct aggregation with same expression.
 		if !distinctAggrGroupByAdded {
-			groupBy := NewGroupBy(distinctExpr, distinctExpr, aeDistinctExpr)
+			groupBy := NewGroupBy(distinctExpr, distinctExpr)
 			groupBy.ColOffset = aggr.ColOffset
 			aggrBelowRoute.Grouping = append(aggrBelowRoute.Grouping, groupBy)
 			distinctAggrGroupByAdded = true
@@ -477,9 +477,9 @@ func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Agg
 			}
 			for _, lhsExpr := range jc.LHSExprs {
 				e := lhsExpr.Expr
-				lhs.addGrouping(ctx, NewGroupBy(e, e, aeWrap(e)))
+				lhs.addGrouping(ctx, NewGroupBy(e, e))
 			}
-			rhs.addGrouping(ctx, NewGroupBy(jc.RHSExpr, jc.RHSExpr, aeWrap(jc.RHSExpr)))
+			rhs.addGrouping(ctx, NewGroupBy(jc.RHSExpr, jc.RHSExpr))
 		default:
 			return nil, vterrors.VT13001(fmt.Sprintf("grouping with bad dependencies %s", groupBy.SimplifiedExpr))
 		}

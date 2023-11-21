@@ -249,7 +249,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
 			KeyCol:          groupBy.ColOffset,
 			WeightStringCol: groupBy.WSOffset,
-			Expr:            groupBy.AsAliasedExpr().Expr,
+			Expr:            groupBy.SimplifiedExpr,
 			Type:            typ,
 		})
 	}

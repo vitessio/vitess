@@ -91,7 +91,7 @@ func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, e
 	a.Columns = append(a.Columns, expr)
 
 	if addToGroupBy {
-		groupBy := NewGroupBy(expr.Expr, expr.Expr, expr)
+		groupBy := NewGroupBy(expr.Expr, expr.Expr)
 		groupBy.ColOffset = offset
 		a.Grouping = append(a.Grouping, groupBy)
 	} else {
