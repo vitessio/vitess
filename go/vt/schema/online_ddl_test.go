@@ -107,6 +107,7 @@ func TestIsOnlineDDLTableName(t *testing.T) {
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_del",
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_new",
 		"_84371a37_6153_11eb_9917_f875a4d24e90_20210128122816_vrepl",
+		"_84371a37_6153_11eb_9917_f875a4d24e90_20210128122816_vrp",
 		"_table_old",
 		"__table_old",
 	}
@@ -121,6 +122,7 @@ func TestIsOnlineDDLTableName(t *testing.T) {
 		"_table_ghc",
 		"_table_del",
 		"_table_vrepl",
+		"_table_vrp",
 		"table_old",
 	}
 	for _, tableName := range irrelevantNames {

@@ -36,6 +36,8 @@ func TestNameIsGCTableName(t *testing.T) {
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_ghc",
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_del",
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_new",
+		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_vrepl",
+		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_vrp",
 		"_table_old",
 		"__table_old",
 	}
@@ -63,6 +65,8 @@ func TestIsInternalOperationTableName(t *testing.T) {
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_ghc",
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_del",
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_new",
+		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_vrepl",
+		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_vrp",
 		"_table_old",
 		"__table_old",
 		"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
