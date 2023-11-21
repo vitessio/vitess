@@ -5,6 +5,8 @@
  * [release 18.0]: `ReadBinlogFilesTimestamps` backwards compatibility [#14526](https://github.com/vitessio/vitess/pull/14526) 
 #### Build/CI
  * [release-18.0] Update create_release.sh (#14492) [#14516](https://github.com/vitessio/vitess/pull/14516) 
+#### Evalengine
+ * [release-18.0] Fix nullability checks in evalengine (#14556) [#14564](https://github.com/vitessio/vitess/pull/14564) 
 #### Examples
  * [release-18.0] examples: fix flag syntax for zkctl (#14469) [#14487](https://github.com/vitessio/vitess/pull/14487) 
 #### Observability
@@ -25,6 +27,9 @@
 ### Documentation 
 #### Documentation
  * [release-18.0] release notes: add FK import to summary (#14518) [#14519](https://github.com/vitessio/vitess/pull/14519)
+### Internal Cleanup 
+#### Query Serving
+ * [release-18.0] Remove excessive VTGate logging of default planner selection (#14554) [#14561](https://github.com/vitessio/vitess/pull/14561)
 ### Release 
 #### General
  * [release-18.0] Code Freeze for `v18.0.1` [#14549](https://github.com/vitessio/vitess/pull/14549)
