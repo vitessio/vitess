@@ -203,6 +203,7 @@ Flags:
       --message_stream_grace_period duration                             the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
       --migration_check_interval duration                                Interval between migration checks (default 1m0s)
       --mycnf-file string                                                path to my.cnf, if reading all config params from there
+      --mycnf-wait-time duration                                         time to wait for my.cnf to be created by mysqlctld externally (default 10s)
       --mycnf_bin_log_path string                                        mysql binlog path
       --mycnf_data_dir string                                            data directory for mysql
       --mycnf_error_log_path string                                      mysql error log path
