@@ -191,7 +191,7 @@ func (op *opArithAdd) compile(c *compiler, left, right Expr) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sumtype, Col: collationNumeric}, nil
+	return ctype{Type: sumtype, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}, nil
 }
 
 func (op *opArithSub) eval(left, right eval) (eval, error) {
@@ -274,7 +274,7 @@ func (op *opArithSub) compile(c *compiler, left, right Expr) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: subtype, Col: collationNumeric}, nil
+	return ctype{Type: subtype, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}, nil
 }
 
 func (op *opArithMul) eval(left, right eval) (eval, error) {
@@ -334,7 +334,7 @@ func (op *opArithMul) compile(c *compiler, left, right Expr) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: multype, Col: collationNumeric}, nil
+	return ctype{Type: multype, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}, nil
 }
 
 func (op *opArithDiv) eval(left, right eval) (eval, error) {
@@ -604,5 +604,9 @@ func (expr *NegateExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip)
-	return ctype{Type: neg, Col: collationNumeric}, nil
+	return ctype{Type: neg, Flag: nullableFlags(arg.Flag), Col: collationNumeric}, nil
+}
+
+func nullableFlags(flag typeFlag) typeFlag {
+	return flag & (flagNull | flagNullable)
 }

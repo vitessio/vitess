@@ -47,7 +47,7 @@ func mysqlconn(t *testing.T) *mysql.Conn {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(conn.ServerVersion, "8.0.") {
+	if !strings.HasPrefix(conn.ServerVersion, "8.") {
 		conn.Close()
 		t.Skipf("collation integration tests are only supported in MySQL 8.0+")
 	}

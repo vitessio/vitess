@@ -528,7 +528,7 @@ func (asm *assembler) CmpCase(cases int, hasElse bool, tt sqltypes.Type, cc coll
 	asm.emit(func(env *ExpressionEnv) int {
 		end := env.vm.sp - elseOffset
 		for sp := env.vm.sp - stackDepth; sp < end; sp += 2 {
-			if env.vm.stack[sp].(*evalInt64).i != 0 {
+			if env.vm.stack[sp] != nil && env.vm.stack[sp].(*evalInt64).i != 0 {
 				env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[sp+1], tt, cc.Collation)
 				goto done
 			}
@@ -782,8 +782,8 @@ func (asm *assembler) Convert_bB(offset int) {
 		var f float64
 		if arg != nil {
 			f, _ = fastparse.ParseFloat64(arg.(*evalBytes).string())
+			env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(f != 0.0)
 		}
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(f != 0.0)
 		return 1
 	}, "CONV VARBINARY(SP-%d), BOOL", offset)
 }
@@ -791,7 +791,9 @@ func (asm *assembler) Convert_bB(offset int) {
 func (asm *assembler) Convert_TB(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-offset]
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg != nil && !arg.(*evalTemporal).isZero())
+		if arg != nil {
+			env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(!arg.(*evalTemporal).isZero())
+		}
 		return 1
 	}, "CONV SQLTYPES(SP-%d), BOOL", offset)
 }
@@ -839,7 +841,9 @@ func (asm *assembler) Convert_Tj(offset int) {
 func (asm *assembler) Convert_dB(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-offset]
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg != nil && !arg.(*evalDecimal).dec.IsZero())
+		if arg != nil {
+			env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(!arg.(*evalDecimal).dec.IsZero())
+		}
 		return 1
 	}, "CONV DECIMAL(SP-%d), BOOL", offset)
 }
@@ -859,7 +863,9 @@ func (asm *assembler) Convert_dbit(offset int) {
 func (asm *assembler) Convert_fB(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-offset]
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg != nil && arg.(*evalFloat).f != 0.0)
+		if arg != nil {
+			env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg.(*evalFloat).f != 0.0)
+		}
 		return 1
 	}, "CONV FLOAT64(SP-%d), BOOL", offset)
 }
@@ -906,7 +912,9 @@ func (asm *assembler) Convert_Tf(offset int) {
 func (asm *assembler) Convert_iB(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-offset]
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg != nil && arg.(*evalInt64).i != 0)
+		if arg != nil {
+			env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg.(*evalInt64).i != 0)
+		}
 		return 1
 	}, "CONV INT64(SP-%d), BOOL", offset)
 }
@@ -986,7 +994,9 @@ func (asm *assembler) Convert_Nj(offset int) {
 func (asm *assembler) Convert_uB(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-offset]
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg != nil && arg.(*evalUint64).u != 0)
+		if arg != nil {
+			env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg.(*evalUint64).u != 0)
+		}
 		return 1
 	}, "CONV UINT64(SP-%d), BOOL", offset)
 }

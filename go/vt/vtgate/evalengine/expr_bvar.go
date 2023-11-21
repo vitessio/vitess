@@ -91,9 +91,9 @@ func (bv *BindVariable) typeof(env *ExpressionEnv, _ []*querypb.Field) (sqltypes
 	case sqltypes.Null:
 		return sqltypes.Null, flagNull | flagNullable
 	case sqltypes.HexNum, sqltypes.HexVal:
-		return sqltypes.VarBinary, flagHex
+		return sqltypes.VarBinary, flagHex | flagNullable
 	default:
-		return tt, 0
+		return tt, flagNullable
 	}
 }
 
