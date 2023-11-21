@@ -23,7 +23,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -116,7 +115,6 @@ func getConfiguredPlanner(vschema plancontext.VSchema, stmt sqlparser.Statement,
 	case Gen4Left2Right, Gen4GreedyOnly, Gen4:
 	default:
 		// default is gen4 plan
-		log.Infof("Using Gen4 planner instead of %s", planner.String())
 		planner = Gen4
 	}
 	return gen4Planner(query, planner), nil
