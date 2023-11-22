@@ -88,6 +88,7 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	var once sync.Once
 	var fields []*querypb.Field
+	var mu sync.Mutex
 	return vcursor.StreamExecutePrimitive(ctx, p.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		var err error
 		if wantfields {
@@ -107,6 +108,8 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			return err
 		}
 		resultRows := make([]sqltypes.Row, 0, len(qr.Rows))
+		mu.Lock()
+		defer mu.Unlock()
 		for _, r := range qr.Rows {
 			resultRow := make(sqltypes.Row, 0, len(p.Exprs))
 			env.Row = r

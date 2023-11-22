@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"sync"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -97,6 +98,7 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 	// the offset in memory from the result of the scatter query with count + offset.
 	bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count + offset))
 
+	var mu sync.Mutex
 	err = vcursor.StreamExecutePrimitive(ctx, l.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
@@ -108,6 +110,8 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 			return nil
 		}
 
+		mu.Lock()
+		defer mu.Unlock()
 		// we've still not seen all rows we need to see before we can return anything to the client
 		if offset > 0 {
 			if inputSize <= offset {
