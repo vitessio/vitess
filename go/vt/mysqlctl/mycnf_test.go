@@ -65,8 +65,9 @@ func TestMycnf(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		startTime := time.Now()
-		mycnf, err = ReadMycnf(mycnf, 1*time.Minute)
-		require.NoError(t, err, "failed reading")
+		var readErr error
+		mycnf, readErr = ReadMycnf(mycnf, 1*time.Minute)
+		require.NoError(t, readErr, "failed reading")
 		t.Logf("socket file %v", mycnf.SocketFile)
 		totalTimeSpent := time.Since(startTime)
 		require.GreaterOrEqual(t, totalTimeSpent, waitTime)
