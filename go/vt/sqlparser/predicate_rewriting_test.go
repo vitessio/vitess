@@ -92,7 +92,7 @@ func TestSimplifyExpression(in *testing.T) {
 			require.NoError(t, err)
 
 			expr, didRewrite := simplifyExpression(expr)
-			assert.True(t, didRewrite.changed())
+			assert.True(t, didRewrite)
 			assert.Equal(t, tc.expected, String(expr))
 		})
 	}
