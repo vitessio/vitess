@@ -149,14 +149,14 @@ func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*query
 		if err != nil {
 			return nil, err
 		}
-		fl := mysql.FlagsForColumn(typ.Type, typ.Coll)
-		if !sqltypes.IsNull(typ.Type) && !typ.Nullable {
+		fl := mysql.FlagsForColumn(typ.Type(), typ.Collation())
+		if !sqltypes.IsNull(typ.Type()) && !typ.Nullable() {
 			fl |= uint32(querypb.MySqlFlag_NOT_NULL_FLAG)
 		}
 		fields = append(fields, &querypb.Field{
 			Name:    col,
-			Type:    typ.Type,
-			Charset: uint32(typ.Coll),
+			Type:    typ.Type(),
+			Charset: uint32(typ.Collation()),
 			Flags:   fl,
 		})
 	}

@@ -23,8 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -406,7 +404,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 					engine.NewAggregateParam(opcode.AggregateSum, 2, ""),
 					engine.NewAggregateParam(opcode.AggregateSum, 3, ""),
 				},
-				GroupByKeys: []*engine.GroupByParams{{KeyCol: 0, WeightStringCol: -1, Type: evalengine.UnknownType()}},
+				GroupByKeys: []*engine.GroupByParams{{KeyCol: 0, WeightStringCol: -1}},
 				Input:       newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}),
 			},
 			targetPrimitive: newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}),

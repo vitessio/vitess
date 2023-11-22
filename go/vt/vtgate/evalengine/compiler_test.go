@@ -496,6 +496,74 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `VARCHAR("0")`,
 			collation:  collations.CollationUtf8mb4ID,
 		},
+		{
+			expression: `UNIX_TIMESTAMP(0.0) + 1`,
+			result:     `DECIMAL(1.0)`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP(0.000) + 1`,
+			result:     `DECIMAL(1.000)`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP(-1.5) + 1`,
+			result:     `DECIMAL(1.0)`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP(-1.500) + 1`,
+			result:     `DECIMAL(1.000)`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP(0x0) + 1`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP(timestamp '2000-01-01 10:34:58.123456') + 1`,
+			result:     `DECIMAL(946719299.123456)`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP('200001011034581111111') + 1`,
+			result:     `INT64(946719299)`,
+		},
+		{
+			expression: `CONV(-0x1, 13e0, 13e0)`,
+			result:     `VARCHAR("219505A9511A867B72")`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP('20000101103458.111111') + 1`,
+			result:     `DECIMAL(946719299.111111)`,
+		},
+		{
+			expression: `cast(null * 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null + 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null - 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null / 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null % 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `1 AND NULL * 1`,
+			result:     `NULL`,
+		},
+		{
+			expression: `case 0 when NULL then 1 else 0 end`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `case when null is null then 23 else null end`,
+			result:     `INT64(23)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

@@ -42,6 +42,8 @@ type typeAggregation struct {
 	geometry uint16
 	blob     uint16
 	total    uint16
+
+	nullable bool
 }
 
 func AggregateTypes(types []sqltypes.Type) sqltypes.Type {
@@ -63,6 +65,7 @@ func (ta *typeAggregation) addEval(e eval) {
 	switch e := e.(type) {
 	case nil:
 		t = sqltypes.Null
+		ta.nullable = true
 	case *evalBytes:
 		t = sqltypes.Type(e.tt)
 		f = e.flag
@@ -73,6 +76,9 @@ func (ta *typeAggregation) addEval(e eval) {
 }
 
 func (ta *typeAggregation) add(tt sqltypes.Type, f typeFlag) {
+	if f&flagNullable != 0 {
+		ta.nullable = true
+	}
 	switch tt {
 	case sqltypes.Float32, sqltypes.Float64:
 		ta.double++
