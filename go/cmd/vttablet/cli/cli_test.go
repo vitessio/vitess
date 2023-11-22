@@ -2,17 +2,17 @@ package cli
 
 import (
 	"context"
-	"math/rand"
-	"os"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttest"
 )
 
 func TestWaitForDBAGrants(t *testing.T) {
@@ -27,23 +27,20 @@ func TestWaitForDBAGrants(t *testing.T) {
 			waitTime:  1 * time.Second,
 			errWanted: "",
 			setupFunc: func(t *testing.T) (*tabletenv.TabletConfig, func()) {
-				// Create new mysql instance and the dba user with required grants.
+				// Create a new mysql instance, and the dba user with required grants.
 				// Since all the grants already exist, this should pass without any waiting to be needed.
-				connParams, _, cleanup, mysqlDir, err := utils.NewMySQLWithMysqld(rand.Intn(10000), "localhost", "ks",
-					"CREATE USER 'vt_dba'@'localhost';",
-					"GRANT ALL ON *.* TO 'vt_dba'@'localhost';",
-					"GRANT GRANT OPTION ON *.* TO 'vt_dba'@'localhost';",
-					"FLUSH PRIVILEGES;",
-				)
+				testUser := "vt_test_dba"
+				cluster, err := startMySQLAndCreateUser(t, testUser)
 				require.NoError(t, err)
+				grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser)
 				tc := &tabletenv.TabletConfig{
 					DB: &dbconfigs.DBConfigs{},
 				}
-				connParams.Uname = "vt_dba"
+				connParams := cluster.MySQLConnParams()
+				connParams.Uname = testUser
 				tc.DB.SetDbParams(connParams, mysql.ConnParams{}, mysql.ConnParams{})
 				return tc, func() {
-					cleanup()
-					os.RemoveAll(mysqlDir)
+					cluster.TearDown()
 				}
 			},
 		},
@@ -54,30 +51,23 @@ func TestWaitForDBAGrants(t *testing.T) {
 			setupFunc: func(t *testing.T) (*tabletenv.TabletConfig, func()) {
 				// Create a new mysql instance, but delay granting the privileges to the dba user.
 				// This makes the waitForDBAGrants function retry the grant check.
-				connParams, _, cleanup, mysqlDir, err := utils.NewMySQLWithMysqld(rand.Intn(10000), "localhost", "ks",
-					"CREATE USER 'vt_dba'@'localhost';",
-				)
-				cpToUse := connParams
-				go func() {
-					conn, err := mysql.Connect(context.Background(), &cpToUse)
-					require.NoError(t, err)
-					time.Sleep(500 * time.Millisecond)
-					_, err = conn.ExecuteFetch("GRANT ALL ON *.* TO 'vt_dba'@'localhost';", 1000, false)
-					require.NoError(t, err)
-					_, err = conn.ExecuteFetch("GRANT GRANT OPTION ON *.* TO 'vt_dba'@'localhost';", 1000, false)
-					require.NoError(t, err)
-					_, err = conn.ExecuteFetch("FLUSH PRIVILEGES;", 1000, false)
-					require.NoError(t, err)
-				}()
+				testUser := "vt_test_dba"
+				cluster, err := startMySQLAndCreateUser(t, testUser)
 				require.NoError(t, err)
+
+				go func() {
+					time.Sleep(500 * time.Millisecond)
+					grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser)
+				}()
+
 				tc := &tabletenv.TabletConfig{
 					DB: &dbconfigs.DBConfigs{},
 				}
-				connParams.Uname = "vt_dba"
+				connParams := cluster.MySQLConnParams()
+				connParams.Uname = testUser
 				tc.DB.SetDbParams(connParams, mysql.ConnParams{}, mysql.ConnParams{})
 				return tc, func() {
-					cleanup()
-					os.RemoveAll(mysqlDir)
+					cluster.TearDown()
 				}
 			},
 		}, {
@@ -87,18 +77,18 @@ func TestWaitForDBAGrants(t *testing.T) {
 			setupFunc: func(t *testing.T) (*tabletenv.TabletConfig, func()) {
 				// Create a new mysql but don't give the grants to the vt_dba user at all.
 				// This should cause a timeout after waiting, since the privileges are never granted.
-				connParams, _, cleanup, mysqlDir, err := utils.NewMySQLWithMysqld(rand.Intn(10000), "localhost", "ks",
-					"CREATE USER 'vt_dba'@'localhost';",
-				)
+				testUser := "vt_test_dba"
+				cluster, err := startMySQLAndCreateUser(t, testUser)
 				require.NoError(t, err)
+
 				tc := &tabletenv.TabletConfig{
 					DB: &dbconfigs.DBConfigs{},
 				}
-				connParams.Uname = "vt_dba"
+				connParams := cluster.MySQLConnParams()
+				connParams.Uname = testUser
 				tc.DB.SetDbParams(connParams, mysql.ConnParams{}, mysql.ConnParams{})
 				return tc, func() {
-					cleanup()
-					os.RemoveAll(mysqlDir)
+					cluster.TearDown()
 				}
 			},
 		}, {
@@ -122,4 +112,56 @@ func TestWaitForDBAGrants(t *testing.T) {
 			}
 		})
 	}
+}
+
+// startMySQLAndCreateUser starts a MySQL instance and creates the given user
+func startMySQLAndCreateUser(t *testing.T, testUser string) (vttest.LocalCluster, error) {
+	// Launch MySQL.
+	// We need a Keyspace in the topology, so the DbName is set.
+	// We need a Shard too, so the database 'vttest' is created.
+	cfg := vttest.Config{
+		Topology: &vttestpb.VTTestTopology{
+			Keyspaces: []*vttestpb.Keyspace{
+				{
+					Name: "vttest",
+					Shards: []*vttestpb.Shard{
+						{
+							Name:           "0",
+							DbNameOverride: "vttest",
+						},
+					},
+				},
+			},
+		},
+		OnlyMySQL: true,
+		Charset:   "utf8mb4",
+	}
+	cluster := vttest.LocalCluster{
+		Config: cfg,
+	}
+	err := cluster.Setup()
+	if err != nil {
+		return cluster, nil
+	}
+
+	connParams := cluster.MySQLConnParams()
+	conn, err := mysql.Connect(context.Background(), &connParams)
+	require.NoError(t, err)
+	_, err = conn.ExecuteFetch(fmt.Sprintf(`CREATE USER '%v'@'localhost';`, testUser), 1000, false)
+	conn.Close()
+
+	return cluster, err
+}
+
+// grantAllPrivilegesToUser grants all the privileges to the user specified.
+func grantAllPrivilegesToUser(t *testing.T, connParams mysql.ConnParams, testUser string) {
+	conn, err := mysql.Connect(context.Background(), &connParams)
+	require.NoError(t, err)
+	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT ALL ON *.* TO '%v'@'localhost';`, testUser), 1000, false)
+	require.NoError(t, err)
+	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT GRANT OPTION ON *.* TO '%v'@'localhost';`, testUser), 1000, false)
+	require.NoError(t, err)
+	_, err = conn.ExecuteFetch("FLUSH PRIVILEGES;", 1000, false)
+	require.NoError(t, err)
+	conn.Close()
 }
