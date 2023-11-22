@@ -196,8 +196,14 @@ func waitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) er
 			if err != nil {
 				break
 			}
-			if res != nil && len(res.Rows) > 0 && len(res.Rows[0]) > 0 && strings.Contains(res.Rows[0][0].ToString(), "SUPER") {
-				return nil
+			if res != nil && len(res.Rows) > 0 && len(res.Rows[0]) > 0 {
+				privileges := res.Rows[0][0].ToString()
+				// In MySQL 8.0, all the privileges are listed out explicitly, so we can search for SUPER in the output.
+				// In MySQL 5.7, all the privileges are not listed explicitly, instead ALL PRIVILEGES is written, so we search for that too.
+				if strings.Contains(privileges, "SUPER") || strings.Contains(privileges, "ALL PRIVILEGES") {
+					return nil
+				}
+
 			}
 		}
 		time.Sleep(100 * time.Millisecond)
