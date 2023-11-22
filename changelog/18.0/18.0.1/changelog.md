@@ -15,7 +15,8 @@
  * [release-18.0] Make column resolution closer to MySQL (#14426) [#14430](https://github.com/vitessio/vitess/pull/14430)
  * [release-18.0] Bug fix: Use target tablet from health stats cache when checking replication status (#14436) [#14456](https://github.com/vitessio/vitess/pull/14456)
  * [release-18.0] Ensure hexval and int don't share BindVar after Normalization (#14451) [#14479](https://github.com/vitessio/vitess/pull/14479)
- * [release-18.0] planbuilder bugfix: expose columns through derived tables (#14501) [#14504](https://github.com/vitessio/vitess/pull/14504) 
+ * [release-18.0] planbuilder bugfix: expose columns through derived tables (#14501) [#14504](https://github.com/vitessio/vitess/pull/14504)
+ * [release-18.0] expression rewriting: enable more rewrites and limit CNF rewrites (#14560) [#14576](https://github.com/vitessio/vitess/pull/14576) 
 #### vtctldclient
  * [release-18.0] vtctldclient: Apply tablet type filtering for keyspace+shard in GetTablets (#14467) [#14470](https://github.com/vitessio/vitess/pull/14470)
 ### CI/Build 
