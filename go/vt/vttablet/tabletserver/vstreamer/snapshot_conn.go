@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // If the current binary log is greater than this byte size, we
@@ -273,10 +274,14 @@ func (conn *snapshotConn) startSnapshotAllTables(ctx context.Context) (gtid stri
 			lockClause := fmt.Sprintf("%s read", tableName)
 			lockClauses = append(lockClauses, lockClause)
 		}
-		query := fmt.Sprintf("lock tables %s", strings.Join(lockClauses, ","))
-		if _, err := lockConn.ExecuteFetch(query, 1, false); err != nil {
-			log.Infof("Error explicitly locking all %v tables", len(lockClauses))
-			return "", err
+		if len(lockClauses) > 0 {
+			query := fmt.Sprintf("lock tables %s", strings.Join(lockClauses, ","))
+			if _, err := lockConn.ExecuteFetch(query, 1, false); err != nil {
+				log.Error(vterrors.Wrapf(err, "explicitly locking all %v tables", len(lockClauses)))
+				return "", err
+			}
+		} else {
+			log.Infof("explicit lock tables: no tables found")
 		}
 	}
 	mpos, err := lockConn.PrimaryPosition()
