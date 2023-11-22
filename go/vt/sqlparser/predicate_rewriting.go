@@ -20,11 +20,26 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+// This is the number of OR expressions in a predicate that will disable the CNF
+// rewrite because we don't want to send large queries to MySQL
+const CNFOrLimit = 5
+
 // RewritePredicate walks the input AST and rewrites any boolean logic into a simpler form
 // This simpler form is CNF plus logic for extracting predicates from OR, plus logic for turning ORs into IN
 // Note: In order to re-plan, we need to empty the accumulated metadata in the AST,
 // so ColName.Metadata will be nil:ed out as part of this rewrite
 func RewritePredicate(ast SQLNode) SQLNode {
+	count := 0
+	_ = Walk(func(node SQLNode) (bool, error) {
+		if _, isExpr := node.(*OrExpr); isExpr {
+			count++
+		}
+
+		return true, nil
+	}, ast)
+
+	allowCNF := count < CNFOrLimit
+
 	for {
 		printExpr(ast)
 		exprChanged := false
@@ -37,7 +52,7 @@ func RewritePredicate(ast SQLNode) SQLNode {
 				return true
 			}
 
-			rewritten, state := simplifyExpression(e)
+			rewritten, state := simplifyExpression(e, allowCNF)
 			if ch, isChange := state.(changed); isChange {
 				printRule(ch.rule, ch.exprMatched)
 				exprChanged = true
@@ -56,12 +71,12 @@ func RewritePredicate(ast SQLNode) SQLNode {
 	}
 }
 
-func simplifyExpression(expr Expr) (Expr, rewriteState) {
+func simplifyExpression(expr Expr, allowCNF bool) (Expr, rewriteState) {
 	switch expr := expr.(type) {
 	case *NotExpr:
 		return simplifyNot(expr)
 	case *OrExpr:
-		return simplifyOr(expr)
+		return simplifyOr(expr, allowCNF)
 	case *XorExpr:
 		return simplifyXor(expr)
 	case *AndExpr:
@@ -117,14 +132,14 @@ func ExtractINFromOR(expr *OrExpr) []Expr {
 	return uniquefy(ins)
 }
 
-func simplifyOr(expr *OrExpr) (Expr, rewriteState) {
+func simplifyOr(expr *OrExpr, allowCNF bool) (Expr, rewriteState) {
 	or := expr
 
 	// first we search for ANDs and see how they can be simplified
 	land, lok := or.Left.(*AndExpr)
 	rand, rok := or.Right.(*AndExpr)
-	switch {
-	case lok && rok:
+
+	if lok && rok {
 		// (<> AND <>) OR (<> AND <>)
 		var a, b, c Expr
 		var change changed
@@ -132,40 +147,51 @@ func simplifyOr(expr *OrExpr) (Expr, rewriteState) {
 		case Equals.Expr(land.Left, rand.Left):
 			change = newChange("(A and B) or (A and C) => A AND (B OR C)", f(expr))
 			a, b, c = land.Left, land.Right, rand.Right
+			return &AndExpr{Left: a, Right: &OrExpr{Left: b, Right: c}}, change
 		case Equals.Expr(land.Left, rand.Right):
 			change = newChange("(A and B) or (C and A) => A AND (B OR C)", f(expr))
 			a, b, c = land.Left, land.Right, rand.Left
+			return &AndExpr{Left: a, Right: &OrExpr{Left: b, Right: c}}, change
 		case Equals.Expr(land.Right, rand.Left):
 			change = newChange("(B and A) or (A and C) => A AND (B OR C)", f(expr))
 			a, b, c = land.Right, land.Left, rand.Right
+			return &AndExpr{Left: a, Right: &OrExpr{Left: b, Right: c}}, change
 		case Equals.Expr(land.Right, rand.Right):
 			change = newChange("(B and A) or (C and A) => A AND (B OR C)", f(expr))
 			a, b, c = land.Right, land.Left, rand.Left
-		default:
-			return expr, noChange{}
+			return &AndExpr{Left: a, Right: &OrExpr{Left: b, Right: c}}, change
 		}
-		return &AndExpr{Left: a, Right: &OrExpr{Left: b, Right: c}}, change
-	case lok:
-		// (<> AND <>) OR <>
+	}
+
+	// (<> AND <>) OR <>
+	if lok {
 		// Simplification
 		if Equals.Expr(or.Right, land.Left) || Equals.Expr(or.Right, land.Right) {
 			return or.Right, newChange("(A AND B) OR A => A", f(expr))
 		}
-		// Distribution Law
-		return &AndExpr{Left: &OrExpr{Left: land.Left, Right: or.Right}, Right: &OrExpr{Left: land.Right, Right: or.Right}},
-			newChange("(A AND B) OR C => (A OR C) AND (B OR C)", f(expr))
-	case rok:
-		// <> OR (<> AND <>)
+
+		if allowCNF {
+			// Distribution Law
+			return &AndExpr{Left: &OrExpr{Left: land.Left, Right: or.Right}, Right: &OrExpr{Left: land.Right, Right: or.Right}},
+				newChange("(A AND B) OR C => (A OR C) AND (B OR C)", f(expr))
+		}
+	}
+
+	// <> OR (<> AND <>)
+	if rok {
 		// Simplification
 		if Equals.Expr(or.Left, rand.Left) || Equals.Expr(or.Left, rand.Right) {
 			return or.Left, newChange("A OR (A AND B) => A", f(expr))
 		}
-		// Distribution Law
-		return &AndExpr{
-				Left:  &OrExpr{Left: or.Left, Right: rand.Left},
-				Right: &OrExpr{Left: or.Left, Right: rand.Right},
-			},
-			newChange("C OR (A AND B) => (C OR A) AND (C OR B)", f(expr))
+
+		if allowCNF {
+			// Distribution Law
+			return &AndExpr{
+					Left:  &OrExpr{Left: or.Left, Right: rand.Left},
+					Right: &OrExpr{Left: or.Left, Right: rand.Right},
+				},
+				newChange("C OR (A AND B) => (C OR A) AND (C OR B)", f(expr))
+		}
 	}
 
 	// next, we want to try to turn multiple ORs into an IN when possible
@@ -261,7 +287,6 @@ func simplifyAnd(expr *AndExpr) (Expr, rewriteState) {
 	and := expr
 	if or, ok := and.Left.(*OrExpr); ok {
 		// Simplification
-
 		if Equals.Expr(or.Left, and.Right) {
 			return and.Right, newChange("(A OR B) AND A => A", f(expr))
 		}
