@@ -161,13 +161,14 @@ func normKey(bkey []byte) string {
 func ReadMycnf(mycnf *Mycnf, waitTime time.Duration) (*Mycnf, error) {
 	f, err := os.Open(mycnf.Path)
 	if waitTime != 0 {
-		timeout := time.After(waitTime)
+		timer := time.NewTimer(waitTime)
+		ticker := time.NewTicker(myCnfWaitRetryTime)
+		defer ticker.Stop()
 		for err != nil {
 			select {
-			case <-timeout:
+			case <-timer.C:
 				return nil, err
-			default:
-				time.Sleep(myCnfWaitRetryTime)
+			case <-ticker.C:
 				f, err = os.Open(mycnf.Path)
 			}
 		}

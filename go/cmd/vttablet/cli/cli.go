@@ -180,33 +180,29 @@ func waitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) er
 	if waitTime == 0 {
 		return nil
 	}
-	timeout := time.After(waitTime)
+	timer := time.NewTimer(waitTime)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
 	defer cancel()
 	for {
-		select {
-		case <-timeout:
-			return fmt.Errorf("waited %v for dba user to have the required permissions", waitTime)
-		default:
-			conn, err := dbconnpool.NewDBConnection(ctx, config.DB.DbaConnector())
-			if err != nil {
-				break
-			}
-			res, err := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
-			if err != nil {
-				break
-			}
-			if res != nil && len(res.Rows) > 0 && len(res.Rows[0]) > 0 {
+		conn, err := dbconnpool.NewDBConnection(ctx, config.DB.DbaConnector())
+		if err == nil {
+			res, fetchErr := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
+			if fetchErr == nil && res != nil && len(res.Rows) > 0 && len(res.Rows[0]) > 0 {
 				privileges := res.Rows[0][0].ToString()
 				// In MySQL 8.0, all the privileges are listed out explicitly, so we can search for SUPER in the output.
 				// In MySQL 5.7, all the privileges are not listed explicitly, instead ALL PRIVILEGES is written, so we search for that too.
 				if strings.Contains(privileges, "SUPER") || strings.Contains(privileges, "ALL PRIVILEGES") {
 					return nil
 				}
-
 			}
 		}
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-timer.C:
+			return fmt.Errorf("waited %v for dba user to have the required permissions", waitTime)
+		case <-ticker.C:
+		}
 	}
 }
 
