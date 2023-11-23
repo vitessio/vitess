@@ -91,7 +91,7 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	var mu sync.Mutex
 	return vcursor.StreamExecutePrimitive(ctx, p.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		var err error
-		if wantfields {
+		if wantfields && qr.Fields != nil {
 			once.Do(func() {
 				fields, err = p.evalFields(env, qr.Fields)
 				if err != nil {
