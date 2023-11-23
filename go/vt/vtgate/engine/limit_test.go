@@ -451,6 +451,73 @@ func TestLimitStreamExecute(t *testing.T) {
 	}
 }
 
+func TestLimitStreamExecuteAsync(t *testing.T) {
+	bindVars := make(map[string]*querypb.BindVariable)
+	fields := sqltypes.MakeTestFields(
+		"col1|col2",
+		"int64|varchar",
+	)
+	inputResults := sqltypes.MakeTestStreamingResults(
+		fields,
+		"a|1",
+		"b|2",
+		"d|3",
+		"e|4",
+		"a|1",
+		"b|2",
+		"d|3",
+		"e|4",
+		"---",
+		"c|7",
+		"x|8",
+		"y|9",
+		"c|7",
+		"x|8",
+		"y|9",
+		"c|7",
+		"x|8",
+		"y|9",
+		"---",
+		"l|4",
+		"m|5",
+		"n|6",
+		"l|4",
+		"m|5",
+		"n|6",
+		"l|4",
+		"m|5",
+		"n|6",
+	)
+	fp := &fakePrimitive{
+		results: inputResults,
+		async:   true,
+	}
+
+	const maxCount = 26
+	for i := 0; i <= maxCount*20; i++ {
+		expRows := i
+		l := &Limit{
+			Count: evalengine.NewLiteralInt(int64(expRows)),
+			Input: fp,
+		}
+		// Test with limit smaller than input.
+		results := &sqltypes.Result{}
+
+		err := l.TryStreamExecute(context.Background(), &noopVCursor{}, bindVars, true, func(qr *sqltypes.Result) error {
+			if qr != nil {
+				results.Rows = append(results.Rows, qr.Rows...)
+			}
+			return nil
+		})
+		require.NoError(t, err)
+		if expRows > maxCount {
+			expRows = maxCount
+		}
+		require.Len(t, results.Rows, expRows)
+	}
+
+}
+
 func TestOffsetStreamExecute(t *testing.T) {
 	bindVars := make(map[string]*querypb.BindVariable)
 	fields := sqltypes.MakeTestFields(
