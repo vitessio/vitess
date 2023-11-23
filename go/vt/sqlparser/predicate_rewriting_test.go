@@ -91,8 +91,8 @@ func TestSimplifyExpression(in *testing.T) {
 			expr, err := ParseExpr(tc.in)
 			require.NoError(t, err)
 
-			expr, didRewrite := simplifyExpression(expr, true)
-			assert.True(t, didRewrite.changed())
+			expr, changed := simplifyExpression(expr)
+			assert.True(t, changed)
 			assert.Equal(t, tc.expected, String(expr))
 		})
 	}
@@ -137,9 +137,12 @@ func TestRewritePredicate(in *testing.T) {
 		in:       "(a = 1 and b = 41) or (a = 2 and b = 42) or (a = 3 and b = 43)",
 		expected: "a in (1, 2, 3) and (a in (1, 2) or b = 43) and ((a = 1 or b = 42 or a = 3) and (a = 1 or b = 42 or b = 43)) and ((b = 41 or a = 2 or a = 3) and (b = 41 or a = 2 or b = 43) and ((b in (41, 42) or a = 3) and b in (41, 42, 43)))",
 	}, {
-		// this has too many OR expressions in it, so we don't even try the CNF rewriting
+		// the following two tests show some pathological cases that would grow too much, and so we abort the rewriting
 		in:       "a = 1 and b = 41 or a = 2 and b = 42 or a = 3 and b = 43 or a = 4 and b = 44 or a = 5 and b = 45 or a = 6 and b = 46",
 		expected: "a = 1 and b = 41 or a = 2 and b = 42 or a = 3 and b = 43 or a = 4 and b = 44 or a = 5 and b = 45 or a = 6 and b = 46",
+	}, {
+		in:       "not n0 xor not (n2 and n3) xor (not n2 and (n1 xor n1) xor (n0 xor n0 xor n2))",
+		expected: "not n0 xor not (n2 and n3) xor (not n2 and (n1 xor n1) xor (n0 xor n0 xor n2))",
 	}}
 
 	for _, tc := range tests {
