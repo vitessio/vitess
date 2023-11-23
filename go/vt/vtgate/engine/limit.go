@@ -100,7 +100,9 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 
 	var mu sync.Mutex
 	err = vcursor.StreamExecutePrimitive(ctx, l.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
-		if len(qr.Fields) != 0 {
+		mu.Lock()
+		defer mu.Unlock()
+		if wantfields && len(qr.Fields) != 0 {
 			if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
 			}
@@ -110,8 +112,6 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 			return nil
 		}
 
-		mu.Lock()
-		defer mu.Unlock()
 		// we've still not seen all rows we need to see before we can return anything to the client
 		if offset > 0 {
 			if inputSize <= offset {

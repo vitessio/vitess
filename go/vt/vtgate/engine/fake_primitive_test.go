@@ -131,11 +131,18 @@ func (f *fakePrimitive) syncCall(wantfields bool, callback func(*sqltypes.Result
 
 func (f *fakePrimitive) asyncCall(callback func(*sqltypes.Result) error) error {
 	var g errgroup.Group
+	var fields []*querypb.Field
+	if len(f.results) > 0 {
+		fields = f.results[0].Fields
+	}
 	for _, res := range f.results {
 		qr := res
 		g.Go(func() error {
 			if qr == nil {
 				return f.sendErr
+			}
+			if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
+				return err
 			}
 			result := &sqltypes.Result{}
 			for i := 0; i < len(qr.Rows); i++ {

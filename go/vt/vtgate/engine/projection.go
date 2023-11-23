@@ -91,7 +91,9 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	var mu sync.Mutex
 	return vcursor.StreamExecutePrimitive(ctx, p.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		var err error
-		if wantfields && qr.Fields != nil {
+		mu.Lock()
+		defer mu.Unlock()
+		if wantfields {
 			once.Do(func() {
 				fields, err = p.evalFields(env, qr.Fields)
 				if err != nil {
@@ -108,8 +110,6 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			return err
 		}
 		resultRows := make([]sqltypes.Row, 0, len(qr.Rows))
-		mu.Lock()
-		defer mu.Unlock()
 		for _, r := range qr.Rows {
 			resultRow := make(sqltypes.Row, 0, len(p.Exprs))
 			env.Row = r
