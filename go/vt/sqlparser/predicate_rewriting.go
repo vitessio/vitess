@@ -21,8 +21,8 @@ package sqlparser
 func RewritePredicate(ast SQLNode) SQLNode {
 	original := CloneSQLNode(ast)
 
-	// This loop can in some cases of this conversion to CNF can lead to an exponential explosion of the formula,
-	// so we stop it before it goes too crazy
+	// Beware: converting to CNF in this loop might cause exponential formula growth.
+	// We bail out early to prevent going overboard.
 	for loop := 0; loop < 15; loop++ {
 		exprChanged := false
 		stopOnChange := func(SQLNode, SQLNode) bool {
