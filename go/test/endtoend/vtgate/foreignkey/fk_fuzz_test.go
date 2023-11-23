@@ -698,27 +698,20 @@ func BenchmarkFkFuzz(b *testing.B) {
 		// Connect to MySQL and run all the queries
 		mysqlConn, err := mysql.Connect(context.Background(), &mysqlParams)
 		require.NoError(b, err)
-		b.Run("MySQL", func(b *testing.B) {
-			runQueries(b, mysqlConn, queries)
-		})
-
-		// Connect to Vitess managed foreign keys keyspace and run all the queries
+		// Connect to Vitess managed foreign keys keyspace
 		vtConn, err := mysql.Connect(context.Background(), &vtParams)
 		require.NoError(b, err)
 		utils.Exec(b, vtConn, fmt.Sprintf("use `%v`", unshardedKs))
-		b.Run("Vitess Managed Foreign Keys", func(b *testing.B) {
-			runQueries(b, vtConn, queries)
-		})
-
-		// Connect to Vitess managed foreign keys keyspace and run all the queries
+		// Connect to Vitess unmanaged foreign keys keyspace
 		vtUnmanagedConn, err := mysql.Connect(context.Background(), &vtParams)
 		require.NoError(b, err)
 		utils.Exec(b, vtUnmanagedConn, fmt.Sprintf("use `%v`", unshardedUnmanagedKs))
-		b.Run("Vitess Unmanaged Foreign Keys", func(b *testing.B) {
-			runQueries(b, vtUnmanagedConn, queries)
-		})
 
-		// Verify that the data in MySQL and Vitess matches. This ensures, we ended up running the same set of queries with the same outputs.
+		// First we make sure that running all the queries in both the Vitess modes and MySQL gives the same data.
+		// So we run all the queries and then check that the data in all of them matches.
+		runQueries(b, mysqlConn, queries)
+		runQueries(b, vtConn, queries)
+		runQueries(b, vtUnmanagedConn, queries)
 		for _, table := range fkTables {
 			query := fmt.Sprintf("SELECT * FROM %v ORDER BY id", table)
 			resVitessManaged, _ := vtConn.ExecuteFetch(query, 10000, true)
@@ -727,6 +720,22 @@ func BenchmarkFkFuzz(b *testing.B) {
 			require.True(b, compareResultRows(resVitessManaged, resMySQL), "Results for %v don't match\nVitess Managed\n%v\nMySQL\n%v", table, resVitessManaged, resMySQL)
 			require.True(b, compareResultRows(resVitessUnmanaged, resMySQL), "Results for %v don't match\nVitess Unmanaged\n%v\nMySQL\n%v", table, resVitessUnmanaged, resMySQL)
 		}
+
+		// Now we run the benchmarks!
+		b.Run("MySQL", func(b *testing.B) {
+			startBenchmark(b)
+			runQueries(b, mysqlConn, queries)
+		})
+
+		b.Run("Vitess Managed Foreign Keys", func(b *testing.B) {
+			startBenchmark(b)
+			runQueries(b, vtConn, queries)
+		})
+
+		b.Run("Vitess Unmanaged Foreign Keys", func(b *testing.B) {
+			startBenchmark(b)
+			runQueries(b, vtUnmanagedConn, queries)
+		})
 	}
 }
 
