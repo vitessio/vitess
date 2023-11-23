@@ -229,14 +229,12 @@ func ExtractINFromOR(expr *OrExpr) []Expr {
 			}
 
 			var colName *ColName
-			switch left := comparisonExpr.Left.(type) {
-			case *ColName:
+			if left, ok := comparisonExpr.Left.(*ColName); ok {
 				colName = left
 				currentValues = append(currentValues, comparisonExpr.Right)
 			}
 
-			switch right := comparisonExpr.Right.(type) {
-			case *ColName:
+			if right, ok := comparisonExpr.Right.(*ColName); ok {
 				if colName != nil {
 					return nil
 				}
