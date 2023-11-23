@@ -719,7 +719,7 @@ func BenchmarkFkFuzz(b *testing.B) {
 		// Clear out all the data to ensure we start with a clean slate.
 		startBenchmark(b)
 		// Create a fuzzer to generate and store a certain set of queries.
-		fz := newFuzzer(1, maxValForId, maxValForCol, insertShare, deleteShare, updateShare, SQLQueries)
+		fz := newFuzzer(1, maxValForId, maxValForCol, insertShare, deleteShare, updateShare, SQLQueries, nil)
 		var queries []string
 		for j := 0; j < numQueries; j++ {
 			genQueries := fz.generateQuery()
