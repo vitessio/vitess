@@ -162,10 +162,10 @@ func TestDistinctStreamAsync(t *testing.T) {
 			async: true,
 		},
 		CheckCols: []CheckCol{
-			{Col: 0, Type: evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)},
-			{Col: 1, Type: evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID)},
-			{Col: 2, Type: evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID)},
-			{Col: 3, Type: evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)},
+			{Col: 0, Type: sqltypes.VarChar, Collation: collations.CollationUtf8mb4ID},
+			{Col: 1, Type: sqltypes.Int64, Collation: collations.CollationBinaryID},
+			{Col: 2, Type: sqltypes.Int64, Collation: collations.CollationBinaryID},
+			{Col: 3, Type: sqltypes.VarChar, Collation: collations.CollationUtf8mb4ID},
 		},
 	}
 

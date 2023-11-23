@@ -85,7 +85,7 @@ func TestFilterPass(t *testing.T) {
 }
 
 func TestFilterStreaming(t *testing.T) {
-	utf8mb4Bin := collationEnv.LookupByName("utf8mb4_bin")
+	utf8mb4Bin := collationEnv.LookupByName("utf8mb4_bin").ID()
 	predicate := &sqlparser.ComparisonExpr{
 		Operator: sqlparser.GreaterThanOp,
 		Left:     sqlparser.NewColName("left"),

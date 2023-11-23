@@ -695,7 +695,7 @@ func TestMemorySortStreamAsync(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []evalengine.OrderByParams{{
+		OrderBy: []OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
