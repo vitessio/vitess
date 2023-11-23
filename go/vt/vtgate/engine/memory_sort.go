@@ -105,13 +105,13 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 
 	var mu sync.Mutex
 	err = vcursor.StreamExecutePrimitive(ctx, ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+		mu.Lock()
+		defer mu.Unlock()
 		if len(qr.Fields) != 0 {
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
 			}
 		}
-		mu.Lock()
-		defer mu.Unlock()
 		for _, row := range qr.Rows {
 			sorter.Push(row)
 		}
