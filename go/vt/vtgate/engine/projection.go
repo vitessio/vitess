@@ -88,8 +88,11 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	var once sync.Once
 	var fields []*querypb.Field
+	var mu sync.Mutex
 	return vcursor.StreamExecutePrimitive(ctx, p.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		var err error
+		mu.Lock()
+		defer mu.Unlock()
 		if wantfields {
 			once.Do(func() {
 				fields, err = p.evalFields(env, qr.Fields, vcursor)
