@@ -68,11 +68,11 @@ func (expr *builtinBitCount) compile(c *compiler) (ctype, error) {
 	if ct.Type == sqltypes.VarBinary && !ct.isHexOrBitLiteral() {
 		c.asm.BitCount_b()
 		c.asm.jumpDestination(skip)
-		return ctype{Type: sqltypes.Int64, Col: collationBinary}, nil
+		return ctype{Type: sqltypes.Int64, Flag: nullableFlags(ct.Flag), Col: collationBinary}, nil
 	}
 
 	_ = c.compileToBitwiseUint64(ct, 1)
 	c.asm.BitCount_u()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationBinary}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(ct.Flag), Col: collationBinary}, nil
 }
