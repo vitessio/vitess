@@ -91,14 +91,8 @@ func TestSimplifyExpression(in *testing.T) {
 			expr, err := ParseExpr(tc.in)
 			require.NoError(t, err)
 
-			r := &rewriter{
-				// setting these number so it never stops rewriting for these tests
-				initialSize: 1000000000,
-				currentSize: 1,
-			}
-
-			expr, didRewrite := r.simplifyExpression(expr)
-			assert.True(t, didRewrite)
+			expr, changed := simplifyExpression(expr)
+			assert.True(t, changed)
 			assert.Equal(t, tc.expected, String(expr))
 		})
 	}

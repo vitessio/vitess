@@ -19,18 +19,11 @@ package sqlparser
 // RewritePredicate walks the input AST and rewrites any boolean logic into a simpler form
 // This simpler form is CNF plus logic for extracting predicates from OR, plus logic for turning ORs into IN
 func RewritePredicate(ast SQLNode) SQLNode {
-	original, initialSize := cloneAndSize(ast)
+	original := CloneSQLNode(ast)
 
-	r := &rewriter{
-		initialSize: initialSize,
-		currentSize: initialSize,
-	}
-	for {
-		if r.currentSize > initialSize*10 {
-			// the rewritten expression is growing too much.
-			// we'll abort here and return the original expression instead
-			return original
-		}
+	// This loop can in some cases of this conversion to CNF can lead to an exponential explosion of the formula,
+	// so we stop it before it goes too crazy
+	for loop := 0; loop < 15; loop++ {
 		exprChanged := false
 		stopOnChange := func(SQLNode, SQLNode) bool {
 			return !exprChanged
@@ -41,7 +34,7 @@ func RewritePredicate(ast SQLNode) SQLNode {
 				return true
 			}
 
-			rewritten, changed := r.simplifyExpression(e)
+			rewritten, changed := simplifyExpression(e)
 			if changed {
 				exprChanged = true
 				cursor.Replace(rewritten)
@@ -53,68 +46,44 @@ func RewritePredicate(ast SQLNode) SQLNode {
 			return ast
 		}
 	}
+
+	return original
 }
 
-func cloneAndSize(ast SQLNode) (SQLNode, int) {
-	initialSize := 0
-	original := CopyOnRewrite(ast, nil, func(cursor *CopyOnWriteCursor) {
-		node := cursor.Node()
-		_, ok := node.(Expr)
-		if !ok {
-			return
-		}
-		initialSize++
-
-		col, ok := node.(*ColName)
-		if !ok {
-			return
-		}
-
-		// we'll clone these just to make the CopyOnRewrite give us a clone of the entire expression
-		klone := *col
-		cursor.Replace(&klone)
-	}, nil)
-	return original, initialSize
-}
-
-type rewriter struct {
-	initialSize, currentSize int
-}
-
-func (r *rewriter) simplifyExpression(expr Expr) (Expr, bool) {
+func simplifyExpression(expr Expr) (Expr, bool) {
 	switch expr := expr.(type) {
 	case *NotExpr:
-		return r.simplifyNot(expr)
+		return simplifyNot(expr)
 	case *OrExpr:
-		return r.simplifyOr(expr)
+		return simplifyOr(expr)
 	case *XorExpr:
-		return r.simplifyXor(expr)
+		return simplifyXor(expr)
 	case *AndExpr:
-		return r.simplifyAnd(expr)
+		return simplifyAnd(expr)
 	}
 	return expr, false
 }
 
-func (r *rewriter) simplifyNot(expr *NotExpr) (Expr, bool) {
+func simplifyNot(expr *NotExpr) (Expr, bool) {
 	switch child := expr.Expr.(type) {
 	case *NotExpr:
-		r.currentSize--
 		return child.Expr, true
 	case *OrExpr:
-		// we start with 4 expressions and finish with 5
 		// not(or(a,b)) => and(not(a),not(b))
-		r.currentSize++
 		return &AndExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, true
 	case *AndExpr:
-		// we start with 4 expressions and finish with 5
 		// not(and(a,b)) => or(not(a), not(b))
-		r.currentSize++
 		return &OrExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, true
 	}
 	return expr, false
 }
 
-func (r *rewriter) simplifyOr(expr *OrExpr) (Expr, bool) {
+func simplifyOr(expr *OrExpr) (Expr, bool) {
+	res, rewritten := distinctOr(expr)
+	if rewritten {
+		return res, true
+	}
+
 	or := expr
 
 	// first we search for ANDs and see how they can be simplified
@@ -124,24 +93,19 @@ func (r *rewriter) simplifyOr(expr *OrExpr) (Expr, bool) {
 	if lok && rok {
 		// (<> AND <>) OR (<> AND <>)
 		// or(and(T1,T2), and(T2, T3)) => and(T1, or(T2, T2))
-		// All of these rewrites goes from 7 expressions to 5
 		var a, b, c Expr
 		switch {
 		case Equals.Expr(land.Left, rand.Left):
 			a, b, c = land.Left, land.Right, rand.Right
-			r.currentSize -= 2
 			return &AndExpr{Left: a, Right: &OrExpr{Left: b, Right: c}}, true
 		case Equals.Expr(land.Left, rand.Right):
 			a, b, c = land.Left, land.Right, rand.Left
-			r.currentSize -= 2
 			return &AndExpr{Left: a, Right: &OrExpr{Left: b, Right: c}}, true
 		case Equals.Expr(land.Right, rand.Left):
 			a, b, c = land.Right, land.Left, rand.Right
-			r.currentSize -= 2
 			return &AndExpr{Left: a, Right: &OrExpr{Left: b, Right: c}}, true
 		case Equals.Expr(land.Right, rand.Right):
 			a, b, c = land.Right, land.Left, rand.Left
-			r.currentSize -= 2
 			return &AndExpr{Left: a, Right: &OrExpr{Left: b, Right: c}}, true
 		}
 	}
@@ -150,14 +114,12 @@ func (r *rewriter) simplifyOr(expr *OrExpr) (Expr, bool) {
 	if lok {
 		// Simplification
 		if Equals.Expr(or.Right, land.Left) || Equals.Expr(or.Right, land.Right) {
-			// or(and(a,b), c) => c   where c=a or c=b   5 -> 1
-			r.currentSize -= 4
+			// or(and(a,b), c) => c   where c=a or c=b
 			return or.Right, true
 		}
 
 		// Distribution Law
-		//  or(c, and(a,b)) => and(or(c,a), or(c,b)) 5 -> 7
-		r.currentSize += 2
+		//  or(c, and(a,b)) => and(or(c,a), or(c,b))
 		return &AndExpr{
 			Left: &OrExpr{
 				Left:  land.Left,
@@ -175,13 +137,11 @@ func (r *rewriter) simplifyOr(expr *OrExpr) (Expr, bool) {
 		// Simplification
 		if Equals.Expr(or.Left, rand.Left) || Equals.Expr(or.Left, rand.Right) {
 			// or(a,and(b,c)) => a
-			r.currentSize -= 4
 			return or.Left, true
 		}
 
 		// Distribution Law
-		//  or(and(a,b), c) => and(or(c,a), or(c,b)) 5 -> 7
-		r.currentSize += 2
+		//  or(and(a,b), c) => and(or(c,a), or(c,b))
 		return &AndExpr{
 			Left:  &OrExpr{Left: or.Left, Right: rand.Left},
 			Right: &OrExpr{Left: or.Left, Right: rand.Right},
@@ -194,55 +154,49 @@ func (r *rewriter) simplifyOr(expr *OrExpr) (Expr, bool) {
 	if lok && rok {
 		newExpr, rewritten := tryTurningOrIntoIn(lftCmp, rgtCmp)
 		if rewritten {
-			// or(a=x,a=y) => in(a,[x,y]) 7 -> 4
-			r.currentSize -= 3
-			return newExpr, rewritten
+			// or(a=x,a=y) => in(a,[x,y])
+			return newExpr, true
 		}
 	}
 
 	// Try to make distinct
-	result, removed := distinctOr(expr)
-	r.currentSize -= removed
-	return result, removed > 0
+	result, changed := distinctOr(expr)
+	if changed {
+		return result, true
+	}
+	return result, false
 }
 
-func (r *rewriter) simplifyXor(expr *XorExpr) (Expr, bool) {
-	// xor(a,b) => and(or(a,b), not(and(a,b)) 3 -> 8
-	r.currentSize += 8
+func simplifyXor(expr *XorExpr) (Expr, bool) {
+	// xor(a,b) => and(or(a,b), not(and(a,b))
 	return &AndExpr{
 		Left:  &OrExpr{Left: expr.Left, Right: expr.Right},
 		Right: &NotExpr{Expr: &AndExpr{Left: expr.Left, Right: expr.Right}},
 	}, true
 }
 
-func (r *rewriter) simplifyAnd(expr *AndExpr) (Expr, bool) {
+func simplifyAnd(expr *AndExpr) (Expr, bool) {
 	res, rewritten := distinctAnd(expr)
-	if rewritten > 0 {
-		r.currentSize -= rewritten
+	if rewritten {
 		return res, true
 	}
 	and := expr
 	if or, ok := and.Left.(*OrExpr); ok {
 		// Simplification
 		// and(or(a,b),c) => c when c=a or c=b
-		// 5 -> 1
 		if Equals.Expr(or.Left, and.Right) {
-			r.currentSize -= 4
 			return and.Right, true
 		}
 		if Equals.Expr(or.Right, and.Right) {
-			r.currentSize -= 4
 			return and.Right, true
 		}
 	}
 	if or, ok := and.Right.(*OrExpr); ok {
 		// Simplification
 		if Equals.Expr(or.Left, and.Left) {
-			r.currentSize -= 4
 			return and.Left, true
 		}
 		if Equals.Expr(or.Right, and.Left) {
-			r.currentSize -= 4
 			return and.Left, true
 		}
 	}
@@ -339,8 +293,7 @@ outer:
 	return
 }
 
-func distinctOr(in *OrExpr) (result Expr, removed int) {
-
+func distinctOr(in *OrExpr) (result Expr, changed bool) {
 	todo := []*OrExpr{in}
 	var leaves []Expr
 	for len(todo) > 0 {
@@ -361,19 +314,17 @@ func distinctOr(in *OrExpr) (result Expr, removed int) {
 	var predicates []Expr
 
 outer1:
-	for len(leaves) > 0 {
-		curr := leaves[0]
-		leaves = leaves[1:]
+	for _, curr := range leaves {
 		for _, alreadyIn := range predicates {
 			if Equals.Expr(alreadyIn, curr) {
-				removed++
+				changed = true
 				continue outer1
 			}
 		}
 		predicates = append(predicates, curr)
 	}
-	if removed == 0 {
-		return in, 0
+	if !changed {
+		return in, false
 	}
 
 	for i, curr := range predicates {
@@ -384,10 +335,10 @@ outer1:
 		result = &OrExpr{Left: result, Right: curr}
 	}
 
-	return result, removed
+	return
 }
 
-func distinctAnd(in *AndExpr) (result Expr, removed int) {
+func distinctAnd(in *AndExpr) (result Expr, changed bool) {
 	todo := []*AndExpr{in}
 	var leaves []Expr
 	for len(todo) > 0 {
@@ -409,15 +360,17 @@ outer1:
 	for _, curr := range leaves {
 		for _, alreadyIn := range predicates {
 			if Equals.Expr(alreadyIn, curr) {
-				removed++
+				changed = true
 				continue outer1
 			}
 		}
 		predicates = append(predicates, curr)
 	}
-	if removed == 0 {
-		return in, 0
+
+	if !changed {
+		return in, false
 	}
+
 	for i, curr := range predicates {
 		if i == 0 {
 			result = curr
@@ -425,5 +378,5 @@ outer1:
 		}
 		result = &AndExpr{Left: result, Right: curr}
 	}
-	return AndExpressions(leaves...), removed
+	return AndExpressions(leaves...), true
 }
