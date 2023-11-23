@@ -4678,7 +4678,7 @@
           "Sharded": true
         },
         "FieldQuery": "select * from customer where 1 != 1",
-        "Query": "select * from customer where name = 'x'",
+        "Query": "select * from customer where `name` = 'x'",
         "Table": "customer"
       },
       "TablesUsed": [
