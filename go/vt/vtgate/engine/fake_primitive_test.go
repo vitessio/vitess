@@ -23,8 +23,9 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/sqltypes"
+	"golang.org/x/sync/errgroup"
 
+	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -41,6 +42,8 @@ type fakePrimitive struct {
 	log []string
 
 	allResultsInOneCall bool
+
+	async bool
 }
 
 func (f *fakePrimitive) Inputs() ([]Primitive, []map[string]any) {
@@ -86,6 +89,13 @@ func (f *fakePrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor, b
 		return f.sendErr
 	}
 
+	if f.async {
+		return f.asyncCall(callback)
+	}
+	return f.syncCall(wantfields, callback)
+}
+
+func (f *fakePrimitive) syncCall(wantfields bool, callback func(*sqltypes.Result) error) error {
 	readMoreResults := true
 	for readMoreResults && f.curResult < len(f.results) {
 		readMoreResults = f.allResultsInOneCall
@@ -116,9 +126,46 @@ func (f *fakePrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor, b
 			}
 		}
 	}
-
 	return nil
 }
+
+func (f *fakePrimitive) asyncCall(callback func(*sqltypes.Result) error) error {
+	var g errgroup.Group
+	var fields []*querypb.Field
+	if len(f.results) > 0 {
+		fields = f.results[0].Fields
+	}
+	for _, res := range f.results {
+		qr := res
+		g.Go(func() error {
+			if qr == nil {
+				return f.sendErr
+			}
+			if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
+				return err
+			}
+			result := &sqltypes.Result{}
+			for i := 0; i < len(qr.Rows); i++ {
+				result.Rows = append(result.Rows, qr.Rows[i])
+				// Send only two rows at a time.
+				if i%2 == 1 {
+					if err := callback(result); err != nil {
+						return err
+					}
+					result = &sqltypes.Result{}
+				}
+			}
+			if len(result.Rows) != 0 {
+				if err := callback(result); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+	return g.Wait()
+}
+
 func (f *fakePrimitive) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("GetFields %v", printBindVars(bindVars)))
 	return f.TryExecute(ctx, vcursor, bindVars, true /* wantfields */)
