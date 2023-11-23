@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -198,13 +199,16 @@ func (d *Distinct) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 
 // TryStreamExecute implements the Primitive interface
 func (d *Distinct) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	pt := newProbeTable(d.CheckCols)
+	var mu sync.Mutex
 
+	pt := newProbeTable(d.CheckCols)
 	err := vcursor.StreamExecutePrimitive(ctx, d.Source, bindVars, wantfields, func(input *sqltypes.Result) error {
 		result := &sqltypes.Result{
 			Fields:   input.Fields,
 			InsertID: input.InsertID,
 		}
+		mu.Lock()
+		defer mu.Unlock()
 		for _, row := range input.Rows {
 			exists, err := pt.exists(row)
 			if err != nil {
