@@ -184,19 +184,18 @@ func ExtractINFromOR(expr *OrExpr) []Expr {
 
 func orToSlice(expr *OrExpr) []Expr {
 	var exprs []Expr
-	switch lexpr := expr.Left.(type) {
-	case *OrExpr:
-		exprs = append(exprs, orToSlice(lexpr)...)
-	default:
-		exprs = append(exprs, lexpr)
+
+	handleOrSide := func(e Expr) {
+		switch e := e.(type) {
+		case *OrExpr:
+			exprs = append(exprs, orToSlice(e)...)
+		default:
+			exprs = append(exprs, e)
+		}
 	}
 
-	switch rexpr := expr.Right.(type) {
-	case *OrExpr:
-		exprs = append(exprs, orToSlice(rexpr)...)
-	default:
-		exprs = append(exprs, rexpr)
-	}
+	handleOrSide(expr.Left)
+	handleOrSide(expr.Right)
 	return exprs
 }
 
@@ -212,31 +211,29 @@ func andToSlice(expr Expr) []*ComparisonExpr {
 	}
 
 	var exprs []*ComparisonExpr
-	switch lexpr := andExpr.Left.(type) {
-	case *AndExpr:
-		slice := andToSlice(lexpr)
-		if slice == nil {
-			return nil
+	handleAndSide := func(e Expr) bool {
+		switch e := e.(type) {
+		case *AndExpr:
+			slice := andToSlice(e)
+			if slice == nil {
+				return false
+			}
+			exprs = append(exprs, slice...)
+		case *ComparisonExpr:
+			exprs = append(exprs, e)
+		default:
+			return false
 		}
-		exprs = append(exprs, slice...)
-	case *ComparisonExpr:
-		exprs = append(exprs, lexpr)
-	default:
+		return true
+	}
+
+	if !handleAndSide(andExpr.Left) {
+		return nil
+	}
+	if !handleAndSide(andExpr.Right) {
 		return nil
 	}
 
-	switch rexpr := andExpr.Right.(type) {
-	case *AndExpr:
-		slice := andToSlice(rexpr)
-		if slice == nil {
-			return nil
-		}
-		exprs = append(exprs, slice...)
-	case *ComparisonExpr:
-		exprs = append(exprs, rexpr)
-	default:
-		return nil
-	}
 	return exprs
 }
 
