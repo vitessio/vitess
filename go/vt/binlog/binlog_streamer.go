@@ -251,8 +251,8 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	var statements []FullBinlogStatement
 	var format mysql.BinlogFormat
 	var gtid replication.GTID
-	var pos = bls.startPos
-	var autocommit = true
+	pos := bls.startPos
+	autocommit := true
 	var err error
 
 	// Remember the RBR state.
@@ -723,7 +723,7 @@ func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableC
 }
 
 // writeValuesAsSQL is a helper method to print the values as SQL in the
-// provided bytes.Buffer. It also returns the value for the keyspaceIDColumn,
+// provided strings.Builder. It also returns the value for the keyspaceIDColumn,
 // and the array of values for the PK, if necessary.
 func writeValuesAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, rs *mysql.Rows, rowIndex int, getPK bool) (sqltypes.Value, []sqltypes.Value, error) {
 	valueIndex := 0
@@ -794,7 +794,7 @@ func writeValuesAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, rs *my
 }
 
 // writeIdentifiersAsSQL is a helper method to print the identifies as SQL in the
-// provided bytes.Buffer. It also returns the value for the keyspaceIDColumn,
+// provided strings.Builder. It also returns the value for the keyspaceIDColumn,
 // and the array of values for the PK, if necessary.
 func writeIdentifiersAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, rs *mysql.Rows, rowIndex int, getPK bool) (sqltypes.Value, []sqltypes.Value, error) {
 	valueIndex := 0

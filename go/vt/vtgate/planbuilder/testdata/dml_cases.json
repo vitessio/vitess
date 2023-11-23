@@ -4889,5 +4889,15 @@
     "comment": "Unsupported update statement with a replica target destination",
     "query": "update `user[-]@replica`.user_metadata set id=2",
     "plan": "VT09002: update statement with a replica target"
+  },
+  {
+    "comment": "insert row values smaller than number of columns",
+    "query": "insert into user(one, two, three, four) values (1, 2, 3)",
+    "plan": "VT03006: column count does not match value count at row 1"
+  },
+  {
+    "comment": "insert row values greater than number of columns",
+    "query": "insert into user(one, two, three) values (1, 2, 3, 4)",
+    "plan": "VT03006: column count does not match value count at row 1"
   }
 ]

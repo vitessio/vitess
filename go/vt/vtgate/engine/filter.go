@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -78,9 +79,14 @@ func (f *Filter) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[s
 
 // TryStreamExecute satisfies the Primitive interface.
 func (f *Filter) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	var mu sync.Mutex
+
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	filter := func(results *sqltypes.Result) error {
 		var rows [][]sqltypes.Value
+
+		mu.Lock()
+		defer mu.Unlock()
 		for _, row := range results.Rows {
 			env.Row = row
 			evalResult, err := env.Evaluate(f.Predicate)

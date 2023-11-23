@@ -66,19 +66,6 @@ func (b *ArithmeticExpr) eval(env *ExpressionEnv) (eval, error) {
 	return b.Op.eval(left, right)
 }
 
-func makeNumericalType(t sqltypes.Type, f typeFlag) (sqltypes.Type, typeFlag) {
-	if sqltypes.IsNumber(t) {
-		return t, f
-	}
-	if t == sqltypes.VarBinary && (f&flagHex) != 0 {
-		return sqltypes.Uint64, f
-	}
-	if sqltypes.IsDateOrTime(t) {
-		return sqltypes.Int64, f | flagAmbiguousType
-	}
-	return sqltypes.Float64, f
-}
-
 func (b *ArithmeticExpr) compile(c *compiler) (ctype, error) {
 	return b.Op.compile(c, b.Left, b.Right)
 }
@@ -140,7 +127,7 @@ func (op *opArithAdd) compile(c *compiler, left, right IR) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sumtype, Col: collationNumeric}, nil
+	return ctype{Type: sumtype, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}, nil
 }
 
 func (op *opArithSub) eval(left, right eval) (eval, error) {
@@ -223,7 +210,7 @@ func (op *opArithSub) compile(c *compiler, left, right IR) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: subtype, Col: collationNumeric}, nil
+	return ctype{Type: subtype, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}, nil
 }
 
 func (op *opArithMul) eval(left, right eval) (eval, error) {
@@ -283,7 +270,7 @@ func (op *opArithMul) compile(c *compiler, left, right IR) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: multype, Col: collationNumeric}, nil
+	return ctype{Type: multype, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}, nil
 }
 
 func (op *opArithDiv) eval(left, right eval) (eval, error) {
@@ -536,5 +523,15 @@ func (expr *NegateExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip)
-	return ctype{Type: neg, Col: collationNumeric}, nil
+	return ctype{
+		Type:  neg,
+		Flag:  nullableFlags(arg.Flag),
+		Size:  arg.Size,
+		Scale: arg.Scale,
+		Col:   collationNumeric,
+	}, nil
+}
+
+func nullableFlags(flag typeFlag) typeFlag {
+	return flag & (flagNull | flagNullable)
 }

@@ -93,6 +93,8 @@ var inputConversions = []string{
 	`0x0`, `0x1`, `0xff`, `X'00'`, `X'01'`, `X'ff'`,
 	`0b1001`, `b'1001'`, `0x9`, `x'09'`,
 	"NULL", "true", "false",
+	"NULL * 1", "1 * NULL", "NULL * NULL", "NULL / 1", "1 / NULL", "NULL / NULL",
+	"NULL + 1", "1 + NULL", "NULL + NULL", "NULL - 1", "1 - NULL", "NULL - NULL",
 	"0xFF666F6F626172FF", "0x666F6F626172FF", "0xFF666F6F626172",
 	"9223372036854775807", "-9223372036854775808", "18446744073709551615",
 	"18446744073709540000e0",

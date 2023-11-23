@@ -29,6 +29,8 @@ import (
 
 var SystemTime = time.Now
 
+const maxTimePrec = 6
+
 type (
 	builtinNow struct {
 		CallExpr
@@ -564,7 +566,7 @@ func (b *builtinFromUnixtime) eval(env *ExpressionEnv) (eval, error) {
 		sf, ff := math.Modf(ts.f)
 		sec = int64(sf)
 		frac = int64(ff * 1e9)
-		prec = 6
+		prec = maxTimePrec
 	case *evalDecimal:
 		sd, fd := ts.dec.QuoRem(decimal.New(1, 0), 0)
 		sec, _ = sd.Int64()
@@ -589,14 +591,14 @@ func (b *builtinFromUnixtime) eval(env *ExpressionEnv) (eval, error) {
 			sf, ff := math.Modf(f.f)
 			sec = int64(sf)
 			frac = int64(ff * 1e9)
-			prec = 6
+			prec = maxTimePrec
 		}
 	default:
 		f, _ := evalToFloat(ts)
 		sf, ff := math.Modf(f.f)
 		sec = int64(sf)
 		frac = int64(ff * 1e9)
-		prec = 6
+		prec = maxTimePrec
 	}
 
 	if sec < 0 || sec >= maxUnixtime {
@@ -1280,9 +1282,9 @@ func dateTimeUnixTimestamp(env *ExpressionEnv, date eval) evalNumeric {
 				if d.isHexOrBitLiteral() {
 					return newEvalInt64(0)
 				}
-				prec = 6
+				prec = maxTimePrec
 			default:
-				prec = 6
+				prec = maxTimePrec
 			}
 			return newEvalDecimalWithPrec(decimal.Zero, prec)
 		}
@@ -1336,7 +1338,30 @@ func (call *builtinUnixTimestamp) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_UNIX_TIMESTAMP1()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationBinary, Flag: arg.Flag | flagAmbiguousType}, nil
+	switch arg.Type {
+	case sqltypes.Datetime, sqltypes.Time, sqltypes.Decimal:
+		if arg.Size == 0 {
+			return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
+		}
+		return ctype{Type: sqltypes.Decimal, Size: arg.Size, Col: collationNumeric, Flag: arg.Flag}, nil
+	case sqltypes.Date, sqltypes.Int64, sqltypes.Uint64:
+		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		if arg.isHexOrBitLiteral() {
+			return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
+		}
+		if lit, ok := call.Arguments[0].(*Literal); ok {
+			if dt := evalToDateTime(lit.inner, -1, time.Now()); dt != nil {
+				if dt.prec == 0 {
+					return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
+				}
+				return ctype{Type: sqltypes.Decimal, Size: int32(dt.prec), Col: collationNumeric, Flag: arg.Flag}, nil
+			}
+		}
+		fallthrough
+	default:
+		return ctype{Type: sqltypes.Decimal, Size: maxTimePrec, Col: collationNumeric, Flag: arg.Flag}, nil
+	}
 }
 
 func (b *builtinWeek) eval(env *ExpressionEnv) (eval, error) {
