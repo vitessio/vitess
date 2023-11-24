@@ -64,7 +64,7 @@ func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions) (
 // by MySQL on each side then we'll have the same number of extras on
 // both sides. If that's the case, then let's see if the extra rows on
 // both sides are actually different.
-func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64) error {
+func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64, maxReportSampleRows int64) error {
 	if dr.MismatchedRows == 0 {
 		// Get the VSchema on the target and source keyspaces. We can then use this
 		// for handling additional edge cases, such as adjusting results for reference
@@ -122,12 +122,12 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 			}
 		}
 	}
-	// We can now trim the extra rows diffs on both sides to the maxVDiffReportSampleRows value
-	if len(dr.ExtraRowsSourceDiffs) > maxVDiffReportSampleRows {
-		dr.ExtraRowsSourceDiffs = dr.ExtraRowsSourceDiffs[:maxVDiffReportSampleRows-1]
+	// We can now trim the extra rows diffs on both sides to the maxReportSampleRows value
+	if int64(len(dr.ExtraRowsSourceDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
+		dr.ExtraRowsSourceDiffs = dr.ExtraRowsSourceDiffs[:maxReportSampleRows-1]
 	}
-	if len(dr.ExtraRowsTargetDiffs) > maxVDiffReportSampleRows {
-		dr.ExtraRowsTargetDiffs = dr.ExtraRowsTargetDiffs[:maxVDiffReportSampleRows-1]
+	if int64(len(dr.ExtraRowsTargetDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
+		dr.ExtraRowsTargetDiffs = dr.ExtraRowsTargetDiffs[:maxReportSampleRows-1]
 	}
 
 	return nil
@@ -158,14 +158,14 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		return err
 	}
 	log.Infof("Table initialization done on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
-	dr, err := td.diff(ctx, wd.opts.CoreOptions.MaxRows, wd.opts.ReportOptions.DebugQuery, wd.opts.ReportOptions.OnlyPks, wd.opts.CoreOptions.MaxExtraRowsToCompare)
+	dr, err := td.diff(ctx, wd.opts.CoreOptions.MaxRows, wd.opts.ReportOptions.DebugQuery, wd.opts.ReportOptions.OnlyPks, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows)
 	if err != nil {
 		log.Errorf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, err)
 		return err
 	}
 	log.Infof("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, dr)
 	if dr.ExtraRowsSource > 0 || dr.ExtraRowsTarget > 0 {
-		if err := wd.reconcileExtraRows(dr, wd.opts.CoreOptions.MaxExtraRowsToCompare); err != nil {
+		if err := wd.reconcileExtraRows(dr, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows); err != nil {
 			log.Errorf("Encountered an error reconciling extra rows found for table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, err)
 			return vterrors.Wrap(err, "failed to reconcile extra rows")
 		}
