@@ -111,6 +111,7 @@ func trySimplifyExpressions(in sqlparser.SelectStatement, test func(sqlparser.Se
 				// initially return false, but that made the rewriter prematurely abort, if it was the last selectExpr
 				return true
 			}
+			log.Errorf("tried and failed removing expression: %s", sqlparser.String(cursor.expr))
 			cursor.restore()
 		}
 
@@ -124,6 +125,7 @@ func trySimplifyExpressions(in sqlparser.SelectStatement, test func(sqlparser.Se
 				return true
 			}
 
+			log.Errorf("failed to simplify expression: %s -> %s", sqlparser.String(cursor.expr), sqlparser.String(expr))
 			cursor.restore()
 			return false
 		})

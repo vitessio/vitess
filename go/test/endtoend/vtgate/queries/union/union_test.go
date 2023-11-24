@@ -19,12 +19,11 @@ package union
 import (
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func start(t *testing.T) (utils.MySQLCompare, func()) {

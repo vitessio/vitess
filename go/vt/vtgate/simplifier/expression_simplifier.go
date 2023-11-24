@@ -104,6 +104,8 @@ func (s *shrinker) fillQueue() bool {
 		s.queue = append(s.queue, e.Left, e.Right)
 	case *sqlparser.BinaryExpr:
 		s.queue = append(s.queue, e.Left, e.Right)
+	case *sqlparser.UnaryExpr:
+		s.queue = append(s.queue, e.Expr)
 	case *sqlparser.BetweenExpr:
 		s.queue = append(s.queue, e.Left, e.From, e.To)
 	case *sqlparser.Literal:
@@ -196,6 +198,10 @@ func (s *shrinker) fillQueue() bool {
 				s.queue = append(s.queue, clone)
 			}
 		}
+		s.queue = append(s.queue, sqlparser.NewIntLiteral("0"))
+		s.queue = append(s.queue, sqlparser.NewIntLiteral("1"))
+		s.queue = append(s.queue, &sqlparser.NullVal{})
+
 	case *sqlparser.ColName:
 		// we can try to replace the column with a literal value
 		s.queue = append(s.queue, sqlparser.NewIntLiteral("0"))

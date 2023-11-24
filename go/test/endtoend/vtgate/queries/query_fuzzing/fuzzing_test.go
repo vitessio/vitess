@@ -24,13 +24,12 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // this test uses the AST defined in the sqlparser package to randomly generate queries

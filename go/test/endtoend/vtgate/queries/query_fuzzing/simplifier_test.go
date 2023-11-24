@@ -21,11 +21,10 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/test/vschemawrapper"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/simplifier"
@@ -35,23 +34,13 @@ import (
 func TestSimplifyResultsMismatchedQuery(t *testing.T) {
 	t.Skip("Skip CI")
 
-	var queries []string
-	queries = append(queries, "select (68 - -16) / case false when -45 then 3 when 28 then -43 else -62 end as crandom0 from dept as tbl0, (select distinct not not false and count(*) from emp as tbl0, emp as tbl1 where tbl1.ename) as tbl1 limit 1",
-		"select distinct case true when 'burro' then 'trout' else 'elf' end < case count(distinct true) when 'bobcat' then 'turkey' else 'penguin' end from dept as tbl0, emp as tbl1 where 'spider'",
-		"select distinct sum(distinct tbl1.deptno) from dept as tbl0, emp as tbl1 where tbl0.deptno and tbl1.comm in (12, tbl0.deptno, case false when 67 then -17 when -78 then -35 end, -76 >> -68)",
-		"select count(*) + 1 from emp as tbl0 order by count(*) desc",
-		"select count(2 >> tbl2.mgr), sum(distinct tbl2.empno <=> 15) from emp as tbl0 left join emp as tbl2 on -32",
-		"select sum(case false when true then tbl1.deptno else -154 / 132 end) as caggr1 from emp as tbl0, dept as tbl1",
-		"select tbl1.dname as cgroup0, tbl1.dname as cgroup1 from dept as tbl0, dept as tbl1 group by tbl1.dname, tbl1.deptno order by tbl1.deptno desc",
-		"select tbl0.ename as cgroup1 from emp as tbl0 group by tbl0.job, tbl0.ename having sum(tbl0.mgr) = sum(tbl0.mgr) order by tbl0.job desc, tbl0.ename asc limit 8",
-		"select distinct count(*) as caggr1 from dept as tbl0, emp as tbl1 group by tbl1.sal having max(tbl1.comm) != true",
-		"select distinct sum(tbl1.loc) as caggr0 from dept as tbl0, dept as tbl1 group by tbl1.deptno having max(tbl1.dname) <= 1",
-		"select min(tbl0.deptno) as caggr0 from dept as tbl0, emp as tbl1 where case when false then tbl0.dname end group by tbl1.comm",
-		"select count(*) as caggr0, 1 as crandom0 from dept as tbl0, emp as tbl1 where 1 = 0",
-		"select count(*) as caggr0, 1 as crandom0 from dept as tbl0, emp as tbl1 where 'octopus'",
-		"select distinct 'octopus' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno = tbl1.empno having count(*) = count(*)",
-		"select max(tbl0.deptno) from dept as tbl0 right join emp as tbl1 on tbl0.deptno = tbl1.empno and tbl0.deptno = tbl1.deptno group by tbl0.deptno",
-		"select count(tbl1.comm) from emp as tbl1 right join emp as tbl2 on tbl1.mgr = tbl2.sal")
+	// This test minimizes failing queries to their simplest form where the results still mismatch between the databases.
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
+
+	queries := []string{
+		"select (0 & 0) div min(tbl0.deptno) from emp as tbl0",
+	}
 
 	for _, query := range queries {
 		var simplified string
@@ -77,14 +66,7 @@ func simplifyResultsMismatchedQuery(t *testing.T, query string) string {
 	defer closer()
 
 	_, err := mcmp.ExecAllowAndCompareError(query)
-	if err == nil {
-		t.Fatalf("query (%s) does not error", query)
-	} else if !strings.Contains(err.Error(), "mismatched") {
-		t.Fatalf("query (%s) does not error with results mismatched\nError: %v", query, err)
-	}
-
-	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
-	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
+	require.ErrorContainsf(t, err, "mismatched", "query (%s) does not error with results mismatched", query)
 
 	formal, err := vindexes.LoadFormal("svschema.json")
 	require.NoError(t, err)

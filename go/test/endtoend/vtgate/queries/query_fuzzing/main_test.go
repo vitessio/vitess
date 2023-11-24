@@ -28,10 +28,9 @@ import (
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (

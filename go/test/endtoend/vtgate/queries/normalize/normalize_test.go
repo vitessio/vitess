@@ -28,9 +28,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestNormalizeAllFields(t *testing.T) {
