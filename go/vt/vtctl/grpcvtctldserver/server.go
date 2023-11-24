@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"path/filepath"
 	"runtime/debug"
@@ -430,9 +431,32 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("concurrency", req.Concurrency)
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 
-	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
+	shardTablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
+	// Shuffle shardTablets to avoid items in a fixed order
+	rand.Shuffle(len(shardTablets), func(i, j int) {
+		shardTablets[i], shardTablets[j] = shardTablets[j], shardTablets[i]
+	})
+
+	var tablets []*topo.TabletInfo
+	// Instead of return on err directly, count total errors and compare with len(stats)
 	if err != nil {
-		return err
+		nilStatIndex, errorCount := 0, 0
+		for i, stat := range stats {
+			if stat == nil {
+				// Possible of multiple errors but only catch the last error index in stats
+				nilStatIndex = i
+				errorCount++
+			}
+		}
+		// Only return err when errors on all vttablets
+		if errorCount == len(stats) {
+			return err
+		}
+		for i, shardTablet := range shardTablets {
+			if i != nilStatIndex {
+				tablets = append(tablets, shardTablet)
+			}
+		}
 	}
 
 	var (
