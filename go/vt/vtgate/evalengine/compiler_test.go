@@ -532,6 +532,38 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `UNIX_TIMESTAMP('20000101103458.111111') + 1`,
 			result:     `DECIMAL(946719299.111111)`,
 		},
+		{
+			expression: `cast(null * 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null + 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null - 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null / 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null % 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `1 AND NULL * 1`,
+			result:     `NULL`,
+		},
+		{
+			expression: `case 0 when NULL then 1 else 0 end`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `case when null is null then 23 else null end`,
+			result:     `INT64(23)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

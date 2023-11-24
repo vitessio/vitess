@@ -755,7 +755,7 @@ func TestSelectLastInsertId(t *testing.T) {
 	result, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "last_insert_id()", Type: sqltypes.Uint64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG)},
+			{Name: "last_insert_id()", Type: sqltypes.Uint64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG)},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewUint64(52),
@@ -787,20 +787,20 @@ func TestSelectSystemVariables(t *testing.T) {
 	result, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "@@autocommit", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "@@client_found_rows", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "@@skip_query_plan_cache", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "@@enable_system_settings", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "@@sql_select_limit", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "@@transaction_mode", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
-			{Name: "@@workload", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
-			{Name: "@@read_after_write_gtid", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
-			{Name: "@@read_after_write_timeout", Type: sqltypes.Float64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "@@session_track_gtids", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
-			{Name: "@@ddl_strategy", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
-			{Name: "@@migration_context", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
-			{Name: "@@socket", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
-			{Name: "@@query_timeout", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "@@autocommit", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "@@client_found_rows", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "@@skip_query_plan_cache", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "@@enable_system_settings", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "@@sql_select_limit", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "@@transaction_mode", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "@@workload", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "@@read_after_write_gtid", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "@@read_after_write_timeout", Type: sqltypes.Float64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "@@session_track_gtids", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "@@ddl_strategy", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "@@migration_context", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "@@socket", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "@@query_timeout", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 		Rows: [][]sqltypes.Value{{
 			// the following are the uninitialised session values
@@ -843,9 +843,9 @@ func TestSelectInitializedVitessAwareVariable(t *testing.T) {
 	result, err := executorExec(ctx, executor, session, sql, nil)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "@@autocommit", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "@@enable_system_settings", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "@@query_timeout", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "@@autocommit", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "@@enable_system_settings", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "@@query_timeout", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
@@ -884,7 +884,7 @@ func TestSelectUserDefinedVariable(t *testing.T) {
 	require.NoError(t, err)
 	wantResult = &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "@foo", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
+			{Name: "@foo", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarChar("bar"),
@@ -910,7 +910,7 @@ func TestFoundRows(t *testing.T) {
 	result, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "found_rows()", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "found_rows()", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
@@ -943,7 +943,7 @@ func testRowCount(t *testing.T, ctx context.Context, executor *Executor, session
 	result, err := executorExec(ctx, executor, session, "select row_count()", map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "row_count()", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "row_count()", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(wantRowCount),
@@ -964,7 +964,7 @@ func TestSelectLastInsertIdInUnion(t *testing.T) {
 
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
@@ -978,7 +978,7 @@ func TestSelectLastInsertIdInUnion(t *testing.T) {
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(52),
@@ -1046,7 +1046,7 @@ func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "x", Type: sqltypes.Uint64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG)},
+			{Name: "x", Type: sqltypes.Uint64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_UNSIGNED_FLAG)},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewUint64(12345),
@@ -1077,7 +1077,7 @@ func TestSelectDatabase(t *testing.T) {
 		map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "database()", Type: sqltypes.VarChar, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG)},
+			{Name: "database()", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarChar("TestExecutor@primary"),
@@ -1275,7 +1275,7 @@ func TestSelectINFromOR(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "select 1 from user where id = 1 and name = 'apa' or id = 2 and name = 'toto'", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "select 1 from `user` where id = 1 and `name` = 'apa' or id = 2 and `name` = 'toto'",
+		Sql: "select 1 from `user` where id in ::__vals and (id = 1 or `name` = 'toto') and (`name` = 'apa' or id = 2) and `name` in ('apa', 'toto')",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": sqltypes.TestBindVariable([]any{int64(1), int64(2)}),
 		},
