@@ -53,19 +53,25 @@ func registerCommands(root *cobra.Command) {
 		SubCommand: "MoveTables",
 		Workflow:   "commerce2customer",
 	}
-	base.AddCommand(common.GetShowCommand(opts))
-	base.AddCommand(common.GetStatusCommand(opts))
 
-	base.AddCommand(common.GetStartCommand(opts))
-	base.AddCommand(common.GetStopCommand(opts))
+	show := common.GetShowCommand(opts)
+	base.AddCommand(show)
 
-	switchTrafficCommand := common.GetSwitchTrafficCommand(opts)
-	common.AddCommonSwitchTrafficFlags(switchTrafficCommand, true)
-	base.AddCommand(switchTrafficCommand)
+	status := common.GetStatusCommand(opts)
+	base.AddCommand(status)
 
-	reverseTrafficCommand := common.GetReverseTrafficCommand(opts)
-	common.AddCommonSwitchTrafficFlags(reverseTrafficCommand, false)
-	base.AddCommand(reverseTrafficCommand)
+	start := common.GetStartCommand(opts)
+	base.AddCommand(start)
+	stop := common.GetStopCommand(opts)
+	base.AddCommand(stop)
+
+	switchTraffic := common.GetSwitchTrafficCommand(opts)
+	common.AddCommonSwitchTrafficFlags(switchTraffic, true)
+	base.AddCommand(switchTraffic)
+
+	reverseTraffic := common.GetReverseTrafficCommand(opts)
+	common.AddCommonSwitchTrafficFlags(reverseTraffic, false)
+	base.AddCommand(reverseTraffic)
 
 	complete := common.GetCompleteCommand(opts)
 	complete.Flags().BoolVar(&common.CompleteOptions.KeepData, "keep-data", false, "Keep the original source table data that was copied by the MoveTables workflow.")
@@ -78,6 +84,14 @@ func registerCommands(root *cobra.Command) {
 	cancel.Flags().BoolVar(&common.CancelOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the MoveTables workflow in the target keyspace.")
 	cancel.Flags().BoolVar(&common.CancelOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the MoveTables workflow.")
 	base.AddCommand(cancel)
+
+	addShardsFlag(show, status, start, stop, switchTraffic, reverseTraffic, complete, cancel)
+}
+
+func addShardsFlag(cmds ...*cobra.Command) {
+	for _, cmd := range cmds {
+		cmd.Flags().StringSliceVar(&common.BaseOptions.Shards, "shards", nil, "Shards to perform the action on.")
+	}
 }
 
 func init() {

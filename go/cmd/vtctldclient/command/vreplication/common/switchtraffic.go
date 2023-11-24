@@ -98,6 +98,7 @@ func commandSwitchTraffic(cmd *cobra.Command, args []string) error {
 		EnableReverseReplication:  SwitchTrafficOptions.EnableReverseReplication,
 		InitializeTargetSequences: SwitchTrafficOptions.InitializeTargetSequences,
 		Direction:                 int32(SwitchTrafficOptions.Direction),
+		Shards:                    BaseOptions.Shards,
 	}
 	resp, err := GetClient().WorkflowSwitchTraffic(GetCommandCtx(), req)
 	if err != nil {

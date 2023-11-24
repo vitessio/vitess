@@ -146,6 +146,7 @@ func commandUpdateState(cmd *cobra.Command, args []string) error {
 			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
 			OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
 			State:       state,
+			Shards:      BaseOptions.Shards,
 		},
 	}
 

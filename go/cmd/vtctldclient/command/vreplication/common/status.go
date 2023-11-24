@@ -49,6 +49,7 @@ func commandStatus(cmd *cobra.Command, args []string) error {
 	req := &vtctldatapb.WorkflowStatusRequest{
 		Keyspace: BaseOptions.TargetKeyspace,
 		Workflow: BaseOptions.Workflow,
+		Shards:   BaseOptions.Shards,
 	}
 	resp, err := GetClient().WorkflowStatus(GetCommandCtx(), req)
 	if err != nil {

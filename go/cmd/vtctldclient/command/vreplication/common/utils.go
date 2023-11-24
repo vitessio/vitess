@@ -53,6 +53,7 @@ var (
 		Workflow       string
 		TargetKeyspace string
 		Format         string
+		Shards         []string
 	}{}
 
 	CreateOptions = struct {
