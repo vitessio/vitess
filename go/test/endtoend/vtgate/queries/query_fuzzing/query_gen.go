@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package random
+package query_fuzzing
 
 import (
 	"fmt"
@@ -229,7 +229,6 @@ func (sg *selectGenerator) randomSelect() {
 	sg.genConfig = sg.genConfig.CannotAggregateConfig()
 
 	sg.sel = &sqlparser.Select{}
-	sg.sel.SetComments(sqlparser.Comments{"/*vt+ PLANNER=Gen4 */"})
 
 	// select distinct (fails with group by bigint)
 	isDistinct := sg.r.Intn(2) < 1

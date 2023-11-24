@@ -14,7 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package random
+// query_fuzzing sets up two databases: one is a standard MySQL database and the
+// other is a Vitess cluster with identical schemas.
+// It inserts the same dataset into both databases.
+// The package then generates a large number of queries using query fuzzing,
+// executes them on both databases, and verifies that the results match.
+package query_fuzzing
 
 import (
 	_ "embed"
@@ -63,14 +68,11 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 			VSchema:   vschema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal"}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {

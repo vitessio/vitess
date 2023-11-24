@@ -628,7 +628,7 @@
 		},
 		"vtgate_queries_random": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/random"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/query_fuzzing"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",

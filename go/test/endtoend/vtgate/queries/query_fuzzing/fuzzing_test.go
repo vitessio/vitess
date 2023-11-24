@@ -14,9 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package random
+package query_fuzzing
 
 import (
+	_ "embed"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -37,6 +38,12 @@ import (
 // if true then execution will always stop on a "must fix" error: a results mismatched or EOF
 const stopOnMustFixError = false
 
+//go:embed emp_insert.sql
+var empInsert string
+
+//go:embed dept_insert.sql
+var deptInsert string
+
 func start(t *testing.T) (utils.MySQLCompare, func()) {
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
 	require.NoError(t, err)
@@ -53,11 +60,11 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll()
 
 	// disable only_full_group_by
-	// mcmp.Exec("set sql_mode=''")
+	mcmp.Exec("set sql_mode=''")
 
 	// insert data
-	mcmp.Exec("INSERT INTO emp(empno, ename, job, mgr, hiredate, sal, comm, deptno) VALUES (7369,'SMITH','CLERK',7902,'1980-12-17',800,NULL,20), (7499,'ALLEN','SALESMAN',7698,'1981-02-20',1600,300,30), (7521,'WARD','SALESMAN',7698,'1981-02-22',1250,500,30), (7566,'JONES','MANAGER',7839,'1981-04-02',2975,NULL,20), (7654,'MARTIN','SALESMAN',7698,'1981-09-28',1250,1400,30), (7698,'BLAKE','MANAGER',7839,'1981-05-01',2850,NULL,30), (7782,'CLARK','MANAGER',7839,'1981-06-09',2450,NULL,10), (7788,'SCOTT','ANALYST',7566,'1982-12-09',3000,NULL,20), (7839,'KING','PRESIDENT',NULL,'1981-11-17',5000,NULL,10), (7844,'TURNER','SALESMAN',7698,'1981-09-08',1500,0,30), (7876,'ADAMS','CLERK',7788,'1983-01-12',1100,NULL,20), (7900,'JAMES','CLERK',7698,'1981-12-03',950,NULL,30), (7902,'FORD','ANALYST',7566,'1981-12-03',3000,NULL,20), (7934,'MILLER','CLERK',7782,'1982-01-23',1300,NULL,10)")
-	mcmp.Exec("INSERT INTO dept(deptno, dname, loc) VALUES ('10','ACCOUNTING','NEW YORK'), ('20','RESEARCH','DALLAS'), ('30','SALES','CHICAGO'), ('40','OPERATIONS','BOSTON')")
+	mcmp.Exec(empInsert)
+	mcmp.Exec(deptInsert)
 
 	return mcmp, func() {
 		deleteAll()
@@ -223,7 +230,7 @@ func TestKnownFailures(t *testing.T) {
 	helperTest(t, "select exists (select 1) as crandom0 from dept as tbl0 group by exists (select 1)")
 }
 
-func TestRandom(t *testing.T) {
+func TestFuzzQueries(t *testing.T) {
 	t.Skip("Skip CI; random expressions generate too many failures to properly limit")
 
 	mcmp, closer := start(t)
