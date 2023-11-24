@@ -1767,7 +1767,7 @@ func TestInsertSelectGenerate(t *testing.T) {
 				"varchar|int64"),
 			"a|1",
 			"a|null",
-			"b|null"),
+			"b|0"),
 		// This is the result for the sequence query
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(

@@ -27,6 +27,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+// insert into t values (select func(),
+
 type InsertRows struct {
 	// Generate is only set for inserts where a sequence must be generated.
 	Generate *Generate
@@ -117,8 +119,8 @@ func (ir *InsertRows) processGenerateFromSelect(
 	offset := ir.Generate.Offset
 	genColPresent := offset < len(rows[0])
 	if genColPresent {
-		for _, val := range rows {
-			if val[offset].IsNull() {
+		for _, row := range rows {
+			if shouldGenerate(row[offset]) {
 				count++
 			}
 		}
@@ -153,7 +155,7 @@ func (ir *InsertRows) processGenerateFromSelect(
 	used := insertID
 	for idx, val := range rows {
 		if genColPresent {
-			if val[offset].IsNull() {
+			if shouldGenerate(val[offset]) {
 				val[offset] = sqltypes.NewInt64(used)
 				used++
 			}
