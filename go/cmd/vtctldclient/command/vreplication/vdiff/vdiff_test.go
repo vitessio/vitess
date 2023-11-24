@@ -269,6 +269,277 @@ func TestVDiffUnsharded(t *testing.T) {
             }
           }
         ]`),
+	}, {
+		id: "9", // --max-vdiff-report-rows=20 --only-pks
+		result: sqltypes.MakeTestResult(fields,
+			"completed||t1|"+UUID+"|completed|30|"+starttime+"|30|"+comptime+"|1|"+
+				`{"TableName": "t1", "MatchingRows": 10, "ProcessedRows": 30, "MismatchedRows": 20, "ExtraRowsSource": 0, `+
+				`"ExtraRowsTarget": 0, "MismatchedRowsSample": [`+
+				`{"Source": {"Row": {"c1": "2"}}, "Target": {"Row": {"c1": "2"}}},`+
+				`{"Source": {"Row": {"c1": "3"}}, "Target": {"Row": {"c1": "3"}}},`+
+				`{"Source": {"Row": {"c1": "4"}}, "Target": {"Row": {"c1": "4"}}},`+
+				`{"Source": {"Row": {"c1": "5"}}, "Target": {"Row": {"c1": "5"}}},`+
+				`{"Source": {"Row": {"c1": "6"}}, "Target": {"Row": {"c1": "6"}}},`+
+				`{"Source": {"Row": {"c1": "7"}}, "Target": {"Row": {"c1": "7"}}},`+
+				`{"Source": {"Row": {"c1": "8"}}, "Target": {"Row": {"c1": "8"}}},`+
+				`{"Source": {"Row": {"c1": "9"}}, "Target": {"Row": {"c1": "9"}}},`+
+				`{"Source": {"Row": {"c1": "10"}}, "Target": {"Row": {"c1": "10"}}},`+
+				`{"Source": {"Row": {"c1": "11"}}, "Target": {"Row": {"c1": "11"}}},`+
+				`{"Source": {"Row": {"c1": "12"}}, "Target": {"Row": {"c1": "12"}}},`+
+				`{"Source": {"Row": {"c1": "13"}}, "Target": {"Row": {"c1": "13"}}},`+
+				`{"Source": {"Row": {"c1": "14"}}, "Target": {"Row": {"c1": "14"}}},`+
+				`{"Source": {"Row": {"c1": "15"}}, "Target": {"Row": {"c1": "15"}}},`+
+				`{"Source": {"Row": {"c1": "16"}}, "Target": {"Row": {"c1": "16"}}},`+
+				`{"Source": {"Row": {"c1": "17"}}, "Target": {"Row": {"c1": "17"}}},`+
+				`{"Source": {"Row": {"c1": "18"}}, "Target": {"Row": {"c1": "18"}}},`+
+				`{"Source": {"Row": {"c1": "19"}}, "Target": {"Row": {"c1": "19"}}},`+
+				`{"Source": {"Row": {"c1": "20"}}, "Target": {"Row": {"c1": "20"}}},`+
+				`{"Source": {"Row": {"c1": "21"}}, "Target": {"Row": {"c1": "21"}}}`+
+				`]}`),
+		report: fmt.Sprintf(badReportfmt,
+			env.targetKeyspace, UUID, 30, true, starttime, comptime, 30, 10, 20, 0, 0, 30, 10, 20, 0, 0,
+			`"MismatchedRowsSample": [
+          {
+            "Source": {
+              "Row": {
+                "c1": "2"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "2"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "3"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "3"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "4"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "4"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "5"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "5"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "6"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "6"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "7"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "7"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "8"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "8"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "9"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "9"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "10"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "10"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "11"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "11"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "12"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "12"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "13"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "13"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "14"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "14"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "15"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "15"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "16"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "16"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "17"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "17"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "18"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "18"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "19"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "19"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "20"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "20"
+              }
+            }
+          },
+          {
+            "Source": {
+              "Row": {
+                "c1": "21"
+              }
+            },
+            "Target": {
+              "Row": {
+                "c1": "21"
+              }
+            }
+          }
+        ]`),
 	},
 	}
 

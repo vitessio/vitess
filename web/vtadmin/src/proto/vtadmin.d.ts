@@ -27596,6 +27596,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffReportOptions format */
         format?: (string|null);
+
+        /** VDiffReportOptions max_sample_rows */
+        max_sample_rows?: (number|Long|null);
     }
 
     /** Represents a VDiffReportOptions. */
@@ -27615,6 +27618,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffReportOptions format. */
         public format: string;
+
+        /** VDiffReportOptions max_sample_rows. */
+        public max_sample_rows: (number|Long);
 
         /**
          * Creates a new VDiffReportOptions instance using the specified properties.
@@ -65843,6 +65849,9 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest verbose */
         verbose?: (boolean|null);
+
+        /** VDiffCreateRequest max_report_sample_rows */
+        max_report_sample_rows?: (number|Long|null);
     }
 
     /** Represents a VDiffCreateRequest. */
@@ -65907,6 +65916,9 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest verbose. */
         public verbose: boolean;
+
+        /** VDiffCreateRequest max_report_sample_rows. */
+        public max_report_sample_rows: (number|Long);
 
         /**
          * Creates a new VDiffCreateRequest instance using the specified properties.

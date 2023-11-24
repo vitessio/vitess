@@ -26,9 +26,7 @@ import (
 )
 
 const (
-	// At most how many samples we should show for row differences in the final report
-	maxVDiffReportSampleRows = 10
-	truncatedNotation        = "...[TRUNCATED]"
+	truncatedNotation = "...[TRUNCATED]"
 )
 
 // DiffReport is the summary of differences for one table.
