@@ -58,6 +58,8 @@ type (
 		// and Prefix, Mid and Suffix are used instead.
 		Query string
 
+		InsertRows *InsertRows
+
 		// VindexValues specifies values for all the vindex columns.
 		// This is a three-dimensional data structure:
 		// Insert.Values[i] represents the values to be inserted for the i'th colvindex (i < len(Insert.Table.ColumnVindexes))
@@ -112,10 +114,7 @@ type (
 )
 
 func (ins *Insert) Inputs() ([]Primitive, []map[string]any) {
-	if ins.Input == nil {
-		return nil, nil
-	}
-	return []Primitive{ins.Input}, nil
+	return ins.InsertRows.Inputs()
 }
 
 // NewQueryInsert creates an Insert with a query string.
@@ -224,7 +223,7 @@ func (ins *Insert) GetTableName() string {
 }
 
 // TryExecute performs a non-streaming exec.
-func (ins *Insert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ins *Insert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, ins.QueryTimeout)
 	defer cancelFunc()
 
@@ -232,7 +231,7 @@ func (ins *Insert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 	case InsertUnsharded:
 		return ins.execInsertUnsharded(ctx, vcursor, bindVars)
 	case InsertSharded:
-		return ins.execInsertSharded(ctx, vcursor, bindVars)
+		return ins.insertIntoShardedTableFromValues(ctx, vcursor, bindVars)
 	case InsertSelect:
 		return ins.execInsertFromSelect(ctx, vcursor, bindVars)
 	default:
@@ -277,7 +276,7 @@ func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 		if unsharded {
 			insertID, qr, err = ins.insertIntoUnshardedTable(ctx, vcursor, bindVars, result)
 		} else {
-			insertID, qr, err = ins.insertIntoShardedTable(ctx, vcursor, bindVars, result)
+			insertID, qr, err = ins.insertIntoShardedTableFromSelect(ctx, vcursor, bindVars, result.Rows)
 		}
 		if err != nil {
 			return err
@@ -296,24 +295,6 @@ func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 	return callback(output)
 }
 
-func (ins *Insert) insertIntoShardedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, result *sqltypes.Result) (int64, *sqltypes.Result, error) {
-	insertID, err := ins.processGenerateFromRows(ctx, vcursor, result.Rows)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	rss, queries, err := ins.getInsertSelectQueries(ctx, vcursor, bindVars, result.Rows)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	qr, err := ins.executeInsertQueries(ctx, vcursor, rss, queries, insertID)
-	if err != nil {
-		return 0, nil, err
-	}
-	return insertID, qr, nil
-}
-
 // GetFields fetches the field info.
 func (ins *Insert) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code for %q", ins.Query)
@@ -329,14 +310,14 @@ func (ins *Insert) execInsertUnsharded(ctx context.Context, vcursor VCursor, bin
 		if len(result.Rows) == 0 {
 			return &sqltypes.Result{}, nil
 		}
-		query = ins.getInsertQueryForUnsharded(result, bindVars)
+		query = ins.getInsertQueryFromSelectForUnsharded(result, bindVars)
 	}
 
 	_, qr, err := ins.executeUnshardedTableQuery(ctx, vcursor, bindVars, query)
 	return qr, err
 }
 
-func (ins *Insert) getInsertQueryForUnsharded(result *sqltypes.Result, bindVars map[string]*querypb.BindVariable) string {
+func (ins *Insert) getInsertQueryFromSelectForUnsharded(result *sqltypes.Result, bindVars map[string]*querypb.BindVariable) string {
 	var mids sqlparser.Values
 	for r, inputRow := range result.Rows {
 		row := sqlparser.ValTuple{}
@@ -350,17 +331,44 @@ func (ins *Insert) getInsertQueryForUnsharded(result *sqltypes.Result, bindVars 
 	return ins.Prefix + sqlparser.String(mids) + ins.Suffix
 }
 
-func (ins *Insert) execInsertSharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ins *Insert) insertIntoShardedTableFromValues(
+	ctx context.Context,
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+) (*sqltypes.Result, error) {
 	insertID, err := ins.processGenerateFromValues(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	rss, queries, err := ins.getInsertShardedRoute(ctx, vcursor, bindVars)
+	rss, queries, err := ins.getInsertQueriesFromValues(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
 	return ins.executeInsertQueries(ctx, vcursor, rss, queries, insertID)
+}
+
+func (ins *Insert) insertIntoShardedTableFromSelect(
+	ctx context.Context,
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+	rows []sqltypes.Row,
+) (int64, *sqltypes.Result, error) {
+	insertID, err := ins.processGenerateFromSelect(ctx, vcursor, rows)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	rss, queries, err := ins.getInsertSelectQueries(ctx, vcursor, bindVars, rows)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	qr, err := ins.executeInsertQueries(ctx, vcursor, rss, queries, insertID)
+	if err != nil {
+		return 0, nil, err
+	}
+	return insertID, qr, nil
 }
 
 func (ins *Insert) executeInsertQueries(
@@ -480,20 +488,15 @@ func (ins *Insert) getInsertSelectQueries(
 }
 
 func (ins *Insert) execInsertFromSelect(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	// run the SELECT query
-	if ins.Input == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "something went wrong planning INSERT SELECT")
-	}
-
-	result, err := vcursor.ExecutePrimitive(ctx, ins.Input, bindVars, false)
+	result, err := ins.InsertRows.execInsertFromSelect(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	if len(result.Rows) == 0 {
+	if len(result.rows) == 0 {
 		return &sqltypes.Result{}, nil
 	}
 
-	_, qr, err := ins.insertIntoShardedTable(ctx, vcursor, bindVars, result)
+	_, qr, err := ins.insertIntoShardedTableFromSelect(ctx, vcursor, bindVars, result.rows)
 	return qr, err
 }
 
@@ -575,10 +578,10 @@ func (ins *Insert) processGenerateFromValues(
 	return insertID, nil
 }
 
-// processGenerateFromRows generates new values using a sequence if necessary.
+// processGenerateFromSelect generates new values using a sequence if necessary.
 // If no value was generated, it returns 0. Values are generated only
 // for cases where none are supplied.
-func (ins *Insert) processGenerateFromRows(
+func (ins *Insert) processGenerateFromSelect(
 	ctx context.Context,
 	vcursor VCursor,
 	rows []sqltypes.Row,
@@ -639,14 +642,14 @@ func (ins *Insert) processGenerateFromRows(
 	return insertID, nil
 }
 
-// getInsertShardedRoute performs all the vindex related work
+// getInsertQueriesFromValues performs all the vindex related work
 // and returns a map of shard to queries.
 // Using the primary vindex, it computes the target keyspace ids.
 // For owned vindexes, it creates entries.
 // For unowned vindexes with no input values, it reverse maps.
 // For unowned vindexes with values, it validates.
 // If it's an IGNORE or ON DUPLICATE key insert, it drops unroutable rows.
-func (ins *Insert) getInsertShardedRoute(
+func (ins *Insert) getInsertQueriesFromValues(
 	ctx context.Context,
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
@@ -1023,7 +1026,7 @@ func (ins *Insert) description() PrimitiveDescription {
 }
 
 func (ins *Insert) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, result *sqltypes.Result) (int64, *sqltypes.Result, error) {
-	query := ins.getInsertQueryForUnsharded(result, bindVars)
+	query := ins.getInsertQueryFromSelectForUnsharded(result, bindVars)
 	return ins.executeUnshardedTableQuery(ctx, vcursor, bindVars, query)
 }
 

@@ -22,7 +22,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -108,11 +107,9 @@ var _ logicalPlan = (*insert)(nil)
 
 func (i *insert) Primitive() engine.Primitive {
 	if i.source != nil {
-		i.eInsert.Input = i.source.Primitive()
+		input := i.source.Primitive()
+		i.eInsert.Input = input
+		i.eInsert.InsertRows = engine.NewInsertRowsFromSelect(nil, input)
 	}
 	return i.eInsert
-}
-
-func (i *insert) ContainsTables() semantics.TableSet {
-	panic("does not expect insert to get contains tables call")
 }
