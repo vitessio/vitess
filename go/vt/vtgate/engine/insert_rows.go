@@ -51,7 +51,11 @@ func (ir *InsertRows) Inputs() ([]Primitive, []map[string]any) {
 	return []Primitive{ir.RowsFromSelect}, nil
 }
 
-func (ir *InsertRows) execInsertFromSelect(
+func (ir *InsertRows) hasSelectInput() bool {
+	return ir != nil && ir.RowsFromSelect != nil
+}
+
+func (ir *InsertRows) execSelect(
 	ctx context.Context,
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
@@ -70,4 +74,13 @@ func (ir *InsertRows) execInsertFromSelect(
 		rows:     res.Rows,
 		insertID: 0, // TODO
 	}, nil
+}
+
+func (ir *InsertRows) execSelectStreaming(
+	ctx context.Context,
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+	callback func(result *sqltypes.Result) error,
+) error {
+	return vcursor.StreamExecutePrimitiveStandalone(ctx, ir.RowsFromSelect, bindVars, false, callback)
 }

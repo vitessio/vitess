@@ -97,9 +97,6 @@ type (
 		// that will appear in the result set of the select query.
 		VindexValueOffset [][]int
 
-		// Input is a select query plan to retrieve results for inserting data.
-		Input Primitive `json:",omitempty"`
-
 		// ForceNonStreaming is true when the insert table and select table are same.
 		// This will avoid locking by the select table.
 		ForceNonStreaming bool
@@ -242,7 +239,7 @@ func (ins *Insert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 
 // TryStreamExecute performs a streaming exec.
 func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	if ins.Input == nil || ins.ForceNonStreaming {
+	if !ins.InsertRows.hasSelectInput() || ins.ForceNonStreaming {
 		res, err := ins.TryExecute(ctx, vcursor, bindVars, wantfields)
 		if err != nil {
 			return err
@@ -258,8 +255,7 @@ func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 	unsharded := ins.Opcode == InsertUnsharded
 	var mu sync.Mutex
 	output := &sqltypes.Result{}
-
-	err := vcursor.StreamExecutePrimitiveStandalone(ctx, ins.Input, bindVars, false, func(result *sqltypes.Result) error {
+	err := ins.InsertRows.execSelectStreaming(ctx, vcursor, bindVars, func(result *sqltypes.Result) error {
 		if len(result.Rows) == 0 {
 			return nil
 		}
@@ -302,24 +298,24 @@ func (ins *Insert) GetFields(context.Context, VCursor, map[string]*querypb.BindV
 
 func (ins *Insert) execInsertUnsharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	query := ins.Query
-	if ins.Input != nil {
-		result, err := vcursor.ExecutePrimitive(ctx, ins.Input, bindVars, false)
+	if ins.InsertRows.hasSelectInput() {
+		result, err := ins.InsertRows.execSelect(ctx, vcursor, bindVars)
 		if err != nil {
 			return nil, err
 		}
-		if len(result.Rows) == 0 {
+		if len(result.rows) == 0 {
 			return &sqltypes.Result{}, nil
 		}
-		query = ins.getInsertQueryFromSelectForUnsharded(result, bindVars)
+		query = ins.getInsertQueryFromSelectForUnsharded(result.rows, bindVars)
 	}
 
 	_, qr, err := ins.executeUnshardedTableQuery(ctx, vcursor, bindVars, query)
 	return qr, err
 }
 
-func (ins *Insert) getInsertQueryFromSelectForUnsharded(result *sqltypes.Result, bindVars map[string]*querypb.BindVariable) string {
+func (ins *Insert) getInsertQueryFromSelectForUnsharded(rows []sqltypes.Row, bindVars map[string]*querypb.BindVariable) string {
 	var mids sqlparser.Values
-	for r, inputRow := range result.Rows {
+	for r, inputRow := range rows {
 		row := sqlparser.ValTuple{}
 		for c, value := range inputRow {
 			bvName := insertVarOffset(r, c)
@@ -488,7 +484,7 @@ func (ins *Insert) getInsertSelectQueries(
 }
 
 func (ins *Insert) execInsertFromSelect(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	result, err := ins.InsertRows.execInsertFromSelect(ctx, vcursor, bindVars)
+	result, err := ins.InsertRows.execSelect(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -1026,7 +1022,7 @@ func (ins *Insert) description() PrimitiveDescription {
 }
 
 func (ins *Insert) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, result *sqltypes.Result) (int64, *sqltypes.Result, error) {
-	query := ins.getInsertQueryFromSelectForUnsharded(result, bindVars)
+	query := ins.getInsertQueryFromSelectForUnsharded(result.Rows, bindVars)
 	return ins.executeUnshardedTableQuery(ctx, vcursor, bindVars, query)
 }
 

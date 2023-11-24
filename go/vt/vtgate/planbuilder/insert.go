@@ -108,7 +108,6 @@ var _ logicalPlan = (*insert)(nil)
 func (i *insert) Primitive() engine.Primitive {
 	if i.source != nil {
 		input := i.source.Primitive()
-		i.eInsert.Input = input
 		i.eInsert.InsertRows = engine.NewInsertRowsFromSelect(nil, input)
 	}
 	return i.eInsert

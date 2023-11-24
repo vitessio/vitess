@@ -386,12 +386,14 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(240)
+		size += int64(224)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
+	// field InsertRows *vitess.io/vitess/go/vt/vtgate/engine.InsertRows
+	size += cached.InsertRows.CachedSize(true)
 	// field VindexValues [][][]vitess.io/vitess/go/vt/vtgate/evalengine.Expr
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.VindexValues)) * int64(24))
@@ -449,8 +451,34 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Input.(cachedObject); ok {
+	return size
+}
+func (cached *InsertRows) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Generate *vitess.io/vitess/go/vt/vtgate/engine.Generate
+	size += cached.Generate.CachedSize(true)
+	// field RowsFromValues vitess.io/vitess/go/vt/sqlparser.Values
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.RowsFromValues)) * int64(24))
+		for _, elem := range cached.RowsFromValues {
+			{
+				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(16))
+				for _, elem := range elem {
+					if cc, ok := elem.(cachedObject); ok {
+						size += cc.CachedSize(true)
+					}
+				}
+			}
+		}
+	}
+	// field RowsFromSelect vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.RowsFromSelect.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size
