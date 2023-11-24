@@ -442,7 +442,7 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	if err != nil {
 		nilStatIndex, errorCount := 0, 0
 		for i, stat := range stats {
-			if stat == nil {
+			if stat != nil {
 				// Possible of multiple errors but only catch the last error index in stats
 				nilStatIndex = i
 				errorCount++
