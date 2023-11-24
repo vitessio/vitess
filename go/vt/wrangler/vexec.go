@@ -158,7 +158,7 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 	if wr.VExecFunc != nil {
 		return wr.VExecFunc(ctx, workflow, keyspace, query, dryRun)
 	}
-	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, dryRun)
+	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, dryRun, nil)
 	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
 	for tablet, result := range results {
 		retResults[tablet] = sqltypes.Proto3ToResult(result)
@@ -167,10 +167,13 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 }
 
 // runVexec is the main function that runs a dry or wet execution of 'query' on backend shards.
-func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string, callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error), dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string,
+	callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error),
+	dryRun bool, shards []string) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 
-	if err := vx.getPrimaries(); err != nil {
+	if err := vx.getPrimaries(shards); err != nil {
 		return nil, err
 	}
 	if callback == nil { // Using legacy SQL query path
@@ -285,14 +288,11 @@ func (vx *vexec) parseQuery() (err error) {
 }
 
 // getPrimaries identifies primary tablet for all shards relevant to our keyspace
-func (vx *vexec) getPrimaries() error {
+func (vx *vexec) getPrimaries(shards []string) error {
 	var err error
-	shards, err := vx.wr.ts.GetShardNames(vx.ctx, vx.keyspace)
+	shards, err = vx.wr.getShardsToAffect(vx.ctx, vx.keyspace, shards)
 	if err != nil {
 		return err
-	}
-	if len(shards) == 0 {
-		return fmt.Errorf("no shards found in keyspace %s", vx.keyspace)
 	}
 	var allPrimaries []*topo.TabletInfo
 	var primary *topo.TabletInfo
@@ -340,10 +340,11 @@ func (wr *Wrangler) convertQueryResultToSQLTypesResult(results map[*topo.TabletI
 // rpcReq is an optional argument for any actions that use the new RPC path. Today
 // that is only the update action. When using the SQL interface this is ignored and
 // you can pass nil.
-func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, rpcReq any) (map[*topo.TabletInfo]*sqltypes.Result, error) {
+func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, rpcReq any,
+	shards []string) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	switch action {
 	case "show":
-		replStatus, err := wr.ShowWorkflow(ctx, workflow, keyspace)
+		replStatus, err := wr.ShowWorkflow(ctx, workflow, keyspace, shards)
 		if err != nil {
 			return nil, err
 		}
@@ -358,7 +359,7 @@ func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, acti
 		return nil, err
 	default:
 	}
-	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, rpcReq)
+	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, rpcReq, shards)
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +391,7 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 // canRestartWorkflow validates that, for an atomic copy workflow, none of the streams are still in the copy phase.
 // Since we copy all tables in a single snapshot, we cannot restart a workflow which broke before all tables were copied.
 func (wr *Wrangler) canRestartWorkflow(ctx context.Context, workflow, keyspace string) error {
-	res, err := wr.ShowWorkflow(ctx, workflow, keyspace)
+	res, err := wr.ShowWorkflow(ctx, workflow, keyspace, nil)
 	if err != nil {
 		return err
 	}
@@ -409,7 +410,9 @@ func (wr *Wrangler) canRestartWorkflow(ctx context.Context, workflow, keyspace s
 	return nil
 }
 
-func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, rpcReq any) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool,
+	rpcReq any, shards []string) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+
 	var callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error) = nil
 	query, err := wr.getWorkflowActionQuery(action)
 	if err != nil {
@@ -452,7 +455,7 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 			wr.Logger().Printf("On the following tablets in the %s keyspace for workflow %s:\n",
 				keyspace, workflow)
 			vx := newVExec(ctx, workflow, keyspace, "", wr)
-			if err := vx.getPrimaries(); err != nil {
+			if err := vx.getPrimaries(shards); err != nil {
 				return nil, err
 			}
 			tablets := vx.primaries
@@ -475,13 +478,13 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 		}
 	}
 
-	return wr.runVexec(ctx, workflow, keyspace, query, callback, dryRun)
+	return wr.runVexec(ctx, workflow, keyspace, query, callback, dryRun, shards)
 }
 
 // WorkflowTagAction sets or clears the tags for a workflow in a keyspace
 func (wr *Wrangler) WorkflowTagAction(ctx context.Context, keyspace string, workflow string, tags string) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	query := fmt.Sprintf("update _vt.vreplication set tags = %s", encodeString(tags))
-	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, false)
+	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, false, nil)
 	return wr.convertQueryResultToSQLTypesResult(results), err
 }
 
@@ -697,7 +700,7 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	return status, bls.Keyspace, nil
 }
 
-func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (*ReplicationStatusResult, error) {
+func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string, shards []string) (*ReplicationStatusResult, error) {
 	var rsr ReplicationStatusResult
 	rsr.ShardStatuses = make(map[string]*ShardReplicationStatus)
 	rsr.Workflow = workflow
@@ -722,7 +725,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 		defer_secondary_keys,
 		rows_copied
 	from _vt.vreplication`
-	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, false)
+	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, false, shards)
 	if err != nil {
 		return nil, err
 	}
@@ -861,8 +864,8 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 }
 
 // ShowWorkflow will return all of the relevant replication related information for the given workflow.
-func (wr *Wrangler) ShowWorkflow(ctx context.Context, workflow, keyspace string) (*ReplicationStatusResult, error) {
-	replStatus, err := wr.getStreams(ctx, workflow, keyspace)
+func (wr *Wrangler) ShowWorkflow(ctx context.Context, workflow, keyspace string, shards []string) (*ReplicationStatusResult, error) {
+	replStatus, err := wr.getStreams(ctx, workflow, keyspace, shards)
 	if err != nil {
 		return nil, err
 	}

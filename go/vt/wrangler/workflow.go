@@ -77,6 +77,12 @@ type VReplicationWorkflowParams struct {
 
 	// MoveTables only
 	NoRoutingRules bool
+
+	// Partial MoveTables only
+	// Only these shards will be expected to participate in the workflow. Expects user to know what they are doing
+	// and provide the correct set of shards associated with the workflow. This is for reducing latency for workflows
+	// that only use a small set of shards in a keyspace with a large number of shards.
+	ShardsToAffect []string
 }
 
 // VReplicationWorkflow stores various internal objects for a workflow
@@ -101,6 +107,7 @@ func (vrw *VReplicationWorkflow) String() string {
 func (wr *Wrangler) NewVReplicationWorkflow(ctx context.Context, workflowType VReplicationWorkflowType,
 	params *VReplicationWorkflowParams) (*VReplicationWorkflow, error) {
 
+	wr.WorkflowParams = params
 	log.Infof("NewVReplicationWorkflow with params %+v", params)
 	vrw := &VReplicationWorkflow{wr: wr, ctx: ctx, params: params, workflowType: workflowType}
 	ts, ws, err := wr.getWorkflowState(ctx, params.TargetKeyspace, params.Workflow)
@@ -258,7 +265,7 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 	var err error
 	var workflowErrors []*WorkflowError
 	var total, started int64
-	res, err := vrw.wr.ShowWorkflow(vrw.ctx, vrw.params.Workflow, vrw.params.TargetKeyspace)
+	res, err := vrw.wr.ShowWorkflow(vrw.ctx, vrw.params.Workflow, vrw.params.TargetKeyspace, nil)
 	if err != nil {
 		return 0, 0, nil, err
 	}
@@ -525,7 +532,11 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 		return "", nil
 	}
 	log.Infof("state:%s, direction %d, switched %t", vrw.CachedState(), vrw.params.Direction, ws.WritesSwitched)
-	result, err := vrw.wr.getStreams(vrw.ctx, workflowName, keyspace)
+	var shards []string
+	if vrw.params.ShardsToAffect != nil {
+		shards = vrw.params.ShardsToAffect
+	}
+	result, err := vrw.wr.getStreams(vrw.ctx, workflowName, keyspace, shards)
 	if err != nil {
 		return "", err
 	}
@@ -705,6 +716,10 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 		}
 	}
 	return &copyProgress, nil
+}
+
+func (vrw *VReplicationWorkflow) IsPartialMigration() bool {
+	return vrw.ws.IsPartialMigration
 }
 
 // endregion

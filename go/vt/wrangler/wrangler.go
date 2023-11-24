@@ -56,7 +56,8 @@ type Wrangler struct {
 	// DO NOT USE in production code.
 	VExecFunc func(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error)
 	// Limt the number of concurrent background goroutines if needed.
-	sem *semaphore.Weighted
+	sem            *semaphore.Weighted
+	WorkflowParams *VReplicationWorkflowParams
 }
 
 // New creates a new Wrangler object.

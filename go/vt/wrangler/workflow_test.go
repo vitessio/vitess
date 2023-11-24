@@ -378,6 +378,90 @@ func TestPartialMoveTables(t *testing.T) {
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 }
 
+// TestPartialMoveTablesSpecifiedShards is a version of TestPartialMoveTables which uses the --shards option.
+func TestPartialMoveTablesSpecifiedShards(t *testing.T) {
+	ctx := context.Background()
+	shards := []string{"-80", "80-"}
+	shardToMove := shards[0:1]
+	otherShard := shards[1:]
+	p := &VReplicationWorkflowParams{
+		Workflow:                        "test",
+		WorkflowType:                    MoveTablesWorkflow,
+		SourceKeyspace:                  "ks1",
+		SourceShards:                    shardToMove, // shard by shard
+		TargetShards:                    shardToMove, // shard by shard
+		TargetKeyspace:                  "ks2",
+		Tables:                          "t1,t2",
+		Cells:                           "cell1,cell2",
+		TabletTypes:                     "REPLICA,RDONLY,PRIMARY",
+		Timeout:                         DefaultActionTimeout,
+		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
+		OnDDL:                           binlogdatapb.OnDDLAction_STOP.String(),
+	}
+	tme := newTestTablePartialMigrater(ctx, t, shards, shards[0:1], "select * %s")
+	defer tme.stopTablets(t)
+
+	// Save some unrelated shard routing rules to be sure that
+	// they don't interfere in any way.
+	srr, err := tme.ts.GetShardRoutingRules(ctx)
+	require.NoError(t, err)
+	srr.Rules = append(srr.Rules, []*vschema.ShardRoutingRule{
+		{
+			FromKeyspace: "wut",
+			Shard:        "40-80",
+			ToKeyspace:   "bloop",
+		},
+		{
+			FromKeyspace: "haylo",
+			Shard:        "-80",
+			ToKeyspace:   "blarg",
+		},
+	}...)
+	err = tme.ts.SaveShardRoutingRules(ctx, srr)
+	require.NoError(t, err)
+
+	// Providing an incorrect shard should result in the workflow not being found.
+	p.ShardsToAffect = otherShard
+	wf, err := tme.wr.NewVReplicationWorkflow(ctx, MoveTablesWorkflow, p)
+	require.NoError(t, err)
+	require.Nil(t, wf.ts)
+
+	p.ShardsToAffect = shardToMove
+	wf, err = tme.wr.NewVReplicationWorkflow(ctx, MoveTablesWorkflow, p)
+	require.NoError(t, err)
+	require.NotNil(t, wf)
+	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
+	require.True(t, wf.ts.isPartialMigration, "expected partial shard migration")
+
+	// The default shard routing rule for the keyspace's other shard would
+	// normally be put in place, but the unit test does not execute the
+	// wrangler.MoveTables function which adds all of the default shard
+	// routing rules in the topo for the keyspace when the first workflow
+	// is run against it. So we simulate it here.
+	srr, err = tme.ts.GetShardRoutingRules(ctx)
+	require.NoError(t, err)
+	srr.Rules = append(srr.Rules, &vschema.ShardRoutingRule{
+		FromKeyspace: "ks2",
+		Shard:        "80-",
+		ToKeyspace:   "ks1",
+	})
+	err = tme.ts.SaveShardRoutingRules(ctx, srr)
+	require.NoError(t, err)
+
+	tme.expectNoPreviousJournals()
+	expectMoveTablesQueries(t, tme, p)
+	tme.expectNoPreviousJournals()
+	wf.params.ShardsToAffect = shardToMove
+	require.NoError(t, testSwitchForward(t, wf))
+	require.Equal(t, "Reads partially switched, for shards: -80. Writes partially switched, for shards: -80", wf.CurrentState())
+	require.NoError(t, err)
+
+	tme.expectNoPreviousJournals()
+	tme.expectNoPreviousReverseJournals()
+	require.NoError(t, testReverse(t, wf))
+	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
+}
+
 func validateRoutingRuleCount(ctx context.Context, t *testing.T, ts *topo.Server, cnt int) {
 	rr, err := ts.GetRoutingRules(ctx)
 	require.NoError(t, err)
