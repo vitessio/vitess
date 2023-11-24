@@ -438,9 +438,9 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	})
 
 	var tablets []*topo.TabletInfo
+	nilStatIndex, errorCount := 0, 0
 	// Instead of return on err directly, count total errors and compare with len(stats)
 	if err != nil {
-		nilStatIndex, errorCount := 0, 0
 		for i, stat := range stats {
 			// Skip Primary
 			if stat != nil && stat.Position != "" {
@@ -456,6 +456,9 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 		if errorCount == len(stats)-1 {
 			return err
 		}
+	}
+
+	if errorCount != 0 {
 		for i, shardTablet := range shardTablets {
 			if i != nilStatIndex {
 				tablets = append(tablets, shardTablet)
