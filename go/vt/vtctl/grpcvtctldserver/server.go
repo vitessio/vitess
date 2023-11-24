@@ -464,6 +464,8 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 				tablets = append(tablets, shardTablet)
 			}
 		}
+	} else {
+		tablets = shardTablets
 	}
 
 	var (
