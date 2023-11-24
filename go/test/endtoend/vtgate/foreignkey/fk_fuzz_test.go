@@ -55,6 +55,7 @@ type fuzzer struct {
 	updateShare  int
 	concurrency  int
 	queryFormat  QueryFormat
+	noFkSetVar   bool
 	fkState      *bool
 
 	// shouldStop is an internal state variable, that tells the fuzzer
@@ -85,6 +86,7 @@ func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare i
 		updateShare:  updateShare,
 		queryFormat:  queryFormat,
 		fkState:      fkState,
+		noFkSetVar:   false,
 		wg:           sync.WaitGroup{},
 	}
 	// Initially the fuzzer thread is stopped.
@@ -477,7 +479,7 @@ func (fz *fuzzer) generateParameterizedDeleteQuery() (query string, params []any
 
 // getSetVarFkChecksVal generates an optimizer hint to randomly set the foreign key checks to on or off or leave them unaltered.
 func (fz *fuzzer) getSetVarFkChecksVal() string {
-	if fz.concurrency != 1 {
+	if fz.concurrency != 1 || fz.noFkSetVar {
 		return ""
 	}
 	val := rand.Intn(3)
@@ -720,6 +722,7 @@ func BenchmarkFkFuzz(b *testing.B) {
 		startBenchmark(b)
 		// Create a fuzzer to generate and store a certain set of queries.
 		fz := newFuzzer(1, maxValForId, maxValForCol, insertShare, deleteShare, updateShare, SQLQueries, nil)
+		fz.noFkSetVar = true
 		var queries []string
 		for j := 0; j < numQueries; j++ {
 			genQueries := fz.generateQuery()
