@@ -442,14 +442,18 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	if err != nil {
 		nilStatIndex, errorCount := 0, 0
 		for i, stat := range stats {
-			if stat != nil {
+			// Skip Primary
+			if stat != nil && stat.Position != "" {
+				continue
+			}
+			if stat == nil {
 				// Possible of multiple errors but only catch the last error index in stats
 				nilStatIndex = i
 				errorCount++
 			}
 		}
-		// Only return err when errors on all vttablets
-		if errorCount == len(stats) {
+		// Only return err when all Non-Primary have errors
+		if errorCount == len(stats)-1 {
 			return err
 		}
 		for i, shardTablet := range shardTablets {
