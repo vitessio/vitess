@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"path/filepath"
 	"runtime/debug"
@@ -432,37 +431,20 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 
 	shardTablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
-	// Shuffle shardTablets to avoid items in a fixed order
-	rand.Shuffle(len(shardTablets), func(i, j int) {
-		shardTablets[i], shardTablets[j] = shardTablets[j], shardTablets[i]
-	})
 
 	var tablets []*topo.TabletInfo
-	nilStatIndex, errorCount := 0, 0
-	// Instead of return on err directly, count total errors and compare with len(stats)
+	// Instead of return on err directly, only return when no healthy tablets at all
 	if err != nil {
 		for i, stat := range stats {
-			// Skip Primary
-			if stat != nil && stat.Position != "" {
-				continue
-			}
-			if stat == nil {
-				// Possible of multiple errors but only catch the last error index in stats
-				nilStatIndex = i
-				errorCount++
+			// shardTablets[i] and stats[i] is 1:1 mapping
+			// Healthy shardTablets[i] will be added to tablets
+			if stat != nil {
+				tablets = append(tablets, shardTablets[i])
 			}
 		}
-		// Only return err when all Non-Primary have errors
-		if errorCount == len(stats)-1 {
+		// Only return err when all tablets have errors
+		if len(tablets) == 0 {
 			return err
-		}
-	}
-
-	if errorCount != 0 {
-		for i, shardTablet := range shardTablets {
-			if i != nilStatIndex {
-				tablets = append(tablets, shardTablet)
-			}
 		}
 	} else {
 		tablets = shardTablets
