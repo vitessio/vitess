@@ -43,7 +43,7 @@ type SemiJoin struct {
 
 	// Vars defines the list of SemiJoinVars that need to
 	// be built from the LHS result before invoking
-	// the RHS subqquery.
+	// the RHS subquery.
 	Vars map[string]int `json:",omitempty"`
 }
 

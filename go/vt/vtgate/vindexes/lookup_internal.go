@@ -356,7 +356,7 @@ nextRow:
 // Delete deletes the association between ids and value.
 // rowsColValues contains all the rows that are being deleted.
 // For each row, we store the value of each column defined in the vindex.
-// value cointains the keyspace_id of the vindex entry being deleted.
+// value contains the keyspace_id of the vindex entry being deleted.
 //
 // Given the following information in a vindex table with two columns:
 //

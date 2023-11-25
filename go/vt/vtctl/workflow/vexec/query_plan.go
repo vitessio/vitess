@@ -31,7 +31,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// QueryPlan defines the interface to executing a preprared vexec query on one
+// QueryPlan defines the interface to executing a prepared vexec query on one
 // or more tablets. Implementations should ensure that it is safe to call the
 // various Execute* methods repeatedly and in multiple goroutines.
 type QueryPlan interface {

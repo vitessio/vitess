@@ -4170,7 +4170,7 @@ func TestWarmingReads(t *testing.T) {
 
 	executor.normalize = true
 	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
-	// Since queries on the replica will run in a separate go-routine, we need sycnronization for the Queries field in the sandboxconn.
+	// Since queries on the replica will run in a separate go-routine, we need synchronization for the Queries field in the sandboxconn.
 	replica.RequireQueriesLocking()
 
 	_, err := executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user", map[string]*querypb.BindVariable{})

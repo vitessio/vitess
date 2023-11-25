@@ -716,7 +716,7 @@ func TestViewReferences(t *testing.T) {
 }
 
 // TestMassiveSchema loads thousands of tables into one schema, and thousands of tables, some of which are different, into another schema.
-// It compares the two shemas.
+// It compares the two schemas.
 // The objective of this test is to verify that execution time is _reasonable_. Since this will run in GitHub CI, which is very slow, we allow
 // for 1 minute total for all operations.
 func TestMassiveSchema(t *testing.T) {

@@ -165,7 +165,7 @@ func (rs *rowStreamer) buildPlan() error {
 		// "puncture"; this is an event that is captured by vstreamer. The completion of the flow fixes the
 		// puncture, and places a new table under the original table's name, but the way it is done does not
 		// cause vstreamer to refresh schema state.
-		// There is therefore a reproducable valid sequence of events where vstreamer thinks a table does not
+		// There is therefore a reproducible valid sequence of events where vstreamer thinks a table does not
 		// exist, where it in fact does exist.
 		// For this reason we give vstreamer a "second chance" to review the up-to-date state of the schema.
 		// In the future, we will reduce this operation to reading a single table rather than the entire schema.
