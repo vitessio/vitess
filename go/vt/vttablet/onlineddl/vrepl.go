@@ -168,7 +168,7 @@ func NewVRepl(workflow string,
 	}
 }
 
-// readAutoIncrement reads the AUTO_INCREMENT vlaue, if any, for a give ntable
+// readAutoIncrement reads the AUTO_INCREMENT value, if any, for a give ntable
 func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (autoIncrement uint64, err error) {
 	query, err := sqlparser.ParseAndBind(sqlGetAutoIncrement,
 		sqltypes.StringBindVariable(v.dbName),
@@ -642,7 +642,7 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 	return nil
 }
 
-// generateInsertStatement generates the INSERT INTO _vt.replication stataement that creates the vreplication workflow
+// generateInsertStatement generates the INSERT INTO _vt.replication statement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, v.dbName)
 	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",

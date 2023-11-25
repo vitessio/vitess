@@ -777,9 +777,9 @@ func TestReserveBeginExecuteWithPreQueriesAndCheckConnectionState(t *testing.T) 
 	require.NoError(t, err)
 
 	assert.NotEqual(t, qr1.Rows, qr2.Rows)
-	// As the transaction is read commited it is not able to see #5.
+	// As the transaction is read committed it is not able to see #5.
 	assert.Equal(t, `[[INT32(1)] [INT32(2)] [INT32(3)] [INT32(4)]]`, fmt.Sprintf("%v", qr1.Rows))
-	// As the transaction is read uncommited it is able to see #4.
+	// As the transaction is read uncommitted it is able to see #4.
 	assert.Equal(t, `[[INT32(1)] [INT32(2)] [INT32(3)] [INT32(4)] [INT32(5)]]`, fmt.Sprintf("%v", qr2.Rows))
 
 	err = rucClient.Commit()
@@ -804,7 +804,7 @@ func TestReserveBeginExecuteWithPreQueriesAndCheckConnectionState(t *testing.T) 
 	qr2, err = rucClient.Execute(selQuery, nil)
 	require.NoError(t, err)
 
-	// As the transaction on read committed client got rollbacked back, table will forget #4.
+	// As the transaction on read committed client got rolled back, table will forget #4.
 	assert.Equal(t, qr1.Rows, qr2.Rows)
 	assert.Equal(t, `[[INT32(1)] [INT32(2)] [INT32(3)] [INT32(5)]]`, fmt.Sprintf("%v", qr2.Rows))
 

@@ -317,7 +317,7 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 	// Postpone will wait on the unbuffered ch.
 	<-r1.ch
 
-	// Set up a second subsriber, add a message.
+	// Set up a second subscriber, add a message.
 	r2 := newTestReceiver(1)
 	mm.Subscribe(context.Background(), r2.rcv)
 	<-r2.ch

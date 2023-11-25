@@ -24,7 +24,7 @@ The operators go through a few phases while planning:
 	All the post-processing - aggregations, sorting, limit etc. are at this stage
 	contained in Horizon structs. We try to push these down under routes, and expand
 	the ones that can't be pushed down into individual operators such as Projection,
-	Agreggation, Limit, etc.
+	Aggregation, Limit, etc.
 2.	Planning
 	Once the initial plan has been fully built, we go through a number of phases.
 	recursively running rewriters on the tree in a fixed point fashion, until we've gone

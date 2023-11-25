@@ -561,7 +561,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (fun
 //   - "vreplication" for most flows
 //   - "vreplication:online-ddl" for online ddl flows.
 //     Note that with such name, it's possible to throttle
-//     the worflow by either /throttler/throttle-app?app=vreplication and/or /throttler/throttle-app?app=online-ddl
+//     the workflow by either /throttler/throttle-app?app=vreplication and/or /throttler/throttle-app?app=online-ddl
 //     This is useful when we want to throttle all migrations. We throttle "online-ddl" and that applies to both vreplication
 //     migrations as well as gh-ost migrations.
 func (vr *vreplicator) throttlerAppName() string {
@@ -1044,7 +1044,7 @@ func (vr *vreplicator) setExistingRowsCopied() {
 	if vr.stats.CopyRowCount.Get() == 0 {
 		rowsCopiedExisting, err := vr.readExistingRowsCopied(vr.id)
 		if err != nil {
-			log.Warningf("Failed to read existing rows copied value for %s worfklow: %v", vr.WorkflowName, err)
+			log.Warningf("Failed to read existing rows copied value for %s workflow: %v", vr.WorkflowName, err)
 		} else if rowsCopiedExisting != 0 {
 			log.Infof("Resuming the %s vreplication workflow started on another tablet, setting rows copied counter to %v", vr.WorkflowName, rowsCopiedExisting)
 			vr.stats.CopyRowCount.Set(rowsCopiedExisting)

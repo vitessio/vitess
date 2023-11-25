@@ -60,7 +60,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 	for _, expr := range stmt.Exprs {
 		// AST struct has been prepared before getting here, so no scope here means that
 		// we have a UDV. If the original query didn't explicitly specify the scope, it
-		// would have been explictly set to sqlparser.SessionStr before reaching this
+		// would have been explicitly set to sqlparser.SessionStr before reaching this
 		// phase of planning
 		switch expr.Var.Scope {
 		case sqlparser.GlobalScope:
