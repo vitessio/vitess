@@ -640,7 +640,7 @@ func TestExecutorShow(t *testing.T) {
 	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
 	assert.Equal(t, wantQuery, lastQuery, "Got: %v. Want: %v", lastQuery, wantQuery)
 
-	// Set desitation keyspace in session
+	// Set destination keyspace in session
 	session.TargetString = KsTestUnsharded
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, "show create table unknown", nil)
 	require.NoError(t, err)

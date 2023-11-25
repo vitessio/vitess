@@ -391,7 +391,7 @@ func (sbc *SandboxConn) ConcludeTransaction(ctx context.Context, target *querypb
 	return sbc.getError()
 }
 
-// ReadTransaction returns the metadata for the sepcified dtid.
+// ReadTransaction returns the metadata for the specified dtid.
 func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
 	sbc.ReadTransactionCount.Add(1)
 	if err := sbc.getError(); err != nil {

@@ -406,7 +406,7 @@ func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[Table
 				childFKToUpdExprs[childFk.String(tbl.GetVindexTable())] = ue
 			}
 		}
-		// If we are setting a column to NULL, then we don't need to verify the existance of an
+		// If we are setting a column to NULL, then we don't need to verify the existence of an
 		// equivalent row in the parent table, even if this column was part of a foreign key to a parent table.
 		if sqlparser.IsNull(updateExpr.Expr) {
 			continue
@@ -458,7 +458,7 @@ func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[Table
 	return cFksNeedsHandling, pFksNeedsHandling, childFKToUpdExprs
 }
 
-// getAllManagedForeignKeys gets all the foreign keys for the query we are analyzing that Vitess is reposible for managing.
+// getAllManagedForeignKeys gets all the foreign keys for the query we are analyzing that Vitess is responsible for managing.
 func (a *analyzer) getAllManagedForeignKeys() (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, error) {
 	allChildFKs := make(map[TableSet][]vindexes.ChildFKInfo)
 	allParentFKs := make(map[TableSet][]vindexes.ParentFKInfo)

@@ -286,7 +286,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Test SwitchWrites cancelation on failure.
+	// Test SwitchWrites cancellation on failure.
 
 	tme.expectNoPreviousJournals()
 	// Switch all the reads first.
@@ -607,7 +607,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Test SwitchWrites cancelation on failure.
+	// Test SwitchWrites cancellation on failure.
 
 	tme.expectNoPreviousJournals()
 	// Switch all the reads first.

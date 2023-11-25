@@ -89,7 +89,7 @@ func initializeInstanceDao() {
 	cacheInitializationCompleted.Store(true)
 }
 
-// ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronuously or not
+// ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronously or not
 func ExecDBWriteFunc(f func() error) error {
 	m := query.NewMetric()
 
@@ -1105,7 +1105,7 @@ func ForgetInstance(tabletAlias string) error {
 	return nil
 }
 
-// ForgetLongUnseenInstances will remove entries of all instacnes that have long since been last seen.
+// ForgetLongUnseenInstances will remove entries of all instances that have long since been last seen.
 func ForgetLongUnseenInstances() error {
 	sqlResult, err := db.ExecVTOrc(`
 			delete
