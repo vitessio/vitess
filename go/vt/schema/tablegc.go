@@ -45,7 +45,8 @@ const (
 )
 
 const (
-	GCTableNameExpression string = `^_vt_(HOLD|PURGE|EVAC|DROP)_([0-f]{32})_([0-9]{14})$`
+	GCTableNameExpression    string = `^_vt_(HOLD|PURGE|EVAC|DROP)_([0-f]{32})_([0-9]{14})$`
+	NewGCTableNameExpression string = `^_vt_(hld|prg|evc|drp)_([0-f]{32})_([0-9]{14})_$` // =========== use this in conjunction with GCTableNameExpression in vreplicator. Add testing!
 )
 
 var (
@@ -54,9 +55,13 @@ var (
 
 	gcStates = map[string]TableGCState{
 		string(HoldTableGCState):  HoldTableGCState,
+		"hld":                     HoldTableGCState,
 		string(PurgeTableGCState): PurgeTableGCState,
+		"prg":                     PurgeTableGCState,
 		string(EvacTableGCState):  EvacTableGCState,
+		"evc":                     EvacTableGCState,
 		string(DropTableGCState):  DropTableGCState,
+		"drp":                     DropTableGCState,
 	}
 )
 
@@ -90,17 +95,33 @@ func GenerateGCTableName(state TableGCState, t time.Time) (tableName string, err
 // AnalyzeGCTableName analyzes a given table name to see if it's a GC table, and if so, parse out
 // its state, uuid, and timestamp
 func AnalyzeGCTableName(tableName string) (isGCTable bool, state TableGCState, uuid string, t time.Time, err error) {
+	// Try new naming format (e.g. `_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_`):
+	// The new naming format is accepted in v19, and actually _used_ in v20
+	if isInternal, hint, uuid, t, err := AnalyzeInternalTableName(tableName); isInternal {
+		gcState, ok := gcStates[hint]
+		return ok, gcState, uuid, t, err
+	}
+	// Try old naming formats. These names will not be generated in v20.
+	// TODO(shlomi): the code below should be remvoed in v21
 	submatch := gcTableNameRegexp.FindStringSubmatch(tableName)
 	if len(submatch) == 0 {
 		return false, state, uuid, t, nil
 	}
+	gcState, ok := gcStates[submatch[1]]
+	if !ok {
+		return false, state, uuid, t, nil
+	}
 	t, err = time.Parse(readableTimeFormat, submatch[3])
-	return true, TableGCState(submatch[1]), submatch[2], t, err
+	if err != nil {
+		return false, state, uuid, t, err
+	}
+	return true, gcState, submatch[2], t, nil
 }
 
 // IsGCTableName answers 'true' when the given table name stands for a GC table
 func IsGCTableName(tableName string) bool {
-	return gcTableNameRegexp.MatchString(tableName)
+	isGC, _, _, _, _ := AnalyzeGCTableName(tableName)
+	return isGC
 }
 
 // GenerateRenameStatementWithUUID generates a "RENAME TABLE" statement, where a table is renamed to a GC table, with preset UUID
