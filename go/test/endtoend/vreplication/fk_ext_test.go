@@ -135,8 +135,9 @@ func TestFKExt(t *testing.T) {
 	})
 
 	t.Run("MoveTables from unsharded to sharded keyspace", func(t *testing.T) {
-		// Migrate data from target1Keyspace to the sharded target2Keyspace. Streams only from primaries
-		// for one shard and replica for the other shard. Constraints have been dropped from this replica.
+		// Migrate data from target1Keyspace to the sharded target2Keyspace. Drops constraints from
+		// replica to simulate a replica that is not doing cascades in innodb to test vtgate's fkmanaged mode.
+		// The replica with dropped constraints is used as source for the next workflow called in materializeTables().
 		moveKeyspace(t)
 	})
 
@@ -415,7 +416,7 @@ func importIntoVitess(t *testing.T) {
 const getConstraintsQuery = `
 SELECT CONSTRAINT_NAME, TABLE_NAME 
 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
-WHERE TABLE_SCHEMA = ` + "'%s'" + ` AND REFERENCED_TABLE_NAME IS NOT NULL;
+WHERE TABLE_SCHEMA = '%s' AND REFERENCED_TABLE_NAME IS NOT NULL;
 `
 
 // dropReplicaConstraints drops all foreign key constraints on replica tables for a given keyspace/shard.
@@ -423,7 +424,7 @@ WHERE TABLE_SCHEMA = ` + "'%s'" + ` AND REFERENCED_TABLE_NAME IS NOT NULL;
 // the binlogs created by the primary. This will confirm that vtgate is doing the cascades correctly.
 func dropReplicaConstraints(t *testing.T, keyspaceName string, tablet *cluster.VttabletProcess) {
 	var dropConstraints []string
-
+	require.Equal(t, "replica", strings.ToLower(tablet.TabletType))
 	dbName := "vt_" + keyspaceName
 	qr, err := tablet.QueryTablet(fmt.Sprintf(getConstraintsQuery, dbName), keyspaceName, true)
 	if err != nil {
