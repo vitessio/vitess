@@ -19,7 +19,6 @@ package operators
 import (
 	"fmt"
 
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -92,18 +91,14 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return nil, err
 	}
 
-	// Now we check for the foreign key mode and make changes if required.
-	ksMode, err := ctx.VSchema.ForeignKeyMode(vindexTable.Keyspace.Name)
-	if err != nil {
-		return nil, err
+	if deleteStmt.Comments != nil {
+		delOp = &LockAndComment{
+			Source:   delOp,
+			Comments: deleteStmt.Comments,
+		}
 	}
 
-	// Unmanaged foreign-key-mode, we don't need to do anything.
-	if ksMode != vschemapb.Keyspace_FK_MANAGED {
-		return delOp, nil
-	}
-
-	childFks := vindexTable.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.DeleteAction)
+	childFks := ctx.SemTable.GetChildForeignKeysList()
 	// If there are no foreign key constraints, then we don't need to do anything.
 	if len(childFks) == 0 {
 		return delOp, nil
@@ -172,7 +167,7 @@ func createDeleteOperator(
 		return nil, vterrors.VT12001("multi shard DELETE with LIMIT")
 	}
 
-	return sqc.getRootOperator(route), nil
+	return sqc.getRootOperator(route, nil), nil
 }
 
 func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo) (ops.Operator, error) {
@@ -186,16 +181,16 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.O
 		}
 
 		// We need to select all the parent columns for the foreign key constraint, to use in the update of the child table.
-		cols, exprs := selectParentColumns(fk, len(selectExprs))
-		selectExprs = append(selectExprs, exprs...)
+		var offsets []int
+		offsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs)
 
-		fkChild, err := createFkChildForDelete(ctx, fk, cols)
+		fkChild, err := createFkChildForDelete(ctx, fk, offsets)
 		if err != nil {
 			return nil, err
 		}
 		fkChildren = append(fkChildren, fkChild)
 	}
-	selectionOp, err := createSelectionOp(ctx, selectExprs, delStmt.TableExprs, delStmt.Where, nil, sqlparser.ForUpdateLock)
+	selectionOp, err := createSelectionOp(ctx, selectExprs, delStmt.TableExprs, delStmt.Where, nil, nil, sqlparser.ForUpdateLockNoWait)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +204,7 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.O
 
 func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, cols []int) (*FkChild, error) {
 	bvName := ctx.ReservedVars.ReserveVariable(foreignKeyConstraintValues)
-
+	parsedComments := getParsedCommentsForFkChecks(ctx)
 	var childStmt sqlparser.Statement
 	switch fk.OnDelete {
 	case sqlparser.Cascade:
@@ -221,6 +216,7 @@ func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 		}
 		compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, valTuple, sqlparser.NewListArg(bvName), nil)
 		childStmt = &sqlparser.Delete{
+			Comments:   parsedComments,
 			TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
 			Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
 		}
@@ -239,6 +235,7 @@ func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 		compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, valTuple, sqlparser.NewListArg(bvName), nil)
 		childStmt = &sqlparser.Update{
 			Exprs:      updExprs,
+			Comments:   parsedComments,
 			TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
 			Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
 		}

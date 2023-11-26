@@ -20,14 +20,13 @@ import (
 	"math/bits"
 
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type builtinBitCount struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinBitCount)(nil)
+var _ IR = (*builtinBitCount)(nil)
 
 func (call *builtinBitCount) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -51,12 +50,6 @@ func (call *builtinBitCount) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalInt64(int64(count)), nil
 }
 
-func (call *builtinBitCount) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	// The MySQL docs are actually wrong and this returns an int64, not a uint64.
-	return sqltypes.Int64, f
-}
-
 func (expr *builtinBitCount) compile(c *compiler) (ctype, error) {
 	ct, err := expr.Arguments[0].compile(c)
 	if err != nil {
@@ -68,11 +61,11 @@ func (expr *builtinBitCount) compile(c *compiler) (ctype, error) {
 	if ct.Type == sqltypes.VarBinary && !ct.isHexOrBitLiteral() {
 		c.asm.BitCount_b()
 		c.asm.jumpDestination(skip)
-		return ctype{Type: sqltypes.Int64, Col: collationBinary}, nil
+		return ctype{Type: sqltypes.Int64, Flag: nullableFlags(ct.Flag), Col: collationBinary}, nil
 	}
 
 	_ = c.compileToBitwiseUint64(ct, 1)
 	c.asm.BitCount_u()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationBinary}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(ct.Flag), Col: collationBinary}, nil
 }

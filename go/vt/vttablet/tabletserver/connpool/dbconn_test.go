@@ -28,9 +28,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/pools/smartconnpool"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
-	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -66,7 +66,7 @@ func TestDBConnExec(t *testing.T) {
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
-	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -139,7 +139,7 @@ func TestDBConnExecLost(t *testing.T) {
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
-	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -200,7 +200,7 @@ func TestDBConnDeadline(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(50*time.Millisecond))
 	defer cancel()
 
-	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -253,7 +253,7 @@ func TestDBConnKill(t *testing.T) {
 	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -277,7 +277,7 @@ func TestDBConnKill(t *testing.T) {
 		t.Fatalf("kill should succeed, but got error: %v", err)
 	}
 
-	err = dbConn.reconnect(context.Background())
+	err = dbConn.Reconnect(context.Background())
 	if err != nil {
 		t.Fatalf("reconnect should succeed, but got error: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestDBConnClose(t *testing.T) {
 	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	require.NoError(t, err)
 	defer dbConn.Close()
 
@@ -324,7 +324,7 @@ func TestDBNoPoolConnKill(t *testing.T) {
 	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	dbConn, err := NewDBConnNoPool(context.Background(), db.ConnParams(), connPool.dbaPool, nil)
+	dbConn, err := NewConn(context.Background(), db.ConnParams(), connPool.dbaPool, nil)
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -348,7 +348,7 @@ func TestDBNoPoolConnKill(t *testing.T) {
 		t.Fatalf("kill should succeed, but got error: %v", err)
 	}
 
-	err = dbConn.reconnect(context.Background())
+	err = dbConn.Reconnect(context.Background())
 	if err != nil {
 		t.Fatalf("reconnect should succeed, but got error: %v", err)
 	}
@@ -380,7 +380,7 @@ func TestDBConnStream(t *testing.T) {
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
-	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -438,7 +438,7 @@ func TestDBConnStreamKill(t *testing.T) {
 	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	require.NoError(t, err)
 	defer dbConn.Close()
 
@@ -468,7 +468,7 @@ func TestDBConnReconnect(t *testing.T) {
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 
-	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
 	require.NoError(t, err)
 	defer dbConn.Close()
 
@@ -494,14 +494,14 @@ func TestDBConnReApplySetting(t *testing.T) {
 	defer connPool.Close()
 
 	ctx := context.Background()
-	dbConn, err := NewDBConn(ctx, connPool, db.ConnParams())
+	dbConn, err := newPooledConn(ctx, connPool, db.ConnParams())
 	require.NoError(t, err)
 	defer dbConn.Close()
 
 	// apply system settings.
 	setQ := "set @@sql_mode='ANSI_QUOTES'"
 	db.AddExpectedQuery(setQ, nil)
-	err = dbConn.ApplySetting(ctx, pools.NewSetting(setQ, "set @@sql_mode = default"))
+	err = dbConn.ApplySetting(ctx, smartconnpool.NewSetting(setQ, "set @@sql_mode = default"))
 	require.NoError(t, err)
 
 	// close the connection and let the dbconn reconnect to start a new connection when required.

@@ -38,11 +38,9 @@ var (
 	shardedKs         = "ks"
 	unshardedKs       = "uks"
 	Cell              = "test"
-	//go:embed sharded_schema.sql
-	shardedSchemaSQL string
 
-	//go:embed unsharded_schema.sql
-	unshardedSchemaSQL string
+	//go:embed schema.sql
+	schemaSQL string
 
 	//go:embed sharded_vschema.json
 	shardedVSchema string
@@ -107,7 +105,7 @@ func TestMain(m *testing.M) {
 		// Start keyspace
 		sKs := &cluster.Keyspace{
 			Name:      shardedKs,
-			SchemaSQL: shardedSchemaSQL,
+			SchemaSQL: schemaSQL,
 			VSchema:   shardedVSchema,
 		}
 
@@ -118,7 +116,7 @@ func TestMain(m *testing.M) {
 
 		uKs := &cluster.Keyspace{
 			Name:      unshardedKs,
-			SchemaSQL: unshardedSchemaSQL,
+			SchemaSQL: schemaSQL,
 			VSchema:   unshardedVSchema,
 		}
 		err = clusterInstance.StartUnshardedKeyspace(*uKs, 1, false)
@@ -142,7 +140,7 @@ func TestMain(m *testing.M) {
 		}
 		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
 
-		connParams, closer, err := utils.NewMySQL(clusterInstance, shardedKs, shardedSchemaSQL)
+		connParams, closer, err := utils.NewMySQL(clusterInstance, shardedKs, schemaSQL)
 		if err != nil {
 			fmt.Println(err)
 			return 1

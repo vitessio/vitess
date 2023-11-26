@@ -115,7 +115,7 @@ func init() {
 }
 
 func registerThrottlerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&throttleTabletTypes, "throttle_tablet_types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included")
+	fs.StringVar(&throttleTabletTypes, "throttle_tablet_types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included")
 
 	fs.Duration("throttle_threshold", 0, "Replication lag threshold for default lag throttling")
 	fs.String("throttle_metrics_query", "", "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
@@ -349,7 +349,7 @@ func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatap
 	return throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig), nil
 }
 
-// normalizeThrottlerConfig noramlizes missing throttler config information, as needed.
+// normalizeThrottlerConfig normalizes missing throttler config information, as needed.
 func (throttler *Throttler) normalizeThrottlerConfig(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
 	if throttlerConfig == nil {
 		throttlerConfig = &topodatapb.ThrottlerConfig{}
@@ -458,7 +458,7 @@ func (throttler *Throttler) Enable() bool {
 	return true
 }
 
-// Disable deactivates the probes and associated operations. When disabled, the throttler reponds to check
+// Disable deactivates the probes and associated operations. When disabled, the throttler responds to check
 // queries with "200 OK" irrespective of lag or any other metrics.
 func (throttler *Throttler) Disable() bool {
 	throttler.enableMutex.Lock()
@@ -604,7 +604,7 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, pro
 	}
 	defer conn.Recycle()
 
-	tm, err := conn.Exec(ctx, probe.MetricQuery, 1, true)
+	tm, err := conn.Conn.Exec(ctx, probe.MetricQuery, 1, true)
 	if err != nil {
 		metric.Err = err
 		return metric
@@ -619,7 +619,7 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, pro
 	switch metricsQueryType {
 	case mysql.MetricsQueryTypeSelect:
 		// We expect a single row, single column result.
-		// The "for" iteration below is just a way to get first result without knowning column name
+		// The "for" iteration below is just a way to get first result without knowing column name
 		for k := range row {
 			metric.Value, metric.Err = row.ToFloat64(k)
 		}
@@ -899,8 +899,8 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			if !throttler.isLeader.Load() {
 				// This tablet may have used to be the primary, but it isn't now. It may have a recollection
 				// of previous clusters it used to probe. It may have recollection of specific probes for such clusters.
-				// This now ensures any existing cluster probes are overrridden with an empty list of probes.
-				// `clusterProbes` was created above as empty, and identificable via `clusterName`. This will in turn
+				// This now ensures any existing cluster probes are overridden with an empty list of probes.
+				// `clusterProbes` was created above as empty, and identifiable via `clusterName`. This will in turn
 				// be used to overwrite throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] in
 				// updateMySQLClusterProbes().
 				return attemptWriteProbes(clusterProbes)
@@ -990,7 +990,7 @@ func (throttler *Throttler) expireThrottledApps() {
 	}
 }
 
-// ThrottleApp instructs the throttler to begin throttling an app, to som eperiod and with some ratio.
+// ThrottleApp instructs the throttler to begin throttling an app, to some period and with some ratio.
 func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, ratio float64, exempt bool) (appThrottle *base.AppThrottle) {
 	throttler.throttledAppsMutex.Lock()
 	defer throttler.throttledAppsMutex.Unlock()

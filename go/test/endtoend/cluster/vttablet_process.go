@@ -76,7 +76,6 @@ type VttabletProcess struct {
 	ServingStatus               string
 	DbPassword                  string
 	DbPort                      int
-	VreplicationTabletType      string
 	DbFlavor                    string
 	Charset                     string
 	ConsolidationsURL           string
@@ -109,7 +108,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--backup_storage_implementation", vttablet.BackupStorageImplementation,
 		"--file_backup_storage_root", vttablet.FileBackupStorageRoot,
 		"--service_map", vttablet.ServiceMap,
-		"--vreplication_tablet_type", vttablet.VreplicationTabletType,
 		"--db_charset", vttablet.Charset,
 	)
 	if v, err := GetMajorVersion("vttablet"); err != nil {
@@ -659,7 +657,6 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 		ServingStatus:               "NOT_SERVING",
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
-		VreplicationTabletType:      "replica",
 		TabletUID:                   tabletUID,
 		Charset:                     charset,
 	}

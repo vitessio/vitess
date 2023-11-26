@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -33,7 +34,7 @@ var semanticKS = &vindexes.Keyspace{
 
 var _ semantics.SchemaInformation = (*declarativeSchemaInformation)(nil)
 
-// declarativeSchemaInformation is a utility wrapper arounf FakeSI, and adds a few utility functions
+// declarativeSchemaInformation is a utility wrapper around FakeSI, and adds a few utility functions
 // to make it more simple and accessible to schemadiff's logic.
 type declarativeSchemaInformation struct {
 	Tables map[string]*vindexes.Table
@@ -53,6 +54,18 @@ func (si *declarativeSchemaInformation) FindTableOrVindex(tablename sqlparser.Ta
 
 func (si *declarativeSchemaInformation) ConnCollation() collations.ID {
 	return 45
+}
+
+func (si *declarativeSchemaInformation) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
+	return vschemapb.Keyspace_unmanaged, nil
+}
+
+func (si *declarativeSchemaInformation) KeyspaceError(keyspace string) error {
+	return nil
+}
+
+func (si *declarativeSchemaInformation) GetForeignKeyChecksState() *bool {
+	return nil
 }
 
 // addTable adds a fake table with an empty column list

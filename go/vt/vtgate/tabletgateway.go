@@ -92,7 +92,7 @@ func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, t
 
 // NewTabletGateway creates and returns a new TabletGateway
 func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, localCell string) *TabletGateway {
-	// hack to accomodate various users of gateway + tests
+	// hack to accommodate various users of gateway + tests
 	if hc == nil {
 		var topoServer *topo.Server
 		if serv != nil {
@@ -426,6 +426,11 @@ func (gw *TabletGateway) nextTablet(cell string, tablets []*discovery.TabletHeal
 // TabletsCacheStatus returns a displayable version of the health check cache.
 func (gw *TabletGateway) TabletsCacheStatus() discovery.TabletsCacheStatusList {
 	return gw.hc.CacheStatus()
+}
+
+// TabletsHealthyStatus returns a displayable version of the health check healthy list.
+func (gw *TabletGateway) TabletsHealthyStatus() discovery.TabletsCacheStatusList {
+	return gw.hc.HealthyStatus()
 }
 
 func (gw *TabletGateway) updateDefaultConnCollation(tablet *topodatapb.Tablet) {

@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -41,14 +40,4 @@ type simpleProjection struct {
 func (sq *simpleProjection) Primitive() engine.Primitive {
 	sq.eSimpleProj.Input = sq.input.Primitive()
 	return sq.eSimpleProj
-}
-
-// OutputColumns implements the logicalPlan interface
-func (sq *simpleProjection) OutputColumns() []sqlparser.SelectExpr {
-	exprs := make([]sqlparser.SelectExpr, 0, len(sq.eSimpleProj.Cols))
-	outputCols := sq.input.OutputColumns()
-	for _, colID := range sq.eSimpleProj.Cols {
-		exprs = append(exprs, outputCols[colID])
-	}
-	return exprs
 }

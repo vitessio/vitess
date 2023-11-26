@@ -102,6 +102,8 @@ type (
 		// This will avoid locking by the select table.
 		ForceNonStreaming bool
 
+		PreventAutoCommit bool
+
 		// Insert needs tx handling
 		txNeeded
 	}
@@ -958,6 +960,7 @@ func (ins *Insert) description() PrimitiveDescription {
 		"QueryTimeout":         ins.QueryTimeout,
 		"InsertIgnore":         ins.Ignore,
 		"InputAsNonStreaming":  ins.ForceNonStreaming,
+		"NoAutoCommit":         ins.PreventAutoCommit,
 	}
 
 	if len(ins.VindexValues) > 0 {
@@ -971,7 +974,7 @@ func (ins *Insert) description() PrimitiveDescription {
 			for _, exprs := range ints {
 				var this []string
 				for _, expr := range exprs {
-					this = append(this, evalengine.FormatExpr(expr))
+					this = append(this, sqlparser.String(expr))
 				}
 				res = append(res, strings.Join(this, ", "))
 			}
@@ -985,7 +988,7 @@ func (ins *Insert) description() PrimitiveDescription {
 		if ins.Generate.Values == nil {
 			other["AutoIncrement"] = fmt.Sprintf("%s:Offset(%d)", ins.Generate.Query, ins.Generate.Offset)
 		} else {
-			other["AutoIncrement"] = fmt.Sprintf("%s:Values::%s", ins.Generate.Query, evalengine.FormatExpr(ins.Generate.Values))
+			other["AutoIncrement"] = fmt.Sprintf("%s:Values::%s", ins.Generate.Query, sqlparser.String(ins.Generate.Values))
 		}
 	}
 
@@ -1041,12 +1044,12 @@ func (ins *Insert) executeUnshardedTableQuery(ctx context.Context, vcursor VCurs
 	if err != nil {
 		return 0, nil, err
 	}
-	qr, err := execShard(ctx, ins, vcursor, query, bindVars, rss[0], true, true /* canAutocommit */)
+	qr, err := execShard(ctx, ins, vcursor, query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	// If processGenerateFromValues generated new values, it supercedes
+	// If processGenerateFromValues generated new values, it supersedes
 	// any ids that MySQL might have generated. If both generated
 	// values, we don't return an error because this behavior
 	// is required to support migration.

@@ -54,7 +54,6 @@ var (
 		Long: "`mysqlctld` is a gRPC server that can be used instead of the `mysqlctl` client tool.\n" +
 			"If the target directories are empty when it is invoked, it automatically performs initialization operations to bootstrap the `mysqld` instance before starting it.\n" +
 			"The `mysqlctld` process can subsequently receive gRPC commands from a `vttablet` to perform housekeeping operations like shutting down and restarting the `mysqld` instance as needed.\n\n" +
-
 			"{{< warning >}}\n" +
 			"`mysqld_safe` is not used so the `mysqld` process will not be automatically restarted in case of a failure.\n" +
 			"{{</ warning>}}\n\n" +
@@ -151,7 +150,6 @@ func run(cmd *cobra.Command, args []string) error {
 	cancel()
 
 	servenv.Init()
-	defer servenv.Close()
 
 	// Take mysqld down with us on SIGTERM before entering lame duck.
 	servenv.OnTermSync(func() {

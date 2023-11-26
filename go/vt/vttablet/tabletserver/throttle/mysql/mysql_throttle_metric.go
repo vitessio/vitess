@@ -55,9 +55,9 @@ import (
 type MetricsQueryType int
 
 const (
-	// MetricsQueryTypeDefault indictes the default, internal implementation. Specifically, our throttler runs a replication lag query
+	// MetricsQueryTypeDefault indicates the default, internal implementation. Specifically, our throttler runs a replication lag query
 	MetricsQueryTypeDefault MetricsQueryType = iota
-	// MetricsQueryTypeShowGlobal indicatesa SHOW GLOBAL (STATUS|VARIABLES) query
+	// MetricsQueryTypeShowGlobal indicates SHOW GLOBAL (STATUS|VARIABLES) query
 	MetricsQueryTypeShowGlobal
 	// MetricsQueryTypeSelect indicates a custom SELECT query
 	MetricsQueryTypeSelect

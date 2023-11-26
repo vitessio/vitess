@@ -18,18 +18,23 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
-	TupleExpr []Expr
+	TupleExpr []IR
 )
 
+var _ IR = (TupleExpr)(nil)
 var _ Expr = (TupleExpr)(nil)
 
-func (t TupleExpr) eval(env *ExpressionEnv) (eval, error) {
-	tup := make([]eval, 0, len(t))
-	for _, expr := range t {
+func (tuple TupleExpr) IR() IR {
+	return tuple
+}
+
+func (tuple TupleExpr) eval(env *ExpressionEnv) (eval, error) {
+	tup := make([]eval, 0, len(tuple))
+	for _, expr := range tuple {
 		e, err := expr.eval(env)
 		if err != nil {
 			return nil, err
@@ -37,11 +42,6 @@ func (t TupleExpr) eval(env *ExpressionEnv) (eval, error) {
 		tup = append(tup, e)
 	}
 	return &evalTuple{t: tup}, nil
-}
-
-// typeof implements the Expr interface
-func (t TupleExpr) typeof(*ExpressionEnv, []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return sqltypes.Tuple, flagNullable
 }
 
 func (tuple TupleExpr) compile(c *compiler) (ctype, error) {
@@ -52,5 +52,19 @@ func (tuple TupleExpr) compile(c *compiler) (ctype, error) {
 		}
 	}
 	c.asm.PackTuple(len(tuple))
+	return ctype{Type: sqltypes.Tuple, Col: collationBinary}, nil
+}
+
+func (tuple TupleExpr) IsExpr() {}
+
+func (tuple TupleExpr) Format(buf *sqlparser.TrackedBuffer) {
+	tuple.format(buf)
+}
+
+func (tuple TupleExpr) FormatFast(buf *sqlparser.TrackedBuffer) {
+	tuple.format(buf)
+}
+
+func (tuple TupleExpr) typeof(*ExpressionEnv) (ctype, error) {
 	return ctype{Type: sqltypes.Tuple, Col: collationBinary}, nil
 }

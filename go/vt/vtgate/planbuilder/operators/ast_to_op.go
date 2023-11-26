@@ -28,6 +28,7 @@ import (
 )
 
 const foreignKeyConstraintValues = "fkc_vals"
+const foreignKeyUpdateExpr = "fkc_upd"
 
 // translateQueryToOp creates an operator tree that represents the input SELECT or UNION query
 func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op ops.Operator, err error) {
@@ -94,7 +95,7 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 		op = op.AddPredicate(ctx, expr)
 		addColumnEquality(ctx, expr)
 	}
-	return sqc.getRootOperator(op), nil
+	return sqc.getRootOperator(op, nil), nil
 }
 
 // cloneASTAndSemState clones the AST and the semantic state of the input node.
@@ -164,7 +165,7 @@ func (jpc *joinPredicateCollector) inspectPredicate(
 	// then we can use this predicate to connect the subquery to the outer query
 	if !deps.IsSolvedBy(jpc.subqID) && deps.IsSolvedBy(jpc.totalID) {
 		jpc.predicates = append(jpc.predicates, predicate)
-		jc, err := BreakExpressionInLHSandRHS(ctx, predicate, jpc.outerID)
+		jc, err := breakExpressionInLHSandRHSForApplyJoin(ctx, predicate, jpc.outerID)
 		if err != nil {
 			return err
 		}
@@ -199,18 +200,46 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 }
 
 // createOpFromStmt creates an operator from the given statement. It takes in two additional arguments—
-// 1. verifyAllFKs: For this given statement, do we need to verify validity of all the foreign keys on the vtgate level.
-// 2. fkToIgnore: The foreign key constraint to specifically ignore while planning the statement.
+//  1. verifyAllFKs: For this given statement, do we need to verify validity of all the foreign keys on the vtgate level.
+//  2. fkToIgnore: The foreign key constraint to specifically ignore while planning the statement. This field is used in UPDATE CASCADE planning, wherein while planning the child update
+//     query, we need to ignore the parent foreign key constraint that caused the cascade in question.
 func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement, verifyAllFKs bool, fkToIgnore string) (ops.Operator, error) {
-	newCtx, err := plancontext.CreatePlanningContext(stmt, ctx.ReservedVars, ctx.VSchema, ctx.PlannerVersion)
+	var err error
+	ctx, err = plancontext.CreatePlanningContext(stmt, ctx.ReservedVars, ctx.VSchema, ctx.PlannerVersion)
 	if err != nil {
 		return nil, err
 	}
 
-	newCtx.VerifyAllFKs = verifyAllFKs
-	newCtx.ParentFKToIgnore = fkToIgnore
+	// TODO (@GuptaManan100, @harshit-gangal): When we add cross-shard foreign keys support,
+	// we should augment the semantic analysis to also tell us whether the given query has any cross shard parent foreign keys to validate.
+	// If there are, then we have to run the query with FOREIGN_KEY_CHECKS off because we can't be sure if the DML will succeed on MySQL with the checks on.
+	// So, we should set VerifyAllFKs to true. i.e. we should add `|| ctx.SemTable.RequireForeignKeyChecksOff()` to the below condition.
+	if verifyAllFKs {
+		// If ctx.VerifyAllFKs is already true we don't want to turn it off.
+		ctx.VerifyAllFKs = verifyAllFKs
+	}
 
-	return PlanQuery(newCtx, stmt)
+	// From all the parent foreign keys involved, we should remove the one that we need to ignore.
+	err = ctx.SemTable.RemoveParentForeignKey(fkToIgnore)
+	if err != nil {
+		return nil, err
+	}
+
+	// Now, we can filter the foreign keys further based on the planning context, specifically whether we are running
+	// this query with FOREIGN_KEY_CHECKS off or not. If the foreign key checks are enabled, then we don't need to verify
+	// the validity of shard-scoped RESTRICT foreign keys, since MySQL will do that for us. Similarly, we don't need to verify
+	// if the shard-scoped parent foreign key constraints are valid.
+	switch stmt.(type) {
+	case *sqlparser.Update, *sqlparser.Insert:
+		err = ctx.SemTable.RemoveNonRequiredForeignKeys(ctx.VerifyAllFKs, vindexes.UpdateAction)
+	case *sqlparser.Delete:
+		err = ctx.SemTable.RemoveNonRequiredForeignKeys(ctx.VerifyAllFKs, vindexes.DeleteAction)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return PlanQuery(ctx, stmt)
 }
 
 func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr, onlyTable bool) (ops.Operator, error) {
@@ -372,6 +401,7 @@ func createSelectionOp(
 	selectExprs []sqlparser.SelectExpr,
 	tableExprs sqlparser.TableExprs,
 	where *sqlparser.Where,
+	orderBy sqlparser.OrderBy,
 	limit *sqlparser.Limit,
 	lock sqlparser.Lock,
 ) (ops.Operator, error) {
@@ -379,20 +409,10 @@ func createSelectionOp(
 		SelectExprs: selectExprs,
 		From:        tableExprs,
 		Where:       where,
+		OrderBy:     orderBy,
 		Limit:       limit,
 		Lock:        lock,
 	}
 	// There are no foreign keys to check for a select query, so we can pass anything for verifyAllFKs and fkToIgnore.
 	return createOpFromStmt(ctx, selectionStmt, false /* verifyAllFKs */, "" /* fkToIgnore */)
-}
-
-func selectParentColumns(fk vindexes.ChildFKInfo, lastOffset int) ([]int, []sqlparser.SelectExpr) {
-	var cols []int
-	var exprs []sqlparser.SelectExpr
-	for _, column := range fk.ParentColumns {
-		cols = append(cols, lastOffset)
-		exprs = append(exprs, aeWrap(sqlparser.NewColName(column.String())))
-		lastOffset++
-	}
-	return cols, exprs
 }

@@ -565,7 +565,7 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 		}
 		finished <- true
 	}()
-	// Wait until the ticks are stopped or 2 seonds have expired.
+	// Wait until the ticks are stopped or 2 seconds have expired.
 	select {
 	case <-finished:
 		return
@@ -742,7 +742,7 @@ func TestEngineMysqlTime(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			se := &Engine{}
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewDBConnNoPool(context.Background(), db.ConnParams(), nil, nil)
+			conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
 			require.NoError(t, err)
 
 			if tt.timeStampErr != nil {
@@ -848,7 +848,7 @@ func TestEnginePopulatePrimaryKeys(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewDBConnNoPool(context.Background(), db.ConnParams(), nil, nil)
+			conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
 			require.NoError(t, err)
 			se := &Engine{}
 
@@ -909,7 +909,7 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewDBConnNoPool(context.Background(), db.ConnParams(), nil, nil)
+			conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
 			require.NoError(t, err)
 			se := &Engine{}
 			se.innoDbReadRowsCounter = stats.NewCounter("TestEngineUpdateInnoDBRowsRead-"+tt.name, "")
@@ -936,7 +936,7 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 // TestEngineGetTableData tests the functionality of getTableData function
 func TestEngineGetTableData(t *testing.T) {
 	db := fakesqldb.New(t)
-	conn, err := connpool.NewDBConnNoPool(context.Background(), db.ConnParams(), nil, nil)
+	conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -1110,7 +1110,7 @@ func TestEngineReload(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
 	cfg.SignalWhenSchemaChange = true
-	conn, err := connpool.NewDBConnNoPool(context.Background(), db.ConnParams(), nil, nil)
+	conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
 	require.NoError(t, err)
 
 	se := newEngine(10*time.Second, 10*time.Second, 0, db)

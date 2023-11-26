@@ -499,8 +499,8 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 			switch ct := expr.(type) {
 			case *sqlparser.ColName:
 				colname = ct.Name.String()
-			case *sqlparser.FuncExpr: //eg. weight_string()
-				//no-op
+			case *sqlparser.FuncExpr: // eg. weight_string()
+				// no-op
 			default:
 				log.Warningf("Not considering column %v for PK, type %v not handled", selExpr, ct)
 			}
@@ -528,7 +528,7 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 }
 
 // getColumnCollations determines the proper collation to use for each
-// column in the table definition leveraging MySQL's collation inheritence
+// column in the table definition leveraging MySQL's collation inheritance
 // rules.
 func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string]collations.ID, error) {
 	collationEnv := collations.Local()
@@ -547,7 +547,7 @@ func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string
 	tableCharset := tableschema.GetCharset()
 	tableCollation := tableschema.GetCollation()
 	// If no explicit collation is specified for the column then we need
-	// to walk the inheritence tree.
+	// to walk the inheritance tree.
 	getColumnCollation := func(column *sqlparser.ColumnDefinition) collations.ID {
 		// If there's an explicit collation listed then use that.
 		if column.Type.Options.Collate != "" {
@@ -568,7 +568,7 @@ func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string
 			return collationEnv.DefaultCollationForCharset(strings.ToLower(tableCharset))
 		}
 		// The table is using the global default charset and collation and
-		// we inherite that.
+		// we inherit that.
 		return collations.Default()
 	}
 
@@ -672,14 +672,14 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 			}
 		case *sqlparser.AliasedExpr:
 			var targetCol *sqlparser.ColName
-			if !selExpr.As.IsEmpty() {
-				targetCol = &sqlparser.ColName{Name: selExpr.As}
-			} else {
+			if selExpr.As.IsEmpty() {
 				if colAs, ok := selExpr.Expr.(*sqlparser.ColName); ok {
 					targetCol = colAs
 				} else {
 					return nil, fmt.Errorf("expression needs an alias: %v", sqlparser.String(selExpr))
 				}
+			} else {
+				targetCol = &sqlparser.ColName{Name: selExpr.As}
 			}
 			// If the input was "select a as b", then source will use "a" and target will use "b".
 			sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, selExpr)
@@ -769,7 +769,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 func pkColsToGroupByParams(pkCols []int) []*engine.GroupByParams {
 	var res []*engine.GroupByParams
 	for _, col := range pkCols {
-		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1, Type: sqltypes.Unknown})
+		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1, Type: evalengine.Type{}})
 	}
 	return res
 }
@@ -780,15 +780,15 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	for _, participant := range participants {
 		prims = append(prims, participant)
 	}
-	ob := make([]engine.OrderByParams, 0, len(comparePKs))
+	ob := make([]evalengine.OrderByParams, 0, len(comparePKs))
 	for _, cpk := range comparePKs {
 		weightStringCol := -1
 		// if the collation is nil or unknown, use binary collation to compare as bytes
-		if cpk.collation == collations.Unknown {
-			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: sqltypes.Unknown, CollationID: collations.CollationBinaryID})
-		} else {
-			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: sqltypes.Unknown, CollationID: cpk.collation})
+		var collation collations.ID = collations.CollationBinaryID
+		if cpk.collation != collations.Unknown {
+			collation = cpk.collation
 		}
+		ob = append(ob, evalengine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: evalengine.NewType(sqltypes.Unknown, collation)})
 	}
 	return &engine.MergeSort{
 		Primitives: prims,
@@ -810,7 +810,8 @@ func (df *vdiff) selectTablets(ctx context.Context, ts *trafficSwitcher) error {
 			if ts.ExternalTopo() != nil {
 				sourceTopo = ts.ExternalTopo()
 			}
-			tp, err := discovery.NewTabletPicker(ctx, sourceTopo, []string{df.sourceCell}, df.sourceCell, df.ts.SourceKeyspaceName(), shard, df.tabletTypesStr, discovery.TabletPickerOptions{})
+			tp, err := discovery.NewTabletPicker(ctx, sourceTopo, []string{df.sourceCell}, df.sourceCell,
+				df.ts.SourceKeyspaceName(), shard, df.tabletTypesStr, discovery.TabletPickerOptions{})
 			if err != nil {
 				return err
 			}
@@ -827,8 +828,18 @@ func (df *vdiff) selectTablets(ctx context.Context, ts *trafficSwitcher) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		includeNonServingTablets := false
+		if df.ts.workflowType == binlogdatapb.VReplicationWorkflowType_Reshard {
+			// For resharding, the target shards could be non-serving if traffic has already been switched once.
+			// When shards are created their IsPrimaryServing attribute is set to true. However, when the traffic is switched
+			// it is set to false for the shards we are switching from. We don't have a way to know if we have
+			// switched or not, so we just include non-serving tablets for all reshards.
+			includeNonServingTablets = true
+		}
 		err2 = df.forAll(df.targets, func(shard string, target *shardStreamer) error {
-			tp, err := discovery.NewTabletPicker(ctx, df.ts.TopoServer(), []string{df.targetCell}, df.targetCell, df.ts.TargetKeyspaceName(), shard, df.tabletTypesStr, discovery.TabletPickerOptions{})
+			tp, err := discovery.NewTabletPicker(ctx, df.ts.TopoServer(), []string{df.targetCell}, df.targetCell,
+				df.ts.TargetKeyspaceName(), shard, df.tabletTypesStr,
+				discovery.TabletPickerOptions{IncludeNonServingTablets: includeNonServingTablets})
 			if err != nil {
 				return err
 			}
@@ -985,7 +996,7 @@ func (df *vdiff) streamOne(ctx context.Context, keyspace, shard string, particip
 	}()
 }
 
-// syncTargets fast-forwards the vreplication to the source snapshot positons
+// syncTargets fast-forwards the vreplication to the source snapshot positions
 // and waits for the selected tablets to catch up to that point.
 func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
 	waitCtx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
@@ -1058,7 +1069,7 @@ func (df *vdiff) forAll(participants map[string]*shardStreamer, f func(string, *
 	return allErrors.AggrError(vterrors.Aggregate)
 }
 
-//-----------------------------------------------------------------
+// -----------------------------------------------------------------
 // primitiveExecutor
 
 // primitiveExecutor starts execution on the top level primitive
@@ -1118,7 +1129,7 @@ func (pe *primitiveExecutor) drain(ctx context.Context) (int, error) {
 	}
 }
 
-//-----------------------------------------------------------------
+// -----------------------------------------------------------------
 // shardStreamer
 
 func (sm *shardStreamer) StreamExecute(ctx context.Context, vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
@@ -1153,7 +1164,7 @@ func humanInt(n int64) string { // nolint
 	return fmt.Sprintf("%s%s", s, unit)
 }
 
-//-----------------------------------------------------------------
+// -----------------------------------------------------------------
 // tableDiffer
 
 func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, onlyPks bool, maxExtraRowsToCompare int) (*DiffReport, error) {
@@ -1375,7 +1386,7 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 	return buf.String()
 }
 
-//-----------------------------------------------------------------
+// -----------------------------------------------------------------
 // contextVCursor
 
 // contextVCursor satisfies VCursor interface
@@ -1395,7 +1406,7 @@ func (vc *contextVCursor) StreamExecutePrimitive(ctx context.Context, primitive 
 	return primitive.TryStreamExecute(ctx, vc, bindVars, wantfields, callback)
 }
 
-//-----------------------------------------------------------------
+// -----------------------------------------------------------------
 // Utility functions
 
 func removeKeyrange(where *sqlparser.Where) *sqlparser.Where {

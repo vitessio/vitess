@@ -20,7 +20,6 @@ limitations under the License.
 package vtexplain
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"sort"
@@ -43,9 +42,7 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
-var (
-	batchInterval = 10 * time.Millisecond
-)
+var batchInterval = 10 * time.Millisecond
 
 func init() {
 	servenv.OnParseFor("vtexplain", func(fs *pflag.FlagSet) {
@@ -154,10 +151,11 @@ type (
 func (tq *TabletQuery) MarshalJSON() ([]byte, error) {
 	// Convert Bindvars to strings for nicer output
 	bindVars := make(map[string]string)
+	var buf strings.Builder
 	for k, v := range tq.BindVars {
-		var b strings.Builder
-		sqlparser.EncodeValue(&b, v)
-		bindVars[k] = b.String()
+		buf.Reset()
+		sqlparser.EncodeValue(&buf, v)
+		bindVars[k] = buf.String()
 	}
 
 	return jsonutil.MarshalNoEscape(&struct {
@@ -337,7 +335,7 @@ func (vte *VTExplain) explain(sql string) (*Explain, error) {
 // ExplainsAsText returns a text representation of the explains in logical time
 // order
 func (vte *VTExplain) ExplainsAsText(explains []*Explain) (string, error) {
-	var b bytes.Buffer
+	var b strings.Builder
 	for _, explain := range explains {
 		fmt.Fprintf(&b, "----------------------------------------------------------------------\n")
 		fmt.Fprintf(&b, "%s\n\n", explain.SQL)

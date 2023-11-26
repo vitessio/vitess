@@ -211,7 +211,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	// GTID->DDL
 	// GTID->OTHER
 	// HEARTBEAT is issued if there's inactivity, which is likely
-	// to heppend between one group of events and another.
+	// to happen between one group of events and another.
 	//
 	// Buffering only takes row or statement lengths into consideration.
 	// Length of other events is considered negligible.

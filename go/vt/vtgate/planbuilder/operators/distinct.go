@@ -46,12 +46,16 @@ type (
 	}
 )
 
-func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) {
+func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
 	columns := d.GetColumns(ctx)
 	for idx, col := range columns {
-		e := d.QP.GetSimplifiedExpr(col.Expr)
+		e, err := d.QP.GetSimplifiedExpr(ctx, col.Expr)
+		if err != nil {
+			// ambiguous columns are not a problem for DISTINCT
+			e = col.Expr
+		}
 		var wsCol *int
-		typ, coll, _ := ctx.SemTable.TypeForExpr(e)
+		typ, _ := ctx.SemTable.TypeForExpr(e)
 
 		if ctx.SemTable.NeedsWeightString(e) {
 			offset := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(e)))
@@ -59,12 +63,12 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) {
 		}
 
 		d.Columns = append(d.Columns, engine.CheckCol{
-			Col:       idx,
-			WsCol:     wsCol,
-			Type:      typ,
-			Collation: coll,
+			Col:   idx,
+			WsCol: wsCol,
+			Type:  typ,
 		})
 	}
+	return nil
 }
 
 func (d *Distinct) Clone(inputs []ops.Operator) ops.Operator {

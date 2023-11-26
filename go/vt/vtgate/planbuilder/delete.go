@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -56,8 +55,14 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
+	// Remove all the foreign keys that don't require any handling.
+	err = ctx.SemTable.RemoveNonRequiredForeignKeys(ctx.VerifyAllFKs, vindexes.DeleteAction)
+	if err != nil {
+		return nil, err
+	}
+
 	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
-		if fkManagementNotRequired(ctx, vschema, tables) {
+		if !ctx.SemTable.ForeignKeysPresent() {
 			plan := deleteUnshardedShortcut(deleteStmt, ks, tables)
 			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
 		}
@@ -82,33 +87,7 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	plan = pushCommentDirectivesOnPlan(plan, deleteStmt)
-
-	setLockOnAllSelect(plan)
-
-	if err := plan.Wireup(ctx); err != nil {
-		return nil, err
-	}
-
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
-}
-
-func fkManagementNotRequired(ctx *plancontext.PlanningContext, vschema plancontext.VSchema, vTables []*vindexes.Table) bool {
-	// Find the foreign key mode and check for any managed child foreign keys.
-	for _, vTable := range vTables {
-		ksMode, err := vschema.ForeignKeyMode(vTable.Keyspace.Name)
-		if err != nil {
-			return false
-		}
-		if ksMode != vschemapb.Keyspace_FK_MANAGED {
-			continue
-		}
-		childFks := vTable.ChildFKsNeedsHandling(ctx.VerifyAllFKs, vindexes.DeleteAction)
-		if len(childFks) > 0 {
-			return false
-		}
-	}
-	return true
 }
 
 func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {
@@ -116,7 +95,7 @@ func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {
 	if !ok {
 		return del, nil
 	}
-	if !atExpr.As.IsEmpty() && !sqlparser.Equals.IdentifierCS(del.Targets[0].Name, atExpr.As) {
+	if atExpr.As.NotEmpty() && !sqlparser.Equals.IdentifierCS(del.Targets[0].Name, atExpr.As) {
 		// Unknown table in MULTI DELETE
 		return nil, vterrors.VT03003(del.Targets[0].Name.String())
 	}

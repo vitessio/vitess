@@ -89,7 +89,7 @@ where table_schema = database() and table_name in ::viewNames`
 )
 
 // reloadTablesDataInDB reloads teh tables information we have stored in our database we use for schema-tracking.
-func reloadTablesDataInDB(ctx context.Context, conn *connpool.DBConn, tables []*Table, droppedTables []string) error {
+func reloadTablesDataInDB(ctx context.Context, conn *connpool.Conn, tables []*Table, droppedTables []string) error {
 	// No need to do anything if we have no tables to refresh or drop.
 	if len(tables) == 0 && len(droppedTables) == 0 {
 		return nil
@@ -174,7 +174,7 @@ func generateFullQuery(query string) (*sqlparser.ParsedQuery, error) {
 }
 
 // reloadViewsDataInDB reloads teh views information we have stored in our database we use for schema-tracking.
-func reloadViewsDataInDB(ctx context.Context, conn *connpool.DBConn, views []*Table, droppedViews []string) error {
+func reloadViewsDataInDB(ctx context.Context, conn *connpool.Conn, views []*Table, droppedViews []string) error {
 	// No need to do anything if we have no views to refresh or drop.
 	if len(views) == 0 && len(droppedViews) == 0 {
 		return nil
@@ -266,7 +266,7 @@ func reloadViewsDataInDB(ctx context.Context, conn *connpool.DBConn, views []*Ta
 }
 
 // getViewDefinition gets the viewDefinition for the given views.
-func getViewDefinition(ctx context.Context, conn *connpool.DBConn, bv map[string]*querypb.BindVariable, callback func(qr *sqltypes.Result) error, alloc func() *sqltypes.Result, bufferSize int) error {
+func getViewDefinition(ctx context.Context, conn *connpool.Conn, bv map[string]*querypb.BindVariable, callback func(qr *sqltypes.Result) error, alloc func() *sqltypes.Result, bufferSize int) error {
 	viewsDefParsedQuery, err := generateFullQuery(fetchViewDefinitions)
 	if err != nil {
 		return err
@@ -279,7 +279,7 @@ func getViewDefinition(ctx context.Context, conn *connpool.DBConn, bv map[string
 }
 
 // getCreateStatement gets the create-statement for the given view/table.
-func getCreateStatement(ctx context.Context, conn *connpool.DBConn, tableName string) (string, error) {
+func getCreateStatement(ctx context.Context, conn *connpool.Conn, tableName string) (string, error) {
 	res, err := conn.Exec(ctx, sqlparser.BuildParsedQuery(fetchCreateStatement, tableName).Query, 1, false)
 	if err != nil {
 		return "", err
@@ -288,7 +288,7 @@ func getCreateStatement(ctx context.Context, conn *connpool.DBConn, tableName st
 }
 
 // getChangedViewNames gets the list of views that have their definitions changed.
-func getChangedViewNames(ctx context.Context, conn *connpool.DBConn, isServingPrimary bool) (map[string]any, error) {
+func getChangedViewNames(ctx context.Context, conn *connpool.Conn, isServingPrimary bool) (map[string]any, error) {
 	/* Retrieve changed views */
 	views := make(map[string]any)
 	if !isServingPrimary {
@@ -314,7 +314,7 @@ func getChangedViewNames(ctx context.Context, conn *connpool.DBConn, isServingPr
 }
 
 // getMismatchedTableNames gets the tables that do not align with the tables information we have in the cache.
-func (se *Engine) getMismatchedTableNames(ctx context.Context, conn *connpool.DBConn, isServingPrimary bool) (map[string]any, error) {
+func (se *Engine) getMismatchedTableNames(ctx context.Context, conn *connpool.Conn, isServingPrimary bool) (map[string]any, error) {
 	tablesMismatched := make(map[string]any)
 	if !isServingPrimary {
 		return tablesMismatched, nil
@@ -358,7 +358,7 @@ func (se *Engine) getMismatchedTableNames(ctx context.Context, conn *connpool.DB
 }
 
 // reloadDataInDB reloads the schema tracking data in the database
-func reloadDataInDB(ctx context.Context, conn *connpool.DBConn, altered []*Table, created []*Table, dropped []*Table) error {
+func reloadDataInDB(ctx context.Context, conn *connpool.Conn, altered []*Table, created []*Table, dropped []*Table) error {
 	// tablesToReload and viewsToReload stores the tables and views that need reloading and storing in our MySQL database.
 	var tablesToReload, viewsToReload []*Table
 	// droppedTables, droppedViews stores the list of tables and views we need to delete, respectively.

@@ -18,9 +18,9 @@ package semantics
 
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -49,84 +49,100 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 	case *sqlparser.AliasedTableExpr:
 		return tc.visitAliasedTableExpr(node)
 	case *sqlparser.Union:
-		firstSelect := sqlparser.GetFirstSelect(node)
-		expanded, selectExprs := getColumnNames(firstSelect.SelectExprs)
-		info := unionInfo{
-			isAuthoritative: expanded,
-			exprs:           selectExprs,
-		}
-		tc.unionInfo[node] = info
-		if !expanded {
-			return nil
-		}
+		return tc.visitUnion(node)
+	default:
+		return nil
+	}
+}
 
-		size := len(firstSelect.SelectExprs)
-		info.recursive = make([]TableSet, size)
-		info.types = make([]*Type, size)
-
-		_ = sqlparser.VisitAllSelects(node, func(s *sqlparser.Select, idx int) error {
-			for i, expr := range s.SelectExprs {
-				ae, ok := expr.(*sqlparser.AliasedExpr)
-				if !ok {
-					continue
-				}
-				_, recursiveDeps, qt := tc.org.depsForExpr(ae.Expr)
-				info.recursive[i] = info.recursive[i].Merge(recursiveDeps)
-				if idx == 0 {
-					// TODO: we probably should coerce these types together somehow, but I'm not sure how
-					info.types[i] = qt
-				}
-			}
-			return nil
-		})
-		tc.unionInfo[node] = info
+func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
+	firstSelect := sqlparser.GetFirstSelect(union)
+	expanded, selectExprs := getColumnNames(firstSelect.SelectExprs)
+	info := unionInfo{
+		isAuthoritative: expanded,
+		exprs:           selectExprs,
+	}
+	tc.unionInfo[union] = info
+	if !expanded {
+		return nil
 	}
 
+	size := len(firstSelect.SelectExprs)
+	info.recursive = make([]TableSet, size)
+	info.types = make([]evalengine.Type, size)
+
+	_ = sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
+		for i, expr := range s.SelectExprs {
+			ae, ok := expr.(*sqlparser.AliasedExpr)
+			if !ok {
+				continue
+			}
+			_, recursiveDeps, qt := tc.org.depsForExpr(ae.Expr)
+			info.recursive[i] = info.recursive[i].Merge(recursiveDeps)
+			if idx == 0 {
+				// TODO: we probably should coerce these types together somehow, but I'm not sure how
+				info.types[i] = qt
+			}
+		}
+		return nil
+	})
+	tc.unionInfo[union] = info
 	return nil
 }
 
 func (tc *tableCollector) visitAliasedTableExpr(node *sqlparser.AliasedTableExpr) error {
 	switch t := node.Expr.(type) {
 	case *sqlparser.DerivedTable:
-		switch sel := t.Select.(type) {
-		case *sqlparser.Select:
-			return tc.addSelectDerivedTable(sel, node)
-
-		case *sqlparser.Union:
-			return tc.addUnionDerivedTable(sel, node)
-
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %T in a derived table", sel)
-		}
+		return tc.handleDerivedTable(node, t)
 
 	case sqlparser.TableName:
-		var tbl *vindexes.Table
-		var vindex vindexes.Vindex
-		isInfSchema := sqlparser.SystemSchema(t.Qualifier.String())
-		var err error
-		tbl, vindex, _, _, _, err = tc.si.FindTableOrVindex(t)
-		if err != nil && !isInfSchema {
-			// if we are dealing with a system table, it might not be available in the vschema, but that is OK
-			return err
-		}
-		if tbl == nil && vindex != nil {
-			tbl = newVindexTable(t.Name)
-		}
-
-		scope := tc.scoper.currentScope()
-		tableInfo := tc.createTable(t, node, tbl, isInfSchema, vindex)
-
-		tc.Tables = append(tc.Tables, tableInfo)
-		return scope.addTable(tableInfo)
+		return tc.handleTableName(node, t)
 	}
 	return nil
 }
 
-func (tc *tableCollector) addSelectDerivedTable(sel *sqlparser.Select, node *sqlparser.AliasedTableExpr) error {
+func (tc *tableCollector) handleTableName(node *sqlparser.AliasedTableExpr, t sqlparser.TableName) error {
+	var tbl *vindexes.Table
+	var vindex vindexes.Vindex
+	isInfSchema := sqlparser.SystemSchema(t.Qualifier.String())
+	var err error
+	tbl, vindex, _, _, _, err = tc.si.FindTableOrVindex(t)
+	if err != nil && !isInfSchema {
+		// if we are dealing with a system table, it might not be available in the vschema, but that is OK
+		return err
+	}
+	if tbl == nil && vindex != nil {
+		tbl = newVindexTable(t.Name)
+	}
+
+	scope := tc.scoper.currentScope()
+	tableInfo := tc.createTable(t, node, tbl, isInfSchema, vindex)
+
+	tc.Tables = append(tc.Tables, tableInfo)
+	return scope.addTable(tableInfo)
+}
+
+func (tc *tableCollector) handleDerivedTable(node *sqlparser.AliasedTableExpr, t *sqlparser.DerivedTable) error {
+	switch sel := t.Select.(type) {
+	case *sqlparser.Select:
+		return tc.addSelectDerivedTable(sel, node, node.Columns, node.As)
+	case *sqlparser.Union:
+		return tc.addUnionDerivedTable(sel, node, node.Columns, node.As)
+	default:
+		return vterrors.VT13001("[BUG] %T in a derived table", sel)
+	}
+}
+
+func (tc *tableCollector) addSelectDerivedTable(
+	sel *sqlparser.Select,
+	tableExpr *sqlparser.AliasedTableExpr,
+	columns sqlparser.Columns,
+	alias sqlparser.IdentifierCS,
+) error {
 	tables := tc.scoper.wScope[sel]
 	size := len(sel.SelectExprs)
 	deps := make([]TableSet, size)
-	types := make([]*Type, size)
+	types := make([]evalengine.Type, size)
 	expanded := true
 	for i, expr := range sel.SelectExprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
@@ -137,20 +153,20 @@ func (tc *tableCollector) addSelectDerivedTable(sel *sqlparser.Select, node *sql
 		_, deps[i], types[i] = tc.org.depsForExpr(ae.Expr)
 	}
 
-	tableInfo := createDerivedTableForExpressions(sel.SelectExprs, node.Columns, tables.tables, tc.org, expanded, deps, types)
+	tableInfo := createDerivedTableForExpressions(sel.SelectExprs, columns, tables.tables, tc.org, expanded, deps, types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}
 
-	tableInfo.ASTNode = node
-	tableInfo.tableName = node.As.String()
+	tableInfo.ASTNode = tableExpr
+	tableInfo.tableName = alias.String()
 
 	tc.Tables = append(tc.Tables, tableInfo)
 	scope := tc.scoper.currentScope()
 	return scope.addTable(tableInfo)
 }
 
-func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sqlparser.AliasedTableExpr) error {
+func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sqlparser.AliasedTableExpr, columns sqlparser.Columns, alias sqlparser.IdentifierCS) error {
 	firstSelect := sqlparser.GetFirstSelect(union)
 	tables := tc.scoper.wScope[firstSelect]
 	info, found := tc.unionInfo[union]
@@ -158,12 +174,12 @@ func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sql
 		return vterrors.VT13001("information about union is not available")
 	}
 
-	tableInfo := createDerivedTableForExpressions(info.exprs, node.Columns, tables.tables, tc.org, info.isAuthoritative, info.recursive, info.types)
+	tableInfo := createDerivedTableForExpressions(info.exprs, columns, tables.tables, tc.org, info.isAuthoritative, info.recursive, info.types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}
 	tableInfo.ASTNode = node
-	tableInfo.tableName = node.As.String()
+	tableInfo.tableName = alias.String()
 
 	tc.Tables = append(tc.Tables, tableInfo)
 	scope := tc.scoper.currentScope()
@@ -191,7 +207,7 @@ func newVindexTable(t sqlparser.IdentifierCS) *vindexes.Table {
 // The code lives in this file since it is only touching tableCollector data
 func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for i, t2 := range tc.Tables {
-		if t == t2.GetExpr() {
+		if t == t2.getAliasedTableExpr() {
 			return SingleTableSet(i)
 		}
 	}

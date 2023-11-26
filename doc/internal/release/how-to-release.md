@@ -127,10 +127,7 @@ On the release day, there are several things to do:
   > - The benchmarks need to complete before announcing the blog posts or before they get cross-posted.
 - **Go back to dev mode on the release branch.**
   > - The version constants across the codebase must be updated to `SNAPSHOT`.
-- **Build k8s Docker images and publish them.**
-  > - The docker image for `base`, `lite`, etc are built automatically by DockerHub. The k8s images however are dependent on these images and are required to be built manually.
-  > - These images should be built after the `base` image has been built and available on DockerHub.
-  > - To build and publish these images, checkout the new release tag that was just created and run `./release.sh` from the directory `./docker`.
+- **Ensure the k8s images are available on DockerHub.**
 - **Close the current GitHub Milestone**
   > - Once we are done releasing the current version, we must close its corresponding GitHub Milestone as the development cycle for it is over.
   > - **This does not apply if we are releasing an RC release.** For instance, if we are releasing `v18.0.0-rc1` we want to keep the `v18.0.0` milestone opened as development is not fully done for `v18.0.0`. 

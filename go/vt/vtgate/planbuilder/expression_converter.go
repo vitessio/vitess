@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -87,7 +86,7 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 		if !strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
 			return nil, err
 		}
-		evalExpr = evalengine.NewColumn(len(ec.tabletExpressions), sqltypes.Unknown, collations.Unknown)
+		evalExpr = evalengine.NewColumn(len(ec.tabletExpressions), evalengine.Type{}, nil)
 		ec.tabletExpressions = append(ec.tabletExpressions, astExpr)
 	}
 	return evalExpr, nil

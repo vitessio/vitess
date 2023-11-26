@@ -346,8 +346,8 @@ func (vp *vplayer) recordHeartbeat() error {
 //     of transactions come in, with the last one being partial. In this case, all transactions
 //     up to the last one have to be committed, and the final one must be partially applied.
 //
-// Of the above events, the saveable ones are COMMIT, DDL, and OTHER. Eventhough
-// A GTID comes as a separate event, it's not saveable until a subsequent saveable
+// Of the above events, the saveable ones are COMMIT, DDL, and OTHER. Even though
+// a GTID comes as a separate event, it's not saveable until a subsequent saveable
 // event occurs. VStreamer currently sequences the GTID to be sent just before
 // a saveable event, but we do not rely on this. To handle this, we only remember
 // the position when a GTID is encountered. The next saveable event causes the

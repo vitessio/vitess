@@ -901,14 +901,14 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 	for _, s := range status {
 		for _, ts := range s.TabletsStats {
 			// We only want to show REPLICA and RDONLY tablets
-			if ts.Tablet.Type != topodatapb.TabletType_REPLICA && ts.Tablet.Type != topodatapb.TabletType_RDONLY {
+			if ts.Target.TabletType != topodatapb.TabletType_REPLICA && ts.Target.TabletType != topodatapb.TabletType_RDONLY {
 				continue
 			}
 
 			// Allow people to filter by Keyspace and Shard using a LIKE clause
 			if filter != nil {
 				ksFilterRegex := sqlparser.LikeToRegexp(filter.Like)
-				keyspaceShardStr := fmt.Sprintf("%s/%s", ts.Tablet.Keyspace, ts.Tablet.Shard)
+				keyspaceShardStr := fmt.Sprintf("%s/%s", ts.Target.Keyspace, ts.Target.Shard)
 				if !ksFilterRegex.MatchString(keyspaceShardStr) {
 					continue
 				}
@@ -1042,6 +1042,7 @@ func (e *Executor) getPlan(
 	vcursor.SetIgnoreMaxMemoryRows(sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt))
 	vcursor.SetConsolidator(sqlparser.Consolidator(stmt))
 	vcursor.SetWorkloadName(sqlparser.GetWorkloadNameFromStatement(stmt))
+	vcursor.UpdateForeignKeyChecksState(sqlparser.ForeignKeyChecksState(stmt))
 	priority, err := sqlparser.GetPriorityFromStatement(stmt)
 	if err != nil {
 		return nil, err
@@ -1066,6 +1067,7 @@ func (e *Executor) getPlan(
 		vcursor.safeSession.getSelectLimit(),
 		setVarComment,
 		vcursor.safeSession.SystemVariables,
+		vcursor.GetForeignKeyChecksState(),
 		vcursor,
 	)
 	if err != nil {

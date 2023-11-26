@@ -65,7 +65,7 @@ var ErrNoSuchMetric = errors.New("No such metric")
 // ErrInvalidCheckType is an internal error indicating an unknown check type
 var ErrInvalidCheckType = errors.New("Unknown throttler check type")
 
-// IsDialTCPError sees if th egiven error indicates a TCP issue
+// IsDialTCPError sees if the given error indicates a TCP issue
 func IsDialTCPError(e error) bool {
 	if e == nil {
 		return false

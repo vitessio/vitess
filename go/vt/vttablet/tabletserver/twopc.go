@@ -214,7 +214,7 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*tx.Prepa
 	}
 	defer conn.Recycle()
 
-	qr, err := conn.Exec(ctx, tpc.readAllRedo, 10000, false)
+	qr, err := conn.Conn.Exec(ctx, tpc.readAllRedo, 10000, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -261,7 +261,7 @@ func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.T
 	bindVars := map[string]*querypb.BindVariable{
 		"time_created": sqltypes.Int64BindVariable(unresolvedTime.UnixNano()),
 	}
-	qr, err := tpc.read(ctx, conn, tpc.countUnresolvedRedo, bindVars)
+	qr, err := tpc.read(ctx, conn.Conn, tpc.countUnresolvedRedo, bindVars)
 	if err != nil {
 		return 0, err
 	}
@@ -347,7 +347,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid": sqltypes.StringBindVariable(dtid),
 	}
-	qr, err := tpc.read(ctx, conn, tpc.readTransaction, bindVars)
+	qr, err := tpc.read(ctx, conn.Conn, tpc.readTransaction, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +368,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	tm, _ := qr.Rows[0][2].ToCastInt64()
 	result.TimeCreated = tm
 
-	qr, err = tpc.read(ctx, conn, tpc.readParticipants, bindVars)
+	qr, err = tpc.read(ctx, conn.Conn, tpc.readParticipants, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -396,7 +396,7 @@ func (tpc *TwoPC) ReadAbandoned(ctx context.Context, abandonTime time.Time) (map
 	bindVars := map[string]*querypb.BindVariable{
 		"time_created": sqltypes.Int64BindVariable(abandonTime.UnixNano()),
 	}
-	qr, err := tpc.read(ctx, conn, tpc.readAbandoned, bindVars)
+	qr, err := tpc.read(ctx, conn.Conn, tpc.readAbandoned, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +419,7 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*tx.DistributedTx,
 	}
 	defer conn.Recycle()
 
-	qr, err := conn.Exec(ctx, tpc.readAllTransactions, 10000, false)
+	qr, err := conn.Conn.Exec(ctx, tpc.readAllTransactions, 10000, false)
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +466,7 @@ func (tpc *TwoPC) exec(ctx context.Context, conn *StatefulConnection, pq *sqlpar
 	return conn.Exec(ctx, q, 1, false)
 }
 
-func (tpc *TwoPC) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (tpc *TwoPC) read(ctx context.Context, conn *connpool.Conn, pq *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	q, err := pq.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err

@@ -26,10 +26,10 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/pools/smartconnpool"
 
 	"vitess.io/vitess/go/mysql/collations"
 
-	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -63,7 +63,7 @@ type QueryExecutor struct {
 	logStats       *tabletenv.LogStats
 	tsv            *TabletServer
 	tabletType     topodatapb.TabletType
-	setting        *pools.Setting
+	setting        *smartconnpool.Setting
 }
 
 const (
@@ -362,7 +362,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	// if we have a transaction id, let's use the txPool for this query
-	var conn *connpool.DBConn
+	var conn *connpool.PooledConn
 	if qre.connID != 0 {
 		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for streaming query")
 		if err != nil {
@@ -703,7 +703,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 				q.SetErr(err)
 			} else {
 				defer conn.Recycle()
-				res, err := qre.execDBConn(conn, sql, true)
+				res, err := qre.execDBConn(conn.Conn, sql, true)
 				q.SetResult(res)
 				q.SetErr(err)
 			}
@@ -723,7 +723,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 		return nil, err
 	}
 	defer conn.Recycle()
-	res, err := qre.execDBConn(conn, sql, true)
+	res, err := qre.execDBConn(conn.Conn, sql, true)
 	if err != nil {
 		return nil, err
 	}
@@ -765,10 +765,10 @@ func (qre *QueryExecutor) execOther() (*sqltypes.Result, error) {
 		return nil, err
 	}
 	defer conn.Recycle()
-	return qre.execDBConn(conn, qre.query, true)
+	return qre.execDBConn(conn.Conn, qre.query, true)
 }
 
-func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
+func (qre *QueryExecutor) getConn() (*connpool.PooledConn, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getConn")
 	defer span.Finish()
 
@@ -785,7 +785,7 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 	return nil, err
 }
 
-func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
+func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getStreamConn")
 	defer span.Finish()
 
@@ -874,7 +874,7 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 		return nil, err
 	}
 
-	qr, err := qre.execDBConn(conn, sql, true)
+	qr, err := qre.execDBConn(conn.Conn, sql, true)
 	if err != nil {
 		return nil, rewriteOUTParamError(err)
 	}
@@ -885,7 +885,7 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 		}
 		return qr, nil
 	}
-	err = qre.drainResultSetOnConn(conn)
+	err = qre.drainResultSetOnConn(conn.Conn)
 	if err != nil {
 		return nil, err
 	}
@@ -910,7 +910,7 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 		}
 		return qr, nil
 	}
-	err = qre.drainResultSetOnConn(conn.UnderlyingDBConn())
+	err = qre.drainResultSetOnConn(conn.UnderlyingDBConn().Conn)
 	if err != nil {
 		return nil, err
 	}
@@ -1047,7 +1047,7 @@ func (qre *QueryExecutor) execShowThrottlerStatus() (*sqltypes.Result, error) {
 	return result, nil
 }
 
-func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {
+func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.Conn) error {
 	more := true
 	for more {
 		qr, err := conn.FetchNext(qre.ctx, int(qre.getSelectLimit()), true)
@@ -1063,7 +1063,7 @@ func (qre *QueryExecutor) getSelectLimit() int64 {
 	return qre.tsv.qe.maxResultSize.Load()
 }
 
-func (qre *QueryExecutor) execDBConn(conn *connpool.DBConn, sql string, wantfields bool) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields bool) (*sqltypes.Result, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execDBConn")
 	defer span.Finish()
 
@@ -1089,7 +1089,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
 }
 
-func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	callBackClosingSpan := func(result *sqltypes.Result) error {
@@ -1105,15 +1105,15 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, isTransaction boo
 	// weren't getting cleaned up during unserveCommon>handleShutdownGracePeriod in state_manager.go.
 	// This change will ensure that long-running streaming stateful queries get gracefully shutdown during ServingTypeChange
 	// once their grace period is over.
-	qd := NewQueryDetail(qre.logStats.Ctx, conn)
+	qd := NewQueryDetail(qre.logStats.Ctx, conn.Conn)
 	if isTransaction {
 		qre.tsv.statefulql.Add(qd)
 		defer qre.tsv.statefulql.Remove(qd)
-		return conn.StreamOnce(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+		return conn.Conn.StreamOnce(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	}
 	qre.tsv.olapql.Add(qd)
 	defer qre.tsv.olapql.Remove(qd)
-	return conn.Stream(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+	return conn.Conn.Stream(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 }
 
 func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {

@@ -171,10 +171,10 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 	var tableData *sqltypes.Result
 	if h.lastID == 0 && h.schemaMaxAgeSeconds > 0 { // only at vttablet start
 		schemaMaxAge := time.Now().UTC().Add(time.Duration(-h.schemaMaxAgeSeconds) * time.Second)
-		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getInitialSchemaVersions, sidecar.GetIdentifier(),
+		tableData, err = conn.Conn.Exec(ctx, sqlparser.BuildParsedQuery(getInitialSchemaVersions, sidecar.GetIdentifier(),
 			schemaMaxAge.Unix()).Query, 10000, true)
 	} else {
-		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getNextSchemaVersions, sidecar.GetIdentifier(),
+		tableData, err = conn.Conn.Exec(ctx, sqlparser.BuildParsedQuery(getNextSchemaVersions, sidecar.GetIdentifier(),
 			h.lastID).Query, 10000, true)
 	}
 

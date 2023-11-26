@@ -18,7 +18,9 @@ package foreignkey
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -773,4 +776,434 @@ func TestFkScenarios(t *testing.T) {
 			mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
 		})
 	}
+}
+
+// TestFkQueries is for testing a specific set of queries one after the other.
+func TestFkQueries(t *testing.T) {
+	// Wait for schema-tracking to be complete.
+	waitForSchemaTrackingForFkTables(t)
+	// Remove all the foreign key constraints for all the replicas.
+	// We can then verify that the replica, and the primary have the same data, to ensure
+	// that none of the queries ever lead to cascades/updates on MySQL level.
+	for _, ks := range []string{shardedKs, unshardedKs} {
+		replicas := getReplicaTablets(ks)
+		for _, replica := range replicas {
+			removeAllForeignKeyConstraints(t, replica, ks)
+		}
+	}
+
+	testcases := []struct {
+		name    string
+		queries []string
+	}{
+		{
+			name: "Non-literal update",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t10 set col = id + 3",
+			},
+		}, {
+			name: "Non-literal update with order by",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t10 set col = id + 3 order by id desc",
+			},
+		}, {
+			name: "Non-literal update with order by that require parent and child foreign keys verification - success",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t13 (id, col) values (1,1),(2,2)",
+				"update fk_t11 set col = id + 3 where id >= 3",
+			},
+		}, {
+			name: "Non-literal update with order by that require parent and child foreign keys verification - parent fails",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t11 set col = id + 3",
+			},
+		}, {
+			name: "Non-literal update with order by that require parent and child foreign keys verification - child fails",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t13 (id, col) values (1,1),(2,2)",
+				"update fk_t11 set col = id + 3",
+			},
+		}, {
+			name: "Single column update in a multi-col table - success",
+			queries: []string{
+				"insert into fk_multicol_t1 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t2 (id, cola, colb) values (1, 1, 1)",
+				"update fk_multicol_t1 set colb = 4 + (colb) where id = 2",
+			},
+		}, {
+			name: "Single column update in a multi-col table - restrict failure",
+			queries: []string{
+				"insert into fk_multicol_t1 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t2 (id, cola, colb) values (1, 1, 1)",
+				"update fk_multicol_t1 set colb = 4 + (colb) where id = 1",
+			},
+		}, {
+			name: "Single column update in multi-col table - cascade and set null",
+			queries: []string{
+				"insert into fk_multicol_t15 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t16 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t17 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"update fk_multicol_t15 set colb = 4 + (colb) where id = 1",
+			},
+		}, {
+			name: "Non literal update that evaluates to NULL - restricted",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t13 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t10 set col = id + null where id = 1",
+			},
+		}, {
+			name: "Non literal update that evaluates to NULL - success",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t10 set col = id + null where id = 1",
+			},
+		}, {
+			name: "Multi column foreign key update with one literal and one non-literal update",
+			queries: []string{
+				"insert into fk_multicol_t15 (id, cola, colb) values (1,1,1),(2,2,2)",
+				"insert into fk_multicol_t16 (id, cola, colb) values (1,1,1),(2,2,2)",
+				"update fk_multicol_t15 set cola = 3, colb = (id * 2) - 2",
+			},
+		}, {
+			name: "Update that sets to 0 and -0 values",
+			queries: []string{
+				"insert into fk_t15 (id, col) values (1,'-0'), (2, '0'), (3, '5'), (4, '-5')",
+				"insert into fk_t16 (id, col) values (1,'-0'), (2, '0'), (3, '5'), (4, '-5')",
+				"update fk_t15 set col = col * (col - (col))",
+			},
+		},
+		{
+			name: "Update a child table which doesn't cause an update, but parent doesn't have that value",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2)",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t11 (id, col) values (1,1),(2,2),(5,5)",
+				"update fk_t11 set col = id where id in (1, 5)",
+			},
+		},
+		{
+			name: "Update a child table from a null to a value that parent doesn't have",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(5,NULL)",
+				"update fk_t11 set col = id where id in (1, 5)",
+			},
+		},
+		{
+			name: "Update on child to 0 when parent has -0",
+			queries: []string{
+				"insert into fk_t15 (id, col) values (2, '-0')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t16 (id, col) values (3, '5'), (4, '-5')",
+				"update fk_t16 set col = col * (col - (col)) where id = 3",
+				"update fk_t16 set col = col * (col - (col)) where id = 4",
+			},
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			mcmp, closer := start(t)
+			defer closer()
+			_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
+
+			// Ensure that the Vitess database is originally empty
+			ensureDatabaseState(t, mcmp.VtConn, true)
+			ensureDatabaseState(t, mcmp.MySQLConn, true)
+
+			for _, query := range testcase.queries {
+				_, _ = mcmp.ExecAllowAndCompareError(query)
+				if t.Failed() {
+					break
+				}
+			}
+
+			// ensure Vitess database has some data. This ensures not all the commands failed.
+			ensureDatabaseState(t, mcmp.VtConn, false)
+			// Verify the consistency of the data.
+			verifyDataIsCorrect(t, mcmp, 1)
+		})
+	}
+}
+
+// TestShowVschemaKeyspaces verifies the show vschema keyspaces query output for the keyspaces where the foreign keys are
+func TestShowVschemaKeyspaces(t *testing.T) {
+	mcmp, closer := start(t)
+	conn := mcmp.VtConn
+	defer closer()
+
+	res := utils.Exec(t, conn, "SHOW VSCHEMA KEYSPACES")
+	resStr := fmt.Sprintf("%v", res.Rows)
+	require.Contains(t, resStr, `[VARCHAR("uks") VARCHAR("false") VARCHAR("managed") VARCHAR("")]`)
+	require.Contains(t, resStr, `[VARCHAR("ks") VARCHAR("true") VARCHAR("managed") VARCHAR("")]`)
+}
+
+// TestFkOneCase is for testing a specific set of queries. On the CI this test won't run since we'll keep the queries empty.
+func TestFkOneCase(t *testing.T) {
+	queries := []string{}
+	if len(queries) == 0 {
+		t.Skip("No queries to test")
+	}
+	// Wait for schema-tracking to be complete.
+	waitForSchemaTrackingForFkTables(t)
+	// Remove all the foreign key constraints for all the replicas.
+	// We can then verify that the replica, and the primary have the same data, to ensure
+	// that none of the queries ever lead to cascades/updates on MySQL level.
+	for _, ks := range []string{shardedKs, unshardedKs} {
+		replicas := getReplicaTablets(ks)
+		for _, replica := range replicas {
+			removeAllForeignKeyConstraints(t, replica, ks)
+		}
+	}
+
+	mcmp, closer := start(t)
+	defer closer()
+	_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
+
+	// Ensure that the Vitess database is originally empty
+	ensureDatabaseState(t, mcmp.VtConn, true)
+	ensureDatabaseState(t, mcmp.MySQLConn, true)
+
+	for _, query := range queries {
+		if strings.HasPrefix(query, "vexplain") {
+			res := utils.Exec(t, mcmp.VtConn, query)
+			log.Errorf("Query %v, Result - %v", query, res.Rows)
+			continue
+		}
+		_, _ = mcmp.ExecAllowAndCompareError(query)
+		if t.Failed() {
+			log.Errorf("Query failed - %v", query)
+			break
+		}
+	}
+	vitessData := collectFkTablesState(mcmp.VtConn)
+	for idx, table := range fkTables {
+		log.Errorf("Vitess data for %v -\n%v", table, vitessData[idx].Rows)
+	}
+
+	// ensure Vitess database has some data. This ensures not all the commands failed.
+	ensureDatabaseState(t, mcmp.VtConn, false)
+	// Verify the consistency of the data.
+	verifyDataIsCorrect(t, mcmp, 1)
+}
+
+func TestCyclicFks(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+	_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
+
+	// Create a cyclic foreign key constraint.
+	utils.Exec(t, mcmp.VtConn, "alter table fk_t10 add constraint test_cyclic_fks foreign key (col) references fk_t12 (col) on delete cascade on update cascade")
+
+	// Wait for schema-tracking to be complete.
+	errString := utils.WaitForKsError(t, clusterInstance.VtgateProcess, unshardedKs)
+	assert.Contains(t, errString, "VT09019: keyspace 'uks' has cyclic foreign keys")
+
+	// Ensure that the Vitess database is originally empty
+	ensureDatabaseState(t, mcmp.VtConn, true)
+
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, "insert into fk_t10(id, col) values (1, 1)")
+	require.ErrorContains(t, err, "VT09019: keyspace 'uks' has cyclic foreign keys")
+
+	// Drop the cyclic foreign key constraint.
+	utils.Exec(t, mcmp.VtConn, "alter table fk_t10 drop foreign key test_cyclic_fks")
+
+	// Wait for schema-tracking to be complete.
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, unshardedKs, func(t *testing.T, keyspace map[string]interface{}) bool {
+		_, fieldPresent := keyspace["error"]
+		return !fieldPresent
+	})
+
+}
+
+func TestReplace(t *testing.T) {
+	t.Skip("replace engine marked for failure, hence skipping this.")
+	// Wait for schema-tracking to be complete.
+	waitForSchemaTrackingForFkTables(t)
+	// Remove all the foreign key constraints for all the replicas.
+	// We can then verify that the replica, and the primary have the same data, to ensure
+	// that none of the queries ever lead to cascades/updates on MySQL level.
+	for _, ks := range []string{shardedKs, unshardedKs} {
+		replicas := getReplicaTablets(ks)
+		for _, replica := range replicas {
+			removeAllForeignKeyConstraints(t, replica, ks)
+		}
+	}
+
+	mcmp1, _ := start(t)
+	//	defer closer1()
+	_ = utils.Exec(t, mcmp1.VtConn, "use `uks`")
+
+	mcmp2, _ := start(t)
+	//	defer closer2()
+	_ = utils.Exec(t, mcmp2.VtConn, "use `uks`")
+
+	_ = utils.Exec(t, mcmp1.VtConn, "insert into fk_t2 values(1,5), (2,5)")
+
+	done := false
+	go func() {
+		number := 1
+		for !done {
+			query := fmt.Sprintf("replace /* g1q1 - %d */ into fk_t2 values(5,5)", number)
+			_, _ = utils.ExecAllowError(t, mcmp1.VtConn, query)
+			number++
+		}
+	}()
+
+	go func() {
+		number := 1
+		for !done {
+			query := fmt.Sprintf("replace /* q1 - %d */ into fk_t3 values(3,5)", number)
+			_, _ = utils.ExecAllowError(t, mcmp2.VtConn, query)
+
+			query = fmt.Sprintf("replace /* q2 - %d */ into fk_t3 values(4,5)", number)
+			_, _ = utils.ExecAllowError(t, mcmp2.VtConn, query)
+			number++
+		}
+	}()
+
+	totalTime := time.After(1 * time.Minute)
+	for !done {
+		select {
+		case <-totalTime:
+			done = true
+		case <-time.After(10 * time.Millisecond):
+			validateReplication(t)
+		}
+	}
+}
+
+func TestReplaceExplicit(t *testing.T) {
+	t.Skip("explicit delete-insert in transaction fails, hence skipping")
+	// Wait for schema-tracking to be complete.
+	waitForSchemaTrackingForFkTables(t)
+	// Remove all the foreign key constraints for all the replicas.
+	// We can then verify that the replica, and the primary have the same data, to ensure
+	// that none of the queries ever lead to cascades/updates on MySQL level.
+	for _, ks := range []string{shardedKs, unshardedKs} {
+		replicas := getReplicaTablets(ks)
+		for _, replica := range replicas {
+			removeAllForeignKeyConstraints(t, replica, ks)
+		}
+	}
+
+	mcmp1, _ := start(t)
+	//	defer closer1()
+	_ = utils.Exec(t, mcmp1.VtConn, "use `uks`")
+
+	mcmp2, _ := start(t)
+	//	defer closer2()
+	_ = utils.Exec(t, mcmp2.VtConn, "use `uks`")
+
+	_ = utils.Exec(t, mcmp1.VtConn, "insert into fk_t2 values(1,5), (2,5)")
+
+	done := false
+	go func() {
+		number := 0
+		for !done {
+			number++
+			_, _ = utils.ExecAllowError(t, mcmp1.VtConn, "begin")
+			query := fmt.Sprintf("delete /* g1q1 - %d */ from fk_t2 where id = 5", number)
+			_, err := utils.ExecAllowError(t, mcmp1.VtConn, query)
+			if err != nil {
+				_, _ = utils.ExecAllowError(t, mcmp1.VtConn, "rollback")
+				continue
+			}
+			query = fmt.Sprintf("insert /* g1q1 - %d */ into fk_t2 values(5,5)", number)
+			_, err = utils.ExecAllowError(t, mcmp1.VtConn, query)
+			if err != nil {
+				_, _ = utils.ExecAllowError(t, mcmp1.VtConn, "rollback")
+				continue
+			}
+			_, _ = utils.ExecAllowError(t, mcmp1.VtConn, "commit")
+		}
+	}()
+
+	go func() {
+		number := 0
+		for !done {
+			number++
+			_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "begin")
+			query := fmt.Sprintf("delete /* g1q1 - %d */ from fk_t3 where id = 3 or col = 5", number)
+			_, err := utils.ExecAllowError(t, mcmp2.VtConn, query)
+			if err != nil {
+				_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "rollback")
+			} else {
+				query = fmt.Sprintf("insert /* g1q1 - %d */ into fk_t3 values(3,5)", number)
+				_, err = utils.ExecAllowError(t, mcmp2.VtConn, query)
+				if err != nil {
+					_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "rollback")
+				} else {
+					_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "commit")
+				}
+			}
+
+			_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "begin")
+			query = fmt.Sprintf("delete /* g1q1 - %d */ from fk_t3 where id = 4 or col = 5", number)
+			_, err = utils.ExecAllowError(t, mcmp2.VtConn, query)
+			if err != nil {
+				_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "rollback")
+				continue
+			}
+			query = fmt.Sprintf("insert /* g1q1 - %d */ into fk_t3 values(4,5)", number)
+			_, err = utils.ExecAllowError(t, mcmp2.VtConn, query)
+			if err != nil {
+				_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "rollback")
+				continue
+			}
+			_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "commit")
+		}
+	}()
+
+	totalTime := time.After(1 * time.Minute)
+	for !done {
+		select {
+		case <-totalTime:
+			done = true
+		case <-time.After(10 * time.Millisecond):
+			validateReplication(t)
+		}
+	}
+}
+
+// TestReplaceWithFK tests that replace into work as expected when foreign key management is enabled in Vitess.
+func TestReplaceWithFK(t *testing.T) {
+	mcmp, closer := start(t)
+	conn := mcmp.VtConn
+	defer closer()
+
+	// replace some data.
+	_, err := utils.ExecAllowError(t, conn, `replace into t1(id, col) values (1, 1)`)
+	require.ErrorContains(t, err, "VT12001: unsupported: REPLACE INTO with sharded keyspace (errno 1235) (sqlstate 42000)")
+
+	_ = utils.Exec(t, conn, `use uks`)
+
+	_ = utils.Exec(t, conn, `replace into u_t1(id, col1) values (1, 1), (2, 1)`)
+	// u_t1: (1,1) (2,1)
+
+	_ = utils.Exec(t, conn, `replace into u_t2(id, col2) values (1, 1), (2, 1)`)
+	// u_t1: (1,1) (2,1)
+	// u_t2: (1,1) (2,1)
+
+	_ = utils.Exec(t, conn, `replace into u_t1(id, col1) values (2, 2)`)
+	// u_t1: (1,1) (2,2)
+	// u_t2: (1,null) (2,null)
+
+	utils.AssertMatches(t, conn, `select * from u_t1`, `[[INT64(1) INT64(1)] [INT64(2) INT64(2)]]`)
+	utils.AssertMatches(t, conn, `select * from u_t2`, `[[INT64(1) NULL] [INT64(2) NULL]]`)
 }

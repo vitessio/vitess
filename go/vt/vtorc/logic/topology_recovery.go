@@ -584,7 +584,7 @@ func runEmergentOperations(analysisEntry *inst.ReplicationAnalysis) {
 }
 
 // executeCheckAndRecoverFunction will choose the correct check & recovery function based on analysis.
-// It executes the function synchronuously
+// It executes the function synchronously
 func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (err error) {
 	countPendingRecoveries.Add(1)
 	defer countPendingRecoveries.Add(-1)

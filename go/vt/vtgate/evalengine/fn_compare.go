@@ -23,7 +23,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -41,8 +40,8 @@ type (
 	}
 )
 
-var _ Expr = (*builtinBitCount)(nil)
-var _ Expr = (*builtinMultiComparison)(nil)
+var _ IR = (*builtinBitCount)(nil)
+var _ IR = (*builtinMultiComparison)(nil)
 
 func (b *builtinCoalesce) eval(env *ExpressionEnv) (eval, error) {
 	args, err := b.args(env)
@@ -57,17 +56,42 @@ func (b *builtinCoalesce) eval(env *ExpressionEnv) (eval, error) {
 	return nil, nil
 }
 
-func (b *builtinCoalesce) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	var ta typeAggregation
-	for _, arg := range b.Arguments {
-		tt, f := arg.typeof(env, fields)
-		ta.add(tt, f)
-	}
-	return ta.result(), flagNullable
-}
-
 func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
-	return ctype{}, c.unsupported(b)
+	var (
+		ta    typeAggregation
+		ca    collationAggregation
+		local = collations.Local()
+	)
+
+	f := flagNullable
+	for _, arg := range b.Arguments {
+		tt, err := arg.compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		if !tt.nullable() {
+			f = 0
+		}
+		ta.add(tt.Type, tt.Flag)
+		if err := ca.add(local, tt.Col); err != nil {
+			return ctype{}, err
+		}
+	}
+
+	args := len(b.Arguments)
+	c.asm.adjustStack(-(args - 1))
+	c.asm.emit(func(env *ExpressionEnv) int {
+		for sp := env.vm.sp - args; sp < env.vm.sp; sp++ {
+			if env.vm.stack[sp] != nil {
+				env.vm.stack[env.vm.sp-args] = env.vm.stack[sp]
+				break
+			}
+		}
+		env.vm.sp -= args - 1
+		return 1
+	}, "COALESCE (SP-%d) ... (SP-1)", args)
+
+	return ctype{Type: ta.result(), Flag: f, Col: ca.result()}, nil
 }
 
 func getMultiComparisonFunc(args []eval) multiComparisonFunc {
@@ -262,72 +286,13 @@ func (call *builtinMultiComparison) eval(env *ExpressionEnv) (eval, error) {
 	return getMultiComparisonFunc(args)(args, call.cmp)
 }
 
-func (call *builtinMultiComparison) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	var (
-		integersI int
-		integersU int
-		floats    int
-		decimals  int
-		text      int
-		binary    int
-		flags     typeFlag
-	)
-
-	for _, expr := range call.Arguments {
-		tt, f := expr.typeof(env, fields)
-		flags |= f
-
-		switch tt {
-		case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
-			integersI++
-		case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
-			integersU++
-		case sqltypes.Float32, sqltypes.Float64:
-			floats++
-		case sqltypes.Decimal:
-			decimals++
-		case sqltypes.Text, sqltypes.VarChar:
-			text++
-		case sqltypes.Blob, sqltypes.Binary, sqltypes.VarBinary:
-			binary++
-		}
-	}
-
-	if flags&flagNull != 0 {
-		return sqltypes.Null, flags
-	}
-	if integersI+integersU == len(call.Arguments) {
-		if integersI == len(call.Arguments) {
-			return sqltypes.Int64, flags
-		}
-		if integersU == len(call.Arguments) {
-			return sqltypes.Uint64, flags
-		}
-		return sqltypes.Decimal, flags
-	}
-	if binary > 0 || text > 0 {
-		if text > 0 {
-			return sqltypes.VarChar, flags
-		}
-		if binary > 0 {
-			return sqltypes.VarBinary, flags
-		}
-	} else {
-		if floats > 0 {
-			return sqltypes.Float64, flags
-		}
-		if decimals > 0 {
-			return sqltypes.Decimal, flags
-		}
-	}
-	panic("unexpected argument type")
-}
-
 func (call *builtinMultiComparison) compile_c(c *compiler, args []ctype) (ctype, error) {
 	env := collations.Local()
 
 	var ca collationAggregation
+	var f typeFlag
 	for _, arg := range args {
+		f |= nullableFlags(arg.Flag)
 		if err := ca.add(env, arg.Col); err != nil {
 			return ctype{}, err
 		}
@@ -335,15 +300,17 @@ func (call *builtinMultiComparison) compile_c(c *compiler, args []ctype) (ctype,
 
 	tc := ca.result()
 	c.asm.Fn_MULTICMP_c(len(args), call.cmp < 0, tc)
-	return ctype{Type: sqltypes.VarChar, Col: tc}, nil
+	return ctype{Type: sqltypes.VarChar, Flag: f, Col: tc}, nil
 }
 
 func (call *builtinMultiComparison) compile_d(c *compiler, args []ctype) (ctype, error) {
+	var f typeFlag
 	for i, tt := range args {
+		f |= nullableFlags(tt.Flag)
 		c.compileToDecimal(tt, len(args)-i)
 	}
 	c.asm.Fn_MULTICMP_d(len(args), call.cmp < 0)
-	return ctype{Type: sqltypes.Decimal, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Decimal, Flag: f, Col: collationNumeric}, nil
 }
 
 func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
@@ -355,6 +322,7 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 		text     int
 		binary   int
 		args     []ctype
+		nullable bool
 	)
 
 	/*
@@ -374,6 +342,7 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 
 		args = append(args, tt)
 
+		nullable = nullable || tt.nullable()
 		switch tt.Type {
 		case sqltypes.Int64:
 			signed++
@@ -387,19 +356,25 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 			text++
 		case sqltypes.Blob, sqltypes.Binary, sqltypes.VarBinary:
 			binary++
+		case sqltypes.Null:
+			nullable = true
 		default:
 			return ctype{}, c.unsupported(call)
 		}
 	}
 
+	var f typeFlag
+	if nullable {
+		f |= flagNullable
+	}
 	if signed+unsigned == len(args) {
 		if signed == len(args) {
 			c.asm.Fn_MULTICMP_i(len(args), call.cmp < 0)
-			return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+			return ctype{Type: sqltypes.Int64, Flag: f, Col: collationNumeric}, nil
 		}
 		if unsigned == len(args) {
 			c.asm.Fn_MULTICMP_u(len(args), call.cmp < 0)
-			return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
+			return ctype{Type: sqltypes.Uint64, Flag: f, Col: collationNumeric}, nil
 		}
 		return call.compile_d(c, args)
 	}
@@ -408,14 +383,14 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 			return call.compile_c(c, args)
 		}
 		c.asm.Fn_MULTICMP_b(len(args), call.cmp < 0)
-		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+		return ctype{Type: sqltypes.VarBinary, Flag: f, Col: collationBinary}, nil
 	} else {
 		if floats > 0 {
 			for i, tt := range args {
 				c.compileToFloat(tt, len(args)-i)
 			}
 			c.asm.Fn_MULTICMP_f(len(args), call.cmp < 0)
-			return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+			return ctype{Type: sqltypes.Float64, Flag: f, Col: collationNumeric}, nil
 		}
 		if decimals > 0 {
 			return call.compile_d(c, args)

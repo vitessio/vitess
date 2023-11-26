@@ -38,17 +38,6 @@ func gen4SelectStmtPlanner(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
-	switch node := stmt.(type) {
-	case *sqlparser.Select:
-		if node.With != nil {
-			return nil, vterrors.VT12001("WITH expression in SELECT statement")
-		}
-	case *sqlparser.Union:
-		if node.With != nil {
-			return nil, vterrors.VT12001("WITH expression in UNION statement")
-		}
-	}
-
 	sel, isSel := stmt.(*sqlparser.Select)
 	if isSel {
 		// handle dual table for processing at vtgate.
@@ -214,7 +203,7 @@ func newBuildSelectPlan(
 		if err != nil {
 			return nil, nil, err
 		}
-		plan = pushCommentDirectivesOnPlan(plan, selStmt)
+		setCommentDirectivesOnPlan(plan, selStmt)
 		return plan, tablesUsed, err
 	}
 
@@ -233,10 +222,7 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	if err = plan.Wireup(ctx); err != nil {
-		return nil, nil, err
-	}
-	return pushCommentDirectivesOnPlan(plan, selStmt), operators.TablesUsed(op), nil
+	return plan, operators.TablesUsed(op), nil
 }
 
 func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars) (ops.Operator, error) {

@@ -361,7 +361,7 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 }
 
 // findTableSchemaDiff gets the diff which needs to be applied
-// to the current table schema in order toreach the desired one.
+// to the current table schema in order to reach the desired one.
 // The result will be an empty string if they match.
 // This will be a CREATE statement if the table does not exist
 // or an ALTER if the table exists but has a different schema.
