@@ -207,7 +207,7 @@ func (l *ColumnList) Equals(other *ColumnList) bool {
 	return reflect.DeepEqual(l.Columns, other.Columns)
 }
 
-// EqualsByNames chcks if the names in this list equals the names of another list, in order. Type is ignored.
+// EqualsByNames checks if the names in this list equals the names of another list, in order. Type is ignored.
 func (l *ColumnList) EqualsByNames(other *ColumnList) bool {
 	return reflect.DeepEqual(l.Names(), other.Names())
 }
@@ -252,7 +252,7 @@ func (l *ColumnList) MappedNamesColumnList(columnNamesMap map[string]string) *Co
 	return NewColumnList(names)
 }
 
-// SetEnumToTextConversion tells this column list that an enum is conveted to text
+// SetEnumToTextConversion tells this column list that an enum is converted to text
 func (l *ColumnList) SetEnumToTextConversion(columnName string, enumValues string) {
 	l.GetColumn(columnName).EnumToTextConversion = true
 	l.GetColumn(columnName).EnumValues = enumValues

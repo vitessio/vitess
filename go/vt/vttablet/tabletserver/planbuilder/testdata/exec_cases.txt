@@ -175,7 +175,7 @@
   "NextCount": ":a"
 }
 
-# squence with bad value
+# sequence with bad value
 "select next 12345667852342342342323423423 values from seq"
 {
   "PlanID": "Nextval",

@@ -73,7 +73,7 @@ var (
 )
 
 // ExemptFromChecks returns 'true' for apps that should skip the throttler checks. The throttler should
-// always repsond with automated "OK" to those apps, without delay. These apps also do not cause a heartbeat renewal.
+// always respond with automated "OK" to those apps, without delay. These apps also do not cause a heartbeat renewal.
 func ExemptFromChecks(appName string) bool {
 	return exemptFromChecks[appName]
 }

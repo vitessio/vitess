@@ -862,8 +862,8 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 			LHSKey:         op.LHSKeys[0],
 			RHSKey:         op.RHSKeys[0],
 			ASTPred:        op.JoinPredicate(),
-			Collation:      comparisonType.Coll,
-			ComparisonType: comparisonType.Type,
+			Collation:      comparisonType.Collation(),
+			ComparisonType: comparisonType.Type(),
 		},
 	}, nil
 }

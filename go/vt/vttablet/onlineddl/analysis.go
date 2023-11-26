@@ -175,7 +175,7 @@ func analyzeAddRangePartition(alterTable *sqlparser.AlterTable, createTable *sql
 	return op
 }
 
-// alterOptionAvailableViaInstantDDL chcks if the specific alter option is eligible to run via ALGORITHM=INSTANT
+// alterOptionAvailableViaInstantDDL checks if the specific alter option is eligible to run via ALGORITHM=INSTANT
 // reference: https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html
 func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, capableOf mysql.CapableOf) (bool, error) {
 	findColumn := func(colName string) *sqlparser.ColumnDefinition {
@@ -314,7 +314,7 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 }
 
 // AnalyzeInstantDDL takes declarative CreateTable and AlterTable, as well as a server version, and checks whether it is possible to run the ALTER
-// using ALGORITM=INSTANT for that version.
+// using ALGORITHM=INSTANT for that version.
 // This function is INTENTIONALLY public, even though we do not guarantee that it will remain so.
 func AnalyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable, capableOf mysql.CapableOf) (*SpecialAlterPlan, error) {
 	capable, err := capableOf(mysql.InstantDDLFlavorCapability)

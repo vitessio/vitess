@@ -193,7 +193,7 @@ func (ast *astCompiler) translateIsExpr(left sqlparser.Expr, op sqlparser.IsExpr
 }
 
 func (ast *astCompiler) translateBindVar(arg *sqlparser.Argument) (IR, error) {
-	bvar := NewBindVar(arg.Name, Type{Type: arg.Type, Coll: ast.cfg.Collation})
+	bvar := NewBindVar(arg.Name, NewType(arg.Type, ast.cfg.Collation))
 
 	if !bvar.typed() {
 		bvar.dynamicTypeOffset = len(ast.untyped)
@@ -203,12 +203,12 @@ func (ast *astCompiler) translateBindVar(arg *sqlparser.Argument) (IR, error) {
 }
 
 func (ast *astCompiler) translateColOffset(col *sqlparser.Offset) (IR, error) {
-	typ := UnknownType()
+	var typ Type
 	if ast.cfg.ResolveType != nil {
 		typ, _ = ast.cfg.ResolveType(col.Original)
 	}
-	if typ.Coll == collations.Unknown {
-		typ.Coll = ast.cfg.Collation
+	if typ.Valid() && typ.collation == collations.Unknown {
+		typ.collation = ast.cfg.Collation
 	}
 
 	column := NewColumn(col.V, typ, col.Original)
@@ -227,12 +227,12 @@ func (ast *astCompiler) translateColName(colname *sqlparser.ColName) (IR, error)
 	if err != nil {
 		return nil, err
 	}
-	typ := UnknownType()
+	var typ Type
 	if ast.cfg.ResolveType != nil {
 		typ, _ = ast.cfg.ResolveType(colname)
 	}
-	if typ.Coll == collations.Unknown {
-		typ.Coll = ast.cfg.Collation
+	if typ.Valid() && typ.collation == collations.Unknown {
+		typ.collation = ast.cfg.Collation
 	}
 
 	column := NewColumn(idx, typ, colname)
@@ -734,9 +734,9 @@ func (fields FieldResolver) Type(expr sqlparser.Expr) (Type, bool) {
 		name := expr.CompliantName()
 		for _, f := range fields {
 			if f.Name == name {
-				return Type{Type: f.Type, Coll: collations.ID(f.Charset)}, true
+				return NewType(f.Type, collations.ID(f.Charset)), true
 			}
 		}
 	}
-	return UnknownType(), false
+	return Type{}, false
 }

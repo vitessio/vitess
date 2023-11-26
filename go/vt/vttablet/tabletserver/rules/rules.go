@@ -563,7 +563,7 @@ func bvMatch(bvcond BindVarCond, bindVars map[string]*querypb.BindVariable) bool
 // -----------------------------------------------
 // Support types for Rule
 
-// Action speficies the list of actions to perform
+// Action specifies the list of actions to perform
 // when a Rule is triggered.
 type Action int
 
@@ -655,7 +655,7 @@ func init() {
 	}
 }
 
-// These are return statii.
+// These are return states.
 const (
 	QROK = iota
 	QRMismatch

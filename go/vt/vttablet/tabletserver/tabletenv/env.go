@@ -25,7 +25,7 @@ import (
 )
 
 // Env defines the functions supported by TabletServer
-// that the sub-componennts need to access.
+// that the sub-components need to access.
 type Env interface {
 	CheckMySQL()
 	Config() *TabletConfig
