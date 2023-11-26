@@ -286,25 +286,30 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	rs.Complete()
 }
 
+func areRowCountsEqual(t *testing.T) bool {
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+	parentRowCount := getRowCount(t, vtgateConn, "target2.parent")
+	childRowCount := getRowCount(t, vtgateConn, "target2.child")
+	parentCopyRowCount := getRowCount(t, vtgateConn, "target1.parent_copy")
+	childCopyRowCount := getRowCount(t, vtgateConn, "target1.child_copy")
+	log.Infof("Post-materialize row counts are parent: %d, child: %d, parent_copy: %d, child_copy: %d",
+		parentRowCount, childRowCount, parentCopyRowCount, childCopyRowCount)
+	if parentRowCount != parentCopyRowCount || childRowCount != childCopyRowCount {
+		return false
+	}
+	return true
+}
+
 // validateMaterializeRowCounts expects the Load generator to be stopped before calling it.
 func validateMaterializeRowCounts(t *testing.T) {
 	if lg.State() != LoadGeneratorStateStopped {
 		t.Fatal("Load generator was unexpectedly still running when validateMaterializeRowCounts was called -- this will produce unreliable results.")
 	}
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
-	parentRowCount, err := getRowCount(t, vtgateConn, "target2.parent")
-	require.NoError(t, err)
-	childRowCount, err := getRowCount(t, vtgateConn, "target2.child")
-	require.NoError(t, err)
-	parentCopyRowCount, err := getRowCount(t, vtgateConn, "target1.parent_copy")
-	require.NoError(t, err)
-	childCopyRowCount, err := getRowCount(t, vtgateConn, "target1.child_copy")
-	require.NoError(t, err)
-	log.Infof("Post-materialize row counts are parent: %d, child: %d, parent_copy: %d, child_copy: %d",
-		parentRowCount, childRowCount, parentCopyRowCount, childCopyRowCount)
-	require.Equal(t, parentRowCount, parentCopyRowCount)
-	require.Equal(t, childRowCount, childCopyRowCount)
+	areRowCountsEqual2 := func() bool {
+		return areRowCountsEqual(t)
+	}
+	require.NoError(t, waitForCondition("row counts to be equal", areRowCountsEqual2, defaultTimeout))
 }
 
 const fkExtMaterializeSpec = `

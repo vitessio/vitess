@@ -132,9 +132,7 @@ func (lg *SimpleLoadGenerator) getVtgateConn(ctx context.Context) (*mysql.Conn, 
 
 func (lg *SimpleLoadGenerator) getNumRows(vtgateConn *mysql.Conn, table string) int {
 	t := lg.vc.t
-	numRows, err := getRowCount(t, vtgateConn, table)
-	require.NoError(t, err)
-	return numRows
+	return getRowCount(t, vtgateConn, table)
 }
 
 func (lg *SimpleLoadGenerator) WaitForAdditionalRows(count int) error {

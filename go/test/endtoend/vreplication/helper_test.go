@@ -73,20 +73,24 @@ func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines 
 }
 
 func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout time.Duration) *sqltypes.Result {
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(defaultTick)
+	defer ticker.Stop()
+
+	var qr *sqltypes.Result
+	var err error
 	for {
-		qr, err := conn.ExecuteFetch(query, 1000, false)
+		qr, err = conn.ExecuteFetch(query, 1000, false)
 		if err == nil {
 			return qr
 		}
 		select {
-		case <-timer.C:
+		case <-ctx.Done():
 			require.FailNow(t, fmt.Sprintf("query %q did not succeed before the timeout of %s; last seen result: %v",
 				query, timeout, qr.Rows))
-		default:
+		case <-ticker.C:
 			log.Infof("query %q failed with error %v, retrying in %ds", query, err, defaultTick)
-			time.Sleep(defaultTick)
 		}
 	}
 }
@@ -745,14 +749,11 @@ func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool 
 	return mode == "noblob"
 }
 
-func getRowCount(t *testing.T, vtgateConn *mysql.Conn, table string) (int, error) {
+func getRowCount(t *testing.T, vtgateConn *mysql.Conn, table string) int {
 	query := fmt.Sprintf("select count(*) from %s", table)
 	qr := execVtgateQuery(t, vtgateConn, "", query)
-	if qr == nil {
-		return 0, fmt.Errorf("query failed %s", query)
-	}
-	numRows, err := qr.Rows[0][0].ToInt()
-	return numRows, err
+	numRows, _ := qr.Rows[0][0].ToInt()
+	return numRows
 }
 
 const (
@@ -893,15 +894,16 @@ func waitForCondition(name string, condition func() bool, timeout time.Duration)
 
 	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
-	timeoutCh := time.After(timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 	for {
 		select {
 		case <-ticker.C:
 			if condition() {
 				return nil
 			}
-		case <-timeoutCh:
-			return fmt.Errorf("timed out waiting for %s", name)
+		case <-ctx.Done():
+			return fmt.Errorf("%s: waiting for %s", ctx.Err(), name)
 		}
 	}
 }
