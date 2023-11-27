@@ -389,6 +389,7 @@ func (s *aggregationDecimal) Min(value sqltypes.Value) error {
 	}
 	if !s.dec.IsInitialized() || dec.Cmp(s.dec) < 0 {
 		s.dec = dec
+		s.prec = -dec.Exponent()
 	}
 	return nil
 }
@@ -403,6 +404,7 @@ func (s *aggregationDecimal) Max(value sqltypes.Value) error {
 	}
 	if !s.dec.IsInitialized() || dec.Cmp(s.dec) > 0 {
 		s.dec = dec
+		s.prec = -dec.Exponent()
 	}
 	return nil
 }
