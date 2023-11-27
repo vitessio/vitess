@@ -299,7 +299,7 @@ func WaitForTableDeletions(ctx context.Context, t *testing.T, vtgateProcess clus
 }
 
 // WaitForColumn waits for a table's column to be present
-func WaitForColumn(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
+func WaitForColumn(t testing.TB, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
 	timeout := time.After(60 * time.Second)
 	for {
 		select {
