@@ -75,6 +75,7 @@ type (
 		lhsKey, rhsKey int
 		cols           []int
 		hasher         vthash.Hasher
+		sqlmode        evalengine.SQLMode
 	}
 
 	probeTableEntry struct {
@@ -283,7 +284,7 @@ func (pt *hashJoinProbeTable) addLeftRow(r sqltypes.Row) error {
 }
 
 func (pt *hashJoinProbeTable) hash(val sqltypes.Value) (vthash.Hash, error) {
-	err := evalengine.NullsafeHashcode128(&pt.hasher, val, pt.coll, pt.typ)
+	err := evalengine.NullsafeHashcode128(&pt.hasher, val, pt.coll, pt.typ, pt.sqlmode)
 	if err != nil {
 		return vthash.Hash{}, err
 	}

@@ -27,10 +27,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/sysvars"
-
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
@@ -44,6 +43,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/topo"
 	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -209,6 +209,12 @@ func (vc *vcursorImpl) ConnCollation() collations.ID {
 
 func (vc *vcursorImpl) TimeZone() *time.Location {
 	return vc.safeSession.TimeZone()
+}
+
+func (vc *vcursorImpl) SQLMode() string {
+	// TODO: Implement return the current sql_mode.
+	// This is currently hardcoded to the default in MySQL 8.0.
+	return config.DefaultSQLMode
 }
 
 // MaxMemoryRows returns the maxMemoryRows flag value.
