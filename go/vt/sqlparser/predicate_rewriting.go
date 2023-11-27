@@ -258,19 +258,6 @@ func ExtractINFromOR(expr *OrExpr) []Expr {
 		values = append(values, currentValues)
 	}
 
-	if len(varNames) == 1 {
-		var valueTuple ValTuple
-		for _, value := range values {
-			valueTuple = append(valueTuple, value[0])
-		}
-
-		return []Expr{&ComparisonExpr{
-			Operator: InOp,
-			Left:     varNames[0],
-			Right:    valueTuple,
-		}}
-	}
-
 	var nameTuple ValTuple
 	for _, name := range varNames {
 		nameTuple = append(nameTuple, name)
