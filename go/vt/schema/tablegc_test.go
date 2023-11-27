@@ -33,6 +33,14 @@ func TestIsGCTableName(t *testing.T) {
 			tableName, err := generateGCTableName(state, "", tm)
 			assert.NoError(t, err)
 			assert.True(t, IsGCTableName(tableName))
+
+			tableName, err = generateGCTableNameNewFormat(state, "6ace8bcef73211ea87e9f875a4d24e90", tm)
+			assert.NoError(t, err)
+			assert.Truef(t, IsGCTableName(tableName), "table name: %s", tableName)
+
+			tableName, err = GenerateGCTableNameNewFormat(state, tm)
+			assert.NoError(t, err)
+			assert.Truef(t, IsGCTableName(tableName), "table name: %s", tableName)
 		}
 	}
 	t.Run("accept", func(t *testing.T) {
