@@ -255,8 +255,8 @@ func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 	unsharded := ins.Opcode == InsertUnsharded
 	var mu sync.Mutex
 	output := &sqltypes.Result{}
-	err := ins.InsertRows.execSelectStreaming(ctx, vcursor, bindVars, func(result *sqltypes.Result) error {
-		if len(result.Rows) == 0 {
+	err := ins.InsertRows.execSelectStreaming(ctx, vcursor, bindVars, func(irr insertRowsResult) error {
+		if len(irr.rows) == 0 {
 			return nil
 		}
 
@@ -270,9 +270,9 @@ func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 		var qr *sqltypes.Result
 		var err error
 		if unsharded {
-			insertID, qr, err = ins.insertIntoUnshardedTable(ctx, vcursor, bindVars, result)
+			insertID, qr, err = ins.insertIntoUnshardedTable(ctx, vcursor, bindVars, irr.rows)
 		} else {
-			insertID, qr, err = ins.insertIntoShardedTableFromSelect(ctx, vcursor, bindVars, result.Rows)
+			insertID, qr, err = ins.insertIntoShardedTableFromSelect(ctx, vcursor, bindVars, irr)
 		}
 		if err != nil {
 			return err
@@ -348,23 +348,18 @@ func (ins *Insert) insertIntoShardedTableFromSelect(
 	ctx context.Context,
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
-	rows []sqltypes.Row,
+	irr insertRowsResult,
 ) (int64, *sqltypes.Result, error) {
-	insertID, err := ins.processGenerateFromSelect(ctx, vcursor, rows)
+	rss, queries, err := ins.getInsertSelectQueries(ctx, vcursor, bindVars, irr.rows)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	rss, queries, err := ins.getInsertSelectQueries(ctx, vcursor, bindVars, rows)
+	qr, err := ins.executeInsertQueries(ctx, vcursor, rss, queries, irr.insertID)
 	if err != nil {
 		return 0, nil, err
 	}
-
-	qr, err := ins.executeInsertQueries(ctx, vcursor, rss, queries, insertID)
-	if err != nil {
-		return 0, nil, err
-	}
-	return insertID, qr, nil
+	return irr.insertID, qr, nil
 }
 
 func (ins *Insert) executeInsertQueries(
@@ -492,7 +487,7 @@ func (ins *Insert) execInsertFromSelect(ctx context.Context, vcursor VCursor, bi
 		return &sqltypes.Result{}, nil
 	}
 
-	_, qr, err := ins.insertIntoShardedTableFromSelect(ctx, vcursor, bindVars, result.rows)
+	_, qr, err := ins.insertIntoShardedTableFromSelect(ctx, vcursor, bindVars, result)
 	return qr, err
 }
 
@@ -571,70 +566,6 @@ func (ins *Insert) processGenerateFromValues(
 			bindVars[SeqVarName+strconv.Itoa(i)] = sqltypes.ValueBindVariable(v)
 		}
 	}
-	return insertID, nil
-}
-
-// processGenerateFromSelect generates new values using a sequence if necessary.
-// If no value was generated, it returns 0. Values are generated only
-// for cases where none are supplied.
-func (ins *Insert) processGenerateFromSelect(
-	ctx context.Context,
-	vcursor VCursor,
-	rows []sqltypes.Row,
-) (insertID int64, err error) {
-	if ins.Generate == nil {
-		return 0, nil
-	}
-	var count int64
-	offset := ins.Generate.Offset
-	genColPresent := offset < len(rows[0])
-	if genColPresent {
-		for _, val := range rows {
-			if val[offset].IsNull() {
-				count++
-			}
-		}
-	} else {
-		count = int64(len(rows))
-	}
-
-	if count == 0 {
-		return 0, nil
-	}
-
-	// If generation is needed, generate the requested number of values (as one call).
-	rss, _, err := vcursor.ResolveDestinations(ctx, ins.Generate.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
-	if err != nil {
-		return 0, err
-	}
-	if len(rss) != 1 {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "auto sequence generation can happen through single shard only, it is getting routed to %d shards", len(rss))
-	}
-	bindVars := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(count)}
-	qr, err := vcursor.ExecuteStandalone(ctx, ins, ins.Generate.Query, bindVars, rss[0])
-	if err != nil {
-		return 0, err
-	}
-	// If no rows are returned, it's an internal error, and the code
-	// must panic, which will be caught and reported.
-	insertID, err = qr.Rows[0][0].ToCastInt64()
-	if err != nil {
-		return 0, err
-	}
-
-	used := insertID
-	for idx, val := range rows {
-		if genColPresent {
-			if val[offset].IsNull() {
-				val[offset] = sqltypes.NewInt64(used)
-				used++
-			}
-		} else {
-			rows[idx] = append(val, sqltypes.NewInt64(used))
-			used++
-		}
-	}
-
 	return insertID, nil
 }
 
@@ -1021,8 +952,8 @@ func (ins *Insert) description() PrimitiveDescription {
 	}
 }
 
-func (ins *Insert) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, result *sqltypes.Result) (int64, *sqltypes.Result, error) {
-	query := ins.getInsertQueryFromSelectForUnsharded(result.Rows, bindVars)
+func (ins *Insert) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rows []sqltypes.Row) (int64, *sqltypes.Result, error) {
+	query := ins.getInsertQueryFromSelectForUnsharded(rows, bindVars)
 	return ins.executeUnshardedTableQuery(ctx, vcursor, bindVars, query)
 }
 

@@ -1824,6 +1824,14 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
+	generate := &Generate{
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks2",
+			Sharded: false,
+		},
+		Query:  "dummy_generate",
+		Offset: 1,
+	}
 	rb := &Route{
 		Query:      "dummy_select",
 		FieldQuery: "dummy_field_query",
@@ -1836,17 +1844,8 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 		Query:    "dummy_insert",
 		VindexValueOffset: [][]int{
 			{1}}, // The primary vindex has a single column as sharding key
-		InsertRows: NewInsertRowsFromSelect(nil, rb)}
+		InsertRows: NewInsertRowsFromSelect(generate, rb)}
 	ins.ColVindexes = ks.Tables["t1"].ColumnVindexes
-
-	ins.Generate = &Generate{
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks2",
-			Sharded: false,
-		},
-		Query:  "dummy_generate",
-		Offset: 1,
-	}
 	ins.Prefix = "prefix "
 	ins.Suffix = " suffix"
 
@@ -1921,6 +1920,14 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
+	generate := &Generate{
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks2",
+			Sharded: false,
+		},
+		Query:  "dummy_generate",
+		Offset: 2,
+	}
 	rb := &Route{
 		Query:      "dummy_select",
 		FieldQuery: "dummy_field_query",
@@ -1932,18 +1939,10 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 		Keyspace:          ks.Keyspace,
 		Query:             "dummy_insert",
 		VindexValueOffset: [][]int{{1}}, // The primary vindex has a single column as sharding key
-		InsertRows:        NewInsertRowsFromSelect(nil, rb),
+		InsertRows:        NewInsertRowsFromSelect(generate, rb),
 	}
 
 	ins.ColVindexes = ks.Tables["t1"].ColumnVindexes
-	ins.Generate = &Generate{
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks2",
-			Sharded: false,
-		},
-		Query:  "dummy_generate",
-		Offset: 2,
-	}
 	ins.Prefix = "prefix "
 	ins.Suffix = " suffix"
 
@@ -2010,6 +2009,14 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
+	generate := &Generate{
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks2",
+			Sharded: false,
+		},
+		Query:  "dummy_generate",
+		Offset: 2,
+	}
 	rb := &Route{
 		Query:      "dummy_select",
 		FieldQuery: "dummy_field_query",
@@ -2021,17 +2028,9 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 		Keyspace:          ks.Keyspace,
 		Query:             "dummy_insert",
 		VindexValueOffset: [][]int{{1}}, // The primary vindex has a single column as sharding key
-		InsertRows:        NewInsertRowsFromSelect(nil, rb)}
+		InsertRows:        NewInsertRowsFromSelect(generate, rb)}
 
 	ins.ColVindexes = ks.Tables["t1"].ColumnVindexes
-	ins.Generate = &Generate{
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks2",
-			Sharded: false,
-		},
-		Query:  "dummy_generate",
-		Offset: 2,
-	}
 	ins.Prefix = "prefix "
 	ins.Suffix = " suffix"
 
