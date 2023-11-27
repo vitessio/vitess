@@ -17,6 +17,7 @@ limitations under the License.
 package schema
 
 import (
+	"regexp"
 	"testing"
 	"time"
 
@@ -64,6 +65,40 @@ func TestIsGCTableName(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("explicit regexp", func(t *testing.T) {
+		// NewGCTableNameExpression regexp is used externally by vreplication. Its a redundant form of
+		// InternalTableNameExpression, but is nonetheless required. We verify it works correctly
+		re := regexp.MustCompile(NewGCTableNameExpression)
+		t.Run("accept", func(t *testing.T) {
+			names := []string{
+				"_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+				"_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+				"_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+				"_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			}
+			for _, tableName := range names {
+				t.Run(tableName, func(t *testing.T) {
+					assert.True(t, IsGCTableName(tableName))
+					assert.True(t, re.MatchString(tableName))
+				})
+			}
+		})
+		t.Run("reject", func(t *testing.T) {
+			names := []string{
+				"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+				"_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+				"_vt_vrp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+				"_vt_gho_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			}
+			for _, tableName := range names {
+				t.Run(tableName, func(t *testing.T) {
+					assert.False(t, re.MatchString(tableName))
+				})
+			}
+		})
+	})
+
 }
 
 func TestAnalyzeGCTableName(t *testing.T) {
