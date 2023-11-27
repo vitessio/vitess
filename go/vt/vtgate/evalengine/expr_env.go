@@ -30,7 +30,7 @@ import (
 type VCursor interface {
 	TimeZone() *time.Location
 	GetKeyspace() string
-	AllowZeroDate() bool
+	SQLMode() string
 }
 
 type (
@@ -124,7 +124,11 @@ func NewExpressionEnv(ctx context.Context, bindVars map[string]*querypb.BindVari
 	env.user = callerid.ImmediateCallerIDFromContext(ctx)
 	env.SetTime(time.Now())
 	if vc != nil {
-		env.allowZeroDate = vc.AllowZeroDate()
+		env.allowZeroDate = AllowZeroDate(vc.SQLMode())
 	}
 	return env
+}
+
+func AllowZeroDate(sqlMode string) bool {
+	return !strings.Contains(sqlMode, "NO_ZERO_DATE")
 }

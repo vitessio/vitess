@@ -105,7 +105,7 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	err = c.coerceAndVisitResults(res, fields, func(result *sqltypes.Result) error {
 		rows = append(rows, result.Rows...)
 		return nil
-	}, vcursor.AllowZeroDate())
+	}, evalengine.AllowZeroDate(vcursor.SQLMode()))
 	if err != nil {
 		return nil, err
 	}
@@ -228,14 +228,14 @@ func (c *Concatenate) sequentialExec(ctx context.Context, vcursor VCursor, bindV
 
 // TryStreamExecute performs a streaming exec.
 func (c *Concatenate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
-	allowZeroDate := vcursor.AllowZeroDate()
+	zd := evalengine.AllowZeroDate(vcursor.SQLMode())
 	if vcursor.Session().InTransaction() {
 		// as we are in a transaction, we need to execute all queries inside a single connection,
 		// which holds the single transaction we have
-		return c.sequentialStreamExec(ctx, vcursor, bindVars, callback, allowZeroDate)
+		return c.sequentialStreamExec(ctx, vcursor, bindVars, callback, zd)
 	}
 	// not in transaction, so execute in parallel.
-	return c.parallelStreamExec(ctx, vcursor, bindVars, callback, allowZeroDate)
+	return c.parallelStreamExec(ctx, vcursor, bindVars, callback, zd)
 }
 
 func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, in func(*sqltypes.Result) error, allowZeroDate bool) error {
