@@ -33,7 +33,10 @@ import (
 
 func unicodeHash(hashFunc func([]byte) []byte, key sqltypes.Value) ([]byte, error) {
 	collator := collatorPool.Get().(*pooledCollator)
-	defer collatorPool.Put(collator)
+	defer func() {
+		collator.buf.Reset()
+		collatorPool.Put(collator)
+	}()
 
 	keyBytes, err := key.ToBytes()
 	if err != nil {
