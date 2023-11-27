@@ -1220,6 +1220,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vreplication_foreign_key_stress": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestFKExt"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_foreign_key_stress",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vreplication_across_db_versions": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestV2WorkflowsAcrossDBVersions", "-timeout", "20m"],

@@ -93,12 +93,16 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 	time.Sleep(15 * time.Second) // wait for some rows to be inserted.
 
 	createWorkflow := func(workflowName, tables string) {
-		mt := newMoveTables(vc, &moveTables{
-			workflowName:   workflowName,
-			targetKeyspace: targetKeyspace,
+		mt := newMoveTables(vc, &moveTablesWorkflow{
+			workflowInfo: &workflowInfo{
+				vc:             vc,
+				workflowName:   workflowName,
+				targetKeyspace: targetKeyspace,
+				tabletTypes:    "primary",
+			},
 			sourceKeyspace: sourceKeyspace,
 			tables:         tables,
-		}, moveTablesFlavorVtctld)
+		}, workflowFlavorVtctld)
 		mt.Create()
 		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 		catchup(t, targetTab, workflowName, "MoveTables")
