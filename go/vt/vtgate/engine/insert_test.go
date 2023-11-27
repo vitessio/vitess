@@ -1539,8 +1539,8 @@ func TestInsertSelectSimple(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := &Insert{
-		Opcode:            InsertSelect,
+	ins := &InsertSelect{
+		// Opcode:            InsertSelect,
 		Keyspace:          ks.Keyspace,
 		Query:             "dummy_insert",
 		VindexValueOffset: [][]int{{1}},
@@ -1632,8 +1632,8 @@ func TestInsertSelectOwned(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := &Insert{
-		Opcode:   InsertSelect,
+	ins := &InsertSelect{
+		// Opcode:   InsertSelect,
 		Keyspace: ks.Keyspace,
 		Query:    "dummy_insert",
 		VindexValueOffset: [][]int{
@@ -1728,8 +1728,8 @@ func TestInsertSelectGenerate(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	ins := NewInsert(
-		InsertSelect,
+	ins := NewInsertSelect(
+		0,
 		false,
 		ks.Keyspace,
 		nil,
@@ -1837,8 +1837,7 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := &Insert{
-		Opcode:   InsertSelect,
+	ins := &InsertSelect{
 		Keyspace: ks.Keyspace,
 		Query:    "dummy_insert",
 		VindexValueOffset: [][]int{
@@ -1933,8 +1932,7 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := &Insert{
-		Opcode:            InsertSelect,
+	ins := &InsertSelect{
 		Keyspace:          ks.Keyspace,
 		Query:             "dummy_insert",
 		VindexValueOffset: [][]int{{1}}, // The primary vindex has a single column as sharding key
@@ -2022,8 +2020,7 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := &Insert{
-		Opcode:            InsertSelect,
+	ins := &InsertSelect{
 		Keyspace:          ks.Keyspace,
 		Query:             "dummy_insert",
 		VindexValueOffset: [][]int{{1}}, // The primary vindex has a single column as sharding key
@@ -2112,8 +2109,7 @@ func TestInsertSelectUnowned(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := &Insert{
-		Opcode:            InsertSelect,
+	ins := &InsertSelect{
 		Keyspace:          ks.Keyspace,
 		Query:             "dummy_insert",
 		VindexValueOffset: [][]int{{0}}, // the onecol vindex as unowned lookup sharding column
@@ -2227,8 +2223,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		RoutingParameters: &RoutingParameters{Opcode: Unsharded, Keyspace: uks2.Keyspace}}
 
 	// sks1 and sks2
-	ins := &Insert{
-		Opcode:            InsertSelect,
+	ins := &InsertSelect{
 		Keyspace:          sks1.Keyspace,
 		Query:             "dummy_insert",
 		Prefix:            "prefix ",
@@ -2305,8 +2300,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
 
 	// uks1 and sks2
-	ins = &Insert{
-		Opcode:     InsertUnsharded,
+	ins = &InsertSelect{
 		Keyspace:   uks1.Keyspace,
 		Query:      "dummy_insert",
 		Prefix:     "prefix ",

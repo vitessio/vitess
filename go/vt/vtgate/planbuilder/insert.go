@@ -100,16 +100,18 @@ func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tabl
 }
 
 type insert struct {
-	eInsert *engine.Insert
-	source  logicalPlan
+	eInsert       *engine.Insert
+	eInsertSelect *engine.InsertSelect
+	source        logicalPlan
 }
 
 var _ logicalPlan = (*insert)(nil)
 
 func (i *insert) Primitive() engine.Primitive {
-	if i.source != nil {
-		input := i.source.Primitive()
-		i.eInsert.InsertRows.RowsFromSelect = input
+	if i.source == nil {
+		return i.eInsert
 	}
-	return i.eInsert
+	input := i.source.Primitive()
+	i.eInsertSelect.InsertRows.RowsFromSelect = input
+	return i.eInsertSelect
 }

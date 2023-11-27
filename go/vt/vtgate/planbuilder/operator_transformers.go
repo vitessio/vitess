@@ -110,18 +110,16 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 	}
 
 	ins := dmlOp.(*operators.Insert)
-	eins := &engine.Insert{
-		Opcode:            mapToInsertOpCode(rb.Routing.OpCode(), true),
+	eins := &engine.InsertSelect{
 		Keyspace:          rb.Routing.Keyspace(),
 		TableName:         ins.VTable.Name.String(),
 		InsertRows:        engine.NewInsertRows(autoIncGenerate(ins.AutoIncrement)),
 		Ignore:            ins.Ignore,
 		ForceNonStreaming: op.ForceNonStreaming,
 		ColVindexes:       ins.ColVindexes,
-		VindexValues:      ins.VindexValues,
 		VindexValueOffset: ins.VindexValueOffset,
 	}
-	lp := &insert{eInsert: eins}
+	lp := &insert{eInsertSelect: eins}
 
 	eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
 
@@ -578,9 +576,6 @@ func buildInsertLogicalPlan(
 func mapToInsertOpCode(code engine.Opcode, insertSelect bool) engine.InsertOpcode {
 	if code == engine.Unsharded {
 		return engine.InsertUnsharded
-	}
-	if insertSelect {
-		return engine.InsertSelect
 	}
 	return engine.InsertSharded
 }
