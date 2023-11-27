@@ -30,6 +30,7 @@ import (
 type VCursor interface {
 	TimeZone() *time.Location
 	GetKeyspace() string
+	AllowZeroDate() bool
 }
 
 type (
@@ -43,9 +44,10 @@ type (
 		Fields   []*querypb.Field
 
 		// internal state
-		now  time.Time
-		vc   VCursor
-		user *querypb.VTGateCallerID
+		now           time.Time
+		vc            VCursor
+		user          *querypb.VTGateCallerID
+		allowZeroDate bool
 	}
 )
 
@@ -121,5 +123,8 @@ func NewExpressionEnv(ctx context.Context, bindVars map[string]*querypb.BindVari
 	env := &ExpressionEnv{BindVars: bindVars, vc: vc}
 	env.user = callerid.ImmediateCallerIDFromContext(ctx)
 	env.SetTime(time.Now())
+	if vc != nil {
+		env.allowZeroDate = vc.AllowZeroDate()
+	}
 	return env
 }

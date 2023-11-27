@@ -135,6 +135,10 @@ func (t *noopVCursor) TimeZone() *time.Location {
 	return nil
 }
 
+func (t *noopVCursor) AllowZeroDate() bool {
+	return false
+}
+
 func (t *noopVCursor) ExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return primitive.TryExecute(ctx, t, bindVars, wantfields)
 }

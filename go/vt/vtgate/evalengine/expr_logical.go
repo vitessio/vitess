@@ -633,7 +633,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	if !matched {
 		return nil, nil
 	}
-	return evalCoerce(result, ta.result(), ca.result().Collation, env.now)
+	return evalCoerce(result, ta.result(), ca.result().Collation, env.now, env.allowZeroDate)
 }
 
 func (c *CaseExpr) constant() bool {
@@ -716,7 +716,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		f |= flagNullable
 	}
 	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result()}
-	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Col)
+	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Col, c.allowZeroDate)
 	return ct, nil
 }
 

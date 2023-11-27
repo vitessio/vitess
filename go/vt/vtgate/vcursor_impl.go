@@ -211,6 +211,11 @@ func (vc *vcursorImpl) TimeZone() *time.Location {
 	return vc.safeSession.TimeZone()
 }
 
+func (vc *vcursorImpl) AllowZeroDate() bool {
+	// TODO: Implement detecting zero date
+	return false
+}
+
 // MaxMemoryRows returns the maxMemoryRows flag value.
 func (vc *vcursorImpl) MaxMemoryRows() int {
 	return maxMemoryRows

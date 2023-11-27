@@ -105,7 +105,7 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	err = c.coerceAndVisitResults(res, fields, func(result *sqltypes.Result) error {
 		rows = append(rows, result.Rows...)
 		return nil
-	})
+	}, vcursor.AllowZeroDate())
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	}, nil
 }
 
-func (c *Concatenate) coerceValuesTo(row sqltypes.Row, fields []*querypb.Field) error {
+func (c *Concatenate) coerceValuesTo(row sqltypes.Row, fields []*querypb.Field, allowZeroDate bool) error {
 	if len(row) != len(fields) {
 		return errWrongNumberOfColumnsInSelect
 	}
@@ -126,7 +126,7 @@ func (c *Concatenate) coerceValuesTo(row sqltypes.Row, fields []*querypb.Field) 
 			continue
 		}
 		if fields[i].Type != value.Type() {
-			newValue, err := evalengine.CoerceTo(value, fields[i].Type)
+			newValue, err := evalengine.CoerceTo(value, fields[i].Type, allowZeroDate)
 			if err != nil {
 				return err
 			}
@@ -228,16 +228,17 @@ func (c *Concatenate) sequentialExec(ctx context.Context, vcursor VCursor, bindV
 
 // TryStreamExecute performs a streaming exec.
 func (c *Concatenate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
+	allowZeroDate := vcursor.AllowZeroDate()
 	if vcursor.Session().InTransaction() {
 		// as we are in a transaction, we need to execute all queries inside a single connection,
 		// which holds the single transaction we have
-		return c.sequentialStreamExec(ctx, vcursor, bindVars, callback)
+		return c.sequentialStreamExec(ctx, vcursor, bindVars, callback, allowZeroDate)
 	}
 	// not in transaction, so execute in parallel.
-	return c.parallelStreamExec(ctx, vcursor, bindVars, callback)
+	return c.parallelStreamExec(ctx, vcursor, bindVars, callback, allowZeroDate)
 }
 
-func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, in func(*sqltypes.Result) error) error {
+func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, in func(*sqltypes.Result) error, allowZeroDate bool) error {
 	// Scoped context; any early exit triggers cancel() to clean up ongoing work.
 	ctx, cancel := context.WithCancel(inCtx)
 	defer cancel()
@@ -271,7 +272,7 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 		// Apply type coercion if needed.
 		if needsCoercion {
 			for _, row := range res.Rows {
-				if err := c.coerceValuesTo(row, fields); err != nil {
+				if err := c.coerceValuesTo(row, fields, allowZeroDate); err != nil {
 					return err
 				}
 			}
@@ -340,7 +341,7 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 	return wg.Wait()
 }
 
-func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error, allowZeroDate bool) error {
 	// all the below fields ensure that the fields are sent only once.
 	results := make([][]*sqltypes.Result, len(c.Sources))
 
@@ -374,7 +375,7 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 		return err
 	}
 	for _, res := range results {
-		if err = c.coerceAndVisitResults(res, fields, callback); err != nil {
+		if err = c.coerceAndVisitResults(res, fields, callback, allowZeroDate); err != nil {
 			return err
 		}
 	}
@@ -386,6 +387,7 @@ func (c *Concatenate) coerceAndVisitResults(
 	res []*sqltypes.Result,
 	fields []*querypb.Field,
 	callback func(*sqltypes.Result) error,
+	allowZeroDate bool,
 ) error {
 	for _, r := range res {
 		if len(r.Rows) > 0 &&
@@ -402,7 +404,7 @@ func (c *Concatenate) coerceAndVisitResults(
 		}
 		if needsCoercion {
 			for _, row := range r.Rows {
-				err := c.coerceValuesTo(row, fields)
+				err := c.coerceValuesTo(row, fields, allowZeroDate)
 				if err != nil {
 					return err
 				}

@@ -215,6 +215,10 @@ func (vc *vcursor) TimeZone() *time.Location {
 	return time.Local
 }
 
+func (vc *vcursor) AllowZeroDate() bool {
+	return false
+}
+
 func initTimezoneData(t *testing.T, conn *mysql.Conn) {
 	// We load the timezone information into MySQL. The evalengine assumes
 	// our backend MySQL is configured with the timezone information as well

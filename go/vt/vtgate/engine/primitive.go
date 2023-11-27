@@ -88,6 +88,7 @@ type (
 
 		ConnCollation() collations.ID
 		TimeZone() *time.Location
+		AllowZeroDate() bool
 
 		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 
