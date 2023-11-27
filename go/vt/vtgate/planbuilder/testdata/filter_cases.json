@@ -1966,7 +1966,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where not :__sq_has_values and id not in ::__sq1",
+            "Query": "select id from `user` where not :__sq_has_values or id not in ::__sq1",
             "Table": "`user`"
           }
         ]
@@ -2503,7 +2503,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from `user` where 1 != 1",
-                "Query": "select id from `user` where not :__sq_has_values and id not in ::__sq1 and :__sq_has_values1 and id in ::__vals",
+                "Query": "select id from `user` where (not :__sq_has_values or id not in ::__sq1) and :__sq_has_values1 and id in ::__vals",
                 "Table": "`user`",
                 "Values": [
                   "::__sq2"
@@ -2950,7 +2950,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where id = 5 and id in (select user_extra.col from user_extra where user_extra.user_id = 5) and not :__sq_has_values and id not in ::__sq1",
+            "Query": "select id from `user` where id = 5 and id in (select user_extra.col from user_extra where user_extra.user_id = 5) and (not :__sq_has_values or id not in ::__sq1)",
             "Table": "`user`",
             "Values": [
               "INT64(5)"

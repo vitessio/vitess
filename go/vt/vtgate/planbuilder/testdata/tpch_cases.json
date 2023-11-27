@@ -1551,7 +1551,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select ps_suppkey, weight_string(ps_suppkey), ps_partkey from partsupp where 1 != 1",
-                            "Query": "select ps_suppkey, weight_string(ps_suppkey), ps_partkey from partsupp where not :__sq_has_values and ps_suppkey not in ::__sq1",
+                            "Query": "select ps_suppkey, weight_string(ps_suppkey), ps_partkey from partsupp where not :__sq_has_values or ps_suppkey not in ::__sq1",
                             "Table": "partsupp"
                           }
                         ]
