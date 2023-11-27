@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"sort"
@@ -56,6 +57,11 @@ const (
 	workflowStateTimeout = 90 * time.Second
 )
 
+func setSidecarDBName(dbName string) {
+	sidecarDBName = dbName
+	sidecarDBIdentifier = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
+}
+
 func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines string) {
 	queries := strings.Split(lines, "\n")
 	for _, query := range queries {
@@ -65,8 +71,35 @@ func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines 
 		execVtgateQuery(t, conn, database, string(query))
 	}
 }
+
+func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout time.Duration) *sqltypes.Result {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(defaultTick)
+	defer ticker.Stop()
+
+	var qr *sqltypes.Result
+	var err error
+	for {
+		qr, err = conn.ExecuteFetch(query, 1000, false)
+		if err == nil {
+			return qr
+		}
+		select {
+		case <-ctx.Done():
+			require.FailNow(t, fmt.Sprintf("query %q did not succeed before the timeout of %s; last seen result: %v",
+				query, timeout, qr.Rows))
+		case <-ticker.C:
+			log.Infof("query %q failed with error %v, retrying in %ds", query, err, defaultTick)
+		}
+	}
+}
+
 func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, false)
+	if err != nil {
+		log.Errorf("Error executing query: %s: %v", query, err)
+	}
 	require.NoError(t, err)
 	return qr
 }
@@ -79,7 +112,7 @@ func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 	}
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.NoErrorf(t, err, "error connecting to vtgate on %s:%d", hostname, port)
 	return conn
 }
 
@@ -92,6 +125,19 @@ func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query stri
 	}
 	execQuery(t, conn, "begin")
 	qr := execQuery(t, conn, query)
+	execQuery(t, conn, "commit")
+	return qr
+}
+
+func execVtgateQueryWithRetry(t *testing.T, conn *mysql.Conn, database string, query string, timeout time.Duration) *sqltypes.Result {
+	if strings.TrimSpace(query) == "" {
+		return nil
+	}
+	if database != "" {
+		execQuery(t, conn, "use `"+database+"`;")
+	}
+	execQuery(t, conn, "begin")
+	qr := execQueryWithRetry(t, conn, query, timeout)
 	execQuery(t, conn, "commit")
 	return qr
 }
@@ -703,6 +749,13 @@ func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool 
 	return mode == "noblob"
 }
 
+func getRowCount(t *testing.T, vtgateConn *mysql.Conn, table string) int {
+	query := fmt.Sprintf("select count(*) from %s", table)
+	qr := execVtgateQuery(t, vtgateConn, "", query)
+	numRows, _ := qr.Rows[0][0].ToInt()
+	return numRows
+}
+
 const (
 	loadTestBufferingWindowDurationStr = "30s"
 	loadTestPostBufferingInsertWindow  = 60 * time.Second // should be greater than loadTestBufferingWindowDurationStr
@@ -817,6 +870,40 @@ func (lg *loadGenerator) waitForCount(want int64) {
 				"loadtest", want, defaultTimeout, got))
 		default:
 			time.Sleep(defaultTick)
+		}
+	}
+}
+
+// appendToQueryLog is useful when debugging tests.
+func appendToQueryLog(msg string) {
+	file, err := os.OpenFile(queryLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Errorf("Error opening query log file: %v", err)
+		return
+	}
+	defer file.Close()
+	if _, err := file.WriteString(msg + "\n"); err != nil {
+		log.Errorf("Error writing to query log file: %v", err)
+	}
+}
+
+func waitForCondition(name string, condition func() bool, timeout time.Duration) error {
+	if condition() {
+		return nil
+	}
+
+	ticker := time.NewTicker(tickInterval)
+	defer ticker.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	for {
+		select {
+		case <-ticker.C:
+			if condition() {
+				return nil
+			}
+		case <-ctx.Done():
+			return fmt.Errorf("%s: waiting for %s", ctx.Err(), name)
 		}
 	}
 }

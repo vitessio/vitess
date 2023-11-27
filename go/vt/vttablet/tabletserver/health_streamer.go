@@ -50,8 +50,8 @@ import (
 )
 
 var (
-	// blpFunc is a legaacy feature.
-	// TODO(sougou): remove after legacy resharding worflows are removed.
+	// blpFunc is a legacy feature.
+	// TODO(sougou): remove after legacy resharding workflows are removed.
 	blpFunc = vreplication.StatusSummary
 
 	errUnintialized = "tabletserver uninitialized"

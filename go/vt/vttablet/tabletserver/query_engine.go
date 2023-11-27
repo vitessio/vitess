@@ -377,7 +377,7 @@ func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string) (*TabletPla
 	return plan, errNoCache
 }
 
-// GetPlan returns the TabletPlan that for the query. Plans are cached in a theine LRU cache.
+// GetPlan returns the TabletPlan that for the query. Plans are cached in an LRU cache.
 func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetPlan")
 	defer span.Finish()
@@ -424,7 +424,7 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 	return plan, errNoCache
 }
 
-// GetStreamPlan returns the TabletPlan that for the query. Plans are cached in a theine LRU cache.
+// GetStreamPlan returns the TabletPlan that for the query. Plans are cached in an LRU cache.
 func (qe *QueryEngine) GetStreamPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetStreamPlan")
 	defer span.Finish()

@@ -227,7 +227,7 @@ func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement
 
 	// Now, we can filter the foreign keys further based on the planning context, specifically whether we are running
 	// this query with FOREIGN_KEY_CHECKS off or not. If the foreign key checks are enabled, then we don't need to verify
-	// the validity of shard-scoped RESTRICT foreign keys, since MySQL will do that for us. Similarily, we don't need to verify
+	// the validity of shard-scoped RESTRICT foreign keys, since MySQL will do that for us. Similarly, we don't need to verify
 	// if the shard-scoped parent foreign key constraints are valid.
 	switch stmt.(type) {
 	case *sqlparser.Update, *sqlparser.Insert:

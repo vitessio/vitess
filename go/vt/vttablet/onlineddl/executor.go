@@ -76,7 +76,7 @@ var (
 )
 
 var (
-	// fixCompletedTimestampDone fixes a nil `completed_tiemstamp` columns, see
+	// fixCompletedTimestampDone fixes a nil `completed_timestamp` columns, see
 	// https://github.com/vitessio/vitess/issues/13927
 	// The fix is in release-18.0
 	// TODO: remove in release-19.0
@@ -238,7 +238,7 @@ func newGCTableRetainTime() time.Time {
 }
 
 // getMigrationCutOverThreshold returns the cut-over threshold for the given migration. The migration's
-// DDL Strategy may excplicitly set the threshold; otherwise, we return the default cut-over threshold.
+// DDL Strategy may explicitly set the threshold; otherwise, we return the default cut-over threshold.
 func getMigrationCutOverThreshold(onlineDDL *schema.OnlineDDL) time.Duration {
 	if threshold, _ := onlineDDL.StrategySetting().CutOverThreshold(); threshold != 0 {
 		return threshold
@@ -387,7 +387,7 @@ func (e *Executor) matchesShards(commaDelimitedShards string) bool {
 }
 
 // countOwnedRunningMigrations returns an estimate of current count of running migrations; this is
-// normally an accurate number, but can be inexact because the exdcutor peridocially reviews
+// normally an accurate number, but can be inexact because the executor periodically reviews
 // e.ownedRunningMigrations and adds/removes migrations based on actual migration state.
 func (e *Executor) countOwnedRunningMigrations() (count int) {
 	e.ownedRunningMigrations.Range(func(_, val any) bool {
@@ -546,7 +546,7 @@ func (e *Executor) readMySQLVariables(ctx context.Context) (variables *mysqlVari
 }
 
 // createOnlineDDLUser creates a gh-ost or pt-osc user account with all
-// neccessary privileges and with a random password
+// necessary privileges and with a random password
 func (e *Executor) createOnlineDDLUser(ctx context.Context) (password string, err error) {
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
 	if err != nil {
@@ -844,7 +844,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 			}
 			// This was a best effort optimization. Possibly the error is not nil. Which means we
 			// still have a record of the sentry table, and gcArtifacts() will still be able to take
-			// care of it in the futre.
+			// care of it in the future.
 		}()
 		parsed := sqlparser.BuildParsedQuery(sqlCreateSentryTable, sentryTableName)
 		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
@@ -904,7 +904,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	waitForRenameProcess := func() error {
 		// This function waits until it finds the RENAME TABLE... query running in MySQL's PROCESSLIST, or until timeout
 		// The function assumes that one of the renamed tables is locked, thus causing the RENAME to block. If nothing
-		// is locked, then the RENAME will be near-instantaneious and it's unlikely that the function will find it.
+		// is locked, then the RENAME will be near-instantaneous and it's unlikely that the function will find it.
 		renameWaitCtx, cancel := context.WithTimeout(ctx, migrationCutOverThreshold)
 		defer cancel()
 
@@ -1301,7 +1301,7 @@ func (e *Executor) duplicateCreateTable(ctx context.Context, onlineDDL *schema.O
 
 // createDuplicateTableLike creates the table named by `newTableName` in the likeness of onlineDDL.Table
 // This function emulates MySQL's `CREATE TABLE LIKE ...` statement. The difference is that this function takes control over the generated CONSTRAINT names,
-// if any, such that they are detrministic across shards, as well as preserve original names where possible.
+// if any, such that they are deterministic across shards, as well as preserve original names where possible.
 func (e *Executor) createDuplicateTableLike(ctx context.Context, newTableName string, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (
 	originalShowCreateTable string,
 	constraintMap map[string]string,
@@ -1880,7 +1880,7 @@ export MYSQL_PWD
 	// The following sleep() is temporary and artificial. Because we create a new user for this
 	// migration, and because we throttle by replicas, we need to wait for the replicas to be
 	// caught up with the new user creation. Otherwise, the OSC tools will fail connecting to the replicas...
-	// Once we have a built in throttling service , we will no longe rneed to have the OSC tools probe the
+	// Once we have a built in throttling service , we will no longer need to have the OSC tools probe the
 	// replicas. Instead, they will consult with our throttling service.
 	// TODO(shlomi): replace/remove this when we have a proper throttling solution
 	time.Sleep(time.Second)
@@ -2229,7 +2229,7 @@ func (e *Executor) UnthrottleAllMigrations(ctx context.Context) (result *sqltype
 	return emptyResult, nil
 }
 
-// scheduleNextMigration attemps to schedule a single migration to run next.
+// scheduleNextMigration attempts to schedule a single migration to run next.
 // possibly there are migrations to run.
 // The effect of this function is to move a migration from 'queued' state to 'ready' state, is all.
 func (e *Executor) scheduleNextMigration(ctx context.Context) error {
@@ -2257,7 +2257,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 		if !readyToComplete {
 			// see if we need to update ready_to_complete
 			if isImmediateOperation {
-				// Whether postponsed or not, CREATE and DROP operations, as well as VIEW operations,
+				// Whether postponed or not, CREATE and DROP operations, as well as VIEW operations,
 				// are inherently "ready to complete" because their operation is immediate.
 				if err := e.updateMigrationReadyToComplete(ctx, uuid, true); err != nil {
 					return err
@@ -2364,7 +2364,7 @@ func (e *Executor) reviewImmediateOperations(ctx context.Context, capableOf mysq
 
 // reviewQueuedMigration investigates a single migration found in `queued` state.
 // It analyzes whether the migration can & should be fulfilled immediately (e.g. via INSTANT DDL or just because it's a CREATE or DROP),
-// or backfils necessary information if it's a REVERT.
+// or backfills necessary information if it's a REVERT.
 // If all goes well, it sets `reviewed_timestamp` which then allows the state machine to schedule the migration.
 func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capableOf mysql.CapableOf) error {
 	onlineDDL, row, err := e.readMigration(ctx, uuid)
@@ -2702,7 +2702,7 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 	return diff, nil
 }
 
-// getCompletedMigrationByContextAndSQL chceks if there exists a completed migration with exact same
+// getCompletedMigrationByContextAndSQL checks if there exists a completed migration with exact same
 // context and SQL as given migration. If so, it returns its UUID.
 func (e *Executor) getCompletedMigrationByContextAndSQL(ctx context.Context, onlineDDL *schema.OnlineDDL) (completedUUID string, err error) {
 	if onlineDDL.MigrationContext == "" {
@@ -3210,7 +3210,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			if exists {
 				// table does exist, so this declarative DROP turns out to really be an actual DROP. No further action is needed here
 			} else {
-				// table does not exist. We mark this DROP as implicitly sucessful
+				// table does not exist. We mark this DROP as implicitly successful
 				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "no change")
 				return nil
@@ -3243,7 +3243,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 					return failMigration(err)
 				}
 				if diff == nil || diff.IsEmpty() {
-					// No diff! We mark this CREATE as implicitly sucessful
+					// No diff! We mark this CREATE as implicitly successful
 					_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 					_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "no change")
 					return nil
@@ -3507,7 +3507,7 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, onlineDDL
 		}
 	}
 	{
-		// Both time_updated and transaction_timestamp must be in close priximity to each
+		// Both time_updated and transaction_timestamp must be in close proximity to each
 		// other and to the time now, otherwise that means we're lagging and it's not a good time
 		// to cut-over
 		durationDiff := func(t1, t2 time.Time) time.Duration {
@@ -3629,7 +3629,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// This VRepl migration may have started from outside this tablet, so
 					// this executor may not own the migration _yet_. We make sure to own it.
 					// VReplication migrations are unique in this respect: we are able to complete
-					// a vreplicaiton migration started by another tablet.
+					// a vreplication migration started by another tablet.
 					e.ownedRunningMigrations.Store(uuid, onlineDDL)
 					if lastVitessLivenessIndicator := migrationRow.AsInt64("vitess_liveness_indicator", 0); lastVitessLivenessIndicator < s.livenessTimeIndicator() {
 						_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
@@ -3720,7 +3720,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		countRunnning++
 	}
 	{
-		// now, let's look at UUIDs we own and _think_ should be running, and see which of tham _isn't_ actually running or pending...
+		// now, let's look at UUIDs we own and _think_ should be running, and see which of them _isn't_ actually running or pending...
 		uuidsFoundPending := map[string]bool{}
 		for _, uuid := range pendingMigrationsUUIDs {
 			uuidsFoundPending[uuid] = true
@@ -3873,7 +3873,7 @@ func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid stri
 	// The fact we're here means the table is not needed anymore. We can throw it away.
 	// We do so by renaming it into a GC table. We use the HOLD state and with a timestamp that is
 	// in the past. So as we rename the table:
-	// - The Online DDL executor compeltely loses it and has no more access to its data
+	// - The Online DDL executor completely loses it and has no more access to its data
 	// - TableGC will find it on next iteration, see that it's been on HOLD "long enough", and will
 	//   take it from there to transition it into PURGE or EVAC, or DROP, and eventually drop it.
 	renameStatement, toTableName, err := schema.GenerateRenameStatementWithUUID(artifactTable, schema.HoldTableGCState, schema.OnlineDDLToGCUUID(uuid), t)
@@ -4648,7 +4648,7 @@ func (e *Executor) submittedMigrationConflictsWithPendingMigrationInSingletonCon
 	return true
 }
 
-// submitCallbackIfNonConflicting is called internally by SubmitMigration, and is given a callack to execute
+// submitCallbackIfNonConflicting is called internally by SubmitMigration, and is given a callback to execute
 // if the given migration does not conflict any terms. Specifically, this function looks for singleton or
 // singleton-context conflicts.
 // The call back can be an insertion of a new migration, or a retry of an existing migration, or whatnot.
@@ -4754,10 +4754,10 @@ func (e *Executor) SubmitMigration(
 		// So we will _mostly_ ignore the request: we will not submit a new migration. However, we will do
 		// these things:
 
-		// 1. Check that the requested submmited migration macthes the existing one's migration-context, otherwise
+		// 1. Check that the requested submitted migration matches the existing one's migration-context, otherwise
 		//    this doesn't seem right, not the idempotency we were looking for
 		if storedMigration.MigrationContext != onlineDDL.MigrationContext {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "migration rejected: found migration %s with different context: %s than submmitted migration's context: %s", onlineDDL.UUID, storedMigration.MigrationContext, onlineDDL.MigrationContext)
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "migration rejected: found migration %s with different context: %s than submitted migration's context: %s", onlineDDL.UUID, storedMigration.MigrationContext, onlineDDL.MigrationContext)
 		}
 		// 2. Possibly, the existing migration is in 'failed' or 'cancelled' state, in which case this
 		//    resubmission should retry the migration.

@@ -117,7 +117,7 @@ func TestTxLimiter_LimitsOnlyOffendingUser(t *testing.T) {
 		t.Errorf("Get(im1, ef1) after releasing: got %v, want %v", got, want)
 	}
 
-	// Rejection coutner for user 1 should still be 1.
+	// Rejection count for user 1 should still be 1.
 	if got, want := limiter.rejections.Counts()[key1], int64(1); got != want {
 		t.Errorf("Rejections count for %s: got %d, want %d", key1, got, want)
 	}

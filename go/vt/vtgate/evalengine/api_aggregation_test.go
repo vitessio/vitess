@@ -73,6 +73,12 @@ func TestMinMax(t *testing.T) {
 			max:    sqltypes.NewVarBinary("b"),
 		},
 		{
+			type_:  sqltypes.Decimal,
+			values: []sqltypes.Value{sqltypes.NewDecimal("1.001"), sqltypes.NewDecimal("2.1")},
+			min:    sqltypes.NewDecimal("1.001"),
+			max:    sqltypes.NewDecimal("2.1"),
+		},
+		{
 			// accent insensitive
 			type_: sqltypes.VarChar,
 			coll:  getCollationID("utf8mb4_0900_as_ci"),

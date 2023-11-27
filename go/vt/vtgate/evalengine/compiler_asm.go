@@ -516,7 +516,7 @@ func (asm *assembler) Cmp_ne_n() {
 	}, "CMPFLAG NE [NULL]")
 }
 
-func (asm *assembler) CmpCase(cases int, hasElse bool, tt sqltypes.Type, cc collations.TypedCollation) {
+func (asm *assembler) CmpCase(cases int, hasElse bool, tt sqltypes.Type, cc collations.TypedCollation, allowZeroDate bool) {
 	elseOffset := 0
 	if hasElse {
 		elseOffset = 1
@@ -529,12 +529,12 @@ func (asm *assembler) CmpCase(cases int, hasElse bool, tt sqltypes.Type, cc coll
 		end := env.vm.sp - elseOffset
 		for sp := env.vm.sp - stackDepth; sp < end; sp += 2 {
 			if env.vm.stack[sp] != nil && env.vm.stack[sp].(*evalInt64).i != 0 {
-				env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[sp+1], tt, cc.Collation, env.now)
+				env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[sp+1], tt, cc.Collation, env.now, allowZeroDate)
 				goto done
 			}
 		}
 		if elseOffset != 0 {
-			env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[env.vm.sp-1], tt, cc.Collation, env.now)
+			env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[env.vm.sp-1], tt, cc.Collation, env.now, allowZeroDate)
 		} else {
 			env.vm.stack[env.vm.sp-stackDepth] = nil
 		}
@@ -1126,12 +1126,12 @@ func (asm *assembler) Convert_xu(offset int) {
 	}, "CONV (SP-%d), UINT64", offset)
 }
 
-func (asm *assembler) Convert_xD(offset int) {
+func (asm *assembler) Convert_xD(offset int, allowZero bool) {
 	asm.emit(func(env *ExpressionEnv) int {
 		// Need to explicitly check here or we otherwise
 		// store a nil wrapper in an interface vs. a direct
 		// nil.
-		d := evalToDate(env.vm.stack[env.vm.sp-offset], env.now)
+		d := evalToDate(env.vm.stack[env.vm.sp-offset], env.now, allowZero)
 		if d == nil {
 			env.vm.stack[env.vm.sp-offset] = nil
 		} else {
@@ -1141,27 +1141,12 @@ func (asm *assembler) Convert_xD(offset int) {
 	}, "CONV (SP-%d), DATE", offset)
 }
 
-func (asm *assembler) Convert_xD_nz(offset int) {
+func (asm *assembler) Convert_xDT(offset, prec int, allowZero bool) {
 	asm.emit(func(env *ExpressionEnv) int {
 		// Need to explicitly check here or we otherwise
 		// store a nil wrapper in an interface vs. a direct
 		// nil.
-		d := evalToDate(env.vm.stack[env.vm.sp-offset], env.now)
-		if d == nil || d.isZero() {
-			env.vm.stack[env.vm.sp-offset] = nil
-		} else {
-			env.vm.stack[env.vm.sp-offset] = d
-		}
-		return 1
-	}, "CONV (SP-%d), DATE(NOZERO)", offset)
-}
-
-func (asm *assembler) Convert_xDT(offset, prec int) {
-	asm.emit(func(env *ExpressionEnv) int {
-		// Need to explicitly check here or we otherwise
-		// store a nil wrapper in an interface vs. a direct
-		// nil.
-		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset], prec, env.now)
+		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset], prec, env.now, allowZero)
 		if dt == nil {
 			env.vm.stack[env.vm.sp-offset] = nil
 		} else {
@@ -1169,21 +1154,6 @@ func (asm *assembler) Convert_xDT(offset, prec int) {
 		}
 		return 1
 	}, "CONV (SP-%d), DATETIME", offset)
-}
-
-func (asm *assembler) Convert_xDT_nz(offset, prec int) {
-	asm.emit(func(env *ExpressionEnv) int {
-		// Need to explicitly check here or we otherwise
-		// store a nil wrapper in an interface vs. a direct
-		// nil.
-		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset], prec, env.now)
-		if dt == nil || dt.isZero() {
-			env.vm.stack[env.vm.sp-offset] = nil
-		} else {
-			env.vm.stack[env.vm.sp-offset] = dt
-		}
-		return 1
-	}, "CONV (SP-%d), DATETIME(NOZERO)", offset)
 }
 
 func (asm *assembler) Convert_xT(offset, prec int) {
@@ -4189,7 +4159,7 @@ func (asm *assembler) Fn_DATEADD_s(unit datetime.IntervalType, sub bool, col col
 			goto baddate
 		}
 
-		tmp = evalToTemporal(env.vm.stack[env.vm.sp-2])
+		tmp = evalToTemporal(env.vm.stack[env.vm.sp-2], true)
 		if tmp == nil {
 			goto baddate
 		}

@@ -81,7 +81,7 @@ func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query s
 	// Rotating the log when it's above a certain size ensures that we are processing
 	// a relatively small binary log that will be minimal in size and GTID events.
 	// We only attempt to rotate it if the current log is of any significant size to
-	// avoid too many unecessary rotations.
+	// avoid too many unnecessary rotations.
 	if rotatedLog, err = conn.limitOpenBinlogSize(); err != nil {
 		// This is a best effort operation meant to lower overhead and improve performance.
 		// Thus it should not be required, nor cause the operation to fail.
@@ -172,7 +172,7 @@ func (conn *snapshotConn) startSnapshotWithConsistentGTID(ctx context.Context) (
 	return replication.EncodePosition(mpos), nil
 }
 
-// Close rollsback any open transactions and closes the connection.
+// Close rolls back any open transactions and closes the connection.
 func (conn *snapshotConn) Close() {
 	_, _ = conn.ExecuteFetch("rollback", 1, false)
 	conn.Conn.Close()

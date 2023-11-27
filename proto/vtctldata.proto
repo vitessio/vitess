@@ -1725,6 +1725,7 @@ message VDiffCreateRequest {
   vttime.Duration wait_update_interval = 16;
   bool auto_retry = 17;
   bool verbose = 18;
+  int64 max_report_sample_rows = 19;
 }
 
 message VDiffCreateResponse {

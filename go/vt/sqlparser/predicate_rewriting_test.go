@@ -141,6 +141,18 @@ func TestRewritePredicate(in *testing.T) {
 		in:       "a = 1 and b = 41 or a = 2 and b = 42 or a = 3 and b = 43 or a = 4 and b = 44 or a = 5 and b = 45 or a = 6 and b = 46",
 		expected: "a = 1 and b = 41 or a = 2 and b = 42 or a = 3 and b = 43 or a = 4 and b = 44 or a = 5 and b = 45 or a = 6 and b = 46",
 	}, {
+		in:       "a = 5 and B or a = 6 and C",
+		expected: "a in (5, 6) and (a = 5 or C) and ((B or a = 6) and (B or C))",
+	}, {
+		in:       "(a = 5 and b = 1 or b = 2 and a = 6)",
+		expected: "(a = 5 or b = 2) and a in (5, 6) and (b in (1, 2) and (b = 1 or a = 6))",
+	}, {
+		in:       "(a in (1,5) and B or C and a = 6)",
+		expected: "(a in (1, 5) or C) and a in (1, 5, 6) and ((B or C) and (B or a = 6))",
+	}, {
+		in:       "(a in (1, 5) and B or C and a in (5, 7))",
+		expected: "(a in (1, 5) or C) and a in (1, 5, 7) and ((B or C) and (B or a in (5, 7)))",
+	}, {
 		in:       "not n0 xor not (n2 and n3) xor (not n2 and (n1 xor n1) xor (n0 xor n0 xor n2))",
 		expected: "not n0 xor not (n2 and n3) xor (not n2 and (n1 xor n1) xor (n0 xor n0 xor n2))",
 	}}
@@ -161,26 +173,11 @@ func TestExtractINFromOR(in *testing.T) {
 		in       string
 		expected string
 	}{{
-		in:       "(A and B) or (B and A)",
-		expected: "<nil>",
+		in:       "a = 1 and b = 41 or a = 2 and b = 42 or a = 3 and b = 43 or a = 4 and b = 44 or a = 5 and b = 45 or a = 6 and b = 46",
+		expected: "(a, b) in ((1, 41), (2, 42), (3, 43), (4, 44), (5, 45), (6, 46))",
 	}, {
-		in:       "(a = 5 and B) or A",
-		expected: "<nil>",
-	}, {
-		in:       "a = 5 and B or a = 6 and C",
-		expected: "a in (5, 6)",
-	}, {
-		in:       "(a = 5 and b = 1 or b = 2 and a = 6)",
-		expected: "a in (5, 6) and b in (1, 2)",
-	}, {
-		in:       "(a in (1,5) and B or C and a = 6)",
-		expected: "a in (1, 5, 6)",
-	}, {
-		in:       "(a in (1, 5) and B or C and a in (5, 7))",
-		expected: "a in (1, 5, 7)",
-	}, {
-		in:       "(a = 5 and b = 1 or b = 2 and a = 6 or b = 3 and a = 4)",
-		expected: "<nil>",
+		in:       "a = 1 or a = 2 or a = 3 or a = 4 or a = 5 or a = 6",
+		expected: "(a) in ((1), (2), (3), (4), (5), (6))",
 	}}
 
 	for _, tc := range tests {

@@ -435,7 +435,7 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 		if session.queryFromVindex {
 			break
 		}
-		// isSingle is enforced only for normmal commit order operations.
+		// isSingle is enforced only for normal commit order operations.
 		if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
 			count := actualNoOfShardSession(session.ShardSessions)
 			if count <= 1 {

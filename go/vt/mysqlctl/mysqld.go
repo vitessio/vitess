@@ -438,14 +438,16 @@ func cleanupLockfile(socket string, ts string) error {
 	lockPath := fmt.Sprintf("%s.lock", socket)
 	pid, err := os.ReadFile(lockPath)
 	if errors.Is(err, os.ErrNotExist) {
+		log.Infof("%v: no stale lock file at %s", ts, lockPath)
 		// If there's no lock file, we can early return here, nothing
 		// to clean up then.
 		return nil
 	} else if err != nil {
+		log.Errorf("%v: error checking if lock file exists: %v", ts, err)
 		// Any other errors here are unexpected.
 		return err
 	}
-	p, err := strconv.Atoi(string(pid))
+	p, err := strconv.Atoi(string(bytes.TrimSpace(pid)))
 	if err != nil {
 		log.Errorf("%v: error parsing pid from lock file: %v", ts, err)
 		return err

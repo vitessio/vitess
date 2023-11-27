@@ -1049,7 +1049,7 @@ func (ins *Insert) executeUnshardedTableQuery(ctx context.Context, vcursor VCurs
 		return 0, nil, err
 	}
 
-	// If processGenerateFromValues generated new values, it supercedes
+	// If processGenerateFromValues generated new values, it supersedes
 	// any ids that MySQL might have generated. If both generated
 	// values, we don't return an error because this behavior
 	// is required to support migration.

@@ -121,7 +121,7 @@ type stateManager struct {
 	throttler   lagThrottler
 	tableGC     tableGarbageCollector
 
-	// hcticks starts on initialiazation and runs forever.
+	// hcticks starts on initialization and runs forever.
 	hcticks *timer.Timer
 
 	// checkMySQLThrottler ensures that CheckMysql
