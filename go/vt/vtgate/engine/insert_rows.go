@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -127,7 +128,7 @@ func (ir *InsertRows) processGenerateFromSelect(
 	genColPresent := offset < len(rows[0])
 	if genColPresent {
 		for _, row := range rows {
-			if shouldGenerate(row[offset]) {
+			if shouldGenerate(row[offset], evalengine.ParseSQLMode(vcursor.SQLMode())) {
 				count++
 			}
 		}
@@ -147,7 +148,7 @@ func (ir *InsertRows) processGenerateFromSelect(
 	used := insertID
 	for idx, val := range rows {
 		if genColPresent {
-			if shouldGenerate(val[offset]) {
+			if shouldGenerate(val[offset], evalengine.ParseSQLMode(vcursor.SQLMode())) {
 				val[offset] = sqltypes.NewInt64(used)
 				used++
 			}
@@ -182,7 +183,7 @@ func (ir *InsertRows) processGenerateFromValues(
 	count := int64(0)
 	values := resolved.TupleValues()
 	for _, val := range values {
-		if shouldGenerate(val) {
+		if shouldGenerate(val, evalengine.ParseSQLMode(vcursor.SQLMode())) {
 			count++
 		}
 	}
@@ -198,7 +199,7 @@ func (ir *InsertRows) processGenerateFromValues(
 	// Fill the holes where no value was supplied.
 	cur := insertID
 	for i, v := range values {
-		if shouldGenerate(v) {
+		if shouldGenerate(v, evalengine.ParseSQLMode(vcursor.SQLMode())) {
 			bindVars[SeqVarName+strconv.Itoa(i)] = sqltypes.Int64BindVariable(cur)
 			cur++
 		} else {
@@ -228,14 +229,14 @@ func (ir *InsertRows) execGenerate(ctx context.Context, vcursor VCursor, count i
 }
 
 // shouldGenerate determines if a sequence value should be generated for a given value
-func shouldGenerate(v sqltypes.Value) bool {
+func shouldGenerate(v sqltypes.Value, sqlmode evalengine.SQLMode) bool {
 	if v.IsNull() {
 		return true
 	}
 
 	// Unless the NO_AUTO_VALUE_ON_ZERO sql mode is active in mysql, it also
 	// treats 0 as a value that should generate a new sequence.
-	value, err := evalengine.CoerceTo(v, sqltypes.Uint64)
+	value, err := evalengine.CoerceTo(v, sqltypes.Uint64, sqlmode)
 	if err != nil {
 		return false
 	}
@@ -246,4 +247,15 @@ func shouldGenerate(v sqltypes.Value) bool {
 	}
 
 	return id == 0
+}
+
+func (ir *InsertRows) describe(other map[string]any) {
+	if ir == nil || ir.Generate == nil {
+		return
+	}
+	if ir.Generate.Values == nil {
+		other["AutoIncrement"] = fmt.Sprintf("%s:Offset(%d)", ir.Generate.Query, ir.Generate.Offset)
+	} else {
+		other["AutoIncrement"] = fmt.Sprintf("%s:Values::%s", ir.Generate.Query, sqlparser.String(ir.Generate.Values))
+	}
 }

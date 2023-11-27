@@ -39,8 +39,7 @@ import (
 var _ Primitive = (*Insert)(nil)
 
 type (
-	// Insert represents the instructions to perform an insert operation.
-	Insert struct {
+	InsertCommon struct {
 		// Opcode is the execution opcode.
 		Opcode InsertOpcode
 
@@ -53,6 +52,14 @@ type (
 
 		// TableName is the name of the table on which row will be inserted.
 		TableName string
+
+		// Insert needs tx handling
+		txNeeded
+	}
+
+	// Insert represents the instructions to perform an insert operation.
+	Insert struct {
+		*InsertCommon
 
 		// Query specifies the query to be executed.
 		// For InsertSharded plans, this value is unused,
@@ -93,9 +100,6 @@ type (
 		ForceNonStreaming bool
 
 		PreventAutoCommit bool
-
-		// Insert needs tx handling
-		txNeeded
 	}
 
 	ksID = []byte
@@ -108,8 +112,10 @@ func (ins *Insert) Inputs() ([]Primitive, []map[string]any) {
 // NewQueryInsert creates an Insert with a query string.
 func NewQueryInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, query string) *Insert {
 	return &Insert{
-		Opcode:     opcode,
-		Keyspace:   keyspace,
+		InsertCommon: &InsertCommon{
+			Opcode:   opcode,
+			Keyspace: keyspace,
+		},
 		Query:      query,
 		InsertRows: NewInsertRows(nil),
 	}
@@ -127,9 +133,11 @@ func NewInsert(
 	suffix string,
 ) *Insert {
 	ins := &Insert{
-		Opcode:       opcode,
-		Ignore:       ignore,
-		Keyspace:     keyspace,
+		InsertCommon: &InsertCommon{
+			Opcode:   opcode,
+			Keyspace: keyspace,
+			Ignore:   ignore,
+		},
 		InsertRows:   NewInsertRows(nil),
 		VindexValues: vindexValues,
 		Prefix:       prefix,
@@ -654,13 +662,7 @@ func (ins *Insert) description() PrimitiveDescription {
 		other["VindexValues"] = valuesOffsets
 	}
 
-	if ins.InsertRows.Generate != nil {
-		if ins.InsertRows.Generate.Values == nil {
-			other["AutoIncrement"] = fmt.Sprintf("%s:Offset(%d)", ins.InsertRows.Generate.Query, ins.InsertRows.Generate.Offset)
-		} else {
-			other["AutoIncrement"] = fmt.Sprintf("%s:Values::%s", ins.InsertRows.Generate.Query, sqlparser.String(ins.InsertRows.Generate.Values))
-		}
-	}
+	ins.InsertRows.describe(other)
 
 	if len(ins.Mid) > 0 {
 		mids := slice.Map(ins.Mid, func(from sqlparser.ValTuple) string {

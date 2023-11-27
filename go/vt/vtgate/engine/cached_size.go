@@ -386,12 +386,10 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(192)
+		size += int64(160)
 	}
-	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
-	size += cached.Keyspace.CachedSize(true)
-	// field TableName string
-	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
+	// field InsertCommon *vitess.io/vitess/go/vt/vtgate/engine.InsertCommon
+	size += cached.InsertCommon.CachedSize(true)
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
 	// field InsertRows *vitess.io/vitess/go/vt/vtgate/engine.InsertRows
@@ -442,6 +440,20 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Suffix)))
 	return size
 }
+func (cached *InsertCommon) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
+	size += cached.Keyspace.CachedSize(true)
+	// field TableName string
+	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
+	return size
+}
 func (cached *InsertRows) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -478,12 +490,10 @@ func (cached *InsertSelect) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(192)
+		size += int64(144)
 	}
-	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
-	size += cached.Keyspace.CachedSize(true)
-	// field TableName string
-	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
+	// field InsertCommon *vitess.io/vitess/go/vt/vtgate/engine.InsertCommon
+	size += cached.InsertCommon.CachedSize(true)
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
 	// field InsertRows *vitess.io/vitess/go/vt/vtgate/engine.InsertRows
@@ -506,20 +516,6 @@ func (cached *InsertSelect) CachedSize(alloc bool) int64 {
 	}
 	// field Prefix string
 	size += hack.RuntimeAllocSize(int64(len(cached.Prefix)))
-	// field Mid vitess.io/vitess/go/vt/sqlparser.Values
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Mid)) * int64(24))
-		for _, elem := range cached.Mid {
-			{
-				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(16))
-				for _, elem := range elem {
-					if cc, ok := elem.(cachedObject); ok {
-						size += cc.CachedSize(true)
-					}
-				}
-			}
-		}
-	}
 	// field Suffix string
 	size += hack.RuntimeAllocSize(int64(len(cached.Suffix)))
 	return size

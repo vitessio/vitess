@@ -111,17 +111,19 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 
 	ins := dmlOp.(*operators.Insert)
 	eins := &engine.InsertSelect{
-		Keyspace:          rb.Routing.Keyspace(),
-		TableName:         ins.VTable.Name.String(),
+		InsertCommon: &engine.InsertCommon{
+			Keyspace:  rb.Routing.Keyspace(),
+			TableName: ins.VTable.Name.String(),
+			Ignore:    ins.Ignore,
+		},
 		InsertRows:        engine.NewInsertRows(autoIncGenerate(ins.AutoIncrement)),
-		Ignore:            ins.Ignore,
 		ForceNonStreaming: op.ForceNonStreaming,
 		ColVindexes:       ins.ColVindexes,
 		VindexValueOffset: ins.VindexValueOffset,
 	}
 	lp := &insert{eInsertSelect: eins}
 
-	eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
+	eins.Prefix, _, eins.Suffix = generateInsertShardedQuery(ins.AST)
 
 	selectionPlan, err := transformToLogicalPlan(ctx, op.Select)
 	if err != nil {
@@ -547,10 +549,12 @@ func buildInsertLogicalPlan(
 ) (logicalPlan, error) {
 	ins := op.(*operators.Insert)
 	eins := &engine.Insert{
-		Opcode:       mapToInsertOpCode(rb.Routing.OpCode(), false),
-		Keyspace:     rb.Routing.Keyspace(),
-		TableName:    ins.VTable.Name.String(),
-		Ignore:       ins.Ignore,
+		InsertCommon: &engine.InsertCommon{
+			Opcode:    mapToInsertOpCode(rb.Routing.OpCode(), false),
+			Keyspace:  rb.Routing.Keyspace(),
+			TableName: ins.VTable.Name.String(),
+			Ignore:    ins.Ignore,
+		},
 		InsertRows:   engine.NewInsertRows(autoIncGenerate(ins.AutoIncrement)),
 		ColVindexes:  ins.ColVindexes,
 		VindexValues: ins.VindexValues,

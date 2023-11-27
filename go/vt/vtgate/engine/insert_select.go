@@ -21,10 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 
-	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -41,16 +39,7 @@ var _ Primitive = (*InsertSelect)(nil)
 type (
 	// InsertSelect represents the instructions to perform an insert operation.
 	InsertSelect struct {
-
-		// Keyspace specifies the keyspace to send the query to.
-		Keyspace *vindexes.Keyspace
-
-		// Ignore is for INSERT IGNORE and INSERT...ON DUPLICATE KEY constructs
-		// for sharded cases.
-		Ignore bool
-
-		// TableName is the name of the table on which row will be inserted.
-		TableName string
+		*InsertCommon
 
 		// Query specifies the query to be executed.
 		// For InsertSharded plans, this value is unused,
@@ -68,7 +57,6 @@ type (
 
 		// Prefix, Mid and Suffix are for sharded insert plans.
 		Prefix string
-		Mid    sqlparser.Values
 		Suffix string
 
 		// Option to override the standard behavior and allow a multi-shard insert
@@ -104,16 +92,21 @@ func NewInsertSelect(
 	keyspace *vindexes.Keyspace,
 	table *vindexes.Table,
 	prefix string,
-	mid sqlparser.Values,
 	suffix string,
+	vv [][]int,
+	query string,
+	ir *InsertRows,
 ) *InsertSelect {
 	ins := &InsertSelect{
-		Ignore:     ignore,
-		Keyspace:   keyspace,
-		InsertRows: NewInsertRows(nil),
-		Prefix:     prefix,
-		Mid:        mid,
-		Suffix:     suffix,
+		InsertCommon: &InsertCommon{
+			Ignore:   ignore,
+			Keyspace: keyspace,
+		},
+		InsertRows:        ir,
+		Prefix:            prefix,
+		Suffix:            suffix,
+		VindexValueOffset: vv,
+		Query:             query,
 	}
 	if table != nil {
 		ins.TableName = table.Name.String()
@@ -546,13 +539,7 @@ func (ins *InsertSelect) description() PrimitiveDescription {
 		"NoAutoCommit":         ins.PreventAutoCommit,
 	}
 
-	if ins.InsertRows.Generate != nil {
-		if ins.InsertRows.Generate.Values == nil {
-			other["AutoIncrement"] = fmt.Sprintf("%s:Offset(%d)", ins.InsertRows.Generate.Query, ins.InsertRows.Generate.Offset)
-		} else {
-			other["AutoIncrement"] = fmt.Sprintf("%s:Values::%s", ins.InsertRows.Generate.Query, sqlparser.String(ins.InsertRows.Generate.Values))
-		}
-	}
+	ins.InsertRows.describe(other)
 
 	if len(ins.VindexValueOffset) > 0 {
 		valuesOffsets := map[string]string{}
@@ -566,15 +553,7 @@ func (ins *InsertSelect) description() PrimitiveDescription {
 		}
 		other["VindexOffsetFromSelect"] = valuesOffsets
 	}
-	if len(ins.Mid) > 0 {
-		mids := slice.Map(ins.Mid, func(from sqlparser.ValTuple) string {
-			return sqlparser.String(from)
-		})
-		shardQuery := fmt.Sprintf("%s%s%s", ins.Prefix, strings.Join(mids, ", "), ins.Suffix)
-		if shardQuery != ins.Query {
-			other["ShardedQuery"] = shardQuery
-		}
-	}
+
 	return PrimitiveDescription{
 		OperatorType:     "Insert",
 		Keyspace:         ins.Keyspace,

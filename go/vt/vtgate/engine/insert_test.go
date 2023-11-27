@@ -1539,18 +1539,16 @@ func TestInsertSelectSimple(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := &InsertSelect{
-		// Opcode:            InsertSelect,
-		Keyspace:          ks.Keyspace,
-		Query:             "dummy_insert",
-		VindexValueOffset: [][]int{{1}},
-		InsertRows: &InsertRows{
-			RowsFromSelect: rb,
-		}}
-
-	ins.ColVindexes = append(ins.ColVindexes, ks.Tables["t1"].ColumnVindexes...)
-	ins.Prefix = "prefix "
-	ins.Suffix = " suffix"
+	ins := NewInsertSelect(
+		false,
+		ks.Keyspace,
+		ks.Tables["t1"],
+		"prefix ",
+		" suffix",
+		[][]int{{1}},
+		"dummy_insert",
+		NewInsertRowsFromSelect(nil, rb),
+	)
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -1632,19 +1630,19 @@ func TestInsertSelectOwned(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := &InsertSelect{
-		// Opcode:   InsertSelect,
-		Keyspace: ks.Keyspace,
-		Query:    "dummy_insert",
-		VindexValueOffset: [][]int{
+
+	ins := NewInsertSelect(
+		false,
+		ks.Keyspace,
+		ks.Tables["t1"],
+		"prefix ",
+		" suffix",
+		[][]int{
 			{1},  // The primary vindex has a single column as sharding key
 			{0}}, // the onecol vindex uses the 'name' column
-		InsertRows: NewInsertRowsFromSelect(nil, rb),
-	}
-
-	ins.ColVindexes = append(ins.ColVindexes, ks.Tables["t1"].ColumnVindexes...)
-	ins.Prefix = "prefix "
-	ins.Suffix = " suffix"
+		"dummy_insert",
+		NewInsertRowsFromSelect(nil, rb),
+	)
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -1728,15 +1726,6 @@ func TestInsertSelectGenerate(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	ins := NewInsertSelect(
-		false,
-		ks.Keyspace,
-		ks.Tables["t1"],
-		"prefix ",
-		nil,
-		" suffix")
-	ins.Query = "dummy_insert"
-	ins.VindexValueOffset = [][]int{{1}} // The primary vindex has a single column as sharding key
 	rb := &Route{
 		Query:      "dummy_select",
 		FieldQuery: "dummy_field_query",
@@ -1752,7 +1741,17 @@ func TestInsertSelectGenerate(t *testing.T) {
 		Query:  "dummy_generate",
 		Offset: 1,
 	}
-	ins.InsertRows = NewInsertRowsFromSelect(gen, rb)
+
+	ins := NewInsertSelect(
+		false,
+		ks.Keyspace,
+		ks.Tables["t1"],
+		"prefix ",
+		" suffix",
+		[][]int{{1}}, // The primary vindex has a single column as sharding key
+		"dummy_insert",
+		NewInsertRowsFromSelect(gen, rb),
+	)
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -1835,15 +1834,18 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := &InsertSelect{
-		Keyspace: ks.Keyspace,
-		Query:    "dummy_insert",
-		VindexValueOffset: [][]int{
+
+	ins := NewInsertSelect(
+		false,
+		ks.Keyspace,
+		ks.Tables["t1"],
+		"prefix ",
+		" suffix",
+		[][]int{
 			{1}}, // The primary vindex has a single column as sharding key
-		InsertRows: NewInsertRowsFromSelect(generate, rb)}
-	ins.ColVindexes = ks.Tables["t1"].ColumnVindexes
-	ins.Prefix = "prefix "
-	ins.Suffix = " suffix"
+		"dummy_insert",
+		NewInsertRowsFromSelect(generate, rb),
+	)
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -1930,16 +1932,16 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := &InsertSelect{
-		Keyspace:          ks.Keyspace,
-		Query:             "dummy_insert",
-		VindexValueOffset: [][]int{{1}}, // The primary vindex has a single column as sharding key
-		InsertRows:        NewInsertRowsFromSelect(generate, rb),
-	}
-
-	ins.ColVindexes = ks.Tables["t1"].ColumnVindexes
-	ins.Prefix = "prefix "
-	ins.Suffix = " suffix"
+	ins := NewInsertSelect(
+		false,
+		ks.Keyspace,
+		ks.Tables["t1"],
+		"prefix ",
+		" suffix",
+		[][]int{{1}}, // The primary vindex has a single column as sharding key,
+		"dummy_insert",
+		NewInsertRowsFromSelect(generate, rb),
+	)
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -2018,15 +2020,16 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := &InsertSelect{
-		Keyspace:          ks.Keyspace,
-		Query:             "dummy_insert",
-		VindexValueOffset: [][]int{{1}}, // The primary vindex has a single column as sharding key
-		InsertRows:        NewInsertRowsFromSelect(generate, rb)}
-
-	ins.ColVindexes = ks.Tables["t1"].ColumnVindexes
-	ins.Prefix = "prefix "
-	ins.Suffix = " suffix"
+	ins := NewInsertSelect(
+		false,
+		ks.Keyspace,
+		ks.Tables["t1"],
+		"prefix ",
+		" suffix",
+		[][]int{{1}}, // The primary vindex has a single column as sharding key,
+		"dummy_insert",
+		NewInsertRowsFromSelect(generate, rb),
+	)
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -2107,15 +2110,16 @@ func TestInsertSelectUnowned(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := &InsertSelect{
-		Keyspace:          ks.Keyspace,
-		Query:             "dummy_insert",
-		VindexValueOffset: [][]int{{0}}, // the onecol vindex as unowned lookup sharding column
-		InsertRows:        NewInsertRowsFromSelect(nil, rb)}
-
-	ins.ColVindexes = append(ins.ColVindexes, ks.Tables["t2"].ColumnVindexes...)
-	ins.Prefix = "prefix "
-	ins.Suffix = " suffix"
+	ins := NewInsertSelect(
+		false,
+		ks.Keyspace,
+		ks.Tables["t2"],
+		"prefix ",
+		" suffix",
+		[][]int{{0}}, // // the onecol vindex as unowned lookup sharding column
+		"dummy_insert",
+		NewInsertRowsFromSelect(nil, rb),
+	)
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -2221,15 +2225,16 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		RoutingParameters: &RoutingParameters{Opcode: Unsharded, Keyspace: uks2.Keyspace}}
 
 	// sks1 and sks2
-	ins := &InsertSelect{
-		Keyspace:          sks1.Keyspace,
-		Query:             "dummy_insert",
-		Prefix:            "prefix ",
-		Suffix:            " suffix",
-		ColVindexes:       sks1.Tables["s1"].ColumnVindexes,
-		VindexValueOffset: [][]int{{0}},
-		InsertRows:        NewInsertRowsFromSelect(nil, sRoute),
-	}
+	ins := NewInsertSelect(
+		false,
+		sks1.Keyspace,
+		sks1.Tables["s1"],
+		"prefix ",
+		" suffix",
+		[][]int{{0}},
+		"dummy_insert",
+		NewInsertRowsFromSelect(nil, sRoute),
+	)
 
 	vc := &loggingVCursor{
 		resolvedTargetTabletType: topodatapb.TabletType_PRIMARY,
@@ -2298,13 +2303,16 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
 
 	// uks1 and sks2
-	ins = &InsertSelect{
-		Keyspace:   uks1.Keyspace,
-		Query:      "dummy_insert",
-		Prefix:     "prefix ",
-		Suffix:     " suffix",
-		InsertRows: NewInsertRowsFromSelect(nil, sRoute),
-	}
+	ins = NewInsertSelect(
+		false,
+		uks1.Keyspace,
+		nil,
+		"prefix ",
+		" suffix",
+		nil,
+		"dummy_insert",
+		NewInsertRowsFromSelect(nil, sRoute),
+	)
 
 	vc.Rewind()
 	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
