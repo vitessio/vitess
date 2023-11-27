@@ -17,6 +17,7 @@ limitations under the License.
 package foreignkey
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -31,13 +32,14 @@ import (
 )
 
 var (
-	clusterInstance   *cluster.LocalProcessCluster
-	vtParams          mysql.ConnParams
-	mysqlParams       mysql.ConnParams
-	vtgateGrpcAddress string
-	shardedKs         = "ks"
-	unshardedKs       = "uks"
-	Cell              = "test"
+	clusterInstance      *cluster.LocalProcessCluster
+	vtParams             mysql.ConnParams
+	mysqlParams          mysql.ConnParams
+	vtgateGrpcAddress    string
+	shardedKs            = "ks"
+	unshardedKs          = "uks"
+	unshardedUnmanagedKs = "unmanaged_uks"
+	Cell                 = "test"
 
 	//go:embed schema.sql
 	schemaSQL string
@@ -47,6 +49,9 @@ var (
 
 	//go:embed unsharded_vschema.json
 	unshardedVSchema string
+
+	//go:embed unsharded_unmanaged_vschema.json
+	unshardedUnmanagedVSchema string
 
 	fkTables = []string{"fk_t1", "fk_t2", "fk_t3", "fk_t4", "fk_t5", "fk_t6", "fk_t7",
 		"fk_t10", "fk_t11", "fk_t12", "fk_t13", "fk_t15", "fk_t16", "fk_t17", "fk_t18", "fk_t19", "fk_t20",
@@ -124,6 +129,16 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		unmanagedKs := &cluster.Keyspace{
+			Name:      unshardedUnmanagedKs,
+			SchemaSQL: schemaSQL,
+			VSchema:   unshardedUnmanagedVSchema,
+		}
+		err = clusterInstance.StartUnshardedKeyspace(*unmanagedKs, 1, false)
+		if err != nil {
+			return 1
+		}
+
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph")
 		if err != nil {
 			return 1
@@ -157,22 +172,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		_ = utils.Exec(t, mcmp.VtConn, "use `ks/-80`")
-		tables := []string{"t4", "t3", "t2", "t1", "multicol_tbl2", "multicol_tbl1"}
-		tables = append(tables, fkTables...)
-		for _, table := range tables {
-			_, _ = mcmp.ExecAndIgnore("delete /*+ SET_VAR(foreign_key_checks=OFF) */ from " + table)
-		}
-		_ = utils.Exec(t, mcmp.VtConn, "use `ks/80-`")
-		for _, table := range tables {
-			_, _ = mcmp.ExecAndIgnore("delete /*+ SET_VAR(foreign_key_checks=OFF) */ from " + table)
-		}
-		_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
-		tables = []string{"u_t1", "u_t2", "u_t3"}
-		tables = append(tables, fkTables...)
-		for _, table := range tables {
-			_, _ = mcmp.ExecAndIgnore("delete /*+ SET_VAR(foreign_key_checks=OFF) */ from " + table)
-		}
+		clearOutAllData(t, mcmp.VtConn, mcmp.MySQLConn)
 		_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
 	}
 
@@ -182,5 +182,42 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 		deleteAll()
 		mcmp.Close()
 		cluster.PanicHandler(t)
+	}
+}
+
+func startBenchmark(b *testing.B) {
+	ctx := context.Background()
+	vtConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(b, err)
+	mysqlConn, err := mysql.Connect(ctx, &mysqlParams)
+	require.NoError(b, err)
+
+	clearOutAllData(b, vtConn, mysqlConn)
+}
+
+func clearOutAllData(t testing.TB, vtConn *mysql.Conn, mysqlConn *mysql.Conn) {
+	_ = utils.Exec(t, vtConn, "use `ks/-80`")
+	tables := []string{"t4", "t3", "t2", "t1", "multicol_tbl2", "multicol_tbl1"}
+	tables = append(tables, fkTables...)
+	for _, table := range tables {
+		_, _ = utils.ExecAllowError(t, vtConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+		_, _ = utils.ExecAllowError(t, mysqlConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+	}
+	_ = utils.Exec(t, vtConn, "use `ks/80-`")
+	for _, table := range tables {
+		_, _ = utils.ExecAllowError(t, vtConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+		_, _ = utils.ExecAllowError(t, mysqlConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+	}
+	_ = utils.Exec(t, vtConn, "use `uks`")
+	tables = []string{"u_t1", "u_t2", "u_t3"}
+	tables = append(tables, fkTables...)
+	for _, table := range tables {
+		_, _ = utils.ExecAllowError(t, vtConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+		_, _ = utils.ExecAllowError(t, mysqlConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+	}
+	_ = utils.Exec(t, vtConn, "use `unmanaged_uks`")
+	for _, table := range tables {
+		_, _ = utils.ExecAllowError(t, vtConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
+		_, _ = utils.ExecAllowError(t, mysqlConn, "delete /*+ SET_VAR(foreign_key_checks=OFF) */ from "+table)
 	}
 }
