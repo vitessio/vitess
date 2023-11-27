@@ -49,7 +49,6 @@ var (
 	// CellsToWatch is the list of cells the healthcheck operates over. If it is empty, only the local cell is watched
 	CellsToWatch string
 
-	bufferImplementation = "keyspace_events"
 	initialTabletTimeout = 30 * time.Second
 	// retryCount is the number of times a query will be retried on error
 	retryCount = 2
@@ -58,8 +57,6 @@ var (
 func init() {
 	servenv.OnParseFor("vtgate", func(fs *pflag.FlagSet) {
 		fs.StringVar(&CellsToWatch, "cells_to_watch", "", "comma-separated list of cells for watching tablets")
-		fs.StringVar(&bufferImplementation, "buffer_implementation", "keyspace_events", "Allowed values: healthcheck (legacy implementation), keyspace_events (default)")
-		fs.MarkDeprecated("buffer_implementation", "The 'healthcheck' buffer implementation has been removed in v18 and this option will be removed in v19")
 		fs.DurationVar(&initialTabletTimeout, "gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
 		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
 	})
