@@ -1729,10 +1729,8 @@ func TestInsertSelectGenerate(t *testing.T) {
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsertSelect(
-		0,
 		false,
 		ks.Keyspace,
-		nil,
 		ks.Tables["t1"],
 		"prefix ",
 		nil,

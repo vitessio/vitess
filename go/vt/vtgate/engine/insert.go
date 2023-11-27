@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
@@ -69,10 +67,6 @@ type (
 		// Insert.Values[i].Values[j] represents values for the j'th column of the given colVindex (j < len(colVindex[i].Columns)
 		// Insert.Values[i].Values[j].Values[k] represents the value pulled from row k for that column: (k < len(ins.rows))
 		VindexValues [][][]evalengine.Expr
-
-		// VindexValueOffset stores the offset for each column in the ColumnVindex
-		// that will appear in the result set of the select query.
-		VindexValueOffset [][]int
 
 		// ColVindexes are the vindexes that will use the VindexValues
 		ColVindexes []*vindexes.ColumnVindex
@@ -232,56 +226,11 @@ func (ins *Insert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 
 // TryStreamExecute performs a streaming exec.
 func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	if !ins.InsertRows.hasSelectInput() || ins.ForceNonStreaming {
-		res, err := ins.TryExecute(ctx, vcursor, bindVars, wantfields)
-		if err != nil {
-			return err
-		}
-		return callback(res)
-	}
-	if ins.QueryTimeout != 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(ins.QueryTimeout)*time.Millisecond)
-		defer cancel()
-	}
-
-	unsharded := ins.Opcode == InsertUnsharded
-	var mu sync.Mutex
-	output := &sqltypes.Result{}
-	err := ins.InsertRows.execSelectStreaming(ctx, vcursor, bindVars, func(irr insertRowsResult) error {
-		if len(irr.rows) == 0 {
-			return nil
-		}
-
-		// should process only one chunk at a time.
-		// as parallel chunk insert will try to use the same transaction in the vttablet
-		// this will cause transaction in use error.
-		mu.Lock()
-		defer mu.Unlock()
-
-		var insertID int64
-		var qr *sqltypes.Result
-		var err error
-		if unsharded {
-			insertID, qr, err = ins.insertIntoUnshardedTable(ctx, vcursor, bindVars, irr.rows)
-		} else {
-			insertID, qr, err = ins.insertIntoShardedTableFromSelect(ctx, vcursor, bindVars, irr)
-		}
-		if err != nil {
-			return err
-		}
-
-		output.RowsAffected += qr.RowsAffected
-		// InsertID needs to be updated to the least insertID value in sqltypes.Result
-		if output.InsertID == 0 || output.InsertID > uint64(insertID) {
-			output.InsertID = uint64(insertID)
-		}
-		return nil
-	})
+	res, err := ins.TryExecute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
-	return callback(output)
+	return callback(res)
 }
 
 // GetFields fetches the field info.
@@ -337,24 +286,6 @@ func (ins *Insert) insertIntoShardedTableFromValues(
 	return ins.executeInsertQueries(ctx, vcursor, rss, queries, insertID)
 }
 
-func (ins *Insert) insertIntoShardedTableFromSelect(
-	ctx context.Context,
-	vcursor VCursor,
-	bindVars map[string]*querypb.BindVariable,
-	irr insertRowsResult,
-) (int64, *sqltypes.Result, error) {
-	rss, queries, err := ins.getInsertSelectQueries(ctx, vcursor, bindVars, irr.rows)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	qr, err := ins.executeInsertQueries(ctx, vcursor, rss, queries, irr.insertID)
-	if err != nil {
-		return 0, nil, err
-	}
-	return irr.insertID, qr, nil
-}
-
 func (ins *Insert) executeInsertQueries(
 	ctx context.Context,
 	vcursor VCursor,
@@ -376,112 +307,6 @@ func (ins *Insert) executeInsertQueries(
 		result.InsertID = uint64(insertID)
 	}
 	return result, nil
-}
-
-func (ins *Insert) getInsertSelectQueries(
-	ctx context.Context,
-	vcursor VCursor,
-	bindVars map[string]*querypb.BindVariable,
-	rows []sqltypes.Row,
-) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
-	colVindexes := ins.ColVindexes
-	if len(colVindexes) != len(ins.VindexValueOffset) {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex value offsets and vindex info do not match")
-	}
-
-	// Here we go over the incoming rows and extract values for the vindexes we need to update
-	shardingCols := make([][]sqltypes.Row, len(colVindexes))
-	for _, inputRow := range rows {
-		for colIdx := range colVindexes {
-			offsets := ins.VindexValueOffset[colIdx]
-			row := make(sqltypes.Row, 0, len(offsets))
-			for _, offset := range offsets {
-				if offset == -1 { // value not provided from select query
-					row = append(row, sqltypes.NULL)
-					continue
-				}
-				row = append(row, inputRow[offset])
-			}
-			shardingCols[colIdx] = append(shardingCols[colIdx], row)
-		}
-	}
-
-	keyspaceIDs, err := ins.processPrimary(ctx, vcursor, shardingCols[0], colVindexes[0])
-	if err != nil {
-		return nil, nil, err
-	}
-
-	for vIdx := 1; vIdx < len(colVindexes); vIdx++ {
-		colVindex := colVindexes[vIdx]
-		var err error
-		if colVindex.Owned {
-			err = ins.processOwned(ctx, vcursor, shardingCols[vIdx], colVindex, keyspaceIDs)
-		} else {
-			err = ins.processUnowned(ctx, vcursor, shardingCols[vIdx], colVindex, keyspaceIDs)
-		}
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	var indexes []*querypb.Value
-	var destinations []key.Destination
-	for i, ksid := range keyspaceIDs {
-		if ksid != nil {
-			indexes = append(indexes, &querypb.Value{
-				Value: strconv.AppendInt(nil, int64(i), 10),
-			})
-			destinations = append(destinations, key.DestinationKeyspaceID(ksid))
-		}
-	}
-	if len(destinations) == 0 {
-		// In this case, all we have is nil KeyspaceIds, we don't do
-		// anything at all.
-		return nil, nil, nil
-	}
-
-	rss, indexesPerRss, err := vcursor.ResolveDestinations(ctx, ins.Keyspace.Name, indexes, destinations)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		bvs := sqltypes.CopyBindVariables(bindVars) // we don't want to create one huge bindvars for all values
-		var mids sqlparser.Values
-		for _, indexValue := range indexesPerRss[i] {
-			index, _ := strconv.Atoi(string(indexValue.Value))
-			if keyspaceIDs[index] != nil {
-				row := sqlparser.ValTuple{}
-				for colOffset, value := range rows[index] {
-					bvName := insertVarOffset(index, colOffset)
-					bvs[bvName] = sqltypes.ValueBindVariable(value)
-					row = append(row, sqlparser.NewArgument(bvName))
-				}
-				mids = append(mids, row)
-			}
-		}
-		rewritten := ins.Prefix + sqlparser.String(mids) + ins.Suffix
-		queries[i] = &querypb.BoundQuery{
-			Sql:           rewritten,
-			BindVariables: bvs,
-		}
-	}
-
-	return rss, queries, nil
-}
-
-func (ins *Insert) execInsertFromSelect(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	result, err := ins.InsertRows.execSelect(ctx, vcursor, bindVars)
-	if err != nil {
-		return nil, err
-	}
-	if len(result.rows) == 0 {
-		return &sqltypes.Result{}, nil
-	}
-
-	_, qr, err := ins.insertIntoShardedTableFromSelect(ctx, vcursor, bindVars, result)
-	return qr, err
 }
 
 // getInsertQueriesFromValues performs all the vindex related work
@@ -837,18 +662,6 @@ func (ins *Insert) description() PrimitiveDescription {
 		}
 	}
 
-	if len(ins.VindexValueOffset) > 0 {
-		valuesOffsets := map[string]string{}
-		for idx, ints := range ins.VindexValueOffset {
-			if len(ins.ColVindexes) < idx {
-				panic("ins.ColVindexes and ins.VindexValueOffset do not line up")
-			}
-			vindex := ins.ColVindexes[idx]
-			marshal, _ := json.Marshal(ints)
-			valuesOffsets[vindex.Name] = string(marshal)
-		}
-		other["VindexOffsetFromSelect"] = valuesOffsets
-	}
 	if len(ins.Mid) > 0 {
 		mids := slice.Map(ins.Mid, func(from sqlparser.ValTuple) string {
 			return sqlparser.String(from)
@@ -865,11 +678,6 @@ func (ins *Insert) description() PrimitiveDescription {
 		TargetTabletType: topodatapb.TabletType_PRIMARY,
 		Other:            other,
 	}
-}
-
-func (ins *Insert) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rows []sqltypes.Row) (int64, *sqltypes.Result, error) {
-	query := ins.getInsertQueryFromSelectForUnsharded(rows, bindVars)
-	return ins.executeUnshardedTableQuery(ctx, vcursor, bindVars, query)
 }
 
 func (ins *Insert) executeUnshardedTableQuery(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, query string) (int64, *sqltypes.Result, error) {

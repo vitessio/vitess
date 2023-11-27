@@ -547,14 +547,13 @@ func buildInsertLogicalPlan(
 ) (logicalPlan, error) {
 	ins := op.(*operators.Insert)
 	eins := &engine.Insert{
-		Opcode:            mapToInsertOpCode(rb.Routing.OpCode(), false),
-		Keyspace:          rb.Routing.Keyspace(),
-		TableName:         ins.VTable.Name.String(),
-		Ignore:            ins.Ignore,
-		InsertRows:        engine.NewInsertRows(autoIncGenerate(ins.AutoIncrement)),
-		ColVindexes:       ins.ColVindexes,
-		VindexValues:      ins.VindexValues,
-		VindexValueOffset: ins.VindexValueOffset,
+		Opcode:       mapToInsertOpCode(rb.Routing.OpCode(), false),
+		Keyspace:     rb.Routing.Keyspace(),
+		TableName:    ins.VTable.Name.String(),
+		Ignore:       ins.Ignore,
+		InsertRows:   engine.NewInsertRows(autoIncGenerate(ins.AutoIncrement)),
+		ColVindexes:  ins.ColVindexes,
+		VindexValues: ins.VindexValues,
 	}
 	lp := &insert{eInsert: eins}
 

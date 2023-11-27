@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -42,8 +41,6 @@ var _ Primitive = (*InsertSelect)(nil)
 type (
 	// InsertSelect represents the instructions to perform an insert operation.
 	InsertSelect struct {
-		// Opcode is the execution opcode.
-		// Opcode InsertOpcode
 
 		// Keyspace specifies the keyspace to send the query to.
 		Keyspace *vindexes.Keyspace
@@ -101,28 +98,16 @@ func (ins *InsertSelect) Inputs() ([]Primitive, []map[string]any) {
 	return ins.InsertRows.Inputs()
 }
 
-// NewQueryInsertSelect creates an InsertSelect with a query string.
-func NewQueryInsertSelect(opcode InsertOpcode, keyspace *vindexes.Keyspace, query string) *InsertSelect {
-	return &InsertSelect{
-		Keyspace:   keyspace,
-		Query:      query,
-		InsertRows: NewInsertRows(nil),
-	}
-}
-
 // NewInsertSelect creates a new InsertSelect.
 func NewInsertSelect(
-	opcode InsertOpcode,
 	ignore bool,
 	keyspace *vindexes.Keyspace,
-	vindexValues [][][]evalengine.Expr,
 	table *vindexes.Table,
 	prefix string,
 	mid sqlparser.Values,
 	suffix string,
 ) *InsertSelect {
 	ins := &InsertSelect{
-		// Opcode:     opcode,
 		Ignore:     ignore,
 		Keyspace:   keyspace,
 		InsertRows: NewInsertRows(nil),
