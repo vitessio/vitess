@@ -20,11 +20,7 @@ import (
 	"bytes"
 	"os"
 	"strings"
-	"sync"
 	"testing"
-	"time"
-
-	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
@@ -33,9 +29,6 @@ import (
 var MycnfPath = "/tmp/my.cnf"
 
 func TestMycnf(t *testing.T) {
-	// Remove any my.cnf file if it already exists.
-	os.Remove(MycnfPath)
-
 	uid := uint32(11111)
 	cnf := NewMycnf(uid, 6802)
 	myTemplateSource := new(bytes.Buffer)
@@ -46,45 +39,36 @@ func TestMycnf(t *testing.T) {
 	f, _ := os.ReadFile("../../../config/mycnf/default.cnf")
 	myTemplateSource.Write(f)
 	data, err := cnf.makeMycnf(myTemplateSource.String())
-	require.NoError(t, err)
-	t.Logf("data: %v", data)
-
-	// Since there is no my.cnf file, reading it should fail with a no such file error.
+	if err != nil {
+		t.Errorf("err: %v", err)
+	} else {
+		t.Logf("data: %v", data)
+	}
+	err = os.WriteFile(MycnfPath, []byte(data), 0666)
+	if err != nil {
+		t.Errorf("failed creating my.cnf %v", err)
+	}
+	_, err = os.ReadFile(MycnfPath)
+	if err != nil {
+		t.Errorf("failed reading, err %v", err)
+		return
+	}
 	mycnf := NewMycnf(uid, 0)
 	mycnf.Path = MycnfPath
-	_, err = ReadMycnf(mycnf, 0)
-	require.ErrorContains(t, err, "no such file or directory")
-
-	// Next up we will spawn a go-routine to try and read the cnf file with a timeout.
-	// We will create the cnf file after some delay and verify that ReadMycnf does wait that long
-	// and ends up succeeding in reading the my.cnf file.
-	waitTime := 1 * time.Second
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-		startTime := time.Now()
-		var readErr error
-		mycnf, readErr = ReadMycnf(mycnf, 1*time.Minute)
-		require.NoError(t, readErr, "failed reading")
+	mycnf, err = ReadMycnf(mycnf)
+	if err != nil {
+		t.Errorf("failed reading, err %v", err)
+	} else {
 		t.Logf("socket file %v", mycnf.SocketFile)
-		totalTimeSpent := time.Since(startTime)
-		require.GreaterOrEqual(t, totalTimeSpent, waitTime)
-	}()
-
-	time.Sleep(waitTime)
-	err = os.WriteFile(MycnfPath, []byte(data), 0666)
-	require.NoError(t, err, "failed creating my.cnf")
-	_, err = os.ReadFile(MycnfPath)
-	require.NoError(t, err, "failed reading")
-
-	// Wait for ReadMycnf to finish and then verify that the data read is correct.
-	wg.Wait()
+	}
 	// Tablet UID should be 11111, which determines tablet/data dir.
-	require.Contains(t, mycnf.DataDir, "/vt_0000011111/")
+	if got, want := mycnf.DataDir, "/vt_0000011111/"; !strings.Contains(got, want) {
+		t.Errorf("mycnf.DataDir = %v, want *%v*", got, want)
+	}
 	// MySQL server-id should be 22222, different from Tablet UID.
-	require.EqualValues(t, uint32(22222), mycnf.ServerID)
+	if got, want := mycnf.ServerID, uint32(22222); got != want {
+		t.Errorf("mycnf.ServerID = %v, want %v", got, want)
+	}
 }
 
 // Run this test if any changes are made to hook handling / make_mycnf hook
@@ -128,7 +112,7 @@ func NoTestMycnfHook(t *testing.T) {
 	}
 	mycnf := NewMycnf(uid, 0)
 	mycnf.Path = cnf.Path
-	mycnf, err = ReadMycnf(mycnf, 0)
+	mycnf, err = ReadMycnf(mycnf)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)
 	} else {

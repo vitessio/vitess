@@ -157,7 +157,6 @@ Flags:
       --min_retention_count int                                     Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made (default 1)
       --min_retention_time duration                                 Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.
       --mycnf-file string                                           path to my.cnf, if reading all config params from there
-      --mycnf-wait-time duration                                    time to wait for my.cnf to be created by mysqlctld externally (default 10s)
       --mycnf_bin_log_path string                                   mysql binlog path
       --mycnf_data_dir string                                       data directory for mysql
       --mycnf_error_log_path string                                 mysql error log path

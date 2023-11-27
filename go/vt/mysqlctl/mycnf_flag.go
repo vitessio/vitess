@@ -17,8 +17,6 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"time"
-
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
@@ -51,9 +49,6 @@ var (
 
 	// the file to use to specify them all
 	flagMycnfFile string
-
-	// flagWaitForMyCnf is the amount of time to wait for the My.cnf file to be created externally.
-	flagWaitForMyCnf time.Duration
 )
 
 // RegisterFlags registers the command line flags for
@@ -80,7 +75,6 @@ func RegisterFlags() {
 		fs.StringVar(&flagSecureFilePriv, "mycnf_secure_file_priv", flagSecureFilePriv, "mysql path for loading secure files")
 
 		fs.StringVar(&flagMycnfFile, "mycnf-file", flagMycnfFile, "path to my.cnf, if reading all config params from there")
-		fs.DurationVar(&flagWaitForMyCnf, "mycnf-wait-time", 10*time.Second, "time to wait for my.cnf to be created by mysqlctld externally")
 	})
 }
 
@@ -135,5 +129,5 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 	}
 	mycnf = NewMycnf(uid, 0)
 	mycnf.Path = flagMycnfFile
-	return ReadMycnf(mycnf, flagWaitForMyCnf)
+	return ReadMycnf(mycnf)
 }

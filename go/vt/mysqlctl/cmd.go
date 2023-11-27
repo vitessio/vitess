@@ -55,7 +55,7 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (
 // of the MySQL instance.
 func OpenMysqldAndMycnf(tabletUID uint32) (*Mysqld, *Mycnf, error) {
 	// We pass a port of 0, this will be read and overwritten from the path on disk
-	mycnf, err := ReadMycnf(NewMycnf(tabletUID, 0), 0)
+	mycnf, err := ReadMycnf(NewMycnf(tabletUID, 0))
 	if err != nil {
 		return nil, nil, fmt.Errorf("couldn't read my.cnf file: %v", err)
 	}
