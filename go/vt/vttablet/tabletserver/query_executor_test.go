@@ -71,7 +71,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 		input string
 		// passThrough specifies if planbuilder.PassthroughDML must be set.
 		passThrough bool
-		// dbResponses specifes the list of queries and responses to add to the fake db.
+		// dbResponses specifies the list of queries and responses to add to the fake db.
 		dbResponses []dbResponse
 		// resultWant is the result we want.
 		resultWant *sqltypes.Result
@@ -1729,7 +1729,7 @@ func TestQueryExecSchemaReloadCount(t *testing.T) {
 	testcases := []struct {
 		// input is the input query.
 		input string
-		// dbResponses specifes the list of queries and responses to add to the fake db.
+		// dbResponses specifies the list of queries and responses to add to the fake db.
 		dbResponses       []dbResponse
 		schemaReloadCount int
 	}{{

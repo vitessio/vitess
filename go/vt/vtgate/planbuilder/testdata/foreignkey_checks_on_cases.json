@@ -328,7 +328,7 @@
             "Cols": [
               0
             ],
-            "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in (('bar'))",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast('bar' as CHAR)))",
             "Table": "u_tbl3"
           },
           {
@@ -693,7 +693,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in (('foo'))",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast('foo' as CHAR)))",
                 "Table": "u_tbl3"
               },
               {
@@ -727,7 +727,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in (('foo')) for update nowait",
+                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR))) for update nowait",
                 "Table": "u_tbl9"
               },
               {
@@ -755,7 +755,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in (('foo'))",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR)))",
                 "Table": "u_tbl9"
               }
             ]
@@ -805,8 +805,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = u_tbl2.col1 + 'bar' where 1 != 1",
-            "Query": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = u_tbl2.col1 + 'bar' where u_tbl2.col1 + 'bar' is not null and not (u_tbl2.col2) <=> (u_tbl2.col1 + 'bar') and u_tbl2.id = 1 and u_tbl1.col1 is null limit 1 for share nowait",
+            "FieldQuery": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.col1 + 'bar' as CHAR) where 1 != 1",
+            "Query": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.col1 + 'bar' as CHAR) where cast(u_tbl2.col1 + 'bar' as CHAR) is not null and not (u_tbl2.col2) <=> (cast(u_tbl2.col1 + 'bar' as CHAR)) and u_tbl2.id = 1 and u_tbl1.col1 is null limit 1 for share nowait",
             "Table": "u_tbl1, u_tbl2"
           },
           {
@@ -821,8 +821,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col2, col2 <=> col1 + 'bar', col1 + 'bar' from u_tbl2 where 1 != 1",
-                "Query": "select col2, col2 <=> col1 + 'bar', col1 + 'bar' from u_tbl2 where id = 1 for update nowait",
+                "FieldQuery": "select col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where 1 != 1",
+                "Query": "select col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where id = 1 for update nowait",
                 "Table": "u_tbl2"
               },
               {
@@ -840,7 +840,6 @@
                 ],
                 "NonLiteralUpdateInfo": [
                   {
-                    "ExprCol": 0,
                     "CompExprCol": 1,
                     "UpdateExprCol": 2,
                     "UpdateExprBvName": "fkc_upd"
@@ -889,8 +888,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col1, col1 <=> x + 'bar', x + 'bar' from u_tbl1 where 1 != 1",
-            "Query": "select col1, col1 <=> x + 'bar', x + 'bar' from u_tbl1 where id = 1 for update nowait",
+            "FieldQuery": "select col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where 1 != 1",
+            "Query": "select col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where id = 1 for update nowait",
             "Table": "u_tbl1"
           },
           {
@@ -902,7 +901,6 @@
             ],
             "NonLiteralUpdateInfo": [
               {
-                "ExprCol": 0,
                 "CompExprCol": 1,
                 "UpdateExprCol": 2,
                 "UpdateExprBvName": "fkc_upd"
@@ -934,7 +932,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (:fkc_upd is null or (col3) not in ((:fkc_upd)))",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:fkc_upd as CHAR) is null or (col3) not in ((cast(:fkc_upd as CHAR))))",
                 "Table": "u_tbl3"
               },
               {
@@ -960,7 +958,6 @@
             ],
             "NonLiteralUpdateInfo": [
               {
-                "ExprCol": 0,
                 "CompExprCol": 1,
                 "UpdateExprCol": 2,
                 "UpdateExprBvName": "fkc_upd1"
@@ -1066,7 +1063,7 @@
             "Cols": [
               0
             ],
-            "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((2))",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast(2 as CHAR)))",
             "Table": "u_tbl3"
           },
           {
@@ -1143,7 +1140,7 @@
                 "Cols": [
                   0
                 ],
-                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((2))",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (col3) not in ((cast(2 as CHAR)))",
                 "Table": "u_tbl3"
               },
               {
@@ -1177,7 +1174,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((2)) for update nowait",
+                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as CHAR))) for update nowait",
                 "Table": "u_tbl9"
               },
               {
@@ -1205,7 +1202,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((2))",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as CHAR)))",
                 "Table": "u_tbl9"
               }
             ]
@@ -1443,8 +1440,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = 'foo' where 1 != 1",
-                "Query": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = 'foo' where not (u_tbl8.col8) <=> ('foo') and (u_tbl8.col8) in ::fkc_vals and u_tbl9.col9 is null limit 1 for share nowait",
+                "FieldQuery": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = cast('foo' as CHAR) where 1 != 1",
+                "Query": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = cast('foo' as CHAR) where not (u_tbl8.col8) <=> (cast('foo' as CHAR)) and (u_tbl8.col8) in ::fkc_vals and u_tbl9.col9 is null limit 1 for share nowait",
                 "Table": "u_tbl8, u_tbl9"
               },
               {
@@ -1519,8 +1516,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = 'foo' where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = 'foo' where not (u_tbl4.col4) <=> ('foo') and (u_tbl4.col4) in ::fkc_vals and u_tbl3.col3 is null limit 1 for share nowait",
+                "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast('foo' as CHAR) where 1 != 1",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast('foo' as CHAR) where not (u_tbl4.col4) <=> (cast('foo' as CHAR)) and (u_tbl4.col4) in ::fkc_vals and u_tbl3.col3 is null limit 1 for share nowait",
                 "Table": "u_tbl3, u_tbl4"
               },
               {
@@ -1532,7 +1529,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (u_tbl9.col9) not in (('foo')) and u_tbl4.col4 = u_tbl9.col9 limit 1 for share nowait",
+                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (u_tbl9.col9) not in ((cast('foo' as CHAR))) and u_tbl4.col4 = u_tbl9.col9 limit 1 for share nowait",
                 "Table": "u_tbl4, u_tbl9"
               },
               {
@@ -1608,8 +1605,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :v1 where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :v1 where not (u_tbl4.col4) <=> (:v1) and (u_tbl4.col4) in ::fkc_vals and :v1 is not null and u_tbl3.col3 is null limit 1 for share nowait",
+                "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:v1 as CHAR) where 1 != 1",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:v1 as CHAR) where not (u_tbl4.col4) <=> (cast(:v1 as CHAR)) and (u_tbl4.col4) in ::fkc_vals and cast(:v1 as CHAR) is not null and u_tbl3.col3 is null limit 1 for share nowait",
                 "Table": "u_tbl3, u_tbl4"
               },
               {
@@ -1621,7 +1618,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (:v1 is null or (u_tbl9.col9) not in ((:v1))) and u_tbl4.col4 = u_tbl9.col9 limit 1 for share nowait",
+                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (cast(:v1 as CHAR) is null or (u_tbl9.col9) not in ((cast(:v1 as CHAR)))) and u_tbl4.col4 = u_tbl9.col9 limit 1 for share nowait",
                 "Table": "u_tbl4, u_tbl9"
               },
               {

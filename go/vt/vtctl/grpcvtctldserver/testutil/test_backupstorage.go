@@ -104,7 +104,7 @@ func (a handlesByName) Less(i, j int) bool { return a[i].Name() < a[j].Name() }
 // *backupstorage.BackupStorageImplementation to this value before use.
 const BackupStorageImplementation = "grpcvtctldserver.testutil"
 
-// BackupStorage is the singleton test backupstorage.BackupStorage intastnce. It
+// BackupStorage is the singleton test backupstorage.BackupStorage instance. It
 // is public and singleton to allow tests to both mutate and assert against its
 // state.
 var BackupStorage = &backupStorage{

@@ -528,7 +528,7 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 }
 
 // getColumnCollations determines the proper collation to use for each
-// column in the table definition leveraging MySQL's collation inheritence
+// column in the table definition leveraging MySQL's collation inheritance
 // rules.
 func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string]collations.ID, error) {
 	collationEnv := collations.Local()
@@ -547,7 +547,7 @@ func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string
 	tableCharset := tableschema.GetCharset()
 	tableCollation := tableschema.GetCollation()
 	// If no explicit collation is specified for the column then we need
-	// to walk the inheritence tree.
+	// to walk the inheritance tree.
 	getColumnCollation := func(column *sqlparser.ColumnDefinition) collations.ID {
 		// If there's an explicit collation listed then use that.
 		if column.Type.Options.Collate != "" {
@@ -568,7 +568,7 @@ func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string
 			return collationEnv.DefaultCollationForCharset(strings.ToLower(tableCharset))
 		}
 		// The table is using the global default charset and collation and
-		// we inherite that.
+		// we inherit that.
 		return collations.Default()
 	}
 
@@ -996,7 +996,7 @@ func (df *vdiff) streamOne(ctx context.Context, keyspace, shard string, particip
 	}()
 }
 
-// syncTargets fast-forwards the vreplication to the source snapshot positons
+// syncTargets fast-forwards the vreplication to the source snapshot positions
 // and waits for the selected tablets to catch up to that point.
 func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
 	waitCtx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)

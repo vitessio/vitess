@@ -752,16 +752,84 @@
     "unsharded_fk_allow": {
       "foreignKeyMode": "managed",
       "tables": {
-        "u_tbl1": {},
-        "u_tbl2": {},
-        "u_tbl3": {},
-        "u_tbl4": {},
-        "u_tbl5": {},
-        "u_tbl6": {},
-        "u_tbl7": {},
-        "u_tbl8": {},
+        "u_tbl1": {
+          "columns": [
+            {
+              "name": "col1",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "col14",
+              "type": "INT16"
+            }
+          ]
+        },
+        "u_tbl2": {
+          "columns": [
+            {
+              "name": "col2",
+              "type": "VARCHAR"
+            }
+          ]
+        },
+        "u_tbl3": {
+          "columns": [
+            {
+              "name": "col3",
+              "type": "VARCHAR"
+            }
+          ]
+        },
+        "u_tbl4": {
+          "columns": [
+            {
+              "name": "col41",
+              "type": "INT16"
+            },
+            {
+              "name": "col4",
+              "type": "VARCHAR"
+            }
+          ]
+        },
+        "u_tbl5": {
+          "columns": [
+            {
+              "name": "col5",
+              "type": "VARCHAR"
+            }
+          ]
+        },
+        "u_tbl6": {
+          "columns": [
+            {
+              "name": "col6",
+              "type": "VARCHAR"
+            }
+          ]
+        },
+        "u_tbl7": {
+          "columns": [
+            {
+              "name": "col7",
+              "type": "VARCHAR"
+            }
+          ]
+        },
+        "u_tbl8": {
+          "columns": [
+            {
+              "name": "col8",
+              "type": "VARCHAR"
+            }
+          ]
+        },
         "u_tbl9": {
           "columns": [
+            {
+              "name": "col9",
+              "type": "VARCHAR"
+            },
             {"name": "foo"},
             {"name": "bar", "default": "1"}
           ]

@@ -339,7 +339,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 				myvr.WorkflowType = int32(binlogdatapb.VReplicationWorkflowType_Reshard)
 				// Insert second post copy action record to simulate a shard merge where you
 				// have N controllers/replicators running for the same table on the tablet.
-				// This forces a second row, which would otherwise not get created beacause
+				// This forces a second row, which would otherwise not get created because
 				// when this is called there's no secondary keys to stash anymore.
 				addlAction, err := json.Marshal(PostCopyAction{
 					Type: PostCopyActionSQL,

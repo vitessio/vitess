@@ -414,7 +414,7 @@ func TestVSchemaForeignKeys(t *testing.T) {
 	vschema := BuildVSchema(&good)
 	require.NoError(t, vschema.Keyspaces["main"].Error)
 
-	// add fk containst a keyspace.
+	// add fk constraints to a keyspace.
 	vschema.AddForeignKey("main", "t1", &sqlparser.ForeignKeyDefinition{
 		Source: sqlparser.Columns{sqlparser.NewIdentifierCI("c2")},
 		ReferenceDefinition: &sqlparser.ReferenceDefinition{
@@ -2987,7 +2987,7 @@ func TestReferenceTableAndSourceAreGloballyRoutable(t *testing.T) {
 	_, err = vs.FindTable("sharded", "t1")
 	require.NoError(t, err)
 	// If the source of a reference table requires explicit routing, then
-	// neither the reference table nor its souce can be globally routed.
+	// neither the reference table nor its source can be globally routed.
 	_, err = vs.FindTable("", "t1")
 	require.Error(t, err)
 	require.EqualError(t, err, "table t1 not found")

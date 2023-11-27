@@ -141,7 +141,7 @@ var (
 type Server struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
-	// Limt the number of concurrent background goroutines if needed.
+	// Limit the number of concurrent background goroutines if needed.
 	sem *semaphore.Weighted
 }
 
@@ -1640,8 +1640,9 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 			UpdateTableStats:      req.UpdateTableStats,
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-			OnlyPks:    req.OnlyPKs,
-			DebugQuery: req.DebugQuery,
+			OnlyPks:       req.OnlyPKs,
+			DebugQuery:    req.DebugQuery,
+			MaxSampleRows: req.MaxReportSampleRows,
 		},
 	}
 

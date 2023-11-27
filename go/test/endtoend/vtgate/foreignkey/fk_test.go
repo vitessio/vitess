@@ -905,6 +905,15 @@ func TestFkQueries(t *testing.T) {
 				"update fk_t11 set col = id where id in (1, 5)",
 			},
 		},
+		{
+			name: "Update on child to 0 when parent has -0",
+			queries: []string{
+				"insert into fk_t15 (id, col) values (2, '-0')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t16 (id, col) values (3, '5'), (4, '-5')",
+				"update fk_t16 set col = col * (col - (col)) where id = 3",
+				"update fk_t16 set col = col * (col - (col)) where id = 4",
+			},
+		},
 	}
 
 	for _, testcase := range testcases {
