@@ -7,6 +7,8 @@
     - [VTTablet Flags](#vttablet-flags)
   - **[Docker](#docker)**
     - [New MySQL Image](#mysql-image)
+  - **[VTGate](#vtgate)**
+    - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
   - **[Query Compatibility](#query-compatibility)**
     - [`SHOW VSCHEMA KEYSPACES` Query](#show-vschema-keyspaces)
 
@@ -31,6 +33,12 @@ This lightweight image is a replacement of `vitess/lite` to only run `mysqld`.
 
 Several tags are available to let you choose what version of MySQL you want to use: `vitess/mysql:8.0.30`, `vitess/mysql:8.0.34`.
 
+### <a id="vtgate"/>VTGate
+
+#### <a id="fk-checks-vitess-aware"/>`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable
+
+When VTGate receives a query to change the `FOREIGN_KEY_CHECKS` value for a session, instead of sending the value down to MySQL, VTGate now keeps track of the value and changes the queries by adding `SET_VAR(FOREIGN_KEY_CHECKS=On/Off)` style query optimizer hints wherever required. 
+
 ### <a id="query-compatibility"/>Query Compatibility
 
 #### <a id="show-vschema-keyspaces"/>`SHOW VSCHEMA KEYSPACES` Query
@@ -42,11 +50,11 @@ error in the VSchema for the keyspace.
 An example output of the query looks like - 
 ```sql
 mysql> show vschema keyspaces;
-+---------------+---------+------------------+-------+
-| Keyspace Name | Sharded | Foreign Key Mode | Error |
-+---------------+---------+------------------+-------+
-| uks           | false   | managed          |       |
-| ks            | true    | managed          |       |
-+---------------+---------+------------------+-------+
-2 rows in set (0.00 sec)
++----------+---------+-------------+---------+
+| Keyspace | Sharded | Foreign Key | Comment |
++----------+---------+-------------+---------+
+| ks       | true    | managed     |         |
+| uks      | false   | managed     |         |
++----------+---------+-------------+---------+
+2 rows in set (0.01 sec)
 ```
