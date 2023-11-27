@@ -140,8 +140,8 @@ func TestHashJoinVariations(t *testing.T) {
 			Cols:           []int{-1, -2, 1, 2},
 			LHSKey:         tc.lhs,
 			RHSKey:         tc.rhs,
-			Collation:      typ.Coll,
-			ComparisonType: typ.Type,
+			Collation:      typ.Collation(),
+			ComparisonType: typ.Type(),
 		}
 
 		t.Run(tc.name, func(t *testing.T) {
@@ -164,9 +164,9 @@ func TestHashJoinVariations(t *testing.T) {
 func typeForOffset(i int) evalengine.Type {
 	switch i {
 	case 0:
-		return evalengine.Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}
+		return evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID)
 	case 1:
-		return evalengine.Type{Type: sqltypes.VarChar, Coll: collations.Default()}
+		return evalengine.NewType(sqltypes.VarChar, collations.Default())
 	default:
 		panic(i)
 	}

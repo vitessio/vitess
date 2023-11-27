@@ -190,7 +190,7 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.O
 		}
 		fkChildren = append(fkChildren, fkChild)
 	}
-	selectionOp, err := createSelectionOp(ctx, selectExprs, delStmt.TableExprs, delStmt.Where, nil, nil, sqlparser.ForUpdateLock)
+	selectionOp, err := createSelectionOp(ctx, selectExprs, delStmt.TableExprs, delStmt.Where, nil, nil, sqlparser.ForUpdateLockNoWait)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +204,7 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.O
 
 func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, cols []int) (*FkChild, error) {
 	bvName := ctx.ReservedVars.ReserveVariable(foreignKeyConstraintValues)
-
+	parsedComments := getParsedCommentsForFkChecks(ctx)
 	var childStmt sqlparser.Statement
 	switch fk.OnDelete {
 	case sqlparser.Cascade:
@@ -216,6 +216,7 @@ func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 		}
 		compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, valTuple, sqlparser.NewListArg(bvName), nil)
 		childStmt = &sqlparser.Delete{
+			Comments:   parsedComments,
 			TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
 			Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
 		}
@@ -234,6 +235,7 @@ func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 		compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, valTuple, sqlparser.NewListArg(bvName), nil)
 		childStmt = &sqlparser.Update{
 			Exprs:      updExprs,
+			Comments:   parsedComments,
 			TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
 			Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
 		}

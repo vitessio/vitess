@@ -357,6 +357,20 @@ func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 	return newComments, nil
 }
 
+// FkChecksStateString prints the foreign key checks state.
+func FkChecksStateString(state *bool) string {
+	if state == nil {
+		return ""
+	}
+	switch *state {
+	case false:
+		return "Off"
+	case true:
+		return "On"
+	}
+	return ""
+}
+
 // ParseParams parses the vindex parameter list, pulling out the special-case
 // "owner" parameter
 func (node *VindexSpec) ParseParams() (string, map[string]string) {

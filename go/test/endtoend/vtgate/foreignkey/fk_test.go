@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -888,6 +889,31 @@ func TestFkQueries(t *testing.T) {
 				"update fk_t15 set col = col * (col - (col))",
 			},
 		},
+		{
+			name: "Update a child table which doesn't cause an update, but parent doesn't have that value",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2)",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t11 (id, col) values (1,1),(2,2),(5,5)",
+				"update fk_t11 set col = id where id in (1, 5)",
+			},
+		},
+		{
+			name: "Update a child table from a null to a value that parent doesn't have",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(5,NULL)",
+				"update fk_t11 set col = id where id in (1, 5)",
+			},
+		},
+		{
+			name: "Update on child to 0 when parent has -0",
+			queries: []string{
+				"insert into fk_t15 (id, col) values (2, '-0')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t16 (id, col) values (3, '5'), (4, '-5')",
+				"update fk_t16 set col = col * (col - (col)) where id = 3",
+				"update fk_t16 set col = col * (col - (col)) where id = 4",
+			},
+		},
 	}
 
 	for _, testcase := range testcases {
@@ -954,6 +980,11 @@ func TestFkOneCase(t *testing.T) {
 	ensureDatabaseState(t, mcmp.MySQLConn, true)
 
 	for _, query := range queries {
+		if strings.HasPrefix(query, "vexplain") {
+			res := utils.Exec(t, mcmp.VtConn, query)
+			log.Errorf("Query %v, Result - %v", query, res.Rows)
+			continue
+		}
 		_, _ = mcmp.ExecAllowAndCompareError(query)
 		if t.Failed() {
 			log.Errorf("Query failed - %v", query)
@@ -978,20 +1009,26 @@ func TestCyclicFks(t *testing.T) {
 
 	// Create a cyclic foreign key constraint.
 	utils.Exec(t, mcmp.VtConn, "alter table fk_t10 add constraint test_cyclic_fks foreign key (col) references fk_t12 (col) on delete cascade on update cascade")
-	defer func() {
-		utils.Exec(t, mcmp.VtConn, "alter table fk_t10 drop foreign key test_cyclic_fks")
-	}()
 
 	// Wait for schema-tracking to be complete.
-	ksErr := utils.WaitForKsError(t, clusterInstance.VtgateProcess, unshardedKs)
-	// Make sure Vschema has the error for cyclic foreign keys.
-	assert.Contains(t, ksErr, "VT09019: uks has cyclic foreign keys")
+	errString := utils.WaitForKsError(t, clusterInstance.VtgateProcess, unshardedKs)
+	assert.Contains(t, errString, "VT09019: keyspace 'uks' has cyclic foreign keys")
 
 	// Ensure that the Vitess database is originally empty
 	ensureDatabaseState(t, mcmp.VtConn, true)
 
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, "insert into fk_t10(id, col) values (1, 1)")
-	require.ErrorContains(t, err, "VT09019: uks has cyclic foreign keys")
+	require.ErrorContains(t, err, "VT09019: keyspace 'uks' has cyclic foreign keys")
+
+	// Drop the cyclic foreign key constraint.
+	utils.Exec(t, mcmp.VtConn, "alter table fk_t10 drop foreign key test_cyclic_fks")
+
+	// Wait for schema-tracking to be complete.
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, unshardedKs, func(t *testing.T, keyspace map[string]interface{}) bool {
+		_, fieldPresent := keyspace["error"]
+		return !fieldPresent
+	})
+
 }
 
 func TestReplace(t *testing.T) {
@@ -1153,4 +1190,20 @@ func TestReplaceWithFK(t *testing.T) {
 	// replace some data.
 	_, err := utils.ExecAllowError(t, conn, `replace into t1(id, col) values (1, 1)`)
 	require.ErrorContains(t, err, "VT12001: unsupported: REPLACE INTO with sharded keyspace (errno 1235) (sqlstate 42000)")
+
+	_ = utils.Exec(t, conn, `use uks`)
+
+	_ = utils.Exec(t, conn, `replace into u_t1(id, col1) values (1, 1), (2, 1)`)
+	// u_t1: (1,1) (2,1)
+
+	_ = utils.Exec(t, conn, `replace into u_t2(id, col2) values (1, 1), (2, 1)`)
+	// u_t1: (1,1) (2,1)
+	// u_t2: (1,1) (2,1)
+
+	_ = utils.Exec(t, conn, `replace into u_t1(id, col1) values (2, 2)`)
+	// u_t1: (1,1) (2,2)
+	// u_t2: (1,null) (2,null)
+
+	utils.AssertMatches(t, conn, `select * from u_t1`, `[[INT64(1) INT64(1)] [INT64(2) INT64(2)]]`)
+	utils.AssertMatches(t, conn, `select * from u_t2`, `[[INT64(1) NULL] [INT64(2) NULL]]`)
 }

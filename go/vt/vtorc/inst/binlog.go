@@ -68,7 +68,7 @@ func (binlogCoordinates BinlogCoordinates) String() string {
 	return binlogCoordinates.DisplayString()
 }
 
-// Equals tests equality of this corrdinate and another one.
+// Equals tests equality of this coordinate and another one.
 func (binlogCoordinates *BinlogCoordinates) Equals(other *BinlogCoordinates) bool {
 	if other == nil {
 		return false
@@ -106,8 +106,8 @@ func (binlogCoordinates *BinlogCoordinates) FileSmallerThan(other *BinlogCoordin
 	return binlogCoordinates.LogFile < other.LogFile
 }
 
-// FileNumberDistance returns the numeric distance between this corrdinate's file number and the other's.
-// Effectively it means "how many roatets/FLUSHes would make these coordinates's file reach the other's"
+// FileNumberDistance returns the numeric distance between this coordinate's file number and the other's.
+// Effectively it means "how many rotates/FLUSHes would make these coordinates's file reach the other's"
 func (binlogCoordinates *BinlogCoordinates) FileNumberDistance(other *BinlogCoordinates) int {
 	thisNumber, _ := binlogCoordinates.FileNumber()
 	otherNumber, _ := other.FileNumber()
@@ -163,7 +163,7 @@ func (binlogCoordinates *BinlogCoordinates) NextFileCoordinates() (BinlogCoordin
 	return result, nil
 }
 
-// Detach returns a detahced form of coordinates
+// Detach returns a detached form of coordinates
 func (binlogCoordinates *BinlogCoordinates) Detach() (detachedCoordinates BinlogCoordinates) {
 	detachedCoordinates = BinlogCoordinates{LogFile: fmt.Sprintf("//%s:%d", binlogCoordinates.LogFile, binlogCoordinates.LogPos), LogPos: binlogCoordinates.LogPos}
 	return detachedCoordinates

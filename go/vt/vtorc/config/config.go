@@ -44,7 +44,7 @@ const (
 	DiscoveryQueueMaxStatisticsSize       = 120
 	DiscoveryCollectionRetentionSeconds   = 120
 	UnseenInstanceForgetHours             = 240 // Number of hours after which an unseen instance is forgotten
-	FailureDetectionPeriodBlockMinutes    = 60  // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this preceeds any recovery process, if any.
+	FailureDetectionPeriodBlockMinutes    = 60  // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this precedes any recovery process, if any.
 )
 
 var (
@@ -85,7 +85,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 }
 
 // Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.
-// Some of the parameteres have reasonable default values, and some (like database credentials) are
+// Some of the parameters have reasonable default values, and some (like database credentials) are
 // strictly expected from user.
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {

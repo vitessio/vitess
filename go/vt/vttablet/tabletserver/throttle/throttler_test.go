@@ -153,7 +153,7 @@ func TestRefreshMySQLInventory(t *testing.T) {
 	validateClusterProbes := func(t *testing.T, ctx context.Context) {
 		testName := fmt.Sprintf("leader=%t", throttler.isLeader.Load())
 		t.Run(testName, func(t *testing.T) {
-			// validateProbesCount expectes number of probes according to cluster name and throttler's leadership status
+			// validateProbesCount expects a number of probes according to cluster name and throttler's leadership status
 			validateProbesCount := func(t *testing.T, clusterName string, probes *mysql.Probes) {
 				if clusterName == selfStoreName {
 					assert.Equal(t, 1, len(*probes))

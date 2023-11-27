@@ -57,7 +57,6 @@ func NewAggregateParam(opcode AggregateOpcode, col int, alias string) *Aggregate
 		Col:    col,
 		Alias:  alias,
 		WCol:   -1,
-		Type:   evalengine.UnknownType(),
 	}
 	if opcode.NeedsComparableValues() {
 		out.KeyCol = col
@@ -74,8 +73,8 @@ func (ap *AggregateParams) String() string {
 	if ap.WAssigned() {
 		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
 	}
-	if sqltypes.IsText(ap.Type.Type) && ap.Type.Coll != collations.Unknown {
-		keyCol += " COLLATE " + collations.Local().LookupName(ap.Type.Coll)
+	if sqltypes.IsText(ap.Type.Type()) && ap.Type.Collation() != collations.Unknown {
+		keyCol += " COLLATE " + collations.Local().LookupName(ap.Type.Collation())
 	}
 	dispOrigOp := ""
 	if ap.OrigOpcode != AggregateUnassigned && ap.OrigOpcode != ap.Opcode {
@@ -381,7 +380,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 				from: aggr.Col,
 				distinct: aggregatorDistinct{
 					column: distinct,
-					coll:   aggr.Type.Coll,
+					coll:   aggr.Type.Collation(),
 				},
 			}
 
@@ -399,7 +398,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 				sum:  sum,
 				distinct: aggregatorDistinct{
 					column: distinct,
-					coll:   aggr.Type.Coll,
+					coll:   aggr.Type.Collation(),
 				},
 			}
 
@@ -407,7 +406,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 			ag = &aggregatorMin{
 				aggregatorMinMax{
 					from:   aggr.Col,
-					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.Type.Coll),
+					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.Type.Collation()),
 				},
 			}
 
@@ -415,7 +414,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 			ag = &aggregatorMax{
 				aggregatorMinMax{
 					from:   aggr.Col,
-					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.Type.Coll),
+					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.Type.Collation()),
 				},
 			}
 

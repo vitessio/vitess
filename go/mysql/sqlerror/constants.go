@@ -250,6 +250,7 @@ const (
 	ERJSONValueTooBig              = ErrorCode(3150)
 	ERJSONDocumentTooDeep          = ErrorCode(3157)
 
+	ERLockNowait                = ErrorCode(3572)
 	ERRegexpStringNotTerminated = ErrorCode(3684)
 	ERRegexpBufferOverflow      = ErrorCode(3684)
 	ERRegexpIllegalArgument     = ErrorCode(3685)

@@ -92,7 +92,7 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 	}
 	if w.onDemandDuration > 0 {
 		// see RequestHeartbeats() for use of onDemandRequestTicks
-		// it's basically a mechnism to rate limit operation RequestHeartbeats().
+		// it's basically a mechanism to rate limit operation RequestHeartbeats().
 		// and selectively drop excessive requests.
 		w.allowNextHeartbeatRequest()
 		go func() {
@@ -123,7 +123,7 @@ func (w *heartbeatWriter) Open() {
 	if w.isOpen {
 		return
 	}
-	log.Info("Hearbeat Writer: opening")
+	log.Info("Heartbeat Writer: opening")
 
 	// We cannot create the database and tables in this Open function
 	// since, this is run when a tablet changes to Primary type. The other replicas
@@ -159,7 +159,7 @@ func (w *heartbeatWriter) Close() {
 	w.appPool.Close()
 	w.allPrivsPool.Close()
 	w.isOpen = false
-	log.Info("Hearbeat Writer: closed")
+	log.Info("Heartbeat Writer: closed")
 }
 
 // bindHeartbeatVars takes a heartbeat write (insert or update) and
@@ -219,7 +219,7 @@ func (w *heartbeatWriter) recordError(err error) {
 	writeErrors.Add(1)
 }
 
-// enableWrites actives or deactives heartbeat writes
+// enableWrites activates or deactivates heartbeat writes
 func (w *heartbeatWriter) enableWrites(enable bool) {
 	if w.ticks == nil {
 		return

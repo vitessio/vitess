@@ -761,7 +761,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 				// Note: this is done here only because golang does
 				// not currently support setting json tags in proto
 				// declarations so that I could request it always be
-				// ommitted from marshalled JSON output:
+				// omitted from marshalled JSON output:
 				// https://github.com/golang/protobuf/issues/52
 				status.Bls.OnDdl = 0
 			}

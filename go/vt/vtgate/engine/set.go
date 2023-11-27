@@ -445,6 +445,8 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 	switch svss.Name {
 	case sysvars.Autocommit.Name:
 		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetAutocommit)
+	case sysvars.ForeignKeyChecks.Name:
+		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetSessionForeignKeyChecks)
 	case sysvars.ClientFoundRows.Name:
 		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetClientFoundRows)
 	case sysvars.SkipQueryPlanCache.Name:

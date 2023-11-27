@@ -146,12 +146,13 @@ type (
 		ColumnName string
 	}
 
-	// SchemaInformation is used tp provide table information from Vschema.
+	// SchemaInformation is used to provide table information from Vschema.
 	SchemaInformation interface {
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 		ConnCollation() collations.ID
 		// ForeignKeyMode returns the foreign_key flag value
 		ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
+		GetForeignKeyChecksState() *bool
 		KeyspaceError(keyspace string) error
 	}
 
@@ -175,7 +176,9 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 		st.Recursive[to] = st.RecursiveDeps(from)
 		st.Direct[to] = st.DirectDeps(from)
 		if ValidAsMapKey(from) {
-			st.ExprTypes[to] = st.ExprTypes[from]
+			if typ, found := st.ExprTypes[from]; found {
+				st.ExprTypes[to] = typ
+			}
 		}
 	}
 }
@@ -608,16 +611,13 @@ func (st *SemTable) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
 	// We add a lot of WeightString() expressions to queries at late stages of the planning,
 	// which means that they don't have any type information. We can safely assume that they
 	// are VarBinary, since that's the only type that WeightString() can return.
-	_, isWS := e.(*sqlparser.WeightStringFuncExpr)
+	ws, isWS := e.(*sqlparser.WeightStringFuncExpr)
 	if isWS {
-		return evalengine.Type{
-			Type:     sqltypes.VarBinary,
-			Coll:     collations.CollationBinaryID,
-			Nullable: false, // TODO: we should check if the argument is nullable
-		}, true
+		wt, _ := st.TypeForExpr(ws.Expr)
+		return evalengine.NewTypeEx(sqltypes.VarBinary, collations.CollationBinaryID, wt.Nullable(), 0, 0), true
 	}
 
-	return evalengine.UnknownType(), false
+	return evalengine.Type{}, false
 }
 
 // NeedsWeightString returns true if the given expression needs weight_string to do safe comparisons
@@ -630,7 +630,7 @@ func (st *SemTable) NeedsWeightString(e sqlparser.Expr) bool {
 		if !found {
 			return true
 		}
-		return typ.Coll == collations.Unknown && !sqltypes.IsNumber(typ.Type)
+		return typ.Collation() == collations.Unknown && !sqltypes.IsNumber(typ.Type())
 	}
 }
 
@@ -700,8 +700,7 @@ func RewriteDerivedTableExpression(expr sqlparser.Expr, vt TableInfo) sqlparser.
 // CopyExprInfo lookups src in the ExprTypes map and, if a key is found, assign
 // the corresponding Type value of src to dest.
 func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {
-	srcType, found := st.ExprTypes[src]
-	if found {
+	if srcType, found := st.ExprTypes[src]; found {
 		st.ExprTypes[dest] = srcType
 	}
 }

@@ -29,8 +29,11 @@ type (
 	Column struct {
 		Offset    int
 		Type      sqltypes.Type
+		Size      int32
+		Scale     int32
 		Collation collations.TypedCollation
 		Original  sqlparser.Expr
+		Nullable  bool
 
 		// dynamicTypeOffset is set when the type of this column cannot be calculated
 		// at translation time. Since expressions with dynamic types cannot be compiled ahead of time,
@@ -56,7 +59,11 @@ func (c *Column) eval(env *ExpressionEnv) (eval, error) {
 
 func (c *Column) typeof(env *ExpressionEnv) (ctype, error) {
 	if c.typed() {
-		return ctype{Type: c.Type, Flag: flagNullable, Col: c.Collation}, nil
+		var nullable typeFlag
+		if c.Nullable {
+			nullable = flagNullable
+		}
+		return ctype{Type: c.Type, Size: c.Size, Scale: c.Scale, Flag: nullable, Col: c.Collation}, nil
 	}
 	if c.Offset < len(env.Fields) {
 		field := env.Fields[c.Offset]
@@ -85,7 +92,11 @@ func (column *Column) compile(c *compiler) (ctype, error) {
 	if column.typed() {
 		typ.Type = column.Type
 		typ.Col = column.Collation
-		typ.Flag = flagNullable
+		if column.Nullable {
+			typ.Flag = flagNullable
+		}
+		typ.Size = column.Size
+		typ.Scale = column.Scale
 	} else if c.dynamicTypes != nil {
 		typ = c.dynamicTypes[column.dynamicTypeOffset]
 	} else {

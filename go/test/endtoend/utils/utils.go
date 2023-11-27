@@ -256,55 +256,50 @@ func WaitForAuthoritative(t *testing.T, ks, tbl string, readVSchema func() (*int
 
 // WaitForKsError waits for the ks error field to be populated and returns it.
 func WaitForKsError(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string) string {
+	var errString string
+	WaitForVschemaCondition(t, vtgateProcess, ks, func(t *testing.T, keyspace map[string]interface{}) bool {
+		ksErr, fieldPresent := keyspace["error"]
+		if !fieldPresent {
+			return false
+		}
+		var ok bool
+		errString, ok = ksErr.(string)
+		return ok
+	})
+	return errString
+}
+
+// WaitForVschemaCondition waits for the condition to be true
+func WaitForVschemaCondition(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string, conditionMet func(t *testing.T, keyspace map[string]interface{}) bool) {
 	timeout := time.After(60 * time.Second)
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("schema tracking did not find error in '%s'", ks)
-			return ""
+			t.Fatalf("schema tracking did not met the condition within the time for keyspace: %s", ks)
 		default:
 			res, err := vtgateProcess.ReadVSchema()
 			require.NoError(t, err, res)
 			kss := convertToMap(*res)["keyspaces"]
 			ksMap := convertToMap(convertToMap(kss)[ks])
-			ksErr, fieldPresent := ksMap["error"]
-			if !fieldPresent {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			errString, isErr := ksErr.(string)
-			if !isErr {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			return errString
-		}
-	}
-}
-
-// WaitForTableDeletions waits for a table to be deleted
-func WaitForTableDeletions(ctx context.Context, t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl string) error {
-	for {
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("schema tracking still found the table '%s'", tbl)
-		default:
-			res, err := vtgateProcess.ReadVSchema()
-			require.NoError(t, err, res)
-			keyspacesMap := convertToMap(*res)["keyspaces"]
-			ksMap := convertToMap(keyspacesMap)[ks]
-			tablesMap := convertToMap(ksMap)["tables"]
-			_, isPresent := convertToMap(tablesMap)[tbl]
-			if !isPresent {
-				return nil
+			if conditionMet(t, ksMap) {
+				return
 			}
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
 
+// WaitForTableDeletions waits for a table to be deleted
+func WaitForTableDeletions(ctx context.Context, t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl string) {
+	WaitForVschemaCondition(t, vtgateProcess, ks, func(t *testing.T, keyspace map[string]interface{}) bool {
+		tablesMap := keyspace["tables"]
+		_, isPresent := convertToMap(tablesMap)[tbl]
+		return !isPresent
+	})
+}
+
 // WaitForColumn waits for a table's column to be present
-func WaitForColumn(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
+func WaitForColumn(t testing.TB, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
 	timeout := time.After(60 * time.Second)
 	for {
 		select {

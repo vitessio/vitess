@@ -4188,7 +4188,7 @@ func TestDeleteTablets(t *testing.T) {
 				// value anymore
 				defer unlock(&lerr)
 
-				// we do, however, care that the lock context gets propogated
+				// we do, however, care that the lock context gets propagated
 				// both to additional calls to lock, and to the actual RPC call.
 				ctx = lctx
 			}

@@ -149,7 +149,7 @@ func (expr *builtinAbs) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck1(arg)
 
-	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: arg.Flag}
+	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}
 	switch arg.Type {
 	case sqltypes.Int64:
 		c.asm.Fn_ABS_i()
@@ -302,7 +302,7 @@ func (expr *builtinAtan2) compile(c *compiler) (ctype, error) {
 	c.compileToFloat(arg2, 1)
 	c.asm.Fn_ATAN2()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg1.Flag | arg2.Flag}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg1.Flag | arg2.Flag)}, nil
 }
 
 type builtinCos struct {
@@ -538,7 +538,7 @@ func (expr *builtinLog) compile(c *compiler) (ctype, error) {
 	c.compileToFloat(arg2, 1)
 	c.asm.Fn_LOG()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg1.Flag | arg2.Flag}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg1.Flag | arg2.Flag)}, nil
 }
 
 type builtinLog10 struct {
@@ -638,7 +638,7 @@ func (expr *builtinPow) compile(c *compiler) (ctype, error) {
 	c.compileToFloat(arg2, 1)
 	c.asm.Fn_POW()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg1.Flag | arg2.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg1.Flag | arg2.Flag)}, nil
 }
 
 type builtinSign struct {
@@ -718,7 +718,7 @@ func (expr *builtinSign) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}, nil
 }
 
 type builtinSqrt struct {

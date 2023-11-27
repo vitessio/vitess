@@ -242,7 +242,7 @@ func (lh *LookupHash) MarshalJSON() ([]byte, error) {
 	return json.Marshal(lh.lkp)
 }
 
-// UnknownParams satisifes the ParamValidating interface.
+// UnknownParams satisfies the ParamValidating interface.
 func (lh *LookupHash) UnknownParams() []string {
 	return lh.unknownParams
 }
@@ -265,7 +265,7 @@ func unhashList(ksids [][]byte) ([]sqltypes.Value, error) {
 // LookupHashUnique defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup.
-// Warning: This Vindex is being depcreated in favor of LookupUnique
+// Warning: This Vindex is being deprecated in favor of LookupUnique
 type LookupHashUnique struct {
 	name          string
 	writeOnly     bool
