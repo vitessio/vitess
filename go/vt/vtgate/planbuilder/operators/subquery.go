@@ -262,7 +262,10 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Ope
 		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg()), rhsPred)
 		sq.SubqueryValueName = sq.ArgName
 	case opcode.PulloutNotIn:
-		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())), rhsPred)
+		predicates = append(predicates, &sqlparser.OrExpr{
+			Left:  sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())),
+			Right: rhsPred,
+		})
 		sq.SubqueryValueName = sq.ArgName
 	case opcode.PulloutValue:
 		predicates = append(predicates, rhsPred)
