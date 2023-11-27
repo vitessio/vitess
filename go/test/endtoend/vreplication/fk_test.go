@@ -94,12 +94,15 @@ func TestFKWorkflow(t *testing.T) {
 	workflowName := "fk"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
 
-	mt := newMoveTables(vc, &moveTables{
-		workflowName:   workflowName,
-		targetKeyspace: targetKeyspace,
+	mt := newMoveTables(vc, &moveTablesWorkflow{
+		workflowInfo: &workflowInfo{
+			vc:             vc,
+			workflowName:   workflowName,
+			targetKeyspace: targetKeyspace,
+		},
 		sourceKeyspace: sourceKeyspace,
 		atomicCopy:     true,
-	}, moveTablesFlavorRandom)
+	}, workflowFlavorRandom)
 	mt.Create()
 
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())

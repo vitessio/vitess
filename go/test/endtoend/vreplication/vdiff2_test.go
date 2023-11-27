@@ -323,6 +323,7 @@ func testResume(t *testing.T, tc *testCase, cells string) {
 		// expected number of rows in total (original run and resume)
 		_, _ = performVDiff2Action(t, false, ksWorkflow, cells, "resume", uuid, false)
 		info := waitForVDiff2ToComplete(t, false, ksWorkflow, cells, uuid, ogTime)
+		require.NotNil(t, info)
 		require.False(t, info.HasMismatch)
 		require.Equal(t, expectedRows, info.RowsCompared)
 	})
@@ -375,6 +376,7 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 		// confirm that the VDiff was retried, able to complete, and we compared the expected
 		// number of rows in total (original run and retry)
 		info := waitForVDiff2ToComplete(t, false, ksWorkflow, cells, uuid, ogTime)
+		require.NotNil(t, info)
 		require.False(t, info.HasMismatch)
 		require.Equal(t, expectedRows, info.RowsCompared)
 	})

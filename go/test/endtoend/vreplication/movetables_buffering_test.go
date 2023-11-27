@@ -21,7 +21,7 @@ func TestMoveTablesBuffering(t *testing.T) {
 	setupMinimalCustomerKeyspace(t)
 	tables := "loadtest"
 	err := tstWorkflowExec(t, defaultCellName, workflowName, sourceKs, targetKs,
-		tables, workflowActionCreate, "", "", "", false)
+		tables, workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 
