@@ -55,7 +55,6 @@ var (
 	tableACLConfigReloadInterval time.Duration
 	tabletPath                   string
 	tabletConfig                 string
-	dbaGrantWaitTime             = 10 * time.Second
 
 	tm *tabletmanager.TabletManager
 
@@ -103,6 +102,10 @@ vttablet \
 		PreRunE: servenv.CobraPreRunE,
 		RunE:    run,
 	}
+)
+
+const (
+	dbaGrantWaitTime = 10 * time.Second
 )
 
 func run(cmd *cobra.Command, args []string) error {
@@ -310,5 +313,4 @@ func init() {
 	Main.Flags().DurationVar(&tableACLConfigReloadInterval, "table-acl-config-reload-interval", tableACLConfigReloadInterval, "Ticker to reload ACLs. Duration flag, format e.g.: 30s. Default: do not reload")
 	Main.Flags().StringVar(&tabletPath, "tablet-path", tabletPath, "tablet alias")
 	Main.Flags().StringVar(&tabletConfig, "tablet_config", tabletConfig, "YAML file config for tablet")
-	Main.Flags().DurationVar(&dbaGrantWaitTime, "dba-grant-wait-time", dbaGrantWaitTime, "Time to wait for dba user to be granted the required permissions. Setting the value to 0 disable the wait.")
 }

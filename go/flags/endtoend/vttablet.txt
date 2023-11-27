@@ -137,7 +137,6 @@ Flags:
       --db_ssl_key string                                                connection ssl key
       --db_ssl_mode SslMode                                              SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
       --db_tls_min_version string                                        Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --dba-grant-wait-time duration                                     Time to wait for dba user to be granted the required permissions. Setting the value to 0 disable the wait. (default 10s)
       --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
       --degraded_threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
