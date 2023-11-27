@@ -33,6 +33,7 @@ type compiler struct {
 	collation    collations.ID
 	dynamicTypes []ctype
 	asm          assembler
+	sqlmode      SQLMode
 }
 
 type CompilerLog interface {
@@ -257,7 +258,7 @@ func (c *compiler) compileToDate(doct ctype, offset int) ctype {
 	case sqltypes.Date:
 		return doct
 	default:
-		c.asm.Convert_xD(offset)
+		c.asm.Convert_xD(offset, c.sqlmode.AllowZeroDate())
 	}
 	return ctype{Type: sqltypes.Date, Col: collationBinary, Flag: flagNullable}
 }
@@ -268,7 +269,7 @@ func (c *compiler) compileToDateTime(doct ctype, offset, prec int) ctype {
 		c.asm.Convert_tp(offset, prec)
 		return doct
 	default:
-		c.asm.Convert_xDT(offset, prec)
+		c.asm.Convert_xDT(offset, prec, c.sqlmode.AllowZeroDate())
 	}
 	return ctype{Type: sqltypes.Datetime, Size: int32(prec), Col: collationBinary, Flag: flagNullable}
 }
