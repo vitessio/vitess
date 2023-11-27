@@ -44,10 +44,10 @@ type (
 		Fields   []*querypb.Field
 
 		// internal state
-		now           time.Time
-		vc            VCursor
-		user          *querypb.VTGateCallerID
-		allowZeroDate bool
+		now     time.Time
+		vc      VCursor
+		user    *querypb.VTGateCallerID
+		sqlmode SQLMode
 	}
 )
 
@@ -124,11 +124,31 @@ func NewExpressionEnv(ctx context.Context, bindVars map[string]*querypb.BindVari
 	env.user = callerid.ImmediateCallerIDFromContext(ctx)
 	env.SetTime(time.Now())
 	if vc != nil {
-		env.allowZeroDate = AllowZeroDate(vc.SQLMode())
+		env.sqlmode = ParseSQLMode(vc.SQLMode())
 	}
 	return env
 }
 
-func AllowZeroDate(sqlMode string) bool {
-	return !strings.Contains(sqlMode, "NO_ZERO_DATE")
+const (
+	sqlModeParsed = 1 << iota
+	sqlModeNoZeroDate
+)
+
+type SQLMode uint32
+
+func (mode SQLMode) AllowZeroDate() bool {
+	if mode == 0 {
+		// default: do not allow zero-date if the sqlmode is not set
+		return false
+	}
+	return (mode & sqlModeNoZeroDate) == 0
+}
+
+func ParseSQLMode(sqlmode string) SQLMode {
+	var mode SQLMode
+	if strings.Contains(sqlmode, "NO_ZERO_DATE") {
+		mode |= sqlModeNoZeroDate
+	}
+	mode |= sqlModeParsed
+	return mode
 }

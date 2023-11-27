@@ -23,8 +23,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func CoerceTo(value sqltypes.Value, typ sqltypes.Type, allowZeroDate bool) (sqltypes.Value, error) {
-	cast, err := valueToEvalCast(value, value.Type(), collations.Unknown, allowZeroDate)
+func CoerceTo(value sqltypes.Value, typ sqltypes.Type, sqlmode SQLMode) (sqltypes.Value, error) {
+	cast, err := valueToEvalCast(value, value.Type(), collations.Unknown, sqlmode)
 	if err != nil {
 		return sqltypes.Value{}, err
 	}

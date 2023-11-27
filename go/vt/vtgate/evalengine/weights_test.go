@@ -136,7 +136,7 @@ func TestWeightStrings(t *testing.T) {
 				items := make([]item, 0, Length)
 				for i := 0; i < Length; i++ {
 					v := tc.gen()
-					w, _, err := WeightString(nil, v, typ, tc.col, tc.len, tc.prec, false)
+					w, _, err := WeightString(nil, v, typ, tc.col, tc.len, tc.prec, 0)
 					require.NoError(t, err)
 
 					items = append(items, item{value: v, weight: string(w)})
@@ -156,9 +156,9 @@ func TestWeightStrings(t *testing.T) {
 					a := items[i]
 					b := items[i+1]
 
-					v1, err := valueToEvalCast(a.value, typ, tc.col, false)
+					v1, err := valueToEvalCast(a.value, typ, tc.col, 0)
 					require.NoError(t, err)
-					v2, err := valueToEvalCast(b.value, typ, tc.col, false)
+					v2, err := valueToEvalCast(b.value, typ, tc.col, 0)
 					require.NoError(t, err)
 
 					cmp, err := evalCompareNullSafe(v1, v2)

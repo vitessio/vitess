@@ -124,12 +124,12 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		case p > 6:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for 'CONVERT'. Maximum is 6.", p)
 		}
-		if dt := evalToDateTime(e, c.Length, env.now, env.allowZeroDate); dt != nil {
+		if dt := evalToDateTime(e, c.Length, env.now, env.sqlmode.AllowZeroDate()); dt != nil {
 			return dt, nil
 		}
 		return nil, nil
 	case "DATE":
-		if d := evalToDate(e, env.now, env.allowZeroDate); d != nil {
+		if d := evalToDate(e, env.now, env.sqlmode.AllowZeroDate()); d != nil {
 			return d, nil
 		}
 		return nil, nil

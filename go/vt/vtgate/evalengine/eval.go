@@ -218,7 +218,7 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID, now time.Time, all
 	}
 }
 
-func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.ID, allowZeroDate bool) (eval, error) {
+func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.ID, sqlmode SQLMode) (eval, error) {
 	switch {
 	case typ == sqltypes.Null:
 		return nil, nil
@@ -338,7 +338,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			return nil, err
 		}
 		// Separate return here to avoid nil wrapped in interface type
-		d := evalToDate(e, time.Now(), allowZeroDate)
+		d := evalToDate(e, time.Now(), sqlmode.AllowZeroDate())
 		if d == nil {
 			return nil, nil
 		}
@@ -349,7 +349,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			return nil, err
 		}
 		// Separate return here to avoid nil wrapped in interface type
-		dt := evalToDateTime(e, -1, time.Now(), allowZeroDate)
+		dt := evalToDateTime(e, -1, time.Now(), sqlmode.AllowZeroDate())
 		if dt == nil {
 			return nil, nil
 		}

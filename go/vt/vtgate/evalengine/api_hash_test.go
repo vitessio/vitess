@@ -56,10 +56,10 @@ func TestHashCodes(t *testing.T) {
 			require.NoError(t, err)
 			require.Equalf(t, tc.equal, cmp == 0, "got %v %s %v (expected %s)", tc.static, equality(cmp == 0).Operator(), tc.dynamic, equality(tc.equal))
 
-			h1, err := NullsafeHashcode(tc.static, collations.CollationUtf8mb4ID, tc.static.Type(), false)
+			h1, err := NullsafeHashcode(tc.static, collations.CollationUtf8mb4ID, tc.static.Type(), 0)
 			require.NoError(t, err)
 
-			h2, err := NullsafeHashcode(tc.dynamic, collations.CollationUtf8mb4ID, tc.static.Type(), false)
+			h2, err := NullsafeHashcode(tc.dynamic, collations.CollationUtf8mb4ID, tc.static.Type(), 0)
 			require.ErrorIs(t, err, tc.err)
 
 			assert.Equalf(t, tc.equal, h1 == h2, "HASH(%v) %s HASH(%v) (expected %s)", tc.static, equality(h1 == h2).Operator(), tc.dynamic, equality(tc.equal))
@@ -82,9 +82,9 @@ func TestHashCodesRandom(t *testing.T) {
 		typ, err := coerceTo(v1.Type(), v2.Type())
 		require.NoError(t, err)
 
-		hash1, err := NullsafeHashcode(v1, collation, typ, false)
+		hash1, err := NullsafeHashcode(v1, collation, typ, 0)
 		require.NoError(t, err)
-		hash2, err := NullsafeHashcode(v2, collation, typ, false)
+		hash2, err := NullsafeHashcode(v2, collation, typ, 0)
 		require.NoError(t, err)
 		if cmp == 0 {
 			equal++
@@ -142,11 +142,11 @@ func TestHashCodes128(t *testing.T) {
 			require.Equalf(t, tc.equal, cmp == 0, "got %v %s %v (expected %s)", tc.static, equality(cmp == 0).Operator(), tc.dynamic, equality(tc.equal))
 
 			hasher1 := vthash.New()
-			err = NullsafeHashcode128(&hasher1, tc.static, collations.CollationUtf8mb4ID, tc.static.Type(), false)
+			err = NullsafeHashcode128(&hasher1, tc.static, collations.CollationUtf8mb4ID, tc.static.Type(), 0)
 			require.NoError(t, err)
 
 			hasher2 := vthash.New()
-			err = NullsafeHashcode128(&hasher2, tc.dynamic, collations.CollationUtf8mb4ID, tc.static.Type(), false)
+			err = NullsafeHashcode128(&hasher2, tc.dynamic, collations.CollationUtf8mb4ID, tc.static.Type(), 0)
 			require.ErrorIs(t, err, tc.err)
 
 			h1 := hasher1.Sum128()
@@ -172,10 +172,10 @@ func TestHashCodesRandom128(t *testing.T) {
 		require.NoError(t, err)
 
 		hasher1 := vthash.New()
-		err = NullsafeHashcode128(&hasher1, v1, collation, typ, false)
+		err = NullsafeHashcode128(&hasher1, v1, collation, typ, 0)
 		require.NoError(t, err)
 		hasher2 := vthash.New()
-		err = NullsafeHashcode128(&hasher2, v2, collation, typ, false)
+		err = NullsafeHashcode128(&hasher2, v2, collation, typ, 0)
 		require.NoError(t, err)
 		if cmp == 0 {
 			equal++
