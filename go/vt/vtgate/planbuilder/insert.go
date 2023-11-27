@@ -95,6 +95,7 @@ func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tabl
 	eIns.TableName = tables[0].Name.String()
 	eIns.Opcode = engine.InsertUnsharded
 	eIns.Query = generateQuery(stmt)
+	eIns.InsertRows = engine.NewInsertRows(nil)
 	return &insert{eInsert: eIns}
 }
 
@@ -108,7 +109,7 @@ var _ logicalPlan = (*insert)(nil)
 func (i *insert) Primitive() engine.Primitive {
 	if i.source != nil {
 		input := i.source.Primitive()
-		i.eInsert.InsertRows = engine.NewInsertRowsFromSelect(i.eInsert.Generate, input)
+		i.eInsert.InsertRows.RowsFromSelect = input
 	}
 	return i.eInsert
 }

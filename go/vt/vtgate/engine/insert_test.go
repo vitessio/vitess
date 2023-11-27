@@ -76,7 +76,7 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 		},
 		"dummy_insert",
 	)
-	ins.Generate = &Generate{
+	ins.InsertRows.Generate = &Generate{
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks2",
 			Sharded: false,
@@ -129,7 +129,7 @@ func TestInsertUnshardedGenerate_Zeros(t *testing.T) {
 		},
 		"dummy_insert",
 	)
-	ins.Generate = &Generate{
+	ins.InsertRows.Generate = &Generate{
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks2",
 			Sharded: false,
@@ -417,7 +417,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 		" suffix",
 	)
 
-	ins.Generate = &Generate{
+	ins.InsertRows.Generate = &Generate{
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks2",
 			Sharded: false,
@@ -1754,7 +1754,6 @@ func TestInsertSelectGenerate(t *testing.T) {
 		Query:  "dummy_generate",
 		Offset: 1,
 	}
-	ins.Generate = gen
 	ins.InsertRows = NewInsertRowsFromSelect(gen, rb)
 
 	vc := newDMLTestVCursor("-20", "20-")

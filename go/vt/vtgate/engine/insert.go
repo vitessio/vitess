@@ -73,9 +73,6 @@ type (
 		// TableName is the name of the table on which row will be inserted.
 		TableName string
 
-		// Generate is only set for inserts where a sequence must be generated.
-		Generate *Generate
-
 		// Prefix, Mid and Suffix are for sharded insert plans.
 		Prefix string
 		Mid    sqlparser.Values
@@ -117,9 +114,10 @@ func (ins *Insert) Inputs() ([]Primitive, []map[string]any) {
 // NewQueryInsert creates an Insert with a query string.
 func NewQueryInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, query string) *Insert {
 	return &Insert{
-		Opcode:   opcode,
-		Keyspace: keyspace,
-		Query:    query,
+		Opcode:     opcode,
+		Keyspace:   keyspace,
+		Query:      query,
+		InsertRows: NewInsertRows(nil),
 	}
 }
 
@@ -138,6 +136,7 @@ func NewInsert(
 		Opcode:       opcode,
 		Ignore:       ignore,
 		Keyspace:     keyspace,
+		InsertRows:   NewInsertRows(nil),
 		VindexValues: vindexValues,
 		Prefix:       prefix,
 		Mid:          mid,
@@ -332,7 +331,7 @@ func (ins *Insert) insertIntoShardedTableFromValues(
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
 ) (*sqltypes.Result, error) {
-	insertID, err := ins.processGenerateFromValues(ctx, vcursor, bindVars)
+	insertID, err := ins.InsertRows.processGenerateFromValues(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -489,89 +488,6 @@ func (ins *Insert) execInsertFromSelect(ctx context.Context, vcursor VCursor, bi
 
 	_, qr, err := ins.insertIntoShardedTableFromSelect(ctx, vcursor, bindVars, result)
 	return qr, err
-}
-
-// shouldGenerate determines if a sequence value should be generated for a given value
-func shouldGenerate(v sqltypes.Value) bool {
-	if v.IsNull() {
-		return true
-	}
-
-	// Unless the NO_AUTO_VALUE_ON_ZERO sql mode is active in mysql, it also
-	// treats 0 as a value that should generate a new sequence.
-	value, err := evalengine.CoerceTo(v, sqltypes.Uint64)
-	if err != nil {
-		return false
-	}
-
-	id, err := value.ToCastUint64()
-	if err != nil {
-		return false
-	}
-
-	return id == 0
-}
-
-// processGenerateFromValues generates new values using a sequence if necessary.
-// If no value was generated, it returns 0. Values are generated only
-// for cases where none are supplied.
-func (ins *Insert) processGenerateFromValues(
-	ctx context.Context,
-	vcursor VCursor,
-	bindVars map[string]*querypb.BindVariable,
-) (insertID int64, err error) {
-	if ins.Generate == nil {
-		return 0, nil
-	}
-
-	// Scan input values to compute the number of values to generate, and
-	// keep track of where they should be filled.
-	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	resolved, err := env.Evaluate(ins.Generate.Values)
-	if err != nil {
-		return 0, err
-	}
-	count := int64(0)
-	values := resolved.TupleValues()
-	for _, val := range values {
-		if shouldGenerate(val) {
-			count++
-		}
-	}
-
-	// If generation is needed, generate the requested number of values (as one call).
-	if count != 0 {
-		rss, _, err := vcursor.ResolveDestinations(ctx, ins.Generate.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
-		if err != nil {
-			return 0, err
-		}
-		if len(rss) != 1 {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "auto sequence generation can happen through single shard only, it is getting routed to %d shards", len(rss))
-		}
-		bindVars := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(count)}
-		qr, err := vcursor.ExecuteStandalone(ctx, ins, ins.Generate.Query, bindVars, rss[0])
-		if err != nil {
-			return 0, err
-		}
-		// If no rows are returned, it's an internal error, and the code
-		// must panic, which will be caught and reported.
-		insertID, err = qr.Rows[0][0].ToCastInt64()
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// Fill the holes where no value was supplied.
-	cur := insertID
-	for i, v := range values {
-		if shouldGenerate(v) {
-			bindVars[SeqVarName+strconv.Itoa(i)] = sqltypes.Int64BindVariable(cur)
-			cur++
-		} else {
-			bindVars[SeqVarName+strconv.Itoa(i)] = sqltypes.ValueBindVariable(v)
-		}
-	}
-	return insertID, nil
 }
 
 // getInsertQueriesFromValues performs all the vindex related work
@@ -919,11 +835,11 @@ func (ins *Insert) description() PrimitiveDescription {
 		other["VindexValues"] = valuesOffsets
 	}
 
-	if ins.Generate != nil {
-		if ins.Generate.Values == nil {
-			other["AutoIncrement"] = fmt.Sprintf("%s:Offset(%d)", ins.Generate.Query, ins.Generate.Offset)
+	if ins.InsertRows.Generate != nil {
+		if ins.InsertRows.Generate.Values == nil {
+			other["AutoIncrement"] = fmt.Sprintf("%s:Offset(%d)", ins.InsertRows.Generate.Query, ins.InsertRows.Generate.Offset)
 		} else {
-			other["AutoIncrement"] = fmt.Sprintf("%s:Values::%s", ins.Generate.Query, sqlparser.String(ins.Generate.Values))
+			other["AutoIncrement"] = fmt.Sprintf("%s:Values::%s", ins.InsertRows.Generate.Query, sqlparser.String(ins.InsertRows.Generate.Values))
 		}
 	}
 
@@ -963,7 +879,7 @@ func (ins *Insert) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor
 }
 
 func (ins *Insert) executeUnshardedTableQuery(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, query string) (int64, *sqltypes.Result, error) {
-	insertID, err := ins.processGenerateFromValues(ctx, vcursor, bindVars)
+	insertID, err := ins.InsertRows.processGenerateFromValues(ctx, vcursor, bindVars)
 	if err != nil {
 		return 0, nil, err
 	}

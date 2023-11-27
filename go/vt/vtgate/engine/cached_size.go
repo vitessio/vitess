@@ -422,8 +422,6 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	// field TableName string
 	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
-	// field Generate *vitess.io/vitess/go/vt/vtgate/engine.Generate
-	size += cached.Generate.CachedSize(true)
 	// field Prefix string
 	size += hack.RuntimeAllocSize(int64(len(cached.Prefix)))
 	// field Mid vitess.io/vitess/go/vt/sqlparser.Values
