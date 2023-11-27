@@ -17,7 +17,6 @@ limitations under the License.
 package foreignkey
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"math/rand"
@@ -29,7 +28,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
@@ -718,43 +716,7 @@ func BenchmarkFkFuzz(b *testing.B) {
 	// Wait for schema-tracking to be complete.
 	waitForSchemaTrackingForFkTables(b)
 	for i := 0; i < b.N; i++ {
-		// Clear out all the data to ensure we start with a clean slate.
-		startBenchmark(b)
-		// Create a fuzzer to generate and store a certain set of queries.
-		fz := newFuzzer(1, maxValForId, maxValForCol, insertShare, deleteShare, updateShare, SQLQueries, nil)
-		fz.noFkSetVar = true
-		var queries []string
-		for j := 0; j < numQueries; j++ {
-			genQueries := fz.generateQuery()
-			require.Len(b, genQueries, 1)
-			queries = append(queries, genQueries[0])
-		}
-
-		// Connect to MySQL and run all the queries
-		mysqlConn, err := mysql.Connect(context.Background(), &mysqlParams)
-		require.NoError(b, err)
-		// Connect to Vitess managed foreign keys keyspace
-		vtConn, err := mysql.Connect(context.Background(), &vtParams)
-		require.NoError(b, err)
-		utils.Exec(b, vtConn, fmt.Sprintf("use `%v`", unshardedKs))
-		// Connect to Vitess unmanaged foreign keys keyspace
-		vtUnmanagedConn, err := mysql.Connect(context.Background(), &vtParams)
-		require.NoError(b, err)
-		utils.Exec(b, vtUnmanagedConn, fmt.Sprintf("use `%v`", unshardedUnmanagedKs))
-
-		// First we make sure that running all the queries in both the Vitess modes and MySQL gives the same data.
-		// So we run all the queries and then check that the data in all of them matches.
-		runQueries(b, mysqlConn, queries)
-		runQueries(b, vtConn, queries)
-		runQueries(b, vtUnmanagedConn, queries)
-		for _, table := range fkTables {
-			query := fmt.Sprintf("SELECT * FROM %v ORDER BY id", table)
-			resVitessManaged, _ := vtConn.ExecuteFetch(query, 10000, true)
-			resMySQL, _ := mysqlConn.ExecuteFetch(query, 10000, true)
-			resVitessUnmanaged, _ := vtUnmanagedConn.ExecuteFetch(query, 10000, true)
-			require.True(b, compareResultRows(resVitessManaged, resMySQL), "Results for %v don't match\nVitess Managed\n%v\nMySQL\n%v", table, resVitessManaged, resMySQL)
-			require.True(b, compareResultRows(resVitessUnmanaged, resMySQL), "Results for %v don't match\nVitess Unmanaged\n%v\nMySQL\n%v", table, resVitessUnmanaged, resMySQL)
-		}
+		queries, mysqlConn, vtConn, vtUnmanagedConn := setupBenchmark(b, maxValForId, maxValForCol, insertShare, deleteShare, updateShare, numQueries)
 
 		// Now we run the benchmarks!
 		b.Run("MySQL", func(b *testing.B) {
@@ -771,11 +733,5 @@ func BenchmarkFkFuzz(b *testing.B) {
 			startBenchmark(b)
 			runQueries(b, vtUnmanagedConn, queries)
 		})
-	}
-}
-
-func runQueries(t testing.TB, conn *mysql.Conn, queries []string) {
-	for _, query := range queries {
-		_, _ = utils.ExecAllowError(t, conn, query)
 	}
 }
