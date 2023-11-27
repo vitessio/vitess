@@ -3503,7 +3503,7 @@ func (node *Show) Format(buf *TrackedBuffer) {
 			node.ShowTablesOpt.Format(buf)
 			return
 		}
-	case "triggers", "events":
+	case "triggers", "events", "plugins":
 		if node.ShowTablesOpt != nil {
 			buf.Myprintf("show ")
 			buf.Myprintf("%s", loweredType)
