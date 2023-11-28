@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -99,7 +100,18 @@ func (ir *InsertRows) execSelectStreaming(
 	bindVars map[string]*querypb.BindVariable,
 	callback func(irr insertRowsResult) error,
 ) error {
+	var mu sync.Mutex
 	return vcursor.StreamExecutePrimitiveStandalone(ctx, ir.RowsFromSelect, bindVars, false, func(result *sqltypes.Result) error {
+		if len(result.Rows) == 0 {
+			return nil
+		}
+
+		// should process only one chunk at a time.
+		// as parallel chunk insert will try to use the same transaction in the vttablet
+		// this will cause transaction in use error.
+		mu.Lock()
+		defer mu.Unlock()
+
 		insertID, err := ir.processGenerateFromSelect(ctx, vcursor, result.Rows)
 		if err != nil {
 			return err

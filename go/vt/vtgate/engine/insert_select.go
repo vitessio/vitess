@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -159,18 +158,11 @@ func (ins *InsertSelect) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 	defer cancelFunc()
 
 	sharded := ins.Keyspace.Sharded
-	var mu sync.Mutex
 	output := &sqltypes.Result{}
 	err := ins.InsertRows.execSelectStreaming(ctx, vcursor, bindVars, func(irr insertRowsResult) error {
 		if len(irr.rows) == 0 {
 			return nil
 		}
-
-		// should process only one chunk at a time.
-		// as parallel chunk insert will try to use the same transaction in the vttablet
-		// this will cause transaction in use error.
-		mu.Lock()
-		defer mu.Unlock()
 
 		var insertID int64
 		var qr *sqltypes.Result
@@ -178,7 +170,7 @@ func (ins *InsertSelect) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 		if sharded {
 			insertID, qr, err = ins.insertIntoShardedTableFromSelect(ctx, vcursor, bindVars, irr)
 		} else {
-			insertID, qr, err = ins.insertIntoUnshardedTable(ctx, vcursor, bindVars, irr.rows)
+			insertID, qr, err = ins.insertIntoUnshardedTable(ctx, vcursor, bindVars, irr)
 		}
 		if err != nil {
 			return err
@@ -203,20 +195,34 @@ func (ins *InsertSelect) GetFields(context.Context, VCursor, map[string]*querypb
 }
 
 func (ins *InsertSelect) execInsertUnsharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	query := ins.Query
-	if ins.InsertRows.hasSelectInput() {
-		result, err := ins.InsertRows.execSelect(ctx, vcursor, bindVars)
-		if err != nil {
-			return nil, err
-		}
-		if len(result.rows) == 0 {
-			return &sqltypes.Result{}, nil
-		}
-		query = ins.getInsertQueryFromSelectForUnsharded(result.rows, bindVars)
+	irr, err := ins.InsertRows.execSelect(ctx, vcursor, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	if len(irr.rows) == 0 {
+		return &sqltypes.Result{}, nil
+	}
+	_, qr, err := ins.insertIntoUnshardedTable(ctx, vcursor, bindVars, irr)
+	return qr, err
+}
+
+func (ins *InsertSelect) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, irr insertRowsResult) (int64, *sqltypes.Result, error) {
+	query := ins.getInsertQueryFromSelectForUnsharded(irr.rows, bindVars)
+	qr, err := ins.executeUnshardedTableQuery(ctx, vcursor, bindVars, query)
+	if err != nil {
+		return 0, nil, err
 	}
 
-	_, qr, err := ins.executeUnshardedTableQuery(ctx, vcursor, bindVars, query)
-	return qr, err
+	// If processGenerateFromValues generated new values, it supersedes
+	// any ids that MySQL might have generated. If both generated
+	// values, we don't return an error because this behavior
+	// is required to support migration.
+	if irr.insertID != 0 {
+		qr.InsertID = uint64(irr.insertID)
+	} else {
+		irr.insertID = int64(qr.InsertID)
+	}
+	return irr.insertID, qr, nil
 }
 
 func (ins *InsertSelect) getInsertQueryFromSelectForUnsharded(rows []sqltypes.Row, bindVars map[string]*querypb.BindVariable) string {
@@ -231,6 +237,21 @@ func (ins *InsertSelect) getInsertQueryFromSelectForUnsharded(rows []sqltypes.Ro
 		mids = append(mids, row)
 	}
 	return ins.Prefix + sqlparser.String(mids) + ins.Suffix
+}
+
+func (ins *InsertSelect) executeUnshardedTableQuery(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, query string) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(ctx, ins.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+	if err != nil {
+		return nil, err
+	}
+	if len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
+	}
+	err = allowOnlyPrimary(rss...)
+	if err != nil {
+		return nil, err
+	}
+	return execShard(ctx, ins, vcursor, query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */)
 }
 
 func (ins *InsertSelect) insertIntoShardedTableFromSelect(
@@ -248,6 +269,7 @@ func (ins *InsertSelect) insertIntoShardedTableFromSelect(
 	if err != nil {
 		return 0, nil, err
 	}
+	qr.InsertID = uint64(irr.insertID)
 	return irr.insertID, qr, nil
 }
 
@@ -561,43 +583,4 @@ func (ins *InsertSelect) description() PrimitiveDescription {
 		TargetTabletType: topodatapb.TabletType_PRIMARY,
 		Other:            other,
 	}
-}
-
-func (ins *InsertSelect) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rows []sqltypes.Row) (int64, *sqltypes.Result, error) {
-	query := ins.getInsertQueryFromSelectForUnsharded(rows, bindVars)
-	return ins.executeUnshardedTableQuery(ctx, vcursor, bindVars, query)
-}
-
-func (ins *InsertSelect) executeUnshardedTableQuery(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, query string) (int64, *sqltypes.Result, error) {
-	insertID, err := ins.InsertRows.processGenerateFromValues(ctx, vcursor, bindVars)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	rss, _, err := vcursor.ResolveDestinations(ctx, ins.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
-	if err != nil {
-		return 0, nil, err
-	}
-	if len(rss) != 1 {
-		return 0, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
-	}
-	err = allowOnlyPrimary(rss...)
-	if err != nil {
-		return 0, nil, err
-	}
-	qr, err := execShard(ctx, ins, vcursor, query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	// If processGenerateFromValues generated new values, it supersedes
-	// any ids that MySQL might have generated. If both generated
-	// values, we don't return an error because this behavior
-	// is required to support migration.
-	if insertID != 0 {
-		qr.InsertID = uint64(insertID)
-	} else {
-		insertID = int64(qr.InsertID)
-	}
-	return insertID, qr, nil
 }
