@@ -102,6 +102,10 @@ vttablet \
 	}
 )
 
+const (
+	dbaGrantWaitTime = 10 * time.Second
+)
+
 func run(cmd *cobra.Command, args []string) error {
 	servenv.Init()
 
@@ -243,6 +247,11 @@ func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts 
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
 	} else if enforceTableACLConfig {
 		return nil, fmt.Errorf("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
+	}
+
+	err := tabletserver.WaitForDBAGrants(config, dbaGrantWaitTime)
+	if err != nil {
+		return nil, err
 	}
 	// creates and registers the query service
 	qsc := tabletserver.NewTabletServer(ctx, "", config, ts, tabletAlias)
