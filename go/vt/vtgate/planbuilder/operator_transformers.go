@@ -116,9 +116,9 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 			TableName:         ins.VTable.Name.String(),
 			Ignore:            ins.Ignore,
 			ForceNonStreaming: op.ForceNonStreaming,
+			Generate:          autoIncGenerate(ins.AutoIncrement),
 			ColVindexes:       ins.ColVindexes,
 		},
-		InsertRows:        engine.NewInsertRows(autoIncGenerate(ins.AutoIncrement)),
 		VindexValueOffset: ins.VindexValueOffset,
 	}
 	lp := &insert{eInsertSelect: eins}
@@ -554,6 +554,7 @@ func buildInsertLogicalPlan(
 		Keyspace:    rb.Routing.Keyspace(),
 		TableName:   ins.VTable.Name.String(),
 		Ignore:      ins.Ignore,
+		Generate:    autoIncGenerate(ins.AutoIncrement),
 		ColVindexes: ins.ColVindexes,
 	}
 	if hints != nil {
@@ -563,7 +564,6 @@ func buildInsertLogicalPlan(
 
 	eins := &engine.Insert{
 		InsertCommon: ic,
-		InsertRows:   engine.NewInsertRows(autoIncGenerate(ins.AutoIncrement)),
 		VindexValues: ins.VindexValues,
 	}
 	lp := &insert{eInsert: eins}

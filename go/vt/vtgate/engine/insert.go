@@ -46,8 +46,6 @@ type Insert struct {
 	// and Prefix, Mid and Suffix are used instead.
 	Query string
 
-	InsertRows *InsertRows
-
 	// VindexValues specifies values for all the vindex columns.
 	// This is a three-dimensional data structure:
 	// Insert.Values[i] represents the values to be inserted for the i'th colvindex (i < len(Insert.Table.ColumnVindexes))
@@ -70,8 +68,7 @@ func NewQueryInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, query stri
 			Opcode:   opcode,
 			Keyspace: keyspace,
 		},
-		Query:      query,
-		InsertRows: NewInsertRows(nil),
+		Query: query,
 	}
 }
 
@@ -92,7 +89,6 @@ func NewInsert(
 			Keyspace: keyspace,
 			Ignore:   ignore,
 		},
-		InsertRows:   NewInsertRows(nil),
 		VindexValues: vindexValues,
 		Prefix:       prefix,
 		Mid:          mid,
@@ -185,7 +181,7 @@ func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 }
 
 func (ins *Insert) execInsertUnsharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	insertID, err := ins.InsertRows.processGenerateFromValues(ctx, vcursor, bindVars)
+	insertID, err := ins.processGenerateFromValues(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +217,7 @@ func (ins *Insert) insertIntoShardedTableFromValues(
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
 ) (*sqltypes.Result, error) {
-	insertID, err := ins.InsertRows.processGenerateFromValues(ctx, vcursor, bindVars)
+	insertID, err := ins.processGenerateFromValues(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -415,7 +411,6 @@ func (ins *Insert) description() PrimitiveDescription {
 	other := ins.commonDesc()
 	other["Query"] = ins.Query
 	other["TableName"] = ins.GetTableName()
-	ins.InsertRows.describe(other)
 
 	if len(ins.VindexValues) > 0 {
 		valuesOffsets := map[string]string{}

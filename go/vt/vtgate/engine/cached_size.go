@@ -392,8 +392,6 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	size += cached.InsertCommon.CachedSize(true)
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
-	// field InsertRows *vitess.io/vitess/go/vt/vtgate/engine.InsertRows
-	size += cached.InsertRows.CachedSize(true)
 	// field VindexValues [][][]vitess.io/vitess/go/vt/vtgate/evalengine.Expr
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.VindexValues)) * int64(24))
@@ -445,42 +443,14 @@ func (cached *InsertCommon) CachedSize(alloc bool) int64 {
 	size += cached.Keyspace.CachedSize(true)
 	// field TableName string
 	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
+	// field Generate *vitess.io/vitess/go/vt/vtgate/engine.Generate
+	size += cached.Generate.CachedSize(true)
 	// field ColVindexes []*vitess.io/vitess/go/vt/vtgate/vindexes.ColumnVindex
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.ColVindexes)) * int64(8))
 		for _, elem := range cached.ColVindexes {
 			size += elem.CachedSize(true)
 		}
-	}
-	return size
-}
-func (cached *InsertRows) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(48)
-	}
-	// field Generate *vitess.io/vitess/go/vt/vtgate/engine.Generate
-	size += cached.Generate.CachedSize(true)
-	// field RowsFromValues vitess.io/vitess/go/vt/sqlparser.Values
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.RowsFromValues)) * int64(24))
-		for _, elem := range cached.RowsFromValues {
-			{
-				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(16))
-				for _, elem := range elem {
-					if cc, ok := elem.(cachedObject); ok {
-						size += cc.CachedSize(true)
-					}
-				}
-			}
-		}
-	}
-	// field RowsFromSelect vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.RowsFromSelect.(cachedObject); ok {
-		size += cc.CachedSize(true)
 	}
 	return size
 }
@@ -494,8 +464,10 @@ func (cached *InsertSelect) CachedSize(alloc bool) int64 {
 	}
 	// field InsertCommon *vitess.io/vitess/go/vt/vtgate/engine.InsertCommon
 	size += cached.InsertCommon.CachedSize(true)
-	// field InsertRows *vitess.io/vitess/go/vt/vtgate/engine.InsertRows
-	size += cached.InsertRows.CachedSize(true)
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	// field VindexValueOffset [][]int
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.VindexValueOffset)) * int64(24))

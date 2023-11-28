@@ -76,7 +76,7 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 		},
 		"dummy_insert",
 	)
-	ins.InsertRows.Generate = &Generate{
+	ins.Generate = &Generate{
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks2",
 			Sharded: false,
@@ -129,7 +129,7 @@ func TestInsertUnshardedGenerate_Zeros(t *testing.T) {
 		},
 		"dummy_insert",
 	)
-	ins.InsertRows.Generate = &Generate{
+	ins.Generate = &Generate{
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks2",
 			Sharded: false,
@@ -417,7 +417,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 		" suffix",
 	)
 
-	ins.InsertRows.Generate = &Generate{
+	ins.Generate = &Generate{
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks2",
 			Sharded: false,
@@ -1539,7 +1539,7 @@ func TestInsertSelectSimple(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := NewInsertSelect(false, ks.Keyspace, ks.Tables["t1"], "prefix ", " suffix", [][]int{{1}}, NewInsertRowsFromSelect(nil, rb))
+	ins := NewInsertSelect(false, ks.Keyspace, ks.Tables["t1"], "prefix ", " suffix", [][]int{{1}}, rb)
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -1631,7 +1631,7 @@ func TestInsertSelectOwned(t *testing.T) {
 		[][]int{
 			{1},  // The primary vindex has a single column as sharding key
 			{0}}, // the onecol vindex uses the 'name' column
-		NewInsertRowsFromSelect(nil, rb),
+		rb,
 	)
 
 	vc := newDMLTestVCursor("-20", "20-")
@@ -1723,15 +1723,6 @@ func TestInsertSelectGenerate(t *testing.T) {
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
 
-	gen := &Generate{
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks2",
-			Sharded: false,
-		},
-		Query:  "dummy_generate",
-		Offset: 1,
-	}
-
 	ins := NewInsertSelect(
 		false,
 		ks.Keyspace,
@@ -1739,8 +1730,16 @@ func TestInsertSelectGenerate(t *testing.T) {
 		"prefix ",
 		" suffix",
 		[][]int{{1}}, // The primary vindex has a single column as sharding key
-		NewInsertRowsFromSelect(gen, rb),
+		rb,
 	)
+	ins.Generate = &Generate{
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks2",
+			Sharded: false,
+		},
+		Query:  "dummy_generate",
+		Offset: 1,
+	}
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -1809,14 +1808,6 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	generate := &Generate{
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks2",
-			Sharded: false,
-		},
-		Query:  "dummy_generate",
-		Offset: 1,
-	}
 	rb := &Route{
 		Query:      "dummy_select",
 		FieldQuery: "dummy_field_query",
@@ -1832,8 +1823,16 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 		" suffix",
 		[][]int{
 			{1}}, // The primary vindex has a single column as sharding key
-		NewInsertRowsFromSelect(generate, rb),
+		rb,
 	)
+	ins.Generate = &Generate{
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks2",
+			Sharded: false,
+		},
+		Query:  "dummy_generate",
+		Offset: 1,
+	}
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -1906,14 +1905,6 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	generate := &Generate{
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks2",
-			Sharded: false,
-		},
-		Query:  "dummy_generate",
-		Offset: 2,
-	}
 	rb := &Route{
 		Query:      "dummy_select",
 		FieldQuery: "dummy_field_query",
@@ -1927,8 +1918,16 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 		"prefix ",
 		" suffix",
 		[][]int{{1}}, // The primary vindex has a single column as sharding key,
-		NewInsertRowsFromSelect(generate, rb),
+		rb,
 	)
+	ins.Generate = &Generate{
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks2",
+			Sharded: false,
+		},
+		Query:  "dummy_generate",
+		Offset: 2,
+	}
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -1993,14 +1992,6 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	generate := &Generate{
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks2",
-			Sharded: false,
-		},
-		Query:  "dummy_generate",
-		Offset: 2,
-	}
 	rb := &Route{
 		Query:      "dummy_select",
 		FieldQuery: "dummy_field_query",
@@ -2014,8 +2005,16 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 		"prefix ",
 		" suffix",
 		[][]int{{1}}, // The primary vindex has a single column as sharding key,
-		NewInsertRowsFromSelect(generate, rb),
+		rb,
 	)
+	ins.Generate = &Generate{
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks2",
+			Sharded: false,
+		},
+		Query:  "dummy_generate",
+		Offset: 2,
+	}
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -2103,7 +2102,7 @@ func TestInsertSelectUnowned(t *testing.T) {
 		"prefix ",
 		" suffix",
 		[][]int{{0}}, // // the onecol vindex as unowned lookup sharding column
-		NewInsertRowsFromSelect(nil, rb),
+		rb,
 	)
 
 	vc := newDMLTestVCursor("-20", "20-")
@@ -2217,7 +2216,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		"prefix ",
 		" suffix",
 		[][]int{{0}},
-		NewInsertRowsFromSelect(nil, sRoute),
+		sRoute,
 	)
 
 	vc := &loggingVCursor{
@@ -2258,7 +2257,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
 
 	// sks1 and uks2
-	ins.InsertRows = NewInsertRowsFromSelect(nil, uRoute)
+	ins.Input = uRoute
 
 	vc.Rewind()
 	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -2294,7 +2293,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		"prefix ",
 		" suffix",
 		nil,
-		NewInsertRowsFromSelect(nil, sRoute),
+		sRoute,
 	)
 
 	vc.Rewind()
@@ -2324,7 +2323,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
 
 	// uks1 and uks2
-	ins.InsertRows = NewInsertRowsFromSelect(nil, uRoute)
+	ins.Input = uRoute
 
 	vc.Rewind()
 	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)

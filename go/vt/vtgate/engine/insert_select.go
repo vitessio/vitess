@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -36,24 +37,25 @@ import (
 var _ Primitive = (*InsertSelect)(nil)
 
 type (
-	// InsertSelect represents the instructions to perform an insert operation.
+	// InsertSelect represents the instructions to perform an insert operation with input rows from a select.
 	InsertSelect struct {
 		*InsertCommon
 
-		InsertRows *InsertRows
+		// Input is a select query plan to retrieve results for inserting data.
+		Input Primitive
 
 		// VindexValueOffset stores the offset for each column in the ColumnVindex
 		// that will appear in the result set of the select query.
 		VindexValueOffset [][]int
 
-		// Prefix, Mid and Suffix are for sharded insert plans.
+		// Prefix, Suffix are for sharded insert plans.
 		Prefix string
 		Suffix string
 	}
 )
 
 func (ins *InsertSelect) Inputs() ([]Primitive, []map[string]any) {
-	return ins.InsertRows.Inputs()
+	return []Primitive{ins.Input}, nil
 }
 
 // NewInsertSelect creates a new InsertSelect.
@@ -64,14 +66,14 @@ func NewInsertSelect(
 	prefix string,
 	suffix string,
 	vv [][]int,
-	ir *InsertRows,
+	input Primitive,
 ) *InsertSelect {
 	ins := &InsertSelect{
 		InsertCommon: &InsertCommon{
 			Ignore:   ignore,
 			Keyspace: keyspace,
 		},
-		InsertRows:        ir,
+		Input:             input,
 		Prefix:            prefix,
 		Suffix:            suffix,
 		VindexValueOffset: vv,
@@ -118,7 +120,7 @@ func (ins *InsertSelect) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 
 	sharded := ins.Keyspace.Sharded
 	output := &sqltypes.Result{}
-	err := ins.InsertRows.execSelectStreaming(ctx, vcursor, bindVars, func(irr insertRowsResult) error {
+	err := ins.execSelectStreaming(ctx, vcursor, bindVars, func(irr insertRowsResult) error {
 		if len(irr.rows) == 0 {
 			return nil
 		}
@@ -149,7 +151,7 @@ func (ins *InsertSelect) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 }
 
 func (ins *InsertSelect) execInsertUnsharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	irr, err := ins.InsertRows.execSelect(ctx, vcursor, bindVars)
+	irr, err := ins.execSelect(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -344,7 +346,7 @@ func (ins *InsertSelect) getInsertSelectQueries(
 }
 
 func (ins *InsertSelect) execInsertFromSelect(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	result, err := ins.InsertRows.execSelect(ctx, vcursor, bindVars)
+	result, err := ins.execSelect(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +361,6 @@ func (ins *InsertSelect) execInsertFromSelect(ctx context.Context, vcursor VCurs
 func (ins *InsertSelect) description() PrimitiveDescription {
 	other := ins.commonDesc()
 	other["TableName"] = ins.GetTableName()
-	ins.InsertRows.describe(other)
 
 	if len(ins.VindexValueOffset) > 0 {
 		valuesOffsets := map[string]string{}
@@ -384,15 +385,80 @@ func (ins *InsertSelect) description() PrimitiveDescription {
 }
 
 func (ic *InsertCommon) commonDesc() map[string]any {
-	return map[string]any{
+	other := map[string]any{
 		"MultiShardAutocommit": ic.MultiShardAutocommit,
 		"QueryTimeout":         ic.QueryTimeout,
 		"InsertIgnore":         ic.Ignore,
 		"InputAsNonStreaming":  ic.ForceNonStreaming,
 		"NoAutoCommit":         ic.PreventAutoCommit,
 	}
+
+	if ic.Generate != nil {
+		if ic.Generate.Values == nil {
+			other["AutoIncrement"] = fmt.Sprintf("%s:Offset(%d)", ic.Generate.Query, ic.Generate.Offset)
+		} else {
+			other["AutoIncrement"] = fmt.Sprintf("%s:Values::%s", ic.Generate.Query, sqlparser.String(ic.Generate.Values))
+		}
+	}
+	return other
 }
 
 func insertVarOffset(rowNum, colOffset int) string {
 	return fmt.Sprintf("_c%d_%d", rowNum, colOffset)
+}
+
+type insertRowsResult struct {
+	rows     []sqltypes.Row
+	insertID int64
+}
+
+func (ins *InsertSelect) execSelect(
+	ctx context.Context,
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+) (insertRowsResult, error) {
+	res, err := vcursor.ExecutePrimitive(ctx, ins.Input, bindVars, false)
+	if err != nil || len(res.Rows) == 0 {
+		return insertRowsResult{}, err
+	}
+
+	insertID, err := ins.processGenerateFromSelect(ctx, vcursor, res.Rows)
+	if err != nil {
+		return insertRowsResult{}, err
+	}
+
+	return insertRowsResult{
+		rows:     res.Rows,
+		insertID: insertID,
+	}, nil
+}
+
+func (ins *InsertSelect) execSelectStreaming(
+	ctx context.Context,
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+	callback func(irr insertRowsResult) error,
+) error {
+	var mu sync.Mutex
+	return vcursor.StreamExecutePrimitiveStandalone(ctx, ins.Input, bindVars, false, func(result *sqltypes.Result) error {
+		if len(result.Rows) == 0 {
+			return nil
+		}
+
+		// should process only one chunk at a time.
+		// as parallel chunk insert will try to use the same transaction in the vttablet
+		// this will cause transaction in use error.
+		mu.Lock()
+		defer mu.Unlock()
+
+		insertID, err := ins.processGenerateFromSelect(ctx, vcursor, result.Rows)
+		if err != nil {
+			return err
+		}
+
+		return callback(insertRowsResult{
+			rows:     result.Rows,
+			insertID: insertID,
+		})
+	})
 }
