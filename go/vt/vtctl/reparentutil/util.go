@@ -346,16 +346,6 @@ func waitForCatchUp(
 
 // GetBackupCandidates is used to get a list of healthy tablets for backup
 func GetBackupCandidates(tablets []*topo.TabletInfo, stats []*replicationdatapb.Status) (res []*topo.TabletInfo) {
-	// In case of all tablets has nil stats, return TabletType_PRIMARY
-	if len(stats) == 0 {
-		for _, tablet := range tablets {
-			if tablet.Type == topodatapb.TabletType_PRIMARY {
-				res = append(res, tablet)
-				break
-			}
-		}
-		return res
-	}
 	for i, stat := range stats {
 		// Always include TabletType_PRIMARY
 		if tablets[i].Type == topodatapb.TabletType_PRIMARY {
