@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -29,7 +28,6 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
@@ -122,10 +120,6 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := waitForDBAGrants(config, dbaGrantWaitTime); err != nil {
-		return err
-	}
-
 	ts := topo.Open()
 	qsc, err := createTabletServer(context.Background(), config, ts, tabletAlias)
 	if err != nil {
@@ -177,36 +171,6 @@ func run(cmd *cobra.Command, args []string) error {
 	servenv.RunDefault()
 
 	return nil
-}
-
-func waitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) error {
-	if waitTime == 0 {
-		return nil
-	}
-	timer := time.NewTimer(waitTime)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
-	defer cancel()
-	for {
-		conn, err := dbconnpool.NewDBConnection(ctx, config.DB.DbaConnector())
-		if err == nil {
-			res, fetchErr := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
-			if fetchErr == nil && res != nil && len(res.Rows) > 0 && len(res.Rows[0]) > 0 {
-				privileges := res.Rows[0][0].ToString()
-				// In MySQL 8.0, all the privileges are listed out explicitly, so we can search for SUPER in the output.
-				// In MySQL 5.7, all the privileges are not listed explicitly, instead ALL PRIVILEGES is written, so we search for that too.
-				if strings.Contains(privileges, "SUPER") || strings.Contains(privileges, "ALL PRIVILEGES") {
-					return nil
-				}
-			}
-		}
-		select {
-		case <-timer.C:
-			return fmt.Errorf("waited %v for dba user to have the required permissions", waitTime)
-		case <-ticker.C:
-		}
-	}
 }
 
 func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *mysqlctl.Mycnf, error) {
@@ -283,6 +247,11 @@ func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts 
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
 	} else if enforceTableACLConfig {
 		return nil, fmt.Errorf("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
+	}
+
+	err := tabletserver.WaitForDBAGrants(config, dbaGrantWaitTime)
+	if err != nil {
+		return nil, err
 	}
 	// creates and registers the query service
 	qsc := tabletserver.NewTabletServer(ctx, "", config, ts, tabletAlias)
