@@ -234,7 +234,9 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 
 // WaitForDBAGrants waits for DBA user to have the required privileges to function properly.
 func WaitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) error {
-	if waitTime == 0 {
+	// We don't wait for grants if the tablet is externally managed. Permissions
+	// are then the responsibility of the DBA.
+	if config.DB.HasGlobalSettings() || waitTime == 0 {
 		return nil
 	}
 	timer := time.NewTimer(waitTime)

@@ -2707,11 +2707,37 @@ func TestWaitForDBAGrants(t *testing.T) {
 				}
 			},
 		}, {
+			name:      "Success for externally managed tablet",
+			waitTime:  300 * time.Millisecond,
+			errWanted: "",
+			setupFunc: func(t *testing.T) (*tabletenv.TabletConfig, func()) {
+				// Create a new mysql but don't give the grants to the vt_dba user at all.
+				// This should cause a timeout after waiting, since the privileges are never granted.
+				testUser := "vt_test_dba"
+				cluster, err := startMySQLAndCreateUser(t, testUser)
+				require.NoError(t, err)
+
+				tc := &tabletenv.TabletConfig{
+					DB: &dbconfigs.DBConfigs{
+						Host: "some.unknown.host",
+					},
+				}
+				connParams := cluster.MySQLConnParams()
+				connParams.Uname = testUser
+				tc.DB.SetDbParams(connParams, mysql.ConnParams{}, mysql.ConnParams{})
+				return tc, func() {
+					cluster.TearDown()
+				}
+			},
+		}, {
 			name:      "Empty timeout",
 			waitTime:  0,
 			errWanted: "",
 			setupFunc: func(t *testing.T) (*tabletenv.TabletConfig, func()) {
-				return nil, func() {}
+				tc := &tabletenv.TabletConfig{
+					DB: &dbconfigs.DBConfigs{},
+				}
+				return tc, func() {}
 			},
 		},
 	}
