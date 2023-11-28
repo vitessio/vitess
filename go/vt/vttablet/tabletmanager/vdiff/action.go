@@ -20,9 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/google/uuid"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -108,6 +111,9 @@ func (vde *Engine) getVDiffSummary(vdiffID int64, dbClient binlogplayer.DBClient
 // Validate vdiff options. Also setup defaults where applicable.
 func (vde *Engine) fixupOptions(options *tabletmanagerdatapb.VDiffOptions) (*tabletmanagerdatapb.VDiffOptions, error) {
 	// Assign defaults to sourceCell and targetCell if not specified.
+	if options == nil {
+		options = &tabletmanagerdatapb.VDiffOptions{}
+	}
 	sourceCell := options.PickerOptions.SourceCell
 	targetCell := options.PickerOptions.TargetCell
 	var defaultCell string
@@ -118,10 +124,10 @@ func (vde *Engine) fixupOptions(options *tabletmanagerdatapb.VDiffOptions) (*tab
 			return nil, err
 		}
 	}
-	if sourceCell == "" {
+	if sourceCell == "" { // Default is all cells
 		sourceCell = defaultCell
 	}
-	if targetCell == "" {
+	if targetCell == "" { // Default is all cells
 		targetCell = defaultCell
 	}
 	options.PickerOptions.SourceCell = sourceCell
@@ -130,6 +136,8 @@ func (vde *Engine) fixupOptions(options *tabletmanagerdatapb.VDiffOptions) (*tab
 	return options, nil
 }
 
+// getDefaultCell returns all of the cells in the topo as a comma
+// separated string as the default value is all available cells.
 func (vde *Engine) getDefaultCell() (string, error) {
 	cells, err := vde.ts.GetCellInfoNames(vde.ctx)
 	if err != nil {
@@ -139,7 +147,8 @@ func (vde *Engine) getDefaultCell() (string, error) {
 		// Unreachable
 		return "", fmt.Errorf("there are no cells in the topo")
 	}
-	return cells[0], nil
+	sort.Strings(cells) // Ensure that the resulting value is deterministic
+	return strings.Join(cells, ","), nil
 }
 
 func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
@@ -147,7 +156,12 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 	var err error
 	options := req.Options
 
-	query := fmt.Sprintf(sqlGetVDiffID, encodeString(req.VdiffUuid))
+	query, err := sqlparser.ParseAndBind(sqlGetVDiffID,
+		sqltypes.StringBindVariable(req.VdiffUuid),
+	)
+	if err != nil {
+		return err
+	}
 	if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
@@ -287,20 +301,74 @@ func (vde *Engine) handleStopAction(ctx context.Context, dbClient binlogplayer.D
 }
 
 func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
-	var err error
-	query := ""
+	vde.mu.Lock()
+	defer vde.mu.Unlock()
+	var deleteQuery string
+	cleanupController := func(controller *controller) {
+		if controller == nil {
+			return
+		}
+		controller.Stop()
+		delete(vde.controllers, controller.id)
+	}
 
 	switch req.ActionArg {
 	case AllActionArg:
-		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(req.Keyspace), encodeString(req.Workflow))
+		// We need to stop any running controllers before we delete
+		// the vdiff records.
+		query, err := sqlparser.ParseAndBind(sqlGetVDiffIDsByKeyspaceWorkflow,
+			sqltypes.StringBindVariable(req.Keyspace),
+			sqltypes.StringBindVariable(req.Workflow),
+		)
+		if err != nil {
+			return err
+		}
+		res, err := dbClient.ExecuteFetch(query, -1)
+		if err != nil {
+			return err
+		}
+		for _, row := range res.Named().Rows {
+			cleanupController(vde.controllers[row.AsInt64("id", -1)])
+		}
+		deleteQuery, err = sqlparser.ParseAndBind(sqlDeleteVDiffs,
+			sqltypes.StringBindVariable(req.Keyspace),
+			sqltypes.StringBindVariable(req.Workflow),
+		)
+		if err != nil {
+			return err
+		}
 	default:
 		uuid, err := uuid.Parse(req.ActionArg)
 		if err != nil {
 			return fmt.Errorf("action argument %s not supported", req.ActionArg)
 		}
-		query = fmt.Sprintf(sqlDeleteVDiffByUUID, encodeString(uuid.String()))
+		// We need to be sure that the controller is stopped, if
+		// it's still running, before we delete the vdiff record.
+		query, err := sqlparser.ParseAndBind(sqlGetVDiffID,
+			sqltypes.StringBindVariable(uuid.String()),
+		)
+		if err != nil {
+			return err
+		}
+		res, err := dbClient.ExecuteFetch(query, 1)
+		if err != nil {
+			return err
+		}
+		row := res.Named().Row() // Must only be one
+		if row == nil {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no vdiff found for UUID %s on tablet %v",
+				uuid, vde.thisTablet.Alias)
+		}
+		cleanupController(vde.controllers[row.AsInt64("id", -1)])
+		deleteQuery, err = sqlparser.ParseAndBind(sqlDeleteVDiffByUUID,
+			sqltypes.StringBindVariable(uuid.String()),
+		)
+		if err != nil {
+			return err
+		}
 	}
-	if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
+	// Execute the query which deletes the vdiff record(s).
+	if _, err := dbClient.ExecuteFetch(deleteQuery, 1); err != nil {
 		return err
 	}
 

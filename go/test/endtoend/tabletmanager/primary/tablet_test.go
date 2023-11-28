@@ -189,7 +189,7 @@ func TestPrimaryRestartSetsTERTimestamp(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start Vttablet
-	err = clusterInstance.StartVttablet(&replicaTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = clusterInstance.StartVttablet(&replicaTablet, false, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 
 	// Make sure that the TER did not change

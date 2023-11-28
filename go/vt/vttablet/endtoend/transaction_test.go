@@ -321,7 +321,7 @@ func TestShutdownGracePeriod(t *testing.T) {
 	err := client.Begin(false)
 	require.NoError(t, err)
 	go func() {
-		_, err = client.Execute("select sleep(10) from dual", nil)
+		_, err := client.Execute("select sleep(10) from dual", nil)
 		assert.Error(t, err)
 	}()
 
@@ -346,7 +346,7 @@ func TestShutdownGracePeriod(t *testing.T) {
 	err = client.Begin(false)
 	require.NoError(t, err)
 	go func() {
-		_, err = client.Execute("select sleep(11) from dual", nil)
+		_, err := client.Execute("select sleep(11) from dual", nil)
 		assert.Error(t, err)
 	}()
 
@@ -373,7 +373,7 @@ func TestShutdownGracePeriodWithStreamExecute(t *testing.T) {
 	err := client.Begin(false)
 	require.NoError(t, err)
 	go func() {
-		_, err = client.StreamExecute("select sleep(10) from dual", nil)
+		_, err := client.StreamExecute("select sleep(10) from dual", nil)
 		assert.Error(t, err)
 	}()
 
@@ -398,7 +398,7 @@ func TestShutdownGracePeriodWithStreamExecute(t *testing.T) {
 	err = client.Begin(false)
 	require.NoError(t, err)
 	go func() {
-		_, err = client.StreamExecute("select sleep(11) from dual", nil)
+		_, err := client.StreamExecute("select sleep(11) from dual", nil)
 		assert.Error(t, err)
 	}()
 
@@ -425,7 +425,7 @@ func TestShutdownGracePeriodWithReserveExecute(t *testing.T) {
 	err := client.Begin(false)
 	require.NoError(t, err)
 	go func() {
-		_, err = client.ReserveExecute("select sleep(10) from dual", nil, nil)
+		_, err := client.ReserveExecute("select sleep(10) from dual", nil, nil)
 		assert.Error(t, err)
 	}()
 
@@ -450,7 +450,7 @@ func TestShutdownGracePeriodWithReserveExecute(t *testing.T) {
 	err = client.Begin(false)
 	require.NoError(t, err)
 	go func() {
-		_, err = client.ReserveExecute("select sleep(11) from dual", nil, nil)
+		_, err := client.ReserveExecute("select sleep(11) from dual", nil, nil)
 		assert.Error(t, err)
 	}()
 

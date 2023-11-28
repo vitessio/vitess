@@ -428,6 +428,25 @@ func TestPlanBuilder(t *testing.T) {
 			}},
 		},
 	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select convert(val using utf8mb4) as val2, id as id from t1"},
+		outPlan: &Plan{
+			ColExprs: []ColExpr{{
+				ColNum: 1,
+				Field: &querypb.Field{
+					Name: "val",
+					Type: sqltypes.VarBinary,
+				},
+			}, {
+				ColNum: 0,
+				Field: &querypb.Field{
+					Name: "id",
+					Type: sqltypes.Int64,
+				},
+			}},
+			convertUsingUTF8Columns: map[string]bool{"val": true},
+		},
+	}, {
 		inTable: regional,
 		inRule:  &binlogdatapb.Rule{Match: "regional", Filter: "select id, keyspace_id() from regional"},
 		outPlan: &Plan{

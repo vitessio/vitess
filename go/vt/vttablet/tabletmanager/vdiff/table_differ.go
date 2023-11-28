@@ -20,13 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
-
-	"vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo"
 
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -38,14 +34,19 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // how long to wait for background operations to complete
@@ -72,6 +73,12 @@ type tableDiffer struct {
 	sourceQuery string
 	table       *tabletmanagerdatapb.TableDefinition
 	lastPK      *querypb.QueryResult
+
+	// wgShardStreamers is used, with a cancellable context, to wait for all shard streamers
+	// to finish after each diff is complete.
+	wgShardStreamers   sync.WaitGroup
+	shardStreamsCtx    context.Context
+	shardStreamsCancel context.CancelFunc
 }
 
 func newTableDiffer(wd *workflowDiffer, table *tabletmanagerdatapb.TableDefinition, sourceQuery string) *tableDiffer {
@@ -121,19 +128,21 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		}
 	}()
 
-	if err := td.selectTablets(ctx, td.wd.opts.PickerOptions.SourceCell, td.wd.opts.PickerOptions.TabletTypes); err != nil {
+	td.shardStreamsCtx, td.shardStreamsCancel = context.WithCancel(ctx)
+
+	if err := td.selectTablets(ctx); err != nil {
 		return err
 	}
 	if err := td.syncSourceStreams(ctx); err != nil {
 		return err
 	}
-	if err := td.startSourceDataStreams(ctx); err != nil {
+	if err := td.startSourceDataStreams(td.shardStreamsCtx); err != nil {
 		return err
 	}
 	if err := td.syncTargetStreams(ctx); err != nil {
 		return err
 	}
-	if err := td.startTargetDataStream(ctx); err != nil {
+	if err := td.startTargetDataStream(td.shardStreamsCtx); err != nil {
 		return err
 	}
 	td.setupRowSorters()
@@ -199,16 +208,22 @@ func (td *tableDiffer) forEachSource(cb func(source *migrationSource) error) err
 	return allErrors.AggrError(vterrors.Aggregate)
 }
 
-func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes string) error {
-	var wg sync.WaitGroup
-	ct := td.wd.ct
-	var err1, err2 error
+func (td *tableDiffer) selectTablets(ctx context.Context) error {
+	var (
+		wg                   sync.WaitGroup
+		sourceErr, targetErr error
+		targetTablet         *topodatapb.Tablet
+	)
+
+	// The cells from the vdiff record are a comma separated list.
+	sourceCells := strings.Split(td.wd.opts.PickerOptions.SourceCell, ",")
+	targetCells := strings.Split(td.wd.opts.PickerOptions.TargetCell, ",")
 
 	// For Mount+Migrate, the source tablets will be in a different
 	// Vitess cluster with its own TopoServer.
-	sourceTopoServer := ct.ts
-	if ct.externalCluster != "" {
-		extTS, err := ct.ts.OpenExternalVitessClusterServer(ctx, ct.externalCluster)
+	sourceTopoServer := td.wd.ct.ts
+	if td.wd.ct.externalCluster != "" {
+		extTS, err := td.wd.ct.ts.OpenExternalVitessClusterServer(ctx, td.wd.ct.externalCluster)
 		if err != nil {
 			return err
 		}
@@ -217,12 +232,12 @@ func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes stri
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err1 = td.forEachSource(func(source *migrationSource) error {
-			tablet, err := pickTablet(ctx, sourceTopoServer, cell, ct.sourceKeyspace, source.shard, tabletTypes)
+		sourceErr = td.forEachSource(func(source *migrationSource) error {
+			sourceTablet, err := pickTablet(ctx, sourceTopoServer, sourceCells, td.wd.ct.sourceKeyspace, source.shard, td.wd.opts.PickerOptions.TabletTypes)
 			if err != nil {
 				return err
 			}
-			source.tablet = tablet
+			source.tablet = sourceTablet
 			return nil
 		})
 	}()
@@ -230,26 +245,26 @@ func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes stri
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		tablet, err2 := pickTablet(ctx, ct.ts, td.wd.opts.PickerOptions.TargetCell, ct.vde.thisTablet.Keyspace,
-			ct.vde.thisTablet.Shard, td.wd.opts.PickerOptions.TabletTypes)
-		if err2 != nil {
+		targetTablet, targetErr = pickTablet(ctx, td.wd.ct.ts, targetCells, td.wd.ct.vde.thisTablet.Keyspace, td.wd.ct.vde.thisTablet.Shard,
+			td.wd.opts.PickerOptions.TabletTypes)
+		if targetErr != nil {
 			return
 		}
-		ct.targetShardStreamer = &shardStreamer{
-			tablet: tablet,
-			shard:  tablet.Shard,
+		td.wd.ct.targetShardStreamer = &shardStreamer{
+			tablet: targetTablet,
+			shard:  targetTablet.Shard,
 		}
 	}()
 
 	wg.Wait()
-	if err1 != nil {
-		return err1
+	if sourceErr != nil {
+		return sourceErr
 	}
-	return err2
+	return targetErr
 }
 
-func pickTablet(ctx context.Context, ts *topo.Server, cell, keyspace, shard, tabletTypes string) (*topodata.Tablet, error) {
-	tp, err := discovery.NewTabletPicker(ts, []string{cell}, keyspace, shard, tabletTypes)
+func pickTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace, shard, tabletTypes string) (*topodatapb.Tablet, error) {
+	tp, err := discovery.NewTabletPicker(ts, cells, keyspace, shard, tabletTypes)
 	if err != nil {
 		return nil, err
 	}
@@ -348,10 +363,12 @@ func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) err
 
 func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStreamer, query string, lastPK *querypb.QueryResult, gtidch chan string) {
 	log.Infof("streamOneShard Start on %s using query: %s", participant.tablet.Alias.String(), query)
+	td.wgShardStreamers.Add(1)
 	defer func() {
 		log.Infof("streamOneShard End on %s", participant.tablet.Alias.String())
 		close(participant.result)
 		close(gtidch)
+		td.wgShardStreamers.Done()
 	}()
 	participant.err = func() error {
 		conn, err := tabletconn.GetDialer()(participant.tablet, false)
@@ -402,6 +419,8 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			case participant.result <- result:
 			case <-ctx.Done():
 				return vterrors.Wrap(ctx.Err(), "VStreamRows")
+			case <-td.wd.ct.done:
+				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
 			}
 			return nil
 		})
@@ -483,6 +502,8 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		select {
 		case <-ctx.Done():
 			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		case <-td.wd.ct.done:
+			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
 		default:
 		}
 

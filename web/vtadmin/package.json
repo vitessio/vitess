@@ -7,6 +7,7 @@
     "npm": ">=8.1.0"
   },
   "dependencies": {
+    "@babel/traverse": "^7.23.2",
     "@bugsnag/js": "^7.20.0",
     "@headlessui/react": "^1.7.8",
     "@types/jest": "^29.4.0",
@@ -82,7 +83,7 @@
     "@types/lodash-es": "^4.17.4",
     "autoprefixer": "^10.4.2",
     "msw": "^0.36.8",
-    "postcss": "^8.4.6",
+    "postcss": "^8.4.31",
     "prettier": "^2.2.1",
     "protobufjs": "^6.11.3",
     "react-scripts": "5.0.1",

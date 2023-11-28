@@ -23,10 +23,12 @@ Usage of vtgr:
       --keep_logs duration                         keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                keep logs for this long (using mtime) (zero to keep forever)
       --lock-timeout duration                      Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
-      --log_backtrace_at traceLocation             when logging hits line file:N, emit a stack trace (default :0)
+      --log_backtrace_at traceLocations            when logging hits line file:N, emit a stack trace
       --log_dir string                             If non-empty, write log files in this directory
       --log_err_stacks                             log stack traces for errors
+      --log_link string                            If non-empty, add symbolic links in this directory to the log files
       --log_rotate_max_size uint                   size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --logbuflevel int                            Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
       --logtostderr                                log to standard error instead of files
       --ping_tablet_timeout duration               time to wait when we ping a tablet (default 2s)
       --pprof strings                              enable profiling
@@ -41,7 +43,7 @@ Usage of vtgr:
       --stats_common_tags strings                  Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
       --stats_drop_variables string                Variables to be dropped from the list of exported variables.
       --stats_emit_period duration                 Interval between emitting stats to all registered backends (default 1m0s)
-      --stderrthreshold severity                   logs at or above this threshold go to stderr (default 1)
+      --stderrthreshold severityFlag               logs at or above this threshold go to stderr (default 1)
       --tablet_manager_grpc_ca string              the server ca to use to validate servers when connecting
       --tablet_manager_grpc_cert string            the cert to use to connect
       --tablet_manager_grpc_concurrency int        concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,AllPrivs,App}) (default 8)
@@ -69,5 +71,5 @@ Usage of vtgr:
       --topo_zk_tls_key string                     the key to use to connect to the zk topo server, enables TLS
       --v Level                                    log level for V logs
   -v, --version                                    print binary version
-      --vmodule moduleSpec                         comma-separated list of pattern=N settings for file-filtered logging
+      --vmodule vModuleFlag                        comma-separated list of pattern=N settings for file-filtered logging
       --vtgr_config string                         Config file for vtgr.
