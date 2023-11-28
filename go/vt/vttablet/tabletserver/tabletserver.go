@@ -238,8 +238,6 @@ func WaitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) er
 		return nil
 	}
 	timer := time.NewTimer(waitTime)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
 	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
 	defer cancel()
 	for {
@@ -258,7 +256,8 @@ func WaitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) er
 		select {
 		case <-timer.C:
 			return fmt.Errorf("waited %v for dba user to have the required permissions", waitTime)
-		case <-ticker.C:
+		default:
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
