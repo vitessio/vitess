@@ -430,29 +430,15 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("concurrency", req.Concurrency)
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 
-	shardTablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
+	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
 
-	var tablets []*topo.TabletInfo
-	// Instead of return on err directly, only return when no healthy tablets at all
+	// Instead of return on err directly, only return err when no tablets for backup at all
 	if err != nil {
-		for i, stat := range stats {
-			// Always include TabletType_PRIMARY
-			if shardTablets[i].Type == topodatapb.TabletType_PRIMARY {
-				tablets = append(tablets, shardTablets[i])
-				continue
-			}
-			// shardTablets[i] and stats[i] is 1:1 mapping
-			// Healthy shardTablets[i] will be added to tablets
-			if stat != nil {
-				tablets = append(tablets, shardTablets[i])
-			}
-		}
+		tablets = reparentutil.GetBackupCandidates(tablets, stats)
 		// Only return err when no usable tablet
 		if len(tablets) == 0 {
 			return err
 		}
-	} else {
-		tablets = shardTablets
 	}
 
 	var (
