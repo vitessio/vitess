@@ -386,7 +386,7 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(160)
+		size += int64(112)
 	}
 	// field InsertCommon *vitess.io/vitess/go/vt/vtgate/engine.InsertCommon
 	size += cached.InsertCommon.CachedSize(true)
@@ -411,13 +411,6 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 					}
 				}
 			}
-		}
-	}
-	// field ColVindexes []*vitess.io/vitess/go/vt/vtgate/vindexes.ColumnVindex
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.ColVindexes)) * int64(8))
-		for _, elem := range cached.ColVindexes {
-			size += elem.CachedSize(true)
 		}
 	}
 	// field Prefix string
@@ -446,12 +439,19 @@ func (cached *InsertCommon) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(96)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
 	// field TableName string
 	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
+	// field ColVindexes []*vitess.io/vitess/go/vt/vtgate/vindexes.ColumnVindex
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.ColVindexes)) * int64(8))
+		for _, elem := range cached.ColVindexes {
+			size += elem.CachedSize(true)
+		}
+	}
 	return size
 }
 func (cached *InsertRows) CachedSize(alloc bool) int64 {
@@ -490,12 +490,10 @@ func (cached *InsertSelect) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(80)
 	}
 	// field InsertCommon *vitess.io/vitess/go/vt/vtgate/engine.InsertCommon
 	size += cached.InsertCommon.CachedSize(true)
-	// field Query string
-	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
 	// field InsertRows *vitess.io/vitess/go/vt/vtgate/engine.InsertRows
 	size += cached.InsertRows.CachedSize(true)
 	// field VindexValueOffset [][]int
@@ -505,13 +503,6 @@ func (cached *InsertSelect) CachedSize(alloc bool) int64 {
 			{
 				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(8))
 			}
-		}
-	}
-	// field ColVindexes []*vitess.io/vitess/go/vt/vtgate/vindexes.ColumnVindex
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.ColVindexes)) * int64(8))
-		for _, elem := range cached.ColVindexes {
-			size += elem.CachedSize(true)
 		}
 	}
 	// field Prefix string

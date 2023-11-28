@@ -1539,16 +1539,7 @@ func TestInsertSelectSimple(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := NewInsertSelect(
-		false,
-		ks.Keyspace,
-		ks.Tables["t1"],
-		"prefix ",
-		" suffix",
-		[][]int{{1}},
-		"dummy_insert",
-		NewInsertRowsFromSelect(nil, rb),
-	)
+	ins := NewInsertSelect(false, ks.Keyspace, ks.Tables["t1"], "prefix ", " suffix", [][]int{{1}}, NewInsertRowsFromSelect(nil, rb))
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -1640,7 +1631,6 @@ func TestInsertSelectOwned(t *testing.T) {
 		[][]int{
 			{1},  // The primary vindex has a single column as sharding key
 			{0}}, // the onecol vindex uses the 'name' column
-		"dummy_insert",
 		NewInsertRowsFromSelect(nil, rb),
 	)
 
@@ -1749,7 +1739,6 @@ func TestInsertSelectGenerate(t *testing.T) {
 		"prefix ",
 		" suffix",
 		[][]int{{1}}, // The primary vindex has a single column as sharding key
-		"dummy_insert",
 		NewInsertRowsFromSelect(gen, rb),
 	)
 
@@ -1843,7 +1832,6 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 		" suffix",
 		[][]int{
 			{1}}, // The primary vindex has a single column as sharding key
-		"dummy_insert",
 		NewInsertRowsFromSelect(generate, rb),
 	)
 
@@ -1939,7 +1927,6 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 		"prefix ",
 		" suffix",
 		[][]int{{1}}, // The primary vindex has a single column as sharding key,
-		"dummy_insert",
 		NewInsertRowsFromSelect(generate, rb),
 	)
 
@@ -2027,7 +2014,6 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 		"prefix ",
 		" suffix",
 		[][]int{{1}}, // The primary vindex has a single column as sharding key,
-		"dummy_insert",
 		NewInsertRowsFromSelect(generate, rb),
 	)
 
@@ -2117,7 +2103,6 @@ func TestInsertSelectUnowned(t *testing.T) {
 		"prefix ",
 		" suffix",
 		[][]int{{0}}, // // the onecol vindex as unowned lookup sharding column
-		"dummy_insert",
 		NewInsertRowsFromSelect(nil, rb),
 	)
 
@@ -2232,7 +2217,6 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		"prefix ",
 		" suffix",
 		[][]int{{0}},
-		"dummy_insert",
 		NewInsertRowsFromSelect(nil, sRoute),
 	)
 
@@ -2310,7 +2294,6 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		"prefix ",
 		" suffix",
 		nil,
-		"dummy_insert",
 		NewInsertRowsFromSelect(nil, sRoute),
 	)
 

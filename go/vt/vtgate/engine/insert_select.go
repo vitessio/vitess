@@ -40,44 +40,15 @@ type (
 	InsertSelect struct {
 		*InsertCommon
 
-		// Query specifies the query to be executed.
-		// For InsertSharded plans, this value is unused,
-		// and Prefix, Mid and Suffix are used instead.
-		Query string
-
 		InsertRows *InsertRows
 
 		// VindexValueOffset stores the offset for each column in the ColumnVindex
 		// that will appear in the result set of the select query.
 		VindexValueOffset [][]int
 
-		// ColVindexes are the vindexes that will use the VindexValues
-		ColVindexes []*vindexes.ColumnVindex
-
 		// Prefix, Mid and Suffix are for sharded insert plans.
 		Prefix string
 		Suffix string
-
-		// Option to override the standard behavior and allow a multi-shard insert
-		// to use single round trip autocommit.
-		//
-		// This is a clear violation of the SQL semantics since it means the statement
-		// is not atomic in the presence of PK conflicts on one shard and not another.
-		// However, some application use cases would prefer that the statement partially
-		// succeed in order to get the performance benefits of autocommit.
-		MultiShardAutocommit bool
-
-		// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
-		QueryTimeout int
-
-		// ForceNonStreaming is true when the insert table and select table are same.
-		// This will avoid locking by the select table.
-		ForceNonStreaming bool
-
-		PreventAutoCommit bool
-
-		// Insert needs tx handling
-		txNeeded
 	}
 )
 
@@ -93,7 +64,6 @@ func NewInsertSelect(
 	prefix string,
 	suffix string,
 	vv [][]int,
-	query string,
 	ir *InsertRows,
 ) *InsertSelect {
 	ins := &InsertSelect{
@@ -105,7 +75,6 @@ func NewInsertSelect(
 		Prefix:            prefix,
 		Suffix:            suffix,
 		VindexValueOffset: vv,
-		Query:             query,
 	}
 	if table != nil {
 		ins.TableName = table.Name.String()
@@ -122,16 +91,6 @@ func NewInsertSelect(
 // RouteType returns a description of the query routing type used by the primitive
 func (ins *InsertSelect) RouteType() string {
 	return "InsertSelect"
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (ins *InsertSelect) GetKeyspaceName() string {
-	return ins.Keyspace.Name
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (ins *InsertSelect) GetTableName() string {
-	return ins.TableName
 }
 
 // TryExecute performs a non-streaming exec.
@@ -187,11 +146,6 @@ func (ins *InsertSelect) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 		return err
 	}
 	return callback(output)
-}
-
-// GetFields fetches the field info.
-func (ins *InsertSelect) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code for %q", ins.Query)
 }
 
 func (ins *InsertSelect) execInsertUnsharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -402,165 +356,9 @@ func (ins *InsertSelect) execInsertFromSelect(ctx context.Context, vcursor VCurs
 	return qr, err
 }
 
-// processPrimary maps the primary vindex values to the keyspace ids.
-func (ins *InsertSelect) processPrimary(ctx context.Context, vcursor VCursor, vindexColumnsKeys []sqltypes.Row, colVindex *vindexes.ColumnVindex) ([]ksID, error) {
-	destinations, err := vindexes.Map(ctx, colVindex.Vindex, vcursor, vindexColumnsKeys)
-	if err != nil {
-		return nil, err
-	}
-
-	keyspaceIDs := make([]ksID, len(destinations))
-	for i, destination := range destinations {
-		switch d := destination.(type) {
-		case key.DestinationKeyspaceID:
-			// This is a single keyspace id, we're good.
-			keyspaceIDs[i] = d
-		case key.DestinationNone:
-			// No valid keyspace id, we may return an error.
-			if !ins.Ignore {
-				return nil, fmt.Errorf("could not map %v to a keyspace id", vindexColumnsKeys[i])
-			}
-		default:
-			return nil, fmt.Errorf("could not map %v to a unique keyspace id: %v", vindexColumnsKeys[i], destination)
-		}
-	}
-
-	return keyspaceIDs, nil
-}
-
-// processOwned creates vindex entries for the values of an owned column.
-func (ins *InsertSelect) processOwned(ctx context.Context, vcursor VCursor, vindexColumnsKeys []sqltypes.Row, colVindex *vindexes.ColumnVindex, ksids []ksID) error {
-	if !ins.Ignore {
-		return colVindex.Vindex.(vindexes.Lookup).Create(ctx, vcursor, vindexColumnsKeys, ksids, false /* ignoreMode */)
-	}
-
-	// InsertIgnore
-	var createIndexes []int
-	var createKeys []sqltypes.Row
-	var createKsids []ksID
-
-	for rowNum, rowColumnKeys := range vindexColumnsKeys {
-		if ksids[rowNum] == nil {
-			continue
-		}
-		createIndexes = append(createIndexes, rowNum)
-		createKeys = append(createKeys, rowColumnKeys)
-		createKsids = append(createKsids, ksids[rowNum])
-	}
-	if createKeys == nil {
-		return nil
-	}
-
-	err := colVindex.Vindex.(vindexes.Lookup).Create(ctx, vcursor, createKeys, createKsids, true)
-	if err != nil {
-		return err
-	}
-	// After creation, verify that the keys map to the keyspace ids. If not, remove
-	// those that don't map.
-	verified, err := vindexes.Verify(ctx, colVindex.Vindex, vcursor, createKeys, createKsids)
-	if err != nil {
-		return err
-	}
-	for i, v := range verified {
-		if !v {
-			ksids[createIndexes[i]] = nil
-		}
-	}
-	return nil
-}
-
-// processUnowned either reverse maps or validates the values for an unowned column.
-func (ins *InsertSelect) processUnowned(ctx context.Context, vcursor VCursor, vindexColumnsKeys []sqltypes.Row, colVindex *vindexes.ColumnVindex, ksids []ksID) error {
-	var reverseIndexes []int
-	var reverseKsids []ksID
-
-	var verifyIndexes []int
-	var verifyKeys []sqltypes.Row
-	var verifyKsids []ksID
-
-	// Check if this VIndex is reversible or not.
-	reversibleVindex, isReversible := colVindex.Vindex.(vindexes.Reversible)
-
-	for rowNum, rowColumnKeys := range vindexColumnsKeys {
-		// If we weren't able to determine a keyspace id from the primary VIndex, skip this row
-		if ksids[rowNum] == nil {
-			continue
-		}
-
-		if rowColumnKeys[0].IsNull() {
-			// If the value of the column is `NULL`, but this is a reversible VIndex,
-			// we will try to generate the value from the keyspace id generated by the primary VIndex.
-			if isReversible {
-				reverseIndexes = append(reverseIndexes, rowNum)
-				reverseKsids = append(reverseKsids, ksids[rowNum])
-			}
-
-			// Otherwise, don't do anything. Whether `NULL` is a valid value for this column will be
-			// handled by MySQL.
-		} else {
-			// If a value for this column was specified, the keyspace id values from the
-			// secondary VIndex need to be verified against the keyspace id from the primary VIndex
-			verifyIndexes = append(verifyIndexes, rowNum)
-			verifyKeys = append(verifyKeys, rowColumnKeys)
-			verifyKsids = append(verifyKsids, ksids[rowNum])
-		}
-	}
-
-	// Reverse map values for secondary VIndex columns from the primary VIndex's keyspace id.
-	if reverseKsids != nil {
-		reverseKeys, err := reversibleVindex.ReverseMap(vcursor, reverseKsids)
-		if err != nil {
-			return err
-		}
-
-		for i, reverseKey := range reverseKeys {
-			// Fill the first column with the reverse-mapped value.
-			vindexColumnsKeys[reverseIndexes[i]][0] = reverseKey
-		}
-	}
-
-	// Verify that the keyspace ids generated by the primary and secondary VIndexes match
-	if verifyIndexes != nil {
-		// If values were supplied, we validate against keyspace id.
-		verified, err := vindexes.Verify(ctx, colVindex.Vindex, vcursor, verifyKeys, verifyKsids)
-		if err != nil {
-			return err
-		}
-
-		var mismatchVindexKeys []sqltypes.Row
-		for i, v := range verified {
-			rowNum := verifyIndexes[i]
-			if !v {
-				if !ins.Ignore {
-					mismatchVindexKeys = append(mismatchVindexKeys, vindexColumnsKeys[rowNum])
-					continue
-				}
-
-				// Skip the whole row if this is a `INSERT IGNORE` or `INSERT ... ON DUPLICATE KEY ...` statement
-				// but the keyspace ids didn't match.
-				ksids[verifyIndexes[i]] = nil
-			}
-		}
-
-		if mismatchVindexKeys != nil {
-			return fmt.Errorf("values %v for column %v does not map to keyspace ids", mismatchVindexKeys, colVindex.Columns)
-		}
-	}
-
-	return nil
-}
-
 func (ins *InsertSelect) description() PrimitiveDescription {
-	other := map[string]any{
-		"Query":                ins.Query,
-		"TableName":            ins.GetTableName(),
-		"MultiShardAutocommit": ins.MultiShardAutocommit,
-		"QueryTimeout":         ins.QueryTimeout,
-		"InsertIgnore":         ins.Ignore,
-		"InputAsNonStreaming":  ins.ForceNonStreaming,
-		"NoAutoCommit":         ins.PreventAutoCommit,
-	}
-
+	other := ins.commonDesc()
+	other["TableName"] = ins.GetTableName()
 	ins.InsertRows.describe(other)
 
 	if len(ins.VindexValueOffset) > 0 {
@@ -583,4 +381,18 @@ func (ins *InsertSelect) description() PrimitiveDescription {
 		TargetTabletType: topodatapb.TabletType_PRIMARY,
 		Other:            other,
 	}
+}
+
+func (ic *InsertCommon) commonDesc() map[string]any {
+	return map[string]any{
+		"MultiShardAutocommit": ic.MultiShardAutocommit,
+		"QueryTimeout":         ic.QueryTimeout,
+		"InsertIgnore":         ic.Ignore,
+		"InputAsNonStreaming":  ic.ForceNonStreaming,
+		"NoAutoCommit":         ic.PreventAutoCommit,
+	}
+}
+
+func insertVarOffset(rowNum, colOffset int) string {
+	return fmt.Sprintf("_c%d_%d", rowNum, colOffset)
 }
