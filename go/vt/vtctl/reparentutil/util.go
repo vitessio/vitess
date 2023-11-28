@@ -349,13 +349,13 @@ func GetBackupCandidates(tablets []*topo.TabletInfo, stats []*replicationdatapb.
 	for i, stat := range stats {
 		// Always include TabletType_PRIMARY
 		if tablets[i].Type == topodatapb.TabletType_PRIMARY {
-			res = append(tablets, tablets[i])
+			res = append(res, tablets[i])
 			continue
 		}
 		// shardTablets[i] and stats[i] is 1:1 mapping
 		// Healthy shardTablets[i] will be added to tablets
 		if stat != nil {
-			res = append(tablets, tablets[i])
+			res = append(res, tablets[i])
 		}
 	}
 	return res
