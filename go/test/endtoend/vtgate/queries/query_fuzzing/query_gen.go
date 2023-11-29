@@ -44,20 +44,17 @@ type (
 		schemaTables []tableT
 		sel          *sqlparser.Select
 	}
-
 	// queryGenerator generates queries, which can either be unions or select statements
 	queryGenerator struct {
 		stmt   sqlparser.SelectStatement
 		selGen *selectGenerator
 	}
-
 	column struct {
 		name string
 		// TODO: perhaps remove tableName and always pass columns through a tableT
 		tableName string
 		typ       string
 	}
-
 	tableT struct {
 		// the tableT struct can be used to represent the schema of a table or a derived table
 		// in the former case tableExpr will be a sqlparser.TableName, in the latter a sqlparser.DerivedTable
@@ -67,12 +64,17 @@ type (
 		alias     string
 		cols      []column
 	}
+	queryGen interface {
+		randomQuery() sqlparser.SelectStatement
+	}
 )
 
 var _ sqlparser.ExprGenerator = (*tableT)(nil)
 var _ sqlparser.ExprGenerator = (*column)(nil)
 var _ sqlparser.QueryGenerator = (*selectGenerator)(nil)
 var _ sqlparser.QueryGenerator = (*queryGenerator)(nil)
+
+var _ queryGen = (*queryGenerator)(nil)
 
 func newQueryGenerator(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, maxTables, maxAggrs, maxGBs int, schemaTables []tableT) *queryGenerator {
 	return &queryGenerator{
@@ -196,13 +198,14 @@ func (qg *queryGenerator) Generate(r *rand.Rand, genConfig sqlparser.ExprGenerat
 func (sg *selectGenerator) IsQueryGenerator() {}
 func (qg *queryGenerator) IsQueryGenerator()  {}
 
-func (qg *queryGenerator) randomQuery() {
+func (qg *queryGenerator) randomQuery() sqlparser.SelectStatement {
 	if qg.selGen.r.Intn(10) < 1 && testFailingQueries {
 		qg.createUnion()
 	} else {
 		qg.selGen.randomSelect()
 		qg.stmt = qg.selGen.sel
 	}
+	return qg.stmt
 }
 
 // createUnion creates a simple UNION or UNION ALL; no LIMIT or ORDER BY

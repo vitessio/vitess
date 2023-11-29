@@ -18,8 +18,8 @@ package query_fuzzing
 
 import (
 	_ "embed"
+	"errors"
 	"fmt"
-	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -55,8 +55,6 @@ func helperTest(t *testing.T, query string) {
 }
 
 func TestFuzzQueries(t *testing.T) {
-	t.Skip("Skip CI; random expressions generate too many failures to properly limit")
-
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -90,39 +88,42 @@ func TestFuzzQueries(t *testing.T) {
 	// continue testing after an error if and only if testFailingQueries is true
 	for time.Now().Before(endBy) && (!t.Failed() || !testFailingQueries) {
 		seed := time.Now().UnixNano()
-		genConfig := sqlparser.NewExprGeneratorConfig(sqlparser.CannotAggregate, "", 0, false)
-		qg := newQueryGenerator(rand.New(rand.NewSource(seed)), genConfig, 2, 2, 2, schemaTables)
-		qg.randomQuery()
-		query := sqlparser.String(qg.stmt)
-		_, vtErr := mcmp.ExecAllowAndCompareError(query)
+		// genConfig := sqlparser.NewExprGeneratorConfig(sqlparser.CannotAggregate, "", 0, false)
+		// qg := newQueryGenerator(rand.New(rand.NewSource(seed)), genConfig, 2, 2, 2, schemaTables)
+		qg := &maruts{}
+		query := sqlparser.String(qg.randomQuery())
+		t.Run(query, func(t *testing.T) {
+			_, vtErr := mcmp.ExecAllowAndCompareError(query)
 
-		// this assumes all queries are valid mysql queries
-		if vtErr != nil {
-			fmt.Printf("seed: %d\n", seed)
-			fmt.Println(query)
-			fmt.Println(vtErr)
+			// this assumes all queries are valid mysql queries
+			if vtErr != nil {
+				fmt.Printf("seed: %d\n", seed)
+				fmt.Println(query)
+				fmt.Println(vtErr)
 
-			if stopOnMustFixError {
-				// results mismatched
-				if strings.Contains(vtErr.Error(), "results mismatched") {
-					simplified := simplifyResultsMismatchedQuery(t, query)
-					fmt.Printf("final simplified query: %s\n", simplified)
-					break
+				if stopOnMustFixError {
+					// results mismatched
+					if strings.Contains(vtErr.Error(), "results mismatched") {
+						simplified := simplifyResultsMismatchedQuery(t, query)
+						fmt.Printf("final simplified query: %s\n", simplified)
+						t.Fatal("failed")
+					}
+					// EOF
+					var sqlError *sqlerror.SQLError
+					if errors.As(vtErr, &sqlError) && strings.Contains(sqlError.Message, "EOF") {
+						t.Fatal("failed")
+					}
 				}
-				// EOF
-				if sqlError, ok := vtErr.(*sqlerror.SQLError); ok && strings.Contains(sqlError.Message, "EOF") {
-					break
-				}
+
+				// restart the mysql and vitess connections in case something bad happened
+				closer()
+				mcmp, closer = start(t)
+
+				fmt.Printf("\n\n\n")
+				queryFailCount++
 			}
-
-			// restart the mysql and vitess connections in case something bad happened
-			closer()
-			mcmp, closer = start(t)
-
-			fmt.Printf("\n\n\n")
-			queryFailCount++
-		}
-		queryCount++
+			queryCount++
+		})
 	}
 	fmt.Printf("Queries successfully executed: %d\n", queryCount)
 	fmt.Printf("Queries failed: %d\n", queryFailCount)
