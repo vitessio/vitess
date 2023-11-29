@@ -4084,7 +4084,7 @@
       "Original": "insert into unsharded(col) select col from unsharded_tab",
       "Instructions": {
         "OperatorType": "Insert",
-        "Variant": "Unsharded",
+        "Variant": "Select",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -4119,7 +4119,7 @@
       "Original": "insert into unsharded(col) select col from t1",
       "Instructions": {
         "OperatorType": "Insert",
-        "Variant": "Unsharded",
+        "Variant": "Select",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
