@@ -47,6 +47,8 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
+const mysqlShutdownTimeout = 1 * time.Minute
+
 func setBuiltinBackupMysqldDeadline(t time.Duration) time.Duration {
 	old := mysqlctl.BuiltinBackupMysqldTimeout
 	mysqlctl.BuiltinBackupMysqldTimeout = t
@@ -160,7 +162,7 @@ func TestExecuteBackup(t *testing.T) {
 		Keyspace:             keyspace,
 		Shard:                shard,
 		Stats:                fakeStats,
-		MysqlShutdownTimeout: 30 * time.Second,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
@@ -218,7 +220,7 @@ func TestExecuteBackup(t *testing.T) {
 		TopoServer:           ts,
 		Keyspace:             keyspace,
 		Shard:                shard,
-		MysqlShutdownTimeout: 30 * time.Second,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}, bh)
 
 	assert.Error(t, err)
@@ -307,7 +309,7 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 		Shard:                shard,
 		Stats:                backupstats.NewFakeStats(),
 		UpgradeSafe:          true,
-		MysqlShutdownTimeout: 30 * time.Second,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
@@ -394,7 +396,7 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 		TopoServer:           ts,
 		Keyspace:             keyspace,
 		Shard:                shard,
-		MysqlShutdownTimeout: 30 * time.Second,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}, bh)
 
 	require.Error(t, err)
@@ -479,7 +481,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 		TopoServer:           ts,
 		Keyspace:             keyspace,
 		Shard:                shard,
-		MysqlShutdownTimeout: 30 * time.Second,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
@@ -518,7 +520,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 		RestoreToTimestamp:   time.Time{},
 		DryRun:               false,
 		Stats:                fakeStats,
-		MysqlShutdownTimeout: 30 * time.Second,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}
 
 	// Successful restore.

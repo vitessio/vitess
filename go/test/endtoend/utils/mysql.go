@@ -36,6 +36,8 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
+const mysqlShutdownTimeout = 1 * time.Minute
+
 // NewMySQL creates a new MySQL server using the local mysqld binary. The name of the database
 // will be set to `dbName`. SQL queries that need to be executed on the new MySQL instance
 // can be passed through the `schemaSQL` argument.
@@ -97,7 +99,7 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 	}
 	return params, mysqld, func() {
 		ctx := context.Background()
-		_ = mysqld.Teardown(ctx, mycnf, true, 30*time.Second)
+		_ = mysqld.Teardown(ctx, mycnf, true, mysqlShutdownTimeout)
 	}, nil
 }
 

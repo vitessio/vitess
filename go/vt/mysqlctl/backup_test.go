@@ -42,6 +42,8 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 )
 
+const mysqlShutdownTimeout = 1 * time.Minute
+
 // TestBackupExecutesBackupWithScopedParams tests that Backup passes
 // a Scope()-ed stats to backupengine ExecuteBackup.
 func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
@@ -563,7 +565,7 @@ func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 	sqldb := fakesqldb.New(t)
 	sqldb.SetNeverFail(true)
 	mysqld := NewFakeMysqlDaemon(sqldb)
-	require.Nil(t, mysqld.Shutdown(ctx, nil, false, 30*time.Second))
+	require.Nil(t, mysqld.Shutdown(ctx, nil, false, mysqlShutdownTimeout))
 
 	dirName, err := os.MkdirTemp("", "vt_backup_test")
 	require.Nil(t, err)
@@ -586,7 +588,7 @@ func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 		BackupTime:           time.Now(),
 		IncrementalFromPos:   "",
 		Stats:                stats,
-		MysqlShutdownTimeout: 30 * time.Second,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}
 
 	restoreParams := RestoreParams{
@@ -603,7 +605,7 @@ func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 		RestoreToPos:         replication.Position{},
 		DryRun:               false,
 		Stats:                stats,
-		MysqlShutdownTimeout: 30 * time.Second,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}
 
 	manifest := BackupManifest{
