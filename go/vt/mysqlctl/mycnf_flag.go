@@ -17,6 +17,8 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"time"
+
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
@@ -49,6 +51,10 @@ var (
 
 	// the file to use to specify them all
 	flagMycnfFile string
+)
+
+const (
+	waitForMyCnf = 10 * time.Second
 )
 
 // RegisterFlags registers the command line flags for
@@ -129,5 +135,5 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 	}
 	mycnf = NewMycnf(uid, 0)
 	mycnf.Path = flagMycnfFile
-	return ReadMycnf(mycnf)
+	return ReadMycnf(mycnf, waitForMyCnf)
 }
