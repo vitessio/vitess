@@ -246,6 +246,9 @@ func WaitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) er
 		conn, err := dbconnpool.NewDBConnection(ctx, config.DB.DbaConnector())
 		if err == nil {
 			res, fetchErr := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
+			if fetchErr != nil {
+				log.Errorf("Error running SHOW GRANTS - %v", fetchErr)
+			}
 			if fetchErr == nil && res != nil && len(res.Rows) > 0 && len(res.Rows[0]) > 0 {
 				privileges := res.Rows[0][0].ToString()
 				// In MySQL 8.0, all the privileges are listed out explicitly, so we can search for SUPER in the output.
