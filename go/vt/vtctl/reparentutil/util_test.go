@@ -1219,7 +1219,7 @@ func Test_getTabletsWithPromotionRules(t *testing.T) {
 	}
 }
 
-func Test_GetBackupCandidates(t *testing.T) {
+func TestGetBackupCandidates(t *testing.T) {
 	var (
 		primaryTablet = &topo.TabletInfo{
 			Tablet: &topodatapb.Tablet{
