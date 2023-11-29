@@ -88,7 +88,7 @@ func TestFKWorkflow(t *testing.T) {
 	}
 	targetKeyspace := "fktarget"
 	targetTabletId := 200
-	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialFKTargetVSchema, initialFKSchema, 0, 0, targetTabletId, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialFKTargetVSchema, "", 0, 0, targetTabletId, sourceKsOpts)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKeyspace, shardName), 1, 30*time.Second)
 
 	workflowName := "fk"
