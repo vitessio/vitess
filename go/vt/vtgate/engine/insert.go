@@ -38,7 +38,7 @@ var _ Primitive = (*Insert)(nil)
 
 // Insert represents the instructions to perform an insert operation.
 type Insert struct {
-	*InsertCommon
+	InsertCommon
 
 	// Query specifies the query to be executed.
 	// For InsertSharded plans, this value is unused,
@@ -52,12 +52,55 @@ type Insert struct {
 	// Insert.Values[i].Values[j].Values[k] represents the value pulled from row k for that column: (k < len(ins.rows))
 	VindexValues [][][]evalengine.Expr
 
-	// Prefix, Mid and Suffix are for sharded insert plans.
-	Prefix string
-	Mid    sqlparser.Values
-	Suffix string
+	// Mid is the row values for the sharded insert plans.
+	Mid sqlparser.Values
 
 	noInputs
+}
+
+// newQueryInsert creates an Insert with a query string.
+func newQueryInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, query string) *Insert {
+	return &Insert{
+		InsertCommon: InsertCommon{
+			Opcode:   opcode,
+			Keyspace: keyspace,
+		},
+		Query: query,
+	}
+}
+
+// newInsert creates a new Insert.
+func newInsert(
+	opcode InsertOpcode,
+	ignore bool,
+	keyspace *vindexes.Keyspace,
+	vindexValues [][][]evalengine.Expr,
+	table *vindexes.Table,
+	prefix string,
+	mid sqlparser.Values,
+	suffix string,
+) *Insert {
+	ins := &Insert{
+		InsertCommon: InsertCommon{
+			Opcode:   opcode,
+			Keyspace: keyspace,
+			Ignore:   ignore,
+			Prefix:   prefix,
+			Suffix:   suffix,
+		},
+		VindexValues: vindexValues,
+		Mid:          mid,
+	}
+	if table != nil {
+		ins.TableName = table.Name.String()
+		for _, colVindex := range table.ColumnVindexes {
+			if colVindex.IsPartialVindex() {
+				continue
+			}
+			ins.ColVindexes = append(ins.ColVindexes, colVindex)
+		}
+	}
+	return ins
 }
 
 // RouteType returns a description of the query routing type used by the primitive
@@ -95,7 +138,7 @@ func (ins *Insert) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor
 		return nil, err
 	}
 
-	return ins.executeUnshardedTableQuery(ctx, vcursor, ins, bindVars, ins.Query, insertID)
+	return ins.executeUnshardedTableQuery(ctx, vcursor, ins, bindVars, ins.Query, uint64(insertID))
 }
 
 func (ins *Insert) insertIntoShardedTable(
@@ -107,12 +150,12 @@ func (ins *Insert) insertIntoShardedTable(
 	if err != nil {
 		return nil, err
 	}
-	rss, queries, err := ins.getInsertQueries(ctx, vcursor, bindVars)
+	rss, queries, err := ins.getInsertShardedQueries(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
-	return ins.executeInsertQueries(ctx, vcursor, rss, queries, insertID)
+	return ins.executeInsertQueries(ctx, vcursor, rss, queries, uint64(insertID))
 }
 
 func (ins *Insert) executeInsertQueries(
@@ -120,7 +163,7 @@ func (ins *Insert) executeInsertQueries(
 	vcursor VCursor,
 	rss []*srvtopo.ResolvedShard,
 	queries []*querypb.BoundQuery,
-	insertID int64,
+	insertID uint64,
 ) (*sqltypes.Result, error) {
 	autocommit := (len(rss) == 1 || ins.MultiShardAutocommit) && vcursor.AutocommitApproval()
 	err := allowOnlyPrimary(rss...)
@@ -133,82 +176,51 @@ func (ins *Insert) executeInsertQueries(
 	}
 
 	if insertID != 0 {
-		result.InsertID = uint64(insertID)
+		result.InsertID = insertID
 	}
 	return result, nil
 }
 
-// getInsertQueries performs all the vindex related work
+// getInsertShardedQueries performs all the vindex related work
 // and returns a map of shard to queries.
 // Using the primary vindex, it computes the target keyspace ids.
 // For owned vindexes, it creates entries.
 // For unowned vindexes with no input values, it reverse maps.
 // For unowned vindexes with values, it validates.
 // If it's an IGNORE or ON DUPLICATE key insert, it drops unroutable rows.
-func (ins *Insert) getInsertQueries(
+func (ins *Insert) getInsertShardedQueries(
 	ctx context.Context,
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
 ) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
+
 	// vindexRowsValues builds the values of all vindex columns.
 	// the 3-d structure indexes are colVindex, row, col. Note that
 	// ins.Values indexes are colVindex, col, row. So, the conversion
 	// involves a transpose.
 	// The reason we need to transpose is that all the Vindex APIs
 	// require inputs in that format.
-	vindexRowsValues := make([][]sqltypes.Row, len(ins.VindexValues))
-	rowCount := 0
-	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	colVindexes := ins.ColVindexes
-	for vIdx, vColValues := range ins.VindexValues {
-		if len(vColValues) != len(colVindexes[vIdx].Columns) {
-			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] supplied vindex column values don't match vschema: %v %v", vColValues, colVindexes[vIdx].Columns)
-		}
-		for colIdx, colValues := range vColValues {
-			rowsResolvedValues := make(sqltypes.Row, 0, len(colValues))
-			for _, colValue := range colValues {
-				result, err := env.Evaluate(colValue)
-				if err != nil {
-					return nil, nil, err
-				}
-				rowsResolvedValues = append(rowsResolvedValues, result.Value(vcursor.ConnCollation()))
-			}
-			// This is the first iteration: allocate for transpose.
-			if colIdx == 0 {
-				if len(rowsResolvedValues) == 0 {
-					return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] rowcount is zero for inserts: %v", rowsResolvedValues)
-				}
-				if rowCount == 0 {
-					rowCount = len(rowsResolvedValues)
-				}
-				if rowCount != len(rowsResolvedValues) {
-					return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] uneven row values for inserts: %d %d", rowCount, len(rowsResolvedValues))
-				}
-				vindexRowsValues[vIdx] = make([]sqltypes.Row, rowCount)
-			}
-			// Perform the transpose.
-			for rowNum, colVal := range rowsResolvedValues {
-				vindexRowsValues[vIdx][rowNum] = append(vindexRowsValues[vIdx][rowNum], colVal)
-			}
-		}
+	vindexRowsValues, err := ins.buildVindexRowsValues(ctx, vcursor, bindVars)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// The output from the following 'process' functions is a list of
 	// keyspace ids. For regular inserts, a failure to find a route
 	// results in an error. For 'ignore' type inserts, the keyspace
 	// id is returned as nil, which is used later to drop the corresponding rows.
-	if len(vindexRowsValues) == 0 || len(colVindexes) == 0 {
+	if len(vindexRowsValues) == 0 || len(ins.ColVindexes) == 0 {
 		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.RequiresPrimaryKey, vterrors.PrimaryVindexNotSet, ins.TableName)
 	}
 
-	keyspaceIDs, err := ins.processVindexes(ctx, vcursor, vindexRowsValues, colVindexes)
+	keyspaceIDs, err := ins.processVindexes(ctx, vcursor, vindexRowsValues)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Build 3-d bindvars. Skip rows with nil keyspace ids in case
 	// we're executing an insert ignore.
-	for vIdx, colVindex := range colVindexes {
+	for vIdx, colVindex := range ins.ColVindexes {
 		for rowNum, rowColumnKeys := range vindexRowsValues[vIdx] {
 			if keyspaceIDs[rowNum] == nil {
 				// InsertIgnore: skip the row.
@@ -281,6 +293,46 @@ func (ins *Insert) getInsertQueries(
 	return rss, queries, nil
 }
 
+func (ins *Insert) buildVindexRowsValues(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([][]sqltypes.Row, error) {
+	vindexRowsValues := make([][]sqltypes.Row, len(ins.VindexValues))
+	rowCount := 0
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
+	colVindexes := ins.ColVindexes
+	for vIdx, vColValues := range ins.VindexValues {
+		if len(vColValues) != len(colVindexes[vIdx].Columns) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] supplied vindex column values don't match vschema: %v %v", vColValues, colVindexes[vIdx].Columns)
+		}
+		for colIdx, colValues := range vColValues {
+			rowsResolvedValues := make(sqltypes.Row, 0, len(colValues))
+			for _, colValue := range colValues {
+				result, err := env.Evaluate(colValue)
+				if err != nil {
+					return nil, err
+				}
+				rowsResolvedValues = append(rowsResolvedValues, result.Value(vcursor.ConnCollation()))
+			}
+			// This is the first iteration: allocate for transpose.
+			if colIdx == 0 {
+				if len(rowsResolvedValues) == 0 {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] rowcount is zero for inserts: %v", rowsResolvedValues)
+				}
+				if rowCount == 0 {
+					rowCount = len(rowsResolvedValues)
+				}
+				if rowCount != len(rowsResolvedValues) {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] uneven row values for inserts: %d %d", rowCount, len(rowsResolvedValues))
+				}
+				vindexRowsValues[vIdx] = make([]sqltypes.Row, rowCount)
+			}
+			// Perform the transpose.
+			for rowNum, colVal := range rowsResolvedValues {
+				vindexRowsValues[vIdx][rowNum] = append(vindexRowsValues[vIdx][rowNum], colVal)
+			}
+		}
+	}
+	return vindexRowsValues, nil
+}
+
 func (ins *Insert) description() PrimitiveDescription {
 	other := ins.commonDesc()
 	other["Query"] = ins.Query
@@ -320,49 +372,4 @@ func (ins *Insert) description() PrimitiveDescription {
 // to make sure they both produce the same names
 func InsertVarName(col sqlparser.IdentifierCI, rowNum int) string {
 	return fmt.Sprintf("_%s_%d", col.CompliantName(), rowNum)
-}
-
-// NewQueryInsert creates an Insert with a query string.
-func NewQueryInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, query string) *Insert {
-	return &Insert{
-		InsertCommon: &InsertCommon{
-			Opcode:   opcode,
-			Keyspace: keyspace,
-		},
-		Query: query,
-	}
-}
-
-// NewInsert creates a new Insert.
-func NewInsert(
-	opcode InsertOpcode,
-	ignore bool,
-	keyspace *vindexes.Keyspace,
-	vindexValues [][][]evalengine.Expr,
-	table *vindexes.Table,
-	prefix string,
-	mid sqlparser.Values,
-	suffix string,
-) *Insert {
-	ins := &Insert{
-		InsertCommon: &InsertCommon{
-			Opcode:   opcode,
-			Keyspace: keyspace,
-			Ignore:   ignore,
-		},
-		VindexValues: vindexValues,
-		Prefix:       prefix,
-		Mid:          mid,
-		Suffix:       suffix,
-	}
-	if table != nil {
-		ins.TableName = table.Name.String()
-		for _, colVindex := range table.ColumnVindexes {
-			if colVindex.IsPartialVindex() {
-				continue
-			}
-			ins.ColVindexes = append(ins.ColVindexes, colVindex)
-		}
-	}
-	return ins
 }

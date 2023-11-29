@@ -111,7 +111,7 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 
 	ins := dmlOp.(*operators.Insert)
 	eins := &engine.InsertSelect{
-		InsertCommon: &engine.InsertCommon{
+		InsertCommon: engine.InsertCommon{
 			Keyspace:          rb.Routing.Keyspace(),
 			TableName:         ins.VTable.Name.String(),
 			Ignore:            ins.Ignore,
@@ -549,7 +549,7 @@ func buildInsertLogicalPlan(
 ) (logicalPlan, error) {
 	ins := op.(*operators.Insert)
 
-	ic := &engine.InsertCommon{
+	ic := engine.InsertCommon{
 		Opcode:      mapToInsertOpCode(rb.Routing.OpCode()),
 		Keyspace:    rb.Routing.Keyspace(),
 		TableName:   ins.VTable.Name.String(),

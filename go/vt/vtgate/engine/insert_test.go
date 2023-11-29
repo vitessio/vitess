@@ -33,7 +33,7 @@ import (
 )
 
 func TestInsertUnsharded(t *testing.T) {
-	ins := NewQueryInsert(
+	ins := newQueryInsert(
 		InsertUnsharded,
 		&vindexes.Keyspace{
 			Name:    "ks",
@@ -68,7 +68,7 @@ func TestInsertUnsharded(t *testing.T) {
 }
 
 func TestInsertUnshardedGenerate(t *testing.T) {
-	ins := NewQueryInsert(
+	ins := newQueryInsert(
 		InsertUnsharded,
 		&vindexes.Keyspace{
 			Name:    "ks",
@@ -121,7 +121,7 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 }
 
 func TestInsertUnshardedGenerate_Zeros(t *testing.T) {
-	ins := NewQueryInsert(
+	ins := newQueryInsert(
 		InsertUnsharded,
 		&vindexes.Keyspace{
 			Name:    "ks",
@@ -198,7 +198,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	ks := vs.Keyspaces["sharded"]
 
 	// A single row insert should be autocommitted
-	ins := NewInsert(
+	ins := newInsert(
 		InsertSharded,
 		false,
 		ks.Keyspace,
@@ -232,7 +232,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	})
 
 	// Multiple rows are not autocommitted by default
-	ins = NewInsert(
+	ins = newInsert(
 		InsertSharded,
 		false,
 		ks.Keyspace,
@@ -272,7 +272,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	})
 
 	// Optional flag overrides autocommit
-	ins = NewInsert(
+	ins = newInsert(
 		InsertSharded,
 		false,
 		ks.Keyspace,
@@ -344,7 +344,7 @@ func TestInsertShardedFail(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	ins := NewInsert(
+	ins := newInsert(
 		InsertSharded,
 		false,
 		ks.Keyspace,
@@ -394,7 +394,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	ins := NewInsert(
+	ins := newInsert(
 		InsertSharded,
 		false,
 		ks.Keyspace,
@@ -513,7 +513,7 @@ func TestInsertShardedOwned(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	ins := NewInsert(
+	ins := newInsert(
 		InsertSharded,
 		false,
 		ks.Keyspace,
@@ -623,7 +623,7 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	ins := NewInsert(
+	ins := newInsert(
 		InsertSharded,
 		false,
 		ks.Keyspace,
@@ -700,7 +700,7 @@ func TestInsertShardedGeo(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	ins := NewInsert(
+	ins := newInsert(
 		InsertSharded,
 		false,
 		ks.Keyspace,
@@ -806,7 +806,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	ins := NewInsert(
+	ins := newInsert(
 		InsertSharded,
 		true,
 		ks.Keyspace,
@@ -962,7 +962,7 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	ins := NewInsert(
+	ins := newInsert(
 		InsertSharded,
 		true,
 		ks.Keyspace,
@@ -1060,7 +1060,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	ins := NewInsert(
+	ins := newInsert(
 		InsertSharded,
 		false,
 		ks.Keyspace,
@@ -1188,7 +1188,7 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	ins := NewInsert(
+	ins := newInsert(
 		InsertSharded,
 		true,
 		ks.Keyspace,
@@ -1294,7 +1294,7 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	ins := NewInsert(
+	ins := newInsert(
 		InsertSharded,
 		false,
 		ks.Keyspace,
@@ -1371,7 +1371,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	ins := NewInsert(
+	ins := newInsert(
 		InsertSharded,
 		false,
 		ks.Keyspace,
@@ -1485,7 +1485,7 @@ func TestInsertShardedUnownedReverseMapSuccess(t *testing.T) {
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
-	ins := NewInsert(
+	ins := newInsert(
 		InsertSharded,
 		false,
 		ks.Keyspace,
@@ -1539,7 +1539,7 @@ func TestInsertSelectSimple(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := NewInsertSelect(false, ks.Keyspace, ks.Tables["t1"], "prefix ", " suffix", [][]int{{1}}, rb)
+	ins := newInsertSelect(false, ks.Keyspace, ks.Tables["t1"], "prefix ", " suffix", [][]int{{1}}, rb)
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -1622,7 +1622,7 @@ func TestInsertSelectOwned(t *testing.T) {
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
 
-	ins := NewInsertSelect(
+	ins := newInsertSelect(
 		false,
 		ks.Keyspace,
 		ks.Tables["t1"],
@@ -1723,7 +1723,7 @@ func TestInsertSelectGenerate(t *testing.T) {
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
 
-	ins := NewInsertSelect(
+	ins := newInsertSelect(
 		false,
 		ks.Keyspace,
 		ks.Tables["t1"],
@@ -1815,7 +1815,7 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
 
-	ins := NewInsertSelect(
+	ins := newInsertSelect(
 		false,
 		ks.Keyspace,
 		ks.Tables["t1"],
@@ -1911,7 +1911,7 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := NewInsertSelect(
+	ins := newInsertSelect(
 		false,
 		ks.Keyspace,
 		ks.Tables["t1"],
@@ -1998,7 +1998,7 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := NewInsertSelect(
+	ins := newInsertSelect(
 		false,
 		ks.Keyspace,
 		ks.Tables["t1"],
@@ -2095,7 +2095,7 @@ func TestInsertSelectUnowned(t *testing.T) {
 		RoutingParameters: &RoutingParameters{
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace}}
-	ins := NewInsertSelect(
+	ins := newInsertSelect(
 		false,
 		ks.Keyspace,
 		ks.Tables["t2"],
@@ -2209,7 +2209,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		RoutingParameters: &RoutingParameters{Opcode: Unsharded, Keyspace: uks2.Keyspace}}
 
 	// sks1 and sks2
-	ins := NewInsertSelect(
+	ins := newInsertSelect(
 		false,
 		sks1.Keyspace,
 		sks1.Tables["s1"],
@@ -2286,7 +2286,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
 
 	// uks1 and sks2
-	ins = NewInsertSelect(
+	ins = newInsertSelect(
 		false,
 		uks1.Keyspace,
 		nil,

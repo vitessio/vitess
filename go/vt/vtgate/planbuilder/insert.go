@@ -91,7 +91,7 @@ func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vin
 
 func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
 	eIns := &engine.Insert{
-		InsertCommon: &engine.InsertCommon{
+		InsertCommon: engine.InsertCommon{
 			Opcode:    engine.InsertUnsharded,
 			Keyspace:  ks,
 			TableName: tables[0].Name.String(),

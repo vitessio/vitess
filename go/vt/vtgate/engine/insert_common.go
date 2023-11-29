@@ -71,6 +71,10 @@ type (
 		// ColVindexes are the vindexes that will use the VindexValues
 		ColVindexes []*vindexes.ColumnVindex
 
+		// Prefix, Suffix are for sharded insert plans.
+		Prefix string
+		Suffix string
+
 		// Insert needs tx handling
 		txNeeded
 	}
@@ -140,7 +144,7 @@ func (ic *InsertCommon) GetFields(context.Context, VCursor, map[string]*querypb.
 	return nil, vterrors.VT13001("unexpected fields call for insert query")
 }
 
-func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor VCursor, loggingPrimitive Primitive, bindVars map[string]*querypb.BindVariable, query string, insertID int64) (*sqltypes.Result, error) {
+func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor VCursor, loggingPrimitive Primitive, bindVars map[string]*querypb.BindVariable, query string, insertID uint64) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(ctx, ins.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
 		return nil, err
@@ -162,12 +166,13 @@ func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor
 	// values, we don't return an error because this behavior
 	// is required to support migration.
 	if insertID != 0 {
-		qr.InsertID = uint64(insertID)
+		qr.InsertID = insertID
 	}
 	return qr, nil
 }
 
-func (ins *InsertCommon) processVindexes(ctx context.Context, vcursor VCursor, vindexRowsValues [][]sqltypes.Row, colVindexes []*vindexes.ColumnVindex) ([]ksID, error) {
+func (ins *InsertCommon) processVindexes(ctx context.Context, vcursor VCursor, vindexRowsValues [][]sqltypes.Row) ([]ksID, error) {
+	colVindexes := ins.ColVindexes
 	keyspaceIDs, err := ins.processPrimary(ctx, vcursor, vindexRowsValues[0], colVindexes[0])
 	if err != nil {
 		return nil, err

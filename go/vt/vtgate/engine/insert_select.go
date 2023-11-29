@@ -39,7 +39,7 @@ var _ Primitive = (*InsertSelect)(nil)
 type (
 	// InsertSelect represents the instructions to perform an insert operation with input rows from a select.
 	InsertSelect struct {
-		*InsertCommon
+		InsertCommon
 
 		// Input is a select query plan to retrieve results for inserting data.
 		Input Primitive
@@ -47,12 +47,40 @@ type (
 		// VindexValueOffset stores the offset for each column in the ColumnVindex
 		// that will appear in the result set of the select query.
 		VindexValueOffset [][]int
-
-		// Prefix, Suffix are for sharded insert plans.
-		Prefix string
-		Suffix string
 	}
 )
+
+// newInsertSelect creates a new InsertSelect.
+func newInsertSelect(
+	ignore bool,
+	keyspace *vindexes.Keyspace,
+	table *vindexes.Table,
+	prefix string,
+	suffix string,
+	vv [][]int,
+	input Primitive,
+) *InsertSelect {
+	ins := &InsertSelect{
+		InsertCommon: InsertCommon{
+			Ignore:   ignore,
+			Keyspace: keyspace,
+			Prefix:   prefix,
+			Suffix:   suffix,
+		},
+		Input:             input,
+		VindexValueOffset: vv,
+	}
+	if table != nil {
+		ins.TableName = table.Name.String()
+		for _, colVindex := range table.ColumnVindexes {
+			if colVindex.IsPartialVindex() {
+				continue
+			}
+			ins.ColVindexes = append(ins.ColVindexes, colVindex)
+		}
+	}
+	return ins
+}
 
 func (ins *InsertSelect) Inputs() ([]Primitive, []map[string]any) {
 	return []Primitive{ins.Input}, nil
@@ -153,7 +181,7 @@ func (ins *InsertSelect) insertIntoShardedTable(
 	bindVars map[string]*querypb.BindVariable,
 	irr insertRowsResult,
 ) (*sqltypes.Result, error) {
-	rss, queries, err := ins.getInsertQueries(ctx, vcursor, bindVars, irr.rows)
+	rss, queries, err := ins.getInsertShardedQueries(ctx, vcursor, bindVars, irr.rows)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +199,7 @@ func (ins *InsertSelect) executeInsertQueries(
 	vcursor VCursor,
 	rss []*srvtopo.ResolvedShard,
 	queries []*querypb.BoundQuery,
-	insertID int64,
+	insertID uint64,
 ) (*sqltypes.Result, error) {
 	autocommit := (len(rss) == 1 || ins.MultiShardAutocommit) && vcursor.AutocommitApproval()
 	err := allowOnlyPrimary(rss...)
@@ -184,40 +212,23 @@ func (ins *InsertSelect) executeInsertQueries(
 	}
 
 	if insertID != 0 {
-		result.InsertID = uint64(insertID)
+		result.InsertID = insertID
 	}
 	return result, nil
 }
 
-func (ins *InsertSelect) getInsertQueries(
+func (ins *InsertSelect) getInsertShardedQueries(
 	ctx context.Context,
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
 	rows []sqltypes.Row,
 ) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
-	colVindexes := ins.ColVindexes
-	if len(colVindexes) != len(ins.VindexValueOffset) {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex value offsets and vindex info do not match")
+	vindexRowsValues, err := ins.buildVindexRowsValues(rows)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	// Here we go over the incoming rows and extract values for the vindexes we need to update
-	vindexRowsValues := make([][]sqltypes.Row, len(colVindexes))
-	for _, inputRow := range rows {
-		for colIdx := range colVindexes {
-			offsets := ins.VindexValueOffset[colIdx]
-			row := make(sqltypes.Row, 0, len(offsets))
-			for _, offset := range offsets {
-				if offset == -1 { // value not provided from select query
-					row = append(row, sqltypes.NULL)
-					continue
-				}
-				row = append(row, inputRow[offset])
-			}
-			vindexRowsValues[colIdx] = append(vindexRowsValues[colIdx], row)
-		}
-	}
-
-	keyspaceIDs, err := ins.processVindexes(ctx, vcursor, vindexRowsValues, colVindexes)
+	keyspaceIDs, err := ins.processVindexes(ctx, vcursor, vindexRowsValues)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -267,6 +278,31 @@ func (ins *InsertSelect) getInsertQueries(
 	}
 
 	return rss, queries, nil
+}
+
+func (ins *InsertSelect) buildVindexRowsValues(rows []sqltypes.Row) ([][]sqltypes.Row, error) {
+	colVindexes := ins.ColVindexes
+	if len(colVindexes) != len(ins.VindexValueOffset) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex value offsets and vindex info do not match")
+	}
+
+	// Here we go over the incoming rows and extract values for the vindexes we need to update
+	vindexRowsValues := make([][]sqltypes.Row, len(colVindexes))
+	for _, inputRow := range rows {
+		for colIdx := range colVindexes {
+			offsets := ins.VindexValueOffset[colIdx]
+			row := make(sqltypes.Row, 0, len(offsets))
+			for _, offset := range offsets {
+				if offset == -1 { // value not provided from select query
+					row = append(row, sqltypes.NULL)
+					continue
+				}
+				row = append(row, inputRow[offset])
+			}
+			vindexRowsValues[colIdx] = append(vindexRowsValues[colIdx], row)
+		}
+	}
+	return vindexRowsValues, nil
 }
 
 func (ins *InsertSelect) execInsertSharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -332,7 +368,7 @@ func insertVarOffset(rowNum, colOffset int) string {
 
 type insertRowsResult struct {
 	rows     []sqltypes.Row
-	insertID int64
+	insertID uint64
 }
 
 func (ins *InsertSelect) execSelect(
@@ -352,7 +388,7 @@ func (ins *InsertSelect) execSelect(
 
 	return insertRowsResult{
 		rows:     res.Rows,
-		insertID: insertID,
+		insertID: uint64(insertID),
 	}, nil
 }
 
@@ -381,39 +417,7 @@ func (ins *InsertSelect) execSelectStreaming(
 
 		return callback(insertRowsResult{
 			rows:     result.Rows,
-			insertID: insertID,
+			insertID: uint64(insertID),
 		})
 	})
-}
-
-// NewInsertSelect creates a new InsertSelect.
-func NewInsertSelect(
-	ignore bool,
-	keyspace *vindexes.Keyspace,
-	table *vindexes.Table,
-	prefix string,
-	suffix string,
-	vv [][]int,
-	input Primitive,
-) *InsertSelect {
-	ins := &InsertSelect{
-		InsertCommon: &InsertCommon{
-			Ignore:   ignore,
-			Keyspace: keyspace,
-		},
-		Input:             input,
-		Prefix:            prefix,
-		Suffix:            suffix,
-		VindexValueOffset: vv,
-	}
-	if table != nil {
-		ins.TableName = table.Name.String()
-		for _, colVindex := range table.ColumnVindexes {
-			if colVindex.IsPartialVindex() {
-				continue
-			}
-			ins.ColVindexes = append(ins.ColVindexes, colVindex)
-		}
-	}
-	return ins
 }
