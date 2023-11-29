@@ -134,6 +134,65 @@ func TestChooseNewPrimary(t *testing.T) {
 			shouldErr: false,
 		},
 		{
+			name: "found a replica - ignore one with replication lag",
+			tmc: &chooseNewPrimaryTestTMClient{
+				// zone1-101 is behind zone1-102
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+					},
+					"zone1-0000000102": {
+						Position:              "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ReplicationLagSeconds: 232,
+					},
+				},
+			},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			shouldErr: false,
+		},
+		{
 			name: "found a replica - more advanced relay log position",
 			tmc: &chooseNewPrimaryTestTMClient{
 				// zone1-101 is behind zone1-102
@@ -465,6 +524,7 @@ func TestFindPositionForTablet(t *testing.T) {
 		tmc              *testutil.TabletManagerClient
 		tablet           *topodatapb.Tablet
 		expectedPosition string
+		expectedLag      uint32
 		expectedErr      string
 	}{
 		{
@@ -476,7 +536,8 @@ func TestFindPositionForTablet(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						Position: &replicationdatapb.Status{
-							Position: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+							Position:              "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+							ReplicationLagSeconds: 201,
 						},
 					},
 				},
@@ -487,6 +548,7 @@ func TestFindPositionForTablet(t *testing.T) {
 					Uid:  100,
 				},
 			},
+			expectedLag:      201,
 			expectedPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 		}, {
 			name: "no replication status",
@@ -506,6 +568,7 @@ func TestFindPositionForTablet(t *testing.T) {
 					Uid:  100,
 				},
 			},
+			expectedLag:      0,
 			expectedPosition: "",
 		}, {
 			name: "relay log",
@@ -516,8 +579,9 @@ func TestFindPositionForTablet(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						Position: &replicationdatapb.Status{
-							Position:         "unused",
-							RelayLogPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+							Position:              "unused",
+							RelayLogPosition:      "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+							ReplicationLagSeconds: 291,
 						},
 					},
 				},
@@ -528,6 +592,7 @@ func TestFindPositionForTablet(t *testing.T) {
 					Uid:  100,
 				},
 			},
+			expectedLag:      291,
 			expectedPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 		}, {
 			name: "error in parsing position",
@@ -555,7 +620,7 @@ func TestFindPositionForTablet(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			pos, err := findPositionForTablet(ctx, test.tablet, logger, test.tmc, 10*time.Second)
+			pos, lag, err := findPositionAndLagForTablet(ctx, test.tablet, logger, test.tmc, 10*time.Second)
 			if test.expectedErr != "" {
 				require.EqualError(t, err, test.expectedErr)
 				return
@@ -563,6 +628,7 @@ func TestFindPositionForTablet(t *testing.T) {
 			require.NoError(t, err)
 			posString := replication.EncodePosition(pos)
 			require.Equal(t, test.expectedPosition, posString)
+			require.Equal(t, test.expectedLag, lag)
 		})
 	}
 }
