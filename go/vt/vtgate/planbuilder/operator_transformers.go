@@ -110,20 +110,20 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 	}
 
 	ins := dmlOp.(*operators.Insert)
-	eins := &engine.Insert{
-		Opcode:            mapToInsertOpCode(rb.Routing.OpCode(), true),
-		Keyspace:          rb.Routing.Keyspace(),
-		TableName:         ins.VTable.Name.String(),
-		Ignore:            ins.Ignore,
-		ForceNonStreaming: op.ForceNonStreaming,
-		Generate:          autoIncGenerate(ins.AutoIncrement),
-		ColVindexes:       ins.ColVindexes,
-		VindexValues:      ins.VindexValues,
+	eins := &engine.InsertSelect{
+		InsertCommon: engine.InsertCommon{
+			Keyspace:          rb.Routing.Keyspace(),
+			TableName:         ins.VTable.Name.String(),
+			Ignore:            ins.Ignore,
+			ForceNonStreaming: op.ForceNonStreaming,
+			Generate:          autoIncGenerate(ins.AutoIncrement),
+			ColVindexes:       ins.ColVindexes,
+		},
 		VindexValueOffset: ins.VindexValueOffset,
 	}
-	lp := &insert{eInsert: eins}
+	lp := &insert{eInsertSelect: eins}
 
-	eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
+	eins.Prefix, _, eins.Suffix = generateInsertShardedQuery(ins.AST)
 
 	selectionPlan, err := transformToLogicalPlan(ctx, op.Select)
 	if err != nil {
@@ -548,15 +548,23 @@ func buildInsertLogicalPlan(
 	hints *queryHints,
 ) (logicalPlan, error) {
 	ins := op.(*operators.Insert)
+
+	ic := engine.InsertCommon{
+		Opcode:      mapToInsertOpCode(rb.Routing.OpCode()),
+		Keyspace:    rb.Routing.Keyspace(),
+		TableName:   ins.VTable.Name.String(),
+		Ignore:      ins.Ignore,
+		Generate:    autoIncGenerate(ins.AutoIncrement),
+		ColVindexes: ins.ColVindexes,
+	}
+	if hints != nil {
+		ic.MultiShardAutocommit = hints.multiShardAutocommit
+		ic.QueryTimeout = hints.queryTimeout
+	}
+
 	eins := &engine.Insert{
-		Opcode:            mapToInsertOpCode(rb.Routing.OpCode(), false),
-		Keyspace:          rb.Routing.Keyspace(),
-		TableName:         ins.VTable.Name.String(),
-		Ignore:            ins.Ignore,
-		Generate:          autoIncGenerate(ins.AutoIncrement),
-		ColVindexes:       ins.ColVindexes,
-		VindexValues:      ins.VindexValues,
-		VindexValueOffset: ins.VindexValueOffset,
+		InsertCommon: ic,
+		VindexValues: ins.VindexValues,
 	}
 	lp := &insert{eInsert: eins}
 
@@ -566,21 +574,13 @@ func buildInsertLogicalPlan(
 		eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
 	}
 
-	if hints != nil {
-		eins.MultiShardAutocommit = hints.multiShardAutocommit
-		eins.QueryTimeout = hints.queryTimeout
-	}
-
 	eins.Query = generateQuery(stmt)
 	return lp, nil
 }
 
-func mapToInsertOpCode(code engine.Opcode, insertSelect bool) engine.InsertOpcode {
+func mapToInsertOpCode(code engine.Opcode) engine.InsertOpcode {
 	if code == engine.Unsharded {
 		return engine.InsertUnsharded
-	}
-	if insertSelect {
-		return engine.InsertSelect
 	}
 	return engine.InsertSharded
 }
