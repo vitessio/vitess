@@ -18,7 +18,6 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -61,96 +60,6 @@ type Insert struct {
 	noInputs
 }
 
-// NewQueryInsert creates an Insert with a query string.
-func NewQueryInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, query string) *Insert {
-	return &Insert{
-		InsertCommon: &InsertCommon{
-			Opcode:   opcode,
-			Keyspace: keyspace,
-		},
-		Query: query,
-	}
-}
-
-// NewInsert creates a new Insert.
-func NewInsert(
-	opcode InsertOpcode,
-	ignore bool,
-	keyspace *vindexes.Keyspace,
-	vindexValues [][][]evalengine.Expr,
-	table *vindexes.Table,
-	prefix string,
-	mid sqlparser.Values,
-	suffix string,
-) *Insert {
-	ins := &Insert{
-		InsertCommon: &InsertCommon{
-			Opcode:   opcode,
-			Keyspace: keyspace,
-			Ignore:   ignore,
-		},
-		VindexValues: vindexValues,
-		Prefix:       prefix,
-		Mid:          mid,
-		Suffix:       suffix,
-	}
-	if table != nil {
-		ins.TableName = table.Name.String()
-		for _, colVindex := range table.ColumnVindexes {
-			if colVindex.IsPartialVindex() {
-				continue
-			}
-			ins.ColVindexes = append(ins.ColVindexes, colVindex)
-		}
-	}
-	return ins
-}
-
-// Generate represents the instruction to generate
-// a value from a sequence.
-type Generate struct {
-	Keyspace *vindexes.Keyspace
-	Query    string
-	// Values are the supplied values for the column, which
-	// will be stored as a list within the expression. New
-	// values will be generated based on how many were not
-	// supplied (NULL).
-	Values evalengine.Expr
-	// Insert using Select, offset for auto increment column
-	Offset int
-}
-
-// InsertOpcode is a number representing the opcode
-// for the Insert primitive.
-type InsertOpcode int
-
-const (
-	// InsertUnsharded is for routing an insert statement
-	// to an unsharded keyspace.
-	InsertUnsharded = InsertOpcode(iota)
-	// InsertSharded is for routing an insert statement
-	// to individual shards. Requires: A list of Values, one
-	// for each ColVindex. If the table has an Autoinc column,
-	// A Generate subplan must be created.
-	InsertSharded
-)
-
-var insName = map[InsertOpcode]string{
-	InsertUnsharded: "InsertUnsharded",
-	InsertSharded:   "InsertSharded",
-}
-
-// String returns the opcode
-func (code InsertOpcode) String() string {
-	return strings.ReplaceAll(insName[code], "Insert", "")
-}
-
-// MarshalJSON serializes the InsertOpcode as a JSON string.
-// It's used for testing and diagnostics.
-func (code InsertOpcode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(insName[code])
-}
-
 // RouteType returns a description of the query routing type used by the primitive
 func (ins *Insert) RouteType() string {
 	return insName[ins.Opcode]
@@ -163,9 +72,9 @@ func (ins *Insert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 
 	switch ins.Opcode {
 	case InsertUnsharded:
-		return ins.execInsertUnsharded(ctx, vcursor, bindVars)
+		return ins.insertIntoUnshardedTable(ctx, vcursor, bindVars)
 	case InsertSharded:
-		return ins.insertIntoShardedTableFromValues(ctx, vcursor, bindVars)
+		return ins.insertIntoShardedTable(ctx, vcursor, bindVars)
 	default:
 		return nil, vterrors.VT13001("unexpected query route: %v", ins.Opcode)
 	}
@@ -180,39 +89,16 @@ func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 	return callback(res)
 }
 
-func (ins *Insert) execInsertUnsharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ins *Insert) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	insertID, err := ins.processGenerateFromValues(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
-	rss, _, err := vcursor.ResolveDestinations(ctx, ins.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
-	if err != nil {
-		return nil, err
-	}
-	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
-	}
-	if err = allowOnlyPrimary(rss...); err != nil {
-		return nil, err
-	}
-	qr, err := execShard(ctx, ins, vcursor, ins.Query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */)
-	if err != nil {
-		return nil, err
-	}
-
-	// If processGenerateFromValues generated new values, it supersedes
-	// any ids that MySQL might have generated. If both generated
-	// values, we don't return an error because this behavior
-	// is required to support migration.
-	if insertID != 0 {
-		qr.InsertID = uint64(insertID)
-	}
-	return qr, nil
-
+	return ins.executeUnshardedTableQuery(ctx, vcursor, bindVars, ins.Query, insertID)
 }
 
-func (ins *Insert) insertIntoShardedTableFromValues(
+func (ins *Insert) insertIntoShardedTable(
 	ctx context.Context,
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
@@ -221,7 +107,7 @@ func (ins *Insert) insertIntoShardedTableFromValues(
 	if err != nil {
 		return nil, err
 	}
-	rss, queries, err := ins.getInsertQueriesFromValues(ctx, vcursor, bindVars)
+	rss, queries, err := ins.getInsertQueries(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -252,14 +138,14 @@ func (ins *Insert) executeInsertQueries(
 	return result, nil
 }
 
-// getInsertQueriesFromValues performs all the vindex related work
+// getInsertQueries performs all the vindex related work
 // and returns a map of shard to queries.
 // Using the primary vindex, it computes the target keyspace ids.
 // For owned vindexes, it creates entries.
 // For unowned vindexes with no input values, it reverse maps.
 // For unowned vindexes with values, it validates.
 // If it's an IGNORE or ON DUPLICATE key insert, it drops unroutable rows.
-func (ins *Insert) getInsertQueriesFromValues(
+func (ins *Insert) getInsertQueries(
 	ctx context.Context,
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
@@ -314,22 +200,10 @@ func (ins *Insert) getInsertQueriesFromValues(
 	if len(vindexRowsValues) == 0 || len(colVindexes) == 0 {
 		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.RequiresPrimaryKey, vterrors.PrimaryVindexNotSet, ins.TableName)
 	}
-	keyspaceIDs, err := ins.processPrimary(ctx, vcursor, vindexRowsValues[0], colVindexes[0])
+
+	keyspaceIDs, err := ins.processVindexes(ctx, vcursor, vindexRowsValues, colVindexes)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	for vIdx := 1; vIdx < len(colVindexes); vIdx++ {
-		colVindex := colVindexes[vIdx]
-		var err error
-		if colVindex.Owned {
-			err = ins.processOwned(ctx, vcursor, vindexRowsValues[vIdx], colVindex, keyspaceIDs)
-		} else {
-			err = ins.processUnowned(ctx, vcursor, vindexRowsValues[vIdx], colVindex, keyspaceIDs)
-		}
-		if err != nil {
-			return nil, nil, err
-		}
 	}
 
 	// Build 3-d bindvars. Skip rows with nil keyspace ids in case
@@ -446,4 +320,49 @@ func (ins *Insert) description() PrimitiveDescription {
 // to make sure they both produce the same names
 func InsertVarName(col sqlparser.IdentifierCI, rowNum int) string {
 	return fmt.Sprintf("_%s_%d", col.CompliantName(), rowNum)
+}
+
+// NewQueryInsert creates an Insert with a query string.
+func NewQueryInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, query string) *Insert {
+	return &Insert{
+		InsertCommon: &InsertCommon{
+			Opcode:   opcode,
+			Keyspace: keyspace,
+		},
+		Query: query,
+	}
+}
+
+// NewInsert creates a new Insert.
+func NewInsert(
+	opcode InsertOpcode,
+	ignore bool,
+	keyspace *vindexes.Keyspace,
+	vindexValues [][][]evalengine.Expr,
+	table *vindexes.Table,
+	prefix string,
+	mid sqlparser.Values,
+	suffix string,
+) *Insert {
+	ins := &Insert{
+		InsertCommon: &InsertCommon{
+			Opcode:   opcode,
+			Keyspace: keyspace,
+			Ignore:   ignore,
+		},
+		VindexValues: vindexValues,
+		Prefix:       prefix,
+		Mid:          mid,
+		Suffix:       suffix,
+	}
+	if table != nil {
+		ins.TableName = table.Name.String()
+		for _, colVindex := range table.ColumnVindexes {
+			if colVindex.IsPartialVindex() {
+				continue
+			}
+			ins.ColVindexes = append(ins.ColVindexes, colVindex)
+		}
+	}
+	return ins
 }

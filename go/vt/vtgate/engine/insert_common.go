@@ -18,8 +18,10 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -30,49 +32,98 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type InsertCommon struct {
-	// Opcode is the execution opcode.
-	Opcode InsertOpcode
+type (
+	InsertCommon struct {
+		// Opcode is the execution opcode.
+		Opcode InsertOpcode
 
-	// Keyspace specifies the keyspace to send the query to.
-	Keyspace *vindexes.Keyspace
+		// Keyspace specifies the keyspace to send the query to.
+		Keyspace *vindexes.Keyspace
 
-	// Ignore is for INSERT IGNORE and INSERT...ON DUPLICATE KEY constructs
-	// for sharded cases.
-	Ignore bool
+		// Ignore is for INSERT IGNORE and INSERT...ON DUPLICATE KEY constructs
+		// for sharded cases.
+		Ignore bool
 
-	// TableName is the name of the table on which row will be inserted.
-	TableName string
+		// TableName is the name of the table on which row will be inserted.
+		TableName string
 
-	// Option to override the standard behavior and allow a multi-shard insert
-	// to use single round trip autocommit.
-	//
-	// This is a clear violation of the SQL semantics since it means the statement
-	// is not atomic in the presence of PK conflicts on one shard and not another.
-	// However, some application use cases would prefer that the statement partially
-	// succeed in order to get the performance benefits of autocommit.
-	MultiShardAutocommit bool
+		// Option to override the standard behavior and allow a multi-shard insert
+		// to use single round trip autocommit.
+		//
+		// This is a clear violation of the SQL semantics since it means the statement
+		// is not atomic in the presence of PK conflicts on one shard and not another.
+		// However, some application use cases would prefer that the statement partially
+		// succeed in order to get the performance benefits of autocommit.
+		MultiShardAutocommit bool
 
-	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
-	QueryTimeout int
+		// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
+		QueryTimeout int
 
-	// ForceNonStreaming is true when the insert table and select table are same.
-	// This will avoid locking by the select table.
-	ForceNonStreaming bool
+		// ForceNonStreaming is true when the insert table and select table are same.
+		// This will avoid locking by the select table.
+		ForceNonStreaming bool
 
-	PreventAutoCommit bool
+		PreventAutoCommit bool
 
-	// Generate is only set for inserts where a sequence must be generated.
-	Generate *Generate
+		// Generate is only set for inserts where a sequence must be generated.
+		Generate *Generate
 
-	// ColVindexes are the vindexes that will use the VindexValues
-	ColVindexes []*vindexes.ColumnVindex
+		// ColVindexes are the vindexes that will use the VindexValues
+		ColVindexes []*vindexes.ColumnVindex
 
-	// Insert needs tx handling
-	txNeeded
+		// Insert needs tx handling
+		txNeeded
+	}
+
+	ksID = []byte
+
+	// Generate represents the instruction to generate
+	// a value from a sequence.
+	Generate struct {
+		Keyspace *vindexes.Keyspace
+		Query    string
+		// Values are the supplied values for the column, which
+		// will be stored as a list within the expression. New
+		// values will be generated based on how many were not
+		// supplied (NULL).
+		Values evalengine.Expr
+		// Insert using Select, offset for auto increment column
+		Offset int
+	}
+
+	// InsertOpcode is a number representing the opcode
+	// for the Insert primitive.
+	InsertOpcode int
+)
+
+const nextValBV = "n"
+
+const (
+	// InsertUnsharded is for routing an insert statement
+	// to an unsharded keyspace.
+	InsertUnsharded = InsertOpcode(iota)
+	// InsertSharded is for routing an insert statement
+	// to individual shards. Requires: A list of Values, one
+	// for each ColVindex. If the table has an Autoinc column,
+	// A Generate subplan must be created.
+	InsertSharded
+)
+
+var insName = map[InsertOpcode]string{
+	InsertUnsharded: "InsertUnsharded",
+	InsertSharded:   "InsertSharded",
 }
 
-type ksID = []byte
+// String returns the opcode
+func (code InsertOpcode) String() string {
+	return strings.ReplaceAll(insName[code], "Insert", "")
+}
+
+// MarshalJSON serializes the InsertOpcode as a JSON string.
+// It's used for testing and diagnostics.
+func (code InsertOpcode) MarshalJSON() ([]byte, error) {
+	return json.Marshal(insName[code])
+}
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
 func (ic *InsertCommon) GetKeyspaceName() string {
@@ -87,6 +138,53 @@ func (ic *InsertCommon) GetTableName() string {
 // GetFields fetches the field info.
 func (ic *InsertCommon) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.VT13001("unexpected fields call for insert query")
+}
+
+func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, query string, insertID int64) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(ctx, ins.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+	if err != nil {
+		return nil, err
+	}
+	if len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
+	}
+	err = allowOnlyPrimary(rss...)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := execShard(ctx, nil, vcursor, query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */)
+	if err != nil {
+		return nil, err
+	}
+
+	// If processGenerateFromValues generated new values, it supersedes
+	// any ids that MySQL might have generated. If both generated
+	// values, we don't return an error because this behavior
+	// is required to support migration.
+	if insertID != 0 {
+		qr.InsertID = uint64(insertID)
+	}
+	return qr, nil
+}
+
+func (ins *InsertCommon) processVindexes(ctx context.Context, vcursor VCursor, vindexRowsValues [][]sqltypes.Row, colVindexes []*vindexes.ColumnVindex) ([]ksID, error) {
+	keyspaceIDs, err := ins.processPrimary(ctx, vcursor, vindexRowsValues[0], colVindexes[0])
+	if err != nil {
+		return nil, err
+	}
+
+	for vIdx := 1; vIdx < len(colVindexes); vIdx++ {
+		colVindex := colVindexes[vIdx]
+		if colVindex.Owned {
+			err = ins.processOwned(ctx, vcursor, vindexRowsValues[vIdx], colVindex, keyspaceIDs)
+		} else {
+			err = ins.processUnowned(ctx, vcursor, vindexRowsValues[vIdx], colVindex, keyspaceIDs)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return keyspaceIDs, nil
 }
 
 // processPrimary maps the primary vindex values to the keyspace ids.
@@ -333,8 +431,6 @@ func (ic *InsertCommon) processGenerateFromValues(
 	}
 	return insertID, nil
 }
-
-const nextValBV = "n"
 
 func (ic *InsertCommon) execGenerate(ctx context.Context, vcursor VCursor, count int64) (int64, error) {
 	// If generation is needed, generate the requested number of values (as one call).

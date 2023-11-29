@@ -58,38 +58,6 @@ func (ins *InsertSelect) Inputs() ([]Primitive, []map[string]any) {
 	return []Primitive{ins.Input}, nil
 }
 
-// NewInsertSelect creates a new InsertSelect.
-func NewInsertSelect(
-	ignore bool,
-	keyspace *vindexes.Keyspace,
-	table *vindexes.Table,
-	prefix string,
-	suffix string,
-	vv [][]int,
-	input Primitive,
-) *InsertSelect {
-	ins := &InsertSelect{
-		InsertCommon: &InsertCommon{
-			Ignore:   ignore,
-			Keyspace: keyspace,
-		},
-		Input:             input,
-		Prefix:            prefix,
-		Suffix:            suffix,
-		VindexValueOffset: vv,
-	}
-	if table != nil {
-		ins.TableName = table.Name.String()
-		for _, colVindex := range table.ColumnVindexes {
-			if colVindex.IsPartialVindex() {
-				continue
-			}
-			ins.ColVindexes = append(ins.ColVindexes, colVindex)
-		}
-	}
-	return ins
-}
-
 // RouteType returns a description of the query routing type used by the primitive
 func (ins *InsertSelect) RouteType() string {
 	return "InsertSelect"
@@ -101,7 +69,7 @@ func (ins *InsertSelect) TryExecute(ctx context.Context, vcursor VCursor, bindVa
 	defer cancelFunc()
 
 	if ins.Keyspace.Sharded {
-		return ins.execInsertFromSelect(ctx, vcursor, bindVars)
+		return ins.execInsertSharded(ctx, vcursor, bindVars)
 	}
 	return ins.execInsertUnsharded(ctx, vcursor, bindVars)
 }
@@ -125,13 +93,12 @@ func (ins *InsertSelect) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 			return nil
 		}
 
-		var insertID int64
 		var qr *sqltypes.Result
 		var err error
 		if sharded {
-			insertID, qr, err = ins.insertIntoShardedTableFromSelect(ctx, vcursor, bindVars, irr)
+			qr, err = ins.insertIntoShardedTable(ctx, vcursor, bindVars, irr)
 		} else {
-			insertID, qr, err = ins.insertIntoUnshardedTable(ctx, vcursor, bindVars, irr)
+			qr, err = ins.insertIntoUnshardedTable(ctx, vcursor, bindVars, irr)
 		}
 		if err != nil {
 			return err
@@ -139,8 +106,8 @@ func (ins *InsertSelect) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 
 		output.RowsAffected += qr.RowsAffected
 		// InsertID needs to be updated to the least insertID value in sqltypes.Result
-		if output.InsertID == 0 || output.InsertID > uint64(insertID) {
-			output.InsertID = uint64(insertID)
+		if output.InsertID == 0 || output.InsertID > qr.InsertID {
+			output.InsertID = qr.InsertID
 		}
 		return nil
 	})
@@ -158,30 +125,15 @@ func (ins *InsertSelect) execInsertUnsharded(ctx context.Context, vcursor VCurso
 	if len(irr.rows) == 0 {
 		return &sqltypes.Result{}, nil
 	}
-	_, qr, err := ins.insertIntoUnshardedTable(ctx, vcursor, bindVars, irr)
-	return qr, err
+	return ins.insertIntoUnshardedTable(ctx, vcursor, bindVars, irr)
 }
 
-func (ins *InsertSelect) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, irr insertRowsResult) (int64, *sqltypes.Result, error) {
-	query := ins.getInsertQueryFromSelectForUnsharded(irr.rows, bindVars)
-	qr, err := ins.executeUnshardedTableQuery(ctx, vcursor, bindVars, query)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	// If processGenerateFromValues generated new values, it supersedes
-	// any ids that MySQL might have generated. If both generated
-	// values, we don't return an error because this behavior
-	// is required to support migration.
-	if irr.insertID != 0 {
-		qr.InsertID = uint64(irr.insertID)
-	} else {
-		irr.insertID = int64(qr.InsertID)
-	}
-	return irr.insertID, qr, nil
+func (ins *InsertSelect) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, irr insertRowsResult) (*sqltypes.Result, error) {
+	query := ins.getInsertUnshardedQuery(irr.rows, bindVars)
+	return ins.executeUnshardedTableQuery(ctx, vcursor, bindVars, query, irr.insertID)
 }
 
-func (ins *InsertSelect) getInsertQueryFromSelectForUnsharded(rows []sqltypes.Row, bindVars map[string]*querypb.BindVariable) string {
+func (ins *InsertSelect) getInsertUnshardedQuery(rows []sqltypes.Row, bindVars map[string]*querypb.BindVariable) string {
 	var mids sqlparser.Values
 	for r, inputRow := range rows {
 		row := sqlparser.ValTuple{}
@@ -195,38 +147,23 @@ func (ins *InsertSelect) getInsertQueryFromSelectForUnsharded(rows []sqltypes.Ro
 	return ins.Prefix + sqlparser.String(mids) + ins.Suffix
 }
 
-func (ins *InsertSelect) executeUnshardedTableQuery(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, query string) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(ctx, ins.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
-	if err != nil {
-		return nil, err
-	}
-	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
-	}
-	err = allowOnlyPrimary(rss...)
-	if err != nil {
-		return nil, err
-	}
-	return execShard(ctx, ins, vcursor, query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */)
-}
-
-func (ins *InsertSelect) insertIntoShardedTableFromSelect(
+func (ins *InsertSelect) insertIntoShardedTable(
 	ctx context.Context,
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
 	irr insertRowsResult,
-) (int64, *sqltypes.Result, error) {
-	rss, queries, err := ins.getInsertSelectQueries(ctx, vcursor, bindVars, irr.rows)
+) (*sqltypes.Result, error) {
+	rss, queries, err := ins.getInsertQueries(ctx, vcursor, bindVars, irr.rows)
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 
 	qr, err := ins.executeInsertQueries(ctx, vcursor, rss, queries, irr.insertID)
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 	qr.InsertID = uint64(irr.insertID)
-	return irr.insertID, qr, nil
+	return qr, nil
 }
 
 func (ins *InsertSelect) executeInsertQueries(
@@ -252,7 +189,7 @@ func (ins *InsertSelect) executeInsertQueries(
 	return result, nil
 }
 
-func (ins *InsertSelect) getInsertSelectQueries(
+func (ins *InsertSelect) getInsertQueries(
 	ctx context.Context,
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
@@ -264,7 +201,7 @@ func (ins *InsertSelect) getInsertSelectQueries(
 	}
 
 	// Here we go over the incoming rows and extract values for the vindexes we need to update
-	shardingCols := make([][]sqltypes.Row, len(colVindexes))
+	vindexRowsValues := make([][]sqltypes.Row, len(colVindexes))
 	for _, inputRow := range rows {
 		for colIdx := range colVindexes {
 			offsets := ins.VindexValueOffset[colIdx]
@@ -276,26 +213,13 @@ func (ins *InsertSelect) getInsertSelectQueries(
 				}
 				row = append(row, inputRow[offset])
 			}
-			shardingCols[colIdx] = append(shardingCols[colIdx], row)
+			vindexRowsValues[colIdx] = append(vindexRowsValues[colIdx], row)
 		}
 	}
 
-	keyspaceIDs, err := ins.processPrimary(ctx, vcursor, shardingCols[0], colVindexes[0])
+	keyspaceIDs, err := ins.processVindexes(ctx, vcursor, vindexRowsValues, colVindexes)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	for vIdx := 1; vIdx < len(colVindexes); vIdx++ {
-		colVindex := colVindexes[vIdx]
-		var err error
-		if colVindex.Owned {
-			err = ins.processOwned(ctx, vcursor, shardingCols[vIdx], colVindex, keyspaceIDs)
-		} else {
-			err = ins.processUnowned(ctx, vcursor, shardingCols[vIdx], colVindex, keyspaceIDs)
-		}
-		if err != nil {
-			return nil, nil, err
-		}
 	}
 
 	var indexes []*querypb.Value
@@ -345,7 +269,7 @@ func (ins *InsertSelect) getInsertSelectQueries(
 	return rss, queries, nil
 }
 
-func (ins *InsertSelect) execInsertFromSelect(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ins *InsertSelect) execInsertSharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	result, err := ins.execSelect(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -354,8 +278,7 @@ func (ins *InsertSelect) execInsertFromSelect(ctx context.Context, vcursor VCurs
 		return &sqltypes.Result{}, nil
 	}
 
-	_, qr, err := ins.insertIntoShardedTableFromSelect(ctx, vcursor, bindVars, result)
-	return qr, err
+	return ins.insertIntoShardedTable(ctx, vcursor, bindVars, result)
 }
 
 func (ins *InsertSelect) description() PrimitiveDescription {
@@ -447,7 +370,7 @@ func (ins *InsertSelect) execSelectStreaming(
 
 		// should process only one chunk at a time.
 		// as parallel chunk insert will try to use the same transaction in the vttablet
-		// this will cause transaction in use error.
+		// this will cause transaction in use error out with "transaction in use" error.
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -461,4 +384,36 @@ func (ins *InsertSelect) execSelectStreaming(
 			insertID: insertID,
 		})
 	})
+}
+
+// NewInsertSelect creates a new InsertSelect.
+func NewInsertSelect(
+	ignore bool,
+	keyspace *vindexes.Keyspace,
+	table *vindexes.Table,
+	prefix string,
+	suffix string,
+	vv [][]int,
+	input Primitive,
+) *InsertSelect {
+	ins := &InsertSelect{
+		InsertCommon: &InsertCommon{
+			Ignore:   ignore,
+			Keyspace: keyspace,
+		},
+		Input:             input,
+		Prefix:            prefix,
+		Suffix:            suffix,
+		VindexValueOffset: vv,
+	}
+	if table != nil {
+		ins.TableName = table.Name.String()
+		for _, colVindex := range table.ColumnVindexes {
+			if colVindex.IsPartialVindex() {
+				continue
+			}
+			ins.ColVindexes = append(ins.ColVindexes, colVindex)
+		}
+	}
+	return ins
 }
