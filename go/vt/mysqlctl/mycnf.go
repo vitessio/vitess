@@ -162,13 +162,12 @@ func ReadMycnf(mycnf *Mycnf, waitTime time.Duration) (*Mycnf, error) {
 	f, err := os.Open(mycnf.Path)
 	if waitTime != 0 {
 		timer := time.NewTimer(waitTime)
-		ticker := time.NewTicker(myCnfWaitRetryTime)
-		defer ticker.Stop()
 		for err != nil {
 			select {
 			case <-timer.C:
 				return nil, err
-			case <-ticker.C:
+			default:
+				time.Sleep(myCnfWaitRetryTime)
 				f, err = os.Open(mycnf.Path)
 			}
 		}
