@@ -130,7 +130,7 @@ func (ins *InsertSelect) execInsertUnsharded(ctx context.Context, vcursor VCurso
 
 func (ins *InsertSelect) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, irr insertRowsResult) (*sqltypes.Result, error) {
 	query := ins.getInsertUnshardedQuery(irr.rows, bindVars)
-	return ins.executeUnshardedTableQuery(ctx, vcursor, bindVars, query, irr.insertID)
+	return ins.executeUnshardedTableQuery(ctx, vcursor, ins, bindVars, query, irr.insertID)
 }
 
 func (ins *InsertSelect) getInsertUnshardedQuery(rows []sqltypes.Row, bindVars map[string]*querypb.BindVariable) string {
@@ -345,7 +345,7 @@ func (ins *InsertSelect) execSelect(
 		return insertRowsResult{}, err
 	}
 
-	insertID, err := ins.processGenerateFromSelect(ctx, vcursor, res.Rows)
+	insertID, err := ins.processGenerateFromSelect(ctx, vcursor, ins, res.Rows)
 	if err != nil {
 		return insertRowsResult{}, err
 	}
@@ -374,7 +374,7 @@ func (ins *InsertSelect) execSelectStreaming(
 		mu.Lock()
 		defer mu.Unlock()
 
-		insertID, err := ins.processGenerateFromSelect(ctx, vcursor, result.Rows)
+		insertID, err := ins.processGenerateFromSelect(ctx, vcursor, ins, result.Rows)
 		if err != nil {
 			return err
 		}

@@ -140,7 +140,7 @@ func (ic *InsertCommon) GetFields(context.Context, VCursor, map[string]*querypb.
 	return nil, vterrors.VT13001("unexpected fields call for insert query")
 }
 
-func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, query string, insertID int64) (*sqltypes.Result, error) {
+func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor VCursor, loggingPrimitive Primitive, bindVars map[string]*querypb.BindVariable, query string, insertID int64) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(ctx, ins.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
 		return nil, err
@@ -152,7 +152,7 @@ func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor
 	if err != nil {
 		return nil, err
 	}
-	qr, err := execShard(ctx, nil, vcursor, query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */)
+	qr, err := execShard(ctx, loggingPrimitive, vcursor, query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */)
 	if err != nil {
 		return nil, err
 	}
@@ -341,6 +341,7 @@ func (ic *InsertCommon) processUnowned(ctx context.Context, vcursor VCursor, vin
 func (ic *InsertCommon) processGenerateFromSelect(
 	ctx context.Context,
 	vcursor VCursor,
+	loggingPrimitive Primitive,
 	rows []sqltypes.Row,
 ) (insertID int64, err error) {
 	if ic.Generate == nil {
@@ -363,7 +364,7 @@ func (ic *InsertCommon) processGenerateFromSelect(
 		return 0, nil
 	}
 
-	insertID, err = ic.execGenerate(ctx, vcursor, count)
+	insertID, err = ic.execGenerate(ctx, vcursor, loggingPrimitive, count)
 	if err != nil {
 		return 0, err
 	}
@@ -390,6 +391,7 @@ func (ic *InsertCommon) processGenerateFromSelect(
 func (ic *InsertCommon) processGenerateFromValues(
 	ctx context.Context,
 	vcursor VCursor,
+	loggingPrimitive Primitive,
 	bindVars map[string]*querypb.BindVariable,
 ) (insertID int64, err error) {
 	if ic.Generate == nil {
@@ -413,7 +415,7 @@ func (ic *InsertCommon) processGenerateFromValues(
 
 	// If generation is needed, generate the requested number of values (as one call).
 	if count != 0 {
-		insertID, err = ic.execGenerate(ctx, vcursor, count)
+		insertID, err = ic.execGenerate(ctx, vcursor, loggingPrimitive, count)
 		if err != nil {
 			return 0, err
 		}
@@ -432,7 +434,7 @@ func (ic *InsertCommon) processGenerateFromValues(
 	return insertID, nil
 }
 
-func (ic *InsertCommon) execGenerate(ctx context.Context, vcursor VCursor, count int64) (int64, error) {
+func (ic *InsertCommon) execGenerate(ctx context.Context, vcursor VCursor, loggingPrimitive Primitive, count int64) (int64, error) {
 	// If generation is needed, generate the requested number of values (as one call).
 	rss, _, err := vcursor.ResolveDestinations(ctx, ic.Generate.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
@@ -442,7 +444,7 @@ func (ic *InsertCommon) execGenerate(ctx context.Context, vcursor VCursor, count
 		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "auto sequence generation can happen through single shard only, it is getting routed to %d shards", len(rss))
 	}
 	bindVars := map[string]*querypb.BindVariable{nextValBV: sqltypes.Int64BindVariable(count)}
-	qr, err := vcursor.ExecuteStandalone(ctx, nil, ic.Generate.Query, bindVars, rss[0])
+	qr, err := vcursor.ExecuteStandalone(ctx, loggingPrimitive, ic.Generate.Query, bindVars, rss[0])
 	if err != nil {
 		return 0, err
 	}

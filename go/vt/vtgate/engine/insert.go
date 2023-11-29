@@ -90,12 +90,12 @@ func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 }
 
 func (ins *Insert) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	insertID, err := ins.processGenerateFromValues(ctx, vcursor, bindVars)
+	insertID, err := ins.processGenerateFromValues(ctx, vcursor, ins, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
-	return ins.executeUnshardedTableQuery(ctx, vcursor, bindVars, ins.Query, insertID)
+	return ins.executeUnshardedTableQuery(ctx, vcursor, ins, bindVars, ins.Query, insertID)
 }
 
 func (ins *Insert) insertIntoShardedTable(
@@ -103,7 +103,7 @@ func (ins *Insert) insertIntoShardedTable(
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
 ) (*sqltypes.Result, error) {
-	insertID, err := ins.processGenerateFromValues(ctx, vcursor, bindVars)
+	insertID, err := ins.processGenerateFromValues(ctx, vcursor, ins, bindVars)
 	if err != nil {
 		return nil, err
 	}
