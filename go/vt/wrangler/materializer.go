@@ -1273,11 +1273,10 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 					log.Error(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff"))
 				} else {
 					applyDDLs = schema.ToQueries()
-					log.Infof("AtomicCopy used, and schema was normalized via schemadiff. New queries: %v", applyDDLs)
+					log.Infof("AtomicCopy used, and schema was normalized via schemadiff. %v queries normalized", len(applyDDLs))
 				}
 			}
 			sql := strings.Join(applyDDLs, ";\n")
-			log.Infof("materializer.deploySchema: sql=%v", sql)
 
 			_, err = mz.wr.tmc.ApplySchema(ctx, targetTablet.Tablet, &tmutils.SchemaChange{
 				SQL:              sql,
