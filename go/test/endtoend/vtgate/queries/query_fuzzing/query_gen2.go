@@ -17,18 +17,35 @@ limitations under the License.
 package query_fuzzing
 
 import (
+	"math/rand"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-// maruts is a query generator that generates random queries to be used in fuzzing
-type maruts struct {
-}
+type (
+	// maruts is a query generator that generates random queries to be used in fuzzing
+	maruts struct {
+		cfg config
+	}
+
+	config struct {
+		r            *rand.Rand
+		genConfig    sqlparser.ExprGeneratorConfig
+		maxTables    int
+		maxAggrs     int
+		maxGBs       int
+		schemaTables []tableT
+	}
+)
 
 func (m *maruts) randomQuery() sqlparser.SelectStatement {
-	expr := &sqlparser.AliasedExpr{Expr: sqlparser.NewIntLiteral("1")}
+	exprGen := sqlparser.NewGenerator(m.cfg.r, 2)
+	expr := exprGen.Expression(m.cfg.genConfig)
+
+	ae := &sqlparser.AliasedExpr{Expr: expr}
 	tableExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.NewTableName("dual")}
 	return &sqlparser.Select{
-		SelectExprs: sqlparser.SelectExprs{expr},
+		SelectExprs: sqlparser.SelectExprs{ae},
 		From:        []sqlparser.TableExpr{tableExpr},
 	}
 }
