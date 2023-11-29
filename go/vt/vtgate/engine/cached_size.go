@@ -386,10 +386,10 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(192)
 	}
-	// field InsertCommon *vitess.io/vitess/go/vt/vtgate/engine.InsertCommon
-	size += cached.InsertCommon.CachedSize(true)
+	// field InsertCommon vitess.io/vitess/go/vt/vtgate/engine.InsertCommon
+	size += cached.InsertCommon.CachedSize(false)
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
 	// field VindexValues [][][]vitess.io/vitess/go/vt/vtgate/evalengine.Expr
@@ -411,8 +411,6 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field Prefix string
-	size += hack.RuntimeAllocSize(int64(len(cached.Prefix)))
 	// field Mid vitess.io/vitess/go/vt/sqlparser.Values
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Mid)) * int64(24))
@@ -427,8 +425,6 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field Suffix string
-	size += hack.RuntimeAllocSize(int64(len(cached.Suffix)))
 	return size
 }
 func (cached *InsertCommon) CachedSize(alloc bool) int64 {
@@ -437,7 +433,7 @@ func (cached *InsertCommon) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(128)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -452,6 +448,10 @@ func (cached *InsertCommon) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
+	// field Prefix string
+	size += hack.RuntimeAllocSize(int64(len(cached.Prefix)))
+	// field Suffix string
+	size += hack.RuntimeAllocSize(int64(len(cached.Suffix)))
 	return size
 }
 func (cached *InsertSelect) CachedSize(alloc bool) int64 {
@@ -460,10 +460,10 @@ func (cached *InsertSelect) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(176)
 	}
-	// field InsertCommon *vitess.io/vitess/go/vt/vtgate/engine.InsertCommon
-	size += cached.InsertCommon.CachedSize(true)
+	// field InsertCommon vitess.io/vitess/go/vt/vtgate/engine.InsertCommon
+	size += cached.InsertCommon.CachedSize(false)
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
 		size += cc.CachedSize(true)
@@ -477,10 +477,6 @@ func (cached *InsertSelect) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field Prefix string
-	size += hack.RuntimeAllocSize(int64(len(cached.Prefix)))
-	// field Suffix string
-	size += hack.RuntimeAllocSize(int64(len(cached.Suffix)))
 	return size
 }
 
