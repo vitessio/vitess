@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
