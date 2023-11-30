@@ -20,6 +20,7 @@ var (
 	initialFKSchema = `
 create table parent(id int, name varchar(128), primary key(id)) engine=innodb;
 create table child(id int, parent_id int, name varchar(128), primary key(id), foreign key(parent_id) references parent(id) on delete cascade) engine=innodb;
+create view vparent as select * from parent;
 `
 	initialFKData = `
 insert into parent values(1, 'parent1'), (2, 'parent2');
