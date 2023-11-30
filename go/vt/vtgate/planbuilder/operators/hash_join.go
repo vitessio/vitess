@@ -118,10 +118,18 @@ func (hj *HashJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		hj.RHSKeys = append(hj.RHSKeys, rOffset)
 	}
 
+	needsProj := false
 	eexprs := slice.Map(hj.columns, func(in sqlparser.Expr) *ProjExpr {
-		return hj.addColumn(ctx, in)
+		column, pureOffset := hj.addColumn(ctx, in)
+		if !pureOffset {
+			needsProj = true
+		}
+		return column
 	})
 
+	if !needsProj {
+		return nil
+	}
 	proj := newAliasedProjection(hj)
 	proj.addProjExpr(eexprs...)
 	return proj
@@ -151,7 +159,8 @@ func (hj *HashJoin) ShortDescription() string {
 	cmp := strings.Join(comparisons, " AND ")
 
 	if len(hj.columns) > 0 {
-		return fmt.Sprintf("%s columns %v", cmp, hj.columns)
+		exprs := sqlparser.String(sqlparser.Exprs(hj.columns))
+		return fmt.Sprintf("%s columns [%v]", cmp, exprs)
 	}
 
 	return cmp
@@ -225,7 +234,7 @@ func (c Comparison) String() string {
 	return sqlparser.String(c.LHS) + " = " + sqlparser.String(c.RHS)
 }
 
-func (hj *HashJoin) addColumn(ctx *plancontext.PlanningContext, in sqlparser.Expr) *ProjExpr {
+func (hj *HashJoin) addColumn(ctx *plancontext.PlanningContext, in sqlparser.Expr) (*ProjExpr, bool) {
 	lId, rId := TableID(hj.LHS), TableID(hj.RHS)
 	var replaceExpr sqlparser.Expr // this is the expression we will put in instead of whatever we find there
 	pre := func(node, parent sqlparser.SQLNode) bool {
@@ -302,12 +311,14 @@ func (hj *HashJoin) addColumn(ctx *plancontext.PlanningContext, in sqlparser.Exp
 		panic(err)
 	}
 
+	_, isPureOffset := rewrittenExpr.(*sqlparser.Offset)
+
 	return &ProjExpr{
 		Original: aeWrap(in),
 		EvalExpr: rewrittenExpr,
 		ColExpr:  rewrittenExpr,
 		Info:     &EvalEngine{EExpr: eexpr},
-	}
+	}, isPureOffset
 }
 
 // JoinPredicate produces an AST representation of the join condition this join has

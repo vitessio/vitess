@@ -192,6 +192,11 @@ func tryPushProjection(
 			return p, NoRewrite
 		}
 		return pushProjectionInApplyJoin(ctx, p, src)
+	case *HashJoin:
+		if !p.canPush(ctx) {
+			return p, NoRewrite
+		}
+		return pushProjectionThroughHashJoin(ctx, p, src)
 	case *Vindex:
 		if !p.canPush(ctx) {
 			return p, NoRewrite
@@ -209,6 +214,14 @@ func tryPushProjection(
 	default:
 		return p, NoRewrite
 	}
+}
+
+func pushProjectionThroughHashJoin(ctx *plancontext.PlanningContext, p *Projection, hj *HashJoin) (Operator, *ApplyResult) {
+	cols := p.Columns.GetColumns()
+	for _, col := range cols {
+		hj.columns = append(hj.columns, col.Expr)
+	}
+	return hj, Rewrote("merged projection into hash join")
 }
 
 func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *SubQuery) (Operator, *ApplyResult) {
