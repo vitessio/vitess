@@ -117,12 +117,16 @@ func (ts *tableStreamer) Stream() error {
 		return err
 	}
 
-	rs, err := conn.ExecuteFetch("show tables", -1, true)
+	rs, err := conn.ExecuteFetch("show full tables", -1, true)
 	if err != nil {
 		return err
 	}
 	for _, row := range rs.Rows {
 		tableName := row[0].ToString()
+		tableType := row[1].ToString()
+		if tableType != "BASE TABLE" {
+			continue
+		}
 		if schema2.IsInternalOperationTableName(tableName) {
 			log.Infof("Skipping internal table %s", tableName)
 			continue
