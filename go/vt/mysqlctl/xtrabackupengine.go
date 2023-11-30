@@ -484,7 +484,7 @@ func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestorePa
 		return nil, err
 	}
 
-	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
+	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger, params.MysqlShutdownTimeout); err != nil {
 		return nil, err
 	}
 

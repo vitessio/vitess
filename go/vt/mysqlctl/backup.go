@@ -453,7 +453,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
 	// so that any changes made to system tables take effect.
 	params.Logger.Infof("Restore: restarting mysqld after mysql_upgrade")
-	if err := params.Mysqld.Shutdown(context.Background(), params.Cnf, true); err != nil {
+	if err := params.Mysqld.Shutdown(context.Background(), params.Cnf, true, params.MysqlShutdownTimeout); err != nil {
 		return nil, err
 	}
 	if err := params.Mysqld.Start(context.Background(), params.Cnf); err != nil {
