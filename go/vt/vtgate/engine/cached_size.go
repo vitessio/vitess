@@ -1270,12 +1270,12 @@ func (cached *Upsert) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(32)
 	}
-	// field updPrimitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.updPrimitive.(cachedObject); ok {
+	// field InsPrimitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.InsPrimitive.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field insPrimitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.insPrimitive.(cachedObject); ok {
+	// field UpdPrimitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.UpdPrimitive.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

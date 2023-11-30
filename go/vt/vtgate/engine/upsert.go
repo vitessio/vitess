@@ -31,8 +31,8 @@ var _ Primitive = (*Upsert)(nil)
 // Upsert Primitive will execute the insert primitive first and
 // if there is `Duplicate Key` error, it executes the update primitive.
 type Upsert struct {
-	updPrimitive Primitive
-	insPrimitive Primitive
+	InsPrimitive Primitive
+	UpdPrimitive Primitive
 
 	txNeeded
 }
@@ -42,11 +42,11 @@ func (u *Upsert) RouteType() string {
 }
 
 func (u *Upsert) GetKeyspaceName() string {
-	return u.insPrimitive.GetKeyspaceName()
+	return u.InsPrimitive.GetKeyspaceName()
 }
 
 func (u *Upsert) GetTableName() string {
-	return u.insPrimitive.GetTableName()
+	return u.InsPrimitive.GetTableName()
 }
 
 func (u *Upsert) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -54,29 +54,29 @@ func (u *Upsert) GetFields(ctx context.Context, vcursor VCursor, bindVars map[st
 }
 
 func (u *Upsert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	qr, err := vcursor.ExecutePrimitive(ctx, u.insPrimitive, bindVars, wantfields)
+	qr, err := vcursor.ExecutePrimitive(ctx, u.InsPrimitive, bindVars, wantfields)
 	if err == nil {
 		return qr, nil
 	}
 	if vterrors.Code(err) != vtrpcpb.Code_ALREADY_EXISTS {
 		return nil, err
 	}
-	return vcursor.ExecutePrimitive(ctx, u.updPrimitive, bindVars, wantfields)
+	return vcursor.ExecutePrimitive(ctx, u.UpdPrimitive, bindVars, wantfields)
 }
 
 func (u *Upsert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	err := vcursor.StreamExecutePrimitive(ctx, u.insPrimitive, bindVars, wantfields, callback)
+	err := vcursor.StreamExecutePrimitive(ctx, u.InsPrimitive, bindVars, wantfields, callback)
 	if err == nil {
 		return nil
 	}
 	if vterrors.Code(err) != vtrpcpb.Code_ALREADY_EXISTS {
 		return err
 	}
-	return vcursor.StreamExecutePrimitive(ctx, u.updPrimitive, bindVars, wantfields, callback)
+	return vcursor.StreamExecutePrimitive(ctx, u.UpdPrimitive, bindVars, wantfields, callback)
 }
 
 func (u *Upsert) Inputs() ([]Primitive, []map[string]any) {
-	return []Primitive{u.updPrimitive, u.insPrimitive}, nil
+	return []Primitive{u.UpdPrimitive, u.InsPrimitive}, nil
 }
 
 func (u *Upsert) description() PrimitiveDescription {
