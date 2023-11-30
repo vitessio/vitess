@@ -115,7 +115,10 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	}
 
 	maxAllowedPacket := int64(-1)
-	batchMode := true // For testing
+	batchMode := false
+	if vttablet.VReplicationExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 {
+		batchMode = true
+	}
 	if batchMode {
 		res, err := vr.dbClient.ExecuteFetch("select @@session.max_allowed_packet as max_allowed_packet", 1)
 		if err == nil {
@@ -305,7 +308,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	}
 	// TODO: we should ensure that the total size of the bulk statement does not
 	// exceed mysqld's max allowed packet size.
-	if vttablet.VReplicationExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 && len(rowEvent.RowChanges) > 1 {
+	if vp.batchMode && len(rowEvent.RowChanges) > 1 {
 		// If we have a delete row event for a table with a single PK column then we
 		// can perform a simple bulk delete using an IN clause.
 		if (rowEvent.RowChanges[0].Before != nil && rowEvent.RowChanges[0].After == nil) &&
