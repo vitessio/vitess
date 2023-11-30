@@ -131,7 +131,8 @@ func (tm *TabletManager) RestoreData(
 	deleteBeforeRestore bool,
 	backupTime time.Time,
 	restoreToTimetamp time.Time,
-	restoreToPos string) error {
+	restoreToPos string,
+	mysqlShutdownTimeout time.Duration) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -180,14 +181,14 @@ func (tm *TabletManager) RestoreData(
 		RestoreToPos:       restoreToPos,
 		RestoreToTimestamp: protoutil.TimeToProto(restoreToTimetamp),
 	}
-	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, req)
+	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, req, mysqlShutdownTimeout)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest) error {
+func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest, mysqlShutdownTimeout time.Duration) error {
 
 	tablet := tm.Tablet()
 	originalType := tablet.Type
@@ -217,18 +218,19 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	}
 
 	params := mysqlctl.RestoreParams{
-		Cnf:                 tm.Cnf,
-		Mysqld:              tm.MysqlDaemon,
-		Logger:              logger,
-		Concurrency:         restoreConcurrency,
-		HookExtraEnv:        tm.hookExtraEnv(),
-		DeleteBeforeRestore: deleteBeforeRestore,
-		DbName:              topoproto.TabletDbName(tablet),
-		Keyspace:            keyspace,
-		Shard:               tablet.Shard,
-		StartTime:           startTime,
-		DryRun:              request.DryRun,
-		Stats:               backupstats.RestoreStats(),
+		Cnf:                  tm.Cnf,
+		Mysqld:               tm.MysqlDaemon,
+		Logger:               logger,
+		Concurrency:          restoreConcurrency,
+		HookExtraEnv:         tm.hookExtraEnv(),
+		DeleteBeforeRestore:  deleteBeforeRestore,
+		DbName:               topoproto.TabletDbName(tablet),
+		Keyspace:             keyspace,
+		Shard:                tablet.Shard,
+		StartTime:            startTime,
+		DryRun:               request.DryRun,
+		Stats:                backupstats.RestoreStats(),
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}
 	restoreToTimestamp := protoutil.TimeFromProto(request.RestoreToTimestamp).UTC()
 	if request.RestoreToPos != "" && !restoreToTimestamp.IsZero() {

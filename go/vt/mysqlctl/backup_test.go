@@ -42,6 +42,8 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 )
 
+const mysqlShutdownTimeout = 1 * time.Minute
+
 // TestBackupExecutesBackupWithScopedParams tests that Backup passes
 // a Scope()-ed stats to backupengine ExecuteBackup.
 func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
@@ -563,7 +565,7 @@ func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 	sqldb := fakesqldb.New(t)
 	sqldb.SetNeverFail(true)
 	mysqld := NewFakeMysqlDaemon(sqldb)
-	require.Nil(t, mysqld.Shutdown(ctx, nil, false))
+	require.Nil(t, mysqld.Shutdown(ctx, nil, false, mysqlShutdownTimeout))
 
 	dirName, err := os.MkdirTemp("", "vt_backup_test")
 	require.Nil(t, err)
@@ -575,33 +577,35 @@ func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 	stats := backupstats.NewFakeStats()
 
 	backupParams := BackupParams{
-		Cnf:                cnf,
-		Logger:             logger,
-		Mysqld:             mysqld,
-		Concurrency:        1,
-		HookExtraEnv:       map[string]string{},
-		TopoServer:         nil,
-		Keyspace:           "test",
-		Shard:              "-",
-		BackupTime:         time.Now(),
-		IncrementalFromPos: "",
-		Stats:              stats,
+		Cnf:                  cnf,
+		Logger:               logger,
+		Mysqld:               mysqld,
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           nil,
+		Keyspace:             "test",
+		Shard:                "-",
+		BackupTime:           time.Now(),
+		IncrementalFromPos:   "",
+		Stats:                stats,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}
 
 	restoreParams := RestoreParams{
-		Cnf:                 cnf,
-		Logger:              logger,
-		Mysqld:              mysqld,
-		Concurrency:         1,
-		HookExtraEnv:        map[string]string{},
-		DeleteBeforeRestore: false,
-		DbName:              "test",
-		Keyspace:            "test",
-		Shard:               "-",
-		StartTime:           time.Now(),
-		RestoreToPos:        replication.Position{},
-		DryRun:              false,
-		Stats:               stats,
+		Cnf:                  cnf,
+		Logger:               logger,
+		Mysqld:               mysqld,
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		DeleteBeforeRestore:  false,
+		DbName:               "test",
+		Keyspace:             "test",
+		Shard:                "-",
+		StartTime:            time.Now(),
+		RestoreToPos:         replication.Position{},
+		DryRun:               false,
+		Stats:                stats,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}
 
 	manifest := BackupManifest{
