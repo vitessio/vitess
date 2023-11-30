@@ -552,6 +552,9 @@ func testScheduler(t *testing.T) {
 	require.NoError(t, err)
 	if forceCutoverCapable {
 		t.Run("force_cutover", func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*2)
+			defer cancel()
+
 			t.Run("populate t1_test", func(t *testing.T) {
 				onlineddl.VtgateExecQuery(t, &vtParams, populateT1Statement, "")
 			})
@@ -564,7 +567,7 @@ func testScheduler(t *testing.T) {
 			commitTransactionChan := make(chan any)
 			transactionErrorChan := make(chan error)
 			t.Run("locking table rows", func(t *testing.T) {
-				go runInTransaction(t, shards[0].Vttablets[0], "select * from t1_test for update", commitTransactionChan, transactionErrorChan)
+				go runInTransaction(t, ctx, shards[0].Vttablets[0], "select * from t1_test for update", commitTransactionChan, transactionErrorChan)
 			})
 			t.Run("check no force_cutover", func(t *testing.T) {
 				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
@@ -600,11 +603,19 @@ func testScheduler(t *testing.T) {
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 			})
 			t.Run("expect transaction failure", func(t *testing.T) {
-				commitTransactionChan <- true
+				select {
+				case commitTransactionChan <- true: //good
+				case <-ctx.Done():
+					assert.Fail(t, ctx.Err().Error())
+				}
 				// Transaction will now attempt to commit. But we expect our "force_cutover" to have terminated
 				// the transaction's connection.
-				err := <-transactionErrorChan
-				assert.ErrorContains(t, err, "broken pipe")
+				select {
+				case err := <-transactionErrorChan:
+					assert.ErrorContains(t, err, "broken pipe")
+				case <-ctx.Done():
+					assert.Fail(t, ctx.Err().Error())
+				}
 			})
 		})
 	}
@@ -2519,7 +2530,7 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	return statement
 }
 
-func runInTransaction(t *testing.T, tablet *cluster.Vttablet, query string, commitTransactionChan chan any, transactionErrorChan chan error) error {
+func runInTransaction(t *testing.T, ctx context.Context, tablet *cluster.Vttablet, query string, commitTransactionChan chan any, transactionErrorChan chan error) error {
 	conn, err := tablet.VttabletProcess.TabletConn(keyspaceName, true)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -2532,7 +2543,12 @@ func runInTransaction(t *testing.T, tablet *cluster.Vttablet, query string, comm
 
 	if commitTransactionChan != nil {
 		// Wait for instruction to commit
-		<-commitTransactionChan
+		select {
+		case <-commitTransactionChan:
+			// good
+		case <-ctx.Done():
+			assert.Fail(t, ctx.Err().Error())
+		}
 	}
 
 	_, err = conn.ExecuteFetch("commit", 0, false)
