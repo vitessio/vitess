@@ -103,9 +103,9 @@ var (
 		RunE:                  commandOnlineDDLUnthrottle,
 	}
 	OnlineDDLForceCutOver = &cobra.Command{
-		Use:                   "force_cutover <keyspace> <uuid|all>",
+		Use:                   "force-cutover <keyspace> <uuid|all>",
 		Short:                 "Mark a given schema migration, or all pending migration, for corced cut-over.",
-		Example:               "OnlineDDL force_cutover test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
+		Example:               "OnlineDDL force-cutover test_keyspace 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandOnlineDDLForceCutOver,
