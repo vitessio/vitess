@@ -766,8 +766,12 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 	return nil
 }
 
-func (e *Executor) killQueriesOnTable(ctx context.Context, tableName string) error {
-	log.Infof("killQueriesOnTable: %v", tableName)
+// killTableLockHoldersAndAccessors kills any active queries using the given table, and also kills
+// connections with open transactions, holding locks on the table.
+// This is done on a best-effort basis, by issuing `KILL` and `KILL QUERY` commands. As MySQL goes,
+// it is not guaranteed that the queries/transactions will terminate in a timely manner.
+func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableName string) error {
+	log.Infof("killTableLockHoldersAndAccessors: %v", tableName)
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
 	if err != nil {
 		return err
@@ -775,6 +779,8 @@ func (e *Executor) killQueriesOnTable(ctx context.Context, tableName string) err
 	defer conn.Close()
 
 	{
+		// First, let's look at PROCESSLIST for queries that _might_ be operating on our table. This may have
+		// plenty false positives as we're simply looking for the table name as a query substring.
 		likeVariable := "%" + tableName + "%"
 		query, err := sqlparser.ParseAndBind(sqlFindProcessByInfo, sqltypes.StringBindVariable(likeVariable))
 		if err != nil {
@@ -785,7 +791,8 @@ func (e *Executor) killQueriesOnTable(ctx context.Context, tableName string) err
 			return err
 		}
 
-		log.Infof("killQueriesOnTable: found %v potential queries", len(rs.Rows))
+		log.Infof("killTableLockHoldersAndAccessors: found %v potential queries", len(rs.Rows))
+		// Now that we have some list of queries, we actually parse them to find whether the query actually references our table:
 		for _, row := range rs.Named().Rows {
 			threadId := row.AsInt64("id", 0)
 			infoQuery := row.AsString("info", "")
@@ -814,7 +821,7 @@ func (e *Executor) killQueriesOnTable(ctx context.Context, tableName string) err
 			}, stmt)
 
 			if queryUsesTable {
-				log.Infof("killQueriesOnTable: killing query %v: %.100s", threadId, infoQuery)
+				log.Infof("killTableLockHoldersAndAccessors: killing query %v: %.100s", threadId, infoQuery)
 				killQuery := fmt.Sprintf("KILL QUERY %d", threadId)
 				if _, err := conn.Conn.ExecuteFetch(killQuery, 1, false); err != nil {
 					log.Error(vterrors.Errorf(vtrpcpb.Code_ABORTED, "could not kill query %v. Ignoring", threadId))
@@ -839,10 +846,10 @@ func (e *Executor) killQueriesOnTable(ctx context.Context, tableName string) err
 			if err != nil {
 				return err
 			}
-			log.Infof("killQueriesOnTable: found %v locking transactions", len(rs.Rows))
+			log.Infof("killTableLockHoldersAndAccessors: found %v locking transactions", len(rs.Rows))
 			for _, row := range rs.Named().Rows {
 				threadId := row.AsInt64("trx_mysql_thread_id", 0)
-				log.Infof("killQueriesOnTable: killing connection %v with transaction on table", threadId)
+				log.Infof("killTableLockHoldersAndAccessors: killing connection %v with transaction on table", threadId)
 				killConnection := fmt.Sprintf("KILL %d", threadId)
 				_, _ = conn.Conn.ExecuteFetch(killConnection, 1, false)
 			}
@@ -1061,7 +1068,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	time.Sleep(100 * time.Millisecond)
 
 	if shouldForceCutOver {
-		if err := e.killQueriesOnTable(ctx, onlineDDL.Table); err != nil {
+		if err := e.killTableLockHoldersAndAccessors(ctx, onlineDDL.Table); err != nil {
 			return err
 		}
 	}
