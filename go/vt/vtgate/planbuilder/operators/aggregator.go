@@ -204,10 +204,6 @@ func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, ae *sqlpa
 	if offset >= 0 {
 		return offset, err
 	}
-	expr, err = a.DT.RewriteExpression(ctx, expr)
-	if err != nil {
-		return 0, err
-	}
 
 	// Aggregator is little special and cannot work if the input offset are not matched with the aggregation columns.
 	// So, before pushing anything from above the aggregator offset planning needs to be completed.
