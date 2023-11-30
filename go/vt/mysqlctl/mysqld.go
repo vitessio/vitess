@@ -467,7 +467,7 @@ func cleanupLockfile(socket string, ts string) error {
 	if !errors.Is(err, os.ErrProcessDone) {
 		// Any errors except for the process being done
 		// is unexpected here.
-		log.Errorf("%v: error checking process %v: %v", p, ts, err)
+		log.Errorf("%v: error checking process %v: %v", ts, p, err)
 		return err
 	}
 
