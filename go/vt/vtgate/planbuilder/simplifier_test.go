@@ -21,19 +21,14 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/vschemawrapper"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/vt/vtgate/simplifier"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/simplifier"
 )
 
 // TestSimplifyBuggyQuery should be used to whenever we get a planner bug reported

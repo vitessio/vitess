@@ -101,13 +101,18 @@ type phaser struct {
 }
 
 func (p *phaser) next(ctx *plancontext.PlanningContext) Phase {
-	for phas := p.current; phas < DONE; phas++ {
-		if phas.shouldRun(ctx.SemTable.QuerySignature) {
-			p.current = p.current + 1
-			return phas
+	for {
+		curr := p.current
+		if curr == DONE {
+			return DONE
+		}
+
+		p.current++
+
+		if curr.shouldRun(ctx.SemTable.QuerySignature) {
+			return curr
 		}
 	}
-	return DONE
 }
 
 func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
