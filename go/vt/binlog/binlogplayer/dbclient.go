@@ -19,6 +19,7 @@ package binlogplayer
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
@@ -38,6 +39,7 @@ type DBClient interface {
 	Rollback() error
 	Close()
 	ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error)
+	ExecuteFetchMulti(query string, maxrows int) (qrs []*sqltypes.Result, err error)
 }
 
 // dbClientImpl is a real DBClient backed by a mysql connection.
@@ -140,6 +142,27 @@ func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Resul
 	return mqr, nil
 }
 
+func (dc *dbClientImpl) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	log.Errorf("DEBUG: ExecuteFetchMulti: %s", query)
+	results := make([]*sqltypes.Result, 0)
+	mqr, more, err := dc.dbConn.ExecuteFetchMulti(query, maxrows, true)
+	if err != nil {
+		dc.handleError(err)
+		return nil, err
+	}
+	results = append(results, mqr)
+	for more {
+		mqr, more, _, err = dc.dbConn.ReadQueryResult(maxrows, false)
+		if err != nil {
+			dc.handleError(err)
+			return nil, err
+		}
+		results = append(results, mqr)
+	}
+
+	return results, nil
+}
+
 func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	// Replace any provided sidecar database qualifiers with the correct one.
 	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
@@ -147,4 +170,23 @@ func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetch(query string, maxr
 		return nil, err
 	}
 	return dcr.dbClientImpl.ExecuteFetch(uq, maxrows)
+}
+
+func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	// Replace any provided sidecar database qualifiers with the correct one.
+	qps, err := sqlparser.SplitStatementToPieces(query)
+	if err != nil {
+		return nil, err
+	}
+	for i, qp := range qps {
+		uq, err := sqlparser.ReplaceTableQualifiers(qp, sidecar.DefaultName, sidecar.GetName())
+		if err != nil {
+			return nil, err
+		}
+		qps[i] = uq
+	}
+	if err != nil {
+		return nil, err
+	}
+	return dcr.dbClientImpl.ExecuteFetchMulti(strings.Join(qps, ";"), maxrows)
 }

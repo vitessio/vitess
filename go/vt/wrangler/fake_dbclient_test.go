@@ -160,6 +160,19 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resul
 	return qr, err
 }
 
+func (dc *fakeDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	queries := strings.Split(query, ";")
+	results := make([]*sqltypes.Result, 0, len(queries))
+	for _, query := range queries {
+		qr, err := dc.executeFetch(query, maxrows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, qr)
+	}
+	return results, nil
+}
+
 // ExecuteFetch is part of the DBClient interface
 func (dc *fakeDBClient) executeFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	if dbrs := dc.queries[query]; dbrs != nil {

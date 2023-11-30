@@ -224,3 +224,16 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	}
 	return result.result, result.err
 }
+
+func (dc *MockDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	queries := strings.Split(query, ";")
+	results := make([]*sqltypes.Result, 0, len(queries))
+	for _, query := range queries {
+		qr, err := dc.ExecuteFetch(query, maxrows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, qr)
+	}
+	return results, nil
+}

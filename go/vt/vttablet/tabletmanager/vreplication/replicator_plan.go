@@ -197,7 +197,6 @@ type TablePlan struct {
 	Update           *sqlparser.ParsedQuery
 	Delete           *sqlparser.ParsedQuery
 	MultiDelete      *sqlparser.ParsedQuery
-	MultiInsert      *sqlparser.ParsedQuery
 	Fields           []*querypb.Field
 	EnumValuesMap    map[string](map[string]string)
 	ConvertIntToEnum map[string]bool

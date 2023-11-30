@@ -484,6 +484,19 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 	return qr, err
 }
 
+func (dc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	queries := strings.Split(query, ";")
+	results := make([]*sqltypes.Result, 0, len(queries))
+	for _, query := range queries {
+		qr, err := dc.ExecuteFetch(query, maxrows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, qr)
+	}
+	return results, nil
+}
+
 func expectDeleteQueries(t *testing.T) {
 	t.Helper()
 	if doNotLogDBQueries {
