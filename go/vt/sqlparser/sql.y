@@ -3526,6 +3526,15 @@ character_set:
   {
     $$ = string($3)
   }
+| CHARSET ID
+  {
+    $$ = string($2)
+  }
+| CHARSET BINARY
+  {
+    $$ = string($2)
+  }
+
 
 collate_opt:
   {
@@ -3542,6 +3551,10 @@ collate:
     $$ = string($2)
   }
 | COLLATE STRING
+  {
+    $$ = string($2)
+  }
+| COLLATE BINARY
   {
     $$ = string($2)
   }
