@@ -1218,3 +1218,105 @@ func Test_getTabletsWithPromotionRules(t *testing.T) {
 		})
 	}
 }
+
+func TestGetBackupCandidates(t *testing.T) {
+	var (
+		primaryTablet = &topo.TabletInfo{
+			Tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  1,
+				},
+				Type: topodatapb.TabletType_PRIMARY,
+			},
+		}
+		replicaTablet = &topo.TabletInfo{
+			Tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  2,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+		}
+		rdonlyTablet = &topo.TabletInfo{
+			Tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  3,
+				},
+				Type: topodatapb.TabletType_RDONLY,
+			},
+		}
+		spareTablet = &topo.TabletInfo{
+			Tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  4,
+				},
+				Type: topodatapb.TabletType_SPARE,
+			},
+		}
+	)
+	tests := []struct {
+		name     string
+		in       []*topo.TabletInfo
+		expected []*topo.TabletInfo
+		status   []*replicationdatapb.Status
+	}{
+		{
+			name:     "one primary tablet with status",
+			in:       []*topo.TabletInfo{primaryTablet},
+			expected: []*topo.TabletInfo{primaryTablet},
+			status:   []*replicationdatapb.Status{{}},
+		},
+		{
+			name:     "one primary tablet with no status",
+			in:       []*topo.TabletInfo{primaryTablet},
+			expected: []*topo.TabletInfo{primaryTablet},
+			status:   []*replicationdatapb.Status{nil},
+		},
+		{
+			name:     "4 tablets with no status",
+			in:       []*topo.TabletInfo{primaryTablet, replicaTablet, rdonlyTablet, spareTablet},
+			expected: []*topo.TabletInfo{primaryTablet},
+			status:   []*replicationdatapb.Status{nil, nil, nil, nil},
+		},
+		{
+			name:     "4 tablets with full status",
+			in:       []*topo.TabletInfo{primaryTablet, replicaTablet, rdonlyTablet, spareTablet},
+			expected: []*topo.TabletInfo{primaryTablet, replicaTablet, rdonlyTablet, spareTablet},
+			status:   []*replicationdatapb.Status{{}, {}, {}, {}},
+		},
+		{
+			name:     "4 tablets with no primaryTablet status",
+			in:       []*topo.TabletInfo{primaryTablet, replicaTablet, rdonlyTablet, spareTablet},
+			expected: []*topo.TabletInfo{primaryTablet, replicaTablet, rdonlyTablet, spareTablet},
+			status:   []*replicationdatapb.Status{nil, {}, {}, {}},
+		},
+		{
+			name:     "4 tablets with no replicaTablet status",
+			in:       []*topo.TabletInfo{primaryTablet, replicaTablet, rdonlyTablet, spareTablet},
+			expected: []*topo.TabletInfo{primaryTablet, rdonlyTablet, spareTablet},
+			status:   []*replicationdatapb.Status{{}, nil, {}, {}},
+		},
+		{
+			name:     "4 tablets with no rdonlyTablet status",
+			in:       []*topo.TabletInfo{primaryTablet, replicaTablet, rdonlyTablet, spareTablet},
+			expected: []*topo.TabletInfo{primaryTablet, replicaTablet, spareTablet},
+			status:   []*replicationdatapb.Status{{}, {}, nil, {}},
+		},
+		{
+			name:     "4 tablets with no spareTablet status",
+			in:       []*topo.TabletInfo{primaryTablet, replicaTablet, rdonlyTablet, spareTablet},
+			expected: []*topo.TabletInfo{primaryTablet, replicaTablet, rdonlyTablet},
+			status:   []*replicationdatapb.Status{{}, {}, {}, nil},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := GetBackupCandidates(tt.in, tt.status)
+			require.EqualValues(t, tt.expected, res)
+		})
+	}
+}

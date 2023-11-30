@@ -431,8 +431,14 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 
 	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
+
+	// Instead of return on err directly, only return err when no tablets for backup at all
 	if err != nil {
-		return err
+		tablets = reparentutil.GetBackupCandidates(tablets, stats)
+		// Only return err when no usable tablet
+		if len(tablets) == 0 {
+			return err
+		}
 	}
 
 	var (
