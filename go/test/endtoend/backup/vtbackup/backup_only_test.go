@@ -300,11 +300,12 @@ func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool)
 	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
 	tablet.MysqlctlProcess.ExtraArgs = extraArgs
 
-	// Shutdown Mysql
-	err := tablet.MysqlctlProcess.Stop()
-	require.Nil(t, err)
 	// Teardown Tablet
-	err = tablet.VttabletProcess.TearDown()
+	err := tablet.VttabletProcess.TearDown()
+	require.Nil(t, err)
+
+	// Shutdown Mysql
+	err = tablet.MysqlctlProcess.Stop()
 	require.Nil(t, err)
 
 	// Clear out the previous data
@@ -335,13 +336,7 @@ func tearDown(t *testing.T, initMysql bool) {
 		require.Nil(t, err)
 	}
 
-	// TODO: Ideally we should not be resetting the mysql.
-	// So in below code we will have to uncomment the commented code and remove resetTabletDirectory
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
-		//Tear down Tablet
-		//err := tablet.VttabletProcess.TearDown()
-		//require.Nil(t, err)
-
 		resetTabletDirectory(t, tablet, initMysql)
 		// DeleteTablet on a primary will cause tablet to shutdown, so should only call it after tablet is already shut down
 		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", tablet.Alias)
