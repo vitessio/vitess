@@ -29,6 +29,7 @@ import (
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -196,6 +197,7 @@ type TablePlan struct {
 	Update           *sqlparser.ParsedQuery
 	Delete           *sqlparser.ParsedQuery
 	MultiDelete      *sqlparser.ParsedQuery
+	MultiInsert      *sqlparser.ParsedQuery
 	Fields           []*querypb.Field
 	EnumValuesMap    map[string](map[string]string)
 	ConvertIntToEnum map[string]bool
@@ -477,7 +479,37 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 	if err != nil {
 		return nil, err
 	}
+	log.Errorf("DEBUG: applyBulkDeleteChanges: %s", query)
 	return executor(query)
+}
+
+func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+	if len(rowInserts) == 0 {
+		return nil, nil
+	}
+	query := &strings.Builder{}
+	query.WriteString(tp.BulkInsertFront.Query)
+	query.WriteString(" values ")
+
+	for i, rowInsert := range rowInserts {
+		if i > 0 {
+			query.WriteString(", ")
+		}
+		bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
+		vals := sqltypes.MakeRowTrusted(tp.Fields, rowInsert.After)
+		for i, field := range tp.Fields {
+			bindVar, err := tp.bindFieldVal(field, &vals[i])
+			if err != nil {
+				return nil, err
+			}
+			bindvars["a_"+field.Name] = bindVar
+		}
+		if err := tp.BulkInsertValues.Append(query, bindvars, nil); err != nil {
+			return nil, err
+		}
+	}
+	log.Errorf("DEBUG: applyBulkInsertChanges: %s", query)
+	return executor(query.String())
 }
 
 func getQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable) (string, error) {

@@ -276,14 +276,20 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		stats.Send(sql)
 		return qr, err
 	}
-	// If we have a delete row event for a table with a single PK column then we
-	// can perform a simple bulk delete using an IN clause.
-	// TODO: we should ensure that the total size of the statement does not
+	// TODO: we should ensure that the total size of the bulk statement does not
 	// exceed mysqld's max allowed packet size.
-	if vttablet.VReplicationExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 &&
-		len(rowEvent.RowChanges) > 1 && (rowEvent.RowChanges[0].Before != nil && rowEvent.RowChanges[0].After == nil) &&
-		tplan.MultiDelete != nil {
-		tplan.applyBulkDeleteChanges(rowEvent.RowChanges, applyFunc)
+	if vttablet.VReplicationExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 && len(rowEvent.RowChanges) > 1 {
+		// If we have a delete row event for a table with a single PK column then we
+		// can perform a simple bulk delete using an IN clause.
+		if (rowEvent.RowChanges[0].Before != nil && rowEvent.RowChanges[0].After == nil) &&
+			tplan.MultiDelete != nil {
+			tplan.applyBulkDeleteChanges(rowEvent.RowChanges, applyFunc)
+		}
+		// If we're done with the copy phase then we will be replicating all INSERTS
+		// regardless of the PK value.
+		if len(vp.copyState) == 0 && (rowEvent.RowChanges[0].Before == nil && rowEvent.RowChanges[0].After != nil) {
+			tplan.applyBulkInsertChanges(rowEvent.RowChanges, applyFunc)
+		}
 	} else {
 		for _, change := range rowEvent.RowChanges {
 			if _, err := tplan.applyChange(change, applyFunc); err != nil {
@@ -391,7 +397,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		// check throttler.
+		// Check throttler.
 		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)) {
 			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName)
 			continue
