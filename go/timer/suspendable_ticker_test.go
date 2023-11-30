@@ -25,12 +25,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	fastTickerInterval = 10 * time.Millisecond
+)
+
 func TestInitiallySuspended(t *testing.T) {
 	ctx := context.Background()
 	t.Run("true", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
-		ticker := NewSuspendableTicker(10*time.Millisecond, true)
+		ticker := NewSuspendableTicker(fastTickerInterval, true)
 		defer ticker.Stop()
 		select {
 		case <-ticker.C:
@@ -42,7 +46,7 @@ func TestInitiallySuspended(t *testing.T) {
 	t.Run("false", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
-		ticker := NewSuspendableTicker(10*time.Millisecond, false)
+		ticker := NewSuspendableTicker(fastTickerInterval, false)
 		defer ticker.Stop()
 		select {
 		case <-ticker.C:
@@ -56,7 +60,7 @@ func TestInitiallySuspended(t *testing.T) {
 func TestSuspendableTicker(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ticker := NewSuspendableTicker(10*time.Millisecond, false)
+	ticker := NewSuspendableTicker(fastTickerInterval, false)
 	defer ticker.Stop()
 
 	var ticks atomic.Int64
