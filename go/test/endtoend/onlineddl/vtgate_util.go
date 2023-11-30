@@ -206,7 +206,7 @@ func CheckLaunchAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 	}
 }
 
-// CheckForceMigrationCutOver marks a migration for forced cut-over, and expects success by counting affected rows
+// CheckForceMigrationCutOver marks a migration for forced cut-over, and expects success by counting affected rows.
 func CheckForceMigrationCutOver(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectPossible bool) {
 	query, err := sqlparser.ParseAndBind("alter vitess_migration %a force_cutover",
 		sqltypes.StringBindVariable(uuid),
