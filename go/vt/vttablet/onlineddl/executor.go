@@ -780,7 +780,7 @@ func (e *Executor) killQueriesOnTable(ctx context.Context, tableName string) err
 		if err != nil {
 			return err
 		}
-		rs, err := conn.Conn.ExecuteFetch(query, math.MaxInt32, true)
+		rs, err := conn.Conn.ExecuteFetch(query, -1, true)
 		if err != nil {
 			return err
 		}
@@ -835,7 +835,7 @@ func (e *Executor) killQueriesOnTable(ctx context.Context, tableName string) err
 			if err != nil {
 				return err
 			}
-			rs, err := conn.Conn.ExecuteFetch(query, math.MaxInt32, true)
+			rs, err := conn.Conn.ExecuteFetch(query, -1, true)
 			if err != nil {
 				return err
 			}
