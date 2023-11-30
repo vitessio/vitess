@@ -461,13 +461,13 @@ func cleanupLockfile(socket string, ts string) error {
 	if err == nil {
 		// If the process still exists, it's not safe to
 		// remove the lock file, so we have to keep it around.
-		log.Warningf("%v: not removing socket lock file: %v", ts, lockPath)
-		return nil
+		log.Errorf("%v: not removing socket lock file: %v with pid %v", ts, lockPath, p)
+		return fmt.Errorf("process %v is still running", p)
 	}
 	if !errors.Is(err, os.ErrProcessDone) {
 		// Any errors except for the process being done
 		// is unexpected here.
-		log.Errorf("%v: error checking process: %v", ts, err)
+		log.Errorf("%v: error checking process %v: %v", ts, p, err)
 		return err
 	}
 
