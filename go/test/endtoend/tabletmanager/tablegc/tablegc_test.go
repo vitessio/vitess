@@ -360,20 +360,6 @@ func TestEvac(t *testing.T) {
 	})
 
 	t.Run("validating rows evacuated", func(t *testing.T) {
-		// ctx, cancel := context.WithTimeout(ctx, tableTransitionExpiration+gc.CheckTablesReentryMinInterval)
-		// defer cancel()
-
-		// ticker := time.NewTicker(time.Second)
-		// defer ticker.Stop()
-
-		// for {
-		// 	select {
-
-		// 	case <-ctx.Done():
-		// 	case <-ticker.C:
-		// 	}
-		// }
-		// time.Sleep(tableTransitionExpiration + gc.CheckTablesReentryMinInterval)
 		// We're now both beyond table's timestamp as well as a tableGC interval
 		validateTableDoesNotExist(t, tableName)
 		// Table should be renamed as _vt_DROP_... and then dropped!
