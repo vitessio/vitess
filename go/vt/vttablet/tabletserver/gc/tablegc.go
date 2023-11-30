@@ -51,6 +51,7 @@ const (
 var (
 	checkInterval                 = 1 * time.Hour
 	purgeReentranceInterval       = 1 * time.Minute
+	nextPurgeReentry              = 1 * time.Second
 	checkTablesReentryMinInterval = 10 * time.Second
 	NextChecksIntervals           = []time.Duration{time.Second, checkTablesReentryMinInterval + 5*time.Second}
 	gcLifecycle                   = "hold,purge,evac,drop"
@@ -300,7 +301,7 @@ func (collector *TableGC) operate(ctx context.Context) {
 				collector.removePurgingTable(tableName)
 				// Chances are, there's more tables waiting to be purged. Let's speed things by
 				// requesting another purge, instead of waiting a full purgeReentranceInterval cycle
-				purgeReentranceTicker.TickAfter(time.Second)
+				purgeReentranceTicker.TickAfter(nextPurgeReentry)
 			}()
 		case dropTable := <-dropTablesChan:
 			log.Infof("TableGC: found %v in dropTablesChan", dropTable.tableName)
