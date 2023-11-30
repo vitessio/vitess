@@ -331,14 +331,12 @@ func TestParseDDLStrategy(t *testing.T) {
 		{
 			strategyVariable: "vitess --force-cut-over-after=r3m",
 			strategy:         DDLStrategyVitess,
-			options:          "--force-cut-over-after=3m",
 			runtimeOptions:   "",
 			expectError:      "time: invalid duration",
 		},
 		{
 			strategyVariable: "gh-ost --force-cut-over-after=3m",
 			strategy:         DDLStrategyVitess,
-			options:          "--force-cut-over-after=3m",
 			runtimeOptions:   "",
 			expectError:      "--force-cut-over-after is only valid in 'vitess' strategy",
 		},
@@ -360,14 +358,12 @@ func TestParseDDLStrategy(t *testing.T) {
 		{
 			strategyVariable: "vitess --alow-concrrnt", // intentional typo
 			strategy:         DDLStrategyVitess,
-			options:          "",
 			runtimeOptions:   "",
 			expectError:      "invalid flags",
 		},
 		{
 			strategyVariable: "vitess --declarative --max-load=Threads_running=100",
 			strategy:         DDLStrategyVitess,
-			options:          "--declarative --max-load=Threads_running=100",
 			runtimeOptions:   "--max-load=Threads_running=100",
 			expectError:      "invalid flags",
 		},
