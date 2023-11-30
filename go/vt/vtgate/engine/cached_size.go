@@ -1262,6 +1262,24 @@ func (cached *UpdateTarget) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Target)))
 	return size
 }
+func (cached *Upsert) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field updPrimitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.updPrimitive.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field insPrimitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.insPrimitive.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *UserDefinedVariable) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
