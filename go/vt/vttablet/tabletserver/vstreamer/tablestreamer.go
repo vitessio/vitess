@@ -23,12 +23,12 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"vitess.io/vitess/go/vt/vttablet"
-
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -124,7 +124,7 @@ func (ts *tableStreamer) Stream() error {
 	for _, row := range rs.Rows {
 		tableName := row[0].ToString()
 		tableType := row[1].ToString()
-		if tableType != "BASE TABLE" {
+		if tableType != tmutils.TableBaseTable {
 			continue
 		}
 		if schema2.IsInternalOperationTableName(tableName) {
