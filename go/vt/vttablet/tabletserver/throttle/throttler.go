@@ -493,7 +493,7 @@ func (throttler *Throttler) retryReadAndApplyThrottlerConfig(ctx context.Context
 	for {
 		if !throttler.IsOpen() {
 			// Throttler is not open so no need to keep retrying.
-			log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
+			log.Warningf("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
 			return
 		}
 
@@ -501,7 +501,7 @@ func (throttler *Throttler) retryReadAndApplyThrottlerConfig(ctx context.Context
 		defer requestCancel()
 		throttlerConfig, err := throttler.readThrottlerConfig(requestCtx)
 		if err == nil {
-			log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
+			log.Infof("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
 			// It's possible that during a retry-sleep, the throttler is closed and opened again, leading
 			// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
 			// attempt to read the throttler config; but we just want to ensure they don't step on each other
@@ -520,7 +520,7 @@ func (throttler *Throttler) retryReadAndApplyThrottlerConfig(ctx context.Context
 		select {
 		case <-ctx.Done():
 			// Throttler is not open so no need to keep retrying.
-			log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
+			log.Infof("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
 			return
 		case <-retryTicker.C:
 		}
@@ -696,10 +696,8 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 
 					// sparse
 					shouldBeLeader := false
-					if throttler.IsOpen() {
-						if throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY {
-							shouldBeLeader = true
-						}
+					if throttler.IsOpen() && throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY {
+						shouldBeLeader = true
 					}
 
 					isLeader := throttler.isLeader.Swap(shouldBeLeader)
@@ -803,8 +801,7 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tm
 		// probes is known not to change. It can be *replaced*, but not changed.
 		// so it's safe to iterate it
 		for _, probe := range probes {
-			probe := probe
-			go func() {
+			go func(probe *mysql.Probe) {
 				// Avoid querying the same server twice at the same time. If previous read is still there,
 				// we avoid re-reading it.
 				if !atomic.CompareAndSwapInt64(&probe.QueryInProgress, 0, 1) {
@@ -826,7 +823,7 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tm
 					return
 				case throttler.mysqlThrottleMetricChan <- throttleMetrics:
 				}
-			}()
+			}(probe)
 		}
 	}
 	return nil
