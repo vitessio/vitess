@@ -3107,7 +3107,7 @@ func TestPlayerNoBlob(t *testing.T) {
 	require.Equal(t, int64(4), stats.PartialQueryCount.Counts()["update"])
 }
 
-func TestPlayerBulkDelete(t *testing.T) {
+func TestPlayerBulkStatements(t *testing.T) {
 	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
 	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
 	defer func() {
@@ -3137,8 +3137,7 @@ func TestPlayerBulkDelete(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	cancel, vrId := startVReplication(t, bls, "")
-	_ = vrId
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
 	testcases := []struct {
@@ -3146,74 +3145,45 @@ func TestPlayerBulkDelete(t *testing.T) {
 		output string
 		table  string
 		data   [][]string
-	}{{
-		input:  "insert into t1(id, val1) values (1, 'aaa')",
-		output: "insert into t1(id,val1) values (1,'aaa')",
-		table:  "t1",
-		data: [][]string{
-			{"1", "aaa"},
+	}{
+		{
+			input:  "insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc'), (4, 'ddd'), (5, 'eee')",
+			output: "insert into t1(id,val1) values (1,'aaa'), (2,'bbb'), (3,'ccc'), (4,'ddd'), (5,'eee')",
+			table:  "t1",
+			data: [][]string{
+				{"1", "aaa"},
+				{"2", "bbb"},
+				{"3", "ccc"},
+				{"4", "ddd"},
+				{"5", "eee"},
+			},
 		},
-	}, {
-		input:  "insert into t1(id, val1) values (2, 'bbb')",
-		output: "insert into t1(id,val1) values (2,'bbb')",
-		table:  "t1",
-		data: [][]string{
-			{"1", "aaa"},
-			{"2", "bbb"},
+		{
+			input:  "delete from t1 where id = 1",
+			output: "delete from t1 where id=1",
+			table:  "t1",
+			data: [][]string{
+				{"2", "bbb"},
+				{"3", "ccc"},
+				{"4", "ddd"},
+				{"5", "eee"},
+			},
 		},
-	}, {
-		input:  "insert into t1(id, val1) values (3, 'ccc')",
-		output: "insert into t1(id,val1) values (3,'ccc')",
-		table:  "t1",
-		data: [][]string{
-			{"1", "aaa"},
-			{"2", "bbb"},
-			{"3", "ccc"},
+		{
+			input:  "delete from t1 where id > 3",
+			output: "delete from t1 where id in (4, 5)",
+			table:  "t1",
+			data: [][]string{
+				{"2", "bbb"},
+				{"3", "ccc"},
+			},
 		},
-	}, {
-		input:  "insert into t1(id, val1) values (4, 'ddd')",
-		output: "insert into t1(id,val1) values (4,'ddd')",
-		table:  "t1",
-		data: [][]string{
-			{"1", "aaa"},
-			{"2", "bbb"},
-			{"3", "ccc"},
-			{"4", "ddd"},
+		{
+			input:  "delete from t1",
+			output: "delete from t1 where id in (2, 3)",
+			table:  "t1",
 		},
-	}, {
-		input:  "insert into t1(id, val1) values (5, 'eee')",
-		output: "insert into t1(id,val1) values (5,'eee')",
-		table:  "t1",
-		data: [][]string{
-			{"1", "aaa"},
-			{"2", "bbb"},
-			{"3", "ccc"},
-			{"4", "ddd"},
-			{"5", "eee"},
-		},
-	}, {
-		input:  "delete from t1 where id = 1",
-		output: "delete from t1 where id=1",
-		table:  "t1",
-		data: [][]string{
-			{"2", "bbb"},
-			{"3", "ccc"},
-			{"4", "ddd"},
-			{"5", "eee"},
-		},
-	}, {
-		input:  "delete from t1 where id > 3",
-		output: "delete from t1 where id in (4, 5)",
-		table:  "t1",
-		data: [][]string{
-			{"2", "bbb"},
-			{"3", "ccc"},
-		},
-	}, {
-		input:  "delete from t1",
-		output: "delete from t1 where id in (2, 3)",
-		table:  "t1",
-	}}
+	}
 
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
@@ -3225,6 +3195,10 @@ func TestPlayerBulkDelete(t *testing.T) {
 			expectData(t, tcases.table, tcases.data)
 		}
 	}
+}
+
+func TestPlayerBulkTransactions(t *testing.T) {
+	// TODO
 }
 
 func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
