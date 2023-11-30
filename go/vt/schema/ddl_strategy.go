@@ -118,8 +118,16 @@ func ParseDDLStrategy(strategyVariable string) (*DDLStrategySetting, error) {
 	if _, err := setting.RetainArtifactsDuration(); err != nil {
 		return nil, err
 	}
-	if _, err := setting.ForceCutOverAfter(); err != nil {
+	cutoverAfter, err := setting.ForceCutOverAfter()
+	if err != nil {
 		return nil, err
+	}
+	switch setting.Strategy {
+	case DDLStrategyVitess, DDLStrategyOnline:
+	default:
+		if cutoverAfter != 0 {
+			return nil, fmt.Errorf("--force-cut-over-after is only valid in 'vitess' strategy. Found %v value in '%v' strategy", cutoverAfter, setting.Strategy)
+		}
 	}
 
 	switch setting.Strategy {
