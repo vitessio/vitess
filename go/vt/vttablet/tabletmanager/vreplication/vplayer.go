@@ -306,6 +306,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		stats.Send(sql)
 		return qr, err
 	}
+
 	// TODO: we should ensure that the total size of the bulk statement does not
 	// exceed mysqld's max allowed packet size.
 	if vp.batchMode && len(rowEvent.RowChanges) > 1 {
@@ -314,19 +315,22 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		if (rowEvent.RowChanges[0].Before != nil && rowEvent.RowChanges[0].After == nil) &&
 			tplan.MultiDelete != nil {
 			tplan.applyBulkDeleteChanges(rowEvent.RowChanges, applyFunc)
+			return nil
 		}
 		// If we're done with the copy phase then we will be replicating all INSERTS
 		// regardless of the PK value.
 		if len(vp.copyState) == 0 && (rowEvent.RowChanges[0].Before == nil && rowEvent.RowChanges[0].After != nil) {
 			tplan.applyBulkInsertChanges(rowEvent.RowChanges, applyFunc)
-		}
-	} else {
-		for _, change := range rowEvent.RowChanges {
-			if _, err := tplan.applyChange(change, applyFunc); err != nil {
-				return err
-			}
+			return nil
 		}
 	}
+
+	for _, change := range rowEvent.RowChanges {
+		if _, err := tplan.applyChange(change, applyFunc); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
