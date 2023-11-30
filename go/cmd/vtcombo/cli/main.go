@@ -147,6 +147,8 @@ func startMysqld(uid uint32) (mysqld *mysqlctl.Mysqld, cnf *mysqlctl.Mycnf, err 
 	return mysqld, cnf, nil
 }
 
+const mysqlShutdownTimeout = 5 * time.Minute
+
 func run(cmd *cobra.Command, args []string) (err error) {
 	// Stash away a copy of the topology that vtcombo was started with.
 	//
@@ -195,7 +197,9 @@ func run(cmd *cobra.Command, args []string) (err error) {
 			return err
 		}
 		servenv.OnClose(func() {
-			mysqld.Shutdown(context.TODO(), cnf, true)
+			ctx, cancel := context.WithTimeout(context.Background(), mysqlShutdownTimeout+10*time.Second)
+			defer cancel()
+			mysqld.Shutdown(ctx, cnf, true, mysqlShutdownTimeout)
 		})
 		// We want to ensure we can write to this database
 		mysqld.SetReadOnly(false)
@@ -217,7 +221,9 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	if err != nil {
 		// ensure we start mysql in the event we fail here
 		if startMysql {
-			mysqld.Shutdown(context.TODO(), cnf, true)
+			ctx, cancel := context.WithTimeout(context.Background(), mysqlShutdownTimeout+10*time.Second)
+			defer cancel()
+			mysqld.Shutdown(ctx, cnf, true, mysqlShutdownTimeout)
 		}
 
 		return fmt.Errorf("initTabletMapProto failed: %w", err)
@@ -264,7 +270,9 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, ks.GetName(), tpb.Cells, false)
 		if err != nil {
 			if startMysql {
-				mysqld.Shutdown(context.TODO(), cnf, true)
+				ctx, cancel := context.WithTimeout(context.Background(), mysqlShutdownTimeout+10*time.Second)
+				defer cancel()
+				mysqld.Shutdown(ctx, cnf, true, mysqlShutdownTimeout)
 			}
 
 			return fmt.Errorf("Couldn't build srv keyspace for (%v: %v). Got error: %w", ks, tpb.Cells, err)
