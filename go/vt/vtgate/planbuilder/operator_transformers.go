@@ -82,6 +82,9 @@ func transformUpsert(ctx *plancontext.PlanningContext, op *operators.Upsert) (lo
 	if err != nil {
 		return nil, err
 	}
+	if ins, ok := ip.(*insert); ok {
+		ins.eInsert.PreventAutoCommit = true
+	}
 	up, err := transformToLogicalPlan(ctx, op.UpdateOp)
 	if err != nil {
 		return nil, err
