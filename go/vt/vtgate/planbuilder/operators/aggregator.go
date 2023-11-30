@@ -201,7 +201,7 @@ func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, ae *sqlpa
 	}
 
 	if addToGroupBy {
-		panic(vterrors.VT13001("did not expect to add group by here"))
+		panic(vterrors.VT13001(fmt.Sprintf("did not expect to add group by here: %s", sqlparser.String(expr))))
 	}
 
 	return -1
