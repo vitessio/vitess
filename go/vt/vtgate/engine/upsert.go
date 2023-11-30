@@ -54,25 +54,28 @@ func (u *Upsert) GetFields(ctx context.Context, vcursor VCursor, bindVars map[st
 }
 
 func (u *Upsert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	qr, err := vcursor.ExecutePrimitive(ctx, u.InsPrimitive, bindVars, wantfields)
+	insQr, err := vcursor.ExecutePrimitive(ctx, u.InsPrimitive, bindVars, wantfields)
 	if err == nil {
-		return qr, nil
+		return insQr, nil
 	}
 	if vterrors.Code(err) != vtrpcpb.Code_ALREADY_EXISTS {
 		return nil, err
 	}
-	return vcursor.ExecutePrimitive(ctx, u.UpdPrimitive, bindVars, wantfields)
+	updQr, err := vcursor.ExecutePrimitive(ctx, u.UpdPrimitive, bindVars, wantfields)
+	if err != nil {
+		return nil, err
+	}
+	// To match mysql, need to report +1 on rows affected.
+	updQr.RowsAffected += 1
+	return updQr, nil
 }
 
 func (u *Upsert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	err := vcursor.StreamExecutePrimitive(ctx, u.InsPrimitive, bindVars, wantfields, callback)
-	if err == nil {
-		return nil
-	}
-	if vterrors.Code(err) != vtrpcpb.Code_ALREADY_EXISTS {
+	qr, err := u.TryExecute(ctx, vcursor, bindVars, wantfields)
+	if err != nil {
 		return err
 	}
-	return vcursor.StreamExecutePrimitive(ctx, u.UpdPrimitive, bindVars, wantfields, callback)
+	return callback(qr)
 }
 
 func (u *Upsert) Inputs() ([]Primitive, []map[string]any) {
