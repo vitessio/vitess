@@ -100,7 +100,7 @@ func ChooseNewPrimary(
 			pos, replLag, err := findPositionAndLagForTablet(groupCtx, tb, logger, tmc, waitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
-			if err == nil && waitReplicasTimeout > replLag {
+			if err == nil && waitReplicasTimeout >= replLag {
 				validTablets = append(validTablets, tb)
 				tabletPositions = append(tabletPositions, pos)
 			}
