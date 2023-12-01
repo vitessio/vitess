@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -3107,7 +3108,7 @@ func TestPlayerNoBlob(t *testing.T) {
 	require.Equal(t, int64(4), stats.PartialQueryCount.Counts()["update"])
 }
 
-func TestPlayerBulkStatements(t *testing.T) {
+func TestPlayerBatching(t *testing.T) {
 	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
 	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
 	defer func() {
@@ -3139,6 +3140,8 @@ func TestPlayerBulkStatements(t *testing.T) {
 	}
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
+
+	trxBatchExpectRE := `.*;begin;(set @@session\.foreign_key_checks=.*;)?%s;update _vt\.vreplication set pos=.*;commit`
 
 	testcases := []struct {
 		input  string
@@ -3203,20 +3206,25 @@ func TestPlayerBulkStatements(t *testing.T) {
 
 	for _, tcase := range testcases {
 		execStatements(t, []string{tcase.input})
-		for _, stmt := range tcase.output {
-			output := qh.Expect(stmt)
-			expectNontxQueries(t, output)
+		var output qh.ExpectationSequencer
+		switch len(tcase.output) {
+		case 0:
+			require.FailNow(t, "no expected output provided for test case")
+		case 1:
+			output = qh.Expect(tcase.output[0])
+		default:
+			output = qh.Expect(tcase.output[0], tcase.output[1:]...)
 		}
+		expectNontxQueries(t, output)
 		time.Sleep(1 * time.Second)
 		log.Flush()
 		if tcase.table != "" {
 			expectData(t, tcase.table, tcase.data)
 		}
+		// Confirm that the statements were batched together in a multi-statement
+		// protocol message as expected.
+		require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxBatchExpectRE, regexp.QuoteMeta(strings.Join(tcase.output, ";")))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
 	}
-}
-
-func TestPlayerBulkTransactions(t *testing.T) {
-	// TODO
 }
 
 func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {

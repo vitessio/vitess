@@ -130,7 +130,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 			maxAllowedPacket = int64(1024) // 1KiB minimum in mysqld
 			log.Errorf("Error getting max_allowed_packet: %v", err)
 		}
-		maxAllowedPacket -= 128 // Leave 128 bytes of room for the commit etc.
+		maxAllowedPacket -= 512 // Leave 512 bytes of room for the vrepl record update, commit, etc.
 	}
 
 	return &vplayer{

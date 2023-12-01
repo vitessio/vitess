@@ -69,6 +69,7 @@ var (
 	globalFBC                = &fakeBinlogClient{}
 	vrepldb                  = "vrepl"
 	globalDBQueries          = make(chan string, 1000)
+	lastMultiExecQuery       = ""
 	testForeignKeyQueries    = false
 	testSetForeignKeyQueries = false
 	doNotLogDBQueries        = false
@@ -494,6 +495,7 @@ func (dc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltype
 		}
 		results = append(results, qr)
 	}
+	lastMultiExecQuery = query
 	return results, nil
 }
 
