@@ -2919,7 +2919,13 @@ func (ct *ColumnType) SQLType() querypb.Type {
 		return sqltypes.Float32
 	case keywordStrings[DOUBLE]:
 		return sqltypes.Float64
+	case keywordStrings[REAL]:
+		return sqltypes.Float64
 	case keywordStrings[DECIMAL]:
+		return sqltypes.Decimal
+	case keywordStrings[DEC]:
+		return sqltypes.Decimal
+	case keywordStrings[FIXED]:
 		return sqltypes.Decimal
 	case keywordStrings[BIT]:
 		return sqltypes.Bit
