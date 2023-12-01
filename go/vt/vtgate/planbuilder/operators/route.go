@@ -88,7 +88,7 @@ type (
 	Routing interface {
 		// UpdateRoutingParams allows a Routing to control the routing params that will be used by the engine Route
 		// OpCode is already set, and the default keyspace is set for read queries
-		UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) error
+		UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters)
 
 		// Clone returns a copy of the routing. Since we are trying different variation of merging,
 		// one Routing can be used in different constellations.
@@ -102,27 +102,27 @@ type (
 
 		// updateRoutingLogic updates the routing to take predicates into account. This can be used for routing
 		// using vindexes or for figuring out which keyspace an information_schema query should be sent to.
-		updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error)
+		updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing
 	}
 )
 
 // UpdateRoutingLogic first checks if we are dealing with a predicate that
-func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r Routing) (Routing, error) {
+func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r Routing) Routing {
 	ks := r.Keyspace()
 	if ks == nil {
 		var err error
 		ks, err = ctx.VSchema.AnyKeyspace()
 		if err != nil {
-			return nil, err
+			panic(err)
 		}
 	}
 	nr := &NoneRouting{keyspace: ks}
 
 	if isConstantFalse(expr) {
-		return nr, nil
+		return nr
 	}
 
-	exit := func() (Routing, error) {
+	exit := func() Routing {
 		return r.updateRoutingLogic(ctx, expr)
 	}
 
@@ -134,7 +134,7 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 
 	if cmp.Operator != sqlparser.NullSafeEqualOp && (sqlparser.IsNull(cmp.Left) || sqlparser.IsNull(cmp.Right)) {
 		// any comparison against a literal null, except a null safe equality (<=>), will return null
-		return nr, nil
+		return nr
 	}
 
 	tuples, ok := cmp.Right.(sqlparser.ValTuple)
@@ -147,13 +147,13 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 		for _, n := range tuples {
 			// If any of the values in the tuple is a literal null, we know that this comparison will always return NULL
 			if sqlparser.IsNull(n) {
-				return nr, nil
+				return nr
 			}
 		}
 	case sqlparser.InOp:
 		// WHERE col IN (null)
 		if len(tuples) == 1 && sqlparser.IsNull(tuples[0]) {
-			return nr, nil
+			return nr
 		}
 	}
 
@@ -356,7 +356,7 @@ func createRoute(
 	ctx *plancontext.PlanningContext,
 	queryTable *QueryTable,
 	solves semantics.TableSet,
-) (Operator, error) {
+) Operator {
 	if queryTable.IsInfSchema {
 		return createInfSchemaRoute(ctx, queryTable)
 	}
@@ -371,13 +371,13 @@ func findVSchemaTableAndCreateRoute(
 	tableName sqlparser.TableName,
 	solves semantics.TableSet,
 	planAlternates bool,
-) (*Route, error) {
+) *Route {
 	vschemaTable, _, _, _, target, err := ctx.VSchema.FindTableOrVindex(tableName)
 	if target != nil {
-		return nil, vterrors.VT09017("SELECT with a target destination is not allowed")
+		panic(vterrors.VT09017("SELECT with a target destination is not allowed"))
 	}
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	return createRouteFromVSchemaTable(
@@ -396,7 +396,7 @@ func createRouteFromVSchemaTable(
 	vschemaTable *vindexes.Table,
 	solves semantics.TableSet,
 	planAlternates bool,
-) (*Route, error) {
+) *Route {
 	if vschemaTable.Name.String() != queryTable.Table.Name.String() {
 		// we are dealing with a routed table
 		queryTable = queryTable.Clone()
@@ -404,7 +404,7 @@ func createRouteFromVSchemaTable(
 		queryTable.Table.Name = vschemaTable.Name
 		astTable, ok := queryTable.Alias.Expr.(sqlparser.TableName)
 		if !ok {
-			return nil, vterrors.VT13001("a derived table should never be a routed table")
+			panic(vterrors.VT13001("a derived table should never be a routed table"))
 		}
 		realTableName := sqlparser.NewIdentifierCS(vschemaTable.Name.String())
 		astTable.Name = realTableName
@@ -423,11 +423,7 @@ func createRouteFromVSchemaTable(
 	// We create the appropiate Routing struct here, depending on the type of table we are dealing with.
 	routing := createRoutingForVTable(vschemaTable, solves)
 	for _, predicate := range queryTable.Predicates {
-		var err error
-		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-		if err != nil {
-			return nil, err
-		}
+		routing = UpdateRoutingLogic(ctx, predicate, routing)
 	}
 
 	plan.Routing = routing
@@ -435,24 +431,16 @@ func createRouteFromVSchemaTable(
 	switch routing := routing.(type) {
 	case *ShardedRouting:
 		if routing.isScatter() && len(queryTable.Predicates) > 0 {
-			var err error
 			// If we have a scatter query, it's worth spending a little extra time seeing if we can't improve it
-			plan.Routing, err = routing.tryImprove(ctx, queryTable)
-			if err != nil {
-				return nil, err
-			}
+			plan.Routing = routing.tryImprove(ctx, queryTable)
 		}
 	case *AnyShardRouting:
 		if planAlternates {
-			alternates, err := createAlternateRoutesFromVSchemaTable(ctx, queryTable, vschemaTable, solves)
-			if err != nil {
-				return nil, err
-			}
-			routing.Alternates = alternates
+			routing.Alternates = createAlternateRoutesFromVSchemaTable(ctx, queryTable, vschemaTable, solves)
 		}
 	}
 
-	return plan, nil
+	return plan
 }
 
 func createRoutingForVTable(vschemaTable *vindexes.Table, id semantics.TableSet) Routing {
@@ -473,13 +461,13 @@ func createAlternateRoutesFromVSchemaTable(
 	queryTable *QueryTable,
 	vschemaTable *vindexes.Table,
 	solves semantics.TableSet,
-) (map[*vindexes.Keyspace]*Route, error) {
+) map[*vindexes.Keyspace]*Route {
 	routes := make(map[*vindexes.Keyspace]*Route)
 
 	switch vschemaTable.Type {
 	case "", vindexes.TypeReference:
 		for ksName, referenceTable := range vschemaTable.ReferencedBy {
-			route, err := findVSchemaTableAndCreateRoute(
+			route := findVSchemaTableAndCreateRoute(
 				ctx,
 				queryTable,
 				sqlparser.TableName{
@@ -489,23 +477,17 @@ func createAlternateRoutesFromVSchemaTable(
 				solves,
 				false, /*planAlternates*/
 			)
-			if err != nil {
-				return nil, err
-			}
 			routes[referenceTable.Keyspace] = route
 		}
 
 		if vschemaTable.Source != nil {
-			route, err := findVSchemaTableAndCreateRoute(
+			route := findVSchemaTableAndCreateRoute(
 				ctx,
 				queryTable,
 				vschemaTable.Source.TableName,
 				solves,
 				false, /*planAlternates*/
 			)
-			if err != nil {
-				return nil, err
-			}
 			keyspace := route.Routing.Keyspace()
 			if keyspace != nil {
 				routes[keyspace] = route
@@ -513,15 +495,12 @@ func createAlternateRoutesFromVSchemaTable(
 		}
 	}
 
-	return routes, nil
+	return routes
 }
 
 func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	// first we see if the predicate changes how we route
-	newRouting, err := UpdateRoutingLogic(ctx, expr, r.Routing)
-	if err != nil {
-		panic(err)
-	}
+	newRouting := UpdateRoutingLogic(ctx, expr, r.Routing)
 	r.Routing = newRouting
 
 	// we also need to push the predicate down into the query
@@ -529,16 +508,13 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return r
 }
 
-func createProjection(ctx *plancontext.PlanningContext, src Operator) (*Projection, error) {
+func createProjection(ctx *plancontext.PlanningContext, src Operator) *Projection {
 	proj := newAliasedProjection(src)
 	cols := src.GetColumns(ctx)
 	for _, col := range cols {
-		_, err := proj.addUnexploredExpr(col, col.Expr)
-		if err != nil {
-			return nil, err
-		}
+		proj.addUnexploredExpr(col, col.Expr)
 	}
-	return proj, nil
+	return proj
 }
 
 func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
@@ -560,10 +536,7 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 	}
 
 	// If no-one could be found, we probably don't have one yet, so we add one here
-	src, err := createProjection(ctx, r.Source)
-	if err != nil {
-		panic(err)
-	}
+	src := createProjection(ctx, r.Source)
 	r.Source = src
 
 	offsets = src.addColumnsWithoutPushing(ctx, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})

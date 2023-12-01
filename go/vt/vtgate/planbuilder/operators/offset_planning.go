@@ -26,26 +26,22 @@ import (
 )
 
 // planOffsets will walk the tree top down, adding offset information to columns in the tree for use in further optimization,
-func planOffsets(ctx *plancontext.PlanningContext, root Operator) (Operator, error) {
+func planOffsets(ctx *plancontext.PlanningContext, root Operator) Operator {
 	type offsettable interface {
 		planOffsets(ctx *plancontext.PlanningContext) Operator
 	}
 
-	visitor := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult, error) {
-		var err error
+	visitor := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		switch op := in.(type) {
 		case *Horizon:
-			return nil, nil, vterrors.VT13001(fmt.Sprintf("should not see %T here", in))
+			panic(vterrors.VT13001(fmt.Sprintf("should not see %T here", in)))
 		case offsettable:
 			newOp := op.planOffsets(ctx)
 			if newOp != nil {
-				return newOp, Rewrote("new operator after offset planning"), nil
+				return newOp, Rewrote("new operator after offset planning")
 			}
 		}
-		if err != nil {
-			return nil, nil, err
-		}
-		return in, NoRewrite, nil
+		return in, NoRewrite
 	}
 
 	return TopDown(root, TableID, visitor, stopAtRoute)
@@ -91,17 +87,17 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operat
 
 // addColumnsToInput adds columns needed by an operator to its input.
 // This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
-func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) (Operator, error) {
-	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult, error) {
+func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) Operator {
+	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		filter, ok := in.(*Filter)
 		if !ok {
-			return in, NoRewrite, nil
+			return in, NoRewrite
 		}
 
 		proj, areOnTopOfProj := filter.Source.(selectExpressions)
 		if !areOnTopOfProj {
 			// not much we can do here
-			return in, NoRewrite, nil
+			return in, NoRewrite
 		}
 		addedColumns := false
 		found := func(expr sqlparser.Expr, i int) {}
@@ -117,10 +113,10 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) (Operato
 			_ = sqlparser.CopyOnRewrite(expr, visitor, nil, ctx.SemTable.CopySemanticInfo)
 		}
 		if addedColumns {
-			return in, Rewrote("added columns because filter needs it"), nil
+			return in, Rewrote("added columns because filter needs it")
 		}
 
-		return in, NoRewrite, nil
+		return in, NoRewrite
 	}
 
 	return TopDown(root, TableID, visitor, stopAtRoute)
@@ -128,11 +124,11 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) (Operato
 
 // addColumnsToInput adds columns needed by an operator to its input.
 // This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
-func pullDistinctFromUNION(_ *plancontext.PlanningContext, root Operator) (Operator, error) {
-	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult, error) {
+func pullDistinctFromUNION(_ *plancontext.PlanningContext, root Operator) Operator {
+	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		union, ok := in.(*Union)
 		if !ok || !union.distinct {
-			return in, NoRewrite, nil
+			return in, NoRewrite
 		}
 
 		union.distinct = false
@@ -141,7 +137,7 @@ func pullDistinctFromUNION(_ *plancontext.PlanningContext, root Operator) (Opera
 			Required: true,
 			Source:   union,
 		}
-		return distinct, Rewrote("pulled out DISTINCT from union"), nil
+		return distinct, Rewrote("pulled out DISTINCT from union")
 	}
 
 	return TopDown(root, TableID, visitor, stopAtRoute)

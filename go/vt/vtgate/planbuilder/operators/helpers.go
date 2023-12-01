@@ -27,20 +27,20 @@ import (
 )
 
 // compact will optimise the operator tree into a smaller but equivalent version
-func compact(ctx *plancontext.PlanningContext, op Operator) (Operator, error) {
+func compact(ctx *plancontext.PlanningContext, op Operator) Operator {
 	type compactable interface {
 		// Compact implement this interface for operators that have easy to see optimisations
-		Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult, error)
+		Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult)
 	}
 
-	newOp, err := BottomUp(op, TableID, func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult, error) {
+	newOp := BottomUp(op, TableID, func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		newOp, ok := op.(compactable)
 		if !ok {
-			return op, NoRewrite, nil
+			return op, NoRewrite
 		}
 		return newOp.Compact(ctx)
 	}, stopAtRoute)
-	return newOp, err
+	return newOp
 }
 
 func checkValid(op Operator) error {
@@ -96,28 +96,6 @@ func TablesUsed(op Operator) []string {
 		return nil
 	})
 	return collect()
-}
-
-func UnresolvedPredicates(op Operator, st *semantics.SemTable) (result []sqlparser.Expr) {
-	type unresolved interface {
-		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
-		// on the outside of it (a parent Select expression, any other table not used by Operator, etc.).
-		// This is used for sub-queries. An example query could be:
-		// SELECT * FROM tbl WHERE EXISTS (SELECT 1 FROM otherTbl WHERE tbl.col = otherTbl.col)
-		// The subquery would have one unsolved predicate: `tbl.col = otherTbl.col`
-		// It's a predicate that belongs to the inner query, but it needs data from the outer query
-		// These predicates dictate which data we have to send from the outer side to the inner
-		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
-	}
-
-	_ = Visit(op, func(this Operator) error {
-		if tbl, ok := this.(unresolved); ok {
-			result = append(result, tbl.UnsolvedPredicates(st)...)
-		}
-
-		return nil
-	})
-	return
 }
 
 func CostOf(op Operator) (cost int) {

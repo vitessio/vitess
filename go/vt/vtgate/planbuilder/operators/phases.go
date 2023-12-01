@@ -77,7 +77,7 @@ func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 	}
 }
 
-func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) (Operator, error) {
+func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 	switch p {
 	case pullDistinctFromUnion:
 		return pullDistinctFromUNION(ctx, op)
@@ -88,9 +88,9 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) (Operator, err
 	case cleanOutPerfDistinct:
 		return removePerformanceDistinctAboveRoute(ctx, op)
 	case subquerySettling:
-		return settleSubqueries(ctx, op), nil
+		return settleSubqueries(ctx, op)
 	default:
-		return op, nil
+		return op
 	}
 }
 
@@ -113,40 +113,36 @@ func (p *phaser) next(ctx *plancontext.PlanningContext) Phase {
 	}
 }
 
-func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op Operator) (Operator, error) {
-	return BottomUp(op, TableID, func(innerOp Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult, error) {
+func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op Operator) Operator {
+	return BottomUp(op, TableID, func(innerOp Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		d, ok := innerOp.(*Distinct)
 		if !ok || d.Required {
-			return innerOp, NoRewrite, nil
+			return innerOp, NoRewrite
 		}
 
-		return d.Source, Rewrote("removed distinct not required that was not pushed under route"), nil
+		return d.Source, Rewrote("removed distinct not required that was not pushed under route")
 	}, stopAtRoute)
 }
 
-func enableDelegateAggregation(ctx *plancontext.PlanningContext, op Operator) (Operator, error) {
+func enableDelegateAggregation(ctx *plancontext.PlanningContext, op Operator) Operator {
 	return addColumnsToInput(ctx, op)
 }
 
 // addOrderingForAllAggregations is run we have pushed down Aggregators as far down as possible.
-func addOrderingForAllAggregations(ctx *plancontext.PlanningContext, root Operator) (Operator, error) {
-	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult, error) {
+func addOrderingForAllAggregations(ctx *plancontext.PlanningContext, root Operator) Operator {
+	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		aggrOp, ok := in.(*Aggregator)
 		if !ok {
-			return in, NoRewrite, nil
+			return in, NoRewrite
 		}
 
-		requireOrdering, err := needsOrdering(ctx, aggrOp)
-		if err != nil {
-			return nil, nil, err
-		}
-
+		requireOrdering := needsOrdering(ctx, aggrOp)
 		var res *ApplyResult
 		if requireOrdering {
 			addOrderingFor(aggrOp)
 			res = Rewrote("added ordering before aggregation")
 		}
-		return in, res, nil
+		return in, res
 	}
 
 	return BottomUp(root, TableID, visitor, stopAtRoute)
@@ -170,7 +166,7 @@ func addOrderingFor(aggrOp *Aggregator) {
 	}
 }
 
-func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) (bool, error) {
+func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) bool {
 	requiredOrder := slice.Map(in.Grouping, func(from GroupBy) sqlparser.Expr {
 		return from.SimplifiedExpr
 	})
@@ -178,25 +174,25 @@ func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) (bool, erro
 		requiredOrder = append(requiredOrder, in.DistinctExpr)
 	}
 	if len(requiredOrder) == 0 {
-		return false, nil
+		return false
 	}
 	srcOrdering := in.Source.GetOrdering(ctx)
 	if len(srcOrdering) < len(requiredOrder) {
-		return true, nil
+		return true
 	}
 	for idx, gb := range requiredOrder {
 		if !ctx.SemTable.EqualsExprWithDeps(srcOrdering[idx].SimplifiedExpr, gb) {
-			return true, nil
+			return true
 		}
 	}
-	return false, nil
+	return false
 }
 
-func addGroupByOnRHSOfJoin(root Operator) (Operator, error) {
-	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult, error) {
+func addGroupByOnRHSOfJoin(root Operator) Operator {
+	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		join, ok := in.(*ApplyJoin)
 		if !ok {
-			return in, NoRewrite, nil
+			return in, NoRewrite
 		}
 
 		return addLiteralGroupingToRHS(join)
@@ -205,7 +201,7 @@ func addGroupByOnRHSOfJoin(root Operator) (Operator, error) {
 	return TopDown(root, TableID, visitor, stopAtRoute)
 }
 
-func addLiteralGroupingToRHS(in *ApplyJoin) (Operator, *ApplyResult, error) {
+func addLiteralGroupingToRHS(in *ApplyJoin) (Operator, *ApplyResult) {
 	_ = Visit(in.RHS, func(op Operator) error {
 		aggr, isAggr := op.(*Aggregator)
 		if !isAggr {
@@ -217,5 +213,5 @@ func addLiteralGroupingToRHS(in *ApplyJoin) (Operator, *ApplyResult, error) {
 		}
 		return nil
 	})
-	return in, NoRewrite, nil
+	return in, NoRewrite
 }

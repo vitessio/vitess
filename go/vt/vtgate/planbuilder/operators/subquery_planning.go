@@ -73,23 +73,23 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStateme
 }
 
 func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
-	visit := func(op Operator, lhsTables semantics.TableSet, isRoot bool) (Operator, *ApplyResult, error) {
+	visit := func(op Operator, lhsTables semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		switch op := op.(type) {
 		case *SubQueryContainer:
 			outer := op.Outer
 			for _, subq := range op.Inner {
 				newOuter, err := subq.settle(ctx, outer)
 				if err != nil {
-					return nil, nil, err
+					panic(err)
 				}
 				subq.Outer = newOuter
 				outer = subq
 			}
-			return outer, Rewrote("extracted subqueries from subquery container"), nil
+			return outer, Rewrote("extracted subqueries from subquery container")
 		case *Projection:
 			ap, err := op.GetAliasedProjections()
 			if err != nil {
-				return nil, nil, err
+				panic(err)
 			}
 
 			for _, pe := range ap {
@@ -100,13 +100,10 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 				mergeSubqueryExpr(ctx, setExpr.Expr)
 			}
 		}
-		return op, NoRewrite, nil
+		return op, NoRewrite
 	}
-	op, err := BottomUp(op, TableID, visit, nil)
-	if err != nil {
-		panic(err)
-	}
-	return op
+
+	return BottomUp(op, TableID, visit, nil)
 }
 
 func mergeSubqueryExpr(ctx *plancontext.PlanningContext, pe *ProjExpr) {
@@ -192,7 +189,7 @@ func tryPushSubQueryInJoin(
 	ctx *plancontext.PlanningContext,
 	inner *SubQuery,
 	outer *ApplyJoin,
-) (Operator, *ApplyResult, error) {
+) (Operator, *ApplyResult) {
 	lhs := TableID(outer.LHS)
 	rhs := TableID(outer.RHS)
 	joinID := TableID(outer)
@@ -211,12 +208,9 @@ func tryPushSubQueryInJoin(
 	// in general, we don't want to push down uncorrelated subqueries into the RHS of a join,
 	// since this side is executed once per row from the LHS, so we would unnecessarily execute
 	// the subquery multiple times. The exception is if we can merge the subquery with the RHS of the join.
-	merged, result, err := tryMergeWithRHS(ctx, inner, outer)
-	if err != nil {
-		return nil, nil, err
-	}
+	merged, result := tryMergeWithRHS(ctx, inner, outer)
 	if merged != nil {
-		return merged, result, nil
+		return merged, result
 	}
 
 	_, ok := inner.Subquery.(*Projection)
@@ -225,41 +219,37 @@ func tryPushSubQueryInJoin(
 		// Projections are easy to push down, so if this is still at the top,
 		// it means we have not tried pushing it yet.
 		// Let's give it a chance to push down before we push it on the left
-		return nil, NoRewrite, nil
+		return nil, NoRewrite
 	}
 
 	if deps.IsSolvedBy(lhs) {
 		// we can safely push down the subquery on the LHS
 		outer.LHS = addSubQuery(outer.LHS, inner)
-		return outer, Rewrote("push subquery into LHS of join"), nil
+		return outer, Rewrote("push subquery into LHS of join")
 	}
 
 	if outer.LeftJoin || len(inner.Predicates) == 0 {
 		// we can't push any filters on the RHS of an outer join, and
 		// we don't want to push uncorrelated subqueries to the RHS of a join
-		return nil, NoRewrite, nil
+		return nil, NoRewrite
 	}
 
 	if deps.IsSolvedBy(rhs) {
 		// we can push down the subquery filter on RHS of the join
 		outer.RHS = addSubQuery(outer.RHS, inner)
-		return outer, Rewrote("push subquery into RHS of join"), nil
+		return outer, Rewrote("push subquery into RHS of join")
 	}
 
 	if deps.IsSolvedBy(joinID) {
 		// we can rewrite the predicate to not use the values from the lhs,
 		// and instead use arguments for these dependencies.
 		// this way we can push the subquery into the RHS of this join
-		err := inner.mapExpr(extractLHSExpr(ctx, outer, lhs))
-		if err != nil {
-			return nil, nil, err
-		}
-
+		inner.mapExpr(extractLHSExpr(ctx, outer, lhs))
 		outer.RHS = addSubQuery(outer.RHS, inner)
-		return outer, Rewrote("push subquery into RHS of join rewriting predicates"), nil
+		return outer, Rewrote("push subquery into RHS of join rewriting predicates")
 	}
 
-	return nil, NoRewrite, nil
+	return nil, NoRewrite
 }
 
 // extractLHSExpr will return a function that extracts any ColName coming from the LHS table,
@@ -268,37 +258,34 @@ func extractLHSExpr(
 	ctx *plancontext.PlanningContext,
 	outer *ApplyJoin,
 	lhs semantics.TableSet,
-) func(expr sqlparser.Expr) (sqlparser.Expr, error) {
-	return func(expr sqlparser.Expr) (sqlparser.Expr, error) {
-		col, err := breakExpressionInLHSandRHSForApplyJoin(ctx, expr, lhs)
-		if err != nil {
-			return nil, err
-		}
+) func(expr sqlparser.Expr) sqlparser.Expr {
+	return func(expr sqlparser.Expr) sqlparser.Expr {
+		col := breakExpressionInLHSandRHSForApplyJoin(ctx, expr, lhs)
 		if col.IsPureLeft() {
-			return nil, vterrors.VT13001("did not expect to find any predicates that do not need data from the inner here")
+			panic(vterrors.VT13001("did not expect to find any predicates that do not need data from the inner here"))
 		}
 		for _, bve := range col.LHSExprs {
 			if !outer.isColNameMovedFromL2R(bve.Name) {
 				outer.ExtraLHSVars = append(outer.ExtraLHSVars, bve)
 			}
 		}
-		return col.RHSExpr, nil
+		return col.RHSExpr
 	}
 }
 
 // tryMergeWithRHS attempts to merge a subquery with the RHS of a join
-func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *ApplyJoin) (Operator, *ApplyResult, error) {
+func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *ApplyJoin) (Operator, *ApplyResult) {
 	if outer.LeftJoin {
-		return nil, nil, nil
+		return nil, nil
 	}
 	// both sides need to be routes
 	outerRoute, ok := outer.RHS.(*Route)
 	if !ok {
-		return nil, nil, nil
+		return nil, nil
 	}
 	innerRoute, ok := inner.Subquery.(*Route)
 	if !ok {
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	newExpr := rewriteOriginalPushedToRHS(ctx, inner.Original, outer)
@@ -309,12 +296,12 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	}
 	newOp := mergeSubqueryInputs(ctx, innerRoute, outerRoute, inner.GetMergePredicates(), sqm)
 	if newOp == nil {
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	outer.RHS = newOp
 	ctx.MergedSubqueries = append(ctx.MergedSubqueries, inner.originalSubquery)
-	return outer, Rewrote("merged subquery with rhs of join"), nil
+	return outer, Rewrote("merged subquery with rhs of join")
 }
 
 // addSubQuery adds a SubQuery to the given operator. If the operator is a SubQueryContainer,
@@ -362,10 +349,10 @@ func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sql
 	return result.(sqlparser.Expr)
 }
 
-func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Projection, src *SubQueryContainer) (Operator, *ApplyResult, error) {
+func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Projection, src *SubQueryContainer) (Operator, *ApplyResult) {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
-		return p, NoRewrite, nil
+		return p, NoRewrite
 	}
 
 	outer := TableID(src.Outer)
@@ -376,7 +363,7 @@ func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Project
 		}
 
 		if !ctx.SemTable.RecursiveDeps(pe.EvalExpr).IsSolvedBy(outer) {
-			return p, NoRewrite, nil
+			return p, NoRewrite
 		}
 
 		if se, ok := pe.Info.(SubQueryExpression); ok {
@@ -385,7 +372,7 @@ func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Project
 	}
 	// all projections can be pushed to the outer
 	src.Outer, p.Source = p, src.Outer
-	return src, Rewrote("push projection into outer side of subquery container"), nil
+	return src, Rewrote("push projection into outer side of subquery container")
 }
 
 func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Expr, se SubQueryExpression, subqueries ...*SubQuery) sqlparser.Expr {
@@ -431,18 +418,15 @@ func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Exp
 	return result.(sqlparser.Expr)
 }
 
-func pushOrMergeSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQueryContainer) (Operator, *ApplyResult, error) {
+func pushOrMergeSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQueryContainer) (Operator, *ApplyResult) {
 	if !reachedPhase(ctx, initialPlanning) {
-		return in, NoRewrite, nil
+		return in, NoRewrite
 	}
 
 	var remaining []*SubQuery
 	var result *ApplyResult
 	for _, inner := range in.Inner {
-		newOuter, _result, err := pushOrMerge(ctx, in.Outer, inner)
-		if err != nil {
-			return nil, nil, err
-		}
+		newOuter, _result := pushOrMerge(ctx, in.Outer, inner)
 		if _result == NoRewrite {
 			remaining = append(remaining, inner)
 			continue
@@ -453,26 +437,26 @@ func pushOrMergeSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQuery
 	}
 
 	if len(remaining) == 0 {
-		return in.Outer, result, nil
+		return in.Outer, result
 	}
 
 	in.Inner = remaining
 
-	return in, result, nil
+	return in, result
 }
 
 func tryMergeSubQuery(
 	ctx *plancontext.PlanningContext,
 	subQuery *SubQuery,
 	outer *Route,
-) (newOuter Operator, result *ApplyResult, err error) {
+) (newOuter Operator, result *ApplyResult) {
 	switch inner := subQuery.Subquery.(type) {
 	case *Route:
 		return tryMergeSubqueryWithOuter(ctx, subQuery, outer, inner)
 	case *SubQueryContainer:
 		return tryMergeSubqueriesRecursively(ctx, subQuery, outer, inner)
 	}
-	return outer, NoRewrite, nil
+	return outer, NoRewrite
 }
 
 // tryMergeSubqueriesRecursively attempts to merge a SubQueryContainer with the outer Route.
@@ -481,7 +465,7 @@ func tryMergeSubqueriesRecursively(
 	subQuery *SubQuery,
 	outer *Route,
 	inner *SubQueryContainer,
-) (Operator, *ApplyResult, error) {
+) (Operator, *ApplyResult) {
 	exprs := subQuery.GetMergePredicates()
 	merger := &subqueryRouteMerger{
 		outer:    outer,
@@ -490,32 +474,29 @@ func tryMergeSubqueriesRecursively(
 	}
 	op := mergeSubqueryInputs(ctx, inner.Outer, outer, exprs, merger)
 	if op == nil {
-		return outer, NoRewrite, nil
+		return outer, NoRewrite
 	}
 
 	op = Clone(op).(*Route)
 	op.Source = outer.Source
 	var finalResult *ApplyResult
 	for _, subq := range inner.Inner {
-		newOuter, res, err := tryMergeSubQuery(ctx, subq, op)
-		if err != nil {
-			return nil, nil, err
-		}
+		newOuter, res := tryMergeSubQuery(ctx, subq, op)
 		if res == NoRewrite {
 			// we failed to merge one of the inners - we need to abort
-			return nil, NoRewrite, nil
+			return nil, NoRewrite
 		}
 		op = newOuter.(*Route)
 		finalResult = finalResult.Merge(res)
 	}
 
 	op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.Original}}
-	return op, finalResult.Merge(Rewrote("merge outer of two subqueries")), nil
+	return op, finalResult.Merge(Rewrote("merge outer of two subqueries"))
 }
 
-func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQuery, outer *Route, inner Operator) (Operator, *ApplyResult, error) {
+func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQuery, outer *Route, inner Operator) (Operator, *ApplyResult) {
 	if updOp, ok := outer.Source.(*Update); ok && mergingIsBlocked(subQuery, updOp) {
-		return outer, NoRewrite, nil
+		return outer, NoRewrite
 	}
 	exprs := subQuery.GetMergePredicates()
 	merger := &subqueryRouteMerger{
@@ -525,13 +506,13 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	}
 	op := mergeSubqueryInputs(ctx, inner, outer, exprs, merger)
 	if op == nil {
-		return outer, NoRewrite, nil
+		return outer, NoRewrite
 	}
 	if !subQuery.IsProjection {
 		op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.Original}}
 	}
 	ctx.MergedSubqueries = append(ctx.MergedSubqueries, subQuery.originalSubquery)
-	return op, Rewrote("merged subquery with outer"), nil
+	return op, Rewrote("merged subquery with outer")
 }
 
 // This checked if subquery is part of the changed vindex values. Subquery cannot be merged with the outer route.
@@ -544,21 +525,18 @@ func mergingIsBlocked(subQuery *SubQuery, updOp *Update) bool {
 	return false
 }
 
-func pushOrMerge(ctx *plancontext.PlanningContext, outer Operator, inner *SubQuery) (Operator, *ApplyResult, error) {
+func pushOrMerge(ctx *plancontext.PlanningContext, outer Operator, inner *SubQuery) (Operator, *ApplyResult) {
 	switch o := outer.(type) {
 	case *Route:
 		return tryMergeSubQuery(ctx, inner, o)
 	case *ApplyJoin:
-		join, applyResult, err := tryPushSubQueryInJoin(ctx, inner, o)
-		if err != nil {
-			return nil, nil, err
-		}
+		join, applyResult := tryPushSubQueryInJoin(ctx, inner, o)
 		if join == nil {
-			return outer, NoRewrite, nil
+			return outer, NoRewrite
 		}
-		return join, applyResult, nil
+		return join, applyResult
 	default:
-		return outer, NoRewrite, nil
+		return outer, NoRewrite
 	}
 }
 
@@ -616,10 +594,7 @@ func (s *subqueryRouteMerger) mergeShardedRouting(ctx *plancontext.PlanningConte
 		})
 	}
 
-	routing, err := tr.resetRoutingLogic(ctx)
-	if err != nil {
-		panic(err)
-	}
+	routing := tr.resetRoutingLogic(ctx)
 	return s.merge(ctx, old1, old2, routing)
 }
 

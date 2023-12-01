@@ -26,7 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (Operator, *ApplyResult, error) {
+func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (Operator, *ApplyResult) {
 	statement := horizon.selectStatement()
 	switch sel := statement.(type) {
 	case *sqlparser.Select:
@@ -34,16 +34,13 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (Operator
 	case *sqlparser.Union:
 		return expandUnionHorizon(ctx, horizon, sel)
 	}
-	return nil, nil, vterrors.VT13001(fmt.Sprintf("unexpected statement type %T", statement))
+	panic(vterrors.VT13001(fmt.Sprintf("unexpected statement type %T", statement)))
 }
 
-func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, union *sqlparser.Union) (Operator, *ApplyResult, error) {
+func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, union *sqlparser.Union) (Operator, *ApplyResult) {
 	op := horizon.Source
 
-	qp, err := horizon.getQP(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
+	qp := horizon.getQP(ctx)
 
 	if len(qp.OrderExprs) > 0 {
 		op = &Ordering{
@@ -70,20 +67,15 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 	}
 
 	if op == horizon.Source {
-		return op, Rewrote("removed UNION horizon not used"), nil
+		return op, Rewrote("removed UNION horizon not used")
 	}
 
-	return op, Rewrote("expand UNION horizon into smaller components"), nil
+	return op, Rewrote("expand UNION horizon into smaller components")
 }
 
-func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel *sqlparser.Select) (Operator, *ApplyResult, error) {
+func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel *sqlparser.Select) (Operator, *ApplyResult) {
 	op := createProjectionFromSelect(ctx, horizon)
-
-	qp, err := horizon.getQP(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
+	qp := horizon.getQP(ctx)
 	var extracted []string
 	if qp.HasAggr {
 		extracted = append(extracted, "Aggregation")
@@ -101,10 +93,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	if sel.Having != nil {
-		op, err = addWherePredicates(ctx, sel.Having.Expr, op)
-		if err != nil {
-			return nil, nil, err
-		}
+		op = addWherePredicates(ctx, sel.Having.Expr, op)
 		extracted = append(extracted, "Filter")
 	}
 
@@ -124,14 +113,11 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		extracted = append(extracted, "Limit")
 	}
 
-	return op, Rewrote(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", "))), nil
+	return op, Rewrote(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", ")))
 }
 
 func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out Operator) {
-	qp, err := horizon.getQP(ctx)
-	if err != nil {
-		panic(err)
-	}
+	qp := horizon.getQP(ctx)
 
 	var dt *DerivedTable
 	if horizon.TableId != nil {
@@ -213,10 +199,7 @@ func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) O
 			panic(err)
 		}
 
-		_, err = p.addProjExpr(newProjExpr(ae))
-		if err != nil {
-			panic(err)
-		}
+		p.addProjExpr(newProjExpr(ae))
 	}
 	for i, by := range a.Grouping {
 		a.Grouping[i].ColOffset = len(a.Columns)
@@ -250,21 +233,12 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 	for _, ae := range aes {
 		org := sqlparser.CloneRefOfAliasedExpr(ae)
 		expr := ae.Expr
-		newExpr, subqs, err := sqc.pullOutValueSubqueries(ctx, expr, outerID, false)
-		if err != nil {
-			panic(err)
-		}
+		newExpr, subqs := sqc.pullOutValueSubqueries(ctx, expr, outerID, false)
 		if newExpr == nil {
 			// there was no subquery in this expression
-			_, err := proj.addUnexploredExpr(org, expr)
-			if err != nil {
-				panic(err)
-			}
+			proj.addUnexploredExpr(org, expr)
 		} else {
-			err := proj.addSubqueryExpr(org, newExpr, subqs...)
-			if err != nil {
-				panic(err)
-			}
+			proj.addSubqueryExpr(org, newExpr, subqs...)
 		}
 	}
 	proj.Source = sqc.getRootOperator(src, nil)

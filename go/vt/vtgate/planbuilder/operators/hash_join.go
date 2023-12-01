@@ -123,15 +123,11 @@ func (hj *HashJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	})
 
 	proj := newAliasedProjection(hj)
-	_, err := proj.addProjExpr(eexprs...)
-	if err != nil {
-		panic(err)
-	}
-
+	proj.addProjExpr(eexprs...)
 	return proj
 }
 
-func (hj *HashJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+func (hj *HashJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
 	for offset, col := range hj.columns {
 		if ctx.SemTable.EqualsExprWithDeps(expr, col) {
 			return offset

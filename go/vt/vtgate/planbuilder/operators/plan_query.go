@@ -59,20 +59,14 @@ type (
 func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (result Operator, err error) {
 	defer PanicHandler(&err)
 
-	op, err := translateQueryToOp(ctx, stmt)
-	if err != nil {
-		return nil, err
-	}
+	op := translateQueryToOp(ctx, stmt)
 
 	if DebugOperatorTree {
 		fmt.Println("Initial tree:")
 		fmt.Println(ToTree(op))
 	}
 
-	if op, err = compact(ctx, op); err != nil {
-		return nil, err
-	}
-
+	op = compact(ctx, op)
 	if err = checkValid(op); err != nil {
 		return nil, err
 	}

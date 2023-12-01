@@ -30,7 +30,7 @@ type (
 		op Operator, // op is the operator being visited
 		lhsTables semantics.TableSet, // lhsTables contains the TableSet for all table on the LHS of our parent
 		isRoot bool, // isRoot will be true for the root of the operator tree
-	) (Operator, *ApplyResult, error)
+	) (Operator, *ApplyResult)
 
 	// ShouldVisit is used when we want to control which nodes and ancestors to visit and which to skip
 	ShouldVisit func(Operator) VisitRule
@@ -100,12 +100,9 @@ func BottomUp(
 	resolveID func(Operator) semantics.TableSet,
 	visit VisitF,
 	shouldVisit ShouldVisit,
-) (Operator, error) {
-	op, _, err := bottomUp(root, semantics.EmptyTableSet(), resolveID, visit, shouldVisit, true)
-	if err != nil {
-		return nil, err
-	}
-	return op, nil
+) Operator {
+	op, _ := bottomUp(root, semantics.EmptyTableSet(), resolveID, visit, shouldVisit, true)
+	return op
 }
 
 var DebugOperatorTree = false
@@ -125,7 +122,7 @@ func FixedPointBottomUp(
 	resolveID func(Operator) semantics.TableSet,
 	visit VisitF,
 	shouldVisit ShouldVisit,
-) (op Operator, err error) {
+) (op Operator) {
 	var id *ApplyResult
 	op = root
 	// will loop while the rewriting changes anything
@@ -134,13 +131,10 @@ func FixedPointBottomUp(
 			fmt.Println(ToTree(op))
 		}
 		// Continue the top-down rewriting process as long as changes were made during the last traversal
-		op, id, err = bottomUp(op, semantics.EmptyTableSet(), resolveID, visit, shouldVisit, true)
-		if err != nil {
-			return nil, err
-		}
+		op, id = bottomUp(op, semantics.EmptyTableSet(), resolveID, visit, shouldVisit, true)
 	}
 
-	return op, nil
+	return op
 }
 
 // TopDown rewrites an operator tree from the bottom up. BottomUp applies a transformation function to
@@ -161,20 +155,17 @@ func TopDown(
 	resolveID func(Operator) semantics.TableSet,
 	visit VisitF,
 	shouldVisit ShouldVisit,
-) (op Operator, err error) {
-	op, _, err = topDown(root, semantics.EmptyTableSet(), resolveID, visit, shouldVisit, true)
-	if err != nil {
-		return nil, err
-	}
+) Operator {
+	op, _ := topDown(root, semantics.EmptyTableSet(), resolveID, visit, shouldVisit, true)
 
-	return op, nil
+	return op
 }
 
 // Swap takes a tree like a->b->c and swaps `a` and `b`, so we end up with b->a->c
-func Swap(parent, child Operator, message string) (Operator, *ApplyResult, error) {
+func Swap(parent, child Operator, message string) (Operator, *ApplyResult) {
 	c := child.Inputs()
 	if len(c) != 1 {
-		return nil, nil, vterrors.VT13001("Swap can only be used on single input operators")
+		panic(vterrors.VT13001("Swap can only be used on single input operators"))
 	}
 
 	aInputs := slices.Clone(parent.Inputs())
@@ -187,13 +178,13 @@ func Swap(parent, child Operator, message string) (Operator, *ApplyResult, error
 		}
 	}
 	if tmp == nil {
-		return nil, nil, vterrors.VT13001("Swap can only be used when the second argument is an input to the first")
+		panic(vterrors.VT13001("Swap can only be used when the second argument is an input to the first"))
 	}
 
 	child.SetInputs([]Operator{parent})
 	parent.SetInputs(aInputs)
 
-	return child, Rewrote(message), nil
+	return child, Rewrote(message)
 }
 
 func bottomUp(
@@ -203,9 +194,9 @@ func bottomUp(
 	rewriter VisitF,
 	shouldVisit ShouldVisit,
 	isRoot bool,
-) (Operator, *ApplyResult, error) {
+) (Operator, *ApplyResult) {
 	if shouldVisit != nil && !shouldVisit(root) {
-		return root, NoRewrite, nil
+		return root, NoRewrite
 	}
 
 	oldInputs := root.Inputs()
@@ -226,10 +217,7 @@ func bottomUp(
 		if _, isUnion := root.(noLHSTableSet); !isUnion && i > 0 {
 			childID = childID.Merge(resolveID(oldInputs[0]))
 		}
-		in, changed, err := bottomUp(operator, childID, resolveID, rewriter, shouldVisit, false)
-		if err != nil {
-			return nil, nil, err
-		}
+		in, changed := bottomUp(operator, childID, resolveID, rewriter, shouldVisit, false)
 		anythingChanged = anythingChanged.Merge(changed)
 		newInputs[i] = in
 	}
@@ -238,12 +226,9 @@ func bottomUp(
 		root = root.Clone(newInputs)
 	}
 
-	newOp, treeIdentity, err := rewriter(root, rootID, isRoot)
-	if err != nil {
-		return nil, nil, err
-	}
+	newOp, treeIdentity := rewriter(root, rootID, isRoot)
 	anythingChanged = anythingChanged.Merge(treeIdentity)
-	return newOp, anythingChanged, nil
+	return newOp, anythingChanged
 }
 
 func breakableTopDown(
@@ -284,14 +269,11 @@ func topDown(
 	rewriter VisitF,
 	shouldVisit ShouldVisit,
 	isRoot bool,
-) (Operator, *ApplyResult, error) {
-	newOp, anythingChanged, err := rewriter(root, rootID, isRoot)
-	if err != nil {
-		return nil, nil, err
-	}
+) (Operator, *ApplyResult) {
+	newOp, anythingChanged := rewriter(root, rootID, isRoot)
 
 	if !shouldVisit(root) {
-		return newOp, anythingChanged, nil
+		return newOp, anythingChanged
 	}
 
 	if anythingChanged.Changed() {
@@ -308,17 +290,14 @@ func topDown(
 		if _, isUnion := root.(noLHSTableSet); !isUnion && i > 0 {
 			childID = childID.Merge(resolveID(oldInputs[0]))
 		}
-		in, changed, err := topDown(operator, childID, resolveID, rewriter, shouldVisit, false)
-		if err != nil {
-			return nil, nil, err
-		}
+		in, changed := topDown(operator, childID, resolveID, rewriter, shouldVisit, false)
 		anythingChanged = anythingChanged.Merge(changed)
 		newInputs[i] = in
 	}
 
 	if anythingChanged != NoRewrite {
-		return root.Clone(newInputs), anythingChanged, nil
+		return root.Clone(newInputs), anythingChanged
 	}
 
-	return root, NoRewrite, nil
+	return root, NoRewrite
 }

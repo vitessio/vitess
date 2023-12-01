@@ -188,10 +188,7 @@ func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery)
 		return newUncorrelatedSubquery(op.FilterType, op.SubqueryValueName, op.HasValuesName, inner, outer), nil
 	}
 
-	lhsCols, err := op.OuterExpressionsNeeded(ctx, op.Outer)
-	if err != nil {
-		return nil, err
-	}
+	lhsCols := op.OuterExpressionsNeeded(ctx, op.Outer)
 	return newSemiJoin(outer, inner, op.Vars, lhsCols), nil
 }
 
@@ -433,7 +430,7 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, h
 	}
 
 	rp := newRoutingParams(ctx, op.Routing.OpCode())
-	err = op.Routing.UpdateRoutingParams(ctx, rp)
+	op.Routing.UpdateRoutingParams(ctx, rp)
 	if err != nil {
 		return nil, err
 	}
@@ -639,10 +636,7 @@ func buildUpdateLogicalPlan(
 ) (logicalPlan, error) {
 	upd := dmlOp.(*operators.Update)
 	rp := newRoutingParams(ctx, rb.Routing.OpCode())
-	err := rb.Routing.UpdateRoutingParams(ctx, rp)
-	if err != nil {
-		return nil, err
-	}
+	rb.Routing.UpdateRoutingParams(ctx, rp)
 	edml := &engine.DML{
 		Query:             generateQuery(stmt),
 		TableNames:        []string{upd.VTable.Name.String()},
@@ -673,10 +667,7 @@ func buildDeleteLogicalPlan(
 ) (logicalPlan, error) {
 	del := dmlOp.(*operators.Delete)
 	rp := newRoutingParams(ctx, rb.Routing.OpCode())
-	err := rb.Routing.UpdateRoutingParams(ctx, rp)
-	if err != nil {
-		return nil, err
-	}
+	rb.Routing.UpdateRoutingParams(ctx, rp)
 	edml := &engine.DML{
 		Query:             generateQuery(del.AST),
 		TableNames:        []string{del.VTable.Name.String()},

@@ -150,10 +150,7 @@ func (aj *ApplyJoin) IsInner() bool {
 func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 	aj.Predicate = ctx.SemTable.AndExpressions(expr, aj.Predicate)
 
-	col, err := breakExpressionInLHSandRHSForApplyJoin(ctx, expr, TableID(aj.LHS))
-	if err != nil {
-		panic(err)
-	}
+	col := breakExpressionInLHSandRHSForApplyJoin(ctx, expr, TableID(aj.LHS))
 	aj.JoinPredicates = append(aj.JoinPredicates, col)
 	rhs := aj.RHS.AddPredicate(ctx, col.RHSExpr)
 	aj.RHS = rhs
@@ -184,7 +181,7 @@ func joinColumnToExpr(column JoinColumn) sqlparser.Expr {
 	return column.Original
 }
 
-func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sqlparser.AliasedExpr, e sqlparser.Expr, addToGroupBy bool) (col JoinColumn, err error) {
+func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sqlparser.AliasedExpr, e sqlparser.Expr, addToGroupBy bool) (col JoinColumn) {
 	defer func() {
 		col.Original = orig.Expr
 	}()
@@ -200,12 +197,9 @@ func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sq
 	case deps.IsSolvedBy(rhs):
 		col.RHSExpr = e
 	case deps.IsSolvedBy(both):
-		col, err = breakExpressionInLHSandRHSForApplyJoin(ctx, e, TableID(aj.LHS))
-		if err != nil {
-			return JoinColumn{}, err
-		}
+		col = breakExpressionInLHSandRHSForApplyJoin(ctx, e, TableID(aj.LHS))
 	default:
-		return JoinColumn{}, vterrors.VT13002(sqlparser.String(e))
+		panic(vterrors.VT13002(sqlparser.String(e)))
 	}
 
 	return
@@ -231,10 +225,7 @@ func (aj *ApplyJoin) AddColumn(
 			return offset
 		}
 	}
-	col, err := aj.getJoinColumnFor(ctx, expr, expr.Expr, groupBy)
-	if err != nil {
-		panic(err)
-	}
+	col := aj.getJoinColumnFor(ctx, expr, expr.Expr, groupBy)
 	offset := len(aj.JoinColumns)
 	aj.JoinColumns = append(aj.JoinColumns, col)
 	return offset

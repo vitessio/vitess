@@ -68,21 +68,21 @@ func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	return nil
 }
 
-func (sq *SubQuery) OuterExpressionsNeeded(ctx *plancontext.PlanningContext, outer Operator) (result []*sqlparser.ColName, err error) {
+func (sq *SubQuery) OuterExpressionsNeeded(ctx *plancontext.PlanningContext, outer Operator) (result []*sqlparser.ColName) {
 	joinColumns, err := sq.GetJoinColumns(ctx, outer)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 	for _, jc := range joinColumns {
 		for _, lhsExpr := range jc.LHSExprs {
 			col, ok := lhsExpr.Expr.(*sqlparser.ColName)
 			if !ok {
-				return nil, vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(lhsExpr.Expr))
+				panic(vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(lhsExpr.Expr)))
 			}
 			result = append(result, col)
 		}
 	}
-	return result, nil
+	return result
 }
 
 func (sq *SubQuery) GetJoinColumns(ctx *plancontext.PlanningContext, outer Operator) ([]JoinColumn, error) {
@@ -97,7 +97,7 @@ func (sq *SubQuery) GetJoinColumns(ctx *plancontext.PlanningContext, outer Opera
 	}
 	sq.outerID = outerID
 	mapper := func(in sqlparser.Expr) (JoinColumn, error) {
-		return breakExpressionInLHSandRHSForApplyJoin(ctx, in, outerID)
+		return breakExpressionInLHSandRHSForApplyJoin(ctx, in, outerID), nil
 	}
 	joinPredicates, err := slice.MapWithError(sq.Predicates, mapper)
 	if err != nil {
@@ -281,22 +281,8 @@ func (sq *SubQuery) isMerged(ctx *plancontext.PlanningContext) bool {
 }
 
 // mapExpr rewrites all expressions according to the provided function
-func (sq *SubQuery) mapExpr(f func(expr sqlparser.Expr) (sqlparser.Expr, error)) error {
-	newPredicates, err := slice.MapWithError(sq.Predicates, f)
-	if err != nil {
-		return err
-	}
-	sq.Predicates = newPredicates
-
-	sq.Original, err = f(sq.Original)
-	if err != nil {
-		return err
-	}
-
-	originalSubquery, err := f(sq.originalSubquery)
-	if err != nil {
-		return err
-	}
-	sq.originalSubquery = originalSubquery.(*sqlparser.Subquery)
-	return nil
+func (sq *SubQuery) mapExpr(f func(expr sqlparser.Expr) sqlparser.Expr) {
+	sq.Predicates = slice.Map(sq.Predicates, f)
+	sq.Original = f(sq.Original)
+	sq.originalSubquery = f(sq.originalSubquery).(*sqlparser.Subquery)
 }

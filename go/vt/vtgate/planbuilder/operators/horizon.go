@@ -182,10 +182,7 @@ func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectE
 
 func (h *Horizon) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	if h.QP == nil {
-		_, err := h.getQP(ctx)
-		if err != nil {
-			panic(err)
-		}
+		h.getQP(ctx)
 	}
 	return h.QP.OrderExprs
 }
@@ -199,16 +196,16 @@ func (h *Horizon) src() Operator {
 	return h.Source
 }
 
-func (h *Horizon) getQP(ctx *plancontext.PlanningContext) (*QueryProjection, error) {
+func (h *Horizon) getQP(ctx *plancontext.PlanningContext) *QueryProjection {
 	if h.QP != nil {
-		return h.QP, nil
+		return h.QP
 	}
 	qp, err := CreateQPFromSelectStatement(ctx, h.Query)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	h.QP = qp
-	return h.QP, nil
+	return h.QP
 }
 
 func (h *Horizon) ShortDescription() string {
