@@ -2980,6 +2980,36 @@ var (
 			input:  "create table test (pk varchar(255)) collate utf8_unicode_ci",
 			output: "create table test (\n\tpk varchar(255)\n) collate utf8_unicode_ci",
 		}, {
+			input:  "create table test (pk varchar(255) charset binary)",
+			output: "create table test (\n\tpk varchar(255) character set binary\n)",
+		}, {
+			input:  "create table test (pk varchar(255) charset utf8mb4)",
+			output: "create table test (\n\tpk varchar(255) character set utf8mb4\n)",
+		}, {
+			input:  "create table test (pk varchar(255) character set binary)",
+			output: "create table test (\n\tpk varchar(255) character set binary\n)",
+		}, {
+			input:  "create table test (pk varchar(255) character set utf8mb4)",
+			output: "create table test (\n\tpk varchar(255) character set utf8mb4\n)",
+		}, {
+			input:  "create table test (pk varchar(255) collate binary)",
+			output: "create table test (\n\tpk varchar(255) collate binary\n)",
+		}, {
+			input:  "create table test (pk varchar(255) collate utf8_unicode_ci)",
+			output: "create table test (\n\tpk varchar(255) collate utf8_unicode_ci\n)",
+		}, {
+			input:  "create table test (pk varchar(255) charset binary collate binary)",
+			output: "create table test (\n\tpk varchar(255) character set binary collate binary\n)",
+		}, {
+			input:  "create table test (pk varchar(255) charset utf8mb4 collate utf8_unicode_ci)",
+			output: "create table test (\n\tpk varchar(255) character set utf8mb4 collate utf8_unicode_ci\n)",
+		}, {
+			input:  "create table test (pk varchar(255) character set binary collate binary)",
+			output: "create table test (\n\tpk varchar(255) character set binary collate binary\n)",
+		}, {
+			input:  "create table test (pk varchar(255) character set utf8mb4 collate utf8_unicode_ci)",
+			output: "create table test (\n\tpk varchar(255) character set utf8mb4 collate utf8_unicode_ci\n)",
+		}, {
 			input:  "select * from current",
 			output: "select * from `current`",
 		}, {
@@ -4815,9 +4845,6 @@ func runParseTestCaseWithParserOptions(t *testing.T, tcase parseTest, options Pa
 			tcase.output = tcase.input
 		}
 		tree, err := ParseWithOptions(tcase.input, options)
-		if err != nil {
-			panic(tcase.input)
-		}
 		require.NoError(t, err)
 
 		assertTestcaseOutput(t, tcase, tree)
