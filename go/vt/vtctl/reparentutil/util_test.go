@@ -524,7 +524,7 @@ func TestFindPositionForTablet(t *testing.T) {
 		tmc              *testutil.TabletManagerClient
 		tablet           *topodatapb.Tablet
 		expectedPosition string
-		expectedLag      uint32
+		expectedLag      time.Duration
 		expectedErr      string
 	}{
 		{
@@ -548,7 +548,7 @@ func TestFindPositionForTablet(t *testing.T) {
 					Uid:  100,
 				},
 			},
-			expectedLag:      201,
+			expectedLag:      201 * time.Second,
 			expectedPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 		}, {
 			name: "no replication status",
@@ -592,7 +592,7 @@ func TestFindPositionForTablet(t *testing.T) {
 					Uid:  100,
 				},
 			},
-			expectedLag:      291,
+			expectedLag:      291 * time.Second,
 			expectedPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 		}, {
 			name: "error in parsing position",

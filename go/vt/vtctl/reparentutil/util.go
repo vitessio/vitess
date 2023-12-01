@@ -100,7 +100,7 @@ func ChooseNewPrimary(
 			pos, replLag, err := findPositionAndLagForTablet(groupCtx, tb, logger, tmc, waitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
-			if err == nil && waitReplicasTimeout.Nanoseconds() > int64(replLag)*1e9 {
+			if err == nil && waitReplicasTimeout > replLag {
 				validTablets = append(validTablets, tb)
 				tabletPositions = append(tabletPositions, pos)
 			}
@@ -129,7 +129,7 @@ func ChooseNewPrimary(
 
 // findPositionAndLagForTablet processes the replication position and lag for a single tablet and
 // returns it. It is safe to call from multiple goroutines.
-func findPositionAndLagForTablet(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (replication.Position, uint32, error) {
+func findPositionAndLagForTablet(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (replication.Position, time.Duration, error) {
 	logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
 
 	ctx, cancel := context.WithTimeout(ctx, waitTimeout)
@@ -157,7 +157,7 @@ func findPositionAndLagForTablet(ctx context.Context, tablet *topodatapb.Tablet,
 		return replication.Position{}, 0, err
 	}
 
-	return pos, status.ReplicationLagSeconds, nil
+	return pos, time.Second * time.Duration(status.ReplicationLagSeconds), nil
 }
 
 // FindCurrentPrimary returns the current primary tablet of a shard, if any. The
