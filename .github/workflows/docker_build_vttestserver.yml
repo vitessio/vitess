@@ -2,8 +2,6 @@ name: Docker Build vttestserver
 on:
   push:
     branches:
-      - main
-    tags:
       - '*'
 
 concurrency:
@@ -15,13 +13,12 @@ permissions: read-all
 jobs:
   build_and_push:
     name: Build and push vitess/vttestserver Docker images
-    runs-on: gh-hosted-runners-16cores-1
-    if: github.repository == 'vitessio/vitess'
-
+    runs-on: ubuntu-latest
+    
     strategy:
       fail-fast: true
       matrix:
-        branch: [ mysql57, mysql80 ]
+        branch: [ mysql80 ]
 
     steps:
       - name: Check out code
