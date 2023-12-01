@@ -507,6 +507,10 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 			return nil, err
 		}
 	}
+	if tp.BulkInsertOnDup != nil {
+		query.WriteString(tp.BulkInsertOnDup.Query)
+	}
+
 	log.Errorf("DEBUG: applyBulkInsertChanges: %s", query)
 	return executor(query.String())
 }

@@ -2335,7 +2335,7 @@ func TestPlayerCancelOnLock(t *testing.T) {
 	}
 }
 
-func TestPlayerBatching(t *testing.T) {
+func TestPlayerTransactions(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -3142,13 +3142,13 @@ func TestPlayerBulkStatements(t *testing.T) {
 
 	testcases := []struct {
 		input  string
-		output string
+		output []string
 		table  string
 		data   [][]string
 	}{
 		{
 			input:  "insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc'), (4, 'ddd'), (5, 'eee')",
-			output: "insert into t1(id,val1) values (1,'aaa'), (2,'bbb'), (3,'ccc'), (4,'ddd'), (5,'eee')",
+			output: []string{"insert into t1(id,val1) values (1,'aaa'), (2,'bbb'), (3,'ccc'), (4,'ddd'), (5,'eee')"},
 			table:  "t1",
 			data: [][]string{
 				{"1", "aaa"},
@@ -3160,7 +3160,7 @@ func TestPlayerBulkStatements(t *testing.T) {
 		},
 		{
 			input:  "delete from t1 where id = 1",
-			output: "delete from t1 where id=1",
+			output: []string{"delete from t1 where id=1"},
 			table:  "t1",
 			data: [][]string{
 				{"2", "bbb"},
@@ -3171,7 +3171,7 @@ func TestPlayerBulkStatements(t *testing.T) {
 		},
 		{
 			input:  "delete from t1 where id > 3",
-			output: "delete from t1 where id in (4, 5)",
+			output: []string{"delete from t1 where id in (4, 5)"},
 			table:  "t1",
 			data: [][]string{
 				{"2", "bbb"},
@@ -3179,20 +3179,38 @@ func TestPlayerBulkStatements(t *testing.T) {
 			},
 		},
 		{
+			input: "insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc') on duplicate key update id = id+100",
+			output: []string{
+				"insert into t1(id,val1) values (1,'aaa')",
+				"delete from t1 where id=2",
+				"insert into t1(id,val1) values (102,'bbb')",
+				"delete from t1 where id=3",
+				"insert into t1(id,val1) values (103,'ccc')",
+			},
+			table: "t1",
+			data: [][]string{
+				{"1", "aaa"},
+				{"102", "bbb"},
+				{"103", "ccc"},
+			},
+		},
+		{
 			input:  "delete from t1",
-			output: "delete from t1 where id in (2, 3)",
+			output: []string{"delete from t1 where id in (1, 102, 103)"},
 			table:  "t1",
 		},
 	}
 
-	for _, tcases := range testcases {
-		execStatements(t, []string{tcases.input})
-		output := qh.Expect(tcases.output)
-		expectNontxQueries(t, output)
+	for _, tcase := range testcases {
+		execStatements(t, []string{tcase.input})
+		for _, stmt := range tcase.output {
+			output := qh.Expect(stmt)
+			expectNontxQueries(t, output)
+		}
 		time.Sleep(1 * time.Second)
 		log.Flush()
-		if tcases.table != "" {
-			expectData(t, tcases.table, tcases.data)
+		if tcase.table != "" {
+			expectData(t, tcase.table, tcase.data)
 		}
 	}
 }
