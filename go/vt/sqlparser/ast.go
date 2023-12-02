@@ -2881,25 +2881,32 @@ func (ct *ColumnType) SQLType() querypb.Type {
 		return sqltypes.Int64
 	case keywordStrings[BOOL], keywordStrings[BOOLEAN]:
 		return sqltypes.Uint8
-	case keywordStrings[TEXT]:
+	case keywordStrings[TEXT],
+		keywordStrings[TINYTEXT],
+		keywordStrings[MEDIUMTEXT],
+		keywordStrings[LONGTEXT],
+		keywordStrings[LONG],
+		"long varchar":
 		return sqltypes.Text
-	case keywordStrings[TINYTEXT]:
-		return sqltypes.Text
-	case keywordStrings[MEDIUMTEXT]:
-		return sqltypes.Text
-	case keywordStrings[LONGTEXT]:
-		return sqltypes.Text
-	case keywordStrings[BLOB]:
+	case keywordStrings[BLOB],
+		keywordStrings[TINYBLOB],
+		keywordStrings[MEDIUMBLOB],
+		keywordStrings[LONGBLOB]:
 		return sqltypes.Blob
-	case keywordStrings[TINYBLOB]:
-		return sqltypes.Blob
-	case keywordStrings[MEDIUMBLOB]:
-		return sqltypes.Blob
-	case keywordStrings[LONGBLOB]:
-		return sqltypes.Blob
-	case keywordStrings[CHAR]:
+	case keywordStrings[CHAR],
+		keywordStrings[NCHAR],
+		"national char",
+		"national character":
 		return sqltypes.Char
-	case keywordStrings[VARCHAR]:
+	case keywordStrings[VARCHAR],
+		keywordStrings[NVARCHAR],
+		"char varying",
+		"character varying",
+		"nchar varchar",
+		"nchar varying",
+		"national varchar",
+		"national char varying",
+		"national character varying":
 		return sqltypes.VarChar
 	case keywordStrings[BINARY]:
 		return sqltypes.Binary
@@ -2917,15 +2924,14 @@ func (ct *ColumnType) SQLType() querypb.Type {
 		return sqltypes.Year
 	case keywordStrings[FLOAT_TYPE]:
 		return sqltypes.Float32
-	case keywordStrings[DOUBLE]:
+	case keywordStrings[DOUBLE],
+		keywordStrings[REAL],
+		"double precision":
 		return sqltypes.Float64
-	case keywordStrings[REAL]:
-		return sqltypes.Float64
-	case keywordStrings[DECIMAL]:
-		return sqltypes.Decimal
-	case keywordStrings[DEC]:
-		return sqltypes.Decimal
-	case keywordStrings[FIXED]:
+	case keywordStrings[DECIMAL],
+		keywordStrings[DEC],
+		keywordStrings[FIXED],
+		keywordStrings[NUMERIC]:
 		return sqltypes.Decimal
 	case keywordStrings[BIT]:
 		return sqltypes.Bit
@@ -2935,21 +2941,14 @@ func (ct *ColumnType) SQLType() querypb.Type {
 		return sqltypes.Set
 	case keywordStrings[JSON]:
 		return sqltypes.TypeJSON
-	case keywordStrings[GEOMETRY]:
-		return sqltypes.Geometry
-	case keywordStrings[POINT]:
-		return sqltypes.Geometry
-	case keywordStrings[LINESTRING]:
-		return sqltypes.Geometry
-	case keywordStrings[POLYGON]:
-		return sqltypes.Geometry
-	case keywordStrings[GEOMETRYCOLLECTION]:
-		return sqltypes.Geometry
-	case keywordStrings[MULTIPOINT]:
-		return sqltypes.Geometry
-	case keywordStrings[MULTILINESTRING]:
-		return sqltypes.Geometry
-	case keywordStrings[MULTIPOLYGON]:
+	case keywordStrings[GEOMETRY],
+		keywordStrings[POINT],
+		keywordStrings[LINESTRING],
+		keywordStrings[POLYGON],
+		keywordStrings[GEOMETRYCOLLECTION],
+		keywordStrings[MULTIPOINT],
+		keywordStrings[MULTILINESTRING],
+		keywordStrings[MULTIPOLYGON]:
 		return sqltypes.Geometry
 	}
 	panic("unimplemented type " + ct.Type)
