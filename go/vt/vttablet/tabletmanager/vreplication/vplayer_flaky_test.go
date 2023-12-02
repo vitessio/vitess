@@ -3108,7 +3108,7 @@ func TestPlayerNoBlob(t *testing.T) {
 	require.Equal(t, int64(4), stats.PartialQueryCount.Counts()["update"])
 }
 
-func TestPlayerBatching(t *testing.T) {
+func TestPlayerBatchMode(t *testing.T) {
 	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
 	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
 	defer func() {
@@ -3117,8 +3117,9 @@ func TestPlayerBatching(t *testing.T) {
 
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
-		"create table t1(id int, val1 varchar(20), primary key(id))",
-		fmt.Sprintf("create table %s.t1(id int, val1 varchar(20), primary key(id))", vrepldb),
+		"set @@global.max_allowed_packet=1024", // To test trx batch splitting at 512 bytes
+		"create table t1(id int, val1 varchar(1000), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val1 varchar(1000), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -3141,13 +3142,18 @@ func TestPlayerBatching(t *testing.T) {
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
-	trxBatchExpectRE := `.*;begin;(set @@session\.foreign_key_checks=.*;)?%s;update _vt\.vreplication set pos=.*;commit`
+	// When the trx will be in a single batch.
+	trxFullBatchExpectRE := `^begin;(set @@session\.foreign_key_checks=.*;)?%s;update _vt\.vreplication set pos=.*;commit$`
+	// If the trx batch is split, then we only expected the end part.
+	trxLastBatchExpectRE := `%s;update _vt\.vreplication set pos=.*;commit$`
+	longStr := strings.Repeat("a", 485) // Using this will cause the trx batch to be split
 
 	testcases := []struct {
-		input  string
-		output []string
-		table  string
-		data   [][]string
+		input               string
+		output              []string
+		expectedInLastBatch string // Only used if we expect the trx to be split
+		table               string
+		data                [][]string
 	}{
 		{
 			input:  "insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc'), (4, 'ddd'), (5, 'eee')",
@@ -3182,24 +3188,41 @@ func TestPlayerBatching(t *testing.T) {
 			},
 		},
 		{
-			input: "insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc') on duplicate key update id = id+100",
+			input: fmt.Sprintf("insert into t1(id, val1) values (1, '%s'), (2, 'bbb'), (3, 'ccc') on duplicate key update id = id+100", longStr),
 			output: []string{
-				"insert into t1(id,val1) values (1,'aaa')",
-				"delete from t1 where id=2",
+				fmt.Sprintf("insert into t1(id,val1) values (1,'%s')", longStr),
+				"delete from t1 where id=2", // These will be in the second/last batch
 				"insert into t1(id,val1) values (102,'bbb')",
 				"delete from t1 where id=3",
 				"insert into t1(id,val1) values (103,'ccc')",
 			},
-			table: "t1",
+			expectedInLastBatch: "delete from t1 where id=2;insert into t1(id,val1) values (102,'bbb');delete from t1 where id=3;insert into t1(id,val1) values (103,'ccc')",
+			table:               "t1",
 			data: [][]string{
-				{"1", "aaa"},
+				{"1", longStr},
 				{"102", "bbb"},
 				{"103", "ccc"},
 			},
 		},
 		{
+			input: "insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc') on duplicate key update id = id+500, val1 = values(val1)",
+			output: []string{
+				"delete from t1 where id=1",
+				"insert into t1(id,val1) values (501,'aaa')",
+				"insert into t1(id,val1) values (2,'bbb'), (3,'ccc')",
+			},
+			table: "t1",
+			data: [][]string{
+				{"2", "bbb"},
+				{"3", "ccc"},
+				{"102", "bbb"},
+				{"103", "ccc"},
+				{"501", "aaa"},
+			},
+		},
+		{
 			input:  "delete from t1",
-			output: []string{"delete from t1 where id in (1, 102, 103)"},
+			output: []string{"delete from t1 where id in (2, 3, 102, 103, 501)"},
 			table:  "t1",
 		},
 	}
@@ -3221,9 +3244,13 @@ func TestPlayerBatching(t *testing.T) {
 		if tcase.table != "" {
 			expectData(t, tcase.table, tcase.data)
 		}
-		// Confirm that the statements were batched together in a multi-statement
-		// protocol message as expected.
-		require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxBatchExpectRE, regexp.QuoteMeta(strings.Join(tcase.output, ";")))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
+		// Confirm that the statements were batched together in multi-statement
+		// protocol message(s) as expected.
+		if tcase.expectedInLastBatch != "" { // We expect the trx to be split
+			require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxLastBatchExpectRE, regexp.QuoteMeta(tcase.expectedInLastBatch))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
+		} else {
+			require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxFullBatchExpectRE, regexp.QuoteMeta(strings.Join(tcase.output, ";")))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
+		}
 	}
 }
 

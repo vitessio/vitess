@@ -47,6 +47,14 @@ type vplayer struct {
 	replicatorPlan *ReplicatorPlan
 	tablePlans     map[string]*TablePlan
 
+	// These are set when creating the VPlayer based on whether the VPlayer
+	// is in batch (stmt and trx) execution mode or not.
+	query  func(ctx context.Context, sql string) (*sqltypes.Result, error)
+	commit func(ctx context.Context) error
+	// If the VPlayer is in batch mode, we accumulate each transaction's statements
+	// that are then sent as a single multi-statement protocol request to the database.
+	batchMode bool
+
 	pos replication.Position
 	// unsavedEvent is set any time we skip an event without
 	// saving, which is on an empty commit.
@@ -78,15 +86,6 @@ type vplayer struct {
 	// foreignKeyChecksStateInitialized is set to true once we have initialized the foreignKeyChecksEnabled.
 	// The initialization is done on the first row event that this vplayer sees.
 	foreignKeyChecksStateInitialized bool
-
-	// If the vplayer is in batch mode, we accumulate the statements that will
-	// be sent as a single multi-statement protocol request to the database when
-	// we want to commit the transaction (you must be in a transaction to use it).
-	batchMode bool
-	// When operating in batch mode we to be sure that we don't end up sending a
-	// multi-query request that is beyond the max_allowed_packe size set in the
-	// database. When not in batch mode this will be 0.
-	maxBatchSize int64
 }
 
 // NoForeignKeyCheckFlagBitmask is the bitmask for the 2nd bit (least significant) of the flags in a binlog row event.
@@ -114,23 +113,34 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		saveStop = false
 	}
 
-	maxAllowedPacket := int64(-1)
+	queryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+		return vr.dbClient.ExecuteWithRetry(ctx, sql)
+	}
+	commitFunc := func(ctx context.Context) error {
+		return vr.dbClient.Commit()
+	}
 	batchMode := false
 	if vttablet.VReplicationExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 {
 		batchMode = true
 	}
 	if batchMode {
+		maxAllowedPacket := int64(1024) // 1KiB minimum in mysqld
 		res, err := vr.dbClient.ExecuteFetch("select @@session.max_allowed_packet as max_allowed_packet", 1)
-		if err == nil {
-			maxAllowedPacket, err = res.Rows[0][0].ToInt64()
-			if err != nil {
-				log.Errorf("Error getting max_allowed_packet: %v", err)
-			}
+		if err != nil {
+			log.Errorf("Error getting max_allowed_packet, will use the minimum value: %v", err)
 		} else {
-			maxAllowedPacket = int64(1024) // 1KiB minimum in mysqld
-			log.Errorf("Error getting max_allowed_packet: %v", err)
+			if maxAllowedPacket, err = res.Rows[0][0].ToInt64(); err != nil {
+				log.Errorf("Error getting max_allowed_packet, will use the minimum value:: %v", err)
+			}
 		}
 		maxAllowedPacket -= 512 // Leave 512 bytes of room for the vrepl record update, commit, etc.
+		queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+			return nil, vr.dbClient.AddBatchQuery(sql)
+		}
+		commitFunc = func(ctx context.Context) error {
+			return vr.dbClient.CommitQueryBatch(ctx)
+		}
+		vr.dbClient.maxBatchSize = maxAllowedPacket
 	}
 
 	return &vplayer{
@@ -144,8 +154,9 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		tablePlans:       make(map[string]*TablePlan),
 		phase:            phase,
 		throttlerAppName: throttlerapp.VCopierName.ConcatenateString(vr.throttlerAppName()),
+		query:            queryFunc,
+		commit:           commitFunc,
 		batchMode:        batchMode,
-		maxBatchSize:     maxAllowedPacket,
 	}
 }
 
@@ -195,7 +206,7 @@ func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
 		return nil
 	}
 	log.Infof("Setting this session's foreign_key_checks to %s", strconv.FormatBool(dbForeignKeyChecksEnabled))
-	if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, "set @@session.foreign_key_checks="+strconv.FormatBool(dbForeignKeyChecksEnabled), vp.maxBatchSize); err != nil {
+	if _, err := vp.vr.dbClient.ExecuteFetch("set @@session.foreign_key_checks="+strconv.FormatBool(dbForeignKeyChecksEnabled), 1); err != nil {
 		return fmt.Errorf("failed to set session foreign_key_checks: %w", err)
 	}
 	vp.foreignKeyChecksEnabled = dbForeignKeyChecksEnabled
@@ -281,7 +292,7 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 	}
 	if event.Type == binlogdatapb.VEventType_SAVEPOINT || vp.canAcceptStmtEvents {
 		start := time.Now()
-		_, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql, vp.maxBatchSize)
+		_, err := vp.query(ctx, sql)
 		vp.vr.stats.QueryTimings.Record(vp.phase, start)
 		vp.vr.stats.QueryCount.Add(vp.phase, 1)
 		return err
@@ -300,7 +311,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	applyFunc := func(sql string) (*sqltypes.Result, error) {
 		stats := NewVrLogStats("ROWCHANGE")
 		start := time.Now()
-		qr, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql, vp.maxBatchSize)
+		qr, err := vp.query(ctx, sql)
 		vp.vr.stats.QueryCount.Add(vp.phase, 1)
 		vp.vr.stats.QueryTimings.Record(vp.phase, start)
 		stats.Send(sql)
@@ -318,7 +329,8 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 			return nil
 		}
 		// If we're done with the copy phase then we will be replicating all INSERTS
-		// regardless of the PK value.
+		// regardless of the PK value and can use a single INSERT statment with
+		// multiple VALUES clauses.
 		if len(vp.copyState) == 0 && (rowEvent.RowChanges[0].Before == nil && rowEvent.RowChanges[0].After != nil) {
 			tplan.applyBulkInsertChanges(rowEvent.RowChanges, applyFunc)
 			return nil
@@ -558,14 +570,8 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if err != nil {
 			return err
 		}
-		if vp.batchMode {
-			if err := vp.vr.dbClient.CommitQueriesInBatch(ctx); err != nil {
-				return err
-			}
-		} else {
-			if err := vp.vr.dbClient.Commit(); err != nil {
-				return err
-			}
+		if err := vp.commit(ctx); err != nil {
+			return err
 		}
 		if posReached {
 			return io.EOF
@@ -650,7 +656,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
 				return err
 			}
-			if err := vp.vr.dbClient.Commit(); err != nil {
+			if err := vp.commit(ctx); err != nil {
 				return err
 			}
 			return io.EOF
@@ -659,7 +665,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			// So, we apply the DDL first, and then save the position.
 			// Manual intervention may be needed if there is a partial
 			// failure here.
-			if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Statement, vp.maxBatchSize); err != nil {
+			if _, err := vp.query(ctx, event.Statement); err != nil {
 				return err
 			}
 			stats.Send(fmt.Sprintf("%v", event.Statement))
@@ -671,7 +677,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return io.EOF
 			}
 		case binlogdatapb.OnDDLAction_EXEC_IGNORE:
-			if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Statement, vp.maxBatchSize); err != nil {
+			if _, err := vp.query(ctx, event.Statement); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Statement)
 			}
 			stats.Send(fmt.Sprintf("%v", event.Statement))

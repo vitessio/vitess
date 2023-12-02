@@ -60,8 +60,12 @@ var (
 
 	// BlplQuery is the key for the stats map.
 	BlplQuery = "Query"
+	// BlplMultiQuery is the key for the stats map.
+	BlplMultiQuery = "MultiQuery"
 	// BlplTransaction is the key for the stats map.
 	BlplTransaction = "Transaction"
+	// BlplBatchTransaction is the key for the stats map.
+	BlplBatchTransaction = "BatchTransaction"
 )
 
 // Stats is the internal stats of a player. It is a different

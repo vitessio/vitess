@@ -1153,7 +1153,7 @@ func (vbc *vcopierCopyWorker) insertRows(ctx context.Context, rows []*querypb.Ro
 		&vbc.sqlbuffer,
 		rows,
 		func(sql string) (*sqltypes.Result, error) {
-			return vbc.vdbClient.ExecuteWithRetry(ctx, sql, -1)
+			return vbc.vdbClient.ExecuteWithRetry(ctx, sql)
 		},
 	)
 }

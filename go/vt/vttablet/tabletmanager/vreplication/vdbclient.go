@@ -38,7 +38,9 @@ type vdbClient struct {
 	InTransaction bool
 	startTime     time.Time
 	queries       []string
+	queriesPos    int64
 	batchSize     int64
+	maxBatchSize  int64
 }
 
 func newVDBClient(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats) *vdbClient {
@@ -55,6 +57,10 @@ func (vc *vdbClient) Begin() error {
 	if err := vc.DBClient.Begin(); err != nil {
 		return err
 	}
+	// If we're batching, we only batch the contents of the
+	// transaction, which starts with the begin and ends with
+	// the commit.
+	vc.queriesPos = int64(len(vc.queries))
 	vc.queries = append(vc.queries, "begin")
 	vc.InTransaction = true
 	vc.startTime = time.Now()
@@ -72,27 +78,22 @@ func (vc *vdbClient) Commit() error {
 	return nil
 }
 
-func (vc *vdbClient) CommitQueriesInBatch(ctx context.Context) error {
-	log.Errorf("DEBUG: CommitQueriesInBatch: %s", strings.Join(vc.queries, ";"))
+// CommitQueryBatch sends the current transaction's query batch -- which
+// is often the full contents of the transaction, unless we've crossed
+// the maxBatchSize one ore more times -- down the wire to the database,
+// including the final commit.
+func (vc *vdbClient) CommitQueryBatch(ctx context.Context) error {
+	log.Errorf("DEBUG: CommitQueryBatch: %s", strings.Join(vc.queries[vc.queriesPos:], ";"))
 	vc.queries = append(vc.queries, "commit")
-	queries := strings.Join(vc.queries, ";")
+	queries := strings.Join(vc.queries[vc.queriesPos:], ";")
 	for _, err := vc.DBClient.ExecuteFetchMulti(queries, -1); err != nil; {
-		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERLockDeadlock || sqlErr.Number() == sqlerror.ERLockWaitTimeout {
-			log.Infof("retryable error: %v, waiting for %v and retrying", sqlErr, dbLockRetryDelay)
-			time.Sleep(dbLockRetryDelay)
-			select {
-			case <-ctx.Done():
-				return io.EOF
-			default:
-			}
-			continue
-		}
 		return err
 	}
 	vc.InTransaction = false
 	vc.queries = nil
+	vc.queriesPos = 0
 	vc.batchSize = 0
-	vc.stats.Timings.Record(binlogplayer.BlplTransaction, vc.startTime)
+	vc.stats.Timings.Record(binlogplayer.BlplBatchTransaction, vc.startTime)
 	return nil
 }
 
@@ -119,18 +120,21 @@ func (vc *vdbClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, 
 	return vc.DBClient.ExecuteFetch(query, maxrows)
 }
 
-func (vc *vdbClient) AddBatchQuery(query string, maxBatchSize int64) error {
+// AddBatchQuery adds the query to the current transaction's query
+// batch. If this new query would cause the current batch to exceed
+// the maxBatchSize, then the current unsent batch is sent down the
+// wire and this query will be included in the next batch.
+func (vc *vdbClient) AddBatchQuery(query string) error {
 	if !vc.InTransaction {
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cannot batch query outside of a transaction: %s", query)
 	}
 
 	addedSize := int64(len(query)) + 1 // plus 1 for the semicolon
-	if vc.batchSize+addedSize > maxBatchSize {
-		log.Errorf("DEBUG: AddBatchQuery: %s ; but over maxBatchSize of %d", query, maxBatchSize)
+	if vc.batchSize+addedSize > vc.maxBatchSize {
+		log.Errorf("DEBUG: AddBatchQuery: %s ; but over maxBatchSize of %d", query, vc.maxBatchSize)
 		if _, err := vc.ExecuteQueryBatch(); err != nil {
 			return err
 		}
-		return vc.Begin()
 	}
 	log.Errorf("DEBUG: AddBatchQuery: %s", query)
 	vc.queries = append(vc.queries, query)
@@ -139,15 +143,17 @@ func (vc *vdbClient) AddBatchQuery(query string, maxBatchSize int64) error {
 	return nil
 }
 
+// ExecuteQueryBatch sends the transaction's current batch of queries
+// down the wire to the database.
 func (vc *vdbClient) ExecuteQueryBatch() ([]*sqltypes.Result, error) {
-	defer vc.stats.Timings.Record(binlogplayer.BlplQuery, time.Now())
+	defer vc.stats.Timings.Record(binlogplayer.BlplMultiQuery, time.Now())
 
-	log.Errorf("DEBUG: ExecuteQueryBatch: %s", strings.Join(vc.queries, ";"))
-	qrs, err := vc.DBClient.ExecuteFetchMulti(strings.Join(vc.queries, ";"), -1)
+	log.Errorf("DEBUG: ExecuteQueryBatch: %s", strings.Join(vc.queries[vc.queriesPos:], ";"))
+	qrs, err := vc.DBClient.ExecuteFetchMulti(strings.Join(vc.queries[vc.queriesPos:], ";"), -1)
 	if err != nil {
 		return nil, err
 	}
-	vc.queries = nil
+	vc.queriesPos += int64(len(vc.queries[vc.queriesPos:]))
 	vc.batchSize = 0
 
 	return qrs, nil
@@ -159,11 +165,7 @@ func (vc *vdbClient) Execute(query string) (*sqltypes.Result, error) {
 	return vc.ExecuteFetch(query, relayLogMaxItems)
 }
 
-func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string, maxBatchSize int64) (*sqltypes.Result, error) {
-	if maxBatchSize > 0 {
-		return nil, vc.AddBatchQuery(query, maxBatchSize)
-	}
-
+func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqltypes.Result, error) {
 	qr, err := vc.Execute(query)
 	for err != nil {
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERLockDeadlock || sqlErr.Number() == sqlerror.ERLockWaitTimeout {
