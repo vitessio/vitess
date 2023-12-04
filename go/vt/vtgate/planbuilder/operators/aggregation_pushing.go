@@ -53,7 +53,7 @@ func tryPushAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator)
 		// if we have a single sharded route, we can push it down
 		output, applyResult = pushAggregationThroughRoute(ctx, aggregator, src)
 	case *ApplyJoin:
-		output, applyResult = pushAggregationThroughJoin(ctx, aggregator, src)
+		output, applyResult = pushAggregationThroughApplyJoin(ctx, aggregator, src)
 	case *Filter:
 		output, applyResult = pushAggregationThroughFilter(ctx, aggregator, src)
 	case *SubQueryContainer:
@@ -308,44 +308,40 @@ func exprHasVindex(ctx *plancontext.PlanningContext, expr sqlparser.Expr, hasToB
 }
 
 /*
-We push down aggregations using the logic from the paper Orthogonal Optimization of Subqueries and Aggregation, by
-Cesar A. Galindo-Legaria and Milind M. Joshi from Microsoft Corp.
+Using techniques from "Orthogonal Optimization of Subqueries and Aggregation" by Cesar A. Galindo-Legaria
+and Milind M. Joshi (Microsoft Corp), we push down aggregations. It splits an aggregation
+into local aggregates depending on one side of a join, and pushes these into the inputs of the join.
+These then combine to form the final group by/aggregate query.
 
-It explains how one can split an aggregation into local aggregates that depend on only one side of the join.
-The local aggregates can then be gathered together to produce the global
-group by/aggregate query that the user asked for.
+In Vitess, this technique is extremely useful. It enables pushing aggregations to routes,
+even with joins at the vtgate level. Thus, rather than handling all grouping and
+aggregation at vtgate, most work is offloaded to MySQL, with vtgate summarizing results.
 
-In Vitess, this is particularly useful because it allows us to push aggregation down to the routes, even when
-we have to join the results at the vtgate level. Instead of doing all the grouping and aggregation at the
-vtgate level, we can offload most of the work to MySQL, and at the vtgate just summarize the results.
+# For a query like:
 
-# For a query, such as
-
-select count(*) from R1 JOIN R2 on R1.id = R2.id
+select count(*) from L JOIN R on L.id = R.id
 
 Original:
 
-		 GB         <- This is the original grouping, doing count(*)
-		 |
-		JOIN
+		 Aggr         <- Original grouping, doing count(*)
+		  |
+		Join
 		/  \
-	  R1   R2
+	  L     R
 
 Transformed:
 
-		  rootAggr  <- This grouping is now SUMing together the distributed `count(*)` we got back
+		  rootAggr  <- New grouping SUMs distributed `count(*)`
 			  |
-			Proj    <- This projection makes sure that the columns are lined up as expected
+			Proj    <- Projection multiplying `count(*)` from each side of the join
 			  |
-			Sort    <- Here we are sorting the input so that the OrderedAggregate can do its thing
-			  |
-			JOIN
+			Join
 		   /    \
-	   lAggr    rAggr
+	   lhsAggr rhsAggr <- `count(*)` aggregation can now be pushed under a route
 		/         \
-	   R1          R2
+	   L           R
 */
-func pushAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin) (Operator, *ApplyResult) {
+func pushAggregationThroughApplyJoin(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin) (Operator, *ApplyResult) {
 	lhs := &joinPusher{
 		orig: rootAggr,
 		pushed: &Aggregator{
@@ -428,8 +424,8 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, rootAgg
 	}
 }
 
-func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Aggregator, lhs, rhs *joinPusher) []JoinColumn {
-	var groupingJCs []JoinColumn
+func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Aggregator, lhs, rhs *joinPusher) []applyJoinColumn {
+	var groupingJCs []applyJoinColumn
 
 	for _, groupBy := range rootAggr.Grouping {
 		expr, err := rootAggr.QP.GetSimplifiedExpr(ctx, groupBy.Inner)
@@ -440,13 +436,13 @@ func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Agg
 		switch {
 		case deps.IsSolvedBy(lhs.tableID):
 			lhs.addGrouping(ctx, groupBy)
-			groupingJCs = append(groupingJCs, JoinColumn{
+			groupingJCs = append(groupingJCs, applyJoinColumn{
 				Original: expr,
 				LHSExprs: []BindVarExpr{{Expr: expr}},
 			})
 		case deps.IsSolvedBy(rhs.tableID):
 			rhs.addGrouping(ctx, groupBy)
-			groupingJCs = append(groupingJCs, JoinColumn{
+			groupingJCs = append(groupingJCs, applyJoinColumn{
 				Original: expr,
 				RHSExpr:  expr,
 			})
@@ -472,14 +468,15 @@ func splitAggrColumnsToLeftAndRight(
 	aggregator *Aggregator,
 	join *ApplyJoin,
 	lhs, rhs *joinPusher,
-) ([]JoinColumn, Operator, error) {
+) ([]applyJoinColumn, Operator, error) {
 	proj := newAliasedProjection(join)
 	proj.FromAggr = true
 	builder := &aggBuilder{
-		lhs:       lhs,
-		rhs:       rhs,
-		proj:      proj,
-		outerJoin: join.LeftJoin,
+		lhs:         lhs,
+		rhs:         rhs,
+		joinColumns: &applyJoinColumns{},
+		proj:        proj,
+		outerJoin:   join.LeftJoin,
 	}
 
 	canPushDistinctAggr, distinctExpr := checkIfWeCanPush(ctx, aggregator)
@@ -505,7 +502,9 @@ outer:
 		}
 		builder.proj.addUnexploredExpr(col, col.Expr)
 	}
-	return builder.joinColumns, builder.proj, nil
+	columns := builder.joinColumns.(*applyJoinColumns)
+
+	return columns.columns, builder.proj, nil
 }
 
 func coalesceFunc(e sqlparser.Expr) sqlparser.Expr {

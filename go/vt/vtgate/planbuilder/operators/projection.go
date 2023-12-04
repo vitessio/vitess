@@ -473,7 +473,7 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, join *App
 	}
 
 	var newColumns []int
-	var newColumnsAST []JoinColumn
+	var newColumnsAST []applyJoinColumn
 	for _, col := range ap {
 		switch colInfo := col.Info.(type) {
 		case Offset:
@@ -484,7 +484,7 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, join *App
 				// the inner expression is different from what we are presenting to the outside - this means we need to evaluate
 				return p, NoRewrite
 			}
-			offset := slices.IndexFunc(join.JoinColumns, func(jc JoinColumn) bool {
+			offset := slices.IndexFunc(join.JoinColumns, func(jc applyJoinColumn) bool {
 				return ctx.SemTable.EqualsExprWithDeps(jc.Original, col.ColExpr)
 			})
 			if offset < 0 {

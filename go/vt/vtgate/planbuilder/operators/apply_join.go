@@ -41,10 +41,10 @@ type (
 		Predicate sqlparser.Expr
 
 		// JoinColumns keeps track of what AST expression is represented in the Columns array
-		JoinColumns []JoinColumn
+		JoinColumns []applyJoinColumn
 
 		// JoinPredicates are join predicates that have been broken up into left hand side and right hand side parts.
-		JoinPredicates []JoinColumn
+		JoinPredicates []applyJoinColumn
 
 		// ExtraVars are columns we need to copy from left to right not needed by any predicates or projections,
 		// these are needed by other operators further down the right hand side of the join
@@ -60,7 +60,7 @@ type (
 		Vars map[string]int
 	}
 
-	// JoinColumn is where we store information about columns passing through the join operator
+	// applyJoinColumn is where we store information about columns passing through the join operator
 	// It can be in one of three possible configurations:
 	//   - Pure left
 	//     We are projecting a column that comes from the left. The RHSExpr will be nil for these
@@ -70,7 +70,7 @@ type (
 	//     Here we need to transmit columns from the LHS to the RHS,
 	//     so they can be used for the result of this expression that is using data from both sides.
 	//     All fields will be used for these
-	JoinColumn struct {
+	applyJoinColumn struct {
 		Original sqlparser.Expr // this is the original expression being passed through
 		LHSExprs []BindVarExpr
 		RHSExpr  sqlparser.Expr
@@ -173,15 +173,15 @@ func (aj *ApplyJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return aj.LHS.GetOrdering(ctx)
 }
 
-func joinColumnToAliasedExpr(c JoinColumn) *sqlparser.AliasedExpr {
+func joinColumnToAliasedExpr(c applyJoinColumn) *sqlparser.AliasedExpr {
 	return aeWrap(c.Original)
 }
 
-func joinColumnToExpr(column JoinColumn) sqlparser.Expr {
+func joinColumnToExpr(column applyJoinColumn) sqlparser.Expr {
 	return column.Original
 }
 
-func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sqlparser.AliasedExpr, e sqlparser.Expr, addToGroupBy bool) (col JoinColumn) {
+func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sqlparser.AliasedExpr, e sqlparser.Expr, addToGroupBy bool) (col applyJoinColumn) {
 	defer func() {
 		col.Original = orig.Expr
 	}()
@@ -233,7 +233,7 @@ func (aj *ApplyJoin) AddColumn(
 
 func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	for _, col := range aj.JoinColumns {
-		// Read the type description for JoinColumn to understand the following code
+		// Read the type description for applyJoinColumn to understand the following code
 		for _, lhsExpr := range col.LHSExprs {
 			offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
 			if col.RHSExpr == nil {
@@ -270,7 +270,7 @@ func (aj *ApplyJoin) addOffset(offset int) {
 
 func (aj *ApplyJoin) ShortDescription() string {
 	pred := sqlparser.String(aj.Predicate)
-	columns := slice.Map(aj.JoinColumns, func(from JoinColumn) string {
+	columns := slice.Map(aj.JoinColumns, func(from applyJoinColumn) string {
 		return sqlparser.String(from.Original)
 	})
 	firstPart := fmt.Sprintf("on %s columns: %s", pred, strings.Join(columns, ", "))
@@ -306,7 +306,7 @@ func (aj *ApplyJoin) isColNameMovedFromL2R(bindVarName string) bool {
 }
 
 // findOrAddColNameBindVarName goes through the JoinColumns and looks for the given colName coming from the LHS of the join
-// and returns the argument name if found. if it's not found, a new JoinColumn passing this through will be added
+// and returns the argument name if found. if it's not found, a new applyJoinColumn passing this through will be added
 func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContext, col *sqlparser.ColName) (string, error) {
 	for i, thisCol := range aj.JoinColumns {
 		idx := slices.IndexFunc(thisCol.LHSExprs, func(e BindVarExpr) bool {
@@ -364,15 +364,15 @@ func (a *ApplyJoin) LHSColumnsNeeded(ctx *plancontext.PlanningContext) (needed s
 	return ctx.SemTable.Uniquify(needed)
 }
 
-func (jc JoinColumn) IsPureLeft() bool {
+func (jc applyJoinColumn) IsPureLeft() bool {
 	return jc.RHSExpr == nil
 }
 
-func (jc JoinColumn) IsPureRight() bool {
+func (jc applyJoinColumn) IsPureRight() bool {
 	return len(jc.LHSExprs) == 0
 }
 
-func (jc JoinColumn) IsMixedLeftAndRight() bool {
+func (jc applyJoinColumn) IsMixedLeftAndRight() bool {
 	return len(jc.LHSExprs) > 0 && jc.RHSExpr != nil
 }
 

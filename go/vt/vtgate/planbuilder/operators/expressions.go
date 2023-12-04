@@ -28,7 +28,7 @@ func breakExpressionInLHSandRHSForApplyJoin(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,
-) (col JoinColumn) {
+) (col applyJoinColumn) {
 	rewrittenExpr := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		nodeExpr, ok := cursor.Node().(sqlparser.Expr)
 		if !ok || !fetchByOffset(nodeExpr) {

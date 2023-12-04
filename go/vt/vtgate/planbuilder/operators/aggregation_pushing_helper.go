@@ -28,7 +28,7 @@ type (
 	// it accumulates the projections (if any) that need to be evaluated on top of the join
 	aggBuilder struct {
 		lhs, rhs    *joinPusher
-		joinColumns []JoinColumn
+		joinColumns joinColumns
 		proj        *Projection
 		outerJoin   bool
 	}
@@ -45,15 +45,35 @@ type (
 		// No need to have multiple countStars, so we cache it here
 		csAE *sqlparser.AliasedExpr
 	}
+
+	joinColumns interface {
+		addLeft(expr sqlparser.Expr)
+		addRight(expr sqlparser.Expr)
+	}
+
+	applyJoinColumns struct {
+		columns []applyJoinColumn
+	}
 )
+
+func (jc *applyJoinColumns) addLeft(expr sqlparser.Expr) {
+	jc.columns = append(jc.columns, applyJoinColumn{
+		Original: expr,
+		LHSExprs: []BindVarExpr{{Expr: expr}},
+	})
+}
+
+func (jc *applyJoinColumns) addRight(expr sqlparser.Expr) {
+	jc.columns = append(jc.columns, applyJoinColumn{
+		Original: expr,
+		RHSExpr:  expr,
+	})
+}
 
 func (ab *aggBuilder) leftCountStar(ctx *plancontext.PlanningContext) *sqlparser.AliasedExpr {
 	ae, created := ab.lhs.countStar(ctx)
 	if created {
-		ab.joinColumns = append(ab.joinColumns, JoinColumn{
-			Original: ae.Expr,
-			LHSExprs: []BindVarExpr{{Expr: ae.Expr}},
-		})
+		ab.joinColumns.addLeft(ae.Expr)
 	}
 	return ae
 }
@@ -61,10 +81,7 @@ func (ab *aggBuilder) leftCountStar(ctx *plancontext.PlanningContext) *sqlparser
 func (ab *aggBuilder) rightCountStar(ctx *plancontext.PlanningContext) *sqlparser.AliasedExpr {
 	ae, created := ab.rhs.countStar(ctx)
 	if created {
-		ab.joinColumns = append(ab.joinColumns, JoinColumn{
-			Original: ae.Expr,
-			RHSExpr:  ae.Expr,
-		})
+		ab.joinColumns.addRight(ae.Expr)
 	}
 	return ae
 }
@@ -105,18 +122,12 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 // For these, we just copy the aggregation to one side of the join and then pick the max of the max:es returned
 func (ab *aggBuilder) pushThroughLeft(aggr Aggr) {
 	ab.lhs.pushThroughAggr(aggr)
-	ab.joinColumns = append(ab.joinColumns, JoinColumn{
-		Original: aggr.Original.Expr,
-		LHSExprs: []BindVarExpr{{Expr: aggr.Original.Expr}},
-	})
+	ab.joinColumns.addLeft(aggr.Original.Expr)
 }
 
 func (ab *aggBuilder) pushThroughRight(aggr Aggr) {
 	ab.rhs.pushThroughAggr(aggr)
-	ab.joinColumns = append(ab.joinColumns, JoinColumn{
-		Original: aggr.Original.Expr,
-		RHSExpr:  aggr.Original.Expr,
-	})
+	ab.joinColumns.addRight(aggr.Original.Expr)
 }
 
 func (ab *aggBuilder) handlePushThroughAggregation(ctx *plancontext.PlanningContext, aggr Aggr) error {

@@ -219,7 +219,7 @@ func tryPushProjection(
 func pushProjectionThroughHashJoin(ctx *plancontext.PlanningContext, p *Projection, hj *HashJoin) (Operator, *ApplyResult) {
 	cols := p.Columns.GetColumns()
 	for _, col := range cols {
-		hj.columns = append(hj.columns, col.Expr)
+		hj.columns = append(hj.columns, hashJoinColumn{expr: col.Expr})
 	}
 	return hj, Rewrote("merged projection into hash join")
 }
@@ -332,7 +332,7 @@ func splitProjectionAcrossJoin(
 		return
 	}
 
-	// Add the new JoinColumn to the ApplyJoin's JoinPredicates.
+	// Add the new applyJoinColumn to the ApplyJoin's JoinPredicates.
 	join.JoinColumns = append(join.JoinColumns,
 		splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
 }
@@ -343,11 +343,11 @@ func splitUnexploredExpression(
 	lhs, rhs *projector,
 	pe *ProjExpr,
 	colAlias *sqlparser.IdentifierCI,
-) JoinColumn {
-	// Get a JoinColumn for the current expression.
+) applyJoinColumn {
+	// Get a applyJoinColumn for the current expression.
 	col := join.getJoinColumnFor(ctx, pe.Original, pe.ColExpr, false)
 
-	// Update the left and right child columns and names based on the JoinColumn type.
+	// Update the left and right child columns and names based on the applyJoinColumn type.
 	switch {
 	case col.IsPureLeft():
 		lhs.add(pe, colAlias)
