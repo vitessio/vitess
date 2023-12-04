@@ -398,6 +398,44 @@ func TestApplyVSchema(t *testing.T) {
 			},
 			shouldErr: true,
 		}, {
+			name: "unknown params",
+			req: &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: "testkeyspacesharded",
+				VSchema: &vschemapb.Keyspace{
+					Sharded: true,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"lookup1": {
+							Type: "lookup",
+							Params: map[string]string{
+								"hello":   "world",
+								"goodbye": "world",
+							},
+						},
+					},
+				},
+				SkipRebuild: true,
+			},
+			exp: &vtctldatapb.ApplyVSchemaResponse{
+				VSchema: &vschemapb.Keyspace{
+					Sharded: true,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"lookup1": {
+							Type: "lookup",
+							Params: map[string]string{
+								"hello":   "world",
+								"goodbye": "world",
+							},
+						},
+					},
+				},
+				VindexUnknownParams: map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList{
+					"lookup1": {
+						Params: []string{"goodbye", "hello"},
+					},
+				},
+			},
+			shouldErr: false,
+		}, {
 			name: "dry run",
 			req: &vtctldatapb.ApplyVSchemaRequest{
 				Keyspace: "testkeyspace",
@@ -409,6 +447,62 @@ func TestApplyVSchema(t *testing.T) {
 			exp: &vtctldatapb.ApplyVSchemaResponse{
 				VSchema: &vschemapb.Keyspace{
 					Sharded: false,
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "dry run with invalid params",
+			req: &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: "testkeyspacesharded",
+				VSchema: &vschemapb.Keyspace{
+					Sharded: true,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"lookup1": {
+							Type: "lookup_invalid",
+						},
+					},
+				},
+				DryRun: true,
+			},
+			exp:       &vtctldatapb.ApplyVSchemaResponse{},
+			shouldErr: true,
+		},
+		{
+			name: "dry run with unknown params",
+			req: &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: "testkeyspacesharded",
+				VSchema: &vschemapb.Keyspace{
+					Sharded: true,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"lookup1": {
+							Type: "lookup",
+							Params: map[string]string{
+								"hello":   "world",
+								"goodbye": "world",
+							},
+						},
+					},
+				},
+				DryRun: true,
+			},
+			exp: &vtctldatapb.ApplyVSchemaResponse{
+				VSchema: &vschemapb.Keyspace{
+					Sharded: true,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"lookup1": {
+							Type: "lookup",
+							Params: map[string]string{
+								"hello":   "world",
+								"goodbye": "world",
+							},
+						},
+					},
+				},
+				VindexUnknownParams: map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList{
+					"lookup1": {
+						Params: []string{"goodbye", "hello"},
+					},
 				},
 			},
 			shouldErr: false,

@@ -364,14 +364,35 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		vs = req.VSchema
 	}
 
-	if req.DryRun { // we return what was passed in and parsed, rather than current
-		return &vtctldatapb.ApplyVSchemaResponse{VSchema: vs}, nil
-	}
-
-	_, err = vindexes.BuildKeyspace(vs)
+	ksVs, err := vindexes.BuildKeyspace(vs)
 	if err != nil {
 		err = vterrors.Wrapf(err, "BuildKeyspace(%s)", req.Keyspace)
 		return nil, err
+	}
+
+	// Attach unknown Vindex params to the response.
+	vindexUnknownParams := make(map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList)
+	var vdxNames []string
+	for name := range ksVs.Vindexes {
+		vdxNames = append(vdxNames, name)
+	}
+	sort.Strings(vdxNames)
+	for _, name := range vdxNames {
+		vdx := ksVs.Vindexes[name]
+		if val, ok := vdx.(vindexes.ParamValidating); ok {
+			ups := val.UnknownParams()
+			if len(ups) == 0 {
+				continue
+			}
+			vindexUnknownParams[name] = &vtctldatapb.ApplyVSchemaResponse_ParamList{Params: ups}
+		}
+	}
+
+	if req.DryRun { // we return what was passed in and parsed, rather than current
+		return &vtctldatapb.ApplyVSchemaResponse{
+			VSchema:             vs,
+			VindexUnknownParams: vindexUnknownParams,
+		}, nil
 	}
 
 	if err = s.ts.SaveVSchema(ctx, req.Keyspace, vs); err != nil {
@@ -390,7 +411,10 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		err = vterrors.Wrapf(err, "GetVSchema(%s)", req.Keyspace)
 		return nil, err
 	}
-	return &vtctldatapb.ApplyVSchemaResponse{VSchema: updatedVS}, nil
+	return &vtctldatapb.ApplyVSchemaResponse{
+		VSchema:             updatedVS,
+		VindexUnknownParams: vindexUnknownParams,
+	}, nil
 }
 
 // Backup is part of the vtctlservicepb.VtctldServer interface.

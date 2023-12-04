@@ -45279,6 +45279,9 @@ export namespace vtctldata {
 
         /** ApplyVSchemaResponse v_schema */
         v_schema?: (vschema.IKeyspace|null);
+
+        /** ApplyVSchemaResponse vindex_unknown_params */
+        vindex_unknown_params?: ({ [k: string]: vtctldata.ApplyVSchemaResponse.IParamList }|null);
     }
 
     /** Represents an ApplyVSchemaResponse. */
@@ -45292,6 +45295,9 @@ export namespace vtctldata {
 
         /** ApplyVSchemaResponse v_schema. */
         public v_schema?: (vschema.IKeyspace|null);
+
+        /** ApplyVSchemaResponse vindex_unknown_params. */
+        public vindex_unknown_params: { [k: string]: vtctldata.ApplyVSchemaResponse.IParamList };
 
         /**
          * Creates a new ApplyVSchemaResponse instance using the specified properties.
@@ -45369,6 +45375,106 @@ export namespace vtctldata {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace ApplyVSchemaResponse {
+
+        /** Properties of a ParamList. */
+        interface IParamList {
+
+            /** ParamList params */
+            params?: (string[]|null);
+        }
+
+        /** Represents a ParamList. */
+        class ParamList implements IParamList {
+
+            /**
+             * Constructs a new ParamList.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtctldata.ApplyVSchemaResponse.IParamList);
+
+            /** ParamList params. */
+            public params: string[];
+
+            /**
+             * Creates a new ParamList instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns ParamList instance
+             */
+            public static create(properties?: vtctldata.ApplyVSchemaResponse.IParamList): vtctldata.ApplyVSchemaResponse.ParamList;
+
+            /**
+             * Encodes the specified ParamList message. Does not implicitly {@link vtctldata.ApplyVSchemaResponse.ParamList.verify|verify} messages.
+             * @param message ParamList message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: vtctldata.ApplyVSchemaResponse.IParamList, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified ParamList message, length delimited. Does not implicitly {@link vtctldata.ApplyVSchemaResponse.ParamList.verify|verify} messages.
+             * @param message ParamList message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: vtctldata.ApplyVSchemaResponse.IParamList, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a ParamList message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns ParamList
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ApplyVSchemaResponse.ParamList;
+
+            /**
+             * Decodes a ParamList message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns ParamList
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ApplyVSchemaResponse.ParamList;
+
+            /**
+             * Verifies a ParamList message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a ParamList message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns ParamList
+             */
+            public static fromObject(object: { [k: string]: any }): vtctldata.ApplyVSchemaResponse.ParamList;
+
+            /**
+             * Creates a plain object from a ParamList message. Also converts values to other types if specified.
+             * @param message ParamList
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: vtctldata.ApplyVSchemaResponse.ParamList, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this ParamList to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for ParamList
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
     }
 
     /** Properties of a BackupRequest. */
