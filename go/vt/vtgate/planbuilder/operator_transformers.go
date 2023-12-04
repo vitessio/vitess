@@ -68,9 +68,30 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator) (
 		return transformFkVerify(ctx, op)
 	case *operators.InsertSelection:
 		return transformInsertionSelection(ctx, op)
+	case *operators.HashJoin:
+		return transformHashJoin(ctx, op)
+	case *operators.Sequential:
+		return transformSequential(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequential) (logicalPlan, error) {
+	var lps []logicalPlan
+	for _, source := range op.Sources {
+		lp, err := transformToLogicalPlan(ctx, source)
+		if err != nil {
+			return nil, err
+		}
+		if ins, ok := lp.(*insert); ok {
+			ins.eInsert.PreventAutoCommit = true
+		}
+		lps = append(lps, lp)
+	}
+	return &sequential{
+		sources: lps,
+	}, nil
 }
 
 func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators.InsertSelection) (logicalPlan, error) {
@@ -89,20 +110,20 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 	}
 
 	ins := dmlOp.(*operators.Insert)
-	eins := &engine.Insert{
-		Opcode:            mapToInsertOpCode(rb.Routing.OpCode(), true),
-		Keyspace:          rb.Routing.Keyspace(),
-		TableName:         ins.VTable.Name.String(),
-		Ignore:            ins.Ignore,
-		ForceNonStreaming: op.ForceNonStreaming,
-		Generate:          autoIncGenerate(ins.AutoIncrement),
-		ColVindexes:       ins.ColVindexes,
-		VindexValues:      ins.VindexValues,
+	eins := &engine.InsertSelect{
+		InsertCommon: engine.InsertCommon{
+			Keyspace:          rb.Routing.Keyspace(),
+			TableName:         ins.VTable.Name.String(),
+			Ignore:            ins.Ignore,
+			ForceNonStreaming: op.ForceNonStreaming,
+			Generate:          autoIncGenerate(ins.AutoIncrement),
+			ColVindexes:       ins.ColVindexes,
+		},
 		VindexValueOffset: ins.VindexValueOffset,
 	}
-	lp := &insert{eInsert: eins}
+	lp := &insert{eInsertSelect: eins}
 
-	eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
+	eins.Prefix, _, eins.Suffix = generateInsertShardedQuery(ins.AST)
 
 	selectionPlan, err := transformToLogicalPlan(ctx, op.Select)
 	if err != nil {
@@ -139,9 +160,10 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 
 		childEngine := childLP.Primitive()
 		children = append(children, &engine.FkChild{
-			BVName: child.BVName,
-			Cols:   child.Cols,
-			Exec:   childEngine,
+			BVName:         child.BVName,
+			Cols:           child.Cols,
+			NonLiteralInfo: child.NonLiteralInfo,
+			Exec:           childEngine,
 		})
 	}
 
@@ -526,15 +548,23 @@ func buildInsertLogicalPlan(
 	hints *queryHints,
 ) (logicalPlan, error) {
 	ins := op.(*operators.Insert)
+
+	ic := engine.InsertCommon{
+		Opcode:      mapToInsertOpCode(rb.Routing.OpCode()),
+		Keyspace:    rb.Routing.Keyspace(),
+		TableName:   ins.VTable.Name.String(),
+		Ignore:      ins.Ignore,
+		Generate:    autoIncGenerate(ins.AutoIncrement),
+		ColVindexes: ins.ColVindexes,
+	}
+	if hints != nil {
+		ic.MultiShardAutocommit = hints.multiShardAutocommit
+		ic.QueryTimeout = hints.queryTimeout
+	}
+
 	eins := &engine.Insert{
-		Opcode:            mapToInsertOpCode(rb.Routing.OpCode(), false),
-		Keyspace:          rb.Routing.Keyspace(),
-		TableName:         ins.VTable.Name.String(),
-		Ignore:            ins.Ignore,
-		Generate:          autoIncGenerate(ins.AutoIncrement),
-		ColVindexes:       ins.ColVindexes,
-		VindexValues:      ins.VindexValues,
-		VindexValueOffset: ins.VindexValueOffset,
+		InsertCommon: ic,
+		VindexValues: ins.VindexValues,
 	}
 	lp := &insert{eInsert: eins}
 
@@ -544,21 +574,13 @@ func buildInsertLogicalPlan(
 		eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
 	}
 
-	if hints != nil {
-		eins.MultiShardAutocommit = hints.multiShardAutocommit
-		eins.QueryTimeout = hints.queryTimeout
-	}
-
 	eins.Query = generateQuery(stmt)
 	return lp, nil
 }
 
-func mapToInsertOpCode(code engine.Opcode, insertSelect bool) engine.InsertOpcode {
+func mapToInsertOpCode(code engine.Opcode) engine.InsertOpcode {
 	if code == engine.Unsharded {
 		return engine.InsertUnsharded
-	}
-	if insertSelect {
-		return engine.InsertSelect
 	}
 	return engine.InsertSharded
 }
@@ -789,4 +811,59 @@ func createLimit(input logicalPlan, limit *sqlparser.Limit) (logicalPlan, error)
 	}
 
 	return plan, nil
+}
+
+func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin) (logicalPlan, error) {
+	lhs, err := transformToLogicalPlan(ctx, op.LHS)
+	if err != nil {
+		return nil, err
+	}
+	rhs, err := transformToLogicalPlan(ctx, op.RHS)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(op.LHSKeys) != 1 {
+		return nil, vterrors.VT12001("hash joins must have exactly one join predicate")
+	}
+
+	joinOp := engine.InnerJoin
+	if op.LeftJoin {
+		joinOp = engine.LeftJoin
+	}
+
+	var missingTypes []string
+
+	ltyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].LHS)
+	if !found {
+		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].LHS))
+	}
+	rtyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].RHS)
+	if !found {
+		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].RHS))
+	}
+
+	if len(missingTypes) > 0 {
+		return nil, vterrors.VT12001(
+			fmt.Sprintf("missing type information for [%s]", strings.Join(missingTypes, ", ")))
+	}
+
+	comparisonType, err := evalengine.CoerceTypes(ltyp, rtyp)
+	if err != nil {
+		return nil, err
+	}
+
+	return &hashJoin{
+		lhs: lhs,
+		rhs: rhs,
+		inner: &engine.HashJoin{
+			Opcode:         joinOp,
+			Cols:           op.ColumnOffsets,
+			LHSKey:         op.LHSKeys[0],
+			RHSKey:         op.RHSKeys[0],
+			ASTPred:        op.JoinPredicate(),
+			Collation:      comparisonType.Collation(),
+			ComparisonType: comparisonType.Type(),
+		},
+	}, nil
 }

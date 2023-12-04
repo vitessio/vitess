@@ -17,7 +17,6 @@ limitations under the License.
 package workflow
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -142,7 +141,7 @@ var (
 type Server struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
-	// Limt the number of concurrent background goroutines if needed.
+	// Limit the number of concurrent background goroutines if needed.
 	sem *semaphore.Weighted
 }
 
@@ -990,7 +989,6 @@ ORDER BY
 
 func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *State, error) {
 	ts, err := s.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
-
 	if err != nil {
 		log.Errorf("buildTrafficSwitcher failed: %v", err)
 		return nil, nil, err
@@ -1034,7 +1032,6 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 		// We assume a consistent state, so only choose routing rule for one table.
 		if len(ts.Tables()) == 0 {
 			return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tables in workflow %s.%s", targetKeyspace, workflowName)
-
 		}
 		table := ts.Tables()[0]
 
@@ -1337,8 +1334,8 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 }
 
 func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest,
-	workflowType binlogdatapb.VReplicationWorkflowType) (res *vtctldatapb.WorkflowStatusResponse, err error) {
-
+	workflowType binlogdatapb.VReplicationWorkflowType,
+) (res *vtctldatapb.WorkflowStatusResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.MoveTablesCreate")
 	defer span.Finish()
 
@@ -1350,7 +1347,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 
 	sourceKeyspace := req.SourceKeyspace
 	targetKeyspace := req.TargetKeyspace
-	//FIXME validate tableSpecs, allTables, excludeTables
+	// FIXME validate tableSpecs, allTables, excludeTables
 	var (
 		tables       = req.IncludeTables
 		externalTopo *topo.Server
@@ -1717,8 +1714,9 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 			UpdateTableStats:      req.UpdateTableStats,
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-			OnlyPks:    req.OnlyPKs,
-			DebugQuery: req.DebugQuery,
+			OnlyPks:       req.OnlyPKs,
+			DebugQuery:    req.DebugQuery,
+			MaxSampleRows: req.MaxReportSampleRows,
 		},
 	}
 
@@ -2102,7 +2100,7 @@ func (s *Server) GetCopyProgress(ctx context.Context, ts *trafficSwitcher, state
 		sourceTableSizes[table] = 0
 	}
 
-	var getTableMetrics = func(tablet *topodatapb.Tablet, query string, rowCounts *map[string]int64, tableSizes *map[string]int64) error {
+	getTableMetrics := func(tablet *topodatapb.Tablet, query string, rowCounts *map[string]int64, tableSizes *map[string]int64) error {
 		p3qr, err := s.tmc.ExecuteFetchAsDba(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 			Query:   []byte(query),
 			MaxRows: uint64(len(tables)),
@@ -2836,7 +2834,8 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 
 // updateShardRecords updates the shard records based on 'from' or 'to' direction.
 func (s *Server) updateShardRecords(ctx context.Context, keyspace string, shards []*topo.ShardInfo, cells []string,
-	servedType topodatapb.TabletType, isFrom bool, clearSourceShards bool, logger logutil.Logger) (err error) {
+	servedType topodatapb.TabletType, isFrom bool, clearSourceShards bool, logger logutil.Logger,
+) (err error) {
 	return topotools.UpdateShardRecords(ctx, s.ts, s.tmc, keyspace, shards, cells, servedType, isFrom, clearSourceShards, logger)
 }
 
@@ -3051,7 +3050,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 			return handleError("invalid request", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
 		}
 	}
-	var cells = req.Cells
+	cells := req.Cells
 	// If no cells were provided in the command then use the value from the workflow.
 	if len(cells) == 0 && ts.optCells != "" {
 		cells = strings.Split(strings.TrimSpace(ts.optCells), ",")
@@ -3122,8 +3121,8 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 
 // switchWrites is a generic way of migrating write traffic for a workflow.
 func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, timeout time.Duration,
-	cancel bool) (journalID int64, dryRunResults *[]string, err error) {
-
+	cancel bool,
+) (journalID int64, dryRunResults *[]string, err error) {
 	var sw iswitcher
 	if req.DryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
@@ -3476,8 +3475,8 @@ func (s *Server) applySQLShard(ctx context.Context, tabletInfo *topo.TabletInfo,
 // fillStringTemplate returns the string template filled.
 func fillStringTemplate(tmpl string, vars any) (string, error) {
 	myTemplate := template.Must(template.New("").Parse(tmpl))
-	data := new(bytes.Buffer)
-	if err := myTemplate.Execute(data, vars); err != nil {
+	var data strings.Builder
+	if err := myTemplate.Execute(&data, vars); err != nil {
 		return "", err
 	}
 	return data.String(), nil

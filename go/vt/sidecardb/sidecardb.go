@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/history"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -361,7 +362,7 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 }
 
 // findTableSchemaDiff gets the diff which needs to be applied
-// to the current table schema in order toreach the desired one.
+// to the current table schema in order to reach the desired one.
 // The result will be an empty string if they match.
 // This will be a CREATE statement if the table does not exist
 // or an ALTER if the table exists but has a different schema.
@@ -485,7 +486,7 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 	sqlModeResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"sql_mode",
 		"varchar"),
-		"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
+		config.DefaultSQLMode,
 	)
 	db.AddQuery("select @@session.sql_mode as sql_mode", sqlModeResult)
 

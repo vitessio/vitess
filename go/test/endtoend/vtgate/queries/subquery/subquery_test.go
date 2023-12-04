@@ -19,12 +19,11 @@ package subquery
 import (
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func start(t *testing.T) (utils.MySQLCompare, func()) {
@@ -56,6 +55,28 @@ func TestSubqueriesHasValues(t *testing.T) {
 	mcmp.Exec("insert into t1(id1, id2) values (0,1),(1,2),(2,3),(3,4),(4,5),(5,6)")
 	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 IN (SELECT id1 FROM t1 WHERE id1 > 10)`, `[]`)
 	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id1 FROM t1 WHERE id1 > 10) ORDER BY id2`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(6)]]`)
+}
+
+func TestNotINQueries(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+
+	// Tests NOT IN where the RHS contains all rows, some rows and no rows
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (0,1),(1,2),(2,3),(3,4),(4,5),(5,6)")
+	// no matching rows
+	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id1 FROM t1 WHERE id1 > 10) ORDER BY id2`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(6)]]`)
+	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id2 FROM t1 WHERE id2 > 10) ORDER BY id2`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(6)]]`)
+
+	// some matching rows
+	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id1 FROM t1 WHERE id1 > 3) ORDER BY id2`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]`)
+	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id2 FROM t1 WHERE id2 > 3) ORDER BY id2`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]`)
+
+	// all rows matching
+	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id1 FROM t1) ORDER BY id2`, `[]`)
+	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id2 FROM t1) ORDER BY id2`, `[[INT64(1)]]`)
+
 }
 
 // Test only supported in >= v16.0.0
@@ -106,7 +127,7 @@ func TestSubqueryInUpdate(t *testing.T) {
 	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 10), (2, 20), (3, 30), (4, 40), (5, 50)`)
 	utils.Exec(t, conn, `insert into t2(id3, id4) values (1, 3), (2, 4)`)
 	utils.AssertMatches(t, conn, `SELECT id2, keyspace_id FROM t1_id2_idx WHERE id2 IN (2,10)`, `[[INT64(10) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
-	utils.Exec(t, conn, `update /*vt+ PLANNER=gen4 */ t1 set id2 = (select count(*) from t2) where id1 = 1`)
+	utils.Exec(t, conn, `update t1 set id2 = (select count(*) from t2) where id1 = 1`)
 	utils.AssertMatches(t, conn, `SELECT id2 FROM t1 WHERE id1 = 1`, `[[INT64(2)]]`)
 	utils.AssertMatches(t, conn, `SELECT id2, keyspace_id FROM t1_id2_idx WHERE id2 IN (2,10)`, `[[INT64(2) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
 }

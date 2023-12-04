@@ -333,7 +333,6 @@ func TestMain(m *testing.M) {
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 			"--watch_replication_stream",
-			"--vreplication_tablet_type", "primary",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 
@@ -704,6 +703,13 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 			require.NoError(t, err)
 		}
 	})
+	t.Run("waiting for vschema deletions to apply", func(t *testing.T) {
+		timeoutCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+		defer cancel()
+		for _, tableName := range tableNames {
+			utils.WaitForTableDeletions(timeoutCtx, t, clusterInstance.VtgateProcess, keyspaceName, tableName)
+		}
+	})
 	t.Run("creating tables", func(t *testing.T) {
 		// Create the stress tables
 		var b strings.Builder
@@ -915,6 +921,8 @@ func isFKError(err error) bool {
 		return false
 	case sqlerror.ERLockDeadlock:
 		return false // bummer, but deadlocks can happen, it's a legit error.
+	case sqlerror.ERLockNowait:
+		return false // For some queries we use NOWAIT. Bummer, but this can happen, it's a legit error.
 	case sqlerror.ERNoReferencedRow,
 		sqlerror.ERRowIsReferenced,
 		sqlerror.ERRowIsReferenced2,

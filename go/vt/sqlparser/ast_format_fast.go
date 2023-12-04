@@ -1128,7 +1128,7 @@ func (idx *IndexDefinition) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (ii *IndexInfo) FormatFast(buf *TrackedBuffer) {
-	if !ii.ConstraintName.IsEmpty() {
+	if ii.ConstraintName.NotEmpty() {
 		buf.WriteString("constraint ")
 		ii.ConstraintName.FormatFast(buf)
 		buf.WriteByte(' ')
@@ -1154,7 +1154,7 @@ func (ii *IndexInfo) FormatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[KEY])
 	}
-	if !ii.Name.IsEmpty() {
+	if ii.Name.NotEmpty() {
 		buf.WriteByte(' ')
 		ii.Name.FormatFast(buf)
 	}
@@ -1196,7 +1196,7 @@ func (node VindexParam) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (c *ConstraintDefinition) FormatFast(buf *TrackedBuffer) {
-	if !c.Name.IsEmpty() {
+	if c.Name.NotEmpty() {
 		buf.WriteString("constraint ")
 		c.Name.FormatFast(buf)
 		buf.WriteByte(' ')
@@ -1474,7 +1474,7 @@ func (node *StarExpr) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node.
 func (node *AliasedExpr) FormatFast(buf *TrackedBuffer) {
 	node.Expr.FormatFast(buf)
-	if !node.As.IsEmpty() {
+	if node.As.NotEmpty() {
 		buf.WriteString(" as ")
 		node.As.FormatFast(buf)
 	}
@@ -1530,7 +1530,7 @@ func (node TableExprs) FormatFast(buf *TrackedBuffer) {
 func (node *AliasedTableExpr) FormatFast(buf *TrackedBuffer) {
 	node.Expr.FormatFast(buf)
 	node.Partitions.FormatFast(buf)
-	if !node.As.IsEmpty() {
+	if node.As.NotEmpty() {
 		buf.WriteString(" as ")
 		node.As.FormatFast(buf)
 		if len(node.Columns) != 0 {
@@ -1558,7 +1558,7 @@ func (node TableName) FormatFast(buf *TrackedBuffer) {
 	if node.IsEmpty() {
 		return
 	}
-	if !node.Qualifier.IsEmpty() {
+	if node.Qualifier.NotEmpty() {
 		node.Qualifier.FormatFast(buf)
 		buf.WriteByte('.')
 	}
@@ -2064,7 +2064,7 @@ func (node *CollateExpr) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *FuncExpr) FormatFast(buf *TrackedBuffer) {
-	if !node.Qualifier.IsEmpty() {
+	if node.Qualifier.NotEmpty() {
 		node.Qualifier.FormatFast(buf)
 		buf.WriteByte('.')
 	}
@@ -2138,7 +2138,7 @@ func (node *JSONStorageSizeExpr) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node
 func (node *OverClause) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("over")
-	if !node.WindowName.IsEmpty() {
+	if node.WindowName.NotEmpty() {
 		buf.WriteByte(' ')
 		node.WindowName.FormatFast(buf)
 	}
@@ -2151,7 +2151,7 @@ func (node *OverClause) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node
 func (node *WindowSpecification) FormatFast(buf *TrackedBuffer) {
-	if !node.Name.IsEmpty() {
+	if node.Name.NotEmpty() {
 		buf.WriteByte(' ')
 		node.Name.FormatFast(buf)
 	}
@@ -2690,7 +2690,7 @@ func (node *ShowBasic) FormatFast(buf *TrackedBuffer) {
 		buf.WriteString(" from ")
 		node.Tbl.FormatFast(buf)
 	}
-	if !node.DbName.IsEmpty() {
+	if node.DbName.NotEmpty() {
 		buf.WriteString(" from ")
 		node.DbName.FormatFast(buf)
 	}
@@ -2751,7 +2751,7 @@ func (node *CreateDatabase) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node.
 func (node *AlterDatabase) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("alter database")
-	if !node.DBName.IsEmpty() {
+	if node.DBName.NotEmpty() {
 		buf.WriteByte(' ')
 		node.DBName.FormatFast(buf)
 	}
@@ -3118,7 +3118,7 @@ func (node *DropColumn) FormatFast(buf *TrackedBuffer) {
 func (node *DropKey) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("drop ")
 	buf.WriteString(node.Type.ToString())
-	if !node.Name.IsEmpty() {
+	if node.Name.NotEmpty() {
 		buf.WriteByte(' ')
 		node.Name.FormatFast(buf)
 	}

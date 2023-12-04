@@ -241,7 +241,6 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 		"--buffer_window", "10m",
 		"--buffer_max_failover_duration", "10m",
 		"--buffer_min_time_between_failovers", "20m",
-		"--buffer_implementation", "keyspace_events",
 		"--tablet_refresh_interval", "1s",
 	}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, bt.VtGateExtraArgs...)

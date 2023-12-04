@@ -417,7 +417,7 @@ func (conn *gRPCQueryClient) ConcludeTransaction(ctx context.Context, target *qu
 	return nil
 }
 
-// ReadTransaction returns the metadata for the sepcified dtid.
+// ReadTransaction returns the metadata for the specified dtid.
 func (conn *gRPCQueryClient) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (*querypb.TransactionMetadata, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()

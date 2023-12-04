@@ -99,7 +99,7 @@ func NewTestEngine(ts *topo.Server, tablet *topodata.Tablet, dbn string, dbcf fu
 }
 
 func (vde *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	// If it's a test engine and we're already initilized then do nothing.
+	// If it's a test engine and we're already initialized then do nothing.
 	if vde.fortests && vde.dbClientFactoryFiltered != nil && vde.dbClientFactoryDba != nil {
 		return
 	}
@@ -153,7 +153,7 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 		return err
 	}
 
-	// At this point we've fully and succesfully opened so begin
+	// At this point we've fully and successfully opened so begin
 	// retrying error'd VDiffs until the engine is closed.
 	vde.wg.Add(1)
 	go func() {
@@ -193,7 +193,7 @@ func (vde *Engine) retry(ctx context.Context, err error) {
 		if err := vde.openLocked(ctx); err == nil {
 			log.Infof("VDiff engine: opened successfully")
 			// Don't invoke cancelRetry because openLocked
-			// will hold on to this context for later cancelation.
+			// will hold on to this context for later cancellation.
 			vde.cancelRetry = nil
 			vde.mu.Unlock()
 			return

@@ -112,7 +112,7 @@ func (p *AlterTableParser) DroppedColumnsMap() map[string]bool {
 	return p.droppedColumns
 }
 
-// IsRenameTable returns true when the ALTER TABLE statement inclusdes renaming the table
+// IsRenameTable returns true when the ALTER TABLE statement includes renaming the table
 func (p *AlterTableParser) IsRenameTable() bool {
 	return p.isRenameTable
 }

@@ -521,7 +521,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Description = "Primary cannot be reached by vtorc and all of its replicas are lagging"
 			//
 		} else if a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
-			// partial success is here to redice noise
+			// partial success is here to reduce noise
 			a.Analysis = UnreachablePrimary
 			a.Description = "Primary cannot be reached by vtorc but it has replicating replicas; possibly a network/host issue"
 			//

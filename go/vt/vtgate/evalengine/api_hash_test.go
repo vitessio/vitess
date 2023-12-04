@@ -24,13 +24,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/vt/vthash"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 func TestHashCodes(t *testing.T) {
@@ -58,10 +56,10 @@ func TestHashCodes(t *testing.T) {
 			require.NoError(t, err)
 			require.Equalf(t, tc.equal, cmp == 0, "got %v %s %v (expected %s)", tc.static, equality(cmp == 0).Operator(), tc.dynamic, equality(tc.equal))
 
-			h1, err := NullsafeHashcode(tc.static, collations.CollationUtf8mb4ID, tc.static.Type())
+			h1, err := NullsafeHashcode(tc.static, collations.CollationUtf8mb4ID, tc.static.Type(), 0)
 			require.NoError(t, err)
 
-			h2, err := NullsafeHashcode(tc.dynamic, collations.CollationUtf8mb4ID, tc.static.Type())
+			h2, err := NullsafeHashcode(tc.dynamic, collations.CollationUtf8mb4ID, tc.static.Type(), 0)
 			require.ErrorIs(t, err, tc.err)
 
 			assert.Equalf(t, tc.equal, h1 == h2, "HASH(%v) %s HASH(%v) (expected %s)", tc.static, equality(h1 == h2).Operator(), tc.dynamic, equality(tc.equal))
@@ -84,9 +82,9 @@ func TestHashCodesRandom(t *testing.T) {
 		typ, err := coerceTo(v1.Type(), v2.Type())
 		require.NoError(t, err)
 
-		hash1, err := NullsafeHashcode(v1, collation, typ)
+		hash1, err := NullsafeHashcode(v1, collation, typ, 0)
 		require.NoError(t, err)
-		hash2, err := NullsafeHashcode(v2, collation, typ)
+		hash2, err := NullsafeHashcode(v2, collation, typ, 0)
 		require.NoError(t, err)
 		if cmp == 0 {
 			equal++
@@ -144,11 +142,11 @@ func TestHashCodes128(t *testing.T) {
 			require.Equalf(t, tc.equal, cmp == 0, "got %v %s %v (expected %s)", tc.static, equality(cmp == 0).Operator(), tc.dynamic, equality(tc.equal))
 
 			hasher1 := vthash.New()
-			err = NullsafeHashcode128(&hasher1, tc.static, collations.CollationUtf8mb4ID, tc.static.Type())
+			err = NullsafeHashcode128(&hasher1, tc.static, collations.CollationUtf8mb4ID, tc.static.Type(), 0)
 			require.NoError(t, err)
 
 			hasher2 := vthash.New()
-			err = NullsafeHashcode128(&hasher2, tc.dynamic, collations.CollationUtf8mb4ID, tc.static.Type())
+			err = NullsafeHashcode128(&hasher2, tc.dynamic, collations.CollationUtf8mb4ID, tc.static.Type(), 0)
 			require.ErrorIs(t, err, tc.err)
 
 			h1 := hasher1.Sum128()
@@ -174,10 +172,10 @@ func TestHashCodesRandom128(t *testing.T) {
 		require.NoError(t, err)
 
 		hasher1 := vthash.New()
-		err = NullsafeHashcode128(&hasher1, v1, collation, typ)
+		err = NullsafeHashcode128(&hasher1, v1, collation, typ, 0)
 		require.NoError(t, err)
 		hasher2 := vthash.New()
-		err = NullsafeHashcode128(&hasher2, v2, collation, typ)
+		err = NullsafeHashcode128(&hasher2, v2, collation, typ, 0)
 		require.NoError(t, err)
 		if cmp == 0 {
 			equal++
@@ -197,7 +195,7 @@ func coerceTo(v1, v2 sqltypes.Type) (sqltypes.Type, error) {
 	if sqltypes.IsNull(v1) || sqltypes.IsNull(v2) {
 		return sqltypes.Null, nil
 	}
-	if (sqltypes.IsText(v1) || sqltypes.IsBinary(v1)) && (sqltypes.IsText(v2) || sqltypes.IsBinary(v2)) {
+	if (sqltypes.IsTextOrBinary(v1)) && (sqltypes.IsTextOrBinary(v2)) {
 		return sqltypes.VarChar, nil
 	}
 	if sqltypes.IsDateOrTime(v1) {
@@ -209,7 +207,7 @@ func coerceTo(v1, v2 sqltypes.Type) (sqltypes.Type, error) {
 
 	if sqltypes.IsNumber(v1) || sqltypes.IsNumber(v2) {
 		switch {
-		case sqltypes.IsText(v1) || sqltypes.IsBinary(v1) || sqltypes.IsText(v2) || sqltypes.IsBinary(v2):
+		case sqltypes.IsTextOrBinary(v1) || sqltypes.IsTextOrBinary(v2):
 			return sqltypes.Float64, nil
 		case sqltypes.IsFloat(v2) || v2 == sqltypes.Decimal || sqltypes.IsFloat(v1) || v1 == sqltypes.Decimal:
 			return sqltypes.Float64, nil

@@ -993,7 +993,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	)
 
 	// We expect the workflow creation to fail due to the invalid time
-	// zone and thus the workflow iteslf to be cleaned up.
+	// zone and thus the workflow itself to be cleaned up.
 	tenv.tmc.setVReplicationExecResults(sourceTablet.tablet,
 		fmt.Sprintf(deleteWorkflow, sourceKs, workflow.ReverseWorkflowName(wf)),
 		&sqltypes.Result{RowsAffected: 1},

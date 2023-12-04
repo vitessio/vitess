@@ -106,11 +106,11 @@ func (bv *BindVariable) typeof(env *ExpressionEnv) (ctype, error) {
 	case sqltypes.Null:
 		return ctype{Type: sqltypes.Null, Flag: flagNull | flagNullable, Col: collationNull}, nil
 	case sqltypes.HexNum, sqltypes.HexVal:
-		return ctype{Type: sqltypes.VarBinary, Flag: flagHex, Col: collationNumeric}, nil
+		return ctype{Type: sqltypes.VarBinary, Flag: flagHex | flagNullable, Col: collationNumeric}, nil
 	case sqltypes.BitNum:
-		return ctype{Type: sqltypes.VarBinary, Flag: flagBit, Col: collationNumeric}, nil
+		return ctype{Type: sqltypes.VarBinary, Flag: flagBit | flagNullable, Col: collationNumeric}, nil
 	default:
-		return ctype{Type: tt, Flag: 0, Col: typedCoercionCollation(tt, collations.CollationForType(tt, bv.Collation))}, nil
+		return ctype{Type: tt, Flag: flagNullable, Col: typedCoercionCollation(tt, collations.CollationForType(tt, bv.Collation))}, nil
 	}
 }
 

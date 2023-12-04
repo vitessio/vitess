@@ -92,7 +92,7 @@ func permutateDiffs(ctx context.Context, diffs []EntityDiff, callback func([]Ent
 	if len(diffs) == 0 {
 		return false, nil
 	}
-	// Sort by a heristic (DROPs first, ALTERs next, CREATEs last). This ordering is then used first in the permutation
+	// Sort by a heuristic (DROPs first, ALTERs next, CREATEs last). This ordering is then used first in the permutation
 	// search and serves as seed for the rest of permutations.
 
 	return permDiff(ctx, diffs, callback, 0)
@@ -296,7 +296,7 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 	for i, diff := range d.UnorderedDiffs() {
 		unorderedDiffsMap[diff.CanonicalStatementString()] = i
 	}
-	// The order of classes in the quivalence relation is, generally speaking, loyal to the order of original diffs.
+	// The order of classes in the equivalence relation is, generally speaking, loyal to the order of original diffs.
 	for _, class := range d.r.OrderedClasses() {
 		classDiffs := []EntityDiff{}
 		// Which diffs are in this equivalence class?

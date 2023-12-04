@@ -56,6 +56,11 @@ func (s *server) ApplyBinlogFile(ctx context.Context, request *mysqlctlpb.ApplyB
 	return &mysqlctlpb.ApplyBinlogFileResponse{}, s.mysqld.ApplyBinlogFile(ctx, request)
 }
 
+// ReadBinlogFilesTimestamps implements the server side of the MysqlctlClient interface.
+func (s *server) ReadBinlogFilesTimestamps(ctx context.Context, request *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error) {
+	return s.mysqld.ReadBinlogFilesTimestamps(ctx, request)
+}
+
 // ReinitConfig implements the server side of the MysqlctlClient interface.
 func (s *server) ReinitConfig(ctx context.Context, request *mysqlctlpb.ReinitConfigRequest) (*mysqlctlpb.ReinitConfigResponse, error) {
 	return &mysqlctlpb.ReinitConfigResponse{}, s.mysqld.ReinitConfig(ctx, s.cnf)

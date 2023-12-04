@@ -705,7 +705,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 // shouldRetry determines whether we should exit immediately or retry the vstream.
 // The first return value determines if the error can be retried, while the second
-// indicates whether the tablet with which the error occurred should be ommitted
+// indicates whether the tablet with which the error occurred should be omitted
 // from the candidate list of tablets to choose from on the retry.
 //
 // An error should be retried if it is expected to be transient.

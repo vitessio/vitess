@@ -138,7 +138,7 @@ func (vp *VtctlPipe) run(args []string, outputFunc func(string)) error {
 }
 
 // RunAndStreamOutput returns the output of the vtctl command as a channel.
-// When the channcel is closed, the command did finish.
+// When the channel is closed, the command did finish.
 func (vp *VtctlPipe) RunAndStreamOutput(args []string) (logutil.EventStream, error) {
 	actionTimeout := 30 * time.Second
 	ctx := context.Background()

@@ -17,7 +17,6 @@ limitations under the License.
 package sqlerror
 
 import (
-	"bytes"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -53,17 +52,17 @@ func NewSQLError(number ErrorCode, sqlState string, format string, args ...any) 
 
 // Error implements the error interface
 func (se *SQLError) Error() string {
-	buf := &bytes.Buffer{}
+	var buf strings.Builder
 	buf.WriteString(se.Message)
 
 	// Add MySQL errno and SQLSTATE in a format that we can later parse.
 	// There's no avoiding string parsing because all errors
 	// are converted to strings anyway at RPC boundaries.
 	// See NewSQLErrorFromError.
-	fmt.Fprintf(buf, " (errno %v) (sqlstate %v)", se.Num, se.State)
+	fmt.Fprintf(&buf, " (errno %v) (sqlstate %v)", se.Num, se.State)
 
 	if se.Query != "" {
-		fmt.Fprintf(buf, " during query: %s", sqlparser.TruncateForLog(se.Query))
+		fmt.Fprintf(&buf, " during query: %s", sqlparser.TruncateForLog(se.Query))
 	}
 
 	return buf.String()
@@ -243,6 +242,7 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.CharacterSetMismatch:         {num: ERCharacterSetMismatch, state: SSUnknownSQLState},
 	vterrors.WrongParametersToNativeFct:   {num: ERWrongParametersToNativeFct, state: SSUnknownSQLState},
 	vterrors.KillDeniedError:              {num: ERKillDenied, state: SSUnknownSQLState},
+	vterrors.BadNullError:                 {num: ERBadNullError, state: SSConstraintViolation},
 }
 
 func getStateToMySQLState(state vterrors.State) mysqlCode {

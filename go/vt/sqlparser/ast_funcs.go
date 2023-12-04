@@ -357,6 +357,20 @@ func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 	return newComments, nil
 }
 
+// FkChecksStateString prints the foreign key checks state.
+func FkChecksStateString(state *bool) string {
+	if state == nil {
+		return ""
+	}
+	switch *state {
+	case false:
+		return "Off"
+	case true:
+		return "On"
+	}
+	return ""
+}
+
 // ParseParams parses the vindex parameter list, pulling out the special-case
 // "owner" parameter
 func (node *VindexSpec) ParseParams() (string, map[string]string) {
@@ -400,7 +414,7 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 
 // TableName returns a TableName pointing to this table expr
 func (node *AliasedTableExpr) TableName() (TableName, error) {
-	if !node.As.IsEmpty() {
+	if node.As.NotEmpty() {
 		return TableName{Name: node.As}, nil
 	}
 
@@ -868,6 +882,11 @@ func (node IdentifierCI) IsEmpty() bool {
 	return node.val == ""
 }
 
+// NonEmpty returns true if the name is not empty.
+func (node IdentifierCI) NotEmpty() bool {
+	return !node.IsEmpty()
+}
+
 // String returns the unescaped column name. It must
 // not be used for SQL generation. Use sqlparser.String
 // instead. The Stringer conformance is for usage
@@ -933,6 +952,11 @@ func NewIdentifierCS(str string) IdentifierCS {
 // IsEmpty returns true if TabIdent is empty.
 func (node IdentifierCS) IsEmpty() bool {
 	return node.v == ""
+}
+
+// NonEmpty returns true if TabIdent is not empty.
+func (node IdentifierCS) NotEmpty() bool {
+	return !node.IsEmpty()
 }
 
 // String returns the unescaped table name. It must
@@ -1315,6 +1339,16 @@ func (lock Lock) ToString() string {
 		return NoLockStr
 	case ForUpdateLock:
 		return ForUpdateStr
+	case ForUpdateLockNoWait:
+		return ForUpdateNoWaitStr
+	case ForUpdateLockSkipLocked:
+		return ForUpdateSkipLockedStr
+	case ForShareLock:
+		return ForShareStr
+	case ForShareLockNoWait:
+		return ForShareNoWaitStr
+	case ForShareLockSkipLocked:
+		return ForShareSkipLockedStr
 	case ShareModeLock:
 		return ShareModeStr
 	default:
@@ -1929,6 +1963,8 @@ func (ty ShowCommandType) ToString() string {
 		return VitessVariablesStr
 	case VschemaTables:
 		return VschemaTablesStr
+	case VschemaKeyspaces:
+		return VschemaKeyspacesStr
 	case VschemaVindexes:
 		return VschemaVindexesStr
 	case Warnings:
@@ -2099,7 +2135,7 @@ func GetAllSelects(selStmt SelectStatement) []*Select {
 
 // ColumnName returns the alias if one was provided, otherwise prints the AST
 func (ae *AliasedExpr) ColumnName() string {
-	if !ae.As.IsEmpty() {
+	if ae.As.NotEmpty() {
 		return ae.As.String()
 	}
 
@@ -2131,7 +2167,7 @@ func RemoveKeyspace(in SQLNode) {
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
 		switch col := node.(type) {
 		case *ColName:
-			if !col.Qualifier.Qualifier.IsEmpty() {
+			if col.Qualifier.Qualifier.NotEmpty() {
 				col.Qualifier.Qualifier = NewIdentifierCS("")
 			}
 		}

@@ -59,6 +59,14 @@ func (m *MockHealthCheck) CacheStatus() discovery.TabletsCacheStatusList {
 	return ret0
 }
 
+// HealthyStatus mocks base method.
+func (m *MockHealthCheck) HealthyStatus() discovery.TabletsCacheStatusList {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthyStatus")
+	ret0, _ := ret[0].(discovery.TabletsCacheStatusList)
+	return ret0
+}
+
 // CacheStatus indicates an expected call of CacheStatus.
 func (mr *MockHealthCheckMockRecorder) CacheStatus() *gomock.Call {
 	mr.mock.ctrl.T.Helper()

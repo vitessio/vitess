@@ -381,7 +381,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 }
 
 // newTestTablePartialMigrater creates a test tablet migrater
-// specifially for partial or shard by shard migrations.
+// specifically for partial or shard by shard migrations.
 // The shards must be the same on the source and target, and we
 // must be moving a subset of them.
 // fmtQuery should be of the form: 'select a, b %s group by a'.

@@ -437,11 +437,8 @@ func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *tra
 	if ts.optCells != "" {
 		cells = strings.Split(ts.optCells, ",")
 	}
-	// FIXME: currently there is a default setting in the tablet that is used if user does not specify a tablet type,
-	// we use the value specified in the tablet flag `-vreplication_tablet_type`
-	// but ideally we should populate the vreplication table with a default value when we setup the workflow
 	if tabletTypes == "" {
-		tabletTypes = "PRIMARY,REPLICA"
+		tabletTypes = "in_order:REPLICA,PRIMARY" // default
 	}
 
 	var wg sync.WaitGroup
@@ -1394,8 +1391,8 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 				Filter: filter,
 			})
 		}
-		log.Infof("Creating reverse workflow vreplication stream on tablet %s: workflow %s, startPos %s",
-			source.GetPrimary().Alias, ts.ReverseWorkflowName(), target.Position)
+		log.Infof("Creating reverse workflow vreplication stream on tablet %s: workflow %s, startPos %s for target %s:%s, uid %d",
+			source.GetPrimary().Alias, ts.ReverseWorkflowName(), target.Position, ts.TargetKeyspaceName(), target.GetShard().ShardName(), uid)
 		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias,
 			binlogplayer.CreateVReplicationState(ts.ReverseWorkflowName(), reverseBls, target.Position,
 				binlogdatapb.VReplicationWorkflowState_Stopped, source.GetPrimary().DbName(), ts.workflowType, ts.workflowSubType))

@@ -114,7 +114,7 @@ func (compareNullSafeEQ) compare(left, right eval) (boolean, error) {
 }
 
 func typeIsTextual(tt sqltypes.Type) bool {
-	return sqltypes.IsText(tt) || sqltypes.IsBinary(tt) || tt == sqltypes.Time
+	return sqltypes.IsTextOrBinary(tt) || tt == sqltypes.Time
 }
 
 func compareAsStrings(l, r sqltypes.Type) bool {
@@ -365,11 +365,13 @@ func (expr *ComparisonExpr) compile(c *compiler) (ctype, error) {
 
 	swapped := false
 	var skip2 *jump
+	nullable := true
 
 	switch expr.Op.(type) {
 	case compareNullSafeEQ:
 		skip2 = c.asm.jumpFrom()
 		c.asm.Cmp_nullsafe(skip2)
+		nullable = false
 	default:
 		skip2 = c.compileNullCheck1r(rt)
 	}
@@ -407,6 +409,9 @@ func (expr *ComparisonExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	cmptype := ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}
+	if nullable {
+		cmptype.Flag |= nullableFlags(lt.Flag | rt.Flag)
+	}
 
 	switch expr.Op.(type) {
 	case compareEQ:
@@ -540,16 +545,18 @@ func (expr *InExpr) compile(c *compiler) (ctype, error) {
 
 	switch rhs := expr.Right.(type) {
 	case TupleExpr:
+		var rt ctype
 		if table := expr.compileTable(lhs, rhs); table != nil {
 			c.asm.In_table(expr.Negate, table)
 		} else {
-			_, err := rhs.compile(c)
+			rt, err = rhs.compile(c)
 			if err != nil {
 				return ctype{}, err
 			}
 			c.asm.In_slow(expr.Negate)
 		}
-		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
+
+		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | (nullableFlags(lhs.Flag) | (rt.Flag & flagNullable))}, nil
 	case *BindVariable:
 		return ctype{}, c.unsupported(expr)
 	default:

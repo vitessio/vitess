@@ -379,7 +379,7 @@ func (expr *NotExpr) compile(c *compiler) (ctype, error) {
 		c.asm.Not_i()
 	}
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Flag: flagNullable | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(arg.Flag) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func (l *LogicalExpr) eval(env *ExpressionEnv) (eval, error) {
@@ -450,7 +450,7 @@ func (expr *LogicalExpr) compile(c *compiler) (ctype, error) {
 
 	expr.op.compileRight(c)
 	c.asm.jumpDestination(jump)
-	return ctype{Type: sqltypes.Int64, Flag: flagNullable | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: ((lt.Flag | rt.Flag) & flagNullable) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func intervalCompare(n, val eval) (int, bool, error) {
@@ -633,7 +633,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	if !matched {
 		return nil, nil
 	}
-	return evalCoerce(result, ta.result(), ca.result().Collation, env.now)
+	return evalCoerce(result, ta.result(), ca.result().Collation, env.now, env.sqlmode.AllowZeroDate())
 }
 
 func (c *CaseExpr) constant() bool {
@@ -711,8 +711,12 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		}
 	}
 
-	ct := ctype{Type: ta.result(), Col: ca.result()}
-	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Col)
+	var f typeFlag
+	if ta.nullable {
+		f |= flagNullable
+	}
+	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result()}
+	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Col, c.sqlmode.AllowZeroDate())
 	return ct, nil
 }
 
