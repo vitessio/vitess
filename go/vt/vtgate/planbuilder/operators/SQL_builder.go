@@ -23,7 +23,6 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -33,7 +32,7 @@ type (
 		ctx         *plancontext.PlanningContext
 		stmt        sqlparser.Statement
 		tableNames  []string
-		dmlOperator ops.Operator
+		dmlOperator Operator
 	}
 )
 
@@ -41,7 +40,7 @@ func (qb *queryBuilder) asSelectStatement() sqlparser.SelectStatement {
 	return qb.stmt.(sqlparser.SelectStatement)
 }
 
-func ToSQL(ctx *plancontext.PlanningContext, op ops.Operator) (_ sqlparser.Statement, _ ops.Operator, err error) {
+func ToSQL(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement, _ Operator, err error) {
 	defer PanicHandler(&err)
 
 	q := &queryBuilder{ctx: ctx}
@@ -347,7 +346,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) {
 }
 
 // buildQuery recursively builds the query into an AST, from an operator tree
-func buildQuery(op ops.Operator, qb *queryBuilder) {
+func buildQuery(op Operator, qb *queryBuilder) {
 	switch op := op.(type) {
 	case *Table:
 		buildTable(op, qb)
@@ -415,7 +414,7 @@ func buildUpdate(op *Update, qb *queryBuilder) {
 }
 
 type OpWithAST interface {
-	ops.Operator
+	Operator
 	Statement() sqlparser.Statement
 }
 

@@ -17,14 +17,13 @@ limitations under the License.
 package operators
 
 import (
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // VerifyOp keeps the information about the foreign key verification operation.
 // It is a Parent verification or a Child verification.
 type VerifyOp struct {
-	Op  ops.Operator
+	Op  Operator
 	Typ string
 }
 
@@ -33,17 +32,17 @@ type VerifyOp struct {
 // verifications on the existence of the rows in the parent table (for example, INSERT and UPDATE).
 type FkVerify struct {
 	Verify []*VerifyOp
-	Input  ops.Operator
+	Input  Operator
 
 	noColumns
 	noPredicates
 }
 
-var _ ops.Operator = (*FkVerify)(nil)
+var _ Operator = (*FkVerify)(nil)
 
 // Inputs implements the Operator interface
-func (fkv *FkVerify) Inputs() []ops.Operator {
-	inputs := []ops.Operator{fkv.Input}
+func (fkv *FkVerify) Inputs() []Operator {
+	inputs := []Operator{fkv.Input}
 	for _, v := range fkv.Verify {
 		inputs = append(inputs, v.Op)
 	}
@@ -51,7 +50,7 @@ func (fkv *FkVerify) Inputs() []ops.Operator {
 }
 
 // SetInputs implements the Operator interface
-func (fkv *FkVerify) SetInputs(operators []ops.Operator) {
+func (fkv *FkVerify) SetInputs(operators []Operator) {
 	fkv.Input = operators[0]
 	if len(fkv.Verify) != len(operators)-1 {
 		panic("mismatched number of verify inputs")
@@ -62,7 +61,7 @@ func (fkv *FkVerify) SetInputs(operators []ops.Operator) {
 }
 
 // Clone implements the Operator interface
-func (fkv *FkVerify) Clone(inputs []ops.Operator) ops.Operator {
+func (fkv *FkVerify) Clone(inputs []Operator) Operator {
 	newFkv := &FkVerify{
 		Verify: fkv.Verify,
 	}
@@ -71,7 +70,7 @@ func (fkv *FkVerify) Clone(inputs []ops.Operator) ops.Operator {
 }
 
 // GetOrdering implements the Operator interface
-func (fkv *FkVerify) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (fkv *FkVerify) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 

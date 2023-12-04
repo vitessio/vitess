@@ -20,7 +20,6 @@ import (
 	"slices"
 
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -29,7 +28,7 @@ type FkChild struct {
 	BVName         string
 	Cols           []int // indexes
 	NonLiteralInfo []engine.NonLiteralUpdateInfo
-	Op             ops.Operator
+	Op             Operator
 
 	noColumns
 	noPredicates
@@ -39,19 +38,19 @@ type FkChild struct {
 // as an operator. This operator is created for DML queries that require
 // cascades (for example, ON DELETE CASCADE).
 type FkCascade struct {
-	Selection ops.Operator
+	Selection Operator
 	Children  []*FkChild
-	Parent    ops.Operator
+	Parent    Operator
 
 	noColumns
 	noPredicates
 }
 
-var _ ops.Operator = (*FkCascade)(nil)
+var _ Operator = (*FkCascade)(nil)
 
 // Inputs implements the Operator interface
-func (fkc *FkCascade) Inputs() []ops.Operator {
-	var inputs []ops.Operator
+func (fkc *FkCascade) Inputs() []Operator {
+	var inputs []Operator
 	inputs = append(inputs, fkc.Parent)
 	inputs = append(inputs, fkc.Selection)
 	for _, child := range fkc.Children {
@@ -61,7 +60,7 @@ func (fkc *FkCascade) Inputs() []ops.Operator {
 }
 
 // SetInputs implements the Operator interface
-func (fkc *FkCascade) SetInputs(operators []ops.Operator) {
+func (fkc *FkCascade) SetInputs(operators []Operator) {
 	if len(operators) < 2 {
 		panic("incorrect count of inputs for FkCascade")
 	}
@@ -76,7 +75,7 @@ func (fkc *FkCascade) SetInputs(operators []ops.Operator) {
 }
 
 // Clone implements the Operator interface
-func (fkc *FkCascade) Clone(inputs []ops.Operator) ops.Operator {
+func (fkc *FkCascade) Clone(inputs []Operator) Operator {
 	if len(inputs) < 2 {
 		panic("incorrect count of inputs for FkCascade")
 	}
@@ -100,7 +99,7 @@ func (fkc *FkCascade) Clone(inputs []ops.Operator) ops.Operator {
 }
 
 // GetOrdering implements the Operator interface
-func (fkc *FkCascade) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (fkc *FkCascade) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 

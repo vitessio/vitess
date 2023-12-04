@@ -17,35 +17,34 @@ limitations under the License.
 package operators
 
 import (
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type Sequential struct {
-	Sources []ops.Operator
+	Sources []Operator
 
 	noPredicates
 	noColumns
 }
 
 // Clone implements the Operator interface
-func (s *Sequential) Clone(inputs []ops.Operator) ops.Operator {
+func (s *Sequential) Clone(inputs []Operator) Operator {
 	newOp := *s
 	newOp.Sources = inputs
 	return &newOp
 }
 
-func (s *Sequential) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (s *Sequential) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
 // Inputs implements the Operator interface
-func (s *Sequential) Inputs() []ops.Operator {
+func (s *Sequential) Inputs() []Operator {
 	return s.Sources
 }
 
 // SetInputs implements the Operator interface
-func (s *Sequential) SetInputs(ops []ops.Operator) {
+func (s *Sequential) SetInputs(ops []Operator) {
 	s.Sources = ops
 }
 
