@@ -21,13 +21,12 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // RemovePredicate is used when we turn a predicate into a plan operator,
 // and the predicate needs to be removed as an AST construct
-func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (ops.Operator, error) {
+func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) (Operator, error) {
 	switch op := op.(type) {
 	case *Route:
 		newSrc, err := RemovePredicate(ctx, expr, op.Source)
