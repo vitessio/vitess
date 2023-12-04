@@ -3118,8 +3118,8 @@ func TestPlayerBatchMode(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
 		"set @@global.max_allowed_packet=1024", // To test trx batch splitting at 512 bytes
-		"create table t1(id int, val1 varchar(1000), primary key(id))",
-		fmt.Sprintf("create table %s.t1(id int, val1 varchar(1000), primary key(id))", vrepldb),
+		"create table t1(id bigint, val1 varchar(1000), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id bigint, val1 varchar(1000), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -3150,19 +3150,20 @@ func TestPlayerBatchMode(t *testing.T) {
 	longStr := strings.Repeat("a", 460)
 
 	testcases := []struct {
-		input               string
-		output              []string
-		expectedInLastBatch string // Only used if we expect the trx to be split
-		expectBulkInsert    bool
-		expectBulkDelete    bool
-		table               string
-		data                [][]string
+		input                    string
+		output                   []string
+		expectedNonCommitBatches int64
+		expectedInLastBatch      string // Should only be set if we expect 1+ non-commit batches
+		expectedBulkInserts      int64
+		expectedBulkDeletes      int64
+		table                    string
+		data                     [][]string
 	}{
 		{
-			input:            "insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc'), (4, 'ddd'), (5, 'eee')",
-			output:           []string{"insert into t1(id,val1) values (1,'aaa'), (2,'bbb'), (3,'ccc'), (4,'ddd'), (5,'eee')"},
-			expectBulkInsert: true,
-			table:            "t1",
+			input:               "insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc'), (4, 'ddd'), (5, 'eee')",
+			output:              []string{"insert into t1(id,val1) values (1,'aaa'), (2,'bbb'), (3,'ccc'), (4,'ddd'), (5,'eee')"},
+			expectedBulkInserts: 1,
+			table:               "t1",
 			data: [][]string{
 				{"1", "aaa"},
 				{"2", "bbb"},
@@ -3183,10 +3184,10 @@ func TestPlayerBatchMode(t *testing.T) {
 			},
 		},
 		{
-			input:            "delete from t1 where id > 3",
-			output:           []string{"delete from t1 where id in (4, 5)"},
-			expectBulkDelete: true,
-			table:            "t1",
+			input:               "delete from t1 where id > 3",
+			output:              []string{"delete from t1 where id in (4, 5)"},
+			expectedBulkDeletes: 1,
+			table:               "t1",
 			data: [][]string{
 				{"2", "bbb"},
 				{"3", "ccc"},
@@ -3201,8 +3202,9 @@ func TestPlayerBatchMode(t *testing.T) {
 				"delete from t1 where id=3",
 				"insert into t1(id,val1) values (103,'ccc')",
 			},
-			expectedInLastBatch: "delete from t1 where id=2;insert into t1(id,val1) values (102,'bbb');delete from t1 where id=3;insert into t1(id,val1) values (103,'ccc')",
-			table:               "t1",
+			expectedInLastBatch:      "delete from t1 where id=2;insert into t1(id,val1) values (102,'bbb');delete from t1 where id=3;insert into t1(id,val1) values (103,'ccc')",
+			expectedNonCommitBatches: 1,
+			table:                    "t1",
 			data: [][]string{
 				{"1", longStr},
 				{"102", "bbb"},
@@ -3216,8 +3218,9 @@ func TestPlayerBatchMode(t *testing.T) {
 				"insert into t1(id,val1) values (501,'aaa')",
 				"insert into t1(id,val1) values (2,'bbb'), (3,'ccc')",
 			},
-			expectBulkInsert: true,
-			table:            "t1",
+			expectedBulkInserts:      1,
+			expectedNonCommitBatches: 1,
+			table:                    "t1",
 			data: [][]string{
 				{"2", "bbb"},
 				{"3", "ccc"},
@@ -3227,10 +3230,106 @@ func TestPlayerBatchMode(t *testing.T) {
 			},
 		},
 		{
-			input:            "delete from t1",
-			output:           []string{"delete from t1 where id in (2, 3, 102, 103, 501)"},
-			expectBulkDelete: true,
-			table:            "t1",
+			input:               "delete from t1",
+			output:              []string{"delete from t1 where id in (2, 3, 102, 103, 501)"},
+			expectedBulkDeletes: 1,
+			table:               "t1",
+		},
+		{
+			input: fmt.Sprintf("insert into t1(id, val1) values (1, '%s'), (2, 'bbb'), (3, 'ccc'), (4, 'ddd'), (5, 'eee')", longStr),
+			output: []string{
+				// The bulk insert gets split into two queries. It also causes
+				// the trx to get split into two batches.
+				fmt.Sprintf("insert into t1(id,val1) values (1,'%s')", longStr),
+				"insert into t1(id,val1) values (2,'bbb'), (3,'ccc'), (4,'ddd'), (5,'eee')",
+			},
+			expectedBulkInserts:      2,
+			expectedNonCommitBatches: 1,
+			expectedInLastBatch:      "insert into t1(id,val1) values (2,'bbb'), (3,'ccc'), (4,'ddd'), (5,'eee')",
+			table:                    "t1",
+			data: [][]string{
+				{"1", longStr},
+				{"2", "bbb"},
+				{"3", "ccc"},
+				{"4", "ddd"},
+				{"5", "eee"},
+			},
+		},
+		{
+			input: "insert into t1(id, val1) values (600000000000, 'fff'), (610000000000, 'ggg'), (620000000000, 'hhh'), (630000000000, 'iii'), (640000000000, 'jjj'), (650000000000, 'kkk'), (660000000000, 'lll'), (670000000000, 'mmm'), (680000000000, 'nnn'), (690000000000, 'ooo'), (700000000000, 'ppp'), (710000000000, 'qqq'), (720000000000, 'rrr'), (730000000000, 'sss'), (740000000000, 'ttt'), (750000000000, 'uuu'), (760000000000, 'vvv'), (770000000000, 'www'), (780000000000, 'xxx'), (790000000000, 'yyy'), (800000000000, 'zzz'), (810000000000, 'aaaa'), (820000000000, 'bbbb'), (830000000000, 'cccc'), (840000000000, 'dddd'), (850000000000, 'eeee'), (860000000000, 'ffff'), (870000000000, 'gggg'), (880000000000, 'hhhh'), (890000000000, 'iiii'), (910000000000, 'jjjj'), (920000000000, 'kkkk'), (930000000000, 'llll'), (940000000000, 'mmmm'), (950000000000, 'nnnn'), (960000000000, 'oooo'), (970000000000, 'pppp'), (980000000000, 'qqqq'), (990000000000, 'rrrr'), (1000000000000, 'ssss'), (1100000000000, 'tttt'), (1200000000000, 'uuuu'), (1300000000000, 'vvvv'), (1400000000000, 'wwww'), (1500000000000, 'xxxx'), (1600000000000, 'yyyy'), (1700000000000, 'zzzz')",
+			output: []string{
+				"insert into t1(id,val1) values (600000000000,'fff'), (610000000000,'ggg'), (620000000000,'hhh'), (630000000000,'iii'), (640000000000,'jjj'), (650000000000,'kkk'), (660000000000,'lll'), (670000000000,'mmm'), (680000000000,'nnn'), (690000000000,'ooo'), (700000000000,'ppp'), (710000000000,'qqq'), (720000000000,'rrr'), (730000000000,'sss'), (740000000000,'ttt'), (750000000000,'uuu'), (760000000000,'vvv'), (770000000000,'www'), (780000000000,'xxx'), (790000000000,'yyy'), (800000000000,'zzz')",
+				"insert into t1(id,val1) values (810000000000,'aaaa'), (820000000000,'bbbb'), (830000000000,'cccc'), (840000000000,'dddd'), (850000000000,'eeee'), (860000000000,'ffff'), (870000000000,'gggg'), (880000000000,'hhhh'), (890000000000,'iiii'), (910000000000,'jjjj'), (920000000000,'kkkk'), (930000000000,'llll'), (940000000000,'mmmm'), (950000000000,'nnnn'), (960000000000,'oooo'), (970000000000,'pppp'), (980000000000,'qqqq'), (990000000000,'rrrr'), (1000000000000,'ssss'), (1100000000000,'tttt')",
+				"insert into t1(id,val1) values (1200000000000,'uuuu'), (1300000000000,'vvvv'), (1400000000000,'wwww'), (1500000000000,'xxxx'), (1600000000000,'yyyy'), (1700000000000,'zzzz')",
+			},
+			expectedBulkInserts:      3,
+			expectedNonCommitBatches: 2, // This one is split into 3 batches, but the last one is a commit.
+			expectedInLastBatch:      "insert into t1(id,val1) values (1200000000000,'uuuu'), (1300000000000,'vvvv'), (1400000000000,'wwww'), (1500000000000,'xxxx'), (1600000000000,'yyyy'), (1700000000000,'zzzz')",
+			table:                    "t1",
+			data: [][]string{
+				{"1", longStr},
+				{"2", "bbb"},
+				{"3", "ccc"},
+				{"4", "ddd"},
+				{"5", "eee"},
+				{"600000000000", "fff"},
+				{"610000000000", "ggg"},
+				{"620000000000", "hhh"},
+				{"630000000000", "iii"},
+				{"640000000000", "jjj"},
+				{"650000000000", "kkk"},
+				{"660000000000", "lll"},
+				{"670000000000", "mmm"},
+				{"680000000000", "nnn"},
+				{"690000000000", "ooo"},
+				{"700000000000", "ppp"},
+				{"710000000000", "qqq"},
+				{"720000000000", "rrr"},
+				{"730000000000", "sss"},
+				{"740000000000", "ttt"},
+				{"750000000000", "uuu"},
+				{"760000000000", "vvv"},
+				{"770000000000", "www"},
+				{"780000000000", "xxx"},
+				{"790000000000", "yyy"},
+				{"800000000000", "zzz"},
+				{"810000000000", "aaaa"},
+				{"820000000000", "bbbb"},
+				{"830000000000", "cccc"},
+				{"840000000000", "dddd"},
+				{"850000000000", "eeee"},
+				{"860000000000", "ffff"},
+				{"870000000000", "gggg"},
+				{"880000000000", "hhhh"},
+				{"890000000000", "iiii"},
+				{"910000000000", "jjjj"},
+				{"920000000000", "kkkk"},
+				{"930000000000", "llll"},
+				{"940000000000", "mmmm"},
+				{"950000000000", "nnnn"},
+				{"960000000000", "oooo"},
+				{"970000000000", "pppp"},
+				{"980000000000", "qqqq"},
+				{"990000000000", "rrrr"},
+				{"1000000000000", "ssss"},
+				{"1100000000000", "tttt"},
+				{"1200000000000", "uuuu"},
+				{"1300000000000", "vvvv"},
+				{"1400000000000", "wwww"},
+				{"1500000000000", "xxxx"},
+				{"1600000000000", "yyyy"},
+				{"1700000000000", "zzzz"},
+			},
+		},
+		{ // Now we have enough long IDs to cause the bulk delete to also be split along with the trx batch.
+			input: "delete from t1",
+			output: []string{
+				"delete from t1 where id in (1, 2, 3, 4, 5, 600000000000, 610000000000, 620000000000, 630000000000, 640000000000, 650000000000, 660000000000, 670000000000, 680000000000, 690000000000, 700000000000, 710000000000, 720000000000, 730000000000, 740000000000, 750000000000, 760000000000, 770000000000, 780000000000, 790000000000, 800000000000, 810000000000, 820000000000, 830000000000, 840000000000, 850000000000, 860000000000, 870000000000, 880000000000, 890000000000, 910000000000, 920000000000, 930000000000)",
+				"delete from t1 where id in (940000000000, 950000000000, 960000000000, 970000000000, 980000000000, 990000000000, 1000000000000, 1100000000000, 1200000000000, 1300000000000, 1400000000000, 1500000000000, 1600000000000, 1700000000000)",
+			},
+			expectedBulkDeletes: 2,
+			expectedInLastBatch: "delete from t1 where id in (940000000000, 950000000000, 960000000000, 970000000000, 980000000000, 990000000000, 1000000000000, 1100000000000, 1200000000000, 1300000000000, 1400000000000, 1500000000000, 1600000000000, 1700000000000)",
+			table:               "t1",
 		},
 	}
 
@@ -3254,20 +3353,17 @@ func TestPlayerBatchMode(t *testing.T) {
 		if tcase.table != "" {
 			expectData(t, tcase.table, tcase.data)
 		}
-		if tcase.expectBulkDelete {
-			expectedBulkDeletes++
-		}
-		if tcase.expectBulkInsert {
-			expectedBulkInserts++
-		}
-		// Confirm that the statements were batched together in multi-statement
+
+		// Confirm that the row events generated the expected multi-row
+		// statements and the statements were sent in multi-statement
 		// protocol message(s) as expected.
+		expectedBulkDeletes += tcase.expectedBulkDeletes
+		expectedBulkInserts += tcase.expectedBulkInserts
+		expectedTrxBatchCommits++ // Should only ever be 1 per test case
+		expectedTrxBatchExecs += tcase.expectedNonCommitBatches
 		if tcase.expectedInLastBatch != "" { // We expect the trx to be split
-			expectedTrxBatchExecs++
-			expectedTrxBatchCommits++
 			require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxLastBatchExpectRE, regexp.QuoteMeta(tcase.expectedInLastBatch))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
 		} else {
-			expectedTrxBatchCommits++
 			require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxFullBatchExpectRE, regexp.QuoteMeta(strings.Join(tcase.output, ";")))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
 		}
 	}

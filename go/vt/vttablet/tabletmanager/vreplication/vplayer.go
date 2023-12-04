@@ -325,15 +325,15 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		// can perform a simple bulk delete using an IN clause.
 		if (rowEvent.RowChanges[0].Before != nil && rowEvent.RowChanges[0].After == nil) &&
 			tplan.MultiDelete != nil {
-			tplan.applyBulkDeleteChanges(rowEvent.RowChanges, applyFunc)
-			return nil
+			_, err := tplan.applyBulkDeleteChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize)
+			return err
 		}
 		// If we're done with the copy phase then we will be replicating all INSERTS
 		// regardless of the PK value and can use a single INSERT statment with
 		// multiple VALUES clauses.
 		if len(vp.copyState) == 0 && (rowEvent.RowChanges[0].Before == nil && rowEvent.RowChanges[0].After != nil) {
-			tplan.applyBulkInsertChanges(rowEvent.RowChanges, applyFunc)
-			return nil
+			_, err := tplan.applyBulkInsertChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize-12)
+			return err
 		}
 	}
 

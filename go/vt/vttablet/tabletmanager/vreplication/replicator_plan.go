@@ -449,13 +449,34 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 // applyBulkDeleteChanges applies a bulk delete statement from the row changes
 // to the target table using an IN clause with the primary key values of the
 // rows to be deleted. This only supports tables with single column primary keys.
-func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
+	if len(rowDeletes) == 0 {
+		return nil, nil
+	}
 	if (len(tp.TablePlanBuilder.pkCols) + len(tp.TablePlanBuilder.extraSourcePkCols)) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "bulk delete is only supported for tables with a single primary key column")
 	}
 	if tp.MultiDelete == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "plan has no bulk delete query")
 	}
+
+	baseQuerySize := int64(len(tp.MultiDelete.Query))
+	querySize := baseQuerySize
+
+	execQuery := func(pkVals *[]sqltypes.Value) (*sqltypes.Result, error) {
+		pksBV, err := sqltypes.BuildBindVariable(*pkVals)
+		if err != nil {
+			return nil, err
+		}
+		query, err := tp.MultiDelete.GenerateQuery(map[string]*querypb.BindVariable{"bulk_pks": pksBV}, nil)
+		if err != nil {
+			return nil, err
+		}
+		querySize = baseQuerySize
+		tp.TablePlanBuilder.stats.BulkQueryCount.Add("delete", 1)
+		return executor(query)
+	}
+
 	pkIndex := -1
 	pkVals := make([]sqltypes.Value, 0, len(rowDeletes))
 	for _, rowDelete := range rowDeletes {
@@ -469,50 +490,74 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 			}
 		}
 		pkVals = append(pkVals, vals[pkIndex])
+		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // +2 for the comma and space
+		if querySize+addedSize > maxQuerySize {
+			if _, err := execQuery(&pkVals); err != nil {
+				return nil, err
+			}
+			pkVals = nil
+		}
+		querySize += addedSize
 	}
-	pksBV, err := sqltypes.BuildBindVariable(pkVals)
-	if err != nil {
-		return nil, err
-	}
-	query, err := tp.MultiDelete.GenerateQuery(map[string]*querypb.BindVariable{"bulk_pks": pksBV}, nil)
-	if err != nil {
-		return nil, err
-	}
-	tp.TablePlanBuilder.stats.BulkQueryCount.Add("delete", 1)
-	return executor(query)
+
+	return execQuery(&pkVals)
 }
 
-func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+// applyBulkInsertChanges generates a multi-row INSERT statement from the row
+// changes generated from a multi-row INSERT statement executed on the source.
+func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
 	if len(rowInserts) == 0 {
 		return nil, nil
 	}
-	query := &strings.Builder{}
-	query.WriteString(tp.BulkInsertFront.Query)
-	query.WriteString(" values ")
+	if tp.BulkInsertFront == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "plan has no bulk insert query")
+	}
 
-	for i, rowInsert := range rowInserts {
-		if i > 0 {
-			query.WriteString(", ")
+	prefix := &strings.Builder{}
+	prefix.WriteString(tp.BulkInsertFront.Query)
+	prefix.WriteString(" values ")
+	insertPrefix := prefix.String()
+	maxQuerySize -= int64(len(insertPrefix))
+	values := &strings.Builder{}
+
+	execQuery := func(vals *strings.Builder) (*sqltypes.Result, error) {
+		if tp.BulkInsertOnDup != nil {
+			vals.WriteString(tp.BulkInsertOnDup.Query)
 		}
+		tp.TablePlanBuilder.stats.BulkQueryCount.Add("insert", 1)
+		return executor(insertPrefix + vals.String())
+	}
+
+	newStmt := true
+	for _, rowInsert := range rowInserts {
+		rowValues := &strings.Builder{}
 		bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowInsert.After)
-		for i, field := range tp.Fields {
-			bindVar, err := tp.bindFieldVal(field, &vals[i])
+		for n, field := range tp.Fields {
+			bindVar, err := tp.bindFieldVal(field, &vals[n])
 			if err != nil {
 				return nil, err
 			}
 			bindvars["a_"+field.Name] = bindVar
 		}
-		if err := tp.BulkInsertValues.Append(query, bindvars, nil); err != nil {
+		if err := tp.BulkInsertValues.Append(rowValues, bindvars, nil); err != nil {
 			return nil, err
 		}
-	}
-	if tp.BulkInsertOnDup != nil {
-		query.WriteString(tp.BulkInsertOnDup.Query)
+		if int64(values.Len()+rowValues.Len()) > maxQuerySize {
+			if _, err := execQuery(values); err != nil {
+				return nil, err
+			}
+			values.Reset()
+			newStmt = true
+		}
+		if !newStmt {
+			values.WriteString(", ")
+		}
+		values.WriteString(rowValues.String())
+		newStmt = false
 	}
 
-	tp.TablePlanBuilder.stats.BulkQueryCount.Add("insert", 1)
-	return executor(query.String())
+	return execQuery(values)
 }
 
 func getQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable) (string, error) {
