@@ -7,6 +7,7 @@
     "npm": ">=9.5.1"
   },
   "dependencies": {
+    "@adobe/css-tools": "^4.3.2",
     "@bugsnag/js": "^7.20.0",
     "@headlessui/react": "^1.7.8",
     "@types/jest": "^29.4.0",
