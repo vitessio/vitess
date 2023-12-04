@@ -3,6 +3,7 @@
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
+  - **[Dropping Support for MySQL 5.7](#drop-support-mysql57)**
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [VTTablet Flags](#vttablet-flags)
   - **[Docker](#docker)**
@@ -13,6 +14,13 @@
     - [`SHOW VSCHEMA KEYSPACES` Query](#show-vschema-keyspaces)
 
 ## <a id="major-changes"/>Major Changes
+
+### <a id="drop-support-mysql57"/>Dropping Support for MySQL 5.7
+
+Oracle has marked MySQL 5.7 end of life as of October 2023. Vitess is also dropping support for MySQL 5.7 from v19 onwards. Users are advised to upgrade to MySQL 8.0 while on v18 version of Vitess before
+upgrading to v19.
+
+Vitess will however, continue to support importing from MySQL 5.7 into Vitess even in v19.
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions
 
