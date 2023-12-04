@@ -543,7 +543,7 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 		if err := tp.BulkInsertValues.Append(rowValues, bindvars, nil); err != nil {
 			return nil, err
 		}
-		if int64(values.Len()+rowValues.Len()) > maxQuerySize {
+		if int64(values.Len()+rowValues.Len()+2) > maxQuerySize { // Plus 2 for comma and space
 			if _, err := execQuery(values); err != nil {
 				return nil, err
 			}

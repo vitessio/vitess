@@ -318,11 +318,9 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		return qr, err
 	}
 
-	// TODO: we should ensure that the total size of the bulk statement does not
-	// exceed mysqld's max allowed packet size.
 	if vp.batchMode && len(rowEvent.RowChanges) > 1 {
-		// If we have a delete row event for a table with a single PK column then we
-		// can perform a simple bulk delete using an IN clause.
+		// If we have multiple delete row events for a table with a single PK column
+		// then we an perform a simple bulk DELETE using an IN clause.
 		if (rowEvent.RowChanges[0].Before != nil && rowEvent.RowChanges[0].After == nil) &&
 			tplan.MultiDelete != nil {
 			_, err := tplan.applyBulkDeleteChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize)
