@@ -675,7 +675,7 @@ func (s *VtctldServer) CleanupSchemaMigration(ctx context.Context, req *vtctldat
 
 // ForceCutOverSchemaMigration is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ForceCutOverSchemaMigration(ctx context.Context, req *vtctldatapb.ForceCutOverSchemaMigrationRequest) (resp *vtctldatapb.ForceCutOverSchemaMigrationResponse, err error) {
-	span, ctx := trace.NewSpan(ctx, "VtctldServer.ForceCutOverSchemaMigrationResponse")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ForceCutOverSchemaMigration")
 	defer span.Finish()
 
 	defer panicHandler(&err)
