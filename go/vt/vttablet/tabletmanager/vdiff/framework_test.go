@@ -397,7 +397,10 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 }
 
 func (dbc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
-	queries := strings.Split(query, ";")
+	queries, err := sqlparser.SplitStatementToPieces(query)
+	if err != nil {
+		return nil, err
+	}
 	results := make([]*sqltypes.Result, 0, len(queries))
 	for _, query := range queries {
 		qr, err := dbc.ExecuteFetch(query, maxrows)
