@@ -6777,6 +6777,18 @@ var (
 		input:  "create table t (id int primary key, col1 FLOAT SRID 0)",
 		output: "cannot define SRID for non spatial types at position 55 near '0'",
 	}, {
+		input:  "create table t (id int primary key, col1 REAL SRID 0)",
+		output: "cannot define SRID for non spatial types at position 54 near '0'",
+	}, {
+		input:  "create table t (id int primary key, col1 DEC(34, 2) SRID 0)",
+		output: "cannot define SRID for non spatial types at position 60 near '0'",
+	}, {
+		input:  "create table t (id int primary key, col1 FIXED(4, 4) SRID 0)",
+		output: "cannot define SRID for non spatial types at position 61 near '0'",
+	}, {
+		input:  "create table t (id int primary key, col1 NCHAR VARCHAR SRID 0)",
+		output: "cannot define SRID for non spatial types at position 63 near '0'",
+	}, {
 		input:  "create table t (id int primary key, col1 geometry SRID -1)",
 		output: "syntax error at position 57 near 'SRID'",
 	}, {
