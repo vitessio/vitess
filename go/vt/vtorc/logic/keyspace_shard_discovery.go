@@ -124,7 +124,8 @@ func refreshKeyspaceHelper(ctx context.Context, keyspaceName string) error {
 
 // refreshAllShards refreshes all the shard records in the given keyspace.
 func refreshAllShards(ctx context.Context, keyspaceName string) error {
-	shardInfos, err := ts.FindAllShardsInKeyspace(ctx, keyspaceName)
+	// TODO(mdlayher): apply concurrency.
+	shardInfos, err := ts.FindAllShardsInKeyspace(ctx, keyspaceName, nil)
 	if err != nil {
 		log.Error(err)
 		return err

@@ -64,7 +64,8 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 		}
 	}
 
-	shards, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
+	// TODO(mdlayher): apply concurrency.
+	shards, err := ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
 	if err != nil {
 		return err
 	}

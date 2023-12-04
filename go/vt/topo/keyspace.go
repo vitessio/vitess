@@ -273,9 +273,25 @@ func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 	return nil
 }
 
-// FindAllShardsInKeyspace reads and returns all the existing shards in
-// a keyspace. It doesn't take any lock.
-func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) (map[string]*ShardInfo, error) {
+// FindAllShardsInKeyspaceConfig controls the behavior of
+// Server.FindAllShardsInKeyspace.
+type FindAllShardsInKeyspaceConfig struct {
+	// Concurrency controls the maximum number of concurrent calls to GetShard.
+	// If unspecified, Concurrency is set to 1.
+	Concurrency int
+}
+
+// FindAllShardsInKeyspace reads and returns all the existing shards in a
+// keyspace. It doesn't take any lock.
+//
+// If cfg is non-nil, it is used to configure the method's behavior. Otherwise,
+// a default configuration is used.
+func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, cfg *FindAllShardsInKeyspaceConfig) (map[string]*ShardInfo, error) {
+	if cfg == nil || cfg.Concurrency == 0 {
+		// Apply defaults.
+		cfg = &FindAllShardsInKeyspaceConfig{Concurrency: 1}
+	}
+
 	shards, err := ts.GetShardNames(ctx, keyspace)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to get list of shards for keyspace '%v'", keyspace)
@@ -289,16 +305,16 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) 
 	// https://github.com/vitessio/vitess/pull/5436.
 	//
 	// However, removing the concurrency all together can cause large operations
-	// to fail all together due to timeout. Set a reasonable worker limit (8 as
-	// a starting point, chosen in December 2023) to enable concurrent record
-	// fetches while attempting to avoid any thundering herd problems.
+	// to fail all together due to timeout. The caller chooses the appropriate
+	// concurrency level so that certain paths can be optimized (such as vtctld
+	// RebuildKeyspace calls, which do not run on every vttablet).
 	var (
 		mu     sync.Mutex
 		result = make(map[string]*ShardInfo, len(shards))
 	)
 
 	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(8)
+	eg.SetLimit(cfg.Concurrency)
 
 	for _, shard := range shards {
 		shard := shard
@@ -354,7 +370,7 @@ func (ts *Server) GetServingShards(ctx context.Context, keyspace string) ([]*Sha
 
 // GetOnlyShard returns the single ShardInfo of an unsharded keyspace.
 func (ts *Server) GetOnlyShard(ctx context.Context, keyspace string) (*ShardInfo, error) {
-	allShards, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
+	allShards, err := ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
 	if err != nil {
 		return nil, err
 	}
