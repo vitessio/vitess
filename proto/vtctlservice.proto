@@ -66,8 +66,6 @@ service Vtctld {
   rpc CleanupSchemaMigration(vtctldata.CleanupSchemaMigrationRequest) returns (vtctldata.CleanupSchemaMigrationResponse) {};
   // CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
   rpc CompleteSchemaMigration(vtctldata.CompleteSchemaMigrationRequest) returns (vtctldata.CompleteSchemaMigrationResponse) {};
-  // ForceCutOverSchemaMigration marks a schema migration for forced cut-over.
-  rpc ForceCutOverSchemaMigration(vtctldata.ForceCutOverSchemaMigrationRequest) returns (vtctldata.ForceCutOverSchemaMigrationResponse) {};
   // CreateKeyspace creates the specified keyspace in the topology. For a
   // SNAPSHOT keyspace, the request must specify the name of a base keyspace,
   // as well as a snapshot time.
@@ -105,6 +103,8 @@ service Vtctld {
   // FindAllShardsInKeyspace returns a map of shard names to shard references
   // for a given keyspace.
   rpc FindAllShardsInKeyspace(vtctldata.FindAllShardsInKeyspaceRequest) returns (vtctldata.FindAllShardsInKeyspaceResponse) {};
+  // ForceCutOverSchemaMigration marks a schema migration for forced cut-over.
+  rpc ForceCutOverSchemaMigration(vtctldata.ForceCutOverSchemaMigrationRequest) returns (vtctldata.ForceCutOverSchemaMigrationResponse) {};
   // GetBackups returns all the backups for a shard.
   rpc GetBackups(vtctldata.GetBackupsRequest) returns (vtctldata.GetBackupsResponse) {};
   // GetCellInfo returns the information for a cell.

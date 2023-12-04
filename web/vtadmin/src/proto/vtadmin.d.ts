@@ -46552,206 +46552,6 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a ForceCutOverSchemaMigrationRequest. */
-    interface IForceCutOverSchemaMigrationRequest {
-
-        /** ForceCutOverSchemaMigrationRequest keyspace */
-        keyspace?: (string|null);
-
-        /** ForceCutOverSchemaMigrationRequest uuid */
-        uuid?: (string|null);
-    }
-
-    /** Represents a ForceCutOverSchemaMigrationRequest. */
-    class ForceCutOverSchemaMigrationRequest implements IForceCutOverSchemaMigrationRequest {
-
-        /**
-         * Constructs a new ForceCutOverSchemaMigrationRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.IForceCutOverSchemaMigrationRequest);
-
-        /** ForceCutOverSchemaMigrationRequest keyspace. */
-        public keyspace: string;
-
-        /** ForceCutOverSchemaMigrationRequest uuid. */
-        public uuid: string;
-
-        /**
-         * Creates a new ForceCutOverSchemaMigrationRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ForceCutOverSchemaMigrationRequest instance
-         */
-        public static create(properties?: vtctldata.IForceCutOverSchemaMigrationRequest): vtctldata.ForceCutOverSchemaMigrationRequest;
-
-        /**
-         * Encodes the specified ForceCutOverSchemaMigrationRequest message. Does not implicitly {@link vtctldata.ForceCutOverSchemaMigrationRequest.verify|verify} messages.
-         * @param message ForceCutOverSchemaMigrationRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.IForceCutOverSchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ForceCutOverSchemaMigrationRequest message, length delimited. Does not implicitly {@link vtctldata.ForceCutOverSchemaMigrationRequest.verify|verify} messages.
-         * @param message ForceCutOverSchemaMigrationRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.IForceCutOverSchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ForceCutOverSchemaMigrationRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ForceCutOverSchemaMigrationRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ForceCutOverSchemaMigrationRequest;
-
-        /**
-         * Decodes a ForceCutOverSchemaMigrationRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ForceCutOverSchemaMigrationRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ForceCutOverSchemaMigrationRequest;
-
-        /**
-         * Verifies a ForceCutOverSchemaMigrationRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ForceCutOverSchemaMigrationRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ForceCutOverSchemaMigrationRequest
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.ForceCutOverSchemaMigrationRequest;
-
-        /**
-         * Creates a plain object from a ForceCutOverSchemaMigrationRequest message. Also converts values to other types if specified.
-         * @param message ForceCutOverSchemaMigrationRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.ForceCutOverSchemaMigrationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ForceCutOverSchemaMigrationRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ForceCutOverSchemaMigrationRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a ForceCutOverSchemaMigrationResponse. */
-    interface IForceCutOverSchemaMigrationResponse {
-
-        /** ForceCutOverSchemaMigrationResponse rows_affected_by_shard */
-        rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
-    }
-
-    /** Represents a ForceCutOverSchemaMigrationResponse. */
-    class ForceCutOverSchemaMigrationResponse implements IForceCutOverSchemaMigrationResponse {
-
-        /**
-         * Constructs a new ForceCutOverSchemaMigrationResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.IForceCutOverSchemaMigrationResponse);
-
-        /** ForceCutOverSchemaMigrationResponse rows_affected_by_shard. */
-        public rows_affected_by_shard: { [k: string]: (number|Long) };
-
-        /**
-         * Creates a new ForceCutOverSchemaMigrationResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ForceCutOverSchemaMigrationResponse instance
-         */
-        public static create(properties?: vtctldata.IForceCutOverSchemaMigrationResponse): vtctldata.ForceCutOverSchemaMigrationResponse;
-
-        /**
-         * Encodes the specified ForceCutOverSchemaMigrationResponse message. Does not implicitly {@link vtctldata.ForceCutOverSchemaMigrationResponse.verify|verify} messages.
-         * @param message ForceCutOverSchemaMigrationResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.IForceCutOverSchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ForceCutOverSchemaMigrationResponse message, length delimited. Does not implicitly {@link vtctldata.ForceCutOverSchemaMigrationResponse.verify|verify} messages.
-         * @param message ForceCutOverSchemaMigrationResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.IForceCutOverSchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ForceCutOverSchemaMigrationResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ForceCutOverSchemaMigrationResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ForceCutOverSchemaMigrationResponse;
-
-        /**
-         * Decodes a ForceCutOverSchemaMigrationResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ForceCutOverSchemaMigrationResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ForceCutOverSchemaMigrationResponse;
-
-        /**
-         * Verifies a ForceCutOverSchemaMigrationResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ForceCutOverSchemaMigrationResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ForceCutOverSchemaMigrationResponse
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.ForceCutOverSchemaMigrationResponse;
-
-        /**
-         * Creates a plain object from a ForceCutOverSchemaMigrationResponse message. Also converts values to other types if specified.
-         * @param message ForceCutOverSchemaMigrationResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.ForceCutOverSchemaMigrationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ForceCutOverSchemaMigrationResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ForceCutOverSchemaMigrationResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
     /** Properties of a CreateKeyspaceRequest. */
     interface ICreateKeyspaceRequest {
 
@@ -49454,6 +49254,206 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for FindAllShardsInKeyspaceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ForceCutOverSchemaMigrationRequest. */
+    interface IForceCutOverSchemaMigrationRequest {
+
+        /** ForceCutOverSchemaMigrationRequest keyspace */
+        keyspace?: (string|null);
+
+        /** ForceCutOverSchemaMigrationRequest uuid */
+        uuid?: (string|null);
+    }
+
+    /** Represents a ForceCutOverSchemaMigrationRequest. */
+    class ForceCutOverSchemaMigrationRequest implements IForceCutOverSchemaMigrationRequest {
+
+        /**
+         * Constructs a new ForceCutOverSchemaMigrationRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IForceCutOverSchemaMigrationRequest);
+
+        /** ForceCutOverSchemaMigrationRequest keyspace. */
+        public keyspace: string;
+
+        /** ForceCutOverSchemaMigrationRequest uuid. */
+        public uuid: string;
+
+        /**
+         * Creates a new ForceCutOverSchemaMigrationRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ForceCutOverSchemaMigrationRequest instance
+         */
+        public static create(properties?: vtctldata.IForceCutOverSchemaMigrationRequest): vtctldata.ForceCutOverSchemaMigrationRequest;
+
+        /**
+         * Encodes the specified ForceCutOverSchemaMigrationRequest message. Does not implicitly {@link vtctldata.ForceCutOverSchemaMigrationRequest.verify|verify} messages.
+         * @param message ForceCutOverSchemaMigrationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IForceCutOverSchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ForceCutOverSchemaMigrationRequest message, length delimited. Does not implicitly {@link vtctldata.ForceCutOverSchemaMigrationRequest.verify|verify} messages.
+         * @param message ForceCutOverSchemaMigrationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IForceCutOverSchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ForceCutOverSchemaMigrationRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ForceCutOverSchemaMigrationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ForceCutOverSchemaMigrationRequest;
+
+        /**
+         * Decodes a ForceCutOverSchemaMigrationRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ForceCutOverSchemaMigrationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ForceCutOverSchemaMigrationRequest;
+
+        /**
+         * Verifies a ForceCutOverSchemaMigrationRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ForceCutOverSchemaMigrationRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ForceCutOverSchemaMigrationRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ForceCutOverSchemaMigrationRequest;
+
+        /**
+         * Creates a plain object from a ForceCutOverSchemaMigrationRequest message. Also converts values to other types if specified.
+         * @param message ForceCutOverSchemaMigrationRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ForceCutOverSchemaMigrationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ForceCutOverSchemaMigrationRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ForceCutOverSchemaMigrationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ForceCutOverSchemaMigrationResponse. */
+    interface IForceCutOverSchemaMigrationResponse {
+
+        /** ForceCutOverSchemaMigrationResponse rows_affected_by_shard */
+        rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
+    }
+
+    /** Represents a ForceCutOverSchemaMigrationResponse. */
+    class ForceCutOverSchemaMigrationResponse implements IForceCutOverSchemaMigrationResponse {
+
+        /**
+         * Constructs a new ForceCutOverSchemaMigrationResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IForceCutOverSchemaMigrationResponse);
+
+        /** ForceCutOverSchemaMigrationResponse rows_affected_by_shard. */
+        public rows_affected_by_shard: { [k: string]: (number|Long) };
+
+        /**
+         * Creates a new ForceCutOverSchemaMigrationResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ForceCutOverSchemaMigrationResponse instance
+         */
+        public static create(properties?: vtctldata.IForceCutOverSchemaMigrationResponse): vtctldata.ForceCutOverSchemaMigrationResponse;
+
+        /**
+         * Encodes the specified ForceCutOverSchemaMigrationResponse message. Does not implicitly {@link vtctldata.ForceCutOverSchemaMigrationResponse.verify|verify} messages.
+         * @param message ForceCutOverSchemaMigrationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IForceCutOverSchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ForceCutOverSchemaMigrationResponse message, length delimited. Does not implicitly {@link vtctldata.ForceCutOverSchemaMigrationResponse.verify|verify} messages.
+         * @param message ForceCutOverSchemaMigrationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IForceCutOverSchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ForceCutOverSchemaMigrationResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ForceCutOverSchemaMigrationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ForceCutOverSchemaMigrationResponse;
+
+        /**
+         * Decodes a ForceCutOverSchemaMigrationResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ForceCutOverSchemaMigrationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ForceCutOverSchemaMigrationResponse;
+
+        /**
+         * Verifies a ForceCutOverSchemaMigrationResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ForceCutOverSchemaMigrationResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ForceCutOverSchemaMigrationResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ForceCutOverSchemaMigrationResponse;
+
+        /**
+         * Creates a plain object from a ForceCutOverSchemaMigrationResponse message. Also converts values to other types if specified.
+         * @param message ForceCutOverSchemaMigrationResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ForceCutOverSchemaMigrationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ForceCutOverSchemaMigrationResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ForceCutOverSchemaMigrationResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
