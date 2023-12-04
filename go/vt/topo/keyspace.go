@@ -19,6 +19,9 @@ package topo
 import (
 	"context"
 	"path"
+	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -278,18 +281,50 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) 
 		return nil, vterrors.Wrapf(err, "failed to get list of shards for keyspace '%v'", keyspace)
 	}
 
-	result := make(map[string]*ShardInfo, len(shards))
+	// Keyspaces with a large number of shards and geographically distributed
+	// topo instances may experience significant latency fetching shard records.
+	//
+	// A prior version of this logic used unbounded concurrency to fetch shard
+	// records which resulted in overwhelming topo server instances:
+	// https://github.com/vitessio/vitess/pull/5436.
+	//
+	// However, removing the concurrency all together can cause large operations
+	// to fail all together due to timeout. Set a reasonable worker limit (8 as
+	// a starting point, chosen in December 2023) to enable concurrent record
+	// fetches while attempting to avoid any thundering herd problems.
+	var (
+		mu     sync.Mutex
+		result = make(map[string]*ShardInfo, len(shards))
+	)
+
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.SetLimit(8)
+
 	for _, shard := range shards {
-		si, err := ts.GetShard(ctx, keyspace, shard)
-		if err != nil {
-			if IsErrType(err, NoNode) {
+		shard := shard
+
+		eg.Go(func() error {
+			si, err := ts.GetShard(ctx, keyspace, shard)
+			switch {
+			case IsErrType(err, NoNode):
 				log.Warningf("GetShard(%v, %v) returned ErrNoNode, consider checking the topology.", keyspace, shard)
-			} else {
-				return nil, vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
+				return nil
+			case err == nil:
+				mu.Lock()
+				result[shard] = si
+				mu.Unlock()
+
+				return nil
+			default:
+				return vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
 			}
-		}
-		result[shard] = si
+		})
 	}
+
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+
 	return result, nil
 }
 
