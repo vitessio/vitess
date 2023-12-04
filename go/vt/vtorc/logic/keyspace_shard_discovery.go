@@ -124,8 +124,12 @@ func refreshKeyspaceHelper(ctx context.Context, keyspaceName string) error {
 
 // refreshAllShards refreshes all the shard records in the given keyspace.
 func refreshAllShards(ctx context.Context, keyspaceName string) error {
-	// TODO(mdlayher): apply concurrency.
-	shardInfos, err := ts.FindAllShardsInKeyspace(ctx, keyspaceName, nil)
+	shardInfos, err := ts.FindAllShardsInKeyspace(ctx, keyspaceName, &topo.FindAllShardsInKeyspaceConfig{
+		// Fetch shard records concurrently to speed up discovery. A typical
+		// Vitess cluster will have 1-3 vtorc instances deployed, so there is
+		// little risk of a thundering herd.
+		Concurrency: 8,
+	})
 	if err != nil {
 		log.Error(err)
 		return err

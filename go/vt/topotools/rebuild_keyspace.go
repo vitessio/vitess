@@ -30,14 +30,16 @@ import (
 )
 
 // RebuildKeyspace rebuilds the serving graph data while locking out other changes.
-func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts *topo.Server, keyspace string, cells []string, allowPartial bool) (err error) {
+func RebuildKeyspace(ctx context.Context, _ logutil.Logger, ts *topo.Server, keyspace string, cells []string, allowPartial bool) (err error) {
+	// TODO: logutil.Logger is unused, clean up call sites.
+
 	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "RebuildKeyspace")
 	if lockErr != nil {
 		return lockErr
 	}
 	defer unlock(&err)
 
-	return RebuildKeyspaceLocked(ctx, log, ts, keyspace, cells, allowPartial)
+	return RebuildKeyspaceLocked(ctx, ts, keyspace, cells, allowPartial)
 }
 
 // RebuildKeyspaceLocked should only be used with an action lock on the keyspace
@@ -46,7 +48,7 @@ func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts *topo.Server, k
 //
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
-func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Server, keyspace string, cells []string, allowPartial bool) error {
+func RebuildKeyspaceLocked(ctx context.Context, ts *topo.Server, keyspace string, cells []string, allowPartial bool) error {
 	if err := topo.CheckKeyspaceLocked(ctx, keyspace); err != nil {
 		return err
 	}
@@ -64,8 +66,12 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 		}
 	}
 
-	// TODO(mdlayher): apply concurrency.
-	shards, err := ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
+	shards, err := ts.FindAllShardsInKeyspace(ctx, keyspace, &topo.FindAllShardsInKeyspaceConfig{
+		// Fetch shard records concurrently to speed up the rebuild process.
+		// This call is invoked by the first tablet in a given keyspace or
+		// manually via vtctld, so there is little risk of a thundering herd.
+		Concurrency: 8,
+	})
 	if err != nil {
 		return err
 	}

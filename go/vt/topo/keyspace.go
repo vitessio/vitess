@@ -287,9 +287,12 @@ type FindAllShardsInKeyspaceConfig struct {
 // If cfg is non-nil, it is used to configure the method's behavior. Otherwise,
 // a default configuration is used.
 func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, cfg *FindAllShardsInKeyspaceConfig) (map[string]*ShardInfo, error) {
-	if cfg == nil || cfg.Concurrency == 0 {
-		// Apply defaults.
-		cfg = &FindAllShardsInKeyspaceConfig{Concurrency: 1}
+	// Apply any necessary defaults.
+	if cfg == nil {
+		cfg = &FindAllShardsInKeyspaceConfig{}
+	}
+	if cfg.Concurrency == 0 {
+		cfg.Concurrency = 1
 	}
 
 	shards, err := ts.GetShardNames(ctx, keyspace)
