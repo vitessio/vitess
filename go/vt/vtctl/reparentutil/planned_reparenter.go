@@ -60,6 +60,7 @@ type PlannedReparentOptions struct {
 	NewPrimaryAlias     *topodatapb.TabletAlias
 	AvoidPrimaryAlias   *topodatapb.TabletAlias
 	WaitReplicasTimeout time.Duration
+	TolerableReplLag    time.Duration
 
 	// Private options managed internally. We use value-passing semantics to
 	// set these options inside a PlannedReparent without leaking these details
@@ -179,7 +180,7 @@ func (pr *PlannedReparenter) preflightChecks(
 
 		event.DispatchUpdate(ev, "searching for primary candidate")
 
-		opts.NewPrimaryAlias, err = ChooseNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.durability, pr.logger)
+		opts.NewPrimaryAlias, err = ChooseNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.TolerableReplLag, opts.durability, pr.logger)
 		if err != nil {
 			return true, err
 		}

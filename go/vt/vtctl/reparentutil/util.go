@@ -65,6 +65,7 @@ func ChooseNewPrimary(
 	tabletMap map[string]*topo.TabletInfo,
 	avoidPrimaryAlias *topodatapb.TabletAlias,
 	waitReplicasTimeout time.Duration,
+	tolerableReplLag time.Duration,
 	durability Durabler,
 	// (TODO:@ajm188) it's a little gross we need to pass this, maybe embed in the context?
 	logger logutil.Logger,
@@ -100,7 +101,7 @@ func ChooseNewPrimary(
 			pos, replLag, err := findPositionAndLagForTablet(groupCtx, tb, logger, tmc, waitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
-			if err == nil && waitReplicasTimeout >= replLag {
+			if err == nil && (tolerableReplLag == 0 || tolerableReplLag >= replLag) {
 				validTablets = append(validTablets, tb)
 				tabletPositions = append(tabletPositions, pos)
 			}
