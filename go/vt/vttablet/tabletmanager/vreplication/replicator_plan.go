@@ -29,7 +29,6 @@ import (
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -479,7 +478,7 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 	if err != nil {
 		return nil, err
 	}
-	log.Errorf("DEBUG: applyBulkDeleteChanges: %s", query)
+	tp.TablePlanBuilder.stats.BulkQueryCount.Add("delete", 1)
 	return executor(query)
 }
 
@@ -512,7 +511,7 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 		query.WriteString(tp.BulkInsertOnDup.Query)
 	}
 
-	log.Errorf("DEBUG: applyBulkInsertChanges: %s", query)
+	tp.TablePlanBuilder.stats.BulkQueryCount.Add("insert", 1)
 	return executor(query.String())
 }
 

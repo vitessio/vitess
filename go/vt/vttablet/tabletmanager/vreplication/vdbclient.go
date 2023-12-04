@@ -61,7 +61,9 @@ func (vc *vdbClient) Begin() error {
 	// transaction, which starts with the begin and ends with
 	// the commit.
 	vc.queriesPos = int64(len(vc.queries))
+	vc.batchSize = 6 // begin and semicolon
 	vc.queries = append(vc.queries, "begin")
+
 	vc.InTransaction = true
 	vc.startTime = time.Now()
 	return nil
@@ -83,7 +85,6 @@ func (vc *vdbClient) Commit() error {
 // the maxBatchSize one ore more times -- down the wire to the database,
 // including the final commit.
 func (vc *vdbClient) CommitQueryBatch(ctx context.Context) error {
-	log.Errorf("DEBUG: CommitQueryBatch: %s", strings.Join(vc.queries[vc.queriesPos:], ";"))
 	vc.queries = append(vc.queries, "commit")
 	queries := strings.Join(vc.queries[vc.queriesPos:], ";")
 	for _, err := vc.DBClient.ExecuteFetchMulti(queries, -1); err != nil; {
@@ -93,6 +94,7 @@ func (vc *vdbClient) CommitQueryBatch(ctx context.Context) error {
 	vc.queries = nil
 	vc.queriesPos = 0
 	vc.batchSize = 0
+	vc.stats.TrxQueryBatchCount.Add("with_commit", 1)
 	vc.stats.Timings.Record(binlogplayer.BlplBatchTransaction, vc.startTime)
 	return nil
 }
@@ -131,12 +133,10 @@ func (vc *vdbClient) AddBatchQuery(query string) error {
 
 	addedSize := int64(len(query)) + 1 // plus 1 for the semicolon
 	if vc.batchSize+addedSize > vc.maxBatchSize {
-		log.Errorf("DEBUG: AddBatchQuery: %s ; but over maxBatchSize of %d", query, vc.maxBatchSize)
 		if _, err := vc.ExecuteQueryBatch(); err != nil {
 			return err
 		}
 	}
-	log.Errorf("DEBUG: AddBatchQuery: %s", query)
 	vc.queries = append(vc.queries, query)
 	vc.batchSize += addedSize
 
@@ -148,11 +148,11 @@ func (vc *vdbClient) AddBatchQuery(query string) error {
 func (vc *vdbClient) ExecuteQueryBatch() ([]*sqltypes.Result, error) {
 	defer vc.stats.Timings.Record(binlogplayer.BlplMultiQuery, time.Now())
 
-	log.Errorf("DEBUG: ExecuteQueryBatch: %s", strings.Join(vc.queries[vc.queriesPos:], ";"))
 	qrs, err := vc.DBClient.ExecuteFetchMulti(strings.Join(vc.queries[vc.queriesPos:], ";"), -1)
 	if err != nil {
 		return nil, err
 	}
+	vc.stats.TrxQueryBatchCount.Add("without_commit", 1)
 	vc.queriesPos += int64(len(vc.queries[vc.queriesPos:]))
 	vc.batchSize = 0
 

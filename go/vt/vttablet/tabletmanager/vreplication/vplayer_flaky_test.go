@@ -3139,26 +3139,30 @@ func TestPlayerBatchMode(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	cancel, _ := startVReplication(t, bls, "")
+	cancel, vrID := startVReplication(t, bls, "")
 	defer cancel()
 
 	// When the trx will be in a single batch.
 	trxFullBatchExpectRE := `^begin;(set @@session\.foreign_key_checks=.*;)?%s;update _vt\.vreplication set pos=.*;commit$`
 	// If the trx batch is split, then we only expected the end part.
 	trxLastBatchExpectRE := `%s;update _vt\.vreplication set pos=.*;commit$`
-	longStr := strings.Repeat("a", 485) // Using this will cause the trx batch to be split
+	// Using this will cause the trx batch to be split into multiple wire messages.
+	longStr := strings.Repeat("a", 460)
 
 	testcases := []struct {
 		input               string
 		output              []string
 		expectedInLastBatch string // Only used if we expect the trx to be split
+		expectBulkInsert    bool
+		expectBulkDelete    bool
 		table               string
 		data                [][]string
 	}{
 		{
-			input:  "insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc'), (4, 'ddd'), (5, 'eee')",
-			output: []string{"insert into t1(id,val1) values (1,'aaa'), (2,'bbb'), (3,'ccc'), (4,'ddd'), (5,'eee')"},
-			table:  "t1",
+			input:            "insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc'), (4, 'ddd'), (5, 'eee')",
+			output:           []string{"insert into t1(id,val1) values (1,'aaa'), (2,'bbb'), (3,'ccc'), (4,'ddd'), (5,'eee')"},
+			expectBulkInsert: true,
+			table:            "t1",
 			data: [][]string{
 				{"1", "aaa"},
 				{"2", "bbb"},
@@ -3179,9 +3183,10 @@ func TestPlayerBatchMode(t *testing.T) {
 			},
 		},
 		{
-			input:  "delete from t1 where id > 3",
-			output: []string{"delete from t1 where id in (4, 5)"},
-			table:  "t1",
+			input:            "delete from t1 where id > 3",
+			output:           []string{"delete from t1 where id in (4, 5)"},
+			expectBulkDelete: true,
+			table:            "t1",
 			data: [][]string{
 				{"2", "bbb"},
 				{"3", "ccc"},
@@ -3211,7 +3216,8 @@ func TestPlayerBatchMode(t *testing.T) {
 				"insert into t1(id,val1) values (501,'aaa')",
 				"insert into t1(id,val1) values (2,'bbb'), (3,'ccc')",
 			},
-			table: "t1",
+			expectBulkInsert: true,
+			table:            "t1",
 			data: [][]string{
 				{"2", "bbb"},
 				{"3", "ccc"},
@@ -3221,11 +3227,15 @@ func TestPlayerBatchMode(t *testing.T) {
 			},
 		},
 		{
-			input:  "delete from t1",
-			output: []string{"delete from t1 where id in (2, 3, 102, 103, 501)"},
-			table:  "t1",
+			input:            "delete from t1",
+			output:           []string{"delete from t1 where id in (2, 3, 102, 103, 501)"},
+			expectBulkDelete: true,
+			table:            "t1",
 		},
 	}
+
+	expectedBulkInserts, expectedBulkDeletes, expectedTrxBatchExecs, expectedTrxBatchCommits := int64(0), int64(0), int64(0), int64(0)
+	stats := globalStats.controllers[int32(vrID)].blpStats
 
 	for _, tcase := range testcases {
 		execStatements(t, []string{tcase.input})
@@ -3244,14 +3254,28 @@ func TestPlayerBatchMode(t *testing.T) {
 		if tcase.table != "" {
 			expectData(t, tcase.table, tcase.data)
 		}
+		if tcase.expectBulkDelete {
+			expectedBulkDeletes++
+		}
+		if tcase.expectBulkInsert {
+			expectedBulkInserts++
+		}
 		// Confirm that the statements were batched together in multi-statement
 		// protocol message(s) as expected.
 		if tcase.expectedInLastBatch != "" { // We expect the trx to be split
+			expectedTrxBatchExecs++
+			expectedTrxBatchCommits++
 			require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxLastBatchExpectRE, regexp.QuoteMeta(tcase.expectedInLastBatch))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
 		} else {
+			expectedTrxBatchCommits++
 			require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxFullBatchExpectRE, regexp.QuoteMeta(strings.Join(tcase.output, ";")))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
 		}
 	}
+
+	require.Equal(t, expectedBulkInserts, stats.BulkQueryCount.Counts()["insert"], "expected %d bulk inserts but got %d", expectedBulkInserts, stats.BulkQueryCount.Counts()["insert"])
+	require.Equal(t, expectedBulkDeletes, stats.BulkQueryCount.Counts()["delete"], "expected %d bulk deletes but got %d", expectedBulkDeletes, stats.BulkQueryCount.Counts()["delete"])
+	require.Equal(t, expectedTrxBatchExecs, stats.TrxQueryBatchCount.Counts()["without_commit"], "expected %d trx batch execs but got %d", expectedTrxBatchExecs, stats.TrxQueryBatchCount.Counts()["without_commit"])
+	require.Equal(t, expectedTrxBatchCommits, stats.TrxQueryBatchCount.Counts()["with_commit"], "expected %d trx batch commits but got %d", expectedTrxBatchCommits, stats.TrxQueryBatchCount.Counts()["with_commit"])
 }
 
 func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {

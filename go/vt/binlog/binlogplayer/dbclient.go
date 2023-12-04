@@ -143,7 +143,6 @@ func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Resul
 }
 
 func (dc *dbClientImpl) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
-	log.Errorf("DEBUG: ExecuteFetchMulti: %s", query)
 	results := make([]*sqltypes.Result, 0)
 	mqr, more, err := dc.dbConn.ExecuteFetchMulti(query, maxrows, true)
 	if err != nil {
