@@ -23,7 +23,7 @@ import (
 )
 
 // Seconds provides convenience functions for extracting
-// duration from flaot64 seconds values.
+// duration from float64 seconds values.
 type Seconds float64
 
 // SecondsVar is like a flag.Float64Var, but it works for Seconds.

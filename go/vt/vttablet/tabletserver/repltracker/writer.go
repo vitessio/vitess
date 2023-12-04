@@ -87,12 +87,12 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 		errorLog:         logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
 		// We make this pool size 2; to prevent pool exhausted
 		// stats from incrementing continually, and causing concern
-		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
-		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
+		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", env.Exporter(), 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
+		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", env.Exporter(), 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
 	}
 	if w.onDemandDuration > 0 {
 		// see RequestHeartbeats() for use of onDemandRequestTicks
-		// it's basically a mechnism to rate limit operation RequestHeartbeats().
+		// it's basically a mechanism to rate limit operation RequestHeartbeats().
 		// and selectively drop excessive requests.
 		w.allowNextHeartbeatRequest()
 		go func() {
@@ -123,7 +123,7 @@ func (w *heartbeatWriter) Open() {
 	if w.isOpen {
 		return
 	}
-	log.Info("Hearbeat Writer: opening")
+	log.Info("Heartbeat Writer: opening")
 
 	// We cannot create the database and tables in this Open function
 	// since, this is run when a tablet changes to Primary type. The other replicas
@@ -159,7 +159,7 @@ func (w *heartbeatWriter) Close() {
 	w.appPool.Close()
 	w.allPrivsPool.Close()
 	w.isOpen = false
-	log.Info("Hearbeat Writer: closed")
+	log.Info("Heartbeat Writer: closed")
 }
 
 // bindHeartbeatVars takes a heartbeat write (insert or update) and
@@ -207,7 +207,7 @@ func (w *heartbeatWriter) write() error {
 		return err
 	}
 	defer appConn.Recycle()
-	_, err = appConn.ExecuteFetch(upsert, 1, false)
+	_, err = appConn.Conn.ExecuteFetch(upsert, 1, false)
 	if err != nil {
 		return err
 	}
@@ -219,7 +219,7 @@ func (w *heartbeatWriter) recordError(err error) {
 	writeErrors.Add(1)
 }
 
-// enableWrites actives or deactives heartbeat writes
+// enableWrites activates or deactivates heartbeat writes
 func (w *heartbeatWriter) enableWrites(enable bool) {
 	if w.ticks == nil {
 		return

@@ -21,13 +21,12 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -69,7 +68,7 @@ type Route struct {
 	// OrderBy specifies the key order for merge sorting. This will be
 	// set only for scatter queries that need the results to be
 	// merge-sorted.
-	OrderBy []OrderByParams
+	OrderBy evalengine.Comparison
 
 	// TruncateColumnCount specifies the number of columns to return
 	// in the final result. Rest of the columns are truncated
@@ -108,42 +107,6 @@ func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery stri
 		Query:      query,
 		FieldQuery: fieldQuery,
 	}
-}
-
-// OrderByParams specifies the parameters for ordering.
-// This is used for merge-sorting scatter queries.
-type OrderByParams struct {
-	Col int
-	// WeightStringCol is the weight_string column that will be used for sorting.
-	// It is set to -1 if such a column is not added to the query
-	WeightStringCol   int
-	Desc              bool
-	StarColFixedIndex int
-	// Type for knowing if the collation is relevant
-	Type querypb.Type
-	// Collation ID for comparison using collation
-	CollationID collations.ID
-}
-
-// String returns a string. Used for plan descriptions
-func (obp OrderByParams) String() string {
-	val := strconv.Itoa(obp.Col)
-	if obp.StarColFixedIndex > obp.Col {
-		val = strconv.Itoa(obp.StarColFixedIndex)
-	}
-	if obp.WeightStringCol != -1 && obp.WeightStringCol != obp.Col {
-		val = fmt.Sprintf("(%s|%d)", val, obp.WeightStringCol)
-	}
-	if obp.Desc {
-		val += " DESC"
-	} else {
-		val += " ASC"
-	}
-
-	if sqltypes.IsText(obp.Type) && obp.CollationID != collations.Unknown {
-		val += " COLLATE " + collations.Local().LookupName(obp.CollationID)
-	}
-	return val
 }
 
 var (
@@ -421,38 +384,15 @@ func (route *Route) GetFields(ctx context.Context, vcursor VCursor, bindVars map
 }
 
 func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
-	var err error
 	// Since Result is immutable, we make a copy.
 	// The copy can be shallow because we won't be changing
 	// the contents of any row.
 	out := in.ShallowCopy()
 
-	comparers := extractSlices(route.OrderBy)
-
-	sort.Slice(out.Rows, func(i, j int) bool {
-		var cmp int
-		if err != nil {
-			return true
-		}
-		// If there are any errors below, the function sets
-		// the external err and returns true. Once err is set,
-		// all subsequent calls return true. This will make
-		// Slice think that all elements are in the correct
-		// order and return more quickly.
-		for _, c := range comparers {
-			cmp, err = c.compare(out.Rows[i], out.Rows[j])
-			if err != nil {
-				return true
-			}
-			if cmp == 0 {
-				continue
-			}
-			return cmp < 0
-		}
-		return true
-	})
-
-	return out.Truncate(route.TruncateColumnCount), err
+	if err := route.OrderBy.SortResult(out); err != nil {
+		return nil, err
+	}
+	return out.Truncate(route.TruncateColumnCount), nil
 }
 
 func (route *Route) description() PrimitiveDescription {
@@ -467,7 +407,7 @@ func (route *Route) description() PrimitiveDescription {
 	if route.Values != nil {
 		formattedValues := make([]string, 0, len(route.Values))
 		for _, value := range route.Values {
-			formattedValues = append(formattedValues, evalengine.FormatExpr(value))
+			formattedValues = append(formattedValues, sqlparser.String(value))
 		}
 		other["Values"] = formattedValues
 	}
@@ -477,7 +417,7 @@ func (route *Route) description() PrimitiveDescription {
 			if idx != 0 {
 				sysTabSchema += ", "
 			}
-			sysTabSchema += evalengine.FormatExpr(tableSchema)
+			sysTabSchema += sqlparser.String(tableSchema)
 		}
 		sysTabSchema += "]"
 		other["SysTableTableSchema"] = sysTabSchema
@@ -485,7 +425,7 @@ func (route *Route) description() PrimitiveDescription {
 	if len(route.SysTableTableName) != 0 {
 		var sysTableName []string
 		for k, v := range route.SysTableTableName {
-			sysTableName = append(sysTableName, k+":"+evalengine.FormatExpr(v))
+			sysTableName = append(sysTableName, k+":"+sqlparser.String(v))
 		}
 		sort.Strings(sysTableName)
 		other["SysTableTableName"] = "[" + strings.Join(sysTableName, ", ") + "]"
@@ -590,7 +530,8 @@ func getQueries(query string, bvs []map[string]*querypb.BindVariable) []*querypb
 }
 
 func orderByToString(in any) string {
-	return in.(OrderByParams).String()
+	obp := in.(evalengine.OrderByParams)
+	return obp.String()
 }
 
 func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, queries []*querypb.BoundQuery) {

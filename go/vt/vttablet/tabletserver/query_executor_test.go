@@ -71,7 +71,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 		input string
 		// passThrough specifies if planbuilder.PassthroughDML must be set.
 		passThrough bool
-		// dbResponses specifes the list of queries and responses to add to the fake db.
+		// dbResponses specifies the list of queries and responses to add to the fake db.
 		dbResponses []dbResponse
 		// resultWant is the result we want.
 		resultWant *sqltypes.Result
@@ -208,13 +208,13 @@ func TestQueryExecutorPlans(t *testing.T) {
 	}, {
 		input: "create index a on user(id)",
 		dbResponses: []dbResponse{{
-			query:  "alter table `user` add index a (id)",
+			query:  "alter table `user` add key a (id)",
 			result: emptyResult,
 		}},
 		resultWant: emptyResult,
 		planWant:   "DDL",
-		logWant:    "alter table `user` add index a (id)",
-		inTxWant:   "alter table `user` add index a (id)",
+		logWant:    "alter table `user` add key a (id)",
+		inTxWant:   "alter table `user` add key a (id)",
 	}, {
 		input: "create index a on user(id1 + id2)",
 		dbResponses: []dbResponse{{
@@ -1729,7 +1729,7 @@ func TestQueryExecSchemaReloadCount(t *testing.T) {
 	testcases := []struct {
 		// input is the input query.
 		input string
-		// dbResponses specifes the list of queries and responses to add to the fake db.
+		// dbResponses specifies the list of queries and responses to add to the fake db.
 		dbResponses       []dbResponse
 		schemaReloadCount int
 	}{{

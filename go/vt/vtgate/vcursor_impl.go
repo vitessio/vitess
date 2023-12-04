@@ -27,9 +27,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
@@ -43,6 +43,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/topo"
 	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -105,6 +106,11 @@ type vcursorImpl struct {
 	logStats       *logstats.LogStats
 	collation      collations.ID
 
+	// fkChecksState stores the state of foreign key checks variable.
+	// This state is meant to be the final fk checks state after consulting the
+	// session state, and the given query's comments for `SET_VAR` optimizer hints.
+	// A nil value represents that no foreign_key_checks value was provided.
+	fkChecksState       *bool
 	ignoreMaxMemoryRows bool
 	vschema             *vindexes.VSchema
 	vm                  VSchemaOperator
@@ -203,6 +209,12 @@ func (vc *vcursorImpl) ConnCollation() collations.ID {
 
 func (vc *vcursorImpl) TimeZone() *time.Location {
 	return vc.safeSession.TimeZone()
+}
+
+func (vc *vcursorImpl) SQLMode() string {
+	// TODO: Implement return the current sql_mode.
+	// This is currently hardcoded to the default in MySQL 8.0.
+	return config.DefaultSQLMode
 }
 
 // MaxMemoryRows returns the maxMemoryRows flag value.
@@ -820,6 +832,16 @@ func (vc *vcursorImpl) SetAutocommit(ctx context.Context, autocommit bool) error
 	return nil
 }
 
+// SetSessionForeignKeyChecks implements the SessionActions interface
+func (vc *vcursorImpl) SetSessionForeignKeyChecks(ctx context.Context, foreignKeyChecks bool) error {
+	if foreignKeyChecks {
+		vc.safeSession.SetSystemVariable(sysvars.ForeignKeyChecks.Name, "1")
+	} else {
+		vc.safeSession.SetSystemVariable(sysvars.ForeignKeyChecks.Name, "0")
+	}
+	return nil
+}
+
 // SetQueryTimeout implements the SessionActions interface
 func (vc *vcursorImpl) SetQueryTimeout(maxExecutionTime int64) {
 	vc.safeSession.QueryTimeout = maxExecutionTime
@@ -1045,6 +1067,14 @@ func (vc *vcursorImpl) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_Forei
 		return 0, vterrors.VT14004(keyspace)
 	}
 	return ks.ForeignKeyMode, nil
+}
+
+func (vc *vcursorImpl) KeyspaceError(keyspace string) error {
+	ks := vc.vschema.Keyspaces[keyspace]
+	if ks == nil {
+		return vterrors.VT14004(keyspace)
+	}
+	return ks.Error
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
@@ -1322,4 +1352,33 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	v.marginComments.Trailing += "/* warming read */"
 
 	return v
+}
+
+// UpdateForeignKeyChecksState updates the foreign key checks state of the vcursor.
+func (vc *vcursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery *bool) {
+	// Initialize the state to unspecified.
+	vc.fkChecksState = nil
+	// If the query has a SET_VAR optimizer hint that explicitly sets the foreign key checks state,
+	// we should use that.
+	if fkStateFromQuery != nil {
+		vc.fkChecksState = fkStateFromQuery
+		return
+	}
+	// If the query doesn't have anything, then we consult the session state.
+	fkVal, isPresent := vc.safeSession.SystemVariables[sysvars.ForeignKeyChecks.Name]
+	if isPresent {
+		switch strings.ToLower(fkVal) {
+		case "on", "1":
+			val := true
+			vc.fkChecksState = &val
+		case "off", "0":
+			val := false
+			vc.fkChecksState = &val
+		}
+	}
+}
+
+// GetForeignKeyChecksState gets the stored foreign key checks state in the vcursor.
+func (vc *vcursorImpl) GetForeignKeyChecksState() *bool {
+	return vc.fkChecksState
 }

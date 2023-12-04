@@ -68,9 +68,30 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator) (
 		return transformFkVerify(ctx, op)
 	case *operators.InsertSelection:
 		return transformInsertionSelection(ctx, op)
+	case *operators.HashJoin:
+		return transformHashJoin(ctx, op)
+	case *operators.Sequential:
+		return transformSequential(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequential) (logicalPlan, error) {
+	var lps []logicalPlan
+	for _, source := range op.Sources {
+		lp, err := transformToLogicalPlan(ctx, source)
+		if err != nil {
+			return nil, err
+		}
+		if ins, ok := lp.(*insert); ok {
+			ins.eInsert.PreventAutoCommit = true
+		}
+		lps = append(lps, lp)
+	}
+	return &sequential{
+		sources: lps,
+	}, nil
 }
 
 func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators.InsertSelection) (logicalPlan, error) {
@@ -89,20 +110,20 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 	}
 
 	ins := dmlOp.(*operators.Insert)
-	eins := &engine.Insert{
-		Opcode:            mapToInsertOpCode(rb.Routing.OpCode(), true),
-		Keyspace:          rb.Routing.Keyspace(),
-		TableName:         ins.VTable.Name.String(),
-		Ignore:            ins.Ignore,
-		ForceNonStreaming: op.ForceNonStreaming,
-		Generate:          autoIncGenerate(ins.AutoIncrement),
-		ColVindexes:       ins.ColVindexes,
-		VindexValues:      ins.VindexValues,
+	eins := &engine.InsertSelect{
+		InsertCommon: engine.InsertCommon{
+			Keyspace:          rb.Routing.Keyspace(),
+			TableName:         ins.VTable.Name.String(),
+			Ignore:            ins.Ignore,
+			ForceNonStreaming: op.ForceNonStreaming,
+			Generate:          autoIncGenerate(ins.AutoIncrement),
+			ColVindexes:       ins.ColVindexes,
+		},
 		VindexValueOffset: ins.VindexValueOffset,
 	}
-	lp := &insert{eInsert: eins}
+	lp := &insert{eInsertSelect: eins}
 
-	eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
+	eins.Prefix, _, eins.Suffix = generateInsertShardedQuery(ins.AST)
 
 	selectionPlan, err := transformToLogicalPlan(ctx, op.Select)
 	if err != nil {
@@ -139,9 +160,10 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 
 		childEngine := childLP.Primitive()
 		children = append(children, &engine.FkChild{
-			BVName: child.BVName,
-			Cols:   child.Cols,
-			Exec:   childEngine,
+			BVName:         child.BVName,
+			Cols:           child.Cols,
+			NonLiteralInfo: child.NonLiteralInfo,
+			Exec:           childEngine,
 		})
 	}
 
@@ -221,17 +243,16 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		aggrParam.Original = aggr.Original
 		aggrParam.OrigOpcode = aggr.OriginalOpCode
 		aggrParam.WCol = aggr.WSOffset
-		aggrParam.Type, aggrParam.CollationID = aggr.GetTypeCollation(ctx)
+		aggrParam.Type = aggr.GetTypeCollation(ctx)
 		oa.aggregates = append(oa.aggregates, aggrParam)
 	}
 	for _, groupBy := range op.Grouping {
-		typ, col, _ := ctx.SemTable.TypeForExpr(groupBy.SimplifiedExpr)
+		typ, _ := ctx.SemTable.TypeForExpr(groupBy.SimplifiedExpr)
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
 			KeyCol:          groupBy.ColOffset,
 			WeightStringCol: groupBy.WSOffset,
 			Expr:            groupBy.AsAliasedExpr().Expr,
 			Type:            typ,
-			CollationID:     col,
 		})
 	}
 
@@ -269,14 +290,12 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 	}
 
 	for idx, order := range ordering.Order {
-		typ, collationID, _ := ctx.SemTable.TypeForExpr(order.SimplifiedExpr)
-		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
-			Col:               ordering.Offset[idx],
-			WeightStringCol:   ordering.WOffset[idx],
-			Desc:              order.Inner.Direction == sqlparser.DescOrder,
-			StarColFixedIndex: ordering.Offset[idx],
-			Type:              typ,
-			CollationID:       collationID,
+		typ, _ := ctx.SemTable.TypeForExpr(order.SimplifiedExpr)
+		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, evalengine.OrderByParams{
+			Col:             ordering.Offset[idx],
+			WeightStringCol: ordering.WOffset[idx],
+			Desc:            order.Inner.Direction == sqlparser.DescOrder,
+			Type:            typ,
 		})
 	}
 
@@ -327,8 +346,8 @@ func getEvalEngingeExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr
 	case *operators.EvalEngine:
 		return e.EExpr, nil
 	case operators.Offset:
-		typ, col, _ := ctx.SemTable.TypeForExpr(pe.EvalExpr)
-		return evalengine.NewColumn(int(e), typ, col), nil
+		typ, _ := ctx.SemTable.TypeForExpr(pe.EvalExpr)
+		return evalengine.NewColumn(int(e), typ, pe.EvalExpr), nil
 	default:
 		return nil, vterrors.VT13001("project not planned for: %s", pe.String())
 	}
@@ -501,13 +520,12 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 
 	eroute, err := routeToEngineRoute(ctx, op, hints)
 	for _, order := range op.Ordering {
-		typ, collation, _ := ctx.SemTable.TypeForExpr(order.AST)
-		eroute.OrderBy = append(eroute.OrderBy, engine.OrderByParams{
+		typ, _ := ctx.SemTable.TypeForExpr(order.AST)
+		eroute.OrderBy = append(eroute.OrderBy, evalengine.OrderByParams{
 			Col:             order.Offset,
 			WeightStringCol: order.WOffset,
 			Desc:            order.Direction == sqlparser.DescOrder,
 			Type:            typ,
-			CollationID:     collation,
 		})
 	}
 	if err != nil {
@@ -526,21 +544,27 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 }
 
 func buildInsertLogicalPlan(
-	rb *operators.Route,
-	op ops.Operator,
-	stmt *sqlparser.Insert,
+	rb *operators.Route, op ops.Operator, stmt *sqlparser.Insert,
 	hints *queryHints,
 ) (logicalPlan, error) {
 	ins := op.(*operators.Insert)
+
+	ic := engine.InsertCommon{
+		Opcode:      mapToInsertOpCode(rb.Routing.OpCode()),
+		Keyspace:    rb.Routing.Keyspace(),
+		TableName:   ins.VTable.Name.String(),
+		Ignore:      ins.Ignore,
+		Generate:    autoIncGenerate(ins.AutoIncrement),
+		ColVindexes: ins.ColVindexes,
+	}
+	if hints != nil {
+		ic.MultiShardAutocommit = hints.multiShardAutocommit
+		ic.QueryTimeout = hints.queryTimeout
+	}
+
 	eins := &engine.Insert{
-		Opcode:            mapToInsertOpCode(rb.Routing.OpCode(), false),
-		Keyspace:          rb.Routing.Keyspace(),
-		TableName:         ins.VTable.Name.String(),
-		Ignore:            ins.Ignore,
-		Generate:          autoIncGenerate(ins.AutoIncrement),
-		ColVindexes:       ins.ColVindexes,
-		VindexValues:      ins.VindexValues,
-		VindexValueOffset: ins.VindexValueOffset,
+		InsertCommon: ic,
+		VindexValues: ins.VindexValues,
 	}
 	lp := &insert{eInsert: eins}
 
@@ -550,21 +574,13 @@ func buildInsertLogicalPlan(
 		eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
 	}
 
-	if hints != nil {
-		eins.MultiShardAutocommit = hints.multiShardAutocommit
-		eins.QueryTimeout = hints.queryTimeout
-	}
-
 	eins.Query = generateQuery(stmt)
 	return lp, nil
 }
 
-func mapToInsertOpCode(code engine.Opcode, insertSelect bool) engine.InsertOpcode {
+func mapToInsertOpCode(code engine.Opcode) engine.InsertOpcode {
 	if code == engine.Unsharded {
 		return engine.InsertUnsharded
-	}
-	if insertSelect {
-		return engine.InsertSelect
 	}
 	return engine.InsertSharded
 }
@@ -795,4 +811,59 @@ func createLimit(input logicalPlan, limit *sqlparser.Limit) (logicalPlan, error)
 	}
 
 	return plan, nil
+}
+
+func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin) (logicalPlan, error) {
+	lhs, err := transformToLogicalPlan(ctx, op.LHS)
+	if err != nil {
+		return nil, err
+	}
+	rhs, err := transformToLogicalPlan(ctx, op.RHS)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(op.LHSKeys) != 1 {
+		return nil, vterrors.VT12001("hash joins must have exactly one join predicate")
+	}
+
+	joinOp := engine.InnerJoin
+	if op.LeftJoin {
+		joinOp = engine.LeftJoin
+	}
+
+	var missingTypes []string
+
+	ltyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].LHS)
+	if !found {
+		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].LHS))
+	}
+	rtyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].RHS)
+	if !found {
+		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].RHS))
+	}
+
+	if len(missingTypes) > 0 {
+		return nil, vterrors.VT12001(
+			fmt.Sprintf("missing type information for [%s]", strings.Join(missingTypes, ", ")))
+	}
+
+	comparisonType, err := evalengine.CoerceTypes(ltyp, rtyp)
+	if err != nil {
+		return nil, err
+	}
+
+	return &hashJoin{
+		lhs: lhs,
+		rhs: rhs,
+		inner: &engine.HashJoin{
+			Opcode:         joinOp,
+			Cols:           op.ColumnOffsets,
+			LHSKey:         op.LHSKeys[0],
+			RHSKey:         op.RHSKeys[0],
+			ASTPred:        op.JoinPredicate(),
+			Collation:      comparisonType.Collation(),
+			ComparisonType: comparisonType.Type(),
+		},
+	}, nil
 }

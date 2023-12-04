@@ -18,8 +18,8 @@ package evalengine
 
 type (
 	callable interface {
-		Expr
-		callable() []Expr
+		IR
+		callable() []IR
 	}
 
 	CallExpr struct {
@@ -28,7 +28,15 @@ type (
 	}
 )
 
-func (c *CallExpr) callable() []Expr {
+func (c *CallExpr) eval(*ExpressionEnv) (eval, error) {
+	panic("should override")
+}
+
+func (c *CallExpr) compile(*compiler) (ctype, error) {
+	panic("should override")
+}
+
+func (c *CallExpr) callable() []IR {
 	return c.Arguments
 }
 

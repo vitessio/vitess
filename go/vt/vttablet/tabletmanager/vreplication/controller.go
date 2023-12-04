@@ -49,7 +49,7 @@ const (
 )
 
 // controller is created by Engine. Members are initialized upfront.
-// There is no mutex within a controller becaust its members are
+// There is no mutex within a controller because its members are
 // either read-only or self-synchronized.
 type controller struct {
 	vre             *Engine
@@ -268,11 +268,11 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 			isUnrecoverableError(err) ||
 			!ct.lastWorkflowError.ShouldRetry() {
 
-			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)
 			if errSetState := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); errSetState != nil {
-				log.Errorf("INTERNAL: unable to setState() in controller. Attempting to set error text: [%v]; setState() error is: %v", err, errSetState)
+				log.Errorf("INTERNAL: unable to setState() in controller: %v. Could not set error text to: %v.", errSetState, err)
 				return err // yes, err and not errSetState.
 			}
+			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)
 			return nil // this will cause vreplicate to quit the workflow
 		}
 		return err

@@ -89,6 +89,10 @@ func IsText(t querypb.Type) bool {
 	return int(t)&flagIsText == flagIsText
 }
 
+func IsTextOrBinary(t querypb.Type) bool {
+	return int(t)&flagIsText == flagIsText || int(t)&flagIsBinary == flagIsBinary
+}
+
 // IsBinary returns true if querypb.Type is a binary.
 // If you have a Value object, use its member function.
 func IsBinary(t querypb.Type) bool {
@@ -136,7 +140,7 @@ func IsNull(t querypb.Type) bool {
 // switch statements for those who want to cover types
 // by their category.
 const (
-	Unknown    = -1
+	Unknown    = querypb.Type(-1)
 	Null       = querypb.Type_NULL_TYPE
 	Int8       = querypb.Type_INT8
 	Uint8      = querypb.Type_UINT8

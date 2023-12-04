@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -25,6 +26,7 @@ import (
 )
 
 func TestPermutations(t *testing.T) {
+	ctx := context.Background()
 	tt := []struct {
 		name               string
 		fromQueries        []string
@@ -81,7 +83,80 @@ func TestPermutations(t *testing.T) {
 				"create view v2 as select id from t2",
 			},
 			expectDiffs:        4,
-			expectPermutations: 24,
+			expectPermutations: 8, // because CREATE VIEW does not permutate with TABLE operations
+		},
+		{
+			name: "multiple drop view diffs",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+				"create view v1 as select id from t1",
+				"create view v2 as select id from v1",
+				"create view v0 as select id from v2",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+			},
+			expectDiffs:        3,
+			expectPermutations: 1, // because DROP VIEW don't permutate between themselves
+		},
+		{
+			name: "multiple drop view diffs with ALTER TABLE",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+				"create view v1 as select id from t1",
+				"create view v2 as select id from v1",
+				"create view v0 as select id from v2",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info bigint not null);",
+			},
+			expectDiffs:        4,
+			expectPermutations: 1, // because DROP VIEW don't permutate between themselves and with TABLE operations
+		},
+		{
+			name: "multiple create view diffs",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+				"create view v1 as select id from t1",
+				"create view v2 as select id from v1",
+				"create view v3 as select id from v2",
+			},
+			expectDiffs:        3,
+			expectPermutations: 1, // because CREATE VIEW don't permutate between themselves
+		},
+		{
+			name: "multiple create view diffs with ALTER TABLE",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info bigint not null);",
+				"create view v1 as select id from t1",
+				"create view v2 as select id from v1",
+				"create view v3 as select id from v2",
+			},
+			expectDiffs:        4,
+			expectPermutations: 1, // because CREATE VIEW don't permutate between themselves and with TABLE operations
+		},
+		{
+			name: "multiple create and drop view diffs with ALTER TABLE",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+				"create view v101 as select id from t1",
+				"create view v102 as select id from v101",
+				"create view v103 as select id from v102",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info bigint not null);",
+				"create view v201 as select id from t1",
+				"create view v202 as select id from v201",
+				"create view v203 as select id from v202",
+			},
+			expectDiffs:        7,
+			expectPermutations: 1, // because CREATE/DROP VIEW don't permutate between themselves and with TABLE operations
 		},
 	}
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
@@ -112,29 +187,34 @@ func TestPermutations(t *testing.T) {
 			t.Run("no early break", func(t *testing.T) {
 				iteration := 0
 				allPerms := map[string]bool{}
+				allPermsStatements := []string{}
 				allDiffs := schemaDiff.UnorderedDiffs()
 				originalSingleString := toSingleString(allDiffs)
-				earlyBreak := permutateDiffs(allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
+				numEquals := 0
+				earlyBreak, err := permutateDiffs(ctx, allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
+					defer func() { iteration++ }()
 					// cover all permutations
-					allPerms[toSingleString(pdiffs)] = true
-					if iteration == 0 {
-						// First permutation should be the same as original
-						require.Equal(t, originalSingleString, toSingleString(pdiffs))
-					} else {
-						// rest of permutations must be different than original (later we also verify they are all unique)
-						require.NotEqualf(t, originalSingleString, toSingleString(pdiffs), "in iteration %d", iteration)
+					singleString := toSingleString(pdiffs)
+					allPerms[singleString] = true
+					allPermsStatements = append(allPermsStatements, singleString)
+					if originalSingleString == singleString {
+						numEquals++
 					}
-					iteration++
 					return false
 				})
+				assert.NoError(t, err)
+				if len(allDiffs) > 0 {
+					assert.Equal(t, numEquals, 1)
+				}
+
 				assert.False(t, earlyBreak)
-				assert.Equal(t, tc.expectPermutations, len(allPerms))
+				assert.Equalf(t, tc.expectPermutations, len(allPerms), "all perms: %v", strings.Join(allPermsStatements, "\n"))
 			})
 			t.Run("early break", func(t *testing.T) {
 				allPerms := map[string]bool{}
 				allDiffs := schemaDiff.UnorderedDiffs()
 				originalSingleString := toSingleString(allDiffs)
-				earlyBreak := permutateDiffs(allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
+				earlyBreak, err := permutateDiffs(ctx, allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
 					// Single visit
 					allPerms[toSingleString(pdiffs)] = true
 					// First permutation should be the same as original
@@ -142,6 +222,7 @@ func TestPermutations(t *testing.T) {
 					// early break; this callback function should not be invoked again
 					return true
 				})
+				assert.NoError(t, err)
 				if len(allDiffs) > 0 {
 					assert.True(t, earlyBreak)
 					assert.Equal(t, 1, len(allPerms))
@@ -155,7 +236,20 @@ func TestPermutations(t *testing.T) {
 	}
 }
 
+func TestPermutationsContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	allDiffs := []EntityDiff{&DropViewEntityDiff{}}
+	earlyBreak, err := permutateDiffs(ctx, allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
+		return false
+	})
+	assert.True(t, earlyBreak) // proves that termination was due to context cancel
+	assert.Error(t, err)       // proves that termination was due to context cancel
+}
+
 func TestSchemaDiff(t *testing.T) {
+	ctx := context.Background()
 	var (
 		createQueries = []string{
 			"create table t1 (id int primary key, info int not null);",
@@ -336,13 +430,11 @@ func TestSchemaDiff(t *testing.T) {
 				"create table t1 (id int primary key, info int not null, dt datetime);",
 				"create table t2 (id int primary key, ts timestamp, v varchar);",
 				"create view v1 as select id from t1",
-				// "create view v2 as select id from t1",
 				"create view v2 as select info, ts from t1, t2",
-				// "create view v2 as select info, ts from t1, t2",
 			},
 			expectDiffs: 3,
 			expectDeps:  2,
-			entityOrder: []string{"t1", "v2", "t2"},
+			entityOrder: []string{"t1", "t2", "v2"},
 		},
 		{
 			name: "alter view depending on 2 tables, uses new column, alter tables",
@@ -466,7 +558,7 @@ func TestSchemaDiff(t *testing.T) {
 			entityOrder: []string{"t3"},
 		},
 		{
-			name: "create two table with fk",
+			name: "create two tables with fk",
 			toQueries: append(
 				createQueries,
 				"create table tp (id int primary key, info int not null);",
@@ -475,6 +567,7 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs: 2,
 			expectDeps:  1,
 			entityOrder: []string{"tp", "t3"},
+			sequential:  true,
 		},
 		{
 			name: "add FK",
@@ -556,6 +649,7 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs: 2,
 			expectDeps:  1,
 			entityOrder: []string{"t1", "t3"},
+			sequential:  true,
 		},
 		{
 			name: "add column. add FK referencing new column",
@@ -580,6 +674,70 @@ func TestSchemaDiff(t *testing.T) {
 			expectDeps:  1,
 			sequential:  true,
 			entityOrder: []string{"t2", "t1"},
+		}, {
+			name: "add index on parent. add FK to index column",
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null, key info_idx(info));",
+				"create table t2 (id int primary key, ts timestamp, t1_info int not null, constraint parent_info_fk foreign key (t1_info) references t1 (info));",
+				"create view v1 as select id from t1",
+			},
+			expectDiffs: 2,
+			expectDeps:  1,
+			sequential:  true,
+			entityOrder: []string{"t1", "t2"},
+		},
+		{
+			name: "add index on parent with existing index. add FK to index column",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null, key existing_info_idx(info));",
+				"create table t2 (id int primary key, ts timestamp);",
+				"create view v1 as select id from t1",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null, key existing_info_idx(info), key info_idx(info));",
+				"create table t2 (id int primary key, ts timestamp, t1_info int not null, constraint parent_info_fk foreign key (t1_info) references t1 (info));",
+				"create view v1 as select id from t1",
+			},
+			expectDiffs: 2,
+			expectDeps:  1,
+			sequential:  false,
+			entityOrder: []string{"t1", "t2"},
+		},
+		{
+			name: "modify fk column types, fail",
+			fromQueries: []string{
+				"create table t1 (id int primary key);",
+				"create table t2 (id int primary key, ts timestamp, t1_id int, foreign key (t1_id) references t1 (id) on delete no action);",
+			},
+			toQueries: []string{
+				"create table t1 (id bigint primary key);",
+				"create table t2 (id int primary key, ts timestamp, t1_id bigint, foreign key (t1_id) references t1 (id) on delete no action);",
+			},
+			expectDiffs:      2,
+			expectDeps:       0,
+			sequential:       false,
+			conflictingDiffs: 1,
+		},
+		{
+			name: "add hierarchical constraints",
+			fromQueries: []string{
+				"create table t1 (id int primary key, ref int, key ref_idx (ref));",
+				"create table t2 (id int primary key, ref int, key ref_idx (ref));",
+				"create table t3 (id int primary key, ref int, key ref_idx (ref));",
+				"create table t4 (id int primary key, ref int, key ref_idx (ref));",
+				"create table t5 (id int primary key, ref int, key ref_idx (ref));",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, ref int, key ref_idx (ref));",
+				"create table t2 (id int primary key, ref int, key ref_idx (ref), foreign key (ref) references t1 (id) on delete no action);",
+				"create table t3 (id int primary key, ref int, key ref_idx (ref), foreign key (ref) references t2 (id) on delete no action);",
+				"create table t4 (id int primary key, ref int, key ref_idx (ref), foreign key (ref) references t3 (id) on delete no action);",
+				"create table t5 (id int primary key, ref int, key ref_idx (ref), foreign key (ref) references t1 (id) on delete no action);",
+			},
+			expectDiffs: 4,
+			expectDeps:  2, // t2<->t3, t3<->t4
+			sequential:  false,
+			entityOrder: []string{"t2", "t3", "t4", "t5"},
 		},
 		{
 			name: "drop fk",
@@ -649,6 +807,34 @@ func TestSchemaDiff(t *testing.T) {
 			sequential:       true,
 			conflictingDiffs: 2,
 		},
+		{
+			name: "two identical foreign keys in table, drop one",
+			fromQueries: []string{
+				"create table parent (id int primary key)",
+				"create table t1 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id), constraint f2 foreign key (i) references parent(id))",
+			},
+			toQueries: []string{
+				"create table parent (id int primary key)",
+				"create table t1 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id))",
+			},
+			expectDiffs: 1,
+			expectDeps:  0,
+			entityOrder: []string{"t1"},
+		},
+		{
+			name: "test",
+			fromQueries: []string{
+				"CREATE TABLE t1 (id bigint NOT NULL, name varchar(255), PRIMARY KEY (id))",
+			},
+			toQueries: []string{
+				"CREATE TABLE t1 (id bigint NOT NULL, name varchar(255), PRIMARY KEY (id), KEY idx_name (name))",
+				"CREATE TABLE t3 (id bigint NOT NULL, name varchar(255), t1_id bigint, PRIMARY KEY (id), KEY t1_id (t1_id), KEY nameidx (name), CONSTRAINT t3_ibfk_1 FOREIGN KEY (t1_id) REFERENCES t1 (id) ON DELETE CASCADE ON UPDATE CASCADE, CONSTRAINT t3_ibfk_2 FOREIGN KEY (name) REFERENCES t1 (name) ON DELETE CASCADE ON UPDATE CASCADE)",
+			},
+			expectDiffs: 2,
+			expectDeps:  1,
+			sequential:  true,
+			entityOrder: []string{"t1", "t3"},
+		},
 	}
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
 	for _, tc := range tt {
@@ -682,15 +868,18 @@ func TestSchemaDiff(t *testing.T) {
 			assert.Equalf(t, tc.expectDeps, len(deps), "found deps: %v", depsKeys)
 			assert.Equal(t, tc.sequential, schemaDiff.HasSequentialExecutionDependencies())
 
-			orderedDiffs, err := schemaDiff.OrderedDiffs()
+			orderedDiffs, err := schemaDiff.OrderedDiffs(ctx)
 			if tc.conflictingDiffs > 0 {
-				require.Greater(t, tc.conflictingDiffs, 1) // self integrity. If there's a conflict, then obviously there's at least two conflicting diffs (a single diff has nothing to conflict with)
 				assert.Error(t, err)
 				impossibleOrderErr, ok := err.(*ImpossibleApplyDiffOrderError)
 				assert.True(t, ok)
-				assert.Equal(t, tc.conflictingDiffs, len(impossibleOrderErr.ConflictingDiffs))
+				conflictingDiffsStatements := []string{}
+				for _, diff := range impossibleOrderErr.ConflictingDiffs {
+					conflictingDiffsStatements = append(conflictingDiffsStatements, diff.CanonicalStatementString())
+				}
+				assert.Equalf(t, tc.conflictingDiffs, len(impossibleOrderErr.ConflictingDiffs), "found conflicting diffs: %+v\n diff statements=%+v", conflictingDiffsStatements, allDiffsStatements)
 			} else {
-				require.NoError(t, err)
+				require.NoErrorf(t, err, "Unordered diffs: %v", allDiffsStatements)
 			}
 			diffStatementStrings := []string{}
 			for _, diff := range orderedDiffs {

@@ -17,12 +17,12 @@ limitations under the License.
 package sqlparser
 
 import (
-	"bytes"
 	"fmt"
 	"math/rand"
 	"reflect"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -191,23 +191,23 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// Bin values work fine
 		in:      "select * from t where foo = b'11'",
-		outstmt: "select * from t where foo = :foo /* HEXNUM */",
+		outstmt: "select * from t where foo = :foo /* BITNUM */",
 		outbv: map[string]*querypb.BindVariable{
-			"foo": sqltypes.HexNumBindVariable([]byte("0x03")),
+			"foo": sqltypes.BitNumBindVariable([]byte("0b11")),
 		},
 	}, {
 		// Large bin values work fine
 		in:      "select * from t where foo = b'11101010100101010010101010101010101010101000100100100100100101001101010101010101000001'",
-		outstmt: "select * from t where foo = :foo /* HEXNUM */",
+		outstmt: "select * from t where foo = :foo /* BITNUM */",
 		outbv: map[string]*querypb.BindVariable{
-			"foo": sqltypes.HexNumBindVariable([]byte("0x3AA54AAAAAA24925355541")),
+			"foo": sqltypes.BitNumBindVariable([]byte("0b11101010100101010010101010101010101010101000100100100100100101001101010101010101000001")),
 		},
 	}, {
 		// Bin value does not convert for DMLs
 		in:      "update a set v1 = b'11'",
-		outstmt: "update a set v1 = :v1 /* HEXNUM */",
+		outstmt: "update a set v1 = :v1 /* BITNUM */",
 		outbv: map[string]*querypb.BindVariable{
-			"v1": sqltypes.HexNumBindVariable([]byte("0x03")),
+			"v1": sqltypes.BitNumBindVariable([]byte("0b11")),
 		},
 	}, {
 		// ORDER BY column_position
@@ -308,14 +308,14 @@ func TestNormalize(t *testing.T) {
 			"bv3": sqltypes.Int64BindVariable(3),
 		},
 	}, {
-		// BitVal should also be normalized
+		// BitNum should also be normalized
 		in:      `select b'1', 0b01, b'1010', 0b1111111`,
-		outstmt: `select :bv1 /* HEXNUM */, :bv2 /* HEXNUM */, :bv3 /* HEXNUM */, :bv4 /* HEXNUM */ from dual`,
+		outstmt: `select :bv1 /* BITNUM */, :bv2 /* BITNUM */, :bv3 /* BITNUM */, :bv4 /* BITNUM */ from dual`,
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.HexNumBindVariable([]byte("0x01")),
-			"bv2": sqltypes.HexNumBindVariable([]byte("0x01")),
-			"bv3": sqltypes.HexNumBindVariable([]byte("0x0A")),
-			"bv4": sqltypes.HexNumBindVariable([]byte("0x7F")),
+			"bv1": sqltypes.BitNumBindVariable([]byte("0b1")),
+			"bv2": sqltypes.BitNumBindVariable([]byte("0b01")),
+			"bv3": sqltypes.BitNumBindVariable([]byte("0b1010")),
+			"bv4": sqltypes.BitNumBindVariable([]byte("0b1111111")),
 		},
 	}, {
 		// DateVal should also be normalized
@@ -371,6 +371,14 @@ func TestNormalize(t *testing.T) {
 		in:      `select * from (select 12) as t`,
 		outstmt: `select * from (select 12 from dual) as t`,
 		outbv:   map[string]*querypb.BindVariable{},
+	}, {
+		// HexVal and Int should not share a bindvar just because they have the same value
+		in:      `select * from t where v1 = x'31' and v2 = 31`,
+		outstmt: `select * from t where v1 = :v1 /* HEXVAL */ and v2 = :v2 /* INT64 */`,
+		outbv: map[string]*querypb.BindVariable{
+			"v1": sqltypes.HexValBindVariable([]byte("x'31'")),
+			"v2": sqltypes.Int64BindVariable(31),
+		},
 	}}
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
@@ -565,6 +573,7 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 					SQLSelectLimitUnset,
 					"",
 					nil, /*sysvars*/
+					nil,
 					nil, /*views*/
 				)
 				if err != nil {
@@ -617,7 +626,7 @@ values
 
 func BenchmarkNormalizeTPCCInsert(b *testing.B) {
 	generateInsert := func(rows int) string {
-		var query bytes.Buffer
+		var query strings.Builder
 		query.WriteString("INSERT IGNORE INTO customer0 (c_id, c_d_id, c_w_id, c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_since, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_payment_cnt, c_delivery_cnt, c_data) values ")
 		for i := 0; i < rows; i++ {
 			fmt.Fprintf(&query, "(%d, %d, %d, '%s','OE','%s','%s', '%s', '%s', '%s', '%s','%s',NOW(),'%s',50000,%f,-10,10,1,0,'%s' )",
@@ -854,6 +863,7 @@ func benchmarkNormalization(b *testing.B, sqls []string) {
 				"keyspace0",
 				SQLSelectLimitUnset,
 				"",
+				nil,
 				nil,
 				nil,
 			)

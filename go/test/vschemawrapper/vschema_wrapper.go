@@ -40,14 +40,15 @@ import (
 var _ plancontext.VSchema = (*VSchemaWrapper)(nil)
 
 type VSchemaWrapper struct {
-	V             *vindexes.VSchema
-	Keyspace      *vindexes.Keyspace
-	TabletType_   topodatapb.TabletType
-	Dest          key.Destination
-	SysVarEnabled bool
-	Version       plancontext.PlannerVersion
-	EnableViews   bool
-	TestBuilder   func(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error)
+	V                     *vindexes.VSchema
+	Keyspace              *vindexes.Keyspace
+	TabletType_           topodatapb.TabletType
+	Dest                  key.Destination
+	SysVarEnabled         bool
+	ForeignKeyChecksState *bool
+	Version               plancontext.PlannerVersion
+	EnableViews           bool
+	TestBuilder           func(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error)
 }
 
 func (vw *VSchemaWrapper) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
@@ -134,6 +135,14 @@ func (vw *VSchemaWrapper) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_Fo
 		return vw.V.Keyspaces[keyspace].ForeignKeyMode, nil
 	}
 	return defaultFkMode, nil
+}
+
+func (vw *VSchemaWrapper) KeyspaceError(keyspace string) error {
+	return nil
+}
+
+func (vw *VSchemaWrapper) GetForeignKeyChecksState() *bool {
+	return vw.ForeignKeyChecksState
 }
 
 func (vw *VSchemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {

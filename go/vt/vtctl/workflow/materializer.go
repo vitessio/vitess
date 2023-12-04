@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
@@ -103,7 +104,17 @@ func (mz *materializer) createMoveTablesStreams(req *vtctldatapb.MoveTablesCreat
 		}
 
 		sourceShards := mz.filterSourceShards(target)
-		blses, err := mz.generateBinlogSources(mz.ctx, target, sourceShards)
+		// streamKeyRangesEqual allows us to optimize the stream for the cases
+		// where while the target keyspace may be sharded, the target shard has
+		// a single source shard to stream data from and the target and source
+		// shard have equal key ranges. This can be done, for example, when doing
+		// shard by shard migrations -- migrating a single shard at a time between
+		// sharded source and sharded target keyspaces.
+		streamKeyRangesEqual := false
+		if len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, target.KeyRange) {
+			streamKeyRangesEqual = true
+		}
+		blses, err := mz.generateBinlogSources(mz.ctx, target, sourceShards, streamKeyRangesEqual)
 		if err != nil {
 			return err
 		}
@@ -139,7 +150,17 @@ func (mz *materializer) createMaterializerStreams() error {
 	insertMap := make(map[string]string, len(mz.targetShards))
 	for _, targetShard := range mz.targetShards {
 		sourceShards := mz.filterSourceShards(targetShard)
-		inserts, err := mz.generateInserts(mz.ctx, sourceShards)
+		// streamKeyRangesEqual allows us to optimize the stream for the cases
+		// where while the target keyspace may be sharded, the target shard has
+		// a single source shard to stream data from and the target and source
+		// shard have equal key ranges. This can be done, for example, when doing
+		// shard by shard migrations -- migrating a single shard at a time between
+		// sharded source and sharded target keyspaces.
+		streamKeyRangesEqual := false
+		if len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, targetShard.KeyRange) {
+			streamKeyRangesEqual = true
+		}
+		inserts, err := mz.generateInserts(mz.ctx, sourceShards, streamKeyRangesEqual)
 		if err != nil {
 			return err
 		}
@@ -151,7 +172,7 @@ func (mz *materializer) createMaterializerStreams() error {
 	return nil
 }
 
-func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*topo.ShardInfo) (string, error) {
+func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*topo.ShardInfo, keyRangesEqual bool) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, "{{.dbname}}")
 
 	for _, sourceShard := range sourceShards {
@@ -185,7 +206,7 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 				return "", fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
 			}
 			filter := ts.SourceExpression
-			if mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
+			if !keyRangesEqual && mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
 				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
 				if err != nil {
 					return "", err
@@ -251,7 +272,7 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 	return ig.String(), nil
 }
 
-func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *topo.ShardInfo, sourceShards []*topo.ShardInfo) ([]*binlogdatapb.BinlogSource, error) {
+func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *topo.ShardInfo, sourceShards []*topo.ShardInfo, keyRangesEqual bool) ([]*binlogdatapb.BinlogSource, error) {
 	blses := make([]*binlogdatapb.BinlogSource, 0, len(mz.sourceShards))
 	for _, sourceShard := range sourceShards {
 		bls := &binlogdatapb.BinlogSource{
@@ -284,7 +305,7 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 				return nil, fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
 			}
 			filter := ts.SourceExpression
-			if mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
+			if !keyRangesEqual && mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
 				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
 				if err != nil {
 					return nil, err
@@ -424,6 +445,21 @@ func (mz *materializer) deploySchema() error {
 		}
 
 		if len(applyDDLs) > 0 {
+			if mz.ms.AtomicCopy {
+				// AtomicCopy suggests we may be interested in Foreign Key support. As such, we want to
+				// normalize the source schema: ensure the order of table definitions is compatible with
+				// the constraints graph. We want to first create the parents, then the children.
+				// We use schemadiff to normalize the schema.
+				// For now, and because this is could have wider implications, we ignore any errors in
+				// reading the source schema.
+				schema, err := schemadiff.NewSchemaFromQueries(applyDDLs)
+				if err != nil {
+					log.Error(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff"))
+				} else {
+					applyDDLs = schema.ToQueries()
+					log.Infof("AtomicCopy used, and schema was normalized via schemadiff. %v queries normalized", len(applyDDLs))
+				}
+			}
 			sql := strings.Join(applyDDLs, ";\n")
 
 			_, err = mz.tmc.ApplySchema(mz.ctx, targetTablet.Tablet, &tmutils.SchemaChange{

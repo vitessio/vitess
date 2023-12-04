@@ -27596,6 +27596,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffReportOptions format */
         format?: (string|null);
+
+        /** VDiffReportOptions max_sample_rows */
+        max_sample_rows?: (number|Long|null);
     }
 
     /** Represents a VDiffReportOptions. */
@@ -27615,6 +27618,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffReportOptions format. */
         public format: string;
+
+        /** VDiffReportOptions max_sample_rows. */
+        public max_sample_rows: (number|Long);
 
         /**
          * Creates a new VDiffReportOptions instance using the specified properties.
@@ -33019,9 +33025,6 @@ export namespace query {
 
         /** Value value */
         value?: (Uint8Array|null);
-
-        /** Value values */
-        values?: (query.IValue[]|null);
     }
 
     /** Represents a Value. */
@@ -33038,9 +33041,6 @@ export namespace query {
 
         /** Value value. */
         public value: Uint8Array;
-
-        /** Value values. */
-        public values: query.IValue[];
 
         /**
          * Creates a new Value instance using the specified properties.
@@ -41595,6 +41595,27 @@ export namespace vschema {
 
         /** Column type */
         type?: (query.Type|null);
+
+        /** Column invisible */
+        invisible?: (boolean|null);
+
+        /** Column default */
+        "default"?: (string|null);
+
+        /** Column collation_name */
+        collation_name?: (string|null);
+
+        /** Column size */
+        size?: (number|null);
+
+        /** Column scale */
+        scale?: (number|null);
+
+        /** Column nullable */
+        nullable?: (boolean|null);
+
+        /** Column values */
+        values?: (string[]|null);
     }
 
     /** Represents a Column. */
@@ -41611,6 +41632,30 @@ export namespace vschema {
 
         /** Column type. */
         public type: query.Type;
+
+        /** Column invisible. */
+        public invisible: boolean;
+
+        /** Column default. */
+        public default: string;
+
+        /** Column collation_name. */
+        public collation_name: string;
+
+        /** Column size. */
+        public size: number;
+
+        /** Column scale. */
+        public scale: number;
+
+        /** Column nullable. */
+        public nullable?: (boolean|null);
+
+        /** Column values. */
+        public values: string[];
+
+        /** Column _nullable. */
+        public _nullable?: "nullable";
 
         /**
          * Creates a new Column instance using the specified properties.
@@ -42783,6 +42828,9 @@ export namespace vtctldata {
 
         /** SchemaMigration ready_to_complete_at */
         ready_to_complete_at?: (vttime.ITime|null);
+
+        /** SchemaMigration removed_foreign_key_names */
+        removed_foreign_key_names?: (string|null);
     }
 
     /** Represents a SchemaMigration. */
@@ -42952,6 +43000,9 @@ export namespace vtctldata {
 
         /** SchemaMigration ready_to_complete_at. */
         public ready_to_complete_at?: (vttime.ITime|null);
+
+        /** SchemaMigration removed_foreign_key_names. */
+        public removed_foreign_key_names: string;
 
         /**
          * Creates a new SchemaMigration instance using the specified properties.
@@ -65798,6 +65849,9 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest verbose */
         verbose?: (boolean|null);
+
+        /** VDiffCreateRequest max_report_sample_rows */
+        max_report_sample_rows?: (number|Long|null);
     }
 
     /** Represents a VDiffCreateRequest. */
@@ -65862,6 +65916,9 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest verbose. */
         public verbose: boolean;
+
+        /** VDiffCreateRequest max_report_sample_rows. */
+        public max_report_sample_rows: (number|Long);
 
         /**
          * Creates a new VDiffCreateRequest instance using the specified properties.

@@ -557,7 +557,7 @@
       "Original": "select u.id, e.id from user u join user_extra e where e.id = u.col limit 10",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(10)",
+        "Count": "10",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -617,7 +617,7 @@
           {
             "InputName": "SubQuery",
             "OperatorType": "Limit",
-            "Count": "INT64(10)",
+            "Count": "10",
             "Inputs": [
               {
                 "OperatorType": "Join",
@@ -687,7 +687,7 @@
       "Original": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(10)",
+        "Count": "10",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -769,7 +769,7 @@
         "Query": "select id from `user` where id in ::__vals",
         "Table": "`user`",
         "Values": [
-          "(DECIMAL(18446744073709551616), INT64(1))"
+          "(18446744073709551616, 1)"
         ],
         "Vindex": "user_index"
       },
@@ -801,7 +801,7 @@
             "Query": "select u1.id from `user` as u1 where u1.id = 18446744073709551616",
             "Table": "`user`",
             "Values": [
-              "DECIMAL(18446744073709551616)"
+              "18446744073709551616"
             ],
             "Vindex": "user_index"
           },
@@ -857,7 +857,7 @@
             "Query": "select 1 from `user` as u2 where u2.id = 18446744073709551616",
             "Table": "`user`",
             "Values": [
-              "DECIMAL(18446744073709551616)"
+              "18446744073709551616"
             ],
             "Vindex": "user_index"
           }
@@ -882,7 +882,7 @@
           "Sharded": true
         },
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "name_user_map",
         "Inputs": [

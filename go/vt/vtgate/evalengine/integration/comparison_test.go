@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -48,7 +49,6 @@ var (
 	debugGolden          = false
 	debugNormalize       = true
 	debugSimplify        = time.Now().UnixNano()&1 != 0
-	debugCheckTypes      = true
 	debugCheckCollations = true
 )
 
@@ -56,7 +56,6 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&debugGolden, "golden", debugGolden, "print golden test files")
 	fs.BoolVar(&debugNormalize, "normalize", debugNormalize, "normalize comparisons against MySQL values")
 	fs.BoolVar(&debugSimplify, "simplify", debugSimplify, "simplify expressions before evaluating them")
-	fs.BoolVar(&debugCheckTypes, "check-types", debugCheckTypes, "check the TypeOf operator for all queries")
 	fs.BoolVar(&debugCheckCollations, "check-collations", debugCheckCollations, "check the returned collations for all queries")
 }
 
@@ -140,7 +139,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		cmp = &testcases.Comparison{}
 	}
 
-	local, localType, localErr := evaluateLocalEvalengine(env, localQuery, fields)
+	local, localErr := evaluateLocalEvalengine(env, localQuery, fields)
 	remote, remoteErr := conn.ExecuteFetch(remoteQuery, 1, true)
 
 	var localVal, remoteVal sqltypes.Value
@@ -158,13 +157,6 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 			localVal = normalizeValue(v, local.Collation())
 		} else {
 			localVal = v
-		}
-		if debugCheckTypes && localType != -1 {
-			tt := v.Type()
-			if tt != sqltypes.Null && tt != localType {
-				t.Errorf("evaluation type mismatch: eval=%v vs typeof=%v\nlocal: %s\nquery: %s (SIMPLIFY=%v)",
-					tt, localType, localVal, localQuery, debugSimplify)
-			}
 		}
 	}
 	if remoteErr == nil {
@@ -222,6 +214,10 @@ func (vc *vcursor) GetKeyspace() string {
 
 func (vc *vcursor) TimeZone() *time.Location {
 	return time.Local
+}
+
+func (vc *vcursor) SQLMode() string {
+	return config.DefaultSQLMode
 }
 
 func initTimezoneData(t *testing.T, conn *mysql.Conn) {

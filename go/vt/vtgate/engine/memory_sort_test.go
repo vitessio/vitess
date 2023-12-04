@@ -54,7 +54,7 @@ func TestMemorySortExecute(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
@@ -75,7 +75,7 @@ func TestMemorySortExecute(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", sqltypes.Int64, collations.CollationBinaryID)
+	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID))
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	result, err = ms.TryExecute(context.Background(), &noopVCursor{}, bv, false)
@@ -107,7 +107,7 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			WeightStringCol: 0,
 			Col:             1,
 		}},
@@ -136,7 +136,7 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 
 	t.Run("Limit test", func(t *testing.T) {
 		fp.rewind()
-		ms.UpperLimit = evalengine.NewBindVar("__upper_limit", sqltypes.Int64, collations.CollationBinaryID)
+		ms.UpperLimit = evalengine.NewBindVar("__upper_limit", evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID))
 		bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 		results = nil
@@ -173,7 +173,7 @@ func TestMemorySortExecuteWeightString(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			WeightStringCol: 1,
 			Col:             0,
 		}},
@@ -194,7 +194,7 @@ func TestMemorySortExecuteWeightString(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", sqltypes.Int64, collations.CollationBinaryID)
+	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID))
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	result, err = ms.TryExecute(context.Background(), &noopVCursor{}, bv, false)
@@ -227,10 +227,9 @@ func TestMemorySortStreamExecuteCollation(t *testing.T) {
 
 	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
-			Col:         0,
-			Type:        sqltypes.VarChar,
-			CollationID: collationID,
+		OrderBy: []evalengine.OrderByParams{{
+			Col:  0,
+			Type: evalengine.NewType(sqltypes.VarChar, collationID),
 		}},
 		Input: fp,
 	}
@@ -278,7 +277,7 @@ func TestMemorySortStreamExecuteCollation(t *testing.T) {
 
 	t.Run("Limit test", func(t *testing.T) {
 		fp.rewind()
-		ms.UpperLimit = evalengine.NewBindVar("__upper_limit", sqltypes.Int64, collations.CollationBinaryID)
+		ms.UpperLimit = evalengine.NewBindVar("__upper_limit", evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID))
 		bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 		results = nil
@@ -316,10 +315,9 @@ func TestMemorySortExecuteCollation(t *testing.T) {
 
 	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
-			Col:         0,
-			Type:        sqltypes.VarChar,
-			CollationID: collationID,
+		OrderBy: []evalengine.OrderByParams{{
+			Col:  0,
+			Type: evalengine.NewType(sqltypes.VarChar, collationID),
 		}},
 		Input: fp,
 	}
@@ -338,7 +336,7 @@ func TestMemorySortExecuteCollation(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", sqltypes.Int64, collations.CollationBinaryID)
+	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID))
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	result, err = ms.TryExecute(context.Background(), &noopVCursor{}, bv, false)
@@ -370,7 +368,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
@@ -395,7 +393,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	utils.MustMatch(t, wantResults, results)
 
 	fp.rewind()
-	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", sqltypes.Int64, collations.CollationBinaryID)
+	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID))
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	results = nil
@@ -447,7 +445,7 @@ func TestMemorySortExecuteTruncate(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
@@ -486,7 +484,7 @@ func TestMemorySortStreamExecuteTruncate(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
@@ -529,7 +527,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			Col:             1,
 			WeightStringCol: -1,
 		}, {
@@ -554,7 +552,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", sqltypes.Int64, collations.CollationBinaryID)
+	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID))
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	result, err = ms.TryExecute(context.Background(), &noopVCursor{}, bv, false)
@@ -602,7 +600,7 @@ func TestMemorySortMaxMemoryRows(t *testing.T) {
 		}
 
 		ms := &MemorySort{
-			OrderBy: []OrderByParams{{
+			OrderBy: []evalengine.OrderByParams{{
 				WeightStringCol: -1,
 				Col:             1,
 			}},
@@ -638,7 +636,7 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderByParams{{
+		OrderBy: []evalengine.OrderByParams{{
 			WeightStringCol: -1,
 			Col:             0,
 		}},
@@ -658,4 +656,58 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("StreamExecute err: %v, want %v", err, want)
 	}
+}
+
+func TestMemorySortStreamAsync(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c1|c2",
+		"varbinary|decimal",
+	)
+	fp := &fakePrimitive{
+		results: sqltypes.MakeTestStreamingResults(
+			fields,
+			"a|1",
+			"g|2",
+			"a|1",
+			"---",
+			"c|3",
+			"g|2",
+			"a|1",
+			"---",
+			"c|4",
+			"c|3",
+			"g|2",
+			"a|1",
+			"---",
+			"c|4",
+			"c|3",
+			"g|2",
+			"a|1",
+			"---",
+			"c|4",
+			"c|3",
+		),
+		async: true,
+	}
+
+	ms := &MemorySort{
+		OrderBy: []evalengine.OrderByParams{{
+			WeightStringCol: -1,
+			Col:             1,
+		}},
+		Input: fp,
+	}
+
+	qr := &sqltypes.Result{}
+	err := ms.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(res *sqltypes.Result) error {
+		qr.Rows = append(qr.Rows, res.Rows...)
+		return nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, sqltypes.RowsEqualsStr(
+		`[[VARBINARY("a") DECIMAL(1)] [VARBINARY("a") DECIMAL(1)] [VARBINARY("a") DECIMAL(1)] [VARBINARY("a") DECIMAL(1)] [VARBINARY("a") DECIMAL(1)] 
+[VARBINARY("g") DECIMAL(2)] [VARBINARY("g") DECIMAL(2)] [VARBINARY("g") DECIMAL(2)] [VARBINARY("g") DECIMAL(2)] 
+[VARBINARY("c") DECIMAL(3)] [VARBINARY("c") DECIMAL(3)] [VARBINARY("c") DECIMAL(3)] [VARBINARY("c") DECIMAL(3)] 
+[VARBINARY("c") DECIMAL(4)] [VARBINARY("c") DECIMAL(4)] [VARBINARY("c") DECIMAL(4)]]`,
+		qr.Rows))
 }

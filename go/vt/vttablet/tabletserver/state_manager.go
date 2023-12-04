@@ -64,6 +64,7 @@ func (state servingState) String() string {
 
 // transitionRetryInterval is for tests.
 var transitionRetryInterval = 1 * time.Second
+var logInitTime sync.Once
 
 // stateManager manages state transition for all the TabletServer
 // subcomponents.
@@ -121,7 +122,7 @@ type stateManager struct {
 	throttler   lagThrottler
 	tableGC     tableGarbageCollector
 
-	// hcticks starts on initialiazation and runs forever.
+	// hcticks starts on initialization and runs forever.
 	hcticks *timer.Timer
 
 	// checkMySQLThrottler ensures that CheckMysql
@@ -611,9 +612,9 @@ func (sm *stateManager) setTimeBomb() chan struct{} {
 
 // setState changes the state and logs the event.
 func (sm *stateManager) setState(tabletType topodatapb.TabletType, state servingState) {
-	defer func() {
+	defer logInitTime.Do(func() {
 		log.Infof("Tablet Init took %d ms", time.Since(servenv.GetInitStartTime()).Milliseconds())
-	}()
+	})
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	if tabletType == topodatapb.TabletType_UNKNOWN {

@@ -65,7 +65,7 @@ func registerGCFlags(fs *pflag.FlagSet) {
 	// purgeReentranceInterval marks the interval between searching tables to purge
 	fs.DurationVar(&purgeReentranceInterval, "gc_purge_check_interval", purgeReentranceInterval, "Interval between purge discovery checks")
 	// gcLifecycle is the sequence of steps the table goes through in the process of getting dropped
-	fs.StringVar(&gcLifecycle, "table_gc_lifecycle", gcLifecycle, "States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implcitly always included)")
+	fs.StringVar(&gcLifecycle, "table_gc_lifecycle", gcLifecycle, "States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implicitly always included)")
 }
 
 var (
@@ -120,7 +120,7 @@ type TableGC struct {
 	lifecycleStates map[schema.TableGCState]bool
 }
 
-// Status published some status valus from the collector
+// Status published some status values from the collector
 type Status struct {
 	Keyspace string
 	Shard    string
@@ -388,7 +388,7 @@ func (collector *TableGC) readTables(ctx context.Context) (gcTables []*gcTable, 
 	}
 	defer conn.Recycle()
 
-	res, err := conn.Exec(ctx, sqlShowVtTables, math.MaxInt32, true)
+	res, err := conn.Conn.Exec(ctx, sqlShowVtTables, math.MaxInt32, true)
 	if err != nil {
 		return nil, err
 	}
@@ -556,7 +556,7 @@ func (collector *TableGC) dropTable(ctx context.Context, tableName string, isBas
 	parsed := sqlparser.BuildParsedQuery(sqlDrop, tableName)
 
 	log.Infof("TableGC: dropping table: %s", tableName)
-	_, err = conn.ExecuteFetch(parsed.Query, 1, false)
+	_, err = conn.Conn.ExecuteFetch(parsed.Query, 1, false)
 	if err != nil {
 		return err
 	}
@@ -575,7 +575,7 @@ func (collector *TableGC) transitionTable(ctx context.Context, transition *trans
 
 	// when we transition into PURGE, that means we want to begin purging immediately
 	// when we transition into DROP, that means we want to drop immediately
-	// Thereforce the default timestamp is Now
+	// Therefore the default timestamp is Now
 	t := time.Now().UTC()
 	switch transition.toGCState {
 	case schema.EvacTableGCState:
@@ -593,7 +593,7 @@ func (collector *TableGC) transitionTable(ctx context.Context, transition *trans
 	}
 
 	log.Infof("TableGC: renaming table: %s to %s", transition.fromTableName, toTableName)
-	_, err = conn.Exec(ctx, renameStatement, 1, true)
+	_, err = conn.Conn.Exec(ctx, renameStatement, 1, true)
 	if err != nil {
 		return err
 	}
@@ -601,7 +601,7 @@ func (collector *TableGC) transitionTable(ctx context.Context, transition *trans
 	return nil
 }
 
-// addPurgingTable adds a table to the list of droppingpurging (or pending purging) tables
+// addPurgingTable adds a table to the list of dropping purging (or pending purging) tables
 func (collector *TableGC) addPurgingTable(tableName string) (added bool) {
 	if _, ok := collector.lifecycleStates[schema.PurgeTableGCState]; !ok {
 		// PURGE is not a handled state. We don't want to purge this table or any other table,

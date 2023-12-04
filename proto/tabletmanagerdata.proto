@@ -609,6 +609,7 @@ message VDiffReportOptions {
   bool only_pks = 1;
   bool debug_query = 2;
   string format = 3;
+  int64 max_sample_rows = 4;
 }
 
 message VDiffCoreOptions {

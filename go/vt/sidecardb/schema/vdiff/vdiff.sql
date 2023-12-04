@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS vdiff
     `started_at`         timestamp    NULL     DEFAULT NULL,
     `liveness_timestamp` timestamp    NULL     DEFAULT NULL,
     `completed_at`       timestamp    NULL     DEFAULT NULL,
-    `last_error`         varbinary(512)        DEFAULT NULL,
+    `last_error`         varbinary(1024)      DEFAULT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uuid_idx` (`vdiff_uuid`),
     KEY `state` (`state`),

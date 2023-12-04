@@ -234,7 +234,7 @@ func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos replication
 		}
 	}
 
-	return fmt.Sprintf("SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('%s', %v)", pos, timeoutSeconds), nil
+	return fmt.Sprintf("SELECT WAIT_FOR_EXECUTED_GTID_SET('%s', %v)", pos, timeoutSeconds), nil
 }
 
 // readBinlogEvent is part of the Flavor interface.
@@ -397,6 +397,8 @@ func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorC
 		return ServerVersionAtLeast(serverVersion, 8, 0, 30)
 	case DisableRedoLogFlavorCapability:
 		return ServerVersionAtLeast(serverVersion, 8, 0, 21)
+	case CheckConstraintsCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
 	default:
 		return false, nil
 	}

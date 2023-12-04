@@ -34,6 +34,7 @@ type FakeSI struct {
 	Tables           map[string]*vindexes.Table
 	VindexTables     map[string]vindexes.Vindex
 	KsForeignKeyMode map[string]vschemapb.Keyspace_ForeignKeyMode
+	KsError          map[string]error
 }
 
 // FindTableOrVindex implements the SchemaInformation interface
@@ -58,4 +59,19 @@ func (s *FakeSI) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyM
 		return fkMode, nil
 	}
 	return vschemapb.Keyspace_unmanaged, nil
+}
+
+func (s *FakeSI) GetForeignKeyChecksState() *bool {
+	return nil
+}
+
+func (s *FakeSI) KeyspaceError(keyspace string) error {
+	if s.KsError != nil {
+		fkErr, isPresent := s.KsError[keyspace]
+		if !isPresent {
+			return fmt.Errorf("%v keyspace not found", keyspace)
+		}
+		return fkErr
+	}
+	return nil
 }

@@ -581,7 +581,7 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 	}
 }
 
-// disableReplication stopes and resets replication on the mysql server. It moreover sets impossible replication
+// disableReplication stops and resets replication on the mysql server. It moreover sets impossible replication
 // source params, so that the replica can't possibly reconnect. It would take a `CHANGE [MASTER|REPLICATION SOURCE] TO ...` to
 // make the mysql server replicate again (available via tm.MysqlDaemon.SetReplicationPosition)
 func (tm *TabletManager) disableReplication(ctx context.Context) error {

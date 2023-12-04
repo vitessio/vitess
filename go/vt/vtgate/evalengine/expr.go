@@ -17,37 +17,37 @@ limitations under the License.
 package evalengine
 
 import (
-	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
-	// Expr is the interface that all evaluating expressions must implement
+	// Expr is a compiled expression that can be evaluated and serialized back to SQL.
 	Expr interface {
+		sqlparser.Expr
+		IR() IR
 		eval(env *ExpressionEnv) (eval, error)
-		typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag)
-		format(buf *formatter, depth int)
+		typeof(env *ExpressionEnv) (ctype, error)
+	}
+
+	// IR is the interface that all evaluation nodes must implement. It can only be used to
+	// match the AST of the compiled expression for planning purposes. IR objects cannot be
+	// evaluated directly.
+	IR interface {
+		eval(env *ExpressionEnv) (eval, error)
+		format(buf *sqlparser.TrackedBuffer)
 		constant() bool
 		simplify(env *ExpressionEnv) error
 		compile(c *compiler) (ctype, error)
 	}
 
 	UnaryExpr struct {
-		Inner Expr
+		Inner IR
 	}
 
 	BinaryExpr struct {
-		Left, Right Expr
+		Left, Right IR
 	}
 )
-
-func (expr *BinaryExpr) LeftExpr() Expr {
-	return expr.Left
-}
-
-func (expr *BinaryExpr) RightExpr() Expr {
-	return expr.Right
-}
 
 func (expr *BinaryExpr) arguments(env *ExpressionEnv) (eval, eval, error) {
 	left, err := expr.Left.eval(env)

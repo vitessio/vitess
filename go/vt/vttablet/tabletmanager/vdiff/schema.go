@@ -24,10 +24,10 @@ const (
 					and vdt.state in ('completed', 'stopped')`
 	sqlRetryVDiff = `update _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id) set vd.state = 'pending',
 					vd.last_error = '', vdt.state = 'pending' where vd.id = %a and (vd.state = 'error' or vdt.state = 'error')`
-	sqlGetVDiffByKeyspaceWorkflowUUID = "select * from _vt.vdiff where keyspace = %a and workflow = %a and vdiff_uuid = %a"
-	sqlGetMostRecentVDiff             = "select * from _vt.vdiff where keyspace = %a and workflow = %a order by id desc limit 1"
-	sqlGetVDiffByID                   = "select * from _vt.vdiff where id = %a"
-	sqlDeleteVDiffs                   = `delete from vd, vdt, vdl using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+	sqlGetVDiffByKeyspaceWorkflowUUID       = "select * from _vt.vdiff where keyspace = %a and workflow = %a and vdiff_uuid = %a"
+	sqlGetMostRecentVDiffByKeyspaceWorkflow = "select * from _vt.vdiff where keyspace = %a and workflow = %a order by id desc limit %a"
+	sqlGetVDiffByID                         = "select * from _vt.vdiff where id = %a"
+	sqlDeleteVDiffs                         = `delete from vd, vdt, vdl using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 										left join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
 										where vd.keyspace = %a and vd.workflow = %a`
 	sqlDeleteVDiffByUUID = `delete from vd, vdt using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
@@ -38,8 +38,9 @@ const (
 						IF(vdt.mismatch = 1, 1, 0) as has_mismatch, vdt.report as report
 						from _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 						where vd.id = %a`
-	// sqlUpdateVDiffState has a penultimate placeholder for any additional columns you want to update, e.g. `, foo = 1`
-	sqlUpdateVDiffState   = "update _vt.vdiff set state = %s, last_error = %s %s where id = %d"
+	// sqlUpdateVDiffState has a penultimate placeholder for any additional columns you want to update, e.g. `, foo = 1`.
+	// It also truncates the error if needed to ensure that we can save the state when the error text is very long.
+	sqlUpdateVDiffState   = "update _vt.vdiff set state = %s, last_error = left(%s, 1024) %s where id = %d"
 	sqlUpdateVDiffStopped = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.state = 'stopped', vdt.state = 'stopped', vd.last_error = ''
 							where vd.id = vdt.vdiff_id and vd.id = %a and vd.state != 'completed'`
 	sqlGetVReplicationEntry          = "select * from _vt.vreplication %s"
@@ -47,7 +48,6 @@ const (
 	sqlGetVDiffsToRetry              = "select * from _vt.vdiff where state = 'error' and json_unquote(json_extract(options, '$.core_options.auto_retry')) = 'true'"
 	sqlGetVDiffID                    = "select id as id from _vt.vdiff where vdiff_uuid = %a"
 	sqlGetVDiffIDsByKeyspaceWorkflow = "select id as id from _vt.vdiff where keyspace = %a and workflow = %a"
-	sqlGetAllVDiffs                  = "select * from _vt.vdiff order by id desc"
 	sqlGetTableRows                  = "select table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %a and table_name = %a"
 	sqlGetAllTableRows               = "select table_name as table_name, table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %s and table_name in (%s)"
 

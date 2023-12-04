@@ -88,6 +88,7 @@ type (
 
 		ConnCollation() collations.ID
 		TimeZone() *time.Location
+		SQLMode() string
 
 		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 
@@ -153,6 +154,7 @@ type (
 
 		SetAutocommit(ctx context.Context, autocommit bool) error
 		SetClientFoundRows(context.Context, bool) error
+		SetSessionForeignKeyChecks(ctx context.Context, autocommit bool) error
 		SetSkipQueryPlanCache(context.Context, bool) error
 		SetSQLSelectLimit(int64) error
 		SetTransactionMode(vtgatepb.TransactionMode)

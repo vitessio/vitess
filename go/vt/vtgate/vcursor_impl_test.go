@@ -280,6 +280,14 @@ func TestKeyForPlan(t *testing.T) {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1[deadbeef]",
 		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+KsIDsResolved:80-+Query:SELECT 1",
+	}, {
+		vschema:               vschemaWith1KS,
+		targetString:          "",
+		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
+	}, {
+		vschema:               vschemaWith1KS,
+		targetString:          "ks1@replica",
+		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
 	}}
 
 	for i, tc := range tests {

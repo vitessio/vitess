@@ -58,6 +58,7 @@ type controller struct {
 	id              int64 // id from row in _vt.vdiff
 	uuid            string
 	workflow        string
+	workflowType    binlogdatapb.VReplicationWorkflowType
 	cancel          context.CancelFunc
 	dbClientFactory func() binlogplayer.DBClient
 	ts              *topo.Server
@@ -227,6 +228,12 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 			ct.sourceKeyspace = bls.Keyspace
 			ct.filter = bls.Filter
 		}
+
+		workflowType, err := row["workflow_type"].ToInt64()
+		if err != nil {
+			return err
+		}
+		ct.workflowType = binlogdatapb.VReplicationWorkflowType(workflowType)
 	}
 
 	if err := ct.validate(); err != nil {

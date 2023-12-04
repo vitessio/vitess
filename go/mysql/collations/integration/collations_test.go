@@ -20,16 +20,17 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/text/encoding/unicode/utf32"
 
 	"vitess.io/vitess/go/mysql/collations/colldata"
 
@@ -58,7 +59,7 @@ func getSQLQueries(t *testing.T, testfile string) []string {
 	defer tf.Close()
 
 	var chunks []string
-	var curchunk bytes.Buffer
+	var curchunk strings.Builder
 
 	addchunk := func() {
 		if curchunk.Len() > 0 {
@@ -95,7 +96,17 @@ type uca900CollationTest struct {
 	collation string
 }
 
-var defaultUtf32 = utf32.UTF32(utf32.BigEndian, utf32.IgnoreBOM)
+func decodeUtf32(dst, src []byte) ([]byte, error) {
+	for len(src) >= 4 {
+		r := rune(uint32(src[0])<<24 | uint32(src[1])<<16 | uint32(src[2])<<8 | uint32(src[3]))
+		dst = utf8.AppendRune(dst, r)
+		src = src[4:]
+	}
+	if len(src) != 0 {
+		return nil, errors.New("short src")
+	}
+	return dst, nil
+}
 
 func parseUtf32cp(b []byte) []byte {
 	var hexbuf [16]byte
@@ -103,8 +114,11 @@ func parseUtf32cp(b []byte) []byte {
 	if err != nil {
 		return nil
 	}
-	utf8, _ := defaultUtf32.NewDecoder().Bytes(hexbuf[:c])
-	return utf8
+	dst, err := decodeUtf32(nil, hexbuf[:c])
+	if err != nil {
+		panic("failed to decode utf32")
+	}
+	return dst
 }
 
 func parseWeightString(b []byte) []byte {
@@ -205,8 +219,8 @@ func TestCollationsOnMysqld(t *testing.T) {
 }
 
 func TestRemoteKanaSensitivity(t *testing.T) {
-	var Kana1 = []byte("の東京ノ")
-	var Kana2 = []byte("ノ東京の")
+	Kana1 := []byte("の東京ノ")
+	Kana2 := []byte("ノ東京の")
 
 	testRemoteComparison(t, nil, []testcmp{
 		{"utf8mb4_0900_as_cs", Kana1, Kana2},

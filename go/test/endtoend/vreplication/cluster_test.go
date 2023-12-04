@@ -541,10 +541,10 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				require.NoError(t, err)
 				require.NotNil(t, primary)
 				tabletIndex++
-				primary.Vttablet.VreplicationTabletType = "PRIMARY"
 				tablets = append(tablets, primary)
 				dbProcesses = append(dbProcesses, proc)
 				primaryTabletUID = primary.Vttablet.TabletUID
+				primary.Vttablet.IsPrimary = true
 			}
 
 			for i := 0; i < numReplicas; i++ {
@@ -776,7 +776,7 @@ func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName
 	tablets := make(map[string]*cluster.VttabletProcess)
 	for _, shard := range keyspace.Shards {
 		for _, tablet := range shard.Tablets {
-			if tablet.Vttablet.GetTabletStatus() == "SERVING" && strings.EqualFold(tablet.Vttablet.VreplicationTabletType, tabletType) {
+			if tablet.Vttablet.GetTabletStatus() == "SERVING" {
 				log.Infof("Serving status of tablet %s is %s, %s", tablet.Name, tablet.Vttablet.ServingStatus, tablet.Vttablet.GetTabletStatus())
 				tablets[tablet.Name] = tablet.Vttablet
 			}
@@ -796,13 +796,13 @@ func (vc *VitessCluster) getPrimaryTablet(t *testing.T, ksName, shardName string
 				continue
 			}
 			for _, tablet := range shard.Tablets {
-				if tablet.Vttablet.GetTabletStatus() == "SERVING" && strings.EqualFold(tablet.Vttablet.VreplicationTabletType, "primary") {
+				if tablet.Vttablet.IsPrimary {
 					return tablet.Vttablet
 				}
 			}
 		}
 	}
-	require.FailNow(t, "no primary found for %s:%s", ksName, shardName)
+	require.FailNow(t, "no primary found", "keyspace %s, shard %s", ksName, shardName)
 	return nil
 }
 

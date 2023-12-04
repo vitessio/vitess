@@ -60,7 +60,7 @@ func (ast *astCompiler) translateConvertCharset(charset string, binary bool) (co
 	return collationID, nil
 }
 
-func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *sqlparser.ConvertType) (Expr, error) {
+func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *sqlparser.ConvertType) (IR, error) {
 	var (
 		convert ConvertExpr
 		err     error
@@ -117,7 +117,7 @@ func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *s
 	return &convert, nil
 }
 
-func (ast *astCompiler) translateConvertUsingExpr(expr *sqlparser.ConvertUsingExpr) (Expr, error) {
+func (ast *astCompiler) translateConvertUsingExpr(expr *sqlparser.ConvertUsingExpr) (IR, error) {
 	var (
 		using ConvertUsingExpr
 		err   error

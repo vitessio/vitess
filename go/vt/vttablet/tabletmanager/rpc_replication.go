@@ -418,7 +418,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 
 // DemotePrimary prepares a PRIMARY tablet to give up leadership to another tablet.
 //
-// It attemps to idempotently ensure the following guarantees upon returning
+// It attempts to idempotently ensure the following guarantees upon returning
 // successfully:
 //   - No future writes will be accepted.
 //   - No writes are in-flight.

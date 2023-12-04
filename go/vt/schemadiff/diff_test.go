@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -403,6 +404,7 @@ func TestDiffViews(t *testing.T) {
 }
 
 func TestDiffSchemas(t *testing.T) {
+	ctx := context.Background()
 	tt := []struct {
 		name        string
 		from        string
@@ -477,10 +479,10 @@ func TestDiffSchemas(t *testing.T) {
 			from: "create table t1 (id mediumint unsigned NOT NULL, deleted_at timestamp, primary key (id), unique key deleted_check (id, (if((deleted_at is null),0,NULL))))",
 			to:   "create table t1 (id mediumint unsigned NOT NULL, deleted_at timestamp, primary key (id), unique key deleted_check (id, (if((deleted_at is not null),0,NULL))))",
 			diffs: []string{
-				"alter table t1 drop key deleted_check, add unique index deleted_check (id, (if(deleted_at is not null, 0, null)))",
+				"alter table t1 drop key deleted_check, add unique key deleted_check (id, (if(deleted_at is not null, 0, null)))",
 			},
 			cdiffs: []string{
-				"ALTER TABLE `t1` DROP KEY `deleted_check`, ADD UNIQUE INDEX `deleted_check` (`id`, (if(`deleted_at` IS NOT NULL, 0, NULL)))",
+				"ALTER TABLE `t1` DROP KEY `deleted_check`, ADD UNIQUE KEY `deleted_check` (`id`, (if(`deleted_at` IS NOT NULL, 0, NULL)))",
 			},
 		},
 		{
@@ -656,13 +658,13 @@ func TestDiffSchemas(t *testing.T) {
 			to:   "create table t7(id int primary key); create table t5 (id int primary key, i int, constraint f5 foreign key (i) references t7(id)); create table t4 (id int primary key, i int, constraint f4 foreign key (i) references t7(id));",
 			diffs: []string{
 				"create table t7 (\n\tid int,\n\tprimary key (id)\n)",
-				"create table t4 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tindex f4 (i),\n\tconstraint f4 foreign key (i) references t7 (id)\n)",
-				"create table t5 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tindex f5 (i),\n\tconstraint f5 foreign key (i) references t7 (id)\n)",
+				"create table t4 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tkey f4 (i),\n\tconstraint f4 foreign key (i) references t7 (id)\n)",
+				"create table t5 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tkey f5 (i),\n\tconstraint f5 foreign key (i) references t7 (id)\n)",
 			},
 			cdiffs: []string{
 				"CREATE TABLE `t7` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
-				"CREATE TABLE `t4` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tINDEX `f4` (`i`),\n\tCONSTRAINT `f4` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n)",
-				"CREATE TABLE `t5` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tINDEX `f5` (`i`),\n\tCONSTRAINT `f5` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n)",
+				"CREATE TABLE `t4` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f4` (`i`),\n\tCONSTRAINT `f4` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n)",
+				"CREATE TABLE `t5` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f5` (`i`),\n\tCONSTRAINT `f5` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n)",
 			},
 		},
 		{
@@ -806,7 +808,7 @@ func TestDiffSchemas(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 
-				diffs, err := diff.OrderedDiffs()
+				diffs, err := diff.OrderedDiffs(ctx)
 				assert.NoError(t, err)
 				statements := []string{}
 				cstatements := []string{}
@@ -858,6 +860,7 @@ func TestDiffSchemas(t *testing.T) {
 }
 
 func TestSchemaApplyError(t *testing.T) {
+	ctx := context.Background()
 	tt := []struct {
 		name string
 		from string
@@ -900,7 +903,7 @@ func TestSchemaApplyError(t *testing.T) {
 			{
 				diff, err := schema1.SchemaDiff(schema2, hints)
 				require.NoError(t, err)
-				diffs, err := diff.OrderedDiffs()
+				diffs, err := diff.OrderedDiffs(ctx)
 				assert.NoError(t, err)
 				assert.NotEmpty(t, diffs)
 				_, err = schema1.Apply(diffs)
@@ -911,7 +914,7 @@ func TestSchemaApplyError(t *testing.T) {
 			{
 				diff, err := schema2.SchemaDiff(schema1, hints)
 				require.NoError(t, err)
-				diffs, err := diff.OrderedDiffs()
+				diffs, err := diff.OrderedDiffs(ctx)
 				assert.NoError(t, err)
 				assert.NotEmpty(t, diffs, "schema1: %v, schema2: %v", schema1.ToSQL(), schema2.ToSQL())
 				_, err = schema2.Apply(diffs)

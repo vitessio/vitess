@@ -30,8 +30,23 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-func knownBadQuery(expr Expr) bool {
-	isNullSafeComparison := func(expr Expr) bool {
+func internalExpression(e Expr) IR {
+	switch e := e.(type) {
+	case IR:
+		return e
+	case *CompiledExpr:
+		return e.ir
+	case *UntypedExpr:
+		return e.ir
+	default:
+		panic("invalid Expr")
+	}
+}
+
+func knownBadQuery(e Expr) bool {
+	expr := internalExpression(e)
+
+	isNullSafeComparison := func(expr IR) bool {
 		if cmp, ok := expr.(*ComparisonExpr); ok {
 			return cmp.Op.String() == "<=>"
 		}
@@ -54,11 +69,8 @@ func convert(t *testing.T, query string, simplify bool) (Expr, error) {
 	}
 
 	cfg := &Config{
-		Collation:    collations.CollationUtf8mb4ID,
-		Optimization: OptimizationLevelNone,
-	}
-	if simplify {
-		cfg.Optimization = OptimizationLevelSimplify
+		Collation:         collations.CollationUtf8mb4ID,
+		NoConstantFolding: !simplify,
 	}
 
 	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr

@@ -697,7 +697,7 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 		}
 	}
 	// Unreachable code.
-	// We should have found atleast 1 tablet in the valid list.
+	// We should have found at least 1 tablet in the valid list.
 	// If the list is empty, then we should have errored out much sooner.
 	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unreachable - did not find a valid primary candidate even though the valid candidate list was non-empty")
 }

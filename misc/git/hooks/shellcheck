@@ -20,7 +20,9 @@ do
   # The -e SC1090,SC1091 suppressing warnings about trying to find
   # files imported with "source foo.sh". We only want to lint
   # the files modified as part of this current diff.
-  errors+=$(shellcheck -e SC1090,SC1091 "$file" 2>&1)
+  # The -x flag tells shellcheck to follow the files we source
+  # and properly validate them as well.
+  errors+=$(shellcheck -x -e SC1090,SC1091 "$file" 2>&1)
 done
 
 [ -z "$errors" ] && exit 0

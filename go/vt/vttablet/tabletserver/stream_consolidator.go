@@ -256,7 +256,7 @@ func (s *streamInFlight) update(result *sqltypes.Result, block bool, maxMemoryQu
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// if this stream can still be catched up with, we need to store the result in
+	// if this stream can still be caught up with, we need to store the result in
 	// a catch up buffer; otherwise, we can skip this altogether and just fan out the result
 	// to all the followers that are already caught up
 	if s.catchupAllowed {

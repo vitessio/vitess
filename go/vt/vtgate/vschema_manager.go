@@ -20,11 +20,13 @@ import (
 	"context"
 	"sync"
 
+	"vitess.io/vitess/go/vt/graph"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -188,6 +190,9 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 	vschema := vindexes.BuildVSchema(v)
 	if vm.schema != nil {
 		vm.updateFromSchema(vschema)
+		// We mark the keyspaces that have foreign key management in Vitess and have cyclic foreign keys
+		// to have an error. This makes all queries against them to fail.
+		markErrorIfCyclesInFk(vschema)
 	}
 	return vschema
 }
@@ -205,19 +210,37 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 		// Now that we have ensured that all the tables are created, we can start populating the foreign keys
 		// in the tables.
 		for tblName, tblInfo := range m {
+			rTbl, err := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
+			if err != nil {
+				log.Errorf("error finding routed table %s: %v", tblName, err)
+				continue
+			}
 			for _, fkDef := range tblInfo.ForeignKeys {
 				parentTbl, err := vschema.FindRoutedTable(ksName, fkDef.ReferenceDefinition.ReferencedTable.Name.String(), topodatapb.TabletType_PRIMARY)
 				if err != nil {
 					log.Errorf("error finding parent table %s: %v", fkDef.ReferenceDefinition.ReferencedTable.Name.String(), err)
 					continue
 				}
-				childTbl, err := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
-				if err != nil {
-					log.Errorf("error finding child table %s: %v", tblName, err)
-					continue
+				rTbl.ParentForeignKeys = append(rTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
+				parentTbl.ChildForeignKeys = append(parentTbl.ChildForeignKeys, vindexes.NewChildFkInfo(rTbl, fkDef))
+			}
+			for _, idxDef := range tblInfo.Indexes {
+				switch idxDef.Info.Type {
+				case sqlparser.IndexTypePrimary:
+					for _, idxCol := range idxDef.Columns {
+						rTbl.PrimaryKey = append(rTbl.PrimaryKey, idxCol.Column)
+					}
+				case sqlparser.IndexTypeUnique:
+					var uniqueKey sqlparser.Exprs
+					for _, idxCol := range idxDef.Columns {
+						if idxCol.Expression == nil {
+							uniqueKey = append(uniqueKey, sqlparser.NewColName(idxCol.Column.String()))
+						} else {
+							uniqueKey = append(uniqueKey, idxCol.Expression)
+						}
+					}
+					rTbl.UniqueKeys = append(rTbl.UniqueKeys, uniqueKey)
 				}
-				childTbl.ParentForeignKeys = append(childTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
-				parentTbl.ChildForeignKeys = append(parentTbl.ChildForeignKeys, vindexes.NewChildFkInfo(childTbl, fkDef))
 			}
 		}
 
@@ -227,6 +250,47 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 			for name, def := range views {
 				ks.Views[name] = sqlparser.CloneSelectStatement(def)
 			}
+		}
+	}
+}
+
+type tableCol struct {
+	tableName sqlparser.TableName
+	colNames  sqlparser.Columns
+}
+
+var tableColHash = func(tc tableCol) string {
+	res := sqlparser.String(tc.tableName)
+	for _, colName := range tc.colNames {
+		res += "|" + sqlparser.String(colName)
+	}
+	return res
+}
+
+func markErrorIfCyclesInFk(vschema *vindexes.VSchema) {
+	for ksName, ks := range vschema.Keyspaces {
+		// Only check cyclic foreign keys for keyspaces that have
+		// foreign keys managed in Vitess.
+		if ks.ForeignKeyMode != vschemapb.Keyspace_managed {
+			continue
+		}
+		g := graph.NewGraph[string]()
+		for _, table := range ks.Tables {
+			for _, cfk := range table.ChildForeignKeys {
+				childTable := cfk.Table
+				parentVertex := tableCol{
+					tableName: table.GetTableName(),
+					colNames:  cfk.ParentColumns,
+				}
+				childVertex := tableCol{
+					tableName: childTable.GetTableName(),
+					colNames:  cfk.ChildColumns,
+				}
+				g.AddEdge(tableColHash(parentVertex), tableColHash(childVertex))
+			}
+		}
+		if g.HasCycles() {
+			ks.Error = vterrors.VT09019(ksName)
 		}
 	}
 }

@@ -1,0 +1,28 @@
+{
+  "sharded": false,
+  "foreignKeyMode": "managed",
+  "vindexes": {
+    "reverse_bits": {
+      "type": "reverse_bits"
+    }
+  },
+  "tables": {
+    "parent": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "child": {
+      "column_vindexes": [
+        {
+          "column": "parent_id",
+          "name": "reverse_bits"
+        }
+      ]
+    }
+
+  }
+}

@@ -87,8 +87,8 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		}
 		b.recursive[node] = deps.recursive
 		b.direct[node] = deps.direct
-		if deps.typ != nil {
-			b.typer.setTypeFor(node, *deps.typ)
+		if deps.typ.Valid() {
+			b.typer.setTypeFor(node, deps.typ)
 		}
 	case *sqlparser.CountStar:
 		b.bindCountStar(node)
@@ -102,8 +102,8 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		for i, expr := range info.exprs {
 			ae := expr.(*sqlparser.AliasedExpr)
 			b.recursive[ae.Expr] = info.recursive[i]
-			if t := info.types[i]; t != nil {
-				b.typer.exprTypes[ae.Expr] = *t
+			if t := info.types[i]; t.Valid() {
+				b.typer.m[ae.Expr] = t
 			}
 		}
 	}
@@ -122,11 +122,7 @@ func (b *binder) bindCountStar(node *sqlparser.CountStar) {
 				}
 			}
 		default:
-			expr := tbl.GetExpr()
-			if expr != nil {
-				setFor := b.tc.tableSetFor(expr)
-				ts = ts.Merge(setFor)
-			}
+			ts = ts.Merge(tbl.getTableSet(b.org))
 		}
 	}
 	b.recursive[node] = ts
@@ -143,18 +139,11 @@ func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColNam
 	if err != nil {
 		return dependency{}, err
 	}
-	alias := infoFor.GetExpr().As
-	if alias.IsEmpty() {
-		name, err := infoFor.Name()
-		if err != nil {
-			return dependency{}, err
-		}
-		node.Qualifier = name
-	} else {
-		node.Qualifier = sqlparser.TableName{
-			Name: sqlparser.NewIdentifierCS(alias.String()),
-		}
+	name, err := infoFor.Name()
+	if err != nil {
+		return dependency{}, err
 	}
+	node.Qualifier = name
 	deps, err = b.resolveColumn(node, currentScope, false)
 	if err != nil {
 		return dependency{}, err

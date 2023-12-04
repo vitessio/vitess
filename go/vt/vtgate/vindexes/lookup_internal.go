@@ -312,16 +312,16 @@ nextRow:
 	if lkp.MultiShardAutocommit {
 		insStmt = "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */"
 	}
-	buf := new(bytes.Buffer)
+	var buf strings.Builder
 	if ignoreMode {
-		fmt.Fprintf(buf, "%s ignore into %s(", insStmt, lkp.Table)
+		fmt.Fprintf(&buf, "%s ignore into %s(", insStmt, lkp.Table)
 	} else {
-		fmt.Fprintf(buf, "%s into %s(", insStmt, lkp.Table)
+		fmt.Fprintf(&buf, "%s into %s(", insStmt, lkp.Table)
 	}
 	for _, col := range lkp.FromColumns {
-		fmt.Fprintf(buf, "%s, ", col)
+		fmt.Fprintf(&buf, "%s, ", col)
 	}
-	fmt.Fprintf(buf, "%s) values(", lkp.To)
+	fmt.Fprintf(&buf, "%s) values(", lkp.To)
 
 	bindVars := make(map[string]*querypb.BindVariable, 2*len(trimmedRowsCols))
 	for rowIdx := range trimmedToValues {
@@ -340,11 +340,11 @@ nextRow:
 	}
 
 	if lkp.Upsert {
-		fmt.Fprintf(buf, " on duplicate key update ")
+		fmt.Fprintf(&buf, " on duplicate key update ")
 		for _, col := range lkp.FromColumns {
-			fmt.Fprintf(buf, "%s=values(%s), ", col, col)
+			fmt.Fprintf(&buf, "%s=values(%s), ", col, col)
 		}
-		fmt.Fprintf(buf, "%s=values(%s)", lkp.To, lkp.To)
+		fmt.Fprintf(&buf, "%s=values(%s)", lkp.To, lkp.To)
 	}
 
 	if _, err := vcursor.Execute(ctx, "VindexCreate", buf.String(), bindVars, true /* rollbackOnError */, co); err != nil {
@@ -356,7 +356,7 @@ nextRow:
 // Delete deletes the association between ids and value.
 // rowsColValues contains all the rows that are being deleted.
 // For each row, we store the value of each column defined in the vindex.
-// value cointains the keyspace_id of the vindex entry being deleted.
+// value contains the keyspace_id of the vindex entry being deleted.
 //
 // Given the following information in a vindex table with two columns:
 //
@@ -405,7 +405,7 @@ func (lkp *lookupInternal) Update(ctx context.Context, vcursor VCursor, oldValue
 }
 
 func (lkp *lookupInternal) initDelStmt() string {
-	var delBuffer bytes.Buffer
+	var delBuffer strings.Builder
 	fmt.Fprintf(&delBuffer, "delete from %s where ", lkp.Table)
 	for colIdx, column := range lkp.FromColumns {
 		if colIdx != 0 {

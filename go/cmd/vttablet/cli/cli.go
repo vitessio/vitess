@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -102,9 +102,12 @@ vttablet \
 	}
 )
 
+const (
+	dbaGrantWaitTime = 10 * time.Second
+)
+
 func run(cmd *cobra.Command, args []string) error {
 	servenv.Init()
-	defer servenv.Close()
 
 	tabletAlias, err := topoproto.ParseTabletAlias(tabletPath)
 	if err != nil {
@@ -244,6 +247,11 @@ func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts 
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
 	} else if enforceTableACLConfig {
 		return nil, fmt.Errorf("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
+	}
+
+	err := tabletserver.WaitForDBAGrants(config, dbaGrantWaitTime)
+	if err != nil {
+		return nil, err
 	}
 	// creates and registers the query service
 	qsc := tabletserver.NewTabletServer(ctx, "", config, ts, tabletAlias)

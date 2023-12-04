@@ -366,7 +366,7 @@ func (mysqld *Mysqld) GetColumns(ctx context.Context, dbName, table string) ([]*
 		return nil, nil, err
 	}
 	defer conn.Recycle()
-	return GetColumns(dbName, table, conn.ExecuteFetch)
+	return GetColumns(dbName, table, conn.Conn.ExecuteFetch)
 }
 
 // GetPrimaryKeyColumns returns the primary key columns of table.
@@ -397,7 +397,7 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
             WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN %s AND LOWER(INDEX_NAME) = 'primary'
             ORDER BY table_name, SEQ_IN_INDEX`
 	sql = fmt.Sprintf(sql, encodeEntityName(dbName), tableList)
-	qr, err := conn.ExecuteFetch(sql, len(tables)*100, true)
+	qr, err := conn.Conn.ExecuteFetch(sql, len(tables)*100, true)
 	if err != nil {
 		return nil, err
 	}
@@ -629,7 +629,7 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
 	encodedDbName := encodeEntityName(dbName)
 	encodedTable := encodeEntityName(table)
 	sql = fmt.Sprintf(sql, encodedDbName, encodedTable, encodedDbName, encodedTable, encodedDbName, encodedTable)
-	qr, err := conn.ExecuteFetch(sql, 1000, true)
+	qr, err := conn.Conn.ExecuteFetch(sql, 1000, true)
 	if err != nil {
 		return nil, "", err
 	}

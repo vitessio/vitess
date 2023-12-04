@@ -33,16 +33,16 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/pools"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -232,17 +232,52 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 	return tsv
 }
 
+// WaitForDBAGrants waits for DBA user to have the required privileges to function properly.
+func WaitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) error {
+	// We don't wait for grants if the tablet is externally managed. Permissions
+	// are then the responsibility of the DBA.
+	if config.DB.HasGlobalSettings() || waitTime == 0 {
+		return nil
+	}
+	timer := time.NewTimer(waitTime)
+	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
+	defer cancel()
+	for {
+		conn, err := dbconnpool.NewDBConnection(ctx, config.DB.DbaConnector())
+		if err == nil {
+			res, fetchErr := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
+			if fetchErr != nil {
+				log.Errorf("Error running SHOW GRANTS - %v", fetchErr)
+			}
+			if fetchErr == nil && res != nil && len(res.Rows) > 0 && len(res.Rows[0]) > 0 {
+				privileges := res.Rows[0][0].ToString()
+				// In MySQL 8.0, all the privileges are listed out explicitly, so we can search for SUPER in the output.
+				// In MySQL 5.7, all the privileges are not listed explicitly, instead ALL PRIVILEGES is written, so we search for that too.
+				if strings.Contains(privileges, "SUPER") || strings.Contains(privileges, "ALL PRIVILEGES") {
+					return nil
+				}
+			}
+		}
+		select {
+		case <-timer.C:
+			return fmt.Errorf("waited %v for dba user to have the required permissions", waitTime)
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
 func (tsv *TabletServer) loadQueryTimeout() time.Duration {
 	return time.Duration(tsv.QueryTimeout.Load())
 }
 
 // onlineDDLExecutorToggleTableBuffer is called by onlineDDLExecutor as a callback function. onlineDDLExecutor
 // uses it to start/stop query buffering for a given table.
-// It is onlineDDLExecutor's responsibility to make sure beffering is stopped after some definite amount of time.
+// It is onlineDDLExecutor's responsibility to make sure buffering is stopped after some definite amount of time.
 // There are two layers to buffering/unbuffering:
 //  1. the creation and destruction of a QueryRuleSource. The existence of such source affects query plan rules
 //     for all new queries (see Execute() function and call to GetPlan())
-//  2. affecting already existing rules: a Rule has a concext.WithCancel, that is cancelled by onlineDDLExecutor
+//  2. affecting already existing rules: a Rule has a context.WithCancel, that is cancelled by onlineDDLExecutor
 func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(bufferingCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool) {
 	queryRuleSource := fmt.Sprintf("onlineddl/%s", tableName)
 
@@ -496,7 +531,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 			if tsv.txThrottler.Throttle(tsv.getPriorityFromOptions(options), options.GetWorkloadName()) {
 				return errTxThrottled
 			}
-			var connSetting *pools.Setting
+			var connSetting *smartconnpool.Setting
 			if len(settings) > 0 {
 				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
 				if err != nil {
@@ -794,7 +829,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			logStats.ReservedID = reservedID
 			logStats.TransactionID = transactionID
 
-			var connSetting *pools.Setting
+			var connSetting *smartconnpool.Setting
 			if len(settings) > 0 {
 				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
 				if err != nil {
@@ -896,7 +931,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 			logStats.ReservedID = reservedID
 			logStats.TransactionID = transactionID
 
-			var connSetting *pools.Setting
+			var connSetting *smartconnpool.Setting
 			if len(settings) > 0 {
 				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
 				if err != nil {
@@ -1928,7 +1963,7 @@ func (tsv *TabletServer) SetPoolSize(val int) {
 	if val <= 0 {
 		return
 	}
-	tsv.qe.conns.SetCapacity(val)
+	tsv.qe.conns.SetCapacity(int64(val))
 }
 
 // PoolSize returns the pool size.
@@ -1938,7 +1973,7 @@ func (tsv *TabletServer) PoolSize() int {
 
 // SetStreamPoolSize changes the pool size to the specified value.
 func (tsv *TabletServer) SetStreamPoolSize(val int) {
-	tsv.qe.streamConns.SetCapacity(val)
+	tsv.qe.streamConns.SetCapacity(int64(val))
 }
 
 // SetStreamConsolidationBlocking sets whether the stream consolidator should wait for slow clients
@@ -1953,7 +1988,7 @@ func (tsv *TabletServer) StreamPoolSize() int {
 
 // SetTxPoolSize changes the tx pool size to the specified value.
 func (tsv *TabletServer) SetTxPoolSize(val int) {
-	tsv.te.txPool.scp.conns.SetCapacity(val)
+	tsv.te.txPool.scp.conns.SetCapacity(int64(val))
 }
 
 // TxPoolSize returns the tx pool size.

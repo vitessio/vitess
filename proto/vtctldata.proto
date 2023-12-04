@@ -167,6 +167,7 @@ message SchemaMigration {
   bool is_immediate_operation = 51;
   vttime.Time reviewed_at = 52;
   vttime.Time ready_to_complete_at = 53;
+  string removed_foreign_key_names = 54;
 
   enum Strategy {
     option allow_alias = true;
@@ -1724,6 +1725,7 @@ message VDiffCreateRequest {
   vttime.Duration wait_update_interval = 16;
   bool auto_retry = 17;
   bool verbose = 18;
+  int64 max_report_sample_rows = 19;
 }
 
 message VDiffCreateResponse {
