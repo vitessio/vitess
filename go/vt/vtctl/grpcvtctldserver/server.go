@@ -688,7 +688,7 @@ func (s *VtctldServer) ForceCutOverSchemaMigration(ctx context.Context, req *vtc
 		return nil, err
 	}
 
-	log.Info("Calling ApplySchema to force cut-over migration")
+	log.Infof("Calling ApplySchema to force cut-over migration %s", req.Uuid)
 	qr, err := s.ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
