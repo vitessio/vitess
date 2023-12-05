@@ -130,10 +130,10 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		// immediately so we use ExecuteFetch directly.
 		res, err := vr.dbClient.ExecuteFetch("select @@session.max_allowed_packet as max_allowed_packet", 1)
 		if err != nil {
-			log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", err, relayLogMaxSize)
+			log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", relayLogMaxSize, err)
 		} else {
 			if maxAllowedPacket, err = res.Rows[0][0].ToInt64(); err != nil {
-				log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", err, relayLogMaxSize)
+				log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", relayLogMaxSize, err)
 			}
 		}
 		// Leave 64 bytes of room for the begin and commit to be sure that we have a
