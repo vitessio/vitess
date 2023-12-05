@@ -1268,15 +1268,14 @@ func (cached *Upsert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(24)
 	}
-	// field InsPrimitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.InsPrimitive.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field UpdPrimitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.UpdPrimitive.(cachedObject); ok {
-		size += cc.CachedSize(true)
+	// field Upserts []vitess.io/vitess/go/vt/vtgate/engine.upsert
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Upserts)) * int64(32))
+		for _, elem := range cached.Upserts {
+			size += elem.CachedSize(false)
+		}
 	}
 	return size
 }
@@ -1487,6 +1486,24 @@ func (cached *shardRoute) CachedSize(alloc bool) int64 {
 	}
 	// field primitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.primitive.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *upsert) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Insert vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Insert.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Update vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Update.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

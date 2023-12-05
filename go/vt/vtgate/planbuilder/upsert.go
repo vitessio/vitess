@@ -29,8 +29,7 @@ var _ logicalPlan = (*upsert)(nil)
 
 // Primitive implements the logicalPlan interface
 func (u *upsert) Primitive() engine.Primitive {
-	return &engine.Upsert{
-		InsPrimitive: u.insert.Primitive(),
-		UpdPrimitive: u.update.Primitive(),
-	}
+	up := &engine.Upsert{}
+	up.AddUpsert(u.insert.Primitive(), u.update.Primitive())
+	return up
 }
