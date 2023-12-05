@@ -6328,8 +6328,8 @@ func TestPlannedReparentShard(t *testing.T) {
 			expectedErr: "duration: seconds:-1 nanos:1 is out of range for time.Duration",
 		},
 		{
-			name: "tablet unreachable",
-			ts:   memorytopo.NewServer(ctx, "zone1"),
+			name: "no promotable tablets in the same cell as the primary",
+			ts:   memorytopo.NewServer("zone1", "zone2"),
 			tablets: []*topodatapb.Tablet{
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -6345,7 +6345,7 @@ func TestPlannedReparentShard(t *testing.T) {
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
+						Cell: "zone2",
 						Uid:  200,
 					},
 					Type:     topodatapb.TabletType_REPLICA,
@@ -6354,7 +6354,7 @@ func TestPlannedReparentShard(t *testing.T) {
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
+						Cell: "zone2",
 						Uid:  101,
 					},
 					Type:     topodatapb.TabletType_RDONLY,
@@ -6363,33 +6363,23 @@ func TestPlannedReparentShard(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				// This is only needed to verify reachability, so empty results are fine.
-				PrimaryStatusResults: map[string]struct {
-					Status *replicationdatapb.PrimaryStatus
-					Error  error
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
 				}{
-					"zone1-0000000200": {
-						Error: fmt.Errorf("primary status failed"),
-					},
-					"zone1-0000000101": {
-						Status: &replicationdatapb.PrimaryStatus{},
-					},
 					"zone1-0000000100": {
-						Status: &replicationdatapb.PrimaryStatus{},
+						Position: "doesn't matter",
+						Error:    nil,
 					},
 				},
 			},
 			req: &vtctldatapb.PlannedReparentShardRequest{
-				Keyspace: "testkeyspace",
-				Shard:    "-",
-				NewPrimary: &topodatapb.TabletAlias{
-					Cell: "zone1",
-					Uid:  200,
-				},
+				Keyspace:            "testkeyspace",
+				Shard:               "-",
 				WaitReplicasTimeout: protoutil.DurationToProto(time.Millisecond * 10),
 			},
 			expectEventsToOccur: true,
-			expectedErr:         "primary status failed",
+			expectedErr:         "cannot find a tablet to reparent to in the same cell as the current primary",
 		},
 	}
 
