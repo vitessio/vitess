@@ -3109,6 +3109,8 @@ func TestPlayerNoBlob(t *testing.T) {
 }
 
 func TestPlayerBatchMode(t *testing.T) {
+	// To test trx batch splitting at 1024-64 bytes.
+	maxAllowedPacket := 1024
 	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
 	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
 	defer func() {
@@ -3117,7 +3119,7 @@ func TestPlayerBatchMode(t *testing.T) {
 
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
-		"set @@global.max_allowed_packet=1024", // To test trx batch splitting at 1024-64 bytes
+		fmt.Sprintf("set @@global.max_allowed_packet=%d", maxAllowedPacket),
 		"create table t1(id bigint, val1 varchar(1000), primary key(id))",
 		fmt.Sprintf("create table %s.t1(id bigint, val1 varchar(1000), primary key(id))", vrepldb),
 	})
@@ -3142,7 +3144,7 @@ func TestPlayerBatchMode(t *testing.T) {
 	cancel, vrID := startVReplication(t, bls, "")
 	defer cancel()
 
-	maxBatchSize := 1024 - 64 // VPlayer leaves 64 bytes of room
+	maxBatchSize := maxAllowedPacket - 64 // VPlayer leaves 64 bytes of room
 	// When the trx will be in a single batch.
 	trxFullBatchExpectRE := `^begin;(set @@session\.foreign_key_checks=.*;)?%s;update _vt\.vreplication set pos=.*;commit$`
 	// If the trx batch is split, then we only expect the end part.
