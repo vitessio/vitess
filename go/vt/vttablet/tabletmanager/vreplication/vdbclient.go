@@ -82,7 +82,7 @@ func (vc *vdbClient) Commit() error {
 
 // CommitQueryBatch sends the current transaction's query batch -- which
 // is often the full contents of the transaction, unless we've crossed
-// the maxBatchSize one ore more times -- down the wire to the database,
+// the maxBatchSize one or more times -- down the wire to the database,
 // including the final commit.
 func (vc *vdbClient) CommitQueryBatch(ctx context.Context) error {
 	vc.queries = append(vc.queries, "commit")

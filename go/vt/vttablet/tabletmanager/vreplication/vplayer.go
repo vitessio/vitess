@@ -124,16 +124,23 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		batchMode = true
 	}
 	if batchMode {
-		maxAllowedPacket := int64(1024) // 1KiB minimum in mysqld
+		// relayLogMaxSize is effectively the limit used when not batching.
+		maxAllowedPacket := int64(relayLogMaxSize)
+		// We explicitly do NOT want to batch this, we want to send it down the wire
+		// immediately so we use ExecuteFetch directly.
 		res, err := vr.dbClient.ExecuteFetch("select @@session.max_allowed_packet as max_allowed_packet", 1)
 		if err != nil {
-			log.Errorf("Error getting max_allowed_packet, will use the minimum value: %v", err)
+			log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", err, relayLogMaxSize)
 		} else {
 			if maxAllowedPacket, err = res.Rows[0][0].ToInt64(); err != nil {
-				log.Errorf("Error getting max_allowed_packet, will use the minimum value:: %v", err)
+				log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", err, relayLogMaxSize)
 			}
 		}
-		maxAllowedPacket -= 512 // Leave 512 bytes of room for the vrepl record update, commit, etc.
+		// Leave 64 bytes of room for the begin and commit to be sure that we have a
+		// more than ample buffer left for them. The default value of max_allowed_packet
+		// is 4MiB in 5.7 and 64MiB in 8.0 -- and the default for max_relay_log_size is
+		// 250000 bytes -- so we have plenty of room.
+		maxAllowedPacket -= 64
 		queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 			return nil, vr.dbClient.AddBatchQuery(sql)
 		}
@@ -206,7 +213,7 @@ func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
 		return nil
 	}
 	log.Infof("Setting this session's foreign_key_checks to %s", strconv.FormatBool(dbForeignKeyChecksEnabled))
-	if _, err := vp.vr.dbClient.ExecuteFetch("set @@session.foreign_key_checks="+strconv.FormatBool(dbForeignKeyChecksEnabled), 1); err != nil {
+	if _, err := vp.query(ctx, "set @@session.foreign_key_checks="+strconv.FormatBool(dbForeignKeyChecksEnabled)); err != nil {
 		return fmt.Errorf("failed to set session foreign_key_checks: %w", err)
 	}
 	vp.foreignKeyChecksEnabled = dbForeignKeyChecksEnabled
@@ -344,10 +351,10 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	return nil
 }
 
-func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
+func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
 	vp.numAccumulatedHeartbeats = 0
 	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vreplicationStoreCompressedGTID)
-	if _, err := vp.vr.dbClient.Execute(update); err != nil {
+	if _, err := vp.query(ctx, update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
 	vp.unsavedEvent = nil
@@ -465,7 +472,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		// In both cases, now > timeLastSaved. If so, the GTID of the last unsavedEvent
 		// must be saved.
 		if time.Since(vp.timeLastSaved) >= idleTimeout && vp.unsavedEvent != nil {
-			posReached, err := vp.updatePos(vp.unsavedEvent.Timestamp)
+			posReached, err := vp.updatePos(ctx, vp.unsavedEvent.Timestamp)
 			if err != nil {
 				return err
 			}
@@ -564,7 +571,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			vp.unsavedEvent = event
 			return nil
 		}
-		posReached, err := vp.updatePos(event.Timestamp)
+		posReached, err := vp.updatePos(ctx, event.Timestamp)
 		if err != nil {
 			return err
 		}
@@ -621,7 +628,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
 		}
 		// Just update the position.
-		posReached, err := vp.updatePos(event.Timestamp)
+		posReached, err := vp.updatePos(ctx, event.Timestamp)
 		if err != nil {
 			return err
 		}
@@ -637,7 +644,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		switch vp.vr.source.OnDdl {
 		case binlogdatapb.OnDDLAction_IGNORE:
 			// We still have to update the position.
-			posReached, err := vp.updatePos(event.Timestamp)
+			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
 				return err
 			}
@@ -648,7 +655,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err := vp.vr.dbClient.Begin(); err != nil {
 				return err
 			}
-			if _, err := vp.updatePos(event.Timestamp); err != nil {
+			if _, err := vp.updatePos(ctx, event.Timestamp); err != nil {
 				return err
 			}
 			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
@@ -667,7 +674,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return err
 			}
 			stats.Send(fmt.Sprintf("%v", event.Statement))
-			posReached, err := vp.updatePos(event.Timestamp)
+			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
 				return err
 			}
@@ -679,7 +686,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Statement)
 			}
 			stats.Send(fmt.Sprintf("%v", event.Statement))
-			posReached, err := vp.updatePos(event.Timestamp)
+			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
 				return err
 			}

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet"
 
 	"vitess.io/vitess/go/test/utils"
@@ -486,7 +487,10 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 }
 
 func (dc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
-	queries := strings.Split(query, ";")
+	queries, err := sqlparser.SplitStatementToPieces(query)
+	if err != nil {
+		return nil, err
+	}
 	results := make([]*sqltypes.Result, 0, len(queries))
 	for _, query := range queries {
 		qr, err := dc.ExecuteFetch(query, maxrows)

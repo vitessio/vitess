@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -161,7 +162,10 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resul
 }
 
 func (dc *fakeDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
-	queries := strings.Split(query, ";")
+	queries, err := sqlparser.SplitStatementToPieces(query)
+	if err != nil {
+		return nil, err
+	}
 	results := make([]*sqltypes.Result, 0, len(queries))
 	for _, query := range queries {
 		qr, err := dc.executeFetch(query, maxrows)

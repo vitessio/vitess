@@ -489,7 +489,6 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 				}
 			}
 		}
-		pkVals = append(pkVals, vals[pkIndex])
 		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // +2 for the comma and space
 		if querySize+addedSize > maxQuerySize {
 			if _, err := execQuery(&pkVals); err != nil {
@@ -497,6 +496,7 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 			}
 			pkVals = nil
 		}
+		pkVals = append(pkVals, vals[pkIndex])
 		querySize += addedSize
 	}
 
