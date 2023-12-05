@@ -50,7 +50,7 @@ type vplayer struct {
 	// These are set when creating the VPlayer based on whether the VPlayer
 	// is in batch (stmt and trx) execution mode or not.
 	query  func(ctx context.Context, sql string) (*sqltypes.Result, error)
-	commit func(ctx context.Context) error
+	commit func() error
 	// If the VPlayer is in batch mode, we accumulate each transaction's statements
 	// that are then sent as a single multi-statement protocol request to the database.
 	batchMode bool
@@ -116,7 +116,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	queryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 		return vr.dbClient.ExecuteWithRetry(ctx, sql)
 	}
-	commitFunc := func(ctx context.Context) error {
+	commitFunc := func() error {
 		return vr.dbClient.Commit()
 	}
 	batchMode := false
@@ -142,10 +142,13 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		// bytes -- so we have plenty of room.
 		maxAllowedPacket -= 64
 		queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
-			return nil, vr.dbClient.AddBatchQuery(sql)
+			if !vr.dbClient.InTransaction { // Should be sent down the wire immediately
+				return vr.dbClient.Execute(sql)
+			}
+			return nil, vr.dbClient.AddBatchQuery(sql) // Should become part of the trx batch
 		}
-		commitFunc = func(ctx context.Context) error {
-			return vr.dbClient.CommitQueryBatch(ctx)
+		commitFunc = func() error {
+			return vr.dbClient.CommitQueryBatch() // Commit the current trx batch
 		}
 		vr.dbClient.maxBatchSize = maxAllowedPacket
 	}
@@ -588,7 +591,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if err != nil {
 			return err
 		}
-		if err := vp.commit(ctx); err != nil {
+		if err := vp.commit(); err != nil {
 			return err
 		}
 		if posReached {
@@ -674,7 +677,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
 				return err
 			}
-			if err := vp.commit(ctx); err != nil {
+			if err := vp.commit(); err != nil {
 				return err
 			}
 			return io.EOF

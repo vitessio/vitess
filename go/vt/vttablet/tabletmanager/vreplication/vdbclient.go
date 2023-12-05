@@ -85,7 +85,7 @@ func (vc *vdbClient) Commit() error {
 // is often the full contents of the transaction, unless we've crossed
 // the maxBatchSize one or more times -- down the wire to the database,
 // including the final commit.
-func (vc *vdbClient) CommitQueryBatch(ctx context.Context) error {
+func (vc *vdbClient) CommitQueryBatch() error {
 	vc.queries = append(vc.queries, "commit")
 	queries := strings.Join(vc.queries[vc.queriesPos:], ";")
 	for _, err := vc.DBClient.ExecuteFetchMulti(queries, -1); err != nil; {
