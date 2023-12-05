@@ -2739,6 +2739,13 @@ func TestWaitForDBAGrants(t *testing.T) {
 				}
 				return tc, func() {}
 			},
+		}, {
+			name:      "Empty config",
+			waitTime:  300 * time.Millisecond,
+			errWanted: "",
+			setupFunc: func(t *testing.T) (*tabletenv.TabletConfig, func()) {
+				return nil, func() {}
+			},
 		},
 	}
 	for _, tt := range tests {

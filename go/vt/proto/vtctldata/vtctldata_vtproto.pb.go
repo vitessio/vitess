@@ -3138,11 +3138,12 @@ func (m *PlannedReparentShardRequest) CloneVT() *PlannedReparentShardRequest {
 		return (*PlannedReparentShardRequest)(nil)
 	}
 	r := &PlannedReparentShardRequest{
-		Keyspace:            m.Keyspace,
-		Shard:               m.Shard,
-		NewPrimary:          m.NewPrimary.CloneVT(),
-		AvoidPrimary:        m.AvoidPrimary.CloneVT(),
-		WaitReplicasTimeout: m.WaitReplicasTimeout.CloneVT(),
+		Keyspace:                m.Keyspace,
+		Shard:                   m.Shard,
+		NewPrimary:              m.NewPrimary.CloneVT(),
+		AvoidPrimary:            m.AvoidPrimary.CloneVT(),
+		WaitReplicasTimeout:     m.WaitReplicasTimeout.CloneVT(),
+		TolerableReplicationLag: m.TolerableReplicationLag.CloneVT(),
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -13772,6 +13773,16 @@ func (m *PlannedReparentShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.TolerableReplicationLag != nil {
+		size, err := m.TolerableReplicationLag.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x32
+	}
 	if m.WaitReplicasTimeout != nil {
 		size, err := m.WaitReplicasTimeout.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -22607,6 +22618,10 @@ func (m *PlannedReparentShardRequest) SizeVT() (n int) {
 	}
 	if m.WaitReplicasTimeout != nil {
 		l = m.WaitReplicasTimeout.SizeVT()
+		n += 1 + l + sov(uint64(l))
+	}
+	if m.TolerableReplicationLag != nil {
+		l = m.TolerableReplicationLag.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -45423,6 +45438,42 @@ func (m *PlannedReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 				m.WaitReplicasTimeout = &vttime.Duration{}
 			}
 			if err := m.WaitReplicasTimeout.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TolerableReplicationLag", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TolerableReplicationLag == nil {
+				m.TolerableReplicationLag = &vttime.Duration{}
+			}
+			if err := m.TolerableReplicationLag.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

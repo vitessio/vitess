@@ -852,6 +852,7 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysi
 		analyzedTablet.Shard,
 		reparentutil.PlannedReparentOptions{
 			WaitReplicasTimeout: time.Duration(config.Config.WaitReplicasTimeoutSeconds) * time.Second,
+			TolerableReplLag:    time.Duration(config.Config.TolerableReplicationLagSeconds) * time.Second,
 		},
 	)
 

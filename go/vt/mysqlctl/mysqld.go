@@ -461,13 +461,13 @@ func cleanupLockfile(socket string, ts string) error {
 	if err == nil {
 		// If the process still exists, it's not safe to
 		// remove the lock file, so we have to keep it around.
-		log.Warningf("%v: not removing socket lock file: %v", ts, lockPath)
-		return nil
+		log.Errorf("%v: not removing socket lock file: %v with pid %v", ts, lockPath, p)
+		return fmt.Errorf("process %v is still running", p)
 	}
 	if !errors.Is(err, os.ErrProcessDone) {
 		// Any errors except for the process being done
 		// is unexpected here.
-		log.Errorf("%v: error checking process: %v", ts, err)
+		log.Errorf("%v: error checking process %v: %v", ts, p, err)
 		return err
 	}
 
@@ -522,7 +522,7 @@ func (mysqld *Mysqld) wait(ctx context.Context, cnf *Mycnf, params *mysql.ConnPa
 // flushed - on the order of 20-30 minutes.
 //
 // If a mysqlctld address is provided in a flag, Shutdown will run remotely.
-func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool) error {
+func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool, shutdownTimeout time.Duration) error {
 	log.Infof("Mysqld.Shutdown")
 
 	// Execute as remote action on mysqlctld if requested.
@@ -581,7 +581,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		defer os.Remove(cnf)
 		args := []string{
 			"--defaults-extra-file=" + cnf,
-			"--shutdown-timeout=300",
+			fmt.Sprintf("--shutdown-timeout=%d", int(shutdownTimeout.Seconds())),
 			"--connect-timeout=30",
 			"--wait=10",
 			"shutdown",
@@ -1024,9 +1024,9 @@ func (mysqld *Mysqld) createTopDir(cnf *Mycnf, dir string) error {
 }
 
 // Teardown will shutdown the running daemon, and delete the root directory.
-func (mysqld *Mysqld) Teardown(ctx context.Context, cnf *Mycnf, force bool) error {
+func (mysqld *Mysqld) Teardown(ctx context.Context, cnf *Mycnf, force bool, shutdownTimeout time.Duration) error {
 	log.Infof("mysqlctl.Teardown")
-	if err := mysqld.Shutdown(ctx, cnf, true); err != nil {
+	if err := mysqld.Shutdown(ctx, cnf, true, shutdownTimeout); err != nil {
 		log.Warningf("failed mysqld shutdown: %v", err.Error())
 		if !force {
 			return err
