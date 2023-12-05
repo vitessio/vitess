@@ -886,6 +886,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				ctx:            ctx,
 				logStats:       logStats,
 				tsv:            tsv,
+				tabletType:     target.GetTabletType(),
 				setting:        connSetting,
 			}
 			return qre.Stream(callback)
