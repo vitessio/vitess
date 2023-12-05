@@ -19,6 +19,9 @@ package topo
 import (
 	"context"
 	"path"
+	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -270,26 +273,77 @@ func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 	return nil
 }
 
-// FindAllShardsInKeyspace reads and returns all the existing shards in
-// a keyspace. It doesn't take any lock.
-func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) (map[string]*ShardInfo, error) {
+// FindAllShardsInKeyspaceOptions controls the behavior of
+// Server.FindAllShardsInKeyspace.
+type FindAllShardsInKeyspaceOptions struct {
+	// Concurrency controls the maximum number of concurrent calls to GetShard.
+	// If <= 0, Concurrency is set to 1.
+	Concurrency int
+}
+
+// FindAllShardsInKeyspace reads and returns all the existing shards in a
+// keyspace. It doesn't take any lock.
+//
+// If opt is non-nil, it is used to configure the method's behavior. Otherwise,
+// the default options are used.
+func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, opt *FindAllShardsInKeyspaceOptions) (map[string]*ShardInfo, error) {
+	// Apply any necessary defaults.
+	if opt == nil {
+		opt = &FindAllShardsInKeyspaceOptions{}
+	}
+	if opt.Concurrency <= 0 {
+		opt.Concurrency = 1
+	}
+
 	shards, err := ts.GetShardNames(ctx, keyspace)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to get list of shards for keyspace '%v'", keyspace)
 	}
 
-	result := make(map[string]*ShardInfo, len(shards))
+	// Keyspaces with a large number of shards and geographically distributed
+	// topo instances may experience significant latency fetching shard records.
+	//
+	// A prior version of this logic used unbounded concurrency to fetch shard
+	// records which resulted in overwhelming topo server instances:
+	// https://github.com/vitessio/vitess/pull/5436.
+	//
+	// However, removing the concurrency altogether can cause large operations
+	// to fail due to timeout. The caller chooses the appropriate concurrency
+	// level so that certain paths can be optimized (such as vtctld
+	// RebuildKeyspace calls, which do not run on every vttablet).
+	var (
+		mu     sync.Mutex
+		result = make(map[string]*ShardInfo, len(shards))
+	)
+
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.SetLimit(opt.Concurrency)
+
 	for _, shard := range shards {
-		si, err := ts.GetShard(ctx, keyspace, shard)
-		if err != nil {
-			if IsErrType(err, NoNode) {
+		shard := shard
+
+		eg.Go(func() error {
+			si, err := ts.GetShard(ctx, keyspace, shard)
+			switch {
+			case IsErrType(err, NoNode):
 				log.Warningf("GetShard(%v, %v) returned ErrNoNode, consider checking the topology.", keyspace, shard)
-			} else {
-				return nil, vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
+				return nil
+			case err == nil:
+				mu.Lock()
+				result[shard] = si
+				mu.Unlock()
+
+				return nil
+			default:
+				return vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
 			}
-		}
-		result[shard] = si
+		})
 	}
+
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+
 	return result, nil
 }
 
@@ -319,7 +373,7 @@ func (ts *Server) GetServingShards(ctx context.Context, keyspace string) ([]*Sha
 
 // GetOnlyShard returns the single ShardInfo of an unsharded keyspace.
 func (ts *Server) GetOnlyShard(ctx context.Context, keyspace string) (*ShardInfo, error) {
-	allShards, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
+	allShards, err := ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
 	if err != nil {
 		return nil, err
 	}
