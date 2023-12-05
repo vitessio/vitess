@@ -45286,8 +45286,8 @@ export namespace vtctldata {
         /** ApplyVSchemaResponse v_schema */
         v_schema?: (vschema.IKeyspace|null);
 
-        /** ApplyVSchemaResponse vindex_unknown_params */
-        vindex_unknown_params?: ({ [k: string]: vtctldata.ApplyVSchemaResponse.IParamList }|null);
+        /** ApplyVSchemaResponse unknown_vindex_params */
+        unknown_vindex_params?: ({ [k: string]: vtctldata.ApplyVSchemaResponse.IParamList }|null);
     }
 
     /** Represents an ApplyVSchemaResponse. */
@@ -45302,8 +45302,8 @@ export namespace vtctldata {
         /** ApplyVSchemaResponse v_schema. */
         public v_schema?: (vschema.IKeyspace|null);
 
-        /** ApplyVSchemaResponse vindex_unknown_params. */
-        public vindex_unknown_params: { [k: string]: vtctldata.ApplyVSchemaResponse.IParamList };
+        /** ApplyVSchemaResponse unknown_vindex_params. */
+        public unknown_vindex_params: { [k: string]: vtctldata.ApplyVSchemaResponse.IParamList };
 
         /**
          * Creates a new ApplyVSchemaResponse instance using the specified properties.

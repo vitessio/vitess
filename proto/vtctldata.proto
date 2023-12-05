@@ -374,7 +374,7 @@ message ApplyVSchemaRequest {
 
 message ApplyVSchemaResponse {
   vschema.Keyspace v_schema = 1;
-  map<string, ParamList> vindex_unknown_params = 2;
+  map<string, ParamList> unknown_vindex_params = 2;
 
   message ParamList {
     repeated string params = 1;

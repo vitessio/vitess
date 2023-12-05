@@ -371,7 +371,7 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 	}
 
 	// Attach unknown Vindex params to the response.
-	vindexUnknownParams := make(map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList)
+	unknownVindexParams := make(map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList)
 	var vdxNames []string
 	for name := range ksVs.Vindexes {
 		vdxNames = append(vdxNames, name)
@@ -384,14 +384,14 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 			if len(ups) == 0 {
 				continue
 			}
-			vindexUnknownParams[name] = &vtctldatapb.ApplyVSchemaResponse_ParamList{Params: ups}
+			unknownVindexParams[name] = &vtctldatapb.ApplyVSchemaResponse_ParamList{Params: ups}
 		}
 	}
 
 	if req.DryRun { // we return what was passed in and parsed, rather than current
 		return &vtctldatapb.ApplyVSchemaResponse{
 			VSchema:             vs,
-			VindexUnknownParams: vindexUnknownParams,
+			UnknownVindexParams: unknownVindexParams,
 		}, nil
 	}
 
@@ -413,7 +413,7 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 	}
 	return &vtctldatapb.ApplyVSchemaResponse{
 		VSchema:             updatedVS,
-		VindexUnknownParams: vindexUnknownParams,
+		UnknownVindexParams: unknownVindexParams,
 	}, nil
 }
 

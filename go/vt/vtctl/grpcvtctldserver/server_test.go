@@ -428,7 +428,7 @@ func TestApplyVSchema(t *testing.T) {
 						},
 					},
 				},
-				VindexUnknownParams: map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList{
+				UnknownVindexParams: map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList{
 					"lookup1": {
 						Params: []string{"goodbye", "hello"},
 					},
@@ -499,7 +499,7 @@ func TestApplyVSchema(t *testing.T) {
 						},
 					},
 				},
-				VindexUnknownParams: map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList{
+				UnknownVindexParams: map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList{
 					"lookup1": {
 						Params: []string{"goodbye", "hello"},
 					},

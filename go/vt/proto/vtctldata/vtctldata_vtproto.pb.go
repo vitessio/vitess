@@ -715,12 +715,12 @@ func (m *ApplyVSchemaResponse) CloneVT() *ApplyVSchemaResponse {
 	r := &ApplyVSchemaResponse{
 		VSchema: m.VSchema.CloneVT(),
 	}
-	if rhs := m.VindexUnknownParams; rhs != nil {
+	if rhs := m.UnknownVindexParams; rhs != nil {
 		tmpContainer := make(map[string]*ApplyVSchemaResponse_ParamList, len(rhs))
 		for k, v := range rhs {
 			tmpContainer[k] = v.CloneVT()
 		}
-		r.VindexUnknownParams = tmpContainer
+		r.UnknownVindexParams = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -7538,9 +7538,9 @@ func (m *ApplyVSchemaResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.VindexUnknownParams) > 0 {
-		for k := range m.VindexUnknownParams {
-			v := m.VindexUnknownParams[k]
+	if len(m.UnknownVindexParams) > 0 {
+		for k := range m.UnknownVindexParams {
+			v := m.UnknownVindexParams[k]
 			baseI := i
 			size, err := v.MarshalToSizedBufferVT(dAtA[:i])
 			if err != nil {
@@ -20334,8 +20334,8 @@ func (m *ApplyVSchemaResponse) SizeVT() (n int) {
 		l = m.VSchema.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
-	if len(m.VindexUnknownParams) > 0 {
-		for k, v := range m.VindexUnknownParams {
+	if len(m.UnknownVindexParams) > 0 {
+		for k, v := range m.UnknownVindexParams {
 			_ = k
 			_ = v
 			l = 0
@@ -30785,7 +30785,7 @@ func (m *ApplyVSchemaResponse) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field VindexUnknownParams", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field UnknownVindexParams", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -30812,8 +30812,8 @@ func (m *ApplyVSchemaResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.VindexUnknownParams == nil {
-				m.VindexUnknownParams = make(map[string]*ApplyVSchemaResponse_ParamList)
+			if m.UnknownVindexParams == nil {
+				m.UnknownVindexParams = make(map[string]*ApplyVSchemaResponse_ParamList)
 			}
 			var mapkey string
 			var mapvalue *ApplyVSchemaResponse_ParamList
@@ -30910,7 +30910,7 @@ func (m *ApplyVSchemaResponse) UnmarshalVT(dAtA []byte) error {
 					iNdEx += skippy
 				}
 			}
-			m.VindexUnknownParams[mapkey] = mapvalue
+			m.UnknownVindexParams[mapkey] = mapvalue
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
