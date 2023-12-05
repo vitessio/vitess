@@ -251,9 +251,6 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		})
 	}
 
-	if err != nil {
-		return nil, err
-	}
 	oa.truncateColumnCount = op.ResultColumns
 	return oa, nil
 }
@@ -431,9 +428,6 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, h
 
 	rp := newRoutingParams(ctx, op.Routing.OpCode())
 	op.Routing.UpdateRoutingParams(ctx, rp)
-	if err != nil {
-		return nil, err
-	}
 
 	e := &engine.Route{
 		TableName:           strings.Join(tableNames, ", "),
