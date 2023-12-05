@@ -39,7 +39,7 @@ type vttestserver struct {
 	keyspaces            []string
 	numShards            []int
 	mysqlMaxConnecetions int
-	port                 int
+	basePort             int
 }
 
 func newVttestserver(dockerImage string, keyspaces []string, numShards []int, mysqlMaxConnections, port int) *vttestserver {
@@ -48,7 +48,7 @@ func newVttestserver(dockerImage string, keyspaces []string, numShards []int, my
 		keyspaces:            keyspaces,
 		numShards:            numShards,
 		mysqlMaxConnecetions: mysqlMaxConnections,
-		port:                 port,
+		basePort:             port,
 	}
 }
 
@@ -64,13 +64,16 @@ func (v *vttestserver) teardown() {
 func (v *vttestserver) startDockerImage() error {
 	cmd := exec.Command("docker", "run")
 	cmd.Args = append(cmd.Args, "--name=vttestserver-end2end-test")
-	cmd.Args = append(cmd.Args, "-p", fmt.Sprintf("%d:33577", v.port))
-	cmd.Args = append(cmd.Args, "-e", "PORT=33574")
+	cmd.Args = append(cmd.Args, "-p", fmt.Sprintf("%d:%d", v.basePort, v.basePort))
+	cmd.Args = append(cmd.Args, "-p", fmt.Sprintf("%d:%d", v.basePort+1, v.basePort+1))
+	cmd.Args = append(cmd.Args, "-p", fmt.Sprintf("%d:%d", v.basePort+3, v.basePort+3))
+	cmd.Args = append(cmd.Args, "-e", fmt.Sprintf("PORT=%d", v.basePort))
 	cmd.Args = append(cmd.Args, "-e", fmt.Sprintf("KEYSPACES=%s", strings.Join(v.keyspaces, ",")))
 	cmd.Args = append(cmd.Args, "-e", fmt.Sprintf("NUM_SHARDS=%s", strings.Join(convertToStringSlice(v.numShards), ",")))
 	cmd.Args = append(cmd.Args, "-e", "MYSQL_BIND_HOST=0.0.0.0")
+	cmd.Args = append(cmd.Args, "-e", "VTCOMBO_BIND_HOST=0.0.0.0")
 	cmd.Args = append(cmd.Args, "-e", fmt.Sprintf("MYSQL_MAX_CONNECTIONS=%d", v.mysqlMaxConnecetions))
-	cmd.Args = append(cmd.Args, "--health-cmd", "mysqladmin ping -h127.0.0.1 -P33577")
+	cmd.Args = append(cmd.Args, "--health-cmd", fmt.Sprintf("mysqladmin ping -h127.0.0.1 -P%d", v.basePort+3))
 	cmd.Args = append(cmd.Args, "--health-interval=5s")
 	cmd.Args = append(cmd.Args, "--health-timeout=2s")
 	cmd.Args = append(cmd.Args, "--health-retries=5")
