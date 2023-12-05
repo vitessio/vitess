@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	// VReplicationExperimentalFlags is a bitmask of experimental features in vreplication to enable.
+	// VReplicationExperimentalFlags is a bitmask of experimental features in vreplication.
 	VReplicationExperimentalFlagOptimizeInserts           = int64(1)
 	VReplicationExperimentalFlagAllowNoBlobBinlogRowImage = int64(2)
 	VReplicationExperimentalFlagVPlayerBatching           = int64(4)

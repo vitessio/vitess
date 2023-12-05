@@ -446,12 +446,18 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	return nil, nil
 }
 
-// applyBulkDeleteChanges applies a bulk delete statement from the row changes
-// to the target table using an IN clause with the primary key values of the
-// rows to be deleted. This only supports tables with single column primary keys.
+// applyBulkDeleteChanges applies a bulk DELETE statement from the row changes
+// to the target table -- which resulted from a DELETE statement executed on the
+// source that deleted N rows -- using an IN clause with the primary key values
+// of the rows to be deleted. This currently only supports tables with single
+// column primary keys. This limitation is in place for now as we know that case
+// will still be efficient. When using large multi-column IN or OR group clauses
+// in DELETES we could end up doing large (table) scans that actually make things
+// slower.
+// TODO: Add support for multi-column primary keys.
 func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
 	if len(rowDeletes) == 0 {
-		return nil, nil
+		return &sqltypes.Result{}, nil
 	}
 	if (len(tp.TablePlanBuilder.pkCols) + len(tp.TablePlanBuilder.extraSourcePkCols)) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "bulk delete is only supported for tables with a single primary key column")
@@ -489,7 +495,7 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 				}
 			}
 		}
-		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // +2 for the comma and space
+		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // Plus 2 for the comma and space
 		if querySize+addedSize > maxQuerySize {
 			if _, err := execQuery(&pkVals); err != nil {
 				return nil, err
@@ -507,7 +513,7 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 // changes generated from a multi-row INSERT statement executed on the source.
 func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
 	if len(rowInserts) == 0 {
-		return nil, nil
+		return &sqltypes.Result{}, nil
 	}
 	if tp.BulkInsertFront == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "plan has no bulk insert query")
@@ -543,7 +549,7 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 		if err := tp.BulkInsertValues.Append(rowValues, bindvars, nil); err != nil {
 			return nil, err
 		}
-		if int64(values.Len()+rowValues.Len()+2) > maxQuerySize { // Plus 2 for comma and space
+		if int64(values.Len()+2+rowValues.Len()) > maxQuerySize { // Plus 2 for the comma and space
 			if _, err := execQuery(values); err != nil {
 				return nil, err
 			}

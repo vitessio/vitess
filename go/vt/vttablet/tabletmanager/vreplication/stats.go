@@ -256,7 +256,7 @@ func (st *vrStats) register() {
 
 	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationBulkQueryCount",
-		"vreplication events consolidated into individual queries counts per stream",
+		"vreplication vplayer queries with consolidated row events counts per DML type per stream",
 		[]string{"source_keyspace", "source_shard", "workflow", "counts", "dml_type"},
 		func() map[string]int64 {
 			st.mu.Lock()
@@ -274,7 +274,7 @@ func (st *vrStats) register() {
 		})
 	stats.NewCounterFunc(
 		"VReplicationBulkQueryCountTotal",
-		"vreplication events consolidated into individual queries counts aggregated across all streams",
+		"vreplication vplayer queries with consolidated row events counts aggregated across all streams",
 		func() int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
@@ -323,7 +323,7 @@ func (st *vrStats) register() {
 
 	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationTrxQueryBatchCount",
-		"vreplication transaction query batch counts per stream",
+		"vreplication vplayer transaction query batch counts per type per stream",
 		[]string{"source_keyspace", "source_shard", "workflow", "counts", "commit_or_not"},
 		func() map[string]int64 {
 			st.mu.Lock()
@@ -342,7 +342,7 @@ func (st *vrStats) register() {
 
 	stats.NewCounterFunc(
 		"VReplicationTrxQueryBatchCountTotal",
-		"vreplication transaction query batch counts aggregated across all streams",
+		"vreplication vplayer transaction query batch counts aggregated across all streams",
 		func() int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()

@@ -136,10 +136,10 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 				log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", relayLogMaxSize, err)
 			}
 		}
-		// Leave 64 bytes of room for the begin and commit to be sure that we have a
-		// more than ample buffer left for them. The default value of max_allowed_packet
-		// is 4MiB in 5.7 and 64MiB in 8.0 -- and the default for max_relay_log_size is
-		// 250000 bytes -- so we have plenty of room.
+		// Leave 64 bytes of room for the commit to be sure that we have a more than
+		// ample buffer left. The default value of max_allowed_packet is 4MiB in 5.7
+		// and 64MiB in 8.0 -- and the default for max_relay_log_size is 250000
+		// bytes -- so we have plenty of room.
 		maxAllowedPacket -= 64
 		queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 			return nil, vr.dbClient.AddBatchQuery(sql)
@@ -340,7 +340,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 
 	if vp.batchMode && len(rowEvent.RowChanges) > 1 {
 		// If we have multiple delete row events for a table with a single PK column
-		// then we an perform a simple bulk DELETE using an IN clause.
+		// then we can perform a simple bulk DELETE using an IN clause.
 		if (rowEvent.RowChanges[0].Before != nil && rowEvent.RowChanges[0].After == nil) &&
 			tplan.MultiDelete != nil {
 			_, err := tplan.applyBulkDeleteChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize)
@@ -350,7 +350,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		// regardless of the PK value and can use a single INSERT statment with
 		// multiple VALUES clauses.
 		if len(vp.copyState) == 0 && (rowEvent.RowChanges[0].Before == nil && rowEvent.RowChanges[0].After != nil) {
-			_, err := tplan.applyBulkInsertChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize-12)
+			_, err := tplan.applyBulkInsertChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize)
 			return err
 		}
 	}

@@ -57,13 +57,14 @@ func (vc *vdbClient) Begin() error {
 	if err := vc.DBClient.Begin(); err != nil {
 		return err
 	}
+
 	// If we're batching, we only batch the contents of the
 	// transaction, which starts with the begin and ends with
 	// the commit.
 	vc.queriesPos = int64(len(vc.queries))
 	vc.batchSize = 6 // begin and semicolon
-	vc.queries = append(vc.queries, "begin")
 
+	vc.queries = append(vc.queries, "begin")
 	vc.InTransaction = true
 	vc.startTime = time.Now()
 	return nil
@@ -131,7 +132,7 @@ func (vc *vdbClient) AddBatchQuery(query string) error {
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cannot batch query outside of a transaction: %s", query)
 	}
 
-	addedSize := int64(len(query)) + 1 // plus 1 for the semicolon
+	addedSize := int64(len(query)) + 1 // Plus 1 for the semicolon
 	if vc.batchSize+addedSize > vc.maxBatchSize {
 		if _, err := vc.ExecuteQueryBatch(); err != nil {
 			return err
