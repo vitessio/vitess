@@ -305,7 +305,9 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string, opt *G
 	if err != nil || len(listResults) == 0 {
 		// Currently the ZooKeeper and Memory topo implementations do not support scans
 		// so we fall back to the more costly method of fetching the tablets one by one.
-		if IsErrType(err, NoImplementation) {
+		// In the etcd case, it is possible that the response is too large. We also fall
+		// back to fetching the tablets one by one in that case.
+		if IsErrType(err, NoImplementation) || IsErrType(err, ResourceExhausted) {
 			return ts.GetTabletsIndividuallyByCell(ctx, cellAlias, opt)
 		}
 		if IsErrType(err, NoNode) {
