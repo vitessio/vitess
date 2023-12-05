@@ -8705,7 +8705,7 @@ type PlannedReparentShardRequest struct {
 	// WaitReplicasTimeout time to catch up after the reparent.
 	WaitReplicasTimeout *vttime.Duration `protobuf:"bytes,5,opt,name=wait_replicas_timeout,json=waitReplicasTimeout,proto3" json:"wait_replicas_timeout,omitempty"`
 	// TolerableReplicationLag is the amount of replication lag that is considered
-	// acceptable for a tablet to be considered when Vitess makes the choice of a new primary.
+	// acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary.
 	// A value of 0 indicates that Vitess shouldn't consider the replication lag at all.
 	TolerableReplicationLag *vttime.Duration `protobuf:"bytes,6,opt,name=tolerable_replication_lag,json=tolerableReplicationLag,proto3" json:"tolerable_replication_lag,omitempty"`
 }
