@@ -101,8 +101,10 @@ func execOne(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.
 	if err != nil {
 		return nil, err
 	}
-	// To match mysql, need to report +1 on rows affected.
-	updQr.RowsAffected += 1
+	// To match mysql, need to report +1 on rows affected if there is any change.
+	if updQr.RowsAffected > 0 {
+		updQr.RowsAffected += 1
+	}
 	return updQr, nil
 }
 
