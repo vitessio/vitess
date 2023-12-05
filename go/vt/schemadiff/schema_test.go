@@ -331,7 +331,15 @@ func TestInvalidSchema(t *testing.T) {
 			expectErr: &ForeignKeyColumnCountMismatchError{Table: "t11", Constraint: "f11", ColumnCount: 2, ReferencedTable: "t11", ReferencedColumnCount: 1},
 		},
 		{
-			schema:    "create table t11 (id int primary key, i int, constraint f12 foreign key (i) references t12(id) on delete restrict)",
+			schema:    "create table t11 (id int primary key, i int, constraint f12 foreign key (i) references t12 (id) on delete restrict)",
+			expectErr: &ForeignKeyNonexistentReferencedTableError{Table: "t11", ReferencedTable: "t12"},
+		},
+		{
+			schema:    "create view v as select 1 as id from dual; create table t11 (id int primary key, i int, constraint fv foreign key (i) references v (id) on delete restrict)",
+			expectErr: &ForeignKeyReferencesViewError{Table: "t11", ReferencedView: "v"},
+		},
+		{
+			schema:    "create table t11 (id int primary key, i int, constraint f11 foreign key (i) references t12 (id) on delete restrict); create table t12 (id int primary key, i int, constraint f12 foreign key (i) references t11 (id) on delete restrict)",
 			expectErr: &ForeignKeyDependencyUnresolvedError{Table: "t11"},
 		},
 		{
