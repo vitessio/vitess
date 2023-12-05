@@ -81,11 +81,11 @@ func (vc *vdbClient) Commit() error {
 	return nil
 }
 
-// CommitQueryBatch sends the current transaction's query batch -- which
+// CommitTrxQueryBatch sends the current transaction's query batch -- which
 // is often the full contents of the transaction, unless we've crossed
 // the maxBatchSize one or more times -- down the wire to the database,
 // including the final commit.
-func (vc *vdbClient) CommitQueryBatch() error {
+func (vc *vdbClient) CommitTrxQueryBatch() error {
 	vc.queries = append(vc.queries, "commit")
 	queries := strings.Join(vc.queries[vc.queriesPos:], ";")
 	for _, err := vc.DBClient.ExecuteFetchMulti(queries, -1); err != nil; {
@@ -123,18 +123,18 @@ func (vc *vdbClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, 
 	return vc.DBClient.ExecuteFetch(query, maxrows)
 }
 
-// AddBatchQuery adds the query to the current transaction's query
+// AddQueryToTrxBatch adds the query to the current transaction's query
 // batch. If this new query would cause the current batch to exceed
 // the maxBatchSize, then the current unsent batch is sent down the
 // wire and this query will be included in the next batch.
-func (vc *vdbClient) AddBatchQuery(query string) error {
+func (vc *vdbClient) AddQueryToTrxBatch(query string) error {
 	if !vc.InTransaction {
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cannot batch query outside of a transaction: %s", query)
 	}
 
 	addedSize := int64(len(query)) + 1 // Plus 1 for the semicolon
 	if vc.batchSize+addedSize > vc.maxBatchSize {
-		if _, err := vc.ExecuteQueryBatch(); err != nil {
+		if _, err := vc.ExecuteTrxQueryBatch(); err != nil {
 			return err
 		}
 	}
@@ -146,7 +146,7 @@ func (vc *vdbClient) AddBatchQuery(query string) error {
 
 // ExecuteQueryBatch sends the transaction's current batch of queries
 // down the wire to the database.
-func (vc *vdbClient) ExecuteQueryBatch() ([]*sqltypes.Result, error) {
+func (vc *vdbClient) ExecuteTrxQueryBatch() ([]*sqltypes.Result, error) {
 	defer vc.stats.Timings.Record(binlogplayer.BlplMultiQuery, time.Now())
 
 	qrs, err := vc.DBClient.ExecuteFetchMulti(strings.Join(vc.queries[vc.queriesPos:], ";"), -1)
