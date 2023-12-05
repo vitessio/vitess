@@ -32,24 +32,24 @@ func TestServerFindAllShardsInKeyspace(t *testing.T) {
 	tests := []struct {
 		name   string
 		shards int
-		cfg    *topo.FindAllShardsInKeyspaceOptions
+		opt    *topo.FindAllShardsInKeyspaceOptions
 	}{
 		{
 			name:   "negative concurrency",
 			shards: 1,
 			// Ensure this doesn't panic.
-			cfg: &topo.FindAllShardsInKeyspaceOptions{Concurrency: -1},
+			opt: &topo.FindAllShardsInKeyspaceOptions{Concurrency: -1},
 		},
 		{
 			name:   "unsharded",
 			shards: 1,
 			// Make sure the defaults apply as expected.
-			cfg: nil,
+			opt: nil,
 		},
 		{
 			name:   "sharded",
 			shards: 32,
-			cfg:    &topo.FindAllShardsInKeyspaceOptions{Concurrency: 8},
+			opt:    &topo.FindAllShardsInKeyspaceOptions{Concurrency: 8},
 		},
 	}
 
@@ -75,7 +75,7 @@ func TestServerFindAllShardsInKeyspace(t *testing.T) {
 
 			// Verify that we return a complete list of shards and that each
 			// key range is present in the output.
-			out, err := ts.FindAllShardsInKeyspace(ctx, keyspace, tt.cfg)
+			out, err := ts.FindAllShardsInKeyspace(ctx, keyspace, tt.opt)
 			require.NoError(t, err)
 			require.Len(t, out, tt.shards)
 

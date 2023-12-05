@@ -284,8 +284,8 @@ type FindAllShardsInKeyspaceOptions struct {
 // FindAllShardsInKeyspace reads and returns all the existing shards in a
 // keyspace. It doesn't take any lock.
 //
-// If cfg is non-nil, it is used to configure the method's behavior. Otherwise,
-// a default configuration is used.
+// If opt is non-nil, it is used to configure the method's behavior. Otherwise,
+// the default options are used.
 func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, opt *FindAllShardsInKeyspaceOptions) (map[string]*ShardInfo, error) {
 	// Apply any necessary defaults.
 	if opt == nil {
