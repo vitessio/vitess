@@ -50,6 +50,7 @@ type VtProcess struct {
 	Binary       string
 	ExtraArgs    []string
 	Env          []string
+	BindAddress  string
 	Port         int
 	PortGrpc     int
 	HealthCheck  HealthChecker
@@ -91,7 +92,7 @@ func (vtp *VtProcess) IsHealthy() bool {
 // Address returns the main address for this Vitess process.
 // This is usually the main HTTP endpoint for the service.
 func (vtp *VtProcess) Address() string {
-	return fmt.Sprintf("localhost:%d", vtp.Port)
+	return fmt.Sprintf("%s:%d", vtp.BindAddress, vtp.Port)
 }
 
 // WaitTerminate attempts to gracefully shutdown the Vitess process by sending
@@ -128,7 +129,7 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	vtp.proc = exec.Command(
 		vtp.Binary,
 		"--port", fmt.Sprintf("%d", vtp.Port),
-		"--bind-address", "127.0.0.1",
+		"--bind-address", vtp.BindAddress,
 		"--log_dir", vtp.LogDirectory,
 		"--alsologtostderr",
 	)
@@ -196,11 +197,16 @@ var QueryServerArgs = []string{
 // configured with the given Config.
 // The process must be manually started by calling WaitStart()
 func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (*VtProcess, error) {
+	vtcomboBindAddress := "127.0.0.1"
+	if args.VtComboBindAddress != "" {
+		vtcomboBindAddress = args.VtComboBindAddress
+	}
 	vt := &VtProcess{
 		Name:         "vtcombo",
 		Directory:    environment.Directory(),
 		LogDirectory: environment.LogDirectory(),
 		Binary:       environment.BinaryPath("vtcombo"),
+		BindAddress:  vtcomboBindAddress,
 		Port:         environment.PortForProtocol("vtcombo", ""),
 		PortGrpc:     environment.PortForProtocol("vtcombo", "grpc"),
 		HealthCheck:  environment.ProcessHealthCheck("vtcombo"),
