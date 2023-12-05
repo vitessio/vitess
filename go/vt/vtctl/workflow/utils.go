@@ -86,7 +86,7 @@ func getTablesInKeyspace(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 // validateNewWorkflow ensures that the specified workflow doesn't already exist
 // in the keyspace.
 func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, keyspace, workflow string) error {
-	allshards, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
+	allshards, err := ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
 	if err != nil {
 		return err
 	}
