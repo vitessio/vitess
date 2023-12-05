@@ -12,6 +12,8 @@
     - [Stream Consolidations](#stream-consolidations)
   - **[VTGate](#vtgate)**
     - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
+  - **[Vttestserver](#vttestserver)**
+    - [`--vtcombo-bind-host` flag](#vtcombo-bind-host)
   - **[Query Compatibility](#query-compatibility)**
     - [`SHOW VSCHEMA KEYSPACES` Query](#show-vschema-keyspaces)
   - **[Planned Reparent Shard](#planned-reparent-shard)**
@@ -56,6 +58,12 @@ Prior to 19.0 VTTablet reported how much time non-streaming executions spend wai
 #### <a id="fk-checks-vitess-aware"/>`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable
 
 When VTGate receives a query to change the `FOREIGN_KEY_CHECKS` value for a session, instead of sending the value down to MySQL, VTGate now keeps track of the value and changes the queries by adding `SET_VAR(FOREIGN_KEY_CHECKS=On/Off)` style query optimizer hints wherever required. 
+
+### <a id="vttestserver"/>Vttestserver
+
+#### <a id="vtcombo-bind-host"/>`--vtcombo-bind-host` flag
+
+A new flag `--vtcombo-bind-host` has been added to vttestserver that allows the users to configure the bind host that vtcombo uses. This is especially useful when running vttestserver as a docker image and you want to run vtctld commands and look at the vtcombo `/debug/status` dashboard.
 
 ### <a id="query-compatibility"/>Query Compatibility
 
