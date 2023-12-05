@@ -51,7 +51,7 @@ import (
 //   - Waiting transactions are unblocked if their context is done.
 //   - Both the local queue (per row range) and global queue (whole process) are
 //     limited to avoid that queued transactions can consume the full capacity
-//     of vttablet. This is important if the capaciy is finite. For example, the
+//     of vttablet. This is important if the capacity is finite. For example, the
 //     number of RPCs in flight could be limited by the RPC subsystem.
 type TxSerializer struct {
 	env tabletenv.Env
@@ -151,7 +151,7 @@ func (txs *TxSerializer) Wait(ctx context.Context, key, table string) (done Done
 	if err != nil {
 		if waited {
 			// Waiting failed early e.g. due a canceled context and we did NOT get the
-			// slot. Call "done" now because we don'txs return it to the caller.
+			// slot. Call "done" now because we do not return it to the caller.
 			txs.unlockLocked(key, false /* returnSlot */)
 		}
 		return nil, waited, err

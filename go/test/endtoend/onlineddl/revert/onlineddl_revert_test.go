@@ -157,14 +157,6 @@ func TestMain(m *testing.M) {
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 			"--watch_replication_stream",
-			// The next flags are deprecated, and we incldue them to verify that they are nonetheless still allowed.
-			// The values are irrelevant. Just the fact that the flags are allowed in what's important.
-			// These should be included in v18, and removed in v19.
-			"--throttle_threshold", "1m",
-			"--throttle_metrics_query", "select 1 from dual",
-			"--throttle_metrics_threshold", "1.5",
-			"--throttle_check_as_check_self=false",
-			"--throttler-config-via-topo=true",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
@@ -428,7 +420,20 @@ func testRevertible(t *testing.T) {
 					droppedNoDefaultColumnNames := row.AsString("dropped_no_default_column_names", "")
 					expandedColumnNames := row.AsString("expanded_column_names", "")
 
-					assert.Equal(t, testcase.removedForeignKeyNames, removeBackticks(removedForeignKeyNames))
+					// Online DDL renames constraint names, and keeps the original name as a prefix.
+					// The name of e.g. "some_fk_2_" might turn into "some_fk_2_518ubnm034rel35l1m0u1dc7m"
+					expectRemovedForeignKeyNames := strings.Split(testcase.removedForeignKeyNames, ",")
+					actualRemovedForeignKeyNames := strings.Split(removeBackticks(removedForeignKeyNames), ",")
+					assert.Equal(t, len(expectRemovedForeignKeyNames), len(actualRemovedForeignKeyNames))
+					for _, actualRemovedForeignKeyName := range actualRemovedForeignKeyNames {
+						found := false
+						for _, expectRemovedForeignKeyName := range expectRemovedForeignKeyNames {
+							if strings.HasPrefix(actualRemovedForeignKeyName, expectRemovedForeignKeyName) {
+								found = true
+							}
+						}
+						assert.Truef(t, found, "unexpected FK name", "%s", actualRemovedForeignKeyName)
+					}
 					assert.Equal(t, testcase.removedUniqueKeyNames, removeBackticks(removedUniqueKeyNames))
 					assert.Equal(t, testcase.droppedNoDefaultColumnNames, removeBackticks(droppedNoDefaultColumnNames))
 					assert.Equal(t, testcase.expandedColumnNames, removeBackticks(expandedColumnNames))
@@ -466,7 +471,8 @@ func testRevertible(t *testing.T) {
 				droppedNoDefaultColumnNames := row.AsString("dropped_no_default_column_names", "")
 				expandedColumnNames := row.AsString("expanded_column_names", "")
 
-				assert.Equal(t, "some_fk_2", removeBackticks(removedForeignKeyNames))
+				// Online DDL renames constraint names, and keeps the original name as a prefix. The name will be e.g. some_fk_2_518ubnm034rel35l1m0u1dc7m
+				assert.Contains(t, removeBackticks(removedForeignKeyNames), "some_fk_2")
 				assert.Equal(t, "", removeBackticks(removedUniqueKeyNames))
 				assert.Equal(t, "", removeBackticks(droppedNoDefaultColumnNames))
 				assert.Equal(t, "", removeBackticks(expandedColumnNames))

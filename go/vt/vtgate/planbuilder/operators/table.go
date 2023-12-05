@@ -22,7 +22,6 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -43,7 +42,7 @@ type (
 )
 
 // Clone implements the Operator interface
-func (to *Table) Clone([]ops.Operator) ops.Operator {
+func (to *Table) Clone([]Operator) Operator {
 	var columns []*sqlparser.ColName
 	for _, name := range to.Columns {
 		columns = append(columns, sqlparser.CloneRefOfColName(name))
@@ -61,7 +60,7 @@ func (to *Table) introducesTableID() semantics.TableSet {
 }
 
 // AddPredicate implements the PhysicalOperator interface
-func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	return newFilter(to, expr)
 }
 
@@ -92,7 +91,7 @@ func (to *Table) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.Sele
 	return transformColumnsToSelectExprs(ctx, to)
 }
 
-func (to *Table) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (to *Table) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 

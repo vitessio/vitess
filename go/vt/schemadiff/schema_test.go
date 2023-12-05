@@ -331,7 +331,15 @@ func TestInvalidSchema(t *testing.T) {
 			expectErr: &ForeignKeyColumnCountMismatchError{Table: "t11", Constraint: "f11", ColumnCount: 2, ReferencedTable: "t11", ReferencedColumnCount: 1},
 		},
 		{
-			schema:    "create table t11 (id int primary key, i int, constraint f12 foreign key (i) references t12(id) on delete restrict)",
+			schema:    "create table t11 (id int primary key, i int, constraint f12 foreign key (i) references t12 (id) on delete restrict)",
+			expectErr: &ForeignKeyNonexistentReferencedTableError{Table: "t11", ReferencedTable: "t12"},
+		},
+		{
+			schema:    "create view v as select 1 as id from dual; create table t11 (id int primary key, i int, constraint fv foreign key (i) references v (id) on delete restrict)",
+			expectErr: &ForeignKeyReferencesViewError{Table: "t11", ReferencedView: "v"},
+		},
+		{
+			schema:    "create table t11 (id int primary key, i int, constraint f11 foreign key (i) references t12 (id) on delete restrict); create table t12 (id int primary key, i int, constraint f12 foreign key (i) references t11 (id) on delete restrict)",
 			expectErr: &ForeignKeyDependencyUnresolvedError{Table: "t11"},
 		},
 		{
@@ -393,7 +401,7 @@ func TestInvalidTableForeignKeyReference(t *testing.T) {
 		}
 		_, err := NewSchemaFromQueries(fkQueries)
 		assert.Error(t, err)
-		assert.EqualError(t, err, (&ForeignKeyDependencyUnresolvedError{Table: "t11"}).Error())
+		assert.EqualError(t, err, (&ForeignKeyNonexistentReferencedTableError{Table: "t11", ReferencedTable: "t12"}).Error())
 	}
 	{
 		fkQueries := []string{
@@ -716,7 +724,7 @@ func TestViewReferences(t *testing.T) {
 }
 
 // TestMassiveSchema loads thousands of tables into one schema, and thousands of tables, some of which are different, into another schema.
-// It compares the two shemas.
+// It compares the two schemas.
 // The objective of this test is to verify that execution time is _reasonable_. Since this will run in GitHub CI, which is very slow, we allow
 // for 1 minute total for all operations.
 func TestMassiveSchema(t *testing.T) {

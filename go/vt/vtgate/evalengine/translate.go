@@ -193,7 +193,7 @@ func (ast *astCompiler) translateIsExpr(left sqlparser.Expr, op sqlparser.IsExpr
 }
 
 func (ast *astCompiler) translateBindVar(arg *sqlparser.Argument) (IR, error) {
-	bvar := NewBindVar(arg.Name, Type{Type: arg.Type, Coll: ast.cfg.Collation})
+	bvar := NewBindVar(arg.Name, NewType(arg.Type, ast.cfg.Collation))
 
 	if !bvar.typed() {
 		bvar.dynamicTypeOffset = len(ast.untyped)
@@ -203,12 +203,12 @@ func (ast *astCompiler) translateBindVar(arg *sqlparser.Argument) (IR, error) {
 }
 
 func (ast *astCompiler) translateColOffset(col *sqlparser.Offset) (IR, error) {
-	typ := UnknownType()
+	var typ Type
 	if ast.cfg.ResolveType != nil {
 		typ, _ = ast.cfg.ResolveType(col.Original)
 	}
-	if typ.Coll == collations.Unknown {
-		typ.Coll = ast.cfg.Collation
+	if typ.Valid() && typ.collation == collations.Unknown {
+		typ.collation = ast.cfg.Collation
 	}
 
 	column := NewColumn(col.V, typ, col.Original)
@@ -227,12 +227,12 @@ func (ast *astCompiler) translateColName(colname *sqlparser.ColName) (IR, error)
 	if err != nil {
 		return nil, err
 	}
-	typ := UnknownType()
+	var typ Type
 	if ast.cfg.ResolveType != nil {
 		typ, _ = ast.cfg.ResolveType(colname)
 	}
-	if typ.Coll == collations.Unknown {
-		typ.Coll = ast.cfg.Collation
+	if typ.Valid() && typ.collation == collations.Unknown {
+		typ.collation = ast.cfg.Collation
 	}
 
 	column := NewColumn(idx, typ, colname)
@@ -569,6 +569,7 @@ type Config struct {
 	Collation         collations.ID
 	NoConstantFolding bool
 	NoCompilation     bool
+	SQLMode           SQLMode
 }
 
 func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
@@ -603,7 +604,7 @@ func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
 	}
 
 	if len(ast.untyped) == 0 && !cfg.NoCompilation {
-		comp := compiler{collation: cfg.Collation}
+		comp := compiler{collation: cfg.Collation, sqlmode: cfg.SQLMode}
 		return comp.compile(expr)
 	}
 
@@ -626,9 +627,9 @@ type typedExpr struct {
 	err      error
 }
 
-func (typed *typedExpr) compile(expr IR, collation collations.ID) (*CompiledExpr, error) {
+func (typed *typedExpr) compile(expr IR, collation collations.ID, sqlmode SQLMode) (*CompiledExpr, error) {
 	typed.once.Do(func() {
-		comp := compiler{collation: collation, dynamicTypes: typed.types}
+		comp := compiler{collation: collation, dynamicTypes: typed.types, sqlmode: sqlmode}
 		typed.compiled, typed.err = comp.compile(expr)
 	})
 	return typed.compiled, typed.err
@@ -695,7 +696,7 @@ func (u *UntypedExpr) Compile(env *ExpressionEnv) (*CompiledExpr, error) {
 	if err != nil {
 		return nil, err
 	}
-	return typed.compile(u.ir, u.collation)
+	return typed.compile(u.ir, u.collation, env.sqlmode)
 }
 
 func (u *UntypedExpr) typeof(env *ExpressionEnv) (ctype, error) {
@@ -734,9 +735,9 @@ func (fields FieldResolver) Type(expr sqlparser.Expr) (Type, bool) {
 		name := expr.CompliantName()
 		for _, f := range fields {
 			if f.Name == name {
-				return Type{Type: f.Type, Coll: collations.ID(f.Charset)}, true
+				return NewType(f.Type, collations.ID(f.Charset)), true
 			}
 		}
 	}
-	return UnknownType(), false
+	return Type{}, false
 }

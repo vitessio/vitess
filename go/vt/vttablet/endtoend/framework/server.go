@@ -135,7 +135,7 @@ func StopServer() {
 	Server.StopService()
 }
 
-// txReolver transmits dtids to be resolved through ResolveChan.
+// txResolver transmits dtids to be resolved through ResolveChan.
 type txResolver struct {
 	fakerpcvtgateconn.FakeVTGateConn
 }

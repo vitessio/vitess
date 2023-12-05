@@ -612,7 +612,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		case result := <-resultCh:
 			switch result.state {
 			case vcopierCopyTaskCancel:
-				// A task cancelation probably indicates an expired context due
+				// A task cancellation probably indicates an expired context due
 				// to a PlannedReparentShard or elapsed copy phase duration,
 				// neither of which are error conditions.
 			case vcopierCopyTaskComplete:
@@ -1087,7 +1087,7 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 			advanceFn = func(context.Context, *vcopierCopyTaskArgs) error {
 				// Commit.
 				if err := vbc.vdbClient.Commit(); err != nil {
-					return vterrors.Wrapf(err, "error commiting transaction")
+					return vterrors.Wrapf(err, "error committing transaction")
 				}
 				return nil
 			}

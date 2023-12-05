@@ -17,7 +17,6 @@ limitations under the License.
 package schemadiff
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -129,7 +128,7 @@ func NewSchemaFromSQL(sql string) (*Schema, error) {
 	return NewSchemaFromStatements(statements)
 }
 
-// getForeignKeyParentTableNames analyzes a CREATE TABLE definition and extracts all referened foreign key tables names.
+// getForeignKeyParentTableNames analyzes a CREATE TABLE definition and extracts all referenced foreign key tables names.
 // A table name may appear twice in the result output, if it is referenced by more than one foreign key
 func getForeignKeyParentTableNames(createTable *sqlparser.CreateTable) (names []string) {
 	for _, cs := range createTable.TableSpec.Constraints {
@@ -240,6 +239,14 @@ func (s *Schema) normalize() error {
 				if referencedTableName != name {
 					nonSelfReferenceNames = append(nonSelfReferenceNames, referencedTableName)
 				}
+				referencedEntity, ok := s.named[referencedTableName]
+				if !ok {
+					return &ForeignKeyNonexistentReferencedTableError{Table: name, ReferencedTable: referencedTableName}
+				}
+				if _, ok := referencedEntity.(*CreateViewEntity); ok {
+					return &ForeignKeyReferencesViewError{Table: name, ReferencedView: referencedTableName}
+				}
+
 				fkParents[referencedTableName] = true
 			}
 			if allNamesFoundInLowerLevel(nonSelfReferenceNames, iterationLevel) {
@@ -267,7 +274,7 @@ func (s *Schema) normalize() error {
 	// It's possible that there's never been any tables in this schema. Which means
 	// iterationLevel remains zero.
 	// To deal with views, we must have iterationLevel at least 1. This is because any view reads
-	// from _something_: at the very least it reads from DUAL (inplicitly or explicitly). Which
+	// from _something_: at the very least it reads from DUAL (implicitly or explicitly). Which
 	// puts the view at a higher level.
 	if iterationLevel < 1 {
 		iterationLevel = 1
@@ -452,7 +459,7 @@ func (s *Schema) diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err 
 		if _, ok := other.named[e.Name()]; !ok {
 			// other schema does not have the entity
 			// Entities are sorted in foreign key CREATE TABLE valid order (create parents first, then children).
-			// When issuing DROPs, we want to reverse that order. We want to first frop children, then parents.
+			// When issuing DROPs, we want to reverse that order. We want to first do it for children, then parents.
 			// Instead of analyzing all relationships again, we just reverse the entire order of DROPs, foreign key
 			// related or not.
 			dropDiffs = append([]EntityDiff{e.Drop()}, dropDiffs...)
@@ -613,7 +620,7 @@ func (s *Schema) ToQueries() []string {
 
 // ToSQL returns a SQL blob with ordered sequence of queries which can be applied to create the schema
 func (s *Schema) ToSQL() string {
-	var buf bytes.Buffer
+	var buf strings.Builder
 	for _, query := range s.ToQueries() {
 		buf.WriteString(query)
 		buf.WriteString(";\n")
@@ -767,10 +774,10 @@ func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 	return dup, nil
 }
 
-// SchemaDiff calulates a rich diff between this schema and the given schema. It builds on top of diff():
+// SchemaDiff calculates a rich diff between this schema and the given schema. It builds on top of diff():
 // on top of the list of diffs that can take this schema into the given schema, this function also
 // evaluates the dependencies between those diffs, if any, and the resulting SchemaDiff object offers OrderedDiffs(),
-// the safe ordering of diffs that, when appleid sequentially, does not produce any conflicts and keeps schema valid
+// the safe ordering of diffs that, when applied sequentially, does not produce any conflicts and keeps schema valid
 // at each step.
 func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error) {
 	diffs, err := s.diff(other, hints)

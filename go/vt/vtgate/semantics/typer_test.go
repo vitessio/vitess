@@ -51,7 +51,7 @@ func TestNormalizerAndSemanticAnalysisIntegration(t *testing.T) {
 			bv := parse.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Argument)
 			typ, found := st.ExprTypes[bv]
 			require.True(t, found, "bindvar was not typed")
-			require.Equal(t, test.typ, typ.Type.String())
+			require.Equal(t, test.typ, typ.Type().String())
 		})
 	}
 

@@ -19,11 +19,9 @@ package planbuilder
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -62,7 +60,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 		return nil, err
 	}
 
-	if err = errOutIfPlanCannotBeConstructed(ctx, tblInfo.GetVindexTable(), insStmt, ctx.SemTable.ForeignKeysPresent()); err != nil {
+	if err = errOutIfPlanCannotBeConstructed(ctx, tblInfo.GetVindexTable()); err != nil {
 		return nil, err
 	}
 
@@ -84,42 +82,38 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
 }
 
-func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vindexes.Table, insStmt *sqlparser.Insert, fkPlanNeeded bool) error {
-	if vTbl.Keyspace.Sharded && ctx.SemTable.NotUnshardedErr != nil {
-		return ctx.SemTable.NotUnshardedErr
-	}
-	if insStmt.Action != sqlparser.ReplaceAct {
+func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vindexes.Table) error {
+	if !vTbl.Keyspace.Sharded {
 		return nil
 	}
-	if fkPlanNeeded {
-		return vterrors.VT12001("REPLACE INTO with foreign keys")
-	}
-	return nil
+	return ctx.SemTable.NotUnshardedErr
 }
 
 func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
-	eIns := &engine.Insert{}
-	eIns.Keyspace = ks
-	eIns.TableName = tables[0].Name.String()
-	eIns.Opcode = engine.InsertUnsharded
+	eIns := &engine.Insert{
+		InsertCommon: engine.InsertCommon{
+			Opcode:    engine.InsertUnsharded,
+			Keyspace:  ks,
+			TableName: tables[0].Name.String(),
+		},
+	}
 	eIns.Query = generateQuery(stmt)
 	return &insert{eInsert: eIns}
 }
 
 type insert struct {
-	eInsert *engine.Insert
-	source  logicalPlan
+	eInsert       *engine.Insert
+	eInsertSelect *engine.InsertSelect
+	source        logicalPlan
 }
 
 var _ logicalPlan = (*insert)(nil)
 
 func (i *insert) Primitive() engine.Primitive {
-	if i.source != nil {
-		i.eInsert.Input = i.source.Primitive()
+	if i.source == nil {
+		return i.eInsert
 	}
-	return i.eInsert
-}
-
-func (i *insert) ContainsTables() semantics.TableSet {
-	panic("does not expect insert to get contains tables call")
+	input := i.source.Primitive()
+	i.eInsertSelect.Input = input
+	return i.eInsertSelect
 }

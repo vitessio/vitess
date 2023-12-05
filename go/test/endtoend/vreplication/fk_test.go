@@ -94,18 +94,21 @@ func TestFKWorkflow(t *testing.T) {
 	}
 	targetKeyspace := "fktarget"
 	targetTabletId := 200
-	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialFKTargetVSchema, initialFKSchema, 0, 0, targetTabletId, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialFKTargetVSchema, "", 0, 0, targetTabletId, sourceKsOpts)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKeyspace, shardName), 1, 30*time.Second)
 
 	workflowName := "fk"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
 
-	mt := newMoveTables(vc, &moveTables{
-		workflowName:   workflowName,
-		targetKeyspace: targetKeyspace,
+	mt := newMoveTables(vc, &moveTablesWorkflow{
+		workflowInfo: &workflowInfo{
+			vc:             vc,
+			workflowName:   workflowName,
+			targetKeyspace: targetKeyspace,
+		},
 		sourceKeyspace: sourceKeyspace,
 		atomicCopy:     true,
-	}, moveTablesFlavorRandom)
+	}, workflowFlavorRandom)
 	mt.Create()
 
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())

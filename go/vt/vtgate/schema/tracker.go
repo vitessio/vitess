@@ -19,6 +19,7 @@ package schema
 import (
 	"context"
 	"maps"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -216,6 +217,15 @@ func (t *Tracker) GetForeignKeys(ks string, tbl string) []*sqlparser.ForeignKeyD
 	return tblInfo.ForeignKeys
 }
 
+// GetIndexes returns the indexes for table in the given keyspace.
+func (t *Tracker) GetIndexes(ks string, tbl string) []*sqlparser.IndexDefinition {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	tblInfo := t.tables.get(ks, tbl)
+	return tblInfo.Indexes
+}
+
 // Tables returns a map with the columns for all known tables in the keyspace
 func (t *Tracker) Tables(ks string) map[string]*vindexes.TableInfo {
 	t.mu.Lock()
@@ -293,7 +303,7 @@ func (t *Tracker) updateTables(keyspace string, res map[string]string) {
 
 		cols := getColumns(ddl.TableSpec)
 		fks := getForeignKeys(ddl.TableSpec)
-		t.tables.set(keyspace, tableName, cols, fks)
+		t.tables.set(keyspace, tableName, cols, fks, ddl.TableSpec.Indexes)
 	}
 }
 
@@ -302,15 +312,44 @@ func getColumns(tblSpec *sqlparser.TableSpec) []vindexes.Column {
 	cols := make([]vindexes.Column, 0, len(tblSpec.Columns))
 	for _, column := range tblSpec.Columns {
 		colCollation := getColumnCollation(tblCollation, column)
+		size := getColumnNumber(column.Type.Length)
+		scale := getColumnNumber(column.Type.Scale)
+		nullable := getColumnNullable(column.Type.Options.Null)
 		cols = append(cols,
 			vindexes.Column{
 				Name:          column.Name,
 				Type:          column.Type.SQLType(),
 				CollationName: colCollation,
+				Default:       column.Type.Options.Default,
 				Invisible:     column.Type.Invisible(),
+				Size:          size,
+				Scale:         scale,
+				Nullable:      nullable,
+				Values:        column.Type.EnumValues,
 			})
 	}
 	return cols
+}
+
+func getColumnNullable(null *bool) bool {
+	if null == nil {
+		return true
+	}
+	return *null
+}
+
+func getColumnNumber(lit *sqlparser.Literal) int32 {
+	if lit == nil {
+		return 0
+	}
+	if lit.Type != sqlparser.IntVal {
+		return 0
+	}
+	val, err := strconv.ParseInt(lit.Val, 10, 32)
+	if err != nil {
+		return 0
+	}
+	return int32(val)
 }
 
 func getForeignKeys(tblSpec *sqlparser.TableSpec) []*sqlparser.ForeignKeyDefinition {
@@ -343,7 +382,13 @@ func getTableCollation(tblSpec *sqlparser.TableSpec) string {
 
 func getColumnCollation(defaultCollation string, column *sqlparser.ColumnDefinition) string {
 	if column.Type.Options == nil || column.Type.Options.Collate == "" {
-		return defaultCollation
+		switch strings.ToLower(column.Type.Type) {
+		case "enum", "set", "text", "tinytext", "mediumtext", "longtext", "varchar", "char":
+			return defaultCollation
+		case "json":
+			return "utf8mb4_bin"
+		}
+		return "binary"
 	}
 	return column.Type.Options.Collate
 }
@@ -403,13 +448,13 @@ type tableMap struct {
 	m map[keyspaceStr]map[tableNameStr]*vindexes.TableInfo
 }
 
-func (tm *tableMap) set(ks, tbl string, cols []vindexes.Column, fks []*sqlparser.ForeignKeyDefinition) {
+func (tm *tableMap) set(ks, tbl string, cols []vindexes.Column, fks []*sqlparser.ForeignKeyDefinition, indexes []*sqlparser.IndexDefinition) {
 	m := tm.m[ks]
 	if m == nil {
 		m = make(map[tableNameStr]*vindexes.TableInfo)
 		tm.m[ks] = m
 	}
-	m[tbl] = &vindexes.TableInfo{Columns: cols, ForeignKeys: fks}
+	m[tbl] = &vindexes.TableInfo{Columns: cols, ForeignKeys: fks, Indexes: indexes}
 }
 
 func (tm *tableMap) get(ks, tbl string) *vindexes.TableInfo {

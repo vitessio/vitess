@@ -24,7 +24,6 @@ limitations under the License.
 package zkctl
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path"
@@ -94,16 +93,16 @@ func (cnf *ZkConfig) MyidFile() string {
 }
 
 func (cnf *ZkConfig) WriteMyid() error {
-	return os.WriteFile(cnf.MyidFile(), []byte(fmt.Sprintf("%v", cnf.ServerId)), 0664)
+	return os.WriteFile(cnf.MyidFile(), []byte(fmt.Sprintf("%v", cnf.ServerId)), 0o664)
 }
 
 /*
 Search for first existing file in cnfFiles and subsitute in the right values.
 */
 func MakeZooCfg(cnfFiles []string, cnf *ZkConfig, header string) (string, error) {
-	myTemplateSource := new(bytes.Buffer)
+	var myTemplateSource strings.Builder
 	for _, line := range strings.Split(header, "\n") {
-		fmt.Fprintf(myTemplateSource, "## %v\n", strings.TrimSpace(line))
+		fmt.Fprintf(&myTemplateSource, "## %v\n", strings.TrimSpace(line))
 	}
 	var dataErr error
 	for _, path := range cnfFiles {
@@ -127,8 +126,8 @@ func MakeZooCfg(cnfFiles []string, cnf *ZkConfig, header string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	cnfData := new(bytes.Buffer)
-	err = myTemplate.Execute(cnfData, cnf)
+	var cnfData strings.Builder
+	err = myTemplate.Execute(&cnfData, cnf)
 	if err != nil {
 		return "", err
 	}
@@ -161,8 +160,10 @@ func MakeZkConfigFromString(cmdLine string, myID uint32) *ZkConfig {
 		}
 		myID = myID % 1000
 
-		zkServer := zkServerAddr{ServerId: uint32(serverID), ClientPort: 2181,
-			LeaderPort: 2888, ElectionPort: 3888}
+		zkServer := zkServerAddr{
+			ServerId: uint32(serverID), ClientPort: 2181,
+			LeaderPort: 2888, ElectionPort: 3888,
+		}
 		switch len(zkAddrParts) {
 		case 4:
 			zkServer.ClientPort, _ = strconv.Atoi(zkAddrParts[3])

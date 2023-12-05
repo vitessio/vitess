@@ -201,8 +201,21 @@ func (vp *vplayer) play(ctx context.Context) error {
 // The foreign_key_checks value for a transaction is determined by the 2nd bit (least significant) of the flags:
 // - If set (1), foreign key checks are disabled.
 // - If unset (0), foreign key checks are enabled.
-// updateFKCheck also updates the state for the first row event that this vplayer and hence the connection sees.
+// updateFKCheck also updates the state for the first row event that this vplayer, and hence the db connection, sees.
 func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
+	mustUpdate := false
+	if vp.vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) {
+		// If this is an atomic copy, we must update the foreign_key_checks state even when the vplayer runs during
+		// the copy phase, i.e., for catchup and fastforward.
+		mustUpdate = true
+	} else if vp.vr.state == binlogdatapb.VReplicationWorkflowState_Running {
+		// If the vreplication workflow is in Running state, we must update the foreign_key_checks
+		// state for all workflow types.
+		mustUpdate = true
+	}
+	if !mustUpdate {
+		return nil
+	}
 	dbForeignKeyChecksEnabled := true
 	if flags2&NoForeignKeyCheckFlagBitmask == NoForeignKeyCheckFlagBitmask {
 		dbForeignKeyChecksEnabled = false
@@ -414,8 +427,8 @@ func (vp *vplayer) recordHeartbeat() error {
 //     of transactions come in, with the last one being partial. In this case, all transactions
 //     up to the last one have to be committed, and the final one must be partially applied.
 //
-// Of the above events, the saveable ones are COMMIT, DDL, and OTHER. Eventhough
-// A GTID comes as a separate event, it's not saveable until a subsequent saveable
+// Of the above events, the saveable ones are COMMIT, DDL, and OTHER. Even though
+// a GTID comes as a separate event, it's not saveable until a subsequent saveable
 // event occurs. VStreamer currently sequences the GTID to be sent just before
 // a saveable event, but we do not rely on this. To handle this, we only remember
 // the position when a GTID is encountered. The next saveable event causes the

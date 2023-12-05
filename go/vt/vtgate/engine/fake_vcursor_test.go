@@ -21,13 +21,17 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
@@ -130,6 +134,10 @@ func (t *noopVCursor) ConnCollation() collations.ID {
 
 func (t *noopVCursor) TimeZone() *time.Location {
 	return nil
+}
+
+func (t *noopVCursor) SQLMode() string {
+	return config.DefaultSQLMode
 }
 
 func (t *noopVCursor) ExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -264,6 +272,10 @@ func (t *noopVCursor) Session() SessionActions {
 }
 
 func (t *noopVCursor) SetAutocommit(context.Context, bool) error {
+	panic("implement me")
+}
+
+func (t *noopVCursor) SetSessionForeignKeyChecks(ctx context.Context, foreignKeyChecks bool) error {
 	panic("implement me")
 }
 
@@ -735,6 +747,10 @@ func (f *loggingVCursor) SetAutocommit(context.Context, bool) error {
 	panic("implement me")
 }
 
+func (f *loggingVCursor) SetSessionForeignKeyChecks(ctx context.Context, foreignKeyChecks bool) error {
+	panic("implement me")
+}
+
 func (f *loggingVCursor) SetClientFoundRows(context.Context, bool) error {
 	panic("implement me")
 }
@@ -806,18 +822,39 @@ func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
 	return nil, nil
 }
 
-func expectResult(t *testing.T, msg string, result, want *sqltypes.Result) {
+func expectResult(t *testing.T, result, want *sqltypes.Result) {
 	t.Helper()
 	fieldsResult := fmt.Sprintf("%v", result.Fields)
 	fieldsWant := fmt.Sprintf("%v", want.Fields)
 	if fieldsResult != fieldsWant {
-		t.Errorf("%s (mismatch in Fields):\n%s\nwant:\n%s", msg, fieldsResult, fieldsWant)
+		t.Errorf("mismatch in Fields\n%s\nwant:\n%s", fieldsResult, fieldsWant)
 	}
 
 	rowsResult := fmt.Sprintf("%v", result.Rows)
 	rowsWant := fmt.Sprintf("%v", want.Rows)
 	if rowsResult != rowsWant {
-		t.Errorf("%s (mismatch in Rows):\n%s\nwant:\n%s", msg, rowsResult, rowsWant)
+		t.Errorf("mismatch in Rows:\n%s\nwant:\n%s", rowsResult, rowsWant)
+	}
+}
+
+func expectResultAnyOrder(t *testing.T, result, want *sqltypes.Result) {
+	t.Helper()
+	f := func(a, b sqltypes.Row) int {
+		for i := range a {
+			l := a[i].RawStr()
+			r := b[i].RawStr()
+			x := strings.Compare(l, r)
+			if x == 0 {
+				continue
+			}
+			return x
+		}
+		return 0
+	}
+	slices.SortFunc(result.Rows, f)
+	slices.SortFunc(want.Rows, f)
+	if diff := cmp.Diff(want, result); diff != "" {
+		t.Errorf("result: %+v, want %+v\ndiff: %s", result, want, diff)
 	}
 }
 

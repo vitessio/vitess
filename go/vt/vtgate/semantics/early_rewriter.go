@@ -47,6 +47,8 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		handleOrderBy(r, cursor, node)
 	case *sqlparser.OrExpr:
 		rewriteOrExpr(cursor, node)
+	case *sqlparser.AndExpr:
+		rewriteAndExpr(cursor, node)
 	case *sqlparser.NotExpr:
 		rewriteNotExpr(cursor, node)
 	case sqlparser.GroupBy:
@@ -105,6 +107,11 @@ func rewriteNotExpr(cursor *sqlparser.Cursor, node *sqlparser.NotExpr) {
 		return
 	}
 
+	// There is no inverse operator for NullSafeEqualOp.
+	// There doesn't exist a null safe non-equality.
+	if cmp.Operator == sqlparser.NullSafeEqualOp {
+		return
+	}
 	cmp.Operator = sqlparser.Inverse(cmp.Operator)
 	cursor.Replace(cmp)
 }
@@ -174,6 +181,45 @@ func rewriteOrExpr(cursor *sqlparser.Cursor, node *sqlparser.OrExpr) {
 	if newNode != nil {
 		cursor.ReplaceAndRevisit(newNode)
 	}
+}
+
+// rewriteAndExpr rewrites AND expressions when either side is TRUE.
+func rewriteAndExpr(cursor *sqlparser.Cursor, node *sqlparser.AndExpr) {
+	newNode := rewriteAndTrue(*node)
+	if newNode != nil {
+		cursor.ReplaceAndRevisit(newNode)
+	}
+}
+
+func rewriteAndTrue(andExpr sqlparser.AndExpr) sqlparser.Expr {
+	// we are looking for the pattern `WHERE c = 1 AND 1 = 1`
+	isTrue := func(subExpr sqlparser.Expr) bool {
+		evalEnginePred, err := evalengine.Translate(subExpr, nil)
+		if err != nil {
+			return false
+		}
+
+		env := evalengine.EmptyExpressionEnv()
+		res, err := env.Evaluate(evalEnginePred)
+		if err != nil {
+			return false
+		}
+
+		boolValue, err := res.Value(collations.Default()).ToBool()
+		if err != nil {
+			return false
+		}
+
+		return boolValue
+	}
+
+	if isTrue(andExpr.Left) {
+		return andExpr.Right
+	} else if isTrue(andExpr.Right) {
+		return andExpr.Left
+	}
+
+	return nil
 }
 
 // handleLiteral processes literals within the context of ORDER BY expressions.

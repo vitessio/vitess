@@ -30,6 +30,7 @@ import (
 type VCursor interface {
 	TimeZone() *time.Location
 	GetKeyspace() string
+	SQLMode() string
 }
 
 type (
@@ -43,9 +44,10 @@ type (
 		Fields   []*querypb.Field
 
 		// internal state
-		now  time.Time
-		vc   VCursor
-		user *querypb.VTGateCallerID
+		now     time.Time
+		vc      VCursor
+		user    *querypb.VTGateCallerID
+		sqlmode SQLMode
 	}
 )
 
@@ -99,11 +101,7 @@ func (env *ExpressionEnv) TypeOf(expr Expr) (Type, error) {
 	if err != nil {
 		return Type{}, err
 	}
-	return Type{
-		Type:     ty.Type,
-		Coll:     ty.Col.Collation,
-		Nullable: ty.Flag&flagNullable != 0,
-	}, nil
+	return NewTypeEx(ty.Type, ty.Col.Collation, ty.Flag&flagNullable != 0, ty.Size, ty.Scale), nil
 }
 
 func (env *ExpressionEnv) SetTime(now time.Time) {
@@ -125,5 +123,32 @@ func NewExpressionEnv(ctx context.Context, bindVars map[string]*querypb.BindVari
 	env := &ExpressionEnv{BindVars: bindVars, vc: vc}
 	env.user = callerid.ImmediateCallerIDFromContext(ctx)
 	env.SetTime(time.Now())
+	if vc != nil {
+		env.sqlmode = ParseSQLMode(vc.SQLMode())
+	}
 	return env
+}
+
+const (
+	sqlModeParsed = 1 << iota
+	sqlModeNoZeroDate
+)
+
+type SQLMode uint32
+
+func (mode SQLMode) AllowZeroDate() bool {
+	if mode == 0 {
+		// default: do not allow zero-date if the sqlmode is not set
+		return false
+	}
+	return (mode & sqlModeNoZeroDate) == 0
+}
+
+func ParseSQLMode(sqlmode string) SQLMode {
+	var mode SQLMode
+	if strings.Contains(sqlmode, "NO_ZERO_DATE") {
+		mode |= sqlModeNoZeroDate
+	}
+	mode |= sqlModeParsed
+	return mode
 }

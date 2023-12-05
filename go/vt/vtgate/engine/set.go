@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -181,7 +180,6 @@ func (u *UserDefinedVariable) MarshalJSON() ([]byte, error) {
 		Name: u.Name,
 		Expr: sqlparser.String(u.Expr),
 	})
-
 }
 
 // VariableName implements the SetOp interface method.
@@ -209,7 +207,6 @@ func (svi *SysVarIgnore) MarshalJSON() ([]byte, error) {
 		Type:         "SysVarIgnore",
 		SysVarIgnore: *svi,
 	})
-
 }
 
 // VariableName implements the SetOp interface method.
@@ -234,7 +231,6 @@ func (svci *SysVarCheckAndIgnore) MarshalJSON() ([]byte, error) {
 		Type:                 "SysVarCheckAndIgnore",
 		SysVarCheckAndIgnore: *svci,
 	})
-
 }
 
 // VariableName implements the SetOp interface method
@@ -278,7 +274,6 @@ func (svs *SysVarReservedConn) MarshalJSON() ([]byte, error) {
 		Type:               "SysVarSet",
 		SysVarReservedConn: *svs,
 	})
-
 }
 
 // VariableName implements the SetOp interface method
@@ -363,8 +358,8 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	} else {
 		value = qr.Rows[0][0]
 	}
-	buf := new(bytes.Buffer)
-	value.EncodeSQL(buf)
+	var buf strings.Builder
+	value.EncodeSQL(&buf)
 	s := buf.String()
 	vcursor.Session().SetSysVar(svs.Name, s)
 
@@ -450,6 +445,8 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 	switch svss.Name {
 	case sysvars.Autocommit.Name:
 		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetAutocommit)
+	case sysvars.ForeignKeyChecks.Name:
+		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetSessionForeignKeyChecks)
 	case sysvars.ClientFoundRows.Name:
 		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetClientFoundRows)
 	case sysvars.SkipQueryPlanCache.Name:

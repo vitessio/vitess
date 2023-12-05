@@ -41,7 +41,7 @@ type InfoSchemaRouting struct {
 	Table               *QueryTable
 }
 
-func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
+func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.SysTableTableSchema = nil
 	for _, expr := range isr.SysTableTableSchema {
 		eexpr, err := evalengine.Translate(expr, &evalengine.Config{
@@ -49,7 +49,7 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext
 			ResolveColumn: NotImplementedSchemaInfoResolver,
 		})
 		if err != nil {
-			return err
+			panic(err)
 		}
 		rp.SysTableTableSchema = append(rp.SysTableTableSchema, eexpr)
 	}
@@ -61,12 +61,11 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext
 			ResolveColumn: NotImplementedSchemaInfoResolver,
 		})
 		if err != nil {
-			return err
+			panic(err)
 		}
 
 		rp.SysTableTableName[k] = eexpr
 	}
-	return nil
 }
 
 func (isr *InfoSchemaRouting) Clone() Routing {
@@ -77,10 +76,10 @@ func (isr *InfoSchemaRouting) Clone() Routing {
 	}
 }
 
-func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing {
 	isTableSchema, bvName, out := extractInfoSchemaRoutingPredicate(ctx, expr)
 	if out == nil {
-		return isr, nil
+		return isr
 	}
 
 	if isr.SysTableTableName == nil {
@@ -92,14 +91,14 @@ func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContex
 			if sqlparser.Equals.Expr(out, s) {
 				// we already have this expression in the list
 				// stating it again does not add value
-				return isr, nil
+				return isr
 			}
 		}
 		isr.SysTableTableSchema = append(isr.SysTableTableSchema, out)
 	} else {
 		isr.SysTableTableName[bvName] = out
 	}
-	return isr, nil
+	return isr
 }
 
 func (isr *InfoSchemaRouting) Cost() int {

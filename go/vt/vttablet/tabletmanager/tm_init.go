@@ -71,10 +71,14 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-// Query rules from denylist
-const denyListQueryList string = "DenyListQueryRules"
+const (
+	// Query rules from denylist
+	denyListQueryList string = "DenyListQueryRules"
+	dbaGrantWaitTime         = 10 * time.Second
+)
 
 var (
 	// The following flags initialize the tablet record.
@@ -88,6 +92,7 @@ var (
 
 	initPopulateMetadata bool
 	initTimeout          = 1 * time.Minute
+	mysqlShutdownTimeout = 5 * time.Minute
 )
 
 func registerInitFlags(fs *pflag.FlagSet) {
@@ -99,6 +104,7 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&skipBuildInfoTags, "vttablet_skip_buildinfo_tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	fs.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
 	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
+	fs.DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "timeout to use when MySQL is being shut down.")
 }
 
 var (
@@ -333,7 +339,7 @@ func mergeTags(a, b map[string]string) map[string]string {
 }
 
 // Start starts the TabletManager.
-func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval time.Duration) error {
+func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.TabletConfig) error {
 	defer func() {
 		log.Infof("TabletManager Start took ~%d ms", time.Since(servenv.GetInitStartTime()).Milliseconds())
 	}()
@@ -393,7 +399,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	tm.exportStats()
 	servenv.OnRun(tm.registerTabletManager)
 
-	restoring, err := tm.handleRestore(tm.BatchCtx)
+	restoring, err := tm.handleRestore(tm.BatchCtx, config)
 	if err != nil {
 		return err
 	}
@@ -406,8 +412,17 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	// We shouldn't use the base tablet type directly, since the type could have changed to PRIMARY
 	// earlier in tm.checkPrimaryShip code.
 	_, err = tm.initializeReplication(ctx, tm.Tablet().Type)
+	if err != nil {
+		return err
+	}
+
+	// Make sure we have the correct privileges for the DBA user before we start the state manager.
+	err = tabletserver.WaitForDBAGrants(config, dbaGrantWaitTime)
+	if err != nil {
+		return err
+	}
 	tm.tmState.Open()
-	return err
+	return nil
 }
 
 // Close prepares a tablet for shutdown. First we check our tablet ownership and
@@ -536,7 +551,7 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 		tm._rebuildKeyspaceDone = make(chan struct{})
 		go tm.rebuildKeyspace(rebuildKsCtx, tm._rebuildKeyspaceDone, tablet.Keyspace, rebuildKeyspaceRetryInterval)
 	default:
-		return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvKeyspace")
+		return nil, vterrors.Wrap(err, "initKeyspaceShardTopo: failed to read SrvKeyspace")
 	}
 
 	// Rebuild vschema graph if this is the first tablet in this keyspace/cell.
@@ -546,16 +561,16 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 		// Check if vschema was rebuilt after the initial creation of the keyspace.
 		if _, keyspaceExists := srvVSchema.GetKeyspaces()[tablet.Keyspace]; !keyspaceExists {
 			if err := tm.TopoServer.RebuildSrvVSchema(ctx, []string{tm.tabletAlias.Cell}); err != nil {
-				return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
+				return nil, vterrors.Wrap(err, "initKeyspaceShardTopo: failed to RebuildSrvVSchema")
 			}
 		}
 	case topo.IsErrType(err, topo.NoNode):
 		// There is no SrvSchema in this cell at all, so we definitely need to rebuild.
 		if err := tm.TopoServer.RebuildSrvVSchema(ctx, []string{tm.tabletAlias.Cell}); err != nil {
-			return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
+			return nil, vterrors.Wrap(err, "initKeyspaceShardTopo: failed to RebuildSrvVSchema")
 		}
 	default:
-		return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvVSchema")
+		return nil, vterrors.Wrap(err, "initKeyspaceShardTopo: failed to read SrvVSchema")
 	}
 	return shardInfo, nil
 }
@@ -762,7 +777,7 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 	return nil
 }
 
-func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
+func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.TabletConfig) (bool, error) {
 	// Sanity check for inconsistent flags
 	if tm.Cnf == nil && restoreFromBackup {
 		return false, fmt.Errorf("you cannot enable --restore_from_backup without a my.cnf file")
@@ -774,9 +789,6 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	// Restore in the background
 	if restoreFromBackup {
 		go func() {
-			// Open the state manager after restore is done.
-			defer tm.tmState.Open()
-
 			// Zero date will cause us to use the latest, which is the default
 			backupTime := time.Time{}
 			// Or if a backup timestamp was specified then we use the last backup taken at or before that time
@@ -798,9 +810,17 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 			}
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos); err != nil {
+			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, mysqlShutdownTimeout); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
+
+			// Make sure we have the correct privileges for the DBA user before we start the state manager.
+			err := tabletserver.WaitForDBAGrants(config, dbaGrantWaitTime)
+			if err != nil {
+				log.Exitf("Failed waiting for DBA grants: %v", err)
+			}
+			// Open the state manager after restore is done.
+			tm.tmState.Open()
 		}()
 		return true, nil
 	}

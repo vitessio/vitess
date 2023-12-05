@@ -66,7 +66,7 @@ type Controller interface {
 	// ClearQueryPlanCache clears internal query plan cache
 	ClearQueryPlanCache()
 
-	// ReloadSchema makes the quey service reload its schema cache
+	// ReloadSchema makes the query service reload its schema cache
 	ReloadSchema(ctx context.Context) error
 
 	// RegisterQueryRuleSource adds a query rule source

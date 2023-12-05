@@ -4128,6 +4128,10 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: VschemaTables}}
   }
+| SHOW VSCHEMA KEYSPACES
+  {
+    $$ = &Show{&ShowBasic{Command: VschemaKeyspaces}}
+  }
 | SHOW VSCHEMA VINDEXES
   {
     $$ = &Show{&ShowBasic{Command: VschemaVindexes}}
@@ -7506,6 +7510,26 @@ locking_clause:
 FOR UPDATE
   {
     $$ = ForUpdateLock
+  }
+| FOR UPDATE NOWAIT
+  {
+    $$ = ForUpdateLockNoWait
+  }
+| FOR UPDATE SKIP LOCKED
+  {
+    $$ = ForUpdateLockSkipLocked
+  }
+| FOR SHARE
+  {
+    $$ = ForShareLock
+  }
+| FOR SHARE NOWAIT
+  {
+    $$ = ForShareLockNoWait
+  }
+| FOR SHARE SKIP LOCKED
+  {
+    $$ = ForShareLockSkipLocked
   }
 | LOCK IN SHARE MODE
   {

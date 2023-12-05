@@ -76,10 +76,10 @@ type VttabletProcess struct {
 	ServingStatus               string
 	DbPassword                  string
 	DbPort                      int
-	VreplicationTabletType      string
 	DbFlavor                    string
 	Charset                     string
 	ConsolidationsURL           string
+	IsPrimary                   bool
 
 	// Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
@@ -109,7 +109,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--backup_storage_implementation", vttablet.BackupStorageImplementation,
 		"--file_backup_storage_root", vttablet.FileBackupStorageRoot,
 		"--service_map", vttablet.ServiceMap,
-		"--vreplication_tablet_type", vttablet.VreplicationTabletType,
 		"--db_charset", vttablet.Charset,
 	)
 	if v, err := GetMajorVersion("vttablet"); err != nil {
@@ -462,6 +461,29 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	return executeQuery(conn, query)
 }
 
+// QueryTabletMultiple lets you execute multiple queries -- without any
+// results -- against the tablet.
+func (vttablet *VttabletProcess) QueryTabletMultiple(queries []string, keyspace string, useDb bool) error {
+	if !useDb {
+		keyspace = ""
+	}
+	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
+	conn, err := vttablet.conn(&dbParams)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	for _, query := range queries {
+		log.Infof("Executing query %s (on %s)", query, vttablet.Name)
+		_, err := executeQuery(conn, query)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (vttablet *VttabletProcess) defaultConn(dbname string) (*mysql.Conn, error) {
 	dbParams := mysql.ConnParams{
 		Uname:      "vt_dba",
@@ -659,7 +681,6 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 		ServingStatus:               "NOT_SERVING",
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
-		VreplicationTabletType:      "replica",
 		TabletUID:                   tabletUID,
 		Charset:                     charset,
 	}

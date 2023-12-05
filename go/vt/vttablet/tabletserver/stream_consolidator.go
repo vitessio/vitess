@@ -19,9 +19,11 @@ package tabletserver
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -70,7 +72,7 @@ func (sc *StreamConsolidator) SetBlocking(block bool) {
 // `callback`. A `leaderCallback` must also be supplied: this function must perform the actual
 // query in the upstream MySQL server, yielding results into the modified callback that it receives
 // as an argument.
-func (sc *StreamConsolidator) Consolidate(logStats *tabletenv.LogStats, sql string, callback StreamCallback, leaderCallback func(StreamCallback) error) error {
+func (sc *StreamConsolidator) Consolidate(waitTimings *servenv.TimingsWrapper, logStats *tabletenv.LogStats, sql string, callback StreamCallback, leaderCallback func(StreamCallback) error) error {
 	var (
 		inflight        *streamInFlight
 		catchup         []*sqltypes.Result
@@ -100,9 +102,11 @@ func (sc *StreamConsolidator) Consolidate(logStats *tabletenv.LogStats, sql stri
 
 	// if we have a followChan, we're following up on a query that is already being served
 	if followChan != nil {
+		startTime := time.Now()
 		defer func() {
 			memchange := inflight.unfollow(followChan, sc.cleanup)
 			atomic.AddInt64(&sc.memory, memchange)
+			waitTimings.Record("StreamConsolidations", startTime)
 		}()
 
 		logStats.QuerySources |= tabletenv.QuerySourceConsolidator
@@ -252,7 +256,7 @@ func (s *streamInFlight) update(result *sqltypes.Result, block bool, maxMemoryQu
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// if this stream can still be catched up with, we need to store the result in
+	// if this stream can still be caught up with, we need to store the result in
 	// a catch up buffer; otherwise, we can skip this altogether and just fan out the result
 	// to all the followers that are already caught up
 	if s.catchupAllowed {

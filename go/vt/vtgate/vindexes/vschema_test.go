@@ -315,10 +315,12 @@ func TestVSchemaColumns(t *testing.T) {
 			"unsharded": {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						Columns: []*vschemapb.Column{{
-							Name: "c1"}, {
-							Name: "c2",
-							Type: sqltypes.VarChar}}}}}}}
+						Columns: []*vschemapb.Column{
+							{Name: "c1"},
+							{Name: "c2", Type: sqltypes.VarChar},
+							{Name: "c3", Type: sqltypes.VarChar, Default: "''"},
+							{Name: "c4", Type: sqltypes.TypeJSON, Default: "json_array()"},
+						}}}}}}
 
 	got := BuildVSchema(&good)
 	require.NoError(t, got.Keyspaces["unsharded"].Error)
@@ -327,6 +329,8 @@ func TestVSchemaColumns(t *testing.T) {
 	require.NoError(t, err)
 	assertColumn(t, t1.Columns[0], "c1", sqltypes.Null)
 	assertColumn(t, t1.Columns[1], "c2", sqltypes.VarChar)
+	assertColumnWithDefault(t, t1.Columns[2], "c3", sqltypes.VarChar, sqlparser.NewStrLiteral(""))
+	assertColumnWithDefault(t, t1.Columns[3], "c4", sqltypes.TypeJSON, &sqlparser.JSONArrayExpr{})
 }
 
 func TestVSchemaViews(t *testing.T) {
@@ -410,7 +414,7 @@ func TestVSchemaForeignKeys(t *testing.T) {
 	vschema := BuildVSchema(&good)
 	require.NoError(t, vschema.Keyspaces["main"].Error)
 
-	// add fk containst a keyspace.
+	// add fk constraints to a keyspace.
 	vschema.AddForeignKey("main", "t1", &sqlparser.ForeignKeyDefinition{
 		Source: sqlparser.Columns{sqlparser.NewIdentifierCI("c2")},
 		ReferenceDefinition: &sqlparser.ReferenceDefinition{
@@ -2687,8 +2691,9 @@ func TestVSchemaJSON(t *testing.T) {
 					Columns: []Column{{
 						Name: sqlparser.NewIdentifierCI("c1"),
 					}, {
-						Name: sqlparser.NewIdentifierCI("c2"),
-						Type: sqltypes.VarChar,
+						Name:      sqlparser.NewIdentifierCI("c2"),
+						Type:      sqltypes.VarChar,
+						Invisible: true,
 					}},
 				},
 				"t2": {
@@ -2761,7 +2766,8 @@ func TestVSchemaJSON(t *testing.T) {
           },
           {
             "name": "c2",
-            "type": "VARCHAR"
+            "type": "VARCHAR",
+            "invisible": true
           }
         ]
       },
@@ -2981,7 +2987,7 @@ func TestReferenceTableAndSourceAreGloballyRoutable(t *testing.T) {
 	_, err = vs.FindTable("sharded", "t1")
 	require.NoError(t, err)
 	// If the source of a reference table requires explicit routing, then
-	// neither the reference table nor its souce can be globally routed.
+	// neither the reference table nor its source can be globally routed.
 	_, err = vs.FindTable("", "t1")
 	require.Error(t, err)
 	require.EqualError(t, err, "table t1 not found")
@@ -3165,5 +3171,11 @@ func assertVindexMatches(t *testing.T, cv *ColumnVindex, v Vindex, name string, 
 func assertColumn(t *testing.T, col Column, expectedName string, expectedType querypb.Type) {
 	assert.True(t, col.Name.EqualString(expectedName), "column name does not match")
 	assert.Equal(t, expectedType, col.Type, "column type does not match")
+}
 
+func assertColumnWithDefault(t *testing.T, col Column, expectedName string, expectedType querypb.Type, expDefault sqlparser.Expr) {
+	assertColumn(t, col, expectedName, expectedType)
+	if expDefault != nil {
+		assert.Equal(t, expDefault, col.Default, "column default does not match")
+	}
 }

@@ -103,7 +103,7 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0: utf8mb4_0900_ai_ci"
+          "0: utf8mb3_general_ci"
         ],
         "Inputs": [
           {
@@ -146,11 +146,11 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0: utf8mb4_0900_ai_ci",
-          "1: utf8mb4_0900_ai_ci",
-          "2: utf8mb4_0900_ai_ci",
+          "0: utf8mb3_general_ci",
+          "1: utf8mb3_general_ci",
+          "2: utf8mb3_general_ci",
           "3",
-          "4: utf8mb4_0900_ai_ci",
+          "4: utf8mb3_general_ci",
           "5",
           "6",
           "7",
@@ -163,10 +163,10 @@
           "14",
           "15",
           "16",
-          "17: utf8mb4_0900_ai_ci",
+          "17: utf8mb3_general_ci",
           "18",
-          "19: utf8mb4_0900_ai_ci",
-          "20: utf8mb4_0900_ai_ci"
+          "19: utf8mb3_general_ci",
+          "20: utf8mb3_general_ci"
         ],
         "Inputs": [
           {
@@ -1065,7 +1065,7 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0: utf8mb4_0900_ai_ci"
+          "0: utf8mb3_general_ci"
         ],
         "Inputs": [
           {
@@ -1118,7 +1118,7 @@
             "InputName": "SubQuery",
             "OperatorType": "Distinct",
             "Collations": [
-              "0: utf8mb4_0900_ai_ci"
+              "0: utf8mb3_general_ci"
             ],
             "Inputs": [
               {
@@ -1259,6 +1259,48 @@
         "FieldQuery": "select TABLE_NAME from information_schema.apa where 1 != 1",
         "Query": "select TABLE_NAME from information_schema.apa",
         "Table": "information_schema.apa"
+      }
+    }
+  },
+  {
+    "comment": "LIMIT 1 inside derived table on the RHS should not be a problem",
+    "query": "SELECT c.column_name FROM information_schema.columns c JOIN ( SELECT table_name FROM information_schema.tables WHERE table_schema != 'information_schema' LIMIT 1 ) AS tables ON tables.table_name = c.table_name",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT c.column_name FROM information_schema.columns c JOIN ( SELECT table_name FROM information_schema.tables WHERE table_schema != 'information_schema' LIMIT 1 ) AS tables ON tables.table_name = c.table_name",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "tables_table_name": 0
+        },
+        "TableName": "information_schema.`tables`_information_schema.`columns`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "DBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select table_name from (select table_name from information_schema.`tables` where 1 != 1) as `tables` where 1 != 1",
+            "Query": "select table_name from (select table_name from information_schema.`tables` where table_schema != 'information_schema' limit 1) as `tables`",
+            "Table": "information_schema.`tables`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "DBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select c.column_name from information_schema.`columns` as c where 1 != 1",
+            "Query": "select c.column_name from information_schema.`columns` as c where c.table_name = :c_table_name /* VARCHAR */",
+            "SysTableTableName": "[c_table_name::tables_table_name]",
+            "Table": "information_schema.`columns`"
+          }
+        ]
       }
     }
   }

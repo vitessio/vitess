@@ -33,6 +33,7 @@ type compiler struct {
 	collation    collations.ID
 	dynamicTypes []ctype
 	asm          assembler
+	sqlmode      SQLMode
 }
 
 type CompilerLog interface {
@@ -47,19 +48,64 @@ type compiledCoercion struct {
 }
 
 type ctype struct {
-	Type sqltypes.Type
-	Flag typeFlag
-	Col  collations.TypedCollation
+	Type        sqltypes.Type
+	Flag        typeFlag
+	Size, Scale int32
+	Col         collations.TypedCollation
 }
 
 type Type struct {
-	Type     sqltypes.Type
-	Coll     collations.ID
-	Nullable bool
+	typ         sqltypes.Type
+	collation   collations.ID
+	nullable    bool
+	init        bool
+	size, scale int32
 }
 
-func UnknownType() Type {
-	return Type{Type: sqltypes.Unknown, Coll: collations.Unknown}
+func NewType(t sqltypes.Type, collation collations.ID) Type {
+	// New types default to being nullable
+	return NewTypeEx(t, collation, true, 0, 0)
+}
+
+func NewTypeEx(t sqltypes.Type, collation collations.ID, nullable bool, size, scale int32) Type {
+	return Type{
+		typ:       t,
+		collation: collation,
+		nullable:  nullable,
+		init:      true,
+		size:      size,
+		scale:     scale,
+	}
+}
+
+func (t *Type) Type() sqltypes.Type {
+	if t.init {
+		return t.typ
+	}
+	return sqltypes.Unknown
+}
+
+func (t *Type) Collation() collations.ID {
+	return t.collation
+}
+
+func (t *Type) Size() int32 {
+	return t.size
+}
+
+func (t *Type) Scale() int32 {
+	return t.scale
+}
+
+func (t *Type) Nullable() bool {
+	if t.init {
+		return t.nullable
+	}
+	return true // nullable by default for unknown types
+}
+
+func (t *Type) Valid() bool {
+	return t.init
 }
 
 func (ct ctype) nullable() bool {
@@ -67,7 +113,7 @@ func (ct ctype) nullable() bool {
 }
 
 func (ct ctype) isTextual() bool {
-	return sqltypes.IsText(ct.Type) || sqltypes.IsBinary(ct.Type)
+	return sqltypes.IsTextOrBinary(ct.Type)
 }
 
 func (ct ctype) isHexOrBitLiteral() bool {
@@ -102,36 +148,36 @@ func (c *compiler) compileToNumeric(ct ctype, offset int, fallback sqltypes.Type
 	if ct.Type == sqltypes.VarBinary {
 		if (ct.Flag & flagHex) != 0 {
 			c.asm.Convert_hex(offset)
-			return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+			return ctype{Type: sqltypes.Uint64, Flag: ct.Flag, Col: collationNumeric}
 		}
 		if (ct.Flag & flagBit) != 0 {
 			c.asm.Convert_bit(offset)
-			return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+			return ctype{Type: sqltypes.Int64, Flag: ct.Flag, Col: collationNumeric}
 		}
 	}
 
 	if sqltypes.IsDateOrTime(ct.Type) {
 		if preciseDatetime {
 			c.asm.Convert_Ti(offset)
-			return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+			return ctype{Type: sqltypes.Int64, Flag: ct.Flag, Col: collationNumeric}
 		}
 		c.asm.Convert_Tf(offset)
-		return ctype{sqltypes.Float64, ct.Flag, collationNumeric}
+		return ctype{Type: sqltypes.Float64, Flag: ct.Flag, Col: collationNumeric}
 	}
 
 	switch fallback {
 	case sqltypes.Int64:
 		c.asm.Convert_xi(offset)
-		return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+		return ctype{Type: sqltypes.Int64, Flag: ct.Flag, Col: collationNumeric}
 	case sqltypes.Uint64:
 		c.asm.Convert_xu(offset)
-		return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+		return ctype{Type: sqltypes.Uint64, Flag: ct.Flag, Col: collationNumeric}
 	case sqltypes.Decimal:
 		c.asm.Convert_xd(offset, 0, 0)
-		return ctype{sqltypes.Decimal, ct.Flag, collationNumeric}
+		return ctype{Type: sqltypes.Decimal, Flag: ct.Flag, Col: collationNumeric}
 	}
 	c.asm.Convert_xf(offset)
-	return ctype{sqltypes.Float64, ct.Flag, collationNumeric}
+	return ctype{Type: sqltypes.Float64, Flag: ct.Flag, Col: collationNumeric}
 }
 
 func (c *compiler) compileToInt64(ct ctype, offset int) ctype {
@@ -144,7 +190,7 @@ func (c *compiler) compileToInt64(ct ctype, offset int) ctype {
 	default:
 		c.asm.Convert_xi(offset)
 	}
-	return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+	return ctype{Type: sqltypes.Int64, Flag: ct.Flag, Col: collationNumeric}
 }
 
 func (c *compiler) compileToUint64(ct ctype, offset int) ctype {
@@ -157,7 +203,7 @@ func (c *compiler) compileToUint64(ct ctype, offset int) ctype {
 	default:
 		c.asm.Convert_xu(offset)
 	}
-	return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+	return ctype{Type: sqltypes.Uint64, Flag: ct.Flag, Col: collationNumeric}
 }
 
 func (c *compiler) compileToBitwiseUint64(ct ctype, offset int) ctype {
@@ -172,7 +218,7 @@ func (c *compiler) compileToBitwiseUint64(ct ctype, offset int) ctype {
 	default:
 		c.asm.Convert_xu(offset)
 	}
-	return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+	return ctype{Type: sqltypes.Uint64, Flag: ct.Flag, Col: collationNumeric}
 }
 
 func (c *compiler) compileToFloat(ct ctype, offset int) ctype {
@@ -189,7 +235,7 @@ func (c *compiler) compileToFloat(ct ctype, offset int) ctype {
 	default:
 		c.asm.Convert_xf(offset)
 	}
-	return ctype{sqltypes.Float64, ct.Flag, collationNumeric}
+	return ctype{Type: sqltypes.Float64, Flag: ct.Flag, Col: collationNumeric}
 }
 
 func (c *compiler) compileToDecimal(ct ctype, offset int) ctype {
@@ -204,7 +250,7 @@ func (c *compiler) compileToDecimal(ct ctype, offset int) ctype {
 	default:
 		c.asm.Convert_xd(offset, 0, 0)
 	}
-	return ctype{sqltypes.Decimal, ct.Flag, collationNumeric}
+	return ctype{Type: sqltypes.Decimal, Flag: ct.Flag, Col: collationNumeric}
 }
 
 func (c *compiler) compileToDate(doct ctype, offset int) ctype {
@@ -212,7 +258,7 @@ func (c *compiler) compileToDate(doct ctype, offset int) ctype {
 	case sqltypes.Date:
 		return doct
 	default:
-		c.asm.Convert_xD(offset)
+		c.asm.Convert_xD(offset, c.sqlmode.AllowZeroDate())
 	}
 	return ctype{Type: sqltypes.Date, Col: collationBinary, Flag: flagNullable}
 }
@@ -223,9 +269,9 @@ func (c *compiler) compileToDateTime(doct ctype, offset, prec int) ctype {
 		c.asm.Convert_tp(offset, prec)
 		return doct
 	default:
-		c.asm.Convert_xDT(offset, prec)
+		c.asm.Convert_xDT(offset, prec, c.sqlmode.AllowZeroDate())
 	}
-	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: flagNullable}
+	return ctype{Type: sqltypes.Datetime, Size: int32(prec), Col: collationBinary, Flag: flagNullable}
 }
 
 func (c *compiler) compileToTime(doct ctype, offset, prec int) ctype {
@@ -236,7 +282,7 @@ func (c *compiler) compileToTime(doct ctype, offset, prec int) ctype {
 	default:
 		c.asm.Convert_xT(offset, prec)
 	}
-	return ctype{Type: sqltypes.Time, Col: collationBinary, Flag: flagNullable}
+	return ctype{Type: sqltypes.Time, Size: int32(prec), Col: collationBinary, Flag: flagNullable}
 }
 
 func (c *compiler) compileNullCheck1(ct ctype) *jump {

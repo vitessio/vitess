@@ -1267,7 +1267,7 @@ func TestTemplate(t *testing.T) {
 		TabletsStats: ts,
 	}
 	templ := template.New("")
-	templ, err := templ.Parse(HealthCheckTemplate)
+	templ, err := templ.Parse(healthCheckTemplate)
 	require.Nil(t, err, "error parsing template: %v", err)
 	wr := &bytes.Buffer{}
 	err = templ.Execute(wr, []*TabletsCacheStatus{tcs})
@@ -1295,7 +1295,7 @@ func TestDebugURLFormatting(t *testing.T) {
 		TabletsStats: ts,
 	}
 	templ := template.New("")
-	templ, err := templ.Parse(HealthCheckTemplate)
+	templ, err := templ.Parse(healthCheckTemplate)
 	require.Nil(t, err, "error parsing template")
 	wr := &bytes.Buffer{}
 	err = templ.Execute(wr, []*TabletsCacheStatus{tcs})

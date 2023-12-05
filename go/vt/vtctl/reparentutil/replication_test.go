@@ -54,7 +54,7 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 		statusMap        map[string]*replicationdatapb.StopReplicationStatus
 		primaryStatusMap map[string]*replicationdatapb.PrimaryStatus
 		// Note: for these tests, it's simpler to compare keys than actual
-		// mysql.Postion structs, which are just thin wrappers around the
+		// mysql.Position structs, which are just thin wrappers around the
 		// mysql.GTIDSet interface. If a tablet alias makes it into the map, we
 		// know it was chosen by the method, and that either
 		// mysql.DecodePosition was successful (in the primary case) or

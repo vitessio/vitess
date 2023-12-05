@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -151,7 +151,7 @@ func run(cmd *cobra.Command, args []string) error {
 		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler()),
 		VDiffEngine:         vdiff.NewEngine(config, ts, tablet),
 	}
-	if err := tm.Start(tablet, config.Healthcheck.IntervalSeconds.Get()); err != nil {
+	if err := tm.Start(tablet, config); err != nil {
 		ts.Close()
 		return fmt.Errorf("failed to parse --tablet-path or initialize DB credentials: %w", err)
 	}
@@ -244,6 +244,7 @@ func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts 
 	} else if enforceTableACLConfig {
 		return nil, fmt.Errorf("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
 	}
+
 	// creates and registers the query service
 	qsc := tabletserver.NewTabletServer(ctx, "", config, ts, tabletAlias)
 	servenv.OnRun(func() {

@@ -60,7 +60,8 @@ func TestNextTableToPurge(t *testing.T) {
 	}
 	for _, ts := range tt {
 		collector := &TableGC{
-			purgingTables: make(map[string]bool),
+			purgingTables:    make(map[string]bool),
+			checkRequestChan: make(chan bool),
 		}
 		for _, table := range ts.tables {
 			collector.purgingTables[table] = true
@@ -256,8 +257,9 @@ func TestShouldTransitionTable(t *testing.T) {
 
 func TestCheckTables(t *testing.T) {
 	collector := &TableGC{
-		isOpen:        0,
-		purgingTables: map[string]bool{},
+		isOpen:           0,
+		purgingTables:    map[string]bool{},
+		checkRequestChan: make(chan bool),
 	}
 	var err error
 	collector.lifecycleStates, err = schema.ParseGCLifecycle("hold,purge,evac,drop")

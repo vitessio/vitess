@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet"
 
@@ -224,6 +225,15 @@ func execStatements(t *testing.T, queries []string) {
 	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
 		log.Errorf("Error executing query: %s", err.Error())
 		t.Error(err)
+	}
+}
+
+func execConnStatements(t *testing.T, conn *dbconnpool.DBConnection, queries []string) {
+	t.Helper()
+	for _, query := range queries {
+		if _, err := conn.ExecuteFetch(query, 10000, false); err != nil {
+			t.Fatalf("ExecuteFetch(%v) failed: %v", query, err)
+		}
 	}
 }
 

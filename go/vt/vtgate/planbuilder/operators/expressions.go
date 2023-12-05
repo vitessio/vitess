@@ -22,13 +22,13 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// BreakExpressionInLHSandRHS takes an expression and
+// breakExpressionInLHSandRHSForApplyJoin takes an expression and
 // extracts the parts that are coming from one of the sides into `ColName`s that are needed
-func BreakExpressionInLHSandRHS(
+func breakExpressionInLHSandRHSForApplyJoin(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,
-) (col JoinColumn, err error) {
+) (col JoinColumn) {
 	rewrittenExpr := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		nodeExpr, ok := cursor.Node().(sqlparser.Expr)
 		if !ok || !fetchByOffset(nodeExpr) {
@@ -51,9 +51,6 @@ func BreakExpressionInLHSandRHS(
 		cursor.Replace(arg)
 	}, nil).(sqlparser.Expr)
 
-	if err != nil {
-		return JoinColumn{}, err
-	}
 	ctx.JoinPredicates[expr] = append(ctx.JoinPredicates[expr], rewrittenExpr)
 	col.RHSExpr = rewrittenExpr
 	return

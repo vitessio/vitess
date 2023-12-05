@@ -20,6 +20,7 @@ package testenv
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"regexp"
 	"strings"
@@ -75,7 +76,9 @@ func Init(ctx context.Context) (*Env, error) {
 	if err := te.TopoServ.CreateShard(ctx, te.KeyspaceName, te.ShardName); err != nil {
 		panic(err)
 	}
-	te.SrvTopo = srvtopo.NewResilientServer(ctx, te.TopoServ, "TestTopo")
+	// Add a random suffix to metric name to avoid panic. Another option would have been to generate a random string.
+	suffix := rand.Int()
+	te.SrvTopo = srvtopo.NewResilientServer(ctx, te.TopoServ, "TestTopo"+fmt.Sprint(suffix))
 
 	cfg := vttest.Config{
 		Topology: &vttestpb.VTTestTopology{

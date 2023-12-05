@@ -6249,5 +6249,128 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "GROUP BY inside derived table on the RHS should not be a problem",
+    "query": "SELECT c.column_name FROM user c JOIN (SELECT table_name FROM user WHERE id = 143 GROUP BY 1) AS tables ON tables.table_name = c.table_name",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT c.column_name FROM user c JOIN (SELECT table_name FROM user WHERE id = 143 GROUP BY 1) AS tables ON tables.table_name = c.table_name",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "tables_table_name": 0
+        },
+        "TableName": "`user`_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select table_name from (select table_name from `user` where 1 != 1 group by table_name) as `tables` where 1 != 1",
+            "Query": "select table_name from (select table_name from `user` where id = 143 group by table_name) as `tables`",
+            "Table": "`user`",
+            "Values": [
+              "143"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select c.column_name from `user` as c where 1 != 1",
+            "Query": "select c.column_name from `user` as c where c.table_name = :tables_table_name",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Group by aggregated column should not be a problem",
+    "query": "SELECT b.col FROM music AS b JOIN (SELECT MIN(bb.id) AS min_id, MAX(bb.id) AS max_id FROM user AS bb) AS foobars WHERE b.id > foobars.min_id GROUP BY b.col",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT b.col FROM music AS b JOIN (SELECT MIN(bb.id) AS min_id, MAX(bb.id) AS max_id FROM user AS bb) AS foobars WHERE b.id > foobars.min_id GROUP BY b.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "GroupBy": "(0|1)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(0|1) ASC",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "R:0,R:1",
+                "JoinVars": {
+                  "foobars_min_id": 0
+                },
+                "TableName": "`user`_music",
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Ordered",
+                    "GroupBy": "0 COLLATE utf8mb4_0900_ai_ci",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Aggregate",
+                        "Variant": "Scalar",
+                        "Aggregates": "min(0|2) AS min_id, max(1|2) AS max_id",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select min(bb.id) as min_id, max(bb.id) as max_id, weight_string(bb.id) from `user` as bb where 1 != 1 group by weight_string(bb.id)",
+                            "OrderBy": "0 ASC COLLATE utf8mb4_0900_ai_ci",
+                            "Query": "select min(bb.id) as min_id, max(bb.id) as max_id, weight_string(bb.id) from `user` as bb group by weight_string(bb.id) order by min(bb.id) asc",
+                            "Table": "`user`"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select b.col, weight_string(b.col) from music as b where 1 != 1 group by b.col, weight_string(b.col)",
+                    "Query": "select b.col, weight_string(b.col) from music as b where b.id > :foobars_min_id group by b.col, weight_string(b.col)",
+                    "Table": "music"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   }
 ]
