@@ -431,8 +431,14 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 
 	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
+
+	// Instead of return on err directly, only return err when no tablets for backup at all
 	if err != nil {
-		return err
+		tablets = reparentutil.GetBackupCandidates(tablets, stats)
+		// Only return err when no usable tablet
+		if len(tablets) == 0 {
+			return err
+		}
 	}
 
 	var (
@@ -2705,6 +2711,10 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 	} else if !ok {
 		waitReplicasTimeout = time.Second * 30
 	}
+	tolerableReplLag, _, err := protoutil.DurationFromProto(req.TolerableReplicationLag)
+	if err != nil {
+		return nil, err
+	}
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("shard", req.Shard)
@@ -2734,6 +2744,7 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 			AvoidPrimaryAlias:   req.AvoidPrimary,
 			NewPrimaryAlias:     req.NewPrimary,
 			WaitReplicasTimeout: waitReplicasTimeout,
+			TolerableReplLag:    tolerableReplLag,
 		},
 	)
 
@@ -2746,7 +2757,7 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		resp.Keyspace = ev.ShardInfo.Keyspace()
 		resp.Shard = ev.ShardInfo.ShardName()
 
-		if !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
+		if ev.NewPrimary != nil && !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
 			resp.PromotedPrimary = ev.NewPrimary.Alias
 		}
 	}

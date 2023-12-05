@@ -102,10 +102,6 @@ vttablet \
 	}
 )
 
-const (
-	dbaGrantWaitTime = 10 * time.Second
-)
-
 func run(cmd *cobra.Command, args []string) error {
 	servenv.Init()
 
@@ -155,7 +151,7 @@ func run(cmd *cobra.Command, args []string) error {
 		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler()),
 		VDiffEngine:         vdiff.NewEngine(config, ts, tablet),
 	}
-	if err := tm.Start(tablet, config.Healthcheck.IntervalSeconds.Get()); err != nil {
+	if err := tm.Start(tablet, config); err != nil {
 		ts.Close()
 		return fmt.Errorf("failed to parse --tablet-path or initialize DB credentials: %w", err)
 	}
@@ -249,10 +245,6 @@ func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts 
 		return nil, fmt.Errorf("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
 	}
 
-	err := tabletserver.WaitForDBAGrants(config, dbaGrantWaitTime)
-	if err != nil {
-		return nil, err
-	}
 	// creates and registers the query service
 	qsc := tabletserver.NewTabletServer(ctx, "", config, ts, tabletAlias)
 	servenv.OnRun(func() {

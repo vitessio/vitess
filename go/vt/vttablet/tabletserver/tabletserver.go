@@ -187,8 +187,8 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
-	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tsv.lagThrottler, tabletTypeFunc, tsv.onlineDDLExecutorToggleTableBuffer)
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tsv.lagThrottler)
+	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tsv.lagThrottler, tabletTypeFunc, tsv.onlineDDLExecutorToggleTableBuffer, tsv.tableGC.RequestChecks)
 
 	tsv.sm = &stateManager{
 		statelessql: tsv.statelessql,
@@ -236,7 +236,7 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 func WaitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) error {
 	// We don't wait for grants if the tablet is externally managed. Permissions
 	// are then the responsibility of the DBA.
-	if config.DB.HasGlobalSettings() || waitTime == 0 {
+	if config == nil || config.DB.HasGlobalSettings() || waitTime == 0 {
 		return nil
 	}
 	timer := time.NewTimer(waitTime)
@@ -948,6 +948,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				ctx:            ctx,
 				logStats:       logStats,
 				tsv:            tsv,
+				tabletType:     target.GetTabletType(),
 				setting:        connSetting,
 			}
 			return qre.Stream(callback)

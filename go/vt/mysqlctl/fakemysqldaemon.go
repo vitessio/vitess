@@ -220,7 +220,7 @@ func (fmd *FakeMysqlDaemon) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 }
 
 // Shutdown is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool) error {
+func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool, mysqlShutdownTimeout time.Duration) error {
 	if !fmd.Running {
 		return fmt.Errorf("fake mysql daemon not running")
 	}
