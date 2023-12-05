@@ -12,6 +12,8 @@
     - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
   - **[Query Compatibility](#query-compatibility)**
     - [`SHOW VSCHEMA KEYSPACES` Query](#show-vschema-keyspaces)
+  - **[Planned Reparent Shard](#planned-reparent-shard)**
+    - [`--tolerable-replication-lag` Sub-flag](#tolerable-repl-lag)
 
 ## <a id="major-changes"/>Major Changes
 
@@ -66,3 +68,13 @@ mysql> show vschema keyspaces;
 +----------+---------+-------------+---------+
 2 rows in set (0.01 sec)
 ```
+
+### <a id="planned-reparent-shard"/>Planned Reparent Shard
+
+#### <a id="tolerable-repl-lag"/>`--tolerable-replication-lag` Sub-flag
+
+A new sub-flag `--tolerable-replication-lag` has been added to the command `PlannedReparentShard` that allows users to specify the amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary.
+This feature is opt-in and not specifying this sub-flag makes Vitess ignore the replication lag entirely.
+
+A new flag in VTOrc with the same name has been added to control the behaviour of the PlannedReparentShard calls that VTOrc issues.
+
