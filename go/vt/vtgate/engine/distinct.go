@@ -46,6 +46,7 @@ type (
 	probeTable struct {
 		seenRows  map[evalengine.HashCode][]sqltypes.Row
 		checkCols []CheckCol
+		sqlmode   evalengine.SQLMode
 	}
 )
 
@@ -119,14 +120,14 @@ func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (evalengine.HashCode
 			return 0, vterrors.VT13001("index out of range in row when creating the DISTINCT hash code")
 		}
 		col := inputRow[checkCol.Col]
-		hashcode, err := evalengine.NullsafeHashcode(col, checkCol.Type.Collation(), col.Type())
+		hashcode, err := evalengine.NullsafeHashcode(col, checkCol.Type.Collation(), col.Type(), pt.sqlmode)
 		if err != nil {
 			if err != evalengine.UnsupportedCollationHashError || checkCol.WsCol == nil {
 				return 0, err
 			}
 			checkCol = checkCol.SwitchToWeightString()
 			pt.checkCols[i] = checkCol
-			hashcode, err = evalengine.NullsafeHashcode(inputRow[checkCol.Col], checkCol.Type.Collation(), col.Type())
+			hashcode, err = evalengine.NullsafeHashcode(inputRow[checkCol.Col], checkCol.Type.Collation(), col.Type(), pt.sqlmode)
 			if err != nil {
 				return 0, err
 			}

@@ -745,8 +745,27 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 		return nil, fmt.Errorf("could not determine CREATE TABLE statement from table schema %q", tableSchema)
 	}
 
-	for _, index := range createTable.GetTableSpec().Indexes {
+	tableSpec := createTable.GetTableSpec()
+	fkIndexCols := make(map[string]bool)
+	for _, constraint := range tableSpec.Constraints {
+		if fkDef, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); ok {
+			fkCols := make([]string, len(fkDef.Source))
+			for i, fkCol := range fkDef.Source {
+				fkCols[i] = fkCol.Lowered()
+			}
+			fkIndexCols[strings.Join(fkCols, ",")] = true
+		}
+	}
+	for _, index := range tableSpec.Indexes {
 		if index.Info.Type != sqlparser.IndexTypePrimary {
+			cols := make([]string, len(index.Columns))
+			for i, col := range index.Columns {
+				cols[i] = col.Column.Lowered()
+			}
+			if fkIndexCols[strings.Join(cols, ",")] {
+				// This index is needed for a FK constraint so we cannot drop it.
+				continue
+			}
 			secondaryKeys = append(secondaryKeys, index)
 		}
 	}

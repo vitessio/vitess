@@ -564,6 +564,14 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `case when null is null then 23 else null end`,
 			result:     `INT64(23)`,
 		},
+		{
+			expression: `CAST(0 AS DATE)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `DAYOFMONTH(0)`,
+			result:     `INT64(0)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

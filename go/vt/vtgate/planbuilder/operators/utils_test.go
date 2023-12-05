@@ -20,33 +20,32 @@ import (
 	"slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type fakeOp struct {
 	id     semantics.TableSet
-	inputs []ops.Operator
+	inputs []Operator
 	cols   []*sqlparser.AliasedExpr
 }
 
-var _ ops.Operator = (*fakeOp)(nil)
+var _ Operator = (*fakeOp)(nil)
 
-func (f *fakeOp) Clone(inputs []ops.Operator) ops.Operator {
+func (f *fakeOp) Clone(inputs []Operator) Operator {
 	return f
 }
 
-func (f *fakeOp) Inputs() []ops.Operator {
+func (f *fakeOp) Inputs() []Operator {
 	return f.inputs
 }
 
-func (f *fakeOp) SetInputs(operators []ops.Operator) {
+func (f *fakeOp) SetInputs(operators []Operator) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (f *fakeOp) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (f *fakeOp) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	// TODO implement me
 	panic("implement me")
 }
@@ -80,7 +79,7 @@ func (f *fakeOp) ShortDescription() string {
 	panic("implement me")
 }
 
-func (f *fakeOp) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+func (f *fakeOp) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	// TODO implement me
 	panic("implement me")
 }

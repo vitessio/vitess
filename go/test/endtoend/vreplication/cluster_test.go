@@ -544,6 +544,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				tablets = append(tablets, primary)
 				dbProcesses = append(dbProcesses, proc)
 				primaryTabletUID = primary.Vttablet.TabletUID
+				primary.Vttablet.IsPrimary = true
 			}
 
 			for i := 0; i < numReplicas; i++ {
@@ -795,13 +796,13 @@ func (vc *VitessCluster) getPrimaryTablet(t *testing.T, ksName, shardName string
 				continue
 			}
 			for _, tablet := range shard.Tablets {
-				if tablet.Vttablet.GetTabletStatus() == "SERVING" {
+				if tablet.Vttablet.IsPrimary {
 					return tablet.Vttablet
 				}
 			}
 		}
 	}
-	require.FailNow(t, "no primary found for %s:%s", ksName, shardName)
+	require.FailNow(t, "no primary found", "keyspace %s, shard %s", ksName, shardName)
 	return nil
 }
 

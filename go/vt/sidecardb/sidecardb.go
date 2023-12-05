@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/history"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -485,7 +486,7 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 	sqlModeResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"sql_mode",
 		"varchar"),
-		"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
+		config.DefaultSQLMode,
 	)
 	db.AddQuery("select @@session.sql_mode as sql_mode", sqlModeResult)
 

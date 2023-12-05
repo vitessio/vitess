@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -213,6 +214,10 @@ func (vc *vcursor) GetKeyspace() string {
 
 func (vc *vcursor) TimeZone() *time.Location {
 	return time.Local
+}
+
+func (vc *vcursor) SQLMode() string {
+	return config.DefaultSQLMode
 }
 
 func initTimezoneData(t *testing.T, conn *mysql.Conn) {

@@ -110,7 +110,8 @@ func TestNextTableToPurge(t *testing.T) {
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
 			collector := &TableGC{
-				purgingTables: make(map[string]bool),
+				purgingTables:    make(map[string]bool),
+				checkRequestChan: make(chan bool),
 			}
 			var err error
 			collector.lifecycleStates, err = schema.ParseGCLifecycle("hold,purge,evac,drop")
@@ -118,6 +119,7 @@ func TestNextTableToPurge(t *testing.T) {
 			for _, table := range ts.tables {
 				collector.addPurgingTable(table)
 			}
+
 			next, ok := collector.nextTableToPurge()
 			assert.Equal(t, ts.ok, ok)
 			if ok {
@@ -375,8 +377,9 @@ func TestShouldTransitionTable(t *testing.T) {
 
 func TestCheckTables(t *testing.T) {
 	collector := &TableGC{
-		isOpen:        0,
-		purgingTables: map[string]bool{},
+		isOpen:           0,
+		purgingTables:    map[string]bool{},
+		checkRequestChan: make(chan bool),
 	}
 	var err error
 	collector.lifecycleStates, err = schema.ParseGCLifecycle("hold,purge,evac,drop")

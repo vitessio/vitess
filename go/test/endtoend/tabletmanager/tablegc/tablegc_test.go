@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/gc"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
@@ -129,13 +130,18 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func checkTableRows(t *testing.T, tableName string, expect int64) {
+func getTableRows(t *testing.T, tableName string) int64 {
 	require.NotEmpty(t, tableName)
 	query := `select count(*) as c from %a`
 	parsed := sqlparser.BuildParsedQuery(query, tableName)
 	rs, err := primaryTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
 	require.NoError(t, err)
 	count := rs.Named().Row().AsInt64("c", 0)
+	return count
+}
+
+func checkTableRows(t *testing.T, tableName string, expect int64) {
+	count := getTableRows(t, tableName)
 	assert.Equal(t, expect, count)
 }
 
@@ -184,19 +190,18 @@ func validateTableDoesNotExist(t *testing.T, tableExpr string) {
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
-	var foundTableName string
-	var exists bool
-	var err error
+	defer ticker.Stop()
+
 	for {
+		exists, foundTableName, err := tableExists(tableExpr)
+		require.NoError(t, err)
+		if !exists {
+			return
+		}
 		select {
 		case <-ticker.C:
-			exists, foundTableName, err = tableExists(tableExpr)
-			require.NoError(t, err)
-			if !exists {
-				return
-			}
 		case <-ctx.Done():
-			assert.NoError(t, ctx.Err(), "validateTableDoesNotExist timed out, table %v still exists (%v)", tableExpr, foundTableName)
+			assert.Failf(t, "validateTableDoesNotExist timed out, table %v still exists (%v)", tableExpr, foundTableName)
 			return
 		}
 	}
@@ -207,65 +212,84 @@ func validateTableExists(t *testing.T, tableExpr string) {
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
-	var exists bool
-	var err error
+	defer ticker.Stop()
+
 	for {
+		exists, _, err := tableExists(tableExpr)
+		require.NoError(t, err)
+		if exists {
+			return
+		}
 		select {
 		case <-ticker.C:
-			exists, _, err = tableExists(tableExpr)
-			require.NoError(t, err)
-			if exists {
-				return
-			}
 		case <-ctx.Done():
-			assert.NoError(t, ctx.Err(), "validateTableExists timed out, table %v still does not exist", tableExpr)
+			assert.Failf(t, "validateTableExists timed out, table %v still does not exist", tableExpr)
 			return
 		}
 	}
 }
 
 func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableGCState) {
-	for _, state := range states {
-		expectTableToExist := true
-		searchExpr := ""
-		searchExpr2 := ""
-		switch state {
-		case schema.HoldTableGCState:
-			searchExpr = `\_vt\_HOLD\_%`
-			searchExpr2 = `\_vt\_hld\_%`
-		case schema.PurgeTableGCState:
-			searchExpr = `\_vt\_PURGE\_%`
-			searchExpr2 = `\_vt\_prg\_%`
-		case schema.EvacTableGCState:
-			searchExpr = `\_vt\_EVAC\_%`
-			searchExpr2 = `\_vt\_evc\_%`
-		case schema.DropTableGCState:
-			searchExpr = `\_vt\_DROP\_%`
-			searchExpr2 = `\_vt\_drp\_%`
-		case schema.TableDroppedGCState:
-			searchExpr = `\_vt\_%`
-			searchExpr2 = `\_vt\_%`
-			expectTableToExist = false
-		default:
-			t.Log("Unknown state")
-			t.Fail()
-		}
-		exists, tableName, err := tableExists(searchExpr, searchExpr2)
-		require.NoError(t, err)
+	t.Run(fmt.Sprintf("validateAnyState: expectNumRows=%v, states=%v", expectNumRows, states), func(t *testing.T) {
+		timeout := gc.NextChecksIntervals[len(gc.NextChecksIntervals)-1] + 5*time.Second
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
 
-		if exists {
-			if expectNumRows >= 0 {
-				checkTableRows(t, tableName, expectNumRows)
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+
+		for {
+			// Attempt validation:
+			for _, state := range states {
+				expectTableToExist := true
+				searchExpr := ""
+				searchExpr2 := ""
+				switch state {
+				case schema.HoldTableGCState:
+					searchExpr = `\_vt\_HOLD\_%`
+					searchExpr2 = `\_vt\_hld\_%`
+				case schema.PurgeTableGCState:
+					searchExpr = `\_vt\_PURGE\_%`
+					searchExpr2 = `\_vt\_prg\_%`
+				case schema.EvacTableGCState:
+					searchExpr = `\_vt\_EVAC\_%`
+					searchExpr2 = `\_vt\_evc\_%`
+				case schema.DropTableGCState:
+					searchExpr = `\_vt\_DROP\_%`
+					searchExpr2 = `\_vt\_drp\_%`
+				case schema.TableDroppedGCState:
+					searchExpr = `\_vt\_%`
+					searchExpr2 = `\_vt\_%`
+					expectTableToExist = false
+				default:
+					require.Failf(t, "unknown state", "%v", state)
+				}
+				exists, tableName, err := tableExists(searchExpr, searchExpr2)
+				require.NoError(t, err)
+
+				var foundRows int64
+				if exists {
+					foundRows = getTableRows(t, tableName)
+					// Now that the table is validated, we can drop it (test cleanup)
+					dropTable(t, tableName)
+				}
+				t.Logf("=== exists: %v, tableName: %v, rows: %v", exists, tableName, foundRows)
+				if exists == expectTableToExist {
+					// expectNumRows < 0 means "don't care"
+					if expectNumRows < 0 || (expectNumRows == foundRows) {
+						// All conditions are met
+						return
+					}
+				}
 			}
-			// Now that the table is validated, we can drop it
-			dropTable(t, tableName)
+			select {
+			case <-ticker.C:
+			case <-ctx.Done():
+				assert.Failf(t, "timeout in validateAnyState", " waiting for any of these states: %v, expecting rows: %v", states, expectNumRows)
+				return
+			}
 		}
-		if exists == expectTableToExist {
-			// condition met
-			return
-		}
-	}
-	assert.Failf(t, "could not match any of the states", "states=%v", states)
+	})
 }
 
 // dropTable drops a table
@@ -336,17 +360,22 @@ func TestHold(t *testing.T) {
 func TestEvac(t *testing.T) {
 	for _, newNameFormat := range []bool{false, true} {
 		t.Run(fmt.Sprintf("new format=%t", newNameFormat), func(t *testing.T) {
-			populateTable(t)
-			query, tableName, err := generateRenameStatement(newNameFormat, "t1", schema.EvacTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
-			assert.NoError(t, err)
+			var tableName string
+			t.Run("setting up EVAC table", func(t *testing.T) {
+				populateTable(t)
+				var query string
+				var err error
+				query, tableName, err = generateRenameStatement(newNameFormat, "t1", schema.EvacTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
+				assert.NoError(t, err)
 
-			_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-			assert.NoError(t, err)
+				_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+				assert.NoError(t, err)
 
-			validateTableDoesNotExist(t, "t1")
+				validateTableDoesNotExist(t, "t1")
+			})
 
-			time.Sleep(tableTransitionExpiration / 2)
-			{
+			t.Run("validating before expiration", func(t *testing.T) {
+				time.Sleep(tableTransitionExpiration / 2)
 				// Table was created with +10s timestamp, so it should still exist
 				if fastDropTable {
 					// EVAC state is skipped in mysql 8.0.23 and beyond
@@ -355,13 +384,14 @@ func TestEvac(t *testing.T) {
 					validateTableExists(t, tableName)
 					checkTableRows(t, tableName, 1024)
 				}
-			}
+			})
 
-			time.Sleep(tableTransitionExpiration)
-			// We're now both beyond table's timestamp as well as a tableGC interval
-			validateTableDoesNotExist(t, tableName)
-			// Table should be renamed as _vt_DROP_... and then dropped!
-			validateAnyState(t, 0, schema.DropTableGCState, schema.TableDroppedGCState)
+			t.Run("validating rows evacuated", func(t *testing.T) {
+				// We're now both beyond table's timestamp as well as a tableGC interval
+				validateTableDoesNotExist(t, tableName)
+				// Table should be renamed as _vt_DROP_... and then dropped!
+				validateAnyState(t, 0, schema.DropTableGCState, schema.TableDroppedGCState)
+			})
 		})
 	}
 }

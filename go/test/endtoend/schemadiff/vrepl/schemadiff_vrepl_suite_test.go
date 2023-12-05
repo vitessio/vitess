@@ -53,8 +53,8 @@ var (
 )
 
 const (
-	testDataPath   = "../../onlineddl/vrepl_suite/testdata"
-	defaultSQLMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+	testDataPath          = "../../onlineddl/vrepl_suite/testdata"
+	sqlModeAllowsZeroDate = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
 )
 
 type testTableSchema struct {
@@ -202,7 +202,7 @@ func testSingle(t *testing.T, testName string) {
 		return
 	}
 
-	sqlModeQuery := fmt.Sprintf("set @@global.sql_mode='%s'", defaultSQLMode)
+	sqlModeQuery := fmt.Sprintf("set @@global.sql_mode='%s'", sqlModeAllowsZeroDate)
 	_ = mysqlExec(t, sqlModeQuery, "")
 	_ = mysqlExec(t, "set @@global.event_scheduler=0", "")
 

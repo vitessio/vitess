@@ -77,23 +77,26 @@ type BackupParams struct {
 	Stats backupstats.Stats
 	// UpgradeSafe indicates whether the backup is safe for upgrade and created with innodb_fast_shutdown=0
 	UpgradeSafe bool
+	// MysqlShutdownTimeout defines how long we wait during MySQL shutdown if that is part of the backup process.
+	MysqlShutdownTimeout time.Duration
 }
 
 func (b *BackupParams) Copy() BackupParams {
 	return BackupParams{
-		Cnf:                b.Cnf,
-		Mysqld:             b.Mysqld,
-		Logger:             b.Logger,
-		Concurrency:        b.Concurrency,
-		HookExtraEnv:       b.HookExtraEnv,
-		TopoServer:         b.TopoServer,
-		Keyspace:           b.Keyspace,
-		Shard:              b.Shard,
-		TabletAlias:        b.TabletAlias,
-		BackupTime:         b.BackupTime,
-		IncrementalFromPos: b.IncrementalFromPos,
-		Stats:              b.Stats,
-		UpgradeSafe:        b.UpgradeSafe,
+		Cnf:                  b.Cnf,
+		Mysqld:               b.Mysqld,
+		Logger:               b.Logger,
+		Concurrency:          b.Concurrency,
+		HookExtraEnv:         b.HookExtraEnv,
+		TopoServer:           b.TopoServer,
+		Keyspace:             b.Keyspace,
+		Shard:                b.Shard,
+		TabletAlias:          b.TabletAlias,
+		BackupTime:           b.BackupTime,
+		IncrementalFromPos:   b.IncrementalFromPos,
+		Stats:                b.Stats,
+		UpgradeSafe:          b.UpgradeSafe,
+		MysqlShutdownTimeout: b.MysqlShutdownTimeout,
 	}
 }
 
@@ -130,24 +133,27 @@ type RestoreParams struct {
 	DryRun bool
 	// Stats let's restore engines report detailed restore timings.
 	Stats backupstats.Stats
+	// MysqlShutdownTimeout defines how long we wait during MySQL shutdown if that is part of the backup process.
+	MysqlShutdownTimeout time.Duration
 }
 
 func (p *RestoreParams) Copy() RestoreParams {
 	return RestoreParams{
-		Cnf:                 p.Cnf,
-		Mysqld:              p.Mysqld,
-		Logger:              p.Logger,
-		Concurrency:         p.Concurrency,
-		HookExtraEnv:        p.HookExtraEnv,
-		DeleteBeforeRestore: p.DeleteBeforeRestore,
-		DbName:              p.DbName,
-		Keyspace:            p.Keyspace,
-		Shard:               p.Shard,
-		StartTime:           p.StartTime,
-		RestoreToPos:        p.RestoreToPos,
-		RestoreToTimestamp:  p.RestoreToTimestamp,
-		DryRun:              p.DryRun,
-		Stats:               p.Stats,
+		Cnf:                  p.Cnf,
+		Mysqld:               p.Mysqld,
+		Logger:               p.Logger,
+		Concurrency:          p.Concurrency,
+		HookExtraEnv:         p.HookExtraEnv,
+		DeleteBeforeRestore:  p.DeleteBeforeRestore,
+		DbName:               p.DbName,
+		Keyspace:             p.Keyspace,
+		Shard:                p.Shard,
+		StartTime:            p.StartTime,
+		RestoreToPos:         p.RestoreToPos,
+		RestoreToTimestamp:   p.RestoreToTimestamp,
+		DryRun:               p.DryRun,
+		Stats:                p.Stats,
+		MysqlShutdownTimeout: p.MysqlShutdownTimeout,
 	}
 }
 
@@ -584,10 +590,10 @@ func validateMySQLVersionUpgradeCompatible(to string, from string, upgradeSafe b
 	return fmt.Errorf("running MySQL version %q is newer than backup MySQL version %q which is not safe to upgrade", to, from)
 }
 
-func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger) error {
+func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, mysqlShutdownTimeout time.Duration) error {
 	// shutdown mysqld if it is running
 	logger.Infof("Restore: shutdown mysqld")
-	if err := mysqld.Shutdown(ctx, cnf, true); err != nil {
+	if err := mysqld.Shutdown(ctx, cnf, true, mysqlShutdownTimeout); err != nil {
 		return err
 	}
 
