@@ -12649,6 +12649,9 @@ export namespace mysqlctl {
 
         /** ShutdownRequest wait_for_mysqld */
         wait_for_mysqld?: (boolean|null);
+
+        /** ShutdownRequest mysql_shutdown_timeout */
+        mysql_shutdown_timeout?: (vttime.IDuration|null);
     }
 
     /** Represents a ShutdownRequest. */
@@ -12662,6 +12665,9 @@ export namespace mysqlctl {
 
         /** ShutdownRequest wait_for_mysqld. */
         public wait_for_mysqld: boolean;
+
+        /** ShutdownRequest mysql_shutdown_timeout. */
+        public mysql_shutdown_timeout?: (vttime.IDuration|null);
 
         /**
          * Creates a new ShutdownRequest instance using the specified properties.
@@ -57613,6 +57619,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest wait_replicas_timeout */
         wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** PlannedReparentShardRequest tolerable_replication_lag */
+        tolerable_replication_lag?: (vttime.IDuration|null);
     }
 
     /** Represents a PlannedReparentShardRequest. */
@@ -57638,6 +57647,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest wait_replicas_timeout. */
         public wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** PlannedReparentShardRequest tolerable_replication_lag. */
+        public tolerable_replication_lag?: (vttime.IDuration|null);
 
         /**
          * Creates a new PlannedReparentShardRequest instance using the specified properties.

@@ -569,6 +569,7 @@ type Config struct {
 	Collation         collations.ID
 	NoConstantFolding bool
 	NoCompilation     bool
+	SQLMode           SQLMode
 }
 
 func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
@@ -603,7 +604,7 @@ func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
 	}
 
 	if len(ast.untyped) == 0 && !cfg.NoCompilation {
-		comp := compiler{collation: cfg.Collation}
+		comp := compiler{collation: cfg.Collation, sqlmode: cfg.SQLMode}
 		return comp.compile(expr)
 	}
 
@@ -626,9 +627,9 @@ type typedExpr struct {
 	err      error
 }
 
-func (typed *typedExpr) compile(expr IR, collation collations.ID) (*CompiledExpr, error) {
+func (typed *typedExpr) compile(expr IR, collation collations.ID, sqlmode SQLMode) (*CompiledExpr, error) {
 	typed.once.Do(func() {
-		comp := compiler{collation: collation, dynamicTypes: typed.types}
+		comp := compiler{collation: collation, dynamicTypes: typed.types, sqlmode: sqlmode}
 		typed.compiled, typed.err = comp.compile(expr)
 	})
 	return typed.compiled, typed.err
@@ -695,7 +696,7 @@ func (u *UntypedExpr) Compile(env *ExpressionEnv) (*CompiledExpr, error) {
 	if err != nil {
 		return nil, err
 	}
-	return typed.compile(u.ir, u.collation)
+	return typed.compile(u.ir, u.collation, env.sqlmode)
 }
 
 func (u *UntypedExpr) typeof(env *ExpressionEnv) (ctype, error) {

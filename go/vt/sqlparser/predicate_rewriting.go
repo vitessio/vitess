@@ -16,6 +16,8 @@ limitations under the License.
 
 package sqlparser
 
+import "slices"
+
 // RewritePredicate walks the input AST and rewrites any boolean logic into a simpler form
 // This simpler form is CNF plus logic for extracting predicates from OR, plus logic for turning ORs into IN
 func RewritePredicate(ast SQLNode) SQLNode {
@@ -204,36 +206,128 @@ func simplifyAnd(expr *AndExpr) (Expr, bool) {
 	return expr, false
 }
 
-// ExtractINFromOR will add additional predicated to an OR.
-// this rewriter should not be used in a fixed point way, since it returns the original expression with additions,
-// and it will therefor OOM before it stops rewriting
+// ExtractINFromOR rewrites the OR expression into an IN clause.
+// Each side of each ORs has to be an equality comparison expression and the column names have to
+// match for all sides of each comparison.
+// This rewriter takes a query that looks like this WHERE a = 1 and b = 11 or a = 2 and b = 12 or a = 3 and b = 13
+// And rewrite that to WHERE (a, b) IN ((1,11), (2,12), (3,13))
 func ExtractINFromOR(expr *OrExpr) []Expr {
-	// we check if we have two comparisons on either side of the OR
-	// that we can add as an ANDed comparison.
-	// WHERE (a = 5 and B) or (a = 6 AND C) =>
-	// WHERE (a = 5 AND B) OR (a = 6 AND C) AND a IN (5,6)
-	// This rewrite makes it possible to find a better route than Scatter if the `a` column has a helpful vindex
-	lftPredicates := SplitAndExpression(nil, expr.Left)
-	rgtPredicates := SplitAndExpression(nil, expr.Right)
-	var ins []Expr
-	for _, lft := range lftPredicates {
-		l, ok := lft.(*ComparisonExpr)
-		if !ok {
-			continue
+	var varNames []*ColName
+	var values []Exprs
+	orSlice := orToSlice(expr)
+	for _, expr := range orSlice {
+		andSlice := andToSlice(expr)
+		if len(andSlice) == 0 {
+			return nil
 		}
-		for _, rgt := range rgtPredicates {
-			r, ok := rgt.(*ComparisonExpr)
-			if !ok {
-				continue
+
+		var currentVarNames []*ColName
+		var currentValues []Expr
+		for _, comparisonExpr := range andSlice {
+			if comparisonExpr.Operator != EqualOp {
+				return nil
 			}
-			in, changed := tryTurningOrIntoIn(l, r)
-			if changed {
-				ins = append(ins, in)
+
+			var colName *ColName
+			if left, ok := comparisonExpr.Left.(*ColName); ok {
+				colName = left
+				currentValues = append(currentValues, comparisonExpr.Right)
 			}
+
+			if right, ok := comparisonExpr.Right.(*ColName); ok {
+				if colName != nil {
+					return nil
+				}
+				colName = right
+				currentValues = append(currentValues, comparisonExpr.Left)
+			}
+
+			if colName == nil {
+				return nil
+			}
+
+			currentVarNames = append(currentVarNames, colName)
+		}
+
+		if len(varNames) == 0 {
+			varNames = currentVarNames
+		} else if !slices.EqualFunc(varNames, currentVarNames, func(col1, col2 *ColName) bool { return col1.Equal(col2) }) {
+			return nil
+		}
+
+		values = append(values, currentValues)
+	}
+
+	var nameTuple ValTuple
+	for _, name := range varNames {
+		nameTuple = append(nameTuple, name)
+	}
+
+	var valueTuple ValTuple
+	for _, value := range values {
+		valueTuple = append(valueTuple, ValTuple(value))
+	}
+
+	return []Expr{&ComparisonExpr{
+		Operator: InOp,
+		Left:     nameTuple,
+		Right:    valueTuple,
+	}}
+}
+
+func orToSlice(expr *OrExpr) []Expr {
+	var exprs []Expr
+
+	handleOrSide := func(e Expr) {
+		switch e := e.(type) {
+		case *OrExpr:
+			exprs = append(exprs, orToSlice(e)...)
+		default:
+			exprs = append(exprs, e)
 		}
 	}
 
-	return uniquefy(ins)
+	handleOrSide(expr.Left)
+	handleOrSide(expr.Right)
+	return exprs
+}
+
+func andToSlice(expr Expr) []*ComparisonExpr {
+	var andExpr *AndExpr
+	switch expr := expr.(type) {
+	case *AndExpr:
+		andExpr = expr
+	case *ComparisonExpr:
+		return []*ComparisonExpr{expr}
+	default:
+		return nil
+	}
+
+	var exprs []*ComparisonExpr
+	handleAndSide := func(e Expr) bool {
+		switch e := e.(type) {
+		case *AndExpr:
+			slice := andToSlice(e)
+			if slice == nil {
+				return false
+			}
+			exprs = append(exprs, slice...)
+		case *ComparisonExpr:
+			exprs = append(exprs, e)
+		default:
+			return false
+		}
+		return true
+	}
+
+	if !handleAndSide(andExpr.Left) {
+		return nil
+	}
+	if !handleAndSide(andExpr.Right) {
+		return nil
+	}
+
+	return exprs
 }
 
 func tryTurningOrIntoIn(l, r *ComparisonExpr) (Expr, bool) {

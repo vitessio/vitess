@@ -22,7 +22,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -91,28 +90,30 @@ func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vin
 }
 
 func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
-	eIns := &engine.Insert{}
-	eIns.Keyspace = ks
-	eIns.TableName = tables[0].Name.String()
-	eIns.Opcode = engine.InsertUnsharded
+	eIns := &engine.Insert{
+		InsertCommon: engine.InsertCommon{
+			Opcode:    engine.InsertUnsharded,
+			Keyspace:  ks,
+			TableName: tables[0].Name.String(),
+		},
+	}
 	eIns.Query = generateQuery(stmt)
 	return &insert{eInsert: eIns}
 }
 
 type insert struct {
-	eInsert *engine.Insert
-	source  logicalPlan
+	eInsert       *engine.Insert
+	eInsertSelect *engine.InsertSelect
+	source        logicalPlan
 }
 
 var _ logicalPlan = (*insert)(nil)
 
 func (i *insert) Primitive() engine.Primitive {
-	if i.source != nil {
-		i.eInsert.Input = i.source.Primitive()
+	if i.source == nil {
+		return i.eInsert
 	}
-	return i.eInsert
-}
-
-func (i *insert) ContainsTables() semantics.TableSet {
-	panic("does not expect insert to get contains tables call")
+	input := i.source.Primitive()
+	i.eInsertSelect.Input = input
+	return i.eInsertSelect
 }

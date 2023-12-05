@@ -151,16 +151,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm")
 	fs.IntVar(&warmingReadsConcurrency, "warming-reads-concurrency", 500, "Number of concurrent warming reads allowed")
 	fs.DurationVar(&warmingReadsQueryTimeout, "warming-reads-query-timeout", 5*time.Second, "Timeout of warming read queries")
-
-	_ = fs.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
-	_ = fs.MarkDeprecated("schema_change_signal_user", "schema tracking uses an internal api and does not require a user to be specified")
-
-	fs.Int64("gate_query_cache_size", 0, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a cache. This config controls the expected amount of unique entries in the cache.")
-	_ = fs.MarkDeprecated("gate_query_cache_size", "`--gate_query_cache_size` is deprecated and will be removed in `v19.0`. This option only applied to LRU caches, which are now unsupported.")
-
-	fs.Bool("gate_query_cache_lfu", false, "gate server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
-	_ = fs.MarkDeprecated("gate_query_cache_lfu", "`--gate_query_cache_lfu` is deprecated and will be removed in `v19.0`. The query cache always uses a LFU implementation now.")
 }
+
 func init() {
 	servenv.OnParseFor("vtgate", registerFlags)
 	servenv.OnParseFor("vtcombo", registerFlags)
