@@ -158,7 +158,6 @@ func (dc *dbClientImpl) ExecuteFetchMulti(query string, maxrows int) ([]*sqltype
 		}
 		results = append(results, mqr)
 	}
-
 	return results, nil
 }
 

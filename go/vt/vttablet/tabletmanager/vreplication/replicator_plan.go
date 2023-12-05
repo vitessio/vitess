@@ -478,7 +478,6 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 		if err != nil {
 			return nil, err
 		}
-		querySize = baseQuerySize
 		tp.TablePlanBuilder.stats.BulkQueryCount.Add("delete", 1)
 		return executor(query)
 	}
@@ -501,6 +500,7 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 				return nil, err
 			}
 			pkVals = nil
+			querySize = baseQuerySize
 		}
 		pkVals = append(pkVals, vals[pkIndex])
 		querySize += addedSize
