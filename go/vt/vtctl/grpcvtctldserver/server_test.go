@@ -6200,7 +6200,7 @@ func TestPlannedReparentShard(t *testing.T) {
 		req                 *vtctldatapb.PlannedReparentShardRequest
 		expected            *vtctldatapb.PlannedReparentShardResponse
 		expectEventsToOccur bool
-		shouldErr           bool
+		expectedErr         string
 	}{
 		{
 			name: "successful reparent",
@@ -6300,7 +6300,6 @@ func TestPlannedReparentShard(t *testing.T) {
 				},
 			},
 			expectEventsToOccur: true,
-			shouldErr:           false,
 		},
 		{
 			// Note: this is testing the error-handling done in
@@ -6316,7 +6315,7 @@ func TestPlannedReparentShard(t *testing.T) {
 				Shard:    "-",
 			},
 			expectEventsToOccur: false,
-			shouldErr:           true,
+			expectedErr:         "node doesn't exist: keyspaces/testkeyspace/shards/-",
 		},
 		{
 			name: "invalid WaitReplicasTimeout",
@@ -6326,7 +6325,61 @@ func TestPlannedReparentShard(t *testing.T) {
 					Nanos:   1,
 				},
 			},
-			shouldErr: true,
+			expectedErr: "duration: seconds:-1 nanos:1 is out of range for time.Duration",
+		},
+		{
+			name: "no promotable tablets in the same cell as the primary",
+			ts:   memorytopo.NewServer("zone1", "zone2"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
+						Seconds: 100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  101,
+					},
+					Type:     topodatapb.TabletType_RDONLY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "doesn't matter",
+						Error:    nil,
+					},
+				},
+			},
+			req: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace:            "testkeyspace",
+				Shard:               "-",
+				WaitReplicasTimeout: protoutil.DurationToProto(time.Millisecond * 10),
+			},
+			expectEventsToOccur: true,
+			expectedErr:         "cannot find a tablet to reparent to in the same cell as the current primary",
 		},
 	}
 
@@ -6362,8 +6415,8 @@ func TestPlannedReparentShard(t *testing.T) {
 				testutil.AssertLogutilEventsOccurred(t, resp, "expected events to occur during ERS")
 			}()
 
-			if tt.shouldErr {
-				assert.Error(t, err)
+			if tt.expectedErr != "" {
+				assert.EqualError(t, err, tt.expectedErr)
 
 				return
 			}
