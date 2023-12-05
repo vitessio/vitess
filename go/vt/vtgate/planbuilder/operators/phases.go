@@ -20,8 +20,6 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -79,7 +77,7 @@ func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 	}
 }
 
-func (p Phase) act(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 	switch p {
 	case pullDistinctFromUnion:
 		return pullDistinctFromUNION(ctx, op)
@@ -90,9 +88,9 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Opera
 	case cleanOutPerfDistinct:
 		return removePerformanceDistinctAboveRoute(ctx, op)
 	case subquerySettling:
-		return settleSubqueries(ctx, op), nil
+		return settleSubqueries(ctx, op)
 	default:
-		return op, nil
+		return op
 	}
 }
 
@@ -101,60 +99,61 @@ type phaser struct {
 }
 
 func (p *phaser) next(ctx *plancontext.PlanningContext) Phase {
-	for phas := p.current; phas < DONE; phas++ {
-		if phas.shouldRun(ctx.SemTable.QuerySignature) {
-			p.current = p.current + 1
-			return phas
+	for {
+		curr := p.current
+		if curr == DONE {
+			return DONE
+		}
+
+		p.current++
+
+		if curr.shouldRun(ctx.SemTable.QuerySignature) {
+			return curr
 		}
 	}
-	return DONE
 }
 
-func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-	return rewrite.BottomUp(op, TableID, func(innerOp ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
+func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op Operator) Operator {
+	return BottomUp(op, TableID, func(innerOp Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		d, ok := innerOp.(*Distinct)
 		if !ok || d.Required {
-			return innerOp, rewrite.SameTree, nil
+			return innerOp, NoRewrite
 		}
 
-		return d.Source, rewrite.NewTree("removed distinct not required that was not pushed under route"), nil
+		return d.Source, Rewrote("removed distinct not required that was not pushed under route")
 	}, stopAtRoute)
 }
 
-func enableDelegateAggregation(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+func enableDelegateAggregation(ctx *plancontext.PlanningContext, op Operator) Operator {
 	return addColumnsToInput(ctx, op)
 }
 
 // addOrderingForAllAggregations is run we have pushed down Aggregators as far down as possible.
-func addOrderingForAllAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
-	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
+func addOrderingForAllAggregations(ctx *plancontext.PlanningContext, root Operator) Operator {
+	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		aggrOp, ok := in.(*Aggregator)
 		if !ok {
-			return in, rewrite.SameTree, nil
+			return in, NoRewrite
 		}
 
-		requireOrdering, err := needsOrdering(ctx, aggrOp)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		var res *rewrite.ApplyResult
+		requireOrdering := needsOrdering(ctx, aggrOp)
+		var res *ApplyResult
 		if requireOrdering {
 			addOrderingFor(aggrOp)
-			res = rewrite.NewTree("added ordering before aggregation")
+			res = Rewrote("added ordering before aggregation")
 		}
-		return in, res, nil
+		return in, res
 	}
 
-	return rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
+	return BottomUp(root, TableID, visitor, stopAtRoute)
 }
 
 func addOrderingFor(aggrOp *Aggregator) {
-	orderBys := slice.Map(aggrOp.Grouping, func(from GroupBy) ops.OrderBy {
+	orderBys := slice.Map(aggrOp.Grouping, func(from GroupBy) OrderBy {
 		return from.AsOrderBy()
 	})
 	if aggrOp.DistinctExpr != nil {
-		orderBys = append(orderBys, ops.OrderBy{
+		orderBys = append(orderBys, OrderBy{
 			Inner: &sqlparser.Order{
 				Expr: aggrOp.DistinctExpr,
 			},
@@ -167,7 +166,7 @@ func addOrderingFor(aggrOp *Aggregator) {
 	}
 }
 
-func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) (bool, error) {
+func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) bool {
 	requiredOrder := slice.Map(in.Grouping, func(from GroupBy) sqlparser.Expr {
 		return from.SimplifiedExpr
 	})
@@ -175,44 +174,44 @@ func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) (bool, erro
 		requiredOrder = append(requiredOrder, in.DistinctExpr)
 	}
 	if len(requiredOrder) == 0 {
-		return false, nil
+		return false
 	}
 	srcOrdering := in.Source.GetOrdering(ctx)
 	if len(srcOrdering) < len(requiredOrder) {
-		return true, nil
+		return true
 	}
 	for idx, gb := range requiredOrder {
 		if !ctx.SemTable.EqualsExprWithDeps(srcOrdering[idx].SimplifiedExpr, gb) {
-			return true, nil
+			return true
 		}
 	}
-	return false, nil
+	return false
 }
 
-func addGroupByOnRHSOfJoin(root ops.Operator) (ops.Operator, error) {
-	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
+func addGroupByOnRHSOfJoin(root Operator) Operator {
+	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		join, ok := in.(*ApplyJoin)
 		if !ok {
-			return in, rewrite.SameTree, nil
+			return in, NoRewrite
 		}
 
 		return addLiteralGroupingToRHS(join)
 	}
 
-	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
+	return TopDown(root, TableID, visitor, stopAtRoute)
 }
 
-func addLiteralGroupingToRHS(in *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
-	_ = rewrite.Visit(in.RHS, func(op ops.Operator) error {
+func addLiteralGroupingToRHS(in *ApplyJoin) (Operator, *ApplyResult) {
+	_ = Visit(in.RHS, func(op Operator) error {
 		aggr, isAggr := op.(*Aggregator)
 		if !isAggr {
 			return nil
 		}
 		if len(aggr.Grouping) == 0 {
 			gb := sqlparser.NewIntLiteral(".0")
-			aggr.Grouping = append(aggr.Grouping, NewGroupBy(gb, gb, aeWrap(gb)))
+			aggr.Grouping = append(aggr.Grouping, NewGroupBy(gb, gb))
 		}
 		return nil
 	})
-	return in, rewrite.SameTree, nil
+	return in, NoRewrite
 }

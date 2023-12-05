@@ -19,14 +19,12 @@ package operators
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // mergeUnionInputInAnyOrder merges sources the sources of the union in any order
 // can be used for UNION DISTINCT
-func mergeUnionInputInAnyOrder(ctx *plancontext.PlanningContext, op *Union) ([]ops.Operator, []sqlparser.SelectExprs, error) {
+func mergeUnionInputInAnyOrder(ctx *plancontext.PlanningContext, op *Union) ([]Operator, []sqlparser.SelectExprs) {
 	sources := op.Sources
 	selects := op.Selects
 
@@ -43,10 +41,7 @@ func mergeUnionInputInAnyOrder(ctx *plancontext.PlanningContext, op *Union) ([]o
 			}
 			selA := selects[idx]
 			selB := selects[j]
-			newPlan, sel, err := mergeUnionInputs(ctx, srcA, srcB, selA, selB, op.distinct)
-			if err != nil {
-				return nil, nil, err
-			}
+			newPlan, sel := mergeUnionInputs(ctx, srcA, srcB, selA, selB, op.distinct)
 			if newPlan != nil {
 				sources[idx] = newPlan
 				selects[idx] = sel
@@ -57,10 +52,10 @@ func mergeUnionInputInAnyOrder(ctx *plancontext.PlanningContext, op *Union) ([]o
 			}
 		}
 		if !merged {
-			return sources, selects, nil
+			return sources, selects
 		}
 
-		var newSources []ops.Operator
+		var newSources []Operator
 		var newSelects []sqlparser.SelectExprs
 		for i, source := range sources {
 			if keep[i] || i <= idx {
@@ -73,10 +68,10 @@ func mergeUnionInputInAnyOrder(ctx *plancontext.PlanningContext, op *Union) ([]o
 		selects = newSelects
 	}
 
-	return sources, selects, nil
+	return sources, selects
 }
 
-func mergeUnionInputsInOrder(ctx *plancontext.PlanningContext, op *Union) ([]ops.Operator, []sqlparser.SelectExprs, error) {
+func mergeUnionInputsInOrder(ctx *plancontext.PlanningContext, op *Union) ([]Operator, []sqlparser.SelectExprs) {
 	sources := op.Sources
 	selects := op.Selects
 	for {
@@ -85,10 +80,7 @@ func mergeUnionInputsInOrder(ctx *plancontext.PlanningContext, op *Union) ([]ops
 			j := i + 1
 			srcA, selA := sources[i], selects[i]
 			srcB, selB := sources[j], selects[j]
-			newPlan, sel, err := mergeUnionInputs(ctx, srcA, srcB, selA, selB, op.distinct)
-			if err != nil {
-				return nil, nil, err
-			}
+			newPlan, sel := mergeUnionInputs(ctx, srcA, srcB, selA, selB, op.distinct)
 			if newPlan != nil {
 				sources[i] = newPlan
 				selects[i] = sel
@@ -102,7 +94,7 @@ func mergeUnionInputsInOrder(ctx *plancontext.PlanningContext, op *Union) ([]ops
 		}
 	}
 
-	return sources, selects, nil
+	return sources, selects
 }
 
 // mergeUnionInputs checks whether two operators can be merged into a single one.
@@ -111,13 +103,13 @@ func mergeUnionInputsInOrder(ctx *plancontext.PlanningContext, op *Union) ([]ops
 // this function is very similar to mergeJoinInputs
 func mergeUnionInputs(
 	ctx *plancontext.PlanningContext,
-	lhs, rhs ops.Operator,
+	lhs, rhs Operator,
 	lhsExprs, rhsExprs sqlparser.SelectExprs,
 	distinct bool,
-) (ops.Operator, sqlparser.SelectExprs, error) {
+) (Operator, sqlparser.SelectExprs) {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
 	if lhsRoute == nil {
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	switch {
@@ -134,12 +126,12 @@ func mergeUnionInputs(
 		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA)
 
 	case a == sharded && b == sharded && sameKeyspace:
-		res, exprs, err := tryMergeUnionShardedRouting(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct)
-		if err != nil || res != nil {
-			return res, exprs, err
+		res, exprs := tryMergeUnionShardedRouting(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct)
+		if res != nil {
+			return res, exprs
 		}
 	}
-	return nil, nil, nil
+	return nil, nil
 }
 
 func tryMergeUnionShardedRouting(
@@ -147,7 +139,7 @@ func tryMergeUnionShardedRouting(
 	routeA, routeB *Route,
 	exprsA, exprsB sqlparser.SelectExprs,
 	distinct bool,
-) (ops.Operator, sqlparser.SelectExprs, error) {
+) (Operator, sqlparser.SelectExprs) {
 	tblA := routeA.Routing.(*ShardedRouting)
 	tblB := routeB.Routing.(*ShardedRouting)
 
@@ -173,7 +165,7 @@ func tryMergeUnionShardedRouting(
 		}
 	}
 
-	return nil, nil, nil
+	return nil, nil
 }
 
 func createMergedUnion(
@@ -181,7 +173,7 @@ func createMergedUnion(
 	lhsRoute, rhsRoute *Route,
 	lhsExprs, rhsExprs sqlparser.SelectExprs,
 	distinct bool,
-	routing Routing) (ops.Operator, sqlparser.SelectExprs, error) {
+	routing Routing) (Operator, sqlparser.SelectExprs) {
 
 	// if there are `*` on either side, or a different number of SelectExpr items,
 	// we give up aligning the expressions and trust that we can push everything down
@@ -210,16 +202,16 @@ func createMergedUnion(
 		ctx.SemTable.Recursive[col] = deps
 	}
 
-	union := newUnion([]ops.Operator{lhsRoute.Source, rhsRoute.Source}, []sqlparser.SelectExprs{lhsExprs, rhsExprs}, cols, distinct)
+	union := newUnion([]Operator{lhsRoute.Source, rhsRoute.Source}, []sqlparser.SelectExprs{lhsExprs, rhsExprs}, cols, distinct)
 	selectExprs := unionSelects(lhsExprs)
 	return &Route{
 		Source:     union,
 		MergedWith: []*Route{rhsRoute},
 		Routing:    routing,
-	}, selectExprs, nil
+	}, selectExprs
 }
 
-func compactUnion(u *Union) *rewrite.ApplyResult {
+func compactUnion(u *Union) *ApplyResult {
 	if u.distinct {
 		// first we remove unnecessary DISTINCTs
 		for idx, source := range u.Sources {
@@ -231,7 +223,7 @@ func compactUnion(u *Union) *rewrite.ApplyResult {
 		}
 	}
 
-	var newSources []ops.Operator
+	var newSources []Operator
 	var newSelects []sqlparser.SelectExprs
 	merged := false
 
@@ -250,10 +242,10 @@ func compactUnion(u *Union) *rewrite.ApplyResult {
 	}
 
 	if !merged {
-		return rewrite.SameTree
+		return NoRewrite
 	}
 
 	u.Sources = newSources
 	u.Selects = newSelects
-	return rewrite.NewTree("merged UNIONs")
+	return Rewrote("merged UNIONs")
 }

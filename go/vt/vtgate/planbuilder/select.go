@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -225,7 +224,7 @@ func newBuildSelectPlan(
 	return plan, operators.TablesUsed(op), nil
 }
 
-func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars) (ops.Operator, error) {
+func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars) (operators.Operator, error) {
 	err := queryRewrite(ctx.SemTable, reservedVars, selStmt)
 	if err != nil {
 		return nil, err

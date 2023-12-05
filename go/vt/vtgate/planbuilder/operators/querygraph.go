@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -63,7 +62,7 @@ type (
 	}
 )
 
-var _ ops.Operator = (*QueryGraph)(nil)
+var _ Operator = (*QueryGraph)(nil)
 
 // Introduces implements the tableIDIntroducer interface
 func (qg *QueryGraph) introducesTableID() semantics.TableSet {
@@ -163,7 +162,7 @@ func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr
 }
 
 // Clone implements the Operator interface
-func (qg *QueryGraph) Clone([]ops.Operator) ops.Operator {
+func (qg *QueryGraph) Clone([]Operator) Operator {
 	result := &QueryGraph{
 		Tables:     nil,
 		innerJoins: nil,
@@ -176,11 +175,11 @@ func (qg *QueryGraph) Clone([]ops.Operator) ops.Operator {
 	return result
 }
 
-func (qg *QueryGraph) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (qg *QueryGraph) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		qg.collectPredicate(ctx, e)
 	}

@@ -149,19 +149,20 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 
 	// Now we can run the backup.
 	backupParams := mysqlctl.BackupParams{
-		Cnf:                tm.Cnf,
-		Mysqld:             tm.MysqlDaemon,
-		Logger:             l,
-		Concurrency:        int(req.Concurrency),
-		IncrementalFromPos: req.IncrementalFromPos,
-		HookExtraEnv:       tm.hookExtraEnv(),
-		TopoServer:         tm.TopoServer,
-		Keyspace:           tablet.Keyspace,
-		Shard:              tablet.Shard,
-		TabletAlias:        topoproto.TabletAliasString(tablet.Alias),
-		BackupTime:         time.Now(),
-		Stats:              backupstats.BackupStats(),
-		UpgradeSafe:        req.UpgradeSafe,
+		Cnf:                  tm.Cnf,
+		Mysqld:               tm.MysqlDaemon,
+		Logger:               l,
+		Concurrency:          int(req.Concurrency),
+		IncrementalFromPos:   req.IncrementalFromPos,
+		HookExtraEnv:         tm.hookExtraEnv(),
+		TopoServer:           tm.TopoServer,
+		Keyspace:             tablet.Keyspace,
+		Shard:                tablet.Shard,
+		TabletAlias:          topoproto.TabletAliasString(tablet.Alias),
+		BackupTime:           time.Now(),
+		Stats:                backupstats.BackupStats(),
+		UpgradeSafe:          req.UpgradeSafe,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}
 
 	returnErr := mysqlctl.Backup(ctx, backupParams)
@@ -189,7 +190,7 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	// Now we can run restore.
-	err = tm.restoreDataLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */, request)
+	err = tm.restoreDataLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */, request, mysqlShutdownTimeout)
 
 	// Re-run health check to be sure to capture any replication delay.
 	tm.QueryServiceControl.BroadcastHealth()
