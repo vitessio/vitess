@@ -117,7 +117,7 @@ func CreateTablet(
 		Type:           initTabletType,
 		DbNameOverride: dbname,
 	}
-	if err := tm.Start(tablet, 0); err != nil {
+	if err := tm.Start(tablet, nil); err != nil {
 		return err
 	}
 
