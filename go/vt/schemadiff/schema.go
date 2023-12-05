@@ -239,6 +239,14 @@ func (s *Schema) normalize() error {
 				if referencedTableName != name {
 					nonSelfReferenceNames = append(nonSelfReferenceNames, referencedTableName)
 				}
+				referencedEntity, ok := s.named[referencedTableName]
+				if !ok {
+					return &ForeignKeyNonexistentReferencedTableError{Table: name, ReferencedTable: referencedTableName}
+				}
+				if _, ok := referencedEntity.(*CreateViewEntity); ok {
+					return &ForeignKeyReferencesViewError{Table: name, ReferencedView: referencedTableName}
+				}
+
 				fkParents[referencedTableName] = true
 			}
 			if allNamesFoundInLowerLevel(nonSelfReferenceNames, iterationLevel) {
