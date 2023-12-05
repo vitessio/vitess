@@ -6200,7 +6200,7 @@ func TestPlannedReparentShard(t *testing.T) {
 		req                 *vtctldatapb.PlannedReparentShardRequest
 		expected            *vtctldatapb.PlannedReparentShardResponse
 		expectEventsToOccur bool
-		shouldErr           bool
+		expectedErr         string
 	}{
 		{
 			name: "successful reparent",
@@ -6300,7 +6300,6 @@ func TestPlannedReparentShard(t *testing.T) {
 				},
 			},
 			expectEventsToOccur: true,
-			shouldErr:           false,
 		},
 		{
 			// Note: this is testing the error-handling done in
@@ -6316,7 +6315,7 @@ func TestPlannedReparentShard(t *testing.T) {
 				Shard:    "-",
 			},
 			expectEventsToOccur: false,
-			shouldErr:           true,
+			expectedErr:         "node doesn't exist: keyspaces/testkeyspace/shards/-",
 		},
 		{
 			name: "invalid WaitReplicasTimeout",
@@ -6326,7 +6325,71 @@ func TestPlannedReparentShard(t *testing.T) {
 					Nanos:   1,
 				},
 			},
-			shouldErr: true,
+			expectedErr: "duration: seconds:-1 nanos:1 is out of range for time.Duration",
+		},
+		{
+			name: "tablet unreachable",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
+						Seconds: 100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type:     topodatapb.TabletType_RDONLY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				// This is only needed to verify reachability, so empty results are fine.
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Error: fmt.Errorf("primary status failed"),
+					},
+					"zone1-0000000101": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{},
+					},
+				},
+			},
+			req: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				NewPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+				WaitReplicasTimeout: protoutil.DurationToProto(time.Millisecond * 10),
+			},
+			expectEventsToOccur: true,
+			expectedErr:         "primary status failed",
 		},
 	}
 
@@ -6362,8 +6425,8 @@ func TestPlannedReparentShard(t *testing.T) {
 				testutil.AssertLogutilEventsOccurred(t, resp, "expected events to occur during ERS")
 			}()
 
-			if tt.shouldErr {
-				assert.Error(t, err)
+			if tt.expectedErr != "" {
+				assert.EqualError(t, err, tt.expectedErr)
 
 				return
 			}
