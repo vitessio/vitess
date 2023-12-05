@@ -57419,6 +57419,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest wait_replicas_timeout */
         wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** PlannedReparentShardRequest tolerable_replication_lag */
+        tolerable_replication_lag?: (vttime.IDuration|null);
     }
 
     /** Represents a PlannedReparentShardRequest. */
@@ -57444,6 +57447,9 @@ export namespace vtctldata {
 
         /** PlannedReparentShardRequest wait_replicas_timeout. */
         public wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** PlannedReparentShardRequest tolerable_replication_lag. */
+        public tolerable_replication_lag?: (vttime.IDuration|null);
 
         /**
          * Creates a new PlannedReparentShardRequest instance using the specified properties.
