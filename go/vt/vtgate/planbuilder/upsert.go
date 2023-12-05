@@ -21,8 +21,8 @@ import (
 )
 
 type upsert struct {
-	insert logicalPlan
-	update logicalPlan
+	insert []logicalPlan
+	update []logicalPlan
 }
 
 var _ logicalPlan = (*upsert)(nil)
@@ -30,6 +30,8 @@ var _ logicalPlan = (*upsert)(nil)
 // Primitive implements the logicalPlan interface
 func (u *upsert) Primitive() engine.Primitive {
 	up := &engine.Upsert{}
-	up.AddUpsert(u.insert.Primitive(), u.update.Primitive())
+	for i := 0; i < len(u.insert); i++ {
+		up.AddUpsert(u.insert[i].Primitive(), u.update[i].Primitive())
+	}
 	return up
 }

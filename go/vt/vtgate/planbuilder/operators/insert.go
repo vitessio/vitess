@@ -163,23 +163,18 @@ func checkAndCreateInsertOperator(ctx *plancontext.PlanningContext, ins *sqlpars
 			panic(vterrors.VT12001("REPLACE INTO with foreign keys"))
 		}
 		if len(ins.OnDup) > 0 {
-			row := getSingleRowOrError(ins)
-			return createUpsertOperator(ctx, ins, insOp, row, vTbl)
+			rows := getRowsOrError(ins)
+			return createUpsertOperator(ctx, ins, insOp, rows, vTbl)
 		}
 	}
 	return insOp
 }
 
-func getSingleRowOrError(ins *sqlparser.Insert) sqlparser.ValTuple {
-	switch rows := ins.Rows.(type) {
-	case sqlparser.SelectStatement:
-		panic(vterrors.VT12001("ON DUPLICATE KEY UPDATE with foreign keys with select statement"))
-	case sqlparser.Values:
-		if len(rows) == 1 {
-			return rows[0]
-		}
+func getRowsOrError(ins *sqlparser.Insert) sqlparser.Values {
+	if rows, ok := ins.Rows.(sqlparser.Values); ok {
+		return rows
 	}
-	panic(vterrors.VT12001("ON DUPLICATE KEY UPDATE with foreign keys with multiple rows"))
+	panic(vterrors.VT12001("ON DUPLICATE KEY UPDATE with foreign keys with select statement"))
 }
 
 func getWhereCondExpr(compExprs []*sqlparser.ComparisonExpr) sqlparser.Expr {

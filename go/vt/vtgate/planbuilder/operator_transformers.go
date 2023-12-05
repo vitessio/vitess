@@ -78,22 +78,28 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 }
 
 func transformUpsert(ctx *plancontext.PlanningContext, op *operators.Upsert) (logicalPlan, error) {
-	ip, err := transformToLogicalPlan(ctx, op.InsertOp)
-	if err != nil {
-		return nil, err
+	u := &upsert{}
+	for _, source := range op.Sources {
+		iLp, uLp, err := transformOneUpsert(ctx, source)
+		if err != nil {
+			return nil, err
+		}
+		u.insert = append(u.insert, iLp)
+		u.update = append(u.update, uLp)
 	}
-	if ins, ok := ip.(*insert); ok {
+	return u, nil
+}
+
+func transformOneUpsert(ctx *plancontext.PlanningContext, source operators.UpsertSource) (iLp, uLp logicalPlan, err error) {
+	iLp, err = transformToLogicalPlan(ctx, source.Insert)
+	if err != nil {
+		return
+	}
+	if ins, ok := iLp.(*insert); ok {
 		ins.eInsert.PreventAutoCommit = true
 	}
-	up, err := transformToLogicalPlan(ctx, op.UpdateOp)
-	if err != nil {
-		return nil, err
-	}
-
-	return &upsert{
-		insert: ip,
-		update: up,
-	}, nil
+	uLp, err = transformToLogicalPlan(ctx, source.Update)
+	return
 }
 
 func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequential) (logicalPlan, error) {

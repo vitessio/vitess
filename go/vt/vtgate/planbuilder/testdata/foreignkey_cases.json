@@ -2834,5 +2834,200 @@
         "unsharded_fk_allow.u_tbl9"
       ]
     }
+  },
+  {
+    "comment": "insert with on duplicate key update with multiple rows",
+    "query": "insert into u_tbl2 (id, col2) values (:v1, :v2),(:v3, :v4), (:v5, :v6) on duplicate key update col2 = values(col2)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into u_tbl2 (id, col2) values (:v1, :v2),(:v3, :v4), (:v5, :v6) on duplicate key update col2 = values(col2)",
+      "Instructions": {
+        "OperatorType": "Upsert",
+        "TargetTabletType": "PRIMARY",
+        "Inputs": [
+          {
+            "InputName": "Insert-1",
+            "OperatorType": "Insert",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "NoAutoCommit": true,
+            "Query": "insert into u_tbl2(id, col2) values (:v1, :v2)",
+            "TableName": "u_tbl2"
+          },
+          {
+            "InputName": "Update-1",
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
+                "Query": "select col2 from u_tbl2 where id = :v1 for update nowait",
+                "Table": "u_tbl2"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (cast(:v2 as CHAR) is null or (col3) not in ((cast(:v2 as CHAR))))",
+                "Table": "u_tbl3"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update u_tbl2 set col2 = :v2 where id = :v1",
+                "Table": "u_tbl2"
+              }
+            ]
+          },
+          {
+            "InputName": "Insert-2",
+            "OperatorType": "Insert",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "NoAutoCommit": true,
+            "Query": "insert into u_tbl2(id, col2) values (:v3, :v4)",
+            "TableName": "u_tbl2"
+          },
+          {
+            "InputName": "Update-2",
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
+                "Query": "select col2 from u_tbl2 where id = :v3 for update nowait",
+                "Table": "u_tbl2"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals1",
+                "Cols": [
+                  0
+                ],
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:v4 as CHAR) is null or (col3) not in ((cast(:v4 as CHAR))))",
+                "Table": "u_tbl3"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update u_tbl2 set col2 = :v4 where id = :v3",
+                "Table": "u_tbl2"
+              }
+            ]
+          },
+          {
+            "InputName": "Insert-3",
+            "OperatorType": "Insert",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "NoAutoCommit": true,
+            "Query": "insert into u_tbl2(id, col2) values (:v5, :v6)",
+            "TableName": "u_tbl2"
+          },
+          {
+            "InputName": "Update-3",
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
+                "Query": "select col2 from u_tbl2 where id = :v5 for update nowait",
+                "Table": "u_tbl2"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals2",
+                "Cols": [
+                  0
+                ],
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals2 and (cast(:v6 as CHAR) is null or (col3) not in ((cast(:v6 as CHAR))))",
+                "Table": "u_tbl3"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update u_tbl2 set col2 = :v6 where id = :v5",
+                "Table": "u_tbl2"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl2",
+        "unsharded_fk_allow.u_tbl3"
+      ]
+    }
   }
 ]
