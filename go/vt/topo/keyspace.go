@@ -307,9 +307,9 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	// records which resulted in overwhelming topo server instances:
 	// https://github.com/vitessio/vitess/pull/5436.
 	//
-	// However, removing the concurrency all together can cause large operations
-	// to fail all together due to timeout. The caller chooses the appropriate
-	// concurrency level so that certain paths can be optimized (such as vtctld
+	// However, removing the concurrency altogether can cause large operations
+	// to fail due to timeout. The caller chooses the appropriate concurrency
+	// level so that certain paths can be optimized (such as vtctld
 	// RebuildKeyspace calls, which do not run on every vttablet).
 	var (
 		mu     sync.Mutex
