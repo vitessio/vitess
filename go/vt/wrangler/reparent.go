@@ -76,7 +76,12 @@ func (wr *Wrangler) InitShardPrimary(ctx context.Context, keyspace, shard string
 
 // PlannedReparentShard will make the provided tablet the primary for the shard,
 // when both the current and new primary are reachable and in good shape.
-func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, primaryElectTabletAlias, avoidTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration) (err error) {
+func (wr *Wrangler) PlannedReparentShard(
+	ctx context.Context,
+	keyspace, shard string,
+	primaryElectTabletAlias, avoidTabletAlias *topodatapb.TabletAlias,
+	waitReplicasTimeout, tolerableReplicationLag time.Duration,
+) (err error) {
 	_, err = reparentutil.NewPlannedReparenter(wr.ts, wr.tmc, wr.logger).ReparentShard(
 		ctx,
 		keyspace,
@@ -85,6 +90,7 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 			AvoidPrimaryAlias:   avoidTabletAlias,
 			NewPrimaryAlias:     primaryElectTabletAlias,
 			WaitReplicasTimeout: waitReplicasTimeout,
+			TolerableReplLag:    tolerableReplicationLag,
 		},
 	)
 

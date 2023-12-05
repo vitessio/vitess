@@ -3,6 +3,7 @@
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
+  - **[Dropping Support for MySQL 5.7](#drop-support-mysql57)**
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [VTTablet Flags](#vttablet-flags)
   - **[Docker](#docker)**
@@ -11,8 +12,17 @@
     - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
   - **[Query Compatibility](#query-compatibility)**
     - [`SHOW VSCHEMA KEYSPACES` Query](#show-vschema-keyspaces)
+  - **[Planned Reparent Shard](#planned-reparent-shard)**
+    - [`--tolerable-replication-lag` Sub-flag](#tolerable-repl-lag)
 
 ## <a id="major-changes"/>Major Changes
+
+### <a id="drop-support-mysql57"/>Dropping Support for MySQL 5.7
+
+Oracle has marked MySQL 5.7 end of life as of October 2023. Vitess is also dropping support for MySQL 5.7 from v19 onwards. Users are advised to upgrade to MySQL 8.0 while on v18 version of Vitess before
+upgrading to v19.
+
+Vitess will however, continue to support importing from MySQL 5.7 into Vitess even in v19.
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions
 
@@ -58,3 +68,13 @@ mysql> show vschema keyspaces;
 +----------+---------+-------------+---------+
 2 rows in set (0.01 sec)
 ```
+
+### <a id="planned-reparent-shard"/>Planned Reparent Shard
+
+#### <a id="tolerable-repl-lag"/>`--tolerable-replication-lag` Sub-flag
+
+A new sub-flag `--tolerable-replication-lag` has been added to the command `PlannedReparentShard` that allows users to specify the amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary.
+This feature is opt-in and not specifying this sub-flag makes Vitess ignore the replication lag entirely.
+
+A new flag in VTOrc with the same name has been added to control the behaviour of the PlannedReparentShard calls that VTOrc issues.
+

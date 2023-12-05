@@ -64,10 +64,9 @@ var (
 	_ Routing = (*SequenceRouting)(nil)
 )
 
-func (tr *TargetedRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
+func (tr *TargetedRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.Keyspace = tr.keyspace
 	rp.TargetDestination = tr.TargetDestination
-	return nil
 }
 
 func (tr *TargetedRouting) Clone() Routing {
@@ -75,8 +74,8 @@ func (tr *TargetedRouting) Clone() Routing {
 	return &newTr
 }
 
-func (tr *TargetedRouting) updateRoutingLogic(_ *plancontext.PlanningContext, _ sqlparser.Expr) (Routing, error) {
-	return tr, nil
+func (tr *TargetedRouting) updateRoutingLogic(_ *plancontext.PlanningContext, _ sqlparser.Expr) Routing {
+	return tr
 }
 
 func (tr *TargetedRouting) Cost() int {
@@ -91,17 +90,16 @@ func (tr *TargetedRouting) Keyspace() *vindexes.Keyspace {
 	return tr.keyspace
 }
 
-func (n *NoneRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
+func (n *NoneRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.Keyspace = n.keyspace
-	return nil
 }
 
 func (n *NoneRouting) Clone() Routing {
 	return n
 }
 
-func (n *NoneRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) (Routing, error) {
-	return n, nil
+func (n *NoneRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) Routing {
+	return n
 }
 
 func (n *NoneRouting) Cost() int {
@@ -116,9 +114,8 @@ func (n *NoneRouting) Keyspace() *vindexes.Keyspace {
 	return n.keyspace
 }
 
-func (rr *AnyShardRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
+func (rr *AnyShardRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.Keyspace = rr.keyspace
-	return nil
 }
 
 func (rr *AnyShardRouting) Clone() Routing {
@@ -128,8 +125,8 @@ func (rr *AnyShardRouting) Clone() Routing {
 	}
 }
 
-func (rr *AnyShardRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) (Routing, error) {
-	return rr, nil
+func (rr *AnyShardRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) Routing {
+	return rr
 }
 
 func (rr *AnyShardRouting) Cost() int {
@@ -159,16 +156,14 @@ func (rr *AnyShardRouting) AlternateInKeyspace(keyspace *vindexes.Keyspace) *Rou
 	return nil
 }
 
-func (dr *DualRouting) UpdateRoutingParams(*plancontext.PlanningContext, *engine.RoutingParameters) error {
-	return nil
-}
+func (dr *DualRouting) UpdateRoutingParams(*plancontext.PlanningContext, *engine.RoutingParameters) {}
 
 func (dr *DualRouting) Clone() Routing {
 	return &DualRouting{}
 }
 
-func (dr *DualRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) (Routing, error) {
-	return dr, nil
+func (dr *DualRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) Routing {
+	return dr
 }
 
 func (dr *DualRouting) Cost() int {
@@ -183,18 +178,17 @@ func (dr *DualRouting) Keyspace() *vindexes.Keyspace {
 	return nil
 }
 
-func (sr *SequenceRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
+func (sr *SequenceRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.Opcode = engine.Next
 	rp.Keyspace = sr.keyspace
-	return nil
 }
 
 func (sr *SequenceRouting) Clone() Routing {
 	return &SequenceRouting{keyspace: sr.keyspace}
 }
 
-func (sr *SequenceRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) (Routing, error) {
-	return sr, nil
+func (sr *SequenceRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) Routing {
+	return sr
 }
 
 func (sr *SequenceRouting) Cost() int {

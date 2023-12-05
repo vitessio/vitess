@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -33,7 +32,7 @@ type (
 	// ApplyJoin is a nested loop join - for each row on the LHS,
 	// we'll execute the plan on the RHS, feeding data from left to right
 	ApplyJoin struct {
-		LHS, RHS ops.Operator
+		LHS, RHS Operator
 
 		// LeftJoin will be true in the case of an outer join
 		LeftJoin bool
@@ -72,7 +71,7 @@ type (
 	//     so they can be used for the result of this expression that is using data from both sides.
 	//     All fields will be used for these
 	JoinColumn struct {
-		Original *sqlparser.AliasedExpr // this is the original expression being passed through
+		Original sqlparser.Expr // this is the original expression being passed through
 		LHSExprs []BindVarExpr
 		RHSExpr  sqlparser.Expr
 		GroupBy  bool // if this is true, we need to push this down to our inputs with addToGroupBy set to true
@@ -86,7 +85,7 @@ type (
 	}
 )
 
-func NewApplyJoin(lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
+func NewApplyJoin(lhs, rhs Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
 	return &ApplyJoin{
 		LHS:       lhs,
 		RHS:       rhs,
@@ -97,7 +96,7 @@ func NewApplyJoin(lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin
 }
 
 // Clone implements the Operator interface
-func (aj *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
+func (aj *ApplyJoin) Clone(inputs []Operator) Operator {
 	kopy := *aj
 	kopy.LHS = inputs[0]
 	kopy.RHS = inputs[1]
@@ -110,33 +109,33 @@ func (aj *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
 	return &kopy
 }
 
-func (aj *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (aj *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	return AddPredicate(ctx, aj, expr, false, newFilter)
 }
 
 // Inputs implements the Operator interface
-func (aj *ApplyJoin) Inputs() []ops.Operator {
-	return []ops.Operator{aj.LHS, aj.RHS}
+func (aj *ApplyJoin) Inputs() []Operator {
+	return []Operator{aj.LHS, aj.RHS}
 }
 
 // SetInputs implements the Operator interface
-func (aj *ApplyJoin) SetInputs(inputs []ops.Operator) {
+func (aj *ApplyJoin) SetInputs(inputs []Operator) {
 	aj.LHS, aj.RHS = inputs[0], inputs[1]
 }
 
-func (aj *ApplyJoin) GetLHS() ops.Operator {
+func (aj *ApplyJoin) GetLHS() Operator {
 	return aj.LHS
 }
 
-func (aj *ApplyJoin) GetRHS() ops.Operator {
+func (aj *ApplyJoin) GetRHS() Operator {
 	return aj.RHS
 }
 
-func (aj *ApplyJoin) SetLHS(operator ops.Operator) {
+func (aj *ApplyJoin) SetLHS(operator Operator) {
 	aj.LHS = operator
 }
 
-func (aj *ApplyJoin) SetRHS(operator ops.Operator) {
+func (aj *ApplyJoin) SetRHS(operator Operator) {
 	aj.RHS = operator
 }
 
@@ -151,10 +150,7 @@ func (aj *ApplyJoin) IsInner() bool {
 func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 	aj.Predicate = ctx.SemTable.AndExpressions(expr, aj.Predicate)
 
-	col, err := breakExpressionInLHSandRHSForApplyJoin(ctx, expr, TableID(aj.LHS))
-	if err != nil {
-		panic(err)
-	}
+	col := breakExpressionInLHSandRHSForApplyJoin(ctx, expr, TableID(aj.LHS))
 	aj.JoinPredicates = append(aj.JoinPredicates, col)
 	rhs := aj.RHS.AddPredicate(ctx, col.RHSExpr)
 	aj.RHS = rhs
@@ -173,21 +169,21 @@ func (aj *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.
 	return transformColumnsToSelectExprs(ctx, aj)
 }
 
-func (aj *ApplyJoin) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+func (aj *ApplyJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return aj.LHS.GetOrdering(ctx)
 }
 
 func joinColumnToAliasedExpr(c JoinColumn) *sqlparser.AliasedExpr {
-	return c.Original
+	return aeWrap(c.Original)
 }
 
 func joinColumnToExpr(column JoinColumn) sqlparser.Expr {
-	return column.Original.Expr
+	return column.Original
 }
 
-func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sqlparser.AliasedExpr, e sqlparser.Expr, addToGroupBy bool) (col JoinColumn, err error) {
+func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sqlparser.AliasedExpr, e sqlparser.Expr, addToGroupBy bool) (col JoinColumn) {
 	defer func() {
-		col.Original = orig
+		col.Original = orig.Expr
 	}()
 	lhs := TableID(aj.LHS)
 	rhs := TableID(aj.RHS)
@@ -201,12 +197,9 @@ func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sq
 	case deps.IsSolvedBy(rhs):
 		col.RHSExpr = e
 	case deps.IsSolvedBy(both):
-		col, err = breakExpressionInLHSandRHSForApplyJoin(ctx, e, TableID(aj.LHS))
-		if err != nil {
-			return JoinColumn{}, err
-		}
+		col = breakExpressionInLHSandRHSForApplyJoin(ctx, e, TableID(aj.LHS))
 	default:
-		return JoinColumn{}, vterrors.VT13002(sqlparser.String(e))
+		panic(vterrors.VT13002(sqlparser.String(e)))
 	}
 
 	return
@@ -232,16 +225,13 @@ func (aj *ApplyJoin) AddColumn(
 			return offset
 		}
 	}
-	col, err := aj.getJoinColumnFor(ctx, expr, expr.Expr, groupBy)
-	if err != nil {
-		panic(err)
-	}
+	col := aj.getJoinColumnFor(ctx, expr, expr.Expr, groupBy)
 	offset := len(aj.JoinColumns)
 	aj.JoinColumns = append(aj.JoinColumns, col)
 	return offset
 }
 
-func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
+func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	for _, col := range aj.JoinColumns {
 		// Read the type description for JoinColumn to understand the following code
 		for _, lhsExpr := range col.LHSExprs {

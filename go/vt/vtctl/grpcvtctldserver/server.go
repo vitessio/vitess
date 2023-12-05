@@ -2711,6 +2711,10 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 	} else if !ok {
 		waitReplicasTimeout = time.Second * 30
 	}
+	tolerableReplLag, _, err := protoutil.DurationFromProto(req.TolerableReplicationLag)
+	if err != nil {
+		return nil, err
+	}
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("shard", req.Shard)
@@ -2740,6 +2744,7 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 			AvoidPrimaryAlias:   req.AvoidPrimary,
 			NewPrimaryAlias:     req.NewPrimary,
 			WaitReplicasTimeout: waitReplicasTimeout,
+			TolerableReplLag:    tolerableReplLag,
 		},
 	)
 
@@ -2752,7 +2757,7 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		resp.Keyspace = ev.ShardInfo.Keyspace()
 		resp.Shard = ev.ShardInfo.ShardName()
 
-		if !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
+		if ev.NewPrimary != nil && !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
 			resp.PromotedPrimary = ev.NewPrimary.Alias
 		}
 	}

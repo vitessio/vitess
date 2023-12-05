@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -34,8 +33,8 @@ import (
 // outer query through a join.
 type SubQuery struct {
 	// Fields filled in at the time of construction:
-	Outer             ops.Operator         // Outer query operator.
-	Subquery          ops.Operator         // Subquery operator.
+	Outer             Operator             // Outer query operator.
+	Subquery          Operator             // Subquery operator.
 	FilterType        opcode.PulloutOpcode // Type of subquery filter.
 	Original          sqlparser.Expr       // This is the expression we should use if we can merge the inner to the outer
 	originalSubquery  *sqlparser.Subquery  // Subquery representation, e.g., (SELECT foo from user LIMIT 1).
@@ -54,7 +53,7 @@ type SubQuery struct {
 	IsProjection bool
 }
 
-func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
+func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	sq.Vars = make(map[string]int)
 	columns, err := sq.GetJoinColumns(ctx, sq.Outer)
 	if err != nil {
@@ -69,24 +68,24 @@ func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
 	return nil
 }
 
-func (sq *SubQuery) OuterExpressionsNeeded(ctx *plancontext.PlanningContext, outer ops.Operator) (result []*sqlparser.ColName, err error) {
+func (sq *SubQuery) OuterExpressionsNeeded(ctx *plancontext.PlanningContext, outer Operator) (result []*sqlparser.ColName) {
 	joinColumns, err := sq.GetJoinColumns(ctx, outer)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 	for _, jc := range joinColumns {
 		for _, lhsExpr := range jc.LHSExprs {
 			col, ok := lhsExpr.Expr.(*sqlparser.ColName)
 			if !ok {
-				return nil, vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(lhsExpr.Expr))
+				panic(vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(lhsExpr.Expr)))
 			}
 			result = append(result, col)
 		}
 	}
-	return result, nil
+	return result
 }
 
-func (sq *SubQuery) GetJoinColumns(ctx *plancontext.PlanningContext, outer ops.Operator) ([]JoinColumn, error) {
+func (sq *SubQuery) GetJoinColumns(ctx *plancontext.PlanningContext, outer Operator) ([]JoinColumn, error) {
 	if outer == nil {
 		return nil, vterrors.VT13001("outer operator cannot be nil")
 	}
@@ -98,7 +97,7 @@ func (sq *SubQuery) GetJoinColumns(ctx *plancontext.PlanningContext, outer ops.O
 	}
 	sq.outerID = outerID
 	mapper := func(in sqlparser.Expr) (JoinColumn, error) {
-		return breakExpressionInLHSandRHSForApplyJoin(ctx, in, outerID)
+		return breakExpressionInLHSandRHSForApplyJoin(ctx, in, outerID), nil
 	}
 	joinPredicates, err := slice.MapWithError(sq.Predicates, mapper)
 	if err != nil {
@@ -109,7 +108,7 @@ func (sq *SubQuery) GetJoinColumns(ctx *plancontext.PlanningContext, outer ops.O
 }
 
 // Clone implements the Operator interface
-func (sq *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
+func (sq *SubQuery) Clone(inputs []Operator) Operator {
 	klone := *sq
 	switch len(inputs) {
 	case 1:
@@ -126,21 +125,21 @@ func (sq *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
 	return &klone
 }
 
-func (sq *SubQuery) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+func (sq *SubQuery) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return sq.Outer.GetOrdering(ctx)
 }
 
 // Inputs implements the Operator interface
-func (sq *SubQuery) Inputs() []ops.Operator {
+func (sq *SubQuery) Inputs() []Operator {
 	if sq.Outer == nil {
-		return []ops.Operator{sq.Subquery}
+		return []Operator{sq.Subquery}
 	}
 
-	return []ops.Operator{sq.Outer, sq.Subquery}
+	return []Operator{sq.Outer, sq.Subquery}
 }
 
 // SetInputs implements the Operator interface
-func (sq *SubQuery) SetInputs(inputs []ops.Operator) {
+func (sq *SubQuery) SetInputs(inputs []Operator) {
 	switch len(inputs) {
 	case 1:
 		sq.Subquery = inputs[0]
@@ -168,7 +167,7 @@ func (sq *SubQuery) ShortDescription() string {
 	return fmt.Sprintf("%s %v%s", typ, sq.FilterType.String(), pred)
 }
 
-func (sq *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (sq *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	sq.Outer = sq.Outer.AddPredicate(ctx, expr)
 	return sq
 }
@@ -197,7 +196,7 @@ func (sq *SubQuery) GetMergePredicates() []sqlparser.Expr {
 	return sq.Predicates
 }
 
-func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer ops.Operator) (ops.Operator, error) {
+func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) (Operator, error) {
 	if !sq.TopLevel {
 		return nil, subqueryNotAtTopErr
 	}
@@ -215,7 +214,7 @@ func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer ops.Operator)
 var correlatedSubqueryErr = vterrors.VT12001("correlated subquery is only supported for EXISTS")
 var subqueryNotAtTopErr = vterrors.VT12001("unmergable subquery can not be inside complex expression")
 
-func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer ops.Operator) (ops.Operator, error) {
+func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operator) (Operator, error) {
 	if len(sq.Predicates) > 0 {
 		if sq.FilterType != opcode.PulloutExists {
 			return nil, correlatedSubqueryErr
@@ -282,22 +281,8 @@ func (sq *SubQuery) isMerged(ctx *plancontext.PlanningContext) bool {
 }
 
 // mapExpr rewrites all expressions according to the provided function
-func (sq *SubQuery) mapExpr(f func(expr sqlparser.Expr) (sqlparser.Expr, error)) error {
-	newPredicates, err := slice.MapWithError(sq.Predicates, f)
-	if err != nil {
-		return err
-	}
-	sq.Predicates = newPredicates
-
-	sq.Original, err = f(sq.Original)
-	if err != nil {
-		return err
-	}
-
-	originalSubquery, err := f(sq.originalSubquery)
-	if err != nil {
-		return err
-	}
-	sq.originalSubquery = originalSubquery.(*sqlparser.Subquery)
-	return nil
+func (sq *SubQuery) mapExpr(f func(expr sqlparser.Expr) sqlparser.Expr) {
+	sq.Predicates = slice.Map(sq.Predicates, f)
+	sq.Original = f(sq.Original)
+	sq.originalSubquery = f(sq.originalSubquery).(*sqlparser.Subquery)
 }

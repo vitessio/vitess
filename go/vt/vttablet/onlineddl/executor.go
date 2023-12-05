@@ -176,6 +176,7 @@ type Executor struct {
 	ts                    *topo.Server
 	lagThrottler          *throttle.Throttler
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool)
+	requestGCChecksFunc   func()
 	tabletAlias           *topodatapb.TabletAlias
 
 	keyspace string
@@ -251,6 +252,7 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 	lagThrottler *throttle.Throttler,
 	tabletTypeFunc func() topodatapb.TabletType,
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool),
+	requestGCChecksFunc func(),
 ) *Executor {
 	// sanitize flags
 	if maxConcurrentOnlineDDLs < 1 {
@@ -268,6 +270,7 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 		ts:                    ts,
 		lagThrottler:          lagThrottler,
 		toggleBufferTableFunc: toggleBufferTableFunc,
+		requestGCChecksFunc:   requestGCChecksFunc,
 		ticks:                 timer.NewTimer(migrationCheckInterval),
 		// Gracefully return an error if any caller tries to execute
 		// a query before the executor has been fully opened.
@@ -3932,6 +3935,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 			if err == nil {
 				// artifact was renamed away and is gone. There' no need to list it in `artifacts` column.
 				e.clearSingleArtifact(ctx, uuid, artifactTable)
+				e.requestGCChecksFunc()
 			} else {
 				return vterrors.Wrapf(err, "in gcArtifacts() for %s", artifactTable)
 			}
@@ -4502,6 +4506,7 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 		return nil, err
 	}
 	log.Infof("CleanupMigration: migration %s marked as ready to clean up", uuid)
+	defer e.triggerNextCheckInterval()
 	return rs, nil
 }
 

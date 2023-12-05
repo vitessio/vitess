@@ -208,7 +208,7 @@ func init() {
 	Main.Flags().IntVar(&mysqlPort, "mysql_port", mysqlPort, "mysql port")
 	Main.Flags().StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "path to the mysql socket")
 	Main.Flags().DurationVar(&mysqlTimeout, "mysql_timeout", mysqlTimeout, "how long to wait for mysqld startup")
-	Main.Flags().DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "how long to wait for mysqld startup")
+	Main.Flags().DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "how long to wait for mysqld shutdown")
 	Main.Flags().StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "path to .sql file to run after mysql_install_db")
 	Main.Flags().BoolVar(&detachedMode, "detach", detachedMode, "detached mode - run backups detached from the terminal")
 	Main.Flags().DurationVar(&keepAliveTimeout, "keep-alive-timeout", keepAliveTimeout, "Wait until timeout elapses after a successful backup before shutting down.")

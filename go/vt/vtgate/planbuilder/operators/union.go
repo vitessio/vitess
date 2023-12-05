@@ -23,12 +23,11 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type Union struct {
-	Sources []ops.Operator
+	Sources []Operator
 
 	// These are the select expressions coming from each source
 	Selects  []sqlparser.SelectExprs
@@ -38,7 +37,7 @@ type Union struct {
 	unionColumnsAsAlisedExprs []*sqlparser.AliasedExpr
 }
 
-func newUnion(srcs []ops.Operator, sourceSelects []sqlparser.SelectExprs, columns sqlparser.SelectExprs, distinct bool) *Union {
+func newUnion(srcs []Operator, sourceSelects []sqlparser.SelectExprs, columns sqlparser.SelectExprs, distinct bool) *Union {
 	if columns == nil {
 		panic("rt")
 	}
@@ -51,24 +50,24 @@ func newUnion(srcs []ops.Operator, sourceSelects []sqlparser.SelectExprs, column
 }
 
 // Clone implements the Operator interface
-func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
+func (u *Union) Clone(inputs []Operator) Operator {
 	newOp := *u
 	newOp.Sources = inputs
 	newOp.Selects = slices.Clone(u.Selects)
 	return &newOp
 }
 
-func (u *Union) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (u *Union) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
 // Inputs implements the Operator interface
-func (u *Union) Inputs() []ops.Operator {
+func (u *Union) Inputs() []Operator {
 	return u.Sources
 }
 
 // SetInputs implements the Operator interface
-func (u *Union) SetInputs(ops []ops.Operator) {
+func (u *Union) SetInputs(ops []Operator) {
 	u.Sources = ops
 }
 
@@ -93,7 +92,7 @@ Notice how `X.col = 42` has been translated to `foo = 42` and `id = 42` on respe
 The first SELECT of the union dictates the column names, and the second is whatever expression
 can be found on the same offset. The names of the RHS are discarded.
 */
-func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	offsets := make(map[string]int)
 	sel, err := u.GetSelectFor(0)
 	if err != nil {
