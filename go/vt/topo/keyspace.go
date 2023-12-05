@@ -273,11 +273,11 @@ func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 	return nil
 }
 
-// FindAllShardsInKeyspaceConfig controls the behavior of
+// FindAllShardsInKeyspaceOptions controls the behavior of
 // Server.FindAllShardsInKeyspace.
-type FindAllShardsInKeyspaceConfig struct {
+type FindAllShardsInKeyspaceOptions struct {
 	// Concurrency controls the maximum number of concurrent calls to GetShard.
-	// If unspecified, Concurrency is set to 1.
+	// If <= 0, Concurrency is set to 1.
 	Concurrency int
 }
 
@@ -286,13 +286,13 @@ type FindAllShardsInKeyspaceConfig struct {
 //
 // If cfg is non-nil, it is used to configure the method's behavior. Otherwise,
 // a default configuration is used.
-func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, cfg *FindAllShardsInKeyspaceConfig) (map[string]*ShardInfo, error) {
+func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, opt *FindAllShardsInKeyspaceOptions) (map[string]*ShardInfo, error) {
 	// Apply any necessary defaults.
-	if cfg == nil {
-		cfg = &FindAllShardsInKeyspaceConfig{}
+	if opt == nil {
+		opt = &FindAllShardsInKeyspaceOptions{}
 	}
-	if cfg.Concurrency == 0 {
-		cfg.Concurrency = 1
+	if opt.Concurrency <= 0 {
+		opt.Concurrency = 1
 	}
 
 	shards, err := ts.GetShardNames(ctx, keyspace)
@@ -317,7 +317,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	)
 
 	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(cfg.Concurrency)
+	eg.SetLimit(opt.Concurrency)
 
 	for _, shard := range shards {
 		shard := shard
