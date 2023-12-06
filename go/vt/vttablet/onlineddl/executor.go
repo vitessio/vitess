@@ -778,7 +778,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	defer tmClient.Close()
 
 	// sanity checks:
-	vreplTable, err := getVreplTable(ctx, s)
+	vreplTable, err := getVreplTable(s)
 	if err != nil {
 		return err
 	}
@@ -1422,7 +1422,7 @@ func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDD
 		return nil, err
 	}
 
-	vreplTableName, err := getVreplTable(ctx, revertStream)
+	vreplTableName, err := getVreplTable(revertStream)
 	if err != nil {
 		return nil, err
 	}
