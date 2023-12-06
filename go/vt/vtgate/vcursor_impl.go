@@ -1326,7 +1326,7 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	callerId := callerid.EffectiveCallerIDFromContext(ctx)
 	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
 
-	timedCtx, _ := context.WithTimeout(context.Background(), warmingReadsQueryTimeout) // nolint
+	timedCtx, _ := context.WithTimeout(context.Background(), warmingReadsQueryTimeout) //nolint
 	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
 
 	v := &vcursorImpl{
@@ -1365,8 +1365,7 @@ func (vc *vcursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery *bool) {
 		return
 	}
 	// If the query doesn't have anything, then we consult the session state.
-	fkCheck, _ := vc.safeSession.ForeignKeyChecks()
-	vc.fkChecksState = fkCheck
+	vc.fkChecksState, _ = vc.safeSession.ForeignKeyChecks()
 }
 
 // GetForeignKeyChecksState gets the stored foreign key checks state in the vcursor.

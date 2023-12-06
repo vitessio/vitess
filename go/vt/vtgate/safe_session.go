@@ -572,7 +572,7 @@ func (session *SafeSession) TimeZone() *time.Location {
 	return loc
 }
 
-// ForeignKeyChecks returns the foreign_key_checks stores in system_variables map in the session.
+// ForeignKeyChecks returns the foreign_key_checks stored in system_variables map in the session.
 func (session *SafeSession) ForeignKeyChecks() (*bool, *string) {
 	session.mu.Lock()
 	fkVal, ok := session.SystemVariables[sysvars.ForeignKeyChecks]
