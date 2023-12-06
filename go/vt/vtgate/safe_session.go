@@ -571,19 +571,21 @@ func (session *SafeSession) TimeZone() *time.Location {
 	loc, _ := datetime.ParseTimeZone(tz)
 	return loc
 }
-func (session *SafeSession) ForeingKeyChecks() bool {
+func (session *SafeSession) ForeignKeyChecks() *string {
 	session.mu.Lock()
 	fkVal, ok := session.SystemVariables["foreign_key_checks"]
 	session.mu.Unlock()
 
 	if !ok {
-		return true
+		return nil
 	}
+	fkCheck := "0"
 	switch strings.ToLower(fkVal) {
 	case "off", "0":
-		return false
+		return &fkCheck
 	}
-	return true
+	fkCheck = "1"
+	return &fkCheck
 }
 
 // SetOptions sets the options
@@ -624,10 +626,11 @@ func (session *SafeSession) SetPreQueries() []string {
 		sysVars[k] = v
 	})
 
-	if session.ForeingKeyChecks() {
+	fkVal := session.ForeignKeyChecks()
+	if fkVal != nil {
 		k := "foreign_key_checks"
 		keys = append(keys, k)
-		sysVars[k] = "1"
+		sysVars[k] = *fkVal
 	}
 
 	// if not system variables to set, return
