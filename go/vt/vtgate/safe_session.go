@@ -557,7 +557,7 @@ func (session *SafeSession) HasSystemVariables() (found bool) {
 	session.GetSystemVariables(func(_ string, _ string) {
 		found = true
 	})
-	return
+	return found || session.ForeignKeyChecks() != nil
 }
 
 func (session *SafeSession) TimeZone() *time.Location {
@@ -579,13 +579,15 @@ func (session *SafeSession) ForeignKeyChecks() *string {
 	if !ok {
 		return nil
 	}
-	fkCheck := "0"
 	switch strings.ToLower(fkVal) {
 	case "off", "0":
+		fkCheck := "0"
+		return &fkCheck
+	case "on", "1":
+		fkCheck := "1"
 		return &fkCheck
 	}
-	fkCheck = "1"
-	return &fkCheck
+	return nil
 }
 
 // SetOptions sets the options
