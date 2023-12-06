@@ -55,8 +55,8 @@ func planQuery(ctx *plancontext.PlanningContext, root Operator) (output Operator
 // If we can push it under a route - done.
 // If we can't, we will instead expand the Horizon into
 // smaller operators and try to push these down as far as possible
-func runPhases(ctx *plancontext.PlanningContext, root Operator) (op Operator, err error) {
-	op = root
+func runPhases(ctx *plancontext.PlanningContext, root Operator) (Operator, error) {
+	op := root
 
 	p := phaser{}
 	for phase := p.next(ctx); phase != DONE; phase = p.next(ctx) {
@@ -66,19 +66,14 @@ func runPhases(ctx *plancontext.PlanningContext, root Operator) (op Operator, er
 		}
 
 		op = phase.act(ctx, op)
-		if err != nil {
-			return nil, err
-		}
 
+		var err error
 		op, err = runRewriters(ctx, op)
 		if err != nil {
 			return nil, err
 		}
 
 		op = compact(ctx, op)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return addGroupByOnRHSOfJoin(op), nil
@@ -222,7 +217,7 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *
 		return p, NoRewrite
 	}
 
-	if !reachedPhase(ctx, subquerySettling) || err != nil {
+	if !reachedPhase(ctx, subquerySettling) {
 		return p, NoRewrite
 	}
 
