@@ -573,25 +573,23 @@ func (session *SafeSession) TimeZone() *time.Location {
 }
 
 // ForeignKeyChecks returns the foreign_key_checks stored in system_variables map in the session.
-func (session *SafeSession) ForeignKeyChecks() (*bool, *string) {
+func (session *SafeSession) ForeignKeyChecks() *bool {
 	session.mu.Lock()
 	fkVal, ok := session.SystemVariables[sysvars.ForeignKeyChecks]
 	session.mu.Unlock()
 
 	if !ok {
-		return nil, nil
+		return nil
 	}
 	switch strings.ToLower(fkVal) {
 	case "off", "0":
-		fkCheckStr := "0"
 		fkCheckBool := false
-		return &fkCheckBool, &fkCheckStr
+		return &fkCheckBool
 	case "on", "1":
-		fkCheckStr := "1"
 		fkCheckBool := true
-		return &fkCheckBool, &fkCheckStr
+		return &fkCheckBool
 	}
-	return nil, nil
+	return nil
 }
 
 // SetOptions sets the options
