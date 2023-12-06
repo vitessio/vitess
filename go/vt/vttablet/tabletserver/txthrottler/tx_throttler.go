@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/patrickmn/go-cache"
+
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
@@ -184,6 +186,8 @@ type txThrottlerStateImpl struct {
 
 	healthCheck      discovery.LegacyHealthCheck
 	topologyWatchers []TopologyWatcherInterface
+	// lagRecordsCache holds the  most recently seen lag for each tablet
+	lagRecordsCache *cache.Cache
 }
 
 // NewTxThrottler tries to construct a txThrottler from the
@@ -331,6 +335,8 @@ func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, tar
 	result := &txThrottlerStateImpl{
 		config:    config,
 		throttler: t,
+		lagRecordsCache: cache.New(time.Duration(2*config.throttlerConfig.TargetReplicationLagSec)*time.Second,
+			time.Duration(4*config.throttlerConfig.TargetReplicationLagSec)*time.Second),
 	}
 	result.healthCheck = healthCheckFactory()
 	result.healthCheck.SetListener(result, false /* sendDownEvents */)
@@ -359,7 +365,25 @@ func (ts *txThrottlerStateImpl) throttle() bool {
 	// Serialize calls to ts.throttle.Throttle()
 	ts.throttleMu.Lock()
 	defer ts.throttleMu.Unlock()
-	return ts.throttler.Throttle(0 /* threadId */) > 0
+
+	// Find out the max lag seen recently from the lag cache
+	var maxLag int64
+
+	for host, lagInfo := range ts.lagRecordsCache.Items() {
+		lag, ok := lagInfo.Object.(int64)
+		if !ok {
+			log.Warningf("Failed to get lag of tablet %s from cache: %+v", host, lagInfo.Object)
+
+			continue
+		}
+
+		if lag > maxLag {
+			maxLag = lag
+		}
+	}
+
+	return ts.throttler.Throttle(0 /* threadId */) > 0 && // Throttle if underlying Throttler object says so...
+		maxLag > ts.config.throttlerConfig.TargetReplicationLagSec // ... but only if there is actual lag
 }
 
 func (ts *txThrottlerStateImpl) deallocateResources() {
@@ -391,6 +415,10 @@ func (ts *txThrottlerStateImpl) StatsUpdate(tabletStats *discovery.LegacyTabletS
 	for _, expectedTabletType := range ts.config.tabletTypes {
 		if tabletStats.Target.TabletType == expectedTabletType {
 			ts.throttler.RecordReplicationLag(time.Now(), tabletStats)
+			if tabletStats.Stats != nil {
+				ts.lagRecordsCache.Set(tabletStats.Name, int64(tabletStats.Stats.ReplicationLagSeconds),
+					cache.DefaultExpiration)
+			}
 			return
 		}
 	}
