@@ -70,8 +70,7 @@ type TopologyWatcher struct {
 	cell                string
 	refreshInterval     time.Duration
 	refreshKnownTablets bool
-	getTablets          func(tw *TopologyWatcher) ([]*topodata.TabletAlias, error)
-	sem                 chan int
+	getTablets          func(tw *TopologyWatcher) ([]*topo.TabletInfo, error)
 	ctx                 context.Context
 	cancelFunc          context.CancelFunc
 	// wg keeps track of all launched Go routines.
@@ -94,7 +93,7 @@ type TopologyWatcher struct {
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
 // the tablets that it is configured to watch, and reloads them periodically if needed.
 // As of now there is only one implementation: watch all tablets in a cell.
-func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, filter TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int, getTablets func(tw *TopologyWatcher) ([]*topodata.TabletAlias, error)) *TopologyWatcher {
+func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, filter TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int, getTablets func(tw *TopologyWatcher) ([]*topo.TabletInfo, error)) *TopologyWatcher {
 	tw := &TopologyWatcher{
 		topoServer:          topoServer,
 		healthcheck:         hc,
@@ -103,7 +102,6 @@ func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthC
 		refreshInterval:     refreshInterval,
 		refreshKnownTablets: refreshKnownTablets,
 		getTablets:          getTablets,
-		sem:                 make(chan int, topoReadConcurrency),
 		tablets:             make(map[string]*tabletInfo),
 	}
 	tw.firstLoadChan = make(chan struct{})
@@ -117,8 +115,8 @@ func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthC
 // NewCellTabletsWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and reloads them as needed.
 func NewCellTabletsWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
-	return NewTopologyWatcher(ctx, topoServer, hc, f, cell, refreshInterval, refreshKnownTablets, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topodata.TabletAlias, error) {
-		return tw.topoServer.GetTabletAliasesByCell(ctx, tw.cell)
+	return NewTopologyWatcher(ctx, topoServer, hc, f, cell, refreshInterval, refreshKnownTablets, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topo.TabletInfo, error) {
+		return tw.topoServer.GetTabletsByCell(ctx, tw.cell, &topo.GetTabletsByCellOptions{Concurrency: topoReadConcurrency})
 	})
 }
 
@@ -149,11 +147,10 @@ func (tw *TopologyWatcher) Stop() {
 }
 
 func (tw *TopologyWatcher) loadTablets() {
-	var wg sync.WaitGroup
 	newTablets := make(map[string]*tabletInfo)
 
-	// First get the list of relevant tabletAliases.
-	tabletAliases, err := tw.getTablets(tw)
+	// First get the list of all tablets.
+	tabletInfos, err := tw.getTablets(tw)
 	topologyWatcherOperations.Add(topologyWatcherOpListTablets, 1)
 	if err != nil {
 		topologyWatcherErrors.Add(topologyWatcherOpListTablets, 1)
@@ -168,11 +165,11 @@ func (tw *TopologyWatcher) loadTablets() {
 
 	// Accumulate a list of all known alias strings to use later
 	// when sorting.
-	tabletAliasStrs := make([]string, 0, len(tabletAliases))
+	tabletAliasStrs := make([]string, 0, len(tabletInfos))
 
 	tw.mu.Lock()
-	for _, tAlias := range tabletAliases {
-		aliasStr := topoproto.TabletAliasString(tAlias)
+	for _, tInfo := range tabletInfos {
+		aliasStr := topoproto.TabletAliasString(tInfo.Alias)
 		tabletAliasStrs = append(tabletAliasStrs, aliasStr)
 
 		if !tw.refreshKnownTablets {
@@ -182,37 +179,12 @@ func (tw *TopologyWatcher) loadTablets() {
 				continue
 			}
 		}
-
-		wg.Add(1)
-		go func(alias *topodata.TabletAlias) {
-			defer wg.Done()
-			tw.sem <- 1 // Wait for active queue to drain.
-			tablet, err := tw.topoServer.GetTablet(tw.ctx, alias)
-			topologyWatcherOperations.Add(topologyWatcherOpGetTablet, 1)
-			<-tw.sem // Done; enable next request to run.
-			if err != nil {
-				topologyWatcherErrors.Add(topologyWatcherOpGetTablet, 1)
-				select {
-				case <-tw.ctx.Done():
-					return
-				default:
-				}
-				log.Errorf("cannot get tablet for alias %v: %v", alias, err)
-				return
-			}
-			tw.mu.Lock()
-			aliasStr := topoproto.TabletAliasString(alias)
-			newTablets[aliasStr] = &tabletInfo{
-				alias:  aliasStr,
-				tablet: tablet.Tablet,
-			}
-			tw.mu.Unlock()
-		}(tAlias)
+		// There's no network call here, so we just do the tablets one at a time instead of in parallel goroutines.
+		newTablets[aliasStr] = &tabletInfo{
+			alias:  aliasStr,
+			tablet: tInfo.Tablet,
+		}
 	}
-
-	tw.mu.Unlock()
-	wg.Wait()
-	tw.mu.Lock()
 
 	for alias, newVal := range newTablets {
 		if tw.tabletFilter != nil && !tw.tabletFilter.IsIncluded(newVal.tablet) {

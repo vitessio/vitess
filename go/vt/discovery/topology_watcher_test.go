@@ -147,7 +147,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 		t.Fatalf("CreateTablet failed: %v", err)
 	}
 	tw.loadTablets()
-	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "AddTablet": 1})
+	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "AddTablet": 1})
 	checkChecksum(t, tw, 3238442862)
 
 	// Check the tablet is returned by GetAllTablets().
@@ -178,9 +178,9 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	// If refreshKnownTablets is disabled, only the new tablet is read
 	// from the topo
 	if refreshKnownTablets {
-		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "AddTablet": 1})
+		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "AddTablet": 1})
 	} else {
-		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "AddTablet": 1})
+		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "AddTablet": 1})
 	}
 	checkChecksum(t, tw, 2762153755)
 
@@ -195,7 +195,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	// only the list is read from the topo and the checksum doesn't change
 	tw.loadTablets()
 	if refreshKnownTablets {
-		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2})
+		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0})
 	} else {
 		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1})
 	}
@@ -221,7 +221,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	key = TabletToMapKey(tablet)
 
 	if refreshKnownTablets {
-		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 1})
+		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "ReplaceTablet": 1})
 
 		if _, ok := allTablets[key]; !ok || len(allTablets) != 2 || !proto.Equal(allTablets[key], tablet) {
 			t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, tablet)
@@ -264,7 +264,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 			t.Fatalf("UpdateTabletFields failed: %v", err)
 		}
 		tw.loadTablets()
-		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 2})
+		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "ReplaceTablet": 2})
 		allTablets = fhc.GetAllTablets()
 		key2 := TabletToMapKey(tablet2)
 		if _, ok := allTablets[key2]; !ok {
@@ -288,7 +288,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 			t.Fatalf("UpdateTabletFields failed: %v", err)
 		}
 		tw.loadTablets()
-		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 2})
+		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "ReplaceTablet": 2})
 	}
 
 	// Remove the tablet and check that it is detected as being gone.
@@ -300,7 +300,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	}
 	tw.loadTablets()
 	if refreshKnownTablets {
-		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "RemoveTablet": 1})
+		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "RemoveTablet": 1})
 	} else {
 		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "RemoveTablet": 1})
 	}
@@ -551,7 +551,7 @@ func TestFilterByKeypsaceSkipsIgnoredTablets(t *testing.T) {
 	require.NoError(t, ts.CreateTablet(context.Background(), tablet))
 
 	tw.loadTablets()
-	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "AddTablet": 1})
+	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "AddTablet": 1})
 	checkChecksum(t, tw, 3238442862)
 
 	// Check tablet is reported by HealthCheck
@@ -576,7 +576,7 @@ func TestFilterByKeypsaceSkipsIgnoredTablets(t *testing.T) {
 	require.NoError(t, ts.CreateTablet(context.Background(), tablet2))
 
 	tw.loadTablets()
-	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1})
+	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0})
 	checkChecksum(t, tw, 2762153755)
 
 	// Check the new tablet is NOT reported by HealthCheck.
