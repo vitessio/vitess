@@ -51,7 +51,7 @@ func gen4UpdateStmtPlanner(
 	if ctx.SemTable.HasNonLiteralForeignKeyUpdate(updStmt.Exprs) {
 		// Since we are running the query with foreign key checks off, we have to verify all the foreign keys validity on vtgate.
 		ctx.VerifyAllFKs = true
-		updStmt.SetComments(updStmt.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, "OFF"))
+		updStmt.SetComments(updStmt.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks, "OFF"))
 	}
 
 	// Remove all the foreign keys that don't require any handling.
