@@ -40,6 +40,8 @@ type SystemVariable struct {
 
 	SupportSetVar bool
 
+	IncludeInSet bool
+
 	Case StorageCase
 }
 
@@ -71,7 +73,7 @@ var (
 	TxReadOnly                  = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
 	Workload                    = SystemVariable{Name: "workload", IdentifierAsString: true}
 	QueryTimeout                = SystemVariable{Name: "query_timeout"}
-	ForeignKeyChecks            = SystemVariable{Name: "foreign_key_checks", IsBoolean: true, SupportSetVar: true}
+	ForeignKeyChecks            = SystemVariable{Name: "foreign_key_checks", IsBoolean: true, SupportSetVar: true, IncludeInSet: true}
 
 	// Online DDL
 	DDLStrategy      = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
@@ -295,6 +297,9 @@ func IsVitessAware(sysv string) bool {
 	vitessAwareInit.Do(func() {
 		vitessAwareVariableNames = make(map[string]struct{}, len(VitessAware))
 		for _, v := range VitessAware {
+			if v.IncludeInSet {
+				continue
+			}
 			vitessAwareVariableNames[v.Name] = struct{}{}
 		}
 	})
