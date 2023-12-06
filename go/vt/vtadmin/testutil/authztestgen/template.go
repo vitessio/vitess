@@ -111,9 +111,8 @@ func Test{{ .Method }}(t *testing.T) {
 
 		{{ getActor .Actor }}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
+
 		{{ if .IncludeErrorVar }}
 		resp, err := api.{{ $test.Method }}(ctx, {{ $test.Request }})
 		{{ else }}

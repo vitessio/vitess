@@ -99,7 +99,13 @@ type actorkey struct{}
 // NewContext returns a context with the given actor stored in it. This is used
 // to pass actor information from the authentication middleware and interceptors
 // to the actual vtadmin api methods.
+//
+// If actor is nil, the context is returned with no actor attached.
 func NewContext(ctx context.Context, actor *Actor) context.Context {
+	if actor == nil {
+		return ctx
+	}
+
 	return context.WithValue(ctx, actorkey{}, actor)
 }
 
