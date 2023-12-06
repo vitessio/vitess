@@ -319,9 +319,12 @@ func TestExecutorSetOp(t *testing.T) {
 		sysVars: map[string]string{"sql_quote_show_create": "0"},
 		result:  returnResult("sql_quote_show_create", "int64", "0"),
 	}, {
-		in:      "set foreign_key_checks = 1",
-		sysVars: map[string]string{"foreign_key_checks": "1"},
-		result:  returnNoResult("foreign_key_checks", "int64"),
+		in:     "set foreign_key_checks = 1",
+		result: returnNoResult("foreign_key_checks", "int64"),
+	}, {
+		in:      "set foreign_key_checks = 0",
+		sysVars: map[string]string{"foreign_key_checks": "0"},
+		result:  returnResult("foreign_key_checks", "int64", "0"),
 	}, {
 		in:      "set unique_checks = 0",
 		sysVars: map[string]string{"unique_checks": "0"},
