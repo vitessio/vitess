@@ -196,7 +196,7 @@ func tryPushProjection(
 		if !p.canPush(ctx) {
 			return p, NoRewrite
 		}
-		return pushProjectionThroughHashJoin(ctx, p, src)
+		return pushProjectionThroughHashJoin(p, src)
 	case *Vindex:
 		if !p.canPush(ctx) {
 			return p, NoRewrite
@@ -216,7 +216,7 @@ func tryPushProjection(
 	}
 }
 
-func pushProjectionThroughHashJoin(ctx *plancontext.PlanningContext, p *Projection, hj *HashJoin) (Operator, *ApplyResult) {
+func pushProjectionThroughHashJoin(p *Projection, hj *HashJoin) (Operator, *ApplyResult) {
 	cols := p.Columns.GetColumns()
 	for _, col := range cols {
 		hj.columns = append(hj.columns, hashJoinColumn{expr: col.Expr})
@@ -297,7 +297,7 @@ func pushProjectionInApplyJoin(
 		rhs.explicitColumnAliases = true
 	}
 
-	src.JoinColumns = nil
+	src.JoinColumns = &applyJoinColumns{}
 	for idx, pe := range ap {
 		var col *sqlparser.IdentifierCI
 		if p.DT != nil && idx < len(p.DT.Columns) {
@@ -328,13 +328,12 @@ func splitProjectionAcrossJoin(
 ) {
 
 	// Check if the current expression can reuse an existing column in the ApplyJoin.
-	if _, found := canReuseColumn(ctx, join.JoinColumns, pe.EvalExpr, joinColumnToExpr); found {
+	if _, found := canReuseColumn(ctx, join.JoinColumns.columns, pe.EvalExpr, joinColumnToExpr); found {
 		return
 	}
 
 	// Add the new applyJoinColumn to the ApplyJoin's JoinPredicates.
-	join.JoinColumns = append(join.JoinColumns,
-		splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
+	join.JoinColumns.add(splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
 }
 
 func splitUnexploredExpression(
@@ -392,7 +391,7 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 	if err != nil {
 		panic(err)
 	}
-	for _, predicate := range src.JoinPredicates {
+	for _, predicate := range src.JoinPredicates.columns {
 		for idx, bve := range predicate.LHSExprs {
 			expr := bve.Expr
 			tbl, err := ctx.SemTable.TableInfoForExpr(expr)

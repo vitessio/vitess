@@ -361,7 +361,9 @@ func pushAggregationThroughApplyJoin(ctx *plancontext.PlanningContext, rootAggr 
 		tableID: TableID(join.RHS),
 	}
 
-	joinColumns, output, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, lhs, rhs)
+	columns := &applyJoinColumns{}
+	output, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, join.LeftJoin, columns, lhs, rhs)
+	join.JoinColumns = columns
 	if err != nil {
 		// if we get this error, we just abort the splitting and fall back on simpler ways of solving the same query
 		if errors.Is(err, errAbortAggrPushing) {
@@ -371,14 +373,15 @@ func pushAggregationThroughApplyJoin(ctx *plancontext.PlanningContext, rootAggr 
 	}
 
 	groupingJCs := splitGroupingToLeftAndRight(ctx, rootAggr, lhs, rhs)
-	joinColumns = append(joinColumns, groupingJCs...)
+	for _, col := range groupingJCs {
+		join.JoinColumns.add(col)
+	}
 
 	// We need to add any columns coming from the lhs of the join to the group by on that side
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
 	addColumnsFromLHSInJoinPredicates(ctx, rootAggr, join, lhs)
 
 	join.LHS, join.RHS = lhs.pushed, rhs.pushed
-	join.JoinColumns = joinColumns
 
 	if !rootAggr.Original {
 		// we only keep the root aggregation, if this aggregator was created
@@ -394,7 +397,7 @@ func pushAggregationThroughApplyJoin(ctx *plancontext.PlanningContext, rootAggr 
 var errAbortAggrPushing = fmt.Errorf("abort aggregation pushing")
 
 func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin, lhs *joinPusher) {
-	for _, pred := range join.JoinPredicates {
+	for _, pred := range join.JoinPredicates.columns {
 		for _, bve := range pred.LHSExprs {
 			expr := bve.Expr
 			wexpr, err := rootAggr.QP.GetSimplifiedExpr(ctx, expr)
@@ -466,17 +469,19 @@ func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Agg
 func splitAggrColumnsToLeftAndRight(
 	ctx *plancontext.PlanningContext,
 	aggregator *Aggregator,
-	join *ApplyJoin,
+	join Operator,
+	leftJoin bool,
+	columns joinColumns,
 	lhs, rhs *joinPusher,
-) ([]applyJoinColumn, Operator, error) {
+) (Operator, error) {
 	proj := newAliasedProjection(join)
 	proj.FromAggr = true
 	builder := &aggBuilder{
 		lhs:         lhs,
 		rhs:         rhs,
-		joinColumns: &applyJoinColumns{},
+		joinColumns: columns,
 		proj:        proj,
-		outerJoin:   join.LeftJoin,
+		outerJoin:   leftJoin,
 	}
 
 	canPushDistinctAggr, distinctExpr := checkIfWeCanPush(ctx, aggregator)
@@ -485,7 +490,7 @@ func splitAggrColumnsToLeftAndRight(
 	// We keep node of the distinct aggregation expression to be used later for ordering.
 	if !canPushDistinctAggr {
 		aggregator.DistinctExpr = distinctExpr
-		return nil, nil, errAbortAggrPushing
+		return nil, errAbortAggrPushing
 	}
 
 outer:
@@ -495,16 +500,15 @@ outer:
 			if aggr.ColOffset == colIdx {
 				err := builder.handleAggr(ctx, aggr)
 				if err != nil {
-					return nil, nil, err
+					return nil, err
 				}
 				continue outer
 			}
 		}
 		builder.proj.addUnexploredExpr(col, col.Expr)
 	}
-	columns := builder.joinColumns.(*applyJoinColumns)
 
-	return columns.columns, builder.proj, nil
+	return builder.proj, nil
 }
 
 func coalesceFunc(e sqlparser.Expr) sqlparser.Expr {

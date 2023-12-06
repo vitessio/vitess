@@ -54,6 +54,10 @@ type (
 	applyJoinColumns struct {
 		columns []applyJoinColumn
 	}
+
+	hashJoinColumns struct {
+		columns []hashJoinColumn
+	}
 )
 
 func (jc *applyJoinColumns) addLeft(expr sqlparser.Expr) {
@@ -67,6 +71,24 @@ func (jc *applyJoinColumns) addRight(expr sqlparser.Expr) {
 	jc.columns = append(jc.columns, applyJoinColumn{
 		Original: expr,
 		RHSExpr:  expr,
+	})
+}
+
+func (jc *applyJoinColumns) add(col applyJoinColumn) {
+	jc.columns = append(jc.columns, col)
+}
+
+func (jc *hashJoinColumns) addLeft(expr sqlparser.Expr) {
+	jc.columns = append(jc.columns, hashJoinColumn{
+		expr: expr,
+		side: Left,
+	})
+}
+
+func (jc *hashJoinColumns) addRight(expr sqlparser.Expr) {
+	jc.columns = append(jc.columns, hashJoinColumn{
+		expr: expr,
+		side: Right,
 	})
 }
 

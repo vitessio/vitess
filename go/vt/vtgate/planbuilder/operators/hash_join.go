@@ -61,7 +61,7 @@ type (
 	}
 
 	hashJoinColumn struct {
-		typ  joinSide
+		side joinSide
 		expr sqlparser.Expr
 	}
 
@@ -136,7 +136,7 @@ func (hj *HashJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		var column *ProjExpr
 		var pureOffset bool
 
-		switch in.typ {
+		switch in.side {
 		case Unknown:
 			column, pureOffset = hj.addColumn(ctx, in.expr)
 		case Left:
@@ -187,7 +187,7 @@ func (hj *HashJoin) ShortDescription() string {
 
 	if len(hj.columns) > 0 {
 		cols := slice.Map(hj.columns, func(from hashJoinColumn) (result string) {
-			switch from.typ {
+			switch from.side {
 			case Unknown:
 				result = "U"
 			case Left:
