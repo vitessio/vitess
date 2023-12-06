@@ -571,6 +571,20 @@ func (session *SafeSession) TimeZone() *time.Location {
 	loc, _ := datetime.ParseTimeZone(tz)
 	return loc
 }
+func (session *SafeSession) ForeingKeyChecks() bool {
+	session.mu.Lock()
+	fkVal, ok := session.SystemVariables["foreign_key_checks"]
+	session.mu.Unlock()
+
+	if !ok {
+		return true
+	}
+	switch strings.ToLower(fkVal) {
+	case "off", "0":
+		return false
+	}
+	return true
+}
 
 // SetOptions sets the options
 func (session *SafeSession) SetOptions(options *querypb.ExecuteOptions) {
@@ -609,6 +623,12 @@ func (session *SafeSession) SetPreQueries() []string {
 		keys = append(keys, k)
 		sysVars[k] = v
 	})
+
+	if session.ForeingKeyChecks() {
+		k := "foreign_key_checks"
+		keys = append(keys, k)
+		sysVars[k] = "1"
+	}
 
 	// if not system variables to set, return
 	if len(keys) == 0 {
