@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -27,7 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/errors"
+	vterrors "vitess.io/vitess/go/errors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -161,7 +162,7 @@ func TestNewSchemaFromQueriesLoop(t *testing.T) {
 	)
 	_, err := NewSchemaFromQueries(queries)
 	require.Error(t, err)
-	err = errors.UnwrapFirst(err)
+	err = vterrors.UnwrapFirst(err)
 	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
 }
 
@@ -339,8 +340,11 @@ func TestInvalidSchema(t *testing.T) {
 			expectErr: &ForeignKeyReferencesViewError{Table: "t11", ReferencedView: "v"},
 		},
 		{
-			schema:    "create table t11 (id int primary key, i int, constraint f11 foreign key (i) references t12 (id) on delete restrict); create table t12 (id int primary key, i int, constraint f12 foreign key (i) references t11 (id) on delete restrict)",
-			expectErr: &ForeignKeyDependencyUnresolvedError{Table: "t11"},
+			schema: "create table t11 (id int primary key, i int, constraint f11 foreign key (i) references t12 (id) on delete restrict); create table t12 (id int primary key, i int, constraint f12 foreign key (i) references t11 (id) on delete restrict)",
+			expectErr: errors.Join(
+				&ForeignKeyDependencyUnresolvedError{Table: "t11"},
+				&ForeignKeyDependencyUnresolvedError{Table: "t12"},
+			),
 		},
 		{
 			schema:    "create table t11 (id int primary key, i int, key ix(i), constraint f11 foreign key (i) references t11(id2) on delete restrict)",
@@ -396,11 +400,16 @@ func TestInvalidSchema(t *testing.T) {
 func TestInvalidTableForeignKeyReference(t *testing.T) {
 	{
 		fkQueries := []string{
+			"create table t10 (id int primary key)",
 			"create table t11 (id int primary key, i int, constraint f12 foreign key (i) references t12(id) on delete restrict)",
 			"create table t15(id int, primary key(id))",
 		}
-		_, err := NewSchemaFromQueries(fkQueries)
+		s, err := NewSchemaFromQueries(fkQueries)
 		assert.Error(t, err)
+		// Even though there's errors, we still expect the schema to have been created.
+		assert.NotNil(t, s)
+		// Even though t11 caused an error, we still expect the schema to have parsed all tables.
+		assert.Equal(t, 3, len(s.Entities()))
 		assert.EqualError(t, err, (&ForeignKeyNonexistentReferencedTableError{Table: "t11", ReferencedTable: "t12"}).Error())
 	}
 	{
@@ -411,7 +420,9 @@ func TestInvalidTableForeignKeyReference(t *testing.T) {
 		}
 		_, err := NewSchemaFromQueries(fkQueries)
 		assert.Error(t, err)
-		assert.EqualError(t, err, (&ForeignKeyDependencyUnresolvedError{Table: "t11"}).Error())
+		assert.ErrorContains(t, err, (&ForeignKeyDependencyUnresolvedError{Table: "t11"}).Error())
+		assert.ErrorContains(t, err, (&ForeignKeyDependencyUnresolvedError{Table: "t12"}).Error())
+		assert.ErrorContains(t, err, (&ForeignKeyDependencyUnresolvedError{Table: "t13"}).Error())
 	}
 }
 
@@ -716,7 +727,7 @@ func TestViewReferences(t *testing.T) {
 				require.NotNil(t, schema)
 			} else {
 				require.Error(t, err)
-				err = errors.UnwrapFirst(err)
+				err = vterrors.UnwrapFirst(err)
 				require.Equal(t, ts.expectErr, err, "received error: %v", err)
 			}
 		})
