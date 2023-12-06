@@ -659,16 +659,16 @@ func (v *VRepl) generateStartStatement(ctx context.Context) (string, error) {
 	)
 }
 
-func getVreplTable(ctx context.Context, s *VReplStream) (string, error) {
+func getVreplTable(s *VReplStream) (string, error) {
 	// sanity checks:
 	if s == nil {
-		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No vreplication stream migration %s", s.workflow)
+		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No vreplication stream migration")
 	}
 	if s.bls.Filter == nil {
 		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No binlog source filter for migration %s", s.workflow)
 	}
 	if len(s.bls.Filter.Rules) != 1 {
-		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Cannot detect filter rules for migration/vreplication %+v", s.workflow)
+		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Cannot detect filter rules for migration/vreplication %s", s.workflow)
 	}
 	vreplTable := s.bls.Filter.Rules[0].Match
 	return vreplTable, nil
