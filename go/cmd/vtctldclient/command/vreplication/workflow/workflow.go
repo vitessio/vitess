@@ -83,6 +83,8 @@ func registerCommands(root *cobra.Command) {
 	update.Flags().BoolVar(&updateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
 	update.Flags().StringVar(&updateOptions.OnDDL, "on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
 	base.AddCommand(update)
+
+	common.AddShardsFlag(delete, show, start, stop, update)
 }
 
 func init() {

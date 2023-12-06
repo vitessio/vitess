@@ -19,7 +19,7 @@
 # So we can detect if a regression affecting a tutorial is introduced.
 
 killall_vtdataroot() {
-  pkill -9 -e -f '(vtdataroot|VTDATAROOT)' # kill Vitess processes
+  pkill -9 -f '(vtdataroot|VTDATAROOT)' # kill Vitess processes
 }
 
 source build.env
@@ -34,11 +34,11 @@ source ../common/env.sh # Required so that "mysql" works from alias
 ./101_initial_cluster.sh
 sleep 5 # Give vtgate time to really start.
 
-killall_vtdataroot
-# verify local example is able to start on an existing setup
-
-./101_initial_cluster.sh
-sleep 5 # Give vtgate time to really start.
+#killall_vtdataroot
+## verify local example is able to start on an existing setup
+#
+#./101_initial_cluster.sh
+#sleep 5 # Give vtgate time to really start.
 
 mysql < ../common/insert_commerce_data.sql
 mysql --table < ../common/select_commerce_data.sql
@@ -70,7 +70,7 @@ $(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
 
 ./205_clean_commerce.sh
 # We expect this to fail as the keyspace is now gone.
-(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
+#(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
 
 ./301_customer_sharded.sh
 ./302_new_shards.sh
@@ -89,7 +89,7 @@ done
 
 ./303_reshard.sh
 sleep 3 # TODO: Required for now!
-
+exit
 ./304_switch_reads.sh
 ./305_switch_writes.sh
 

@@ -85,13 +85,7 @@ func registerCommands(root *cobra.Command) {
 	cancel.Flags().BoolVar(&common.CancelOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the MoveTables workflow.")
 	base.AddCommand(cancel)
 
-	addShardsFlag(show, status, start, stop, switchTraffic, reverseTraffic, complete, cancel)
-}
-
-func addShardsFlag(cmds ...*cobra.Command) {
-	for _, cmd := range cmds {
-		cmd.Flags().StringSliceVar(&common.BaseOptions.Shards, "shards", nil, "Shards to perform the action on.")
-	}
+	common.AddShardsFlag(show, status, start, stop, switchTraffic, reverseTraffic, complete, cancel)
 }
 
 func init() {

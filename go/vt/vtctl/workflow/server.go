@@ -408,6 +408,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	)
 
 	vx := vexec.NewVExec(req.Keyspace, "", s.ts, s.tmc)
+	vx.SetShardsSubset(req.Shards)
 	results, err := vx.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -926,8 +927,9 @@ ORDER BY
 	}, nil
 }
 
-func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *State, error) {
-	ts, err := s.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
+func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string,
+	shardsSubset []string) (*trafficSwitcher, *State, error) {
+	ts, err := s.buildTrafficSwitcher(ctx, targetKeyspace, workflowName, shardsSubset)
 	if err != nil {
 		log.Errorf("buildTrafficSwitcher failed: %v", err)
 		return nil, nil, err
@@ -1839,6 +1841,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		Workflow: req.Workflow,
 	}
 	vx := vexec.NewVExec(req.Keyspace, req.Workflow, s.ts, s.tmc)
+	vx.SetShardsSubset(req.Shards)
 	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
 		res, err := s.tmc.DeleteVReplicationWorkflow(ctx, tablet.Tablet, deleteReq)
 		if err != nil {
@@ -1873,7 +1876,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 }
 
 func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowStatusRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
-	ts, state, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
+	ts, state, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow, req.Shards)
 	if err != nil {
 		return nil, err
 	}
@@ -2115,6 +2118,7 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	span.Annotate("state", req.TabletRequest.State)
 
 	vx := vexec.NewVExec(req.Keyspace, req.TabletRequest.Workflow, s.ts, s.tmc)
+	vx.SetShardsSubset(req.Shards)
 	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
 		res, err := s.tmc.UpdateVReplicationWorkflow(ctx, tablet.Tablet, req.TabletRequest)
 		if err != nil {
@@ -2355,8 +2359,10 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 
 // DropTargets cleans up target tables, shards and denied tables if a MoveTables/Reshard
 // is cancelled.
-func (s *Server) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
-	ts, state, err := s.getWorkflowState(ctx, targetKeyspace, workflow)
+func (s *Server) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, keepRoutingRules,
+	dryRun bool, shardsSubset []string) (*[]string, error) {
+
+	ts, state, err := s.getWorkflowState(ctx, targetKeyspace, workflow, shardsSubset)
 	if err != nil {
 		log.Errorf("Failed to get VReplication workflow state for %s.%s: %v", targetKeyspace, workflow, err)
 		return nil, err

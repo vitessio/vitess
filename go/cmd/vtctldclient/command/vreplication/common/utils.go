@@ -244,3 +244,9 @@ func AddCommonSwitchTrafficFlags(cmd *cobra.Command, initializeTargetSequences b
 		cmd.Flags().BoolVar(&SwitchTrafficOptions.InitializeTargetSequences, "initialize-target-sequences", false, "When moving tables from an unsharded keyspace to a sharded keyspace, initialize any sequences that are being used on the target when switching writes.")
 	}
 }
+
+func AddShardsFlag(cmds ...*cobra.Command) {
+	for _, cmd := range cmds {
+		cmd.Flags().StringSliceVar(&BaseOptions.Shards, "shards", nil, "Shards to perform the action on.")
+	}
+}

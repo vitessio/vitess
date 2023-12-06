@@ -88,6 +88,9 @@ type VExec struct {
 	// than "all of the shard primaries in a given keyspace", and I'm not sure
 	// about potential future usages yet.
 	primaries []*topo.TabletInfo
+	// For performance optimization, for workflows where only a small subset of shards are participating,
+	// this attribute can be set to limit the number of shards we query.
+	shardsSubset []string
 	// (TODO:@ajm188) Similar to supporting a TargetStrategy for controlling how
 	// a VExec picks which tablets to query, we may also want an
 	// ExecutionStrategy (I'm far less sure about whether we would want this at
@@ -109,6 +112,16 @@ func NewVExec(keyspace string, workflow string, ts *topo.Server, tmc tmclient.Ta
 		keyspace: keyspace,
 		workflow: workflow,
 	}
+}
+
+// SetShardsSubset sets the shards subset to be used for filtering the shards to query.
+func (vx *VExec) SetShardsSubset(shardsSubset []string) {
+	vx.shardsSubset = shardsSubset
+}
+
+// GetShardsSubset returns the shards subset to be used for filtering the shards to query.
+func (vx *VExec) GetShardsSubset() []string {
+	return vx.shardsSubset
 }
 
 // QueryContext executes the given vexec query, returning a mapping of tablet
@@ -199,23 +212,50 @@ func (vx *VExec) execCallback(ctx context.Context, callback func(context.Context
 	return results, allErrors.AggrError(vterrors.Aggregate)
 }
 
-func (vx *VExec) initialize(ctx context.Context) error {
-	vx.primaries = nil
-
+func (vx *VExec) getShardsToAffect(ctx context.Context, keyspace string) ([]string, error) {
 	getShardsCtx, getShardsCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer getShardsCancel()
+	allShards, err := vx.ts.GetShardNames(getShardsCtx, vx.keyspace)
+	if err != nil {
+		return nil, err
+	}
+	if len(allShards) == 0 {
+		return nil, fmt.Errorf("%w %s", ErrNoShardsForKeyspace, vx.keyspace)
+	}
 
-	shards, err := vx.ts.GetShardNames(getShardsCtx, vx.keyspace)
+	var shardsToAffect []string
+	if vx.shardsSubset != nil {
+		shardsToAffect = vx.shardsSubset
+	}
+
+	if len(shardsToAffect) == 0 {
+		return allShards, nil
+	} else {
+		for _, shard := range shardsToAffect {
+			// Validate that the provided shards are part of the keyspace.
+			found := false
+			for _, shard2 := range allShards {
+				if shard == shard2 {
+					found = true
+				}
+			}
+			if !found {
+				return nil, fmt.Errorf("shard %s not found in keyspace %s", shard, keyspace)
+			}
+		}
+		log.Infof("Selecting subset of shards in keyspace %s: %d from %d :: %+v",
+			keyspace, len(shardsToAffect), len(allShards), shardsToAffect)
+		return shardsToAffect, nil
+	}
+}
+
+func (vx *VExec) initialize(ctx context.Context) error {
+	vx.primaries = nil
+	shards, err := vx.getShardsToAffect(ctx, vx.keyspace)
 	if err != nil {
 		return err
 	}
-
-	if len(shards) == 0 {
-		return fmt.Errorf("%w %s", ErrNoShardsForKeyspace, vx.keyspace)
-	}
-
 	primaries := make([]*topo.TabletInfo, 0, len(shards))
-
 	for _, shard := range shards {
 		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		defer cancel()

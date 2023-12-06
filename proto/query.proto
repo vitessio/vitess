@@ -983,7 +983,6 @@ message TransactionMetadata {
   repeated Target participants = 4;
 }
 
-
 // SchemaTableType represents the type of table requested.
 enum SchemaTableType {
   VIEWS = 0;
