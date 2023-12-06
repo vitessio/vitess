@@ -410,6 +410,10 @@ func TestInvalidTableForeignKeyReference(t *testing.T) {
 		assert.NotNil(t, s)
 		// Even though t11 caused an error, we still expect the schema to have parsed all tables.
 		assert.Equal(t, 3, len(s.Entities()))
+		t11 := s.Table("t11")
+		assert.NotNil(t, t11)
+		// validate t11 table definition is complete, even though it was invalid.
+		assert.Equal(t, "create table t11 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tkey f12 (i),\n\tconstraint f12 foreign key (i) references t12 (id) on delete restrict\n)", t11.Create().StatementString())
 		assert.EqualError(t, err, (&ForeignKeyNonexistentReferencedTableError{Table: "t11", ReferencedTable: "t12"}).Error())
 	}
 	{
