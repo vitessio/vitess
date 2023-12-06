@@ -442,13 +442,13 @@ func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Agg
 		case deps.IsSolvedBy(lhs.tableID):
 			lhs.addGrouping(ctx, groupBy)
 			groupingJCs = append(groupingJCs, JoinColumn{
-				Original: groupBy.Inner,
+				Original: expr,
 				LHSExprs: []BindVarExpr{{Expr: expr}},
 			})
 		case deps.IsSolvedBy(rhs.tableID):
 			rhs.addGrouping(ctx, groupBy)
 			groupingJCs = append(groupingJCs, JoinColumn{
-				Original: groupBy.Inner,
+				Original: expr,
 				RHSExpr:  expr,
 			})
 		case deps.IsSolvedBy(lhs.tableID.Merge(rhs.tableID)):
