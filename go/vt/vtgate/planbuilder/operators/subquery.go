@@ -49,6 +49,9 @@ type SubQuery struct {
 	// Fields related to correlated subqueries:
 	Vars    map[string]int // Arguments copied from outer to inner, set during offset planning.
 	outerID semantics.TableSet
+	// correlated stores whether this subquery is correlated or not.
+	// We use this information to fail the planning if we are unable to merge the subquery with a route.
+	correlated bool
 
 	IsProjection bool
 }
@@ -199,6 +202,9 @@ func (sq *SubQuery) GetMergePredicates() []sqlparser.Expr {
 func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) (Operator, error) {
 	if !sq.TopLevel {
 		return nil, subqueryNotAtTopErr
+	}
+	if sq.correlated {
+		return nil, correlatedSubqueryErr
 	}
 	if sq.IsProjection {
 		if len(sq.GetMergePredicates()) > 0 {
