@@ -48,7 +48,7 @@ func CoerceTypes(v1, v2 Type) (out Type, err error) {
 	switch {
 	case sqltypes.IsTextOrBinary(v1.Type()) && sqltypes.IsTextOrBinary(v2.Type()):
 		mergedCollation, _, _, ferr := mergeCollations(typedCoercionCollation(v1.Type(), v1.Collation()), typedCoercionCollation(v2.Type(), v2.Collation()), v1.Type(), v2.Type())
-		if err != nil {
+		if ferr != nil {
 			return Type{}, ferr
 		}
 		out.collation = mergedCollation.Collation
