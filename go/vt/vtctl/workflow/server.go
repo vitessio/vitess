@@ -1442,13 +1442,11 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 				return nil, err
 			}
 		}
-		if vschema != nil {
-			// We added to the vschema.
-			if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
-				return nil, err
-			}
-		}
 
+		// We added to the vschema.
+		if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err

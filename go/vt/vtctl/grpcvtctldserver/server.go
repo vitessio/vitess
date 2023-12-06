@@ -4992,9 +4992,7 @@ func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string) (*v
 		return nil, err
 	}
 
-	data, _, dataErr := conn.Get(ctx, relativePath)
-
-	if dataErr == nil {
+	if data, _, err := conn.Get(ctx, relativePath); err == nil {
 		result, err := topo.DecodeContent(relativePath, data, false)
 		if err != nil {
 			err := vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file content for cell %s: %v", cellPath, err)
@@ -5006,15 +5004,13 @@ func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string) (*v
 		return &topoCell, nil
 	}
 
-	children, childrenErr := conn.ListDir(ctx, relativePath, false /*full*/)
-
-	if childrenErr != nil && dataErr != nil {
+	children, err := conn.ListDir(ctx, relativePath, false /*full*/)
+	if err != nil {
 		err := vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cell %s with path %s has no file contents and no children: %v", cell, cellPath, err)
 		return nil, err
 	}
 
 	topoCell.Children = make([]string, len(children))
-
 	for i, c := range children {
 		topoCell.Children[i] = c.Name
 	}
