@@ -74,9 +74,9 @@ func TestProcessDeque(t *testing.T) {
 func TestDoorKeeperDynamicSize(t *testing.T) {
 	store := NewStore[keyint, cachedint](200000, true)
 	shard := store.shards[0]
-	require.True(t, shard.dookeeper.Capacity == 512)
+	require.True(t, shard.doorkeeper.Capacity == 512)
 	for i := keyint(0); i < 5000; i++ {
 		shard.set(i, &Entry[keyint, cachedint]{})
 	}
-	require.True(t, shard.dookeeper.Capacity > 100000)
+	require.True(t, shard.doorkeeper.Capacity > 100000)
 }
