@@ -59,7 +59,7 @@ var (
 			"replicaCount": 2
 		},
 		{
-			"name": "redirected",
+			"name": "redirected"
 		},
 		{
 			"name": "routed",
