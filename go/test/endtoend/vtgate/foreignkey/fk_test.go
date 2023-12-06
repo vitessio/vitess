@@ -1207,3 +1207,31 @@ func TestReplaceWithFK(t *testing.T) {
 	utils.AssertMatches(t, conn, `select * from u_t1`, `[[INT64(1) INT64(1)] [INT64(2) INT64(2)]]`)
 	utils.AssertMatches(t, conn, `select * from u_t2`, `[[INT64(1) NULL] [INT64(2) NULL]]`)
 }
+
+// TestDDLFk tests that table is created with fk constraint when foreign_key_checks is off.
+func TestDDLFk(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, mcmp.VtConn, `use uks`)
+
+	createTableDDLTemp1 := `
+create table temp1(id bigint auto_increment primary key, col varchar(20) not null,
+foreign key (col) references temp2(col))
+`
+	mcmp.Exec(`set foreign_key_checks = off`)
+	// should be able to create `temp1` table without a `temp2`
+	mcmp.Exec(createTableDDLTemp1)
+
+	createTableDDLTemp2 := `
+create table temp2(id bigint auto_increment primary key, col varchar(20) not null, key (col))
+`
+	// now create `temp2`
+	mcmp.Exec(createTableDDLTemp2)
+
+	// inserting some data with fk constraints on.
+	mcmp.Exec(`set foreign_key_checks = on`)
+	mcmp.Exec(`insert into temp2(col) values('a'), ('b'), ('c') `)
+	mcmp.Exec(`insert into temp1(col) values('a') `)
+	mcmp.ExecAllowAndCompareError(`insert into temp1(col) values('d') `)
+}

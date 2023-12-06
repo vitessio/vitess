@@ -564,7 +564,7 @@ func TestGetMySQLSetVarValue(t *testing.T) {
 		{
 			name:      "SET_VAR clause in the middle",
 			comments:  []string{"/*+ NO_RANGE_OPTIMIZATION(t3 PRIMARY, f2_idx) SET_VAR(foreign_key_checks=OFF) NO_ICP(t1, t2) */"},
-			valToFind: sysvars.ForeignKeyChecks.Name,
+			valToFind: sysvars.ForeignKeyChecks,
 			want:      "OFF",
 		},
 		{
@@ -582,19 +582,19 @@ func TestGetMySQLSetVarValue(t *testing.T) {
 		{
 			name:      "Multiple SET_VAR clauses",
 			comments:  []string{"/*+ SET_VAR(sort_buffer_size = 16M) */", "/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') */", "/*+ SET_VAR( foReiGn_key_checks = On) */"},
-			valToFind: sysvars.ForeignKeyChecks.Name,
+			valToFind: sysvars.ForeignKeyChecks,
 			want:      "",
 		},
 		{
 			name:      "Verify casing",
 			comments:  []string{"/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') SET_VAR( foReiGn_key_checks = On) */"},
-			valToFind: sysvars.ForeignKeyChecks.Name,
+			valToFind: sysvars.ForeignKeyChecks,
 			want:      "On",
 		},
 		{
 			name:      "Leading comment is a normal comment",
 			comments:  []string{"/* This is a normal comment */", "/*+ MAX_EXECUTION_TIME(1000) SET_VAR( foreign_key_checks = 1) */"},
-			valToFind: sysvars.ForeignKeyChecks.Name,
+			valToFind: sysvars.ForeignKeyChecks,
 			want:      "1",
 		},
 	}
@@ -619,7 +619,7 @@ func TestSetMySQLSetVarValue(t *testing.T) {
 		{
 			name:           "SET_VAR clause in the middle",
 			comments:       []string{"/*+ NO_RANGE_OPTIMIZATION(t3 PRIMARY, f2_idx) SET_VAR(foreign_key_checks=OFF) NO_ICP(t1, t2) */"},
-			key:            sysvars.ForeignKeyChecks.Name,
+			key:            sysvars.ForeignKeyChecks,
 			value:          "On",
 			commentsWanted: []string{"/*+ NO_RANGE_OPTIMIZATION(t3 PRIMARY, f2_idx) SET_VAR(foreign_key_checks=On) NO_ICP(t1, t2) */"},
 		},
@@ -640,21 +640,21 @@ func TestSetMySQLSetVarValue(t *testing.T) {
 		{
 			name:           "Multiple SET_VAR clauses",
 			comments:       []string{"/*+ SET_VAR(sort_buffer_size = 16M) */", "/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') */", "/*+ SET_VAR( foReiGn_key_checks = On) */"},
-			key:            sysvars.ForeignKeyChecks.Name,
+			key:            sysvars.ForeignKeyChecks,
 			value:          "1",
 			commentsWanted: []string{"/*+ SET_VAR(sort_buffer_size = 16M) SET_VAR(foreign_key_checks=1) */", "/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') */", "/*+ SET_VAR( foReiGn_key_checks = On) */"},
 		},
 		{
 			name:           "Verify casing",
 			comments:       []string{"/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') SET_VAR( foReiGn_key_checks = On) */"},
-			key:            sysvars.ForeignKeyChecks.Name,
+			key:            sysvars.ForeignKeyChecks,
 			value:          "off",
 			commentsWanted: []string{"/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') SET_VAR(foReiGn_key_checks=off) */"},
 		},
 		{
 			name:           "Leading comment is a normal comment",
 			comments:       []string{"/* This is a normal comment */", "/*+ MAX_EXECUTION_TIME(1000) SET_VAR( foreign_key_checks = 1) */"},
-			key:            sysvars.ForeignKeyChecks.Name,
+			key:            sysvars.ForeignKeyChecks,
 			value:          "Off",
 			commentsWanted: []string{"/* This is a normal comment */", "/*+ MAX_EXECUTION_TIME(1000) SET_VAR(foreign_key_checks=Off) */"},
 		},

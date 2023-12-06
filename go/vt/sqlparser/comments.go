@@ -558,7 +558,7 @@ func AllowScatterDirective(stmt Statement) bool {
 func ForeignKeyChecksState(stmt Statement) *bool {
 	cmt, ok := stmt.(Commented)
 	if ok {
-		fkChecksVal := cmt.GetParsedComments().GetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name)
+		fkChecksVal := cmt.GetParsedComments().GetMySQLSetVarValue(sysvars.ForeignKeyChecks)
 		// If the value of the `foreign_key_checks` optimizer hint is something that doesn't make sense,
 		// then MySQL just ignores it and treats it like the case, where it is unspecified. We are choosing
 		// to have the same behaviour here. If the value doesn't match any of the acceptable values, we return nil,
