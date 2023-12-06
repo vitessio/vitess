@@ -60,7 +60,6 @@ var (
 		},
 		{
 			"name": "redirected",
-			"servedFrom": "test_keyspace"
 		},
 		{
 			"name": "routed",
