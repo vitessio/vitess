@@ -134,6 +134,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	whereExpr := getWhereCondExpr(append(uniqKeyCompExprs, pkCompExpr))
 
 	delStmt := &sqlparser.Delete{
+		Comments:   ins.Comments,
 		TableExprs: sqlparser.TableExprs{sqlparser.CloneRefOfAliasedTableExpr(ins.Table)},
 		Where:      sqlparser.NewWhere(sqlparser.WhereClause, whereExpr),
 	}

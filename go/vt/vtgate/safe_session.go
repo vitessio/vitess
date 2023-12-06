@@ -557,7 +557,7 @@ func (session *SafeSession) HasSystemVariables() (found bool) {
 	session.GetSystemVariables(func(_ string, _ string) {
 		found = true
 	})
-	return found || session.ForeignKeyChecks() != nil
+	return
 }
 
 func (session *SafeSession) TimeZone() *time.Location {
@@ -571,23 +571,27 @@ func (session *SafeSession) TimeZone() *time.Location {
 	loc, _ := datetime.ParseTimeZone(tz)
 	return loc
 }
-func (session *SafeSession) ForeignKeyChecks() *string {
+
+// ForeignKeyChecks returns the foreign_key_checks stores in system_variables map in the session.
+func (session *SafeSession) ForeignKeyChecks() (*bool, *string) {
 	session.mu.Lock()
-	fkVal, ok := session.SystemVariables["foreign_key_checks"]
+	fkVal, ok := session.SystemVariables[sysvars.ForeignKeyChecks]
 	session.mu.Unlock()
 
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	switch strings.ToLower(fkVal) {
 	case "off", "0":
-		fkCheck := "0"
-		return &fkCheck
+		fkCheckStr := "0"
+		fkCheckBool := false
+		return &fkCheckBool, &fkCheckStr
 	case "on", "1":
-		fkCheck := "1"
-		return &fkCheck
+		fkCheckStr := "1"
+		fkCheckBool := true
+		return &fkCheckBool, &fkCheckStr
 	}
-	return nil
+	return nil, nil
 }
 
 // SetOptions sets the options
@@ -627,13 +631,6 @@ func (session *SafeSession) SetPreQueries() []string {
 		keys = append(keys, k)
 		sysVars[k] = v
 	})
-
-	fkVal := session.ForeignKeyChecks()
-	if fkVal != nil {
-		k := "foreign_key_checks"
-		keys = append(keys, k)
-		sysVars[k] = *fkVal
-	}
 
 	// if not system variables to set, return
 	if len(keys) == 0 {

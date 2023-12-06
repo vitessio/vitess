@@ -835,9 +835,9 @@ func (vc *vcursorImpl) SetAutocommit(ctx context.Context, autocommit bool) error
 // SetSessionForeignKeyChecks implements the SessionActions interface
 func (vc *vcursorImpl) SetSessionForeignKeyChecks(ctx context.Context, foreignKeyChecks bool) error {
 	if foreignKeyChecks {
-		vc.safeSession.SetSystemVariable(sysvars.ForeignKeyChecks.Name, "1")
+		vc.safeSession.SetSystemVariable(sysvars.ForeignKeyChecks, "1")
 	} else {
-		vc.safeSession.SetSystemVariable(sysvars.ForeignKeyChecks.Name, "0")
+		vc.safeSession.SetSystemVariable(sysvars.ForeignKeyChecks, "0")
 	}
 	return nil
 }
@@ -1326,7 +1326,7 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	callerId := callerid.EffectiveCallerIDFromContext(ctx)
 	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
 
-	timedCtx, _ := context.WithTimeout(context.Background(), warmingReadsQueryTimeout) //nolint
+	timedCtx, _ := context.WithTimeout(context.Background(), warmingReadsQueryTimeout) // nolint
 	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
 
 	v := &vcursorImpl{
@@ -1365,17 +1365,8 @@ func (vc *vcursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery *bool) {
 		return
 	}
 	// If the query doesn't have anything, then we consult the session state.
-	fkVal, isPresent := vc.safeSession.SystemVariables[sysvars.ForeignKeyChecks.Name]
-	if isPresent {
-		switch strings.ToLower(fkVal) {
-		case "on", "1":
-			val := true
-			vc.fkChecksState = &val
-		case "off", "0":
-			val := false
-			vc.fkChecksState = &val
-		}
-	}
+	fkCheck, _ := vc.safeSession.ForeignKeyChecks()
+	vc.fkChecksState = fkCheck
 }
 
 // GetForeignKeyChecksState gets the stored foreign key checks state in the vcursor.
