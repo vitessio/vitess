@@ -433,8 +433,11 @@ func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Agg
 	var groupingJCs []JoinColumn
 
 	for _, groupBy := range rootAggr.Grouping {
-		deps := ctx.SemTable.RecursiveDeps(groupBy.Inner)
-		expr := groupBy.Inner
+		expr, err := rootAggr.QP.GetSimplifiedExpr(ctx, groupBy.Inner)
+		if err != nil {
+			panic(err)
+		}
+		deps := ctx.SemTable.RecursiveDeps(expr)
 		switch {
 		case deps.IsSolvedBy(lhs.tableID):
 			lhs.addGrouping(ctx, groupBy)
