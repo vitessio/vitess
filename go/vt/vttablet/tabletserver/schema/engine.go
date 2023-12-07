@@ -706,7 +706,11 @@ func (se *Engine) RegisterNotifier(name string, f notifier, runNotifier bool) {
 		created = append(created, table)
 	}
 	if runNotifier {
-		f(se.tables, created, nil, nil)
+		s := make(map[string]*Table, len(se.tables))
+		for k, v := range se.tables {
+			s[k] = v
+		}
+		f(s, created, nil, nil)
 	}
 }
 
