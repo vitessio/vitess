@@ -42,7 +42,7 @@ type (
 		// These columns are the output columns of the hash join. While in operator mode we keep track of complex expression,
 		// but once we move to the engine primitives, the hash join only passes through column from either left or right.
 		// anything more complex will be solved by a projection on top of the hash join
-		columns []hashJoinColumn
+		columns *hashJoinColumns
 
 		// After offset planning
 
@@ -82,6 +82,7 @@ func NewHashJoin(lhs, rhs Operator, outerJoin bool) *HashJoin {
 		LHS:      lhs,
 		RHS:      rhs,
 		LeftJoin: outerJoin,
+		columns:  &hashJoinColumns{},
 	}
 	return hj
 }
@@ -89,7 +90,7 @@ func NewHashJoin(lhs, rhs Operator, outerJoin bool) *HashJoin {
 func (hj *HashJoin) Clone(inputs []Operator) Operator {
 	kopy := *hj
 	kopy.LHS, kopy.RHS = inputs[0], inputs[1]
-	kopy.columns = slices.Clone(hj.columns)
+	kopy.columns = &hashJoinColumns{columns: slices.Clone(hj.columns.columns)}
 	kopy.LHSKeys = slices.Clone(hj.LHSKeys)
 	kopy.RHSKeys = slices.Clone(hj.RHSKeys)
 	return &kopy
@@ -115,8 +116,8 @@ func (hj *HashJoin) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bo
 		}
 	}
 
-	hj.columns = append(hj.columns, hashJoinColumn{expr: expr.Expr})
-	return len(hj.columns) - 1
+	hj.columns.add(expr.Expr)
+	return len(hj.columns.columns) - 1
 }
 
 func (hj *HashJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
@@ -132,7 +133,7 @@ func (hj *HashJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	}
 
 	needsProj := false
-	eexprs := slice.Map(hj.columns, func(in hashJoinColumn) *ProjExpr {
+	eexprs := slice.Map(hj.columns.columns, func(in hashJoinColumn) *ProjExpr {
 		var column *ProjExpr
 		var pureOffset bool
 
@@ -161,7 +162,7 @@ func (hj *HashJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 }
 
 func (hj *HashJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
-	for offset, col := range hj.columns {
+	for offset, col := range hj.columns.columns {
 		if ctx.SemTable.EqualsExprWithDeps(expr, col.expr) {
 			return offset
 		}
@@ -170,7 +171,7 @@ func (hj *HashJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Exp
 }
 
 func (hj *HashJoin) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	return slice.Map(hj.columns, func(from hashJoinColumn) *sqlparser.AliasedExpr {
+	return slice.Map(hj.columns.columns, func(from hashJoinColumn) *sqlparser.AliasedExpr {
 		return aeWrap(from.expr)
 	})
 }
@@ -185,8 +186,8 @@ func (hj *HashJoin) ShortDescription() string {
 	})
 	cmp := strings.Join(comparisons, " AND ")
 
-	if len(hj.columns) > 0 {
-		cols := slice.Map(hj.columns, func(from hashJoinColumn) (result string) {
+	if len(hj.columns.columns) > 0 {
+		cols := slice.Map(hj.columns.columns, func(from hashJoinColumn) (result string) {
 			switch from.side {
 			case Unknown:
 				result = "U"

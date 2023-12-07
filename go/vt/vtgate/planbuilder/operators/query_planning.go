@@ -219,7 +219,7 @@ func tryPushProjection(
 func pushProjectionThroughHashJoin(p *Projection, hj *HashJoin) (Operator, *ApplyResult) {
 	cols := p.Columns.GetColumns()
 	for _, col := range cols {
-		hj.columns = append(hj.columns, hashJoinColumn{expr: col.Expr})
+		hj.columns.add(col.Expr)
 	}
 	return hj, Rewrote("merged projection into hash join")
 }

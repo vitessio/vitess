@@ -85,6 +85,12 @@ func (jc *hashJoinColumns) addLeft(expr sqlparser.Expr) {
 	})
 }
 
+func (jc *hashJoinColumns) add(expr sqlparser.Expr) {
+	jc.columns = append(jc.columns, hashJoinColumn{
+		expr: expr,
+	})
+}
+
 func (jc *hashJoinColumns) addRight(expr sqlparser.Expr) {
 	jc.columns = append(jc.columns, hashJoinColumn{
 		expr: expr,
