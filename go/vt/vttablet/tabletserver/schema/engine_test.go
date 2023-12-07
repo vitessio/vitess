@@ -748,6 +748,29 @@ func AddFakeInnoDBReadRowsResult(db *fakesqldb.DB, value int) *fakesqldb.Expecte
 	))
 }
 
+// TestRegisterNotifier tests the functionality of RegisterNotifier
+// It also makes sure that writing to the tables map in the schema engine doesn't change the tables received by the notifiers.
+func TestRegisterNotifier(t *testing.T) {
+	// Create a new engine for testing
+	se := NewEngineForTests()
+	se.notifiers = map[string]notifier{}
+	se.tables = map[string]*Table{
+		"t1": nil,
+		"t2": nil,
+		"t3": nil,
+	}
+
+	var tablesReceived map[string]*Table
+	// Register a notifier and make it run immediately.
+	se.RegisterNotifier("TestRegisterNotifier", func(full map[string]*Table, created, altered, dropped []*Table) {
+		tablesReceived = full
+	}, true)
+
+	// Change the se.tables and make sure it doesn't affect the tables received by the notifier.
+	se.tables["t4"] = nil
+	require.Len(t, tablesReceived, 3)
+}
+
 // TestEngineMysqlTime tests the functionality of Engine.mysqlTime function
 func TestEngineMysqlTime(t *testing.T) {
 	tests := []struct {
