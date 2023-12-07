@@ -54,6 +54,8 @@ func tryPushAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator)
 		output, applyResult = pushAggregationThroughRoute(ctx, aggregator, src)
 	case *ApplyJoin:
 		output, applyResult = pushAggregationThroughApplyJoin(ctx, aggregator, src)
+	case *HashJoin:
+		output, applyResult = pushAggregationThroughHashJoin(ctx, aggregator, src)
 	case *Filter:
 		output, applyResult = pushAggregationThroughFilter(ctx, aggregator, src)
 	case *SubQueryContainer:
@@ -392,6 +394,52 @@ func pushAggregationThroughApplyJoin(ctx *plancontext.PlanningContext, rootAggr 
 	rootAggr.aggregateTheAggregates()
 	rootAggr.Source = output
 	return rootAggr, Rewrote("push Aggregation under join")
+}
+
+func pushAggregationThroughHashJoin(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *HashJoin) (Operator, *ApplyResult) {
+	lhs := &joinPusher{
+		orig: rootAggr,
+		pushed: &Aggregator{
+			Source: join.LHS,
+			QP:     rootAggr.QP,
+		},
+		columns: initColReUse(len(rootAggr.Columns)),
+		tableID: TableID(join.LHS),
+	}
+	rhs := &joinPusher{
+		orig: rootAggr,
+		pushed: &Aggregator{
+			Source: join.RHS,
+			QP:     rootAggr.QP,
+		},
+		columns: initColReUse(len(rootAggr.Columns)),
+		tableID: TableID(join.RHS),
+	}
+
+	columns := &hashJoinColumns{}
+	output, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, join.LeftJoin, columns, lhs, rhs)
+	if err != nil {
+		// if we get this error, we just abort the splitting and fall back on simpler ways of solving the same query
+		if errors.Is(err, errAbortAggrPushing) {
+			return nil, nil
+		}
+		panic(err)
+	}
+
+	if len(rootAggr.Grouping) > 0 {
+		return nil, nil
+	}
+	join.LHS, join.RHS = lhs.pushed, rhs.pushed
+
+	if !rootAggr.Original {
+		// we only keep the root aggregation, if this aggregator was created
+		// by splitting one and pushing under a join, we can get rid of this one
+		return output, Rewrote("push Aggregation under hash join - keep original")
+	}
+
+	rootAggr.aggregateTheAggregates()
+	rootAggr.Source = output
+	return rootAggr, Rewrote("push Aggregation under hash join")
 }
 
 var errAbortAggrPushing = fmt.Errorf("abort aggregation pushing")

@@ -196,7 +196,7 @@ func tryPushProjection(
 		if !p.canPush(ctx) {
 			return p, NoRewrite
 		}
-		return pushProjectionThroughHashJoin(p, src)
+		return pushProjectionThroughHashJoin(ctx, p, src)
 	case *Vindex:
 		if !p.canPush(ctx) {
 			return p, NoRewrite
@@ -216,10 +216,13 @@ func tryPushProjection(
 	}
 }
 
-func pushProjectionThroughHashJoin(p *Projection, hj *HashJoin) (Operator, *ApplyResult) {
-	cols := p.Columns.GetColumns()
+func pushProjectionThroughHashJoin(ctx *plancontext.PlanningContext, p *Projection, hj *HashJoin) (Operator, *ApplyResult) {
+	cols := p.Columns.(AliasedProjections)
 	for _, col := range cols {
-		hj.columns.add(col.Expr)
+		if !col.isSameInAndOut(ctx) {
+			return p, NoRewrite
+		}
+		hj.columns.add(col.ColExpr)
 	}
 	return hj, Rewrote("merged projection into hash join")
 }

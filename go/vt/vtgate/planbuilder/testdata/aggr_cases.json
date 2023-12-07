@@ -6442,5 +6442,87 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "count(*) push down through left hash join",
+    "query": "select count(*) from user left join (select col from user_extra limit 10) ue on user.col = ue.col",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user left join (select col from user_extra limit 10) ue on user.col = ue.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "count(*) * coalesce(count(*), 1) as count(*)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "HashLeftJoin",
+                "Collation": "binary",
+                "ComparisonType": "INT16",
+                "JoinColumnIndexes": "-1,1",
+                "Predicate": "`user`.col = ue.col",
+                "TableName": "`user`_user_extra",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*), `user`.col from `user` where 1 != 1",
+                    "Query": "select count(*), `user`.col from `user`",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "count_star(0), any_value(1)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "SimpleProjection",
+                        "Columns": [
+                          1,
+                          0
+                        ],
+                        "Inputs": [
+                          {
+                            "OperatorType": "Limit",
+                            "Count": "10",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select col, 1 from (select col from user_extra where 1 != 1) as ue where 1 != 1",
+                                "Query": "select col, 1 from (select col from user_extra) as ue limit :__upper_limit",
+                                "Table": "user_extra"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]
