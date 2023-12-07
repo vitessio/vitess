@@ -2894,6 +2894,7 @@ func (ct *ColumnType) SQLType() querypb.Type {
 		keywordStrings[LONGBLOB]:
 		return sqltypes.Blob
 	case keywordStrings[CHAR],
+		keywordStrings[CHARACTER],
 		keywordStrings[NCHAR],
 		"national char",
 		"national character":
