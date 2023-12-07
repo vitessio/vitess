@@ -121,6 +121,7 @@ func init() {
 	stats.NewString("BuildHost").Set(AppVersion.buildHost)
 	stats.NewString("BuildUser").Set(AppVersion.buildUser)
 	stats.NewGauge("BuildTimestamp", "build timestamp").Set(AppVersion.buildTime)
+	stats.NewString("BuildVersion").Set(AppVersion.version)
 	stats.NewString("BuildGitRev").Set(AppVersion.buildGitRev)
 	stats.NewString("BuildGitBranch").Set(AppVersion.buildGitBranch)
 	stats.NewGauge("BuildNumber", "build number").Set(AppVersion.jenkinsBuildNumber)
@@ -128,11 +129,12 @@ func init() {
 	stats.NewString("GoOS").Set(AppVersion.goOS)
 	stats.NewString("GoArch").Set(AppVersion.goArch)
 
-	buildLabels := []string{"BuildHost", "BuildUser", "BuildTimestamp", "BuildGitRev", "BuildGitBranch", "BuildNumber"}
+	buildLabels := []string{"BuildHost", "BuildUser", "BuildTimestamp", "BuildVersion", "BuildGitRev", "BuildGitBranch", "BuildNumber"}
 	buildValues := []string{
 		AppVersion.buildHost,
 		AppVersion.buildUser,
 		fmt.Sprintf("%v", AppVersion.buildTime),
+		AppVersion.version,
 		AppVersion.buildGitRev,
 		AppVersion.buildGitBranch,
 		fmt.Sprintf("%v", AppVersion.jenkinsBuildNumber),
