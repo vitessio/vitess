@@ -5495,121 +5495,141 @@ func TestSubStr(t *testing.T) {
 	}
 }
 
+var sampleColumns = []string{
+	"	col_bit bit",
+	"	col_tinyint tinyint auto_increment",
+	"	col_tinyint3 tinyint(3) unsigned",
+	"	col_smallint smallint",
+	"	col_smallint4 smallint(4) zerofill",
+	"	col_mediumint mediumint",
+	"	col_mediumint5 mediumint(5) unsigned not null",
+	"	col_int int",
+	"	col_int10 int(10) not null",
+	"	col_integer integer comment 'this is an integer'",
+	"	col_bigint bigint",
+	"	col_bigint10 bigint(10) zerofill not null default 10",
+	"	col_real real",
+	"	col_real2 real(1,2) not null default 1.23",
+	"	col_double double",
+	"	col_double2 double(3,4) not null default 1.23",
+	"	col_double3 double precision not null default 1.23",
+	"	col_float float",
+	"	col_float2 float(3,4) not null default 1.23",
+	"	col_float3 float(3) not null default 1.23",
+	"	col_decimal decimal",
+	"	col_decimal2 decimal(2)",
+	"	col_decimal3 decimal(2,3)",
+	"	col_dec dec",
+	"	col_dec2 dec(2)",
+	"	col_dec3 dec(2,3)",
+	"	col_fixed fixed",
+	"	col_fixed2 fixed(2)",
+	"	col_fixed3 fixed(2,3)",
+	"	col_numeric numeric",
+	"	col_numeric2 numeric(2)",
+	"	col_numeric3 numeric(2,3)",
+	"	col_date date",
+	"	col_time time",
+	"	col_timestamp timestamp",
+	"	col_datetime datetime",
+	"	col_year year",
+	"	col_char char",
+	"	col_char2 char(2)",
+	"	col_char3 char(3) character set ascii",
+	"	col_char4 char(4) character set ascii collate ascii_bin",
+	"	col_character character",
+	"	col_character2 character(2)",
+	"	col_character3 character(3) character set ascii",
+	"	col_character4 character(4) character set ascii collate ascii_bin",
+	"	col_char_varying char varying(2)",
+	"	col_char_varying2 char varying(10) character set utf8",
+	"	col_nchar nchar",
+	"	col_nchar2 nchar(2)",
+	"	col_nchar_varchar nchar varchar(2)",
+	"	col_nchar_varying nchar varying(2)",
+	"	col_national_char national char",
+	"	col_national_char2 national char(2)",
+	"	col_national_character national character",
+	"	col_national_character2 national character(2)",
+	"	col_national_char_varying national char varying(2)",
+	"	col_varchar varchar",
+	"	col_varchar2 varchar(2)",
+	"	col_varchar3 varchar(3) character set ascii",
+	"	col_varchar4 varchar(4) character set ascii collate ascii_bin",
+	"	col_varchar5 varchar(5) character set ascii binary",
+	"	col_varcharMax varchar(MAX)",
+	"	col_character_varying character varying",
+	"	col_character_varying2 character varying(2)",
+	"	col_character_varying3 character varying(3) character set ascii",
+	"	col_character_varying4 character varying(4) character set ascii collate ascii_bin",
+	"	col_nvarchar nvarchar",
+	"	col_nvarchar2 nvarchar(2)",
+	"	col_national_varchar national varchar",
+	"	col_national_varchar2 national varchar(2)",
+	"	col_national_character_varying national character varying",
+	"	col_national_character_varying2 national character varying(2)",
+	"	col_binary binary",
+	"	col_varbinary varbinary(10)",
+	"	col_tinyblob tinyblob",
+	"	col_blob blob",
+	"	col_mediumblob mediumblob",
+	"	col_longblob longblob",
+	"	col_tinytext tinytext",
+	"	col_text text",
+	"	col_mediumtext mediumtext",
+	"	col_long long",
+	"	col_long_varchar long varchar",
+	"	col_longtext longtext",
+	"	col_text text character set ascii collate ascii_bin",
+	"	col_json json",
+	"	col_enum enum('a', 'b', 'c', 'd')",
+	"	col_enum2 enum('a', 'b', 'c', 'd') character set ascii",
+	"	col_enum3 enum('a', 'b', 'c', 'd') collate ascii_bin",
+	"	col_enum4 enum('a', 'b', 'c', 'd') character set ascii collate ascii_bin",
+	"	col_set set('a', 'b', 'c', 'd')",
+	"	col_set2 set('a', 'b', 'c', 'd') character set ascii",
+	"	col_set3 set('a', 'b', 'c', 'd') collate ascii_bin",
+	"	col_set4 set('a', 'b', 'c', 'd') character set ascii collate ascii_bin",
+}
+
+var sampleGeoColumns = []string{
+	"	col_geometry1 geometry",
+	"	col_geometry2 geometry not null",
+	"	col_point1 point",
+	"	col_point2 point not null",
+	"	col_linestring1 linestring",
+	"	col_linestring2 linestring not null",
+	"	col_polygon1 polygon",
+	"	col_polygon2 polygon not null",
+	"	col_geometrycollection1 geometrycollection",
+	"	col_geometrycollection2 geometrycollection not null",
+	"	col_multipoint1 multipoint",
+	"	col_multipoint2 multipoint not null",
+	"	col_multilinestring1 multilinestring",
+	"	col_multilinestring2 multilinestring not null",
+	"	col_multipolygon1 multipolygon",
+	"	col_multipolygon2 multipolygon not null",
+}
+
 func TestCreateTable(t *testing.T) {
+	var createStatement strings.Builder
+	createStatement.WriteString("create table t (\n")
+	first := true
+	for _, col := range sampleColumns {
+		if !first {
+			createStatement.WriteString(",\n")
+		}
+		first = false
+		createStatement.WriteString(col)
+	}
+	for _, col := range sampleGeoColumns {
+		createStatement.WriteString(",\n")
+		createStatement.WriteString(col)
+	}
+	createStatement.WriteString("\n)")
 	validSQL := []string{
 		// test all the data types and options
-		"create table t (\n" +
-			"	col_bit bit,\n" +
-			"	col_tinyint tinyint auto_increment,\n" +
-			"	col_tinyint3 tinyint(3) unsigned,\n" +
-			"	col_smallint smallint,\n" +
-			"	col_smallint4 smallint(4) zerofill,\n" +
-			"	col_mediumint mediumint,\n" +
-			"	col_mediumint5 mediumint(5) unsigned not null,\n" +
-			"	col_int int,\n" +
-			"	col_int10 int(10) not null,\n" +
-			"	col_integer integer comment 'this is an integer',\n" +
-			"	col_bigint bigint,\n" +
-			"	col_bigint10 bigint(10) zerofill not null default 10,\n" +
-			"	col_real real,\n" +
-			"	col_real2 real(1,2) not null default 1.23,\n" +
-			"	col_double double,\n" +
-			"	col_double2 double(3,4) not null default 1.23,\n" +
-			"	col_double3 double precision not null default 1.23,\n" +
-			"	col_float float,\n" +
-			"	col_float2 float(3,4) not null default 1.23,\n" +
-			"	col_float3 float(3) not null default 1.23,\n" +
-			"	col_decimal decimal,\n" +
-			"	col_decimal2 decimal(2),\n" +
-			"	col_decimal3 decimal(2,3),\n" +
-			"	col_dec dec,\n" +
-			"	col_dec2 dec(2),\n" +
-			"	col_dec3 dec(2,3),\n" +
-			"	col_fixed fixed,\n" +
-			"	col_fixed2 fixed(2),\n" +
-			"	col_fixed3 fixed(2,3),\n" +
-			"	col_numeric numeric,\n" +
-			"	col_numeric2 numeric(2),\n" +
-			"	col_numeric3 numeric(2,3),\n" +
-			"	col_date date,\n" +
-			"	col_time time,\n" +
-			"	col_timestamp timestamp,\n" +
-			"	col_datetime datetime,\n" +
-			"	col_year year,\n" +
-			"	col_char char,\n" +
-			"	col_char2 char(2),\n" +
-			"	col_char3 char(3) character set ascii,\n" +
-			"	col_char4 char(4) character set ascii collate ascii_bin,\n" +
-			"	col_character character,\n" +
-			"	col_character2 character(2),\n" +
-			"	col_character3 character(3) character set ascii,\n" +
-			"	col_character4 character(4) character set ascii collate ascii_bin,\n" +
-			"	col_char_varying char varying(2),\n" +
-			"	col_char_varying2 char varying(10) character set utf8,\n" +
-			"	col_nchar nchar,\n" +
-			"	col_nchar2 nchar(2),\n" +
-			"	col_nchar_varchar nchar varchar(2),\n" +
-			"	col_nchar_varying nchar varying(2),\n" +
-			"	col_national_char national char,\n" +
-			"	col_national_char2 national char(2),\n" +
-			"	col_national_character national character,\n" +
-			"	col_national_character2 national character(2),\n" +
-			"	col_national_char_varying national char varying(2),\n" +
-			"	col_varchar varchar,\n" +
-			"	col_varchar2 varchar(2),\n" +
-			"	col_varchar3 varchar(3) character set ascii,\n" +
-			"	col_varchar4 varchar(4) character set ascii collate ascii_bin,\n" +
-			"	col_varchar5 varchar(5) character set ascii binary,\n" +
-			"	col_varcharMax varchar(MAX),\n" +
-			"	col_character_varying character varying,\n" +
-			"	col_character_varying2 character varying(2),\n" +
-			"	col_character_varying3 character varying(3) character set ascii,\n" +
-			"	col_character_varying4 character varying(4) character set ascii collate ascii_bin,\n" +
-			"	col_nvarchar nvarchar,\n" +
-			"	col_nvarchar2 nvarchar(2),\n" +
-			"	col_national_varchar national varchar,\n" +
-			"	col_national_varchar2 national varchar(2),\n" +
-			"	col_national_character_varying national character varying,\n" +
-			"	col_national_character_varying2 national character varying(2),\n" +
-			"	col_binary binary,\n" +
-			"	col_varbinary varbinary(10),\n" +
-			"	col_tinyblob tinyblob,\n" +
-			"	col_blob blob,\n" +
-			"	col_mediumblob mediumblob,\n" +
-			"	col_longblob longblob,\n" +
-			"	col_tinytext tinytext,\n" +
-			"	col_text text,\n" +
-			"	col_mediumtext mediumtext,\n" +
-			"	col_long long,\n" +
-			"	col_long_varchar long varchar,\n" +
-			"	col_longtext longtext,\n" +
-			"	col_text text character set ascii collate ascii_bin,\n" +
-			"	col_json json,\n" +
-			"	col_enum enum('a', 'b', 'c', 'd'),\n" +
-			"	col_enum2 enum('a', 'b', 'c', 'd') character set ascii,\n" +
-			"	col_enum3 enum('a', 'b', 'c', 'd') collate ascii_bin,\n" +
-			"	col_enum4 enum('a', 'b', 'c', 'd') character set ascii collate ascii_bin,\n" +
-			"	col_set set('a', 'b', 'c', 'd'),\n" +
-			"	col_set2 set('a', 'b', 'c', 'd') character set ascii,\n" +
-			"	col_set3 set('a', 'b', 'c', 'd') collate ascii_bin,\n" +
-			"	col_set4 set('a', 'b', 'c', 'd') character set ascii collate ascii_bin,\n" +
-			"	col_geometry1 geometry,\n" +
-			"	col_geometry2 geometry not null,\n" +
-			"	col_point1 point,\n" +
-			"	col_point2 point not null,\n" +
-			"	col_linestring1 linestring,\n" +
-			"	col_linestring2 linestring not null,\n" +
-			"	col_polygon1 polygon,\n" +
-			"	col_polygon2 polygon not null,\n" +
-			"	col_geometrycollection1 geometrycollection,\n" +
-			"	col_geometrycollection2 geometrycollection not null,\n" +
-			"	col_multipoint1 multipoint,\n" +
-			"	col_multipoint2 multipoint not null,\n" +
-			"	col_multilinestring1 multilinestring,\n" +
-			"	col_multilinestring2 multilinestring not null,\n" +
-			"	col_multipolygon1 multipolygon,\n" +
-			"	col_multipolygon2 multipolygon not null\n" +
-			")",
+		createStatement.String(),
 
 		// test defining indexes separately
 		"create table t (\n" +
@@ -6774,21 +6794,6 @@ var (
 		input:  "insert into a select * into @a from b",
 		output: "INTO clause is not allowed at position 38 near 'b'",
 	}, {
-		input:  "create table t (id int primary key, col1 FLOAT SRID 0)",
-		output: "cannot define SRID for non spatial types at position 55 near '0'",
-	}, {
-		input:  "create table t (id int primary key, col1 REAL SRID 0)",
-		output: "cannot define SRID for non spatial types at position 54 near '0'",
-	}, {
-		input:  "create table t (id int primary key, col1 DEC(34, 2) SRID 0)",
-		output: "cannot define SRID for non spatial types at position 60 near '0'",
-	}, {
-		input:  "create table t (id int primary key, col1 FIXED(4, 4) SRID 0)",
-		output: "cannot define SRID for non spatial types at position 61 near '0'",
-	}, {
-		input:  "create table t (id int primary key, col1 NCHAR VARCHAR SRID 0)",
-		output: "cannot define SRID for non spatial types at position 63 near '0'",
-	}, {
 		input:  "create table t (id int primary key, col1 geometry SRID -1)",
 		output: "syntax error at position 57 near 'SRID'",
 	}, {
@@ -6825,6 +6830,20 @@ var (
 	},
 	}
 
+	invalidSRIDQueries = func() (queries []parseTest) {
+		for _, column := range sampleColumns {
+			var statement strings.Builder
+			statement.WriteString("create table t (id int primary key, ")
+			statement.WriteString(column)
+			statement.WriteString(" SRID 0)")
+			queries = append(queries, parseTest{
+				input:  statement.String(),
+				output: "cannot define SRID for non spatial types",
+			})
+		}
+		return
+	}()
+
 	// invalidAnsiQuotesSQL contains invalid SQL statements that use ANSI_QUOTES mode.
 	invalidAnsiQuotesSQL = []parseTest{
 		{
@@ -6850,6 +6869,12 @@ func TestErrors(t *testing.T) {
 		t.Run(tcase.input, func(t *testing.T) {
 			_, err := Parse(tcase.input)
 			assert.Equal(t, tcase.output, err.Error())
+		})
+	}
+	for _, tcase := range invalidSRIDQueries {
+		t.Run(tcase.input, func(t *testing.T) {
+			_, err := Parse(tcase.input)
+			assert.Contains(t, err.Error(), tcase.output)
 		})
 	}
 }
