@@ -344,24 +344,8 @@ Transformed:
 	   L           R
 */
 func pushAggregationThroughApplyJoin(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin) (Operator, *ApplyResult) {
-	lhs := &joinPusher{
-		orig: rootAggr,
-		pushed: &Aggregator{
-			Source: join.LHS,
-			QP:     rootAggr.QP,
-		},
-		columns: initColReUse(len(rootAggr.Columns)),
-		tableID: TableID(join.LHS),
-	}
-	rhs := &joinPusher{
-		orig: rootAggr,
-		pushed: &Aggregator{
-			Source: join.RHS,
-			QP:     rootAggr.QP,
-		},
-		columns: initColReUse(len(rootAggr.Columns)),
-		tableID: TableID(join.RHS),
-	}
+	lhs := createJoinPusher(rootAggr, join.LHS)
+	rhs := createJoinPusher(rootAggr, join.RHS)
 
 	columns := &applyJoinColumns{}
 	output, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, join.LeftJoin, columns, lhs, rhs)
@@ -393,25 +377,10 @@ func pushAggregationThroughApplyJoin(ctx *plancontext.PlanningContext, rootAggr 
 	return rootAggr, Rewrote("push Aggregation under join")
 }
 
+// pushAggregationThroughHashJoin pushes aggregation through a hash-join in a similar way to pushAggregationThroughApplyJoin
 func pushAggregationThroughHashJoin(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *HashJoin) (Operator, *ApplyResult) {
-	lhs := &joinPusher{
-		orig: rootAggr,
-		pushed: &Aggregator{
-			Source: join.LHS,
-			QP:     rootAggr.QP,
-		},
-		columns: initColReUse(len(rootAggr.Columns)),
-		tableID: TableID(join.LHS),
-	}
-	rhs := &joinPusher{
-		orig: rootAggr,
-		pushed: &Aggregator{
-			Source: join.RHS,
-			QP:     rootAggr.QP,
-		},
-		columns: initColReUse(len(rootAggr.Columns)),
-		tableID: TableID(join.RHS),
-	}
+	lhs := createJoinPusher(rootAggr, join.LHS)
+	rhs := createJoinPusher(rootAggr, join.RHS)
 
 	columns := &hashJoinColumns{}
 	output, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, join.LeftJoin, columns, lhs, rhs)
@@ -469,6 +438,18 @@ func pushAggregationThroughHashJoin(ctx *plancontext.PlanningContext, rootAggr *
 }
 
 var errAbortAggrPushing = fmt.Errorf("abort aggregation pushing")
+
+func createJoinPusher(rootAggr *Aggregator, operator Operator) *joinPusher {
+	return &joinPusher{
+		orig: rootAggr,
+		pushed: &Aggregator{
+			Source: operator,
+			QP:     rootAggr.QP,
+		},
+		columns: initColReUse(len(rootAggr.Columns)),
+		tableID: TableID(operator),
+	}
+}
 
 func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin, lhs *joinPusher) {
 	for _, pred := range join.JoinPredicates.columns {
