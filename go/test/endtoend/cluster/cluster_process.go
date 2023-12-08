@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/syscallutil"
 	"vitess.io/vitess/go/test/endtoend/filelock"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
@@ -1091,7 +1092,7 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 				log.Errorf("Error in conversion to integer: %v", err)
 				return
 			}
-			err = syscall.Kill(pid, syscall.SIGKILL)
+			err = syscallutil.Kill(pid, syscall.SIGKILL)
 			if err != nil {
 				log.Errorf("Error in killing process: %v", err)
 			}

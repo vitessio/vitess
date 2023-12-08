@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
@@ -28,7 +27,6 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"syscall"
 
 	"github.com/spf13/pflag"
 
@@ -295,45 +293,6 @@ func (prof *profile) init() (start func(), stop func()) {
 
 	default:
 		panic("unsupported profile mode")
-	}
-}
-
-func pprofInit() {
-	prof, err := parseProfileFlag(pprofFlag)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if prof != nil {
-		start, stop := prof.init()
-		startSignal := make(chan os.Signal, 1)
-		stopSignal := make(chan os.Signal, 1)
-
-		if prof.waitSig {
-			signal.Notify(startSignal, syscall.SIGUSR1)
-		} else {
-			start()
-			signal.Notify(stopSignal, syscall.SIGUSR1)
-		}
-
-		go func() {
-			for {
-				<-startSignal
-				start()
-				signal.Reset(syscall.SIGUSR1)
-				signal.Notify(stopSignal, syscall.SIGUSR1)
-			}
-		}()
-
-		go func() {
-			for {
-				<-stopSignal
-				stop()
-				signal.Reset(syscall.SIGUSR1)
-				signal.Notify(startSignal, syscall.SIGUSR1)
-			}
-		}()
-
-		OnTerm(stop)
 	}
 }
 
