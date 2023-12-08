@@ -340,6 +340,7 @@ func TestFlush(t *testing.T) {
 	utils.Exec(t, conn, "flush local tables t1, t2")
 }
 
+// TestFlushLock tests that ftwrl and unlock tables should unblock other session connections to execute the query.
 func TestFlushLock(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()

@@ -74,6 +74,6 @@ func (u *Unlock) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars
 
 func (u *Unlock) description() PrimitiveDescription {
 	return PrimitiveDescription{
-		OperatorType: u.RouteType(),
+		OperatorType: "UnlockTables",
 	}
 }
