@@ -28,20 +28,24 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
+	// messageManager only runs on primary tablets.
+	queryTarget = &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
 	// MessageStats tracks stats for messages.
 	MessageStats = stats.NewGaugesWithMultiLabels(
 		"Messages",
@@ -635,7 +639,7 @@ func (mm *messageManager) postpone(ctx context.Context, tsv TabletService, ackWa
 	defer mm.postponeSema.Release(1)
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), ackWaitTime)
 	defer cancel()
-	if _, err := tsv.PostponeMessages(ctx, nil, mm, ids); err != nil {
+	if _, err := tsv.PostponeMessages(ctx, queryTarget, mm, ids); err != nil {
 		// This can happen during spikes. Record the incident for monitoring.
 		MessageStats.Add([]string{mm.name.String(), "PostponeFailed"}, 1)
 	}
@@ -833,7 +837,7 @@ func (mm *messageManager) runPurge() {
 			cancel()
 		}()
 		for {
-			count, err := mm.tsv.PurgeMessages(ctx, nil, mm, time.Now().Add(-mm.purgeAfter).UnixNano())
+			count, err := mm.tsv.PurgeMessages(ctx, queryTarget, mm, time.Now().Add(-mm.purgeAfter).UnixNano())
 			if err != nil {
 				MessageStats.Add([]string{mm.name.String(), "PurgeFailed"}, 1)
 				log.Errorf("Unable to delete messages: %v", err)
