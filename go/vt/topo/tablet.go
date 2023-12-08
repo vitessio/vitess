@@ -24,8 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/key"
 
@@ -515,7 +513,7 @@ func DeleteTabletReplicationData(ctx context.Context, ts *Server, tablet *topoda
 }
 
 // GetTabletMap tries to read all the tablets in the provided list,
-// and returns them all in a map.
+// and returns them in a map.
 // If error is ErrPartialResult, the results in the map are
 // incomplete, meaning some tablets couldn't be read.
 // The map is indexed by topoproto.TabletAliasString(tablet alias).
@@ -524,43 +522,43 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 	span.Annotate("num_tablets", len(tabletAliases))
 	defer span.Finish()
 
-	// Apply any necessary defaults.
-	if opt == nil {
-		// Previously this was always run with unlimited concurrency, so 32 should be fine.
-		opt = &GetTabletsByCellOptions{Concurrency: 32}
-	}
-
 	var (
 		mu        sync.Mutex
+		wg        sync.WaitGroup
 		tabletMap = make(map[string]*TabletInfo)
+		returnErr error
+		// Previously this was always run with unlimited concurrency, so 32 should be fine.
+		concurrency = 32
 	)
 
-	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(opt.Concurrency)
+	if opt != nil && opt.Concurrency > 0 {
+		concurrency = opt.Concurrency
+	}
+	sem := make(chan int, concurrency)
 
 	for _, tabletAlias := range tabletAliases {
-		tabletAlias := tabletAlias
-		eg.Go(func() error {
+		wg.Add(1)
+		go func(tabletAlias *topodatapb.TabletAlias) {
+			defer wg.Done()
+			sem <- 1
 			tabletInfo, err := ts.GetTablet(ctx, tabletAlias)
+			<-sem
+			mu.Lock()
 			if err != nil {
 				log.Warningf("%v: %v", tabletAlias, err)
 				// There can be data races removing nodes - ignore them for now.
-				if !IsErrType(err, NoNode) {
-					return NewError(PartialResult, "")
+				if returnErr != nil && !IsErrType(err, NoNode) {
+					// only need to set this the first time
+					returnErr = NewError(PartialResult, "")
 				}
 			} else {
-				mu.Lock()
 				tabletMap[topoproto.TabletAliasString(tabletAlias)] = tabletInfo
-				mu.Unlock()
 			}
-			return nil
-		})
+			mu.Unlock()
+		}(tabletAlias)
 	}
-	if err := eg.Wait(); err != nil {
-		return tabletMap, err
-	}
-
-	return tabletMap, nil
+	wg.Wait()
+	return tabletMap, returnErr
 }
 
 // InitTablet creates or updates a tablet. If no parent is specified
