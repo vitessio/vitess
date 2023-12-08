@@ -166,7 +166,7 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(ctx, topoServer, "TabletSrvTopo") })
 
 	tabletTypeFunc := func() topodatapb.TabletType {
-		if tsv.sm == nil {
+		if tsv.sm == nil || tsv.sm.Target() == nil {
 			return topodatapb.TabletType_UNKNOWN
 		}
 		return tsv.sm.Target().TabletType
