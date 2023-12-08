@@ -90,14 +90,16 @@ type TopologyWatcher struct {
 	firstLoadChan chan struct{}
 }
 
-// NewTopologyWatcher returns a TopologyWatcher that monitors all
-// the tablets that it is configured to watch, and reloads them periodically if needed.
-// As of now there is only one implementation: watch all tablets in a cell.
-func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, filter TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int, getTablets func(tw *TopologyWatcher) ([]*topo.TabletInfo, error)) *TopologyWatcher {
+// NewCellTabletsWatcher returns a TopologyWatcher that monitors all
+// the tablets in a cell, and reloads them as needed.
+func NewCellTabletsWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
+	getTablets := func(tw *TopologyWatcher) ([]*topo.TabletInfo, error) {
+		return tw.topoServer.GetTabletsByCell(ctx, tw.cell, &topo.GetTabletsByCellOptions{Concurrency: topoReadConcurrency})
+	}
 	tw := &TopologyWatcher{
 		topoServer:          topoServer,
 		healthcheck:         hc,
-		tabletFilter:        filter,
+		tabletFilter:        f,
 		cell:                cell,
 		refreshInterval:     refreshInterval,
 		refreshKnownTablets: refreshKnownTablets,
@@ -110,14 +112,6 @@ func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthC
 	spanContext := trace.CopySpan(context.Background(), ctx)
 	tw.ctx, tw.cancelFunc = context.WithCancel(spanContext)
 	return tw
-}
-
-// NewCellTabletsWatcher returns a TopologyWatcher that monitors all
-// the tablets in a cell, and reloads them as needed.
-func NewCellTabletsWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
-	return NewTopologyWatcher(ctx, topoServer, hc, f, cell, refreshInterval, refreshKnownTablets, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topo.TabletInfo, error) {
-		return tw.topoServer.GetTabletsByCell(ctx, tw.cell, &topo.GetTabletsByCellOptions{Concurrency: topoReadConcurrency})
-	})
 }
 
 // Start starts the topology watcher.
