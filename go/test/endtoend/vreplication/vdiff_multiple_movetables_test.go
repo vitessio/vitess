@@ -33,9 +33,8 @@ import (
 )
 
 func TestMultipleConcurrentVDiffs(t *testing.T) {
-	cellName := "zone"
-	cells := []string{cellName}
-	vc = NewVitessCluster(t, t.Name(), cells, mainClusterConfig)
+	cellName := "zone1"
+	vc = NewVitessCluster(t, nil)
 
 	require.NotNil(t, vc)
 	allCellNames = cellName
@@ -44,7 +43,7 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 	sourceKeyspace := "product"
 	shardName := "0"
 
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
 	cell := vc.Cells[cellName]
 	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, shardName, initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)

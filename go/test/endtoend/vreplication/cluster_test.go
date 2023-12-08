@@ -92,6 +92,7 @@ type VitessCluster struct {
 	t             *testing.T
 	ClusterConfig *ClusterConfig
 	Name          string
+	CellNames     []string
 	Cells         map[string]*Cell
 	Topo          *cluster.TopoProcess
 	Vtctld        *cluster.VtctldProcess
@@ -332,9 +333,28 @@ func init() {
 	externalClusterConfig = getClusterConfig(1, mainVtDataRoot+"/ext")
 }
 
+type clusterOptions struct {
+	cells         []string
+	clusterConfig *ClusterConfig
+}
+
+func getClusterOptions(opts *clusterOptions) *clusterOptions {
+	if opts == nil {
+		opts = &clusterOptions{}
+	}
+	if opts.cells == nil {
+		opts.cells = []string{"zone1"}
+	}
+	if opts.clusterConfig == nil {
+		opts.clusterConfig = mainClusterConfig
+	}
+	return opts
+}
+
 // NewVitessCluster starts a basic cluster with vtgate, vtctld and the topo
-func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConfig *ClusterConfig) *VitessCluster {
-	vc := &VitessCluster{t: t, Name: name, Cells: make(map[string]*Cell), ClusterConfig: clusterConfig}
+func NewVitessCluster(t *testing.T, opts *clusterOptions) *VitessCluster {
+	opts = getClusterOptions(opts)
+	vc := &VitessCluster{t: t, Name: t.Name(), CellNames: opts.cells, Cells: make(map[string]*Cell), ClusterConfig: opts.clusterConfig}
 	require.NotNil(t, vc)
 
 	vc.CleanupDataroot(t, true)
@@ -346,32 +366,45 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 	err := topo.ManageTopoDir("mkdir", "/vitess/global")
 	require.NoError(t, err)
 	vc.Topo = topo
-	for _, cellName := range cellNames {
+	for _, cellName := range opts.cells {
 		err := topo.ManageTopoDir("mkdir", "/vitess/"+cellName)
 		require.NoError(t, err)
 	}
 
-	vtctld := cluster.VtctldProcessInstance(vc.ClusterConfig.vtctldPort, vc.ClusterConfig.vtctldGrpcPort,
-		vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname, vc.ClusterConfig.tmpDir)
-	vc.Vtctld = vtctld
-	require.NotNil(t, vc.Vtctld)
-	// use first cell as `-cell`
-	vc.Vtctld.Setup(cellNames[0], extraVtctldArgs...)
-
-	vc.Vtctl = cluster.VtctlProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
-	require.NotNil(t, vc.Vtctl)
-	for _, cellName := range cellNames {
-		vc.Vtctl.AddCellInfo(cellName)
-		cell, err := vc.AddCell(t, cellName)
-		require.NoError(t, err)
-		require.NotNil(t, cell)
-	}
-
-	vc.VtctlClient = cluster.VtctlClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
-	require.NotNil(t, vc.VtctlClient)
-	vc.VtctldClient = cluster.VtctldClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
-	require.NotNil(t, vc.VtctldClient)
+	vc.setupVtctld()
+	vc.setupVtctl()
+	vc.setupVtctlClient()
+	vc.setupVtctldClient()
 	return vc
+}
+
+func (vc *VitessCluster) setupVtctld() {
+	vc.Vtctld = cluster.VtctldProcessInstance(vc.ClusterConfig.vtctldPort, vc.ClusterConfig.vtctldGrpcPort,
+		vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname, vc.ClusterConfig.tmpDir)
+	require.NotNil(vc.t, vc.Vtctld)
+	// use first cell as `-cell`
+	vc.Vtctld.Setup(vc.CellNames[0], extraVtctldArgs...)
+}
+
+func (vc *VitessCluster) setupVtctl() {
+	vc.Vtctl = cluster.VtctlProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
+	require.NotNil(vc.t, vc.Vtctl)
+	for _, cellName := range vc.CellNames {
+		vc.Vtctl.AddCellInfo(cellName)
+		cell, err := vc.AddCell(vc.t, cellName)
+		require.NoError(vc.t, err)
+		require.NotNil(vc.t, cell)
+	}
+}
+
+func (vc *VitessCluster) setupVtctlClient() {
+	vc.VtctlClient = cluster.VtctlClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
+	require.NotNil(vc.t, vc.VtctlClient)
+}
+
+func (vc *VitessCluster) setupVtctldClient() {
+	vc.VtctldClient = cluster.VtctldClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
+	require.NotNil(vc.t, vc.VtctldClient)
 }
 
 // CleanupDataroot deletes the vtdataroot directory. Since we run multiple tests sequentially in a single CI test shard,
@@ -762,7 +795,7 @@ func (vc *VitessCluster) teardown() {
 }
 
 // TearDown brings down a cluster, deleting processes, removing topo keys
-func (vc *VitessCluster) TearDown(t *testing.T) {
+func (vc *VitessCluster) TearDown() {
 	if debugMode {
 		return
 	}
@@ -779,7 +812,7 @@ func (vc *VitessCluster) TearDown(t *testing.T) {
 	}
 	// some processes seem to hang around for a bit
 	time.Sleep(5 * time.Second)
-	vc.CleanupDataroot(t, false)
+	vc.CleanupDataroot(vc.t, false)
 }
 
 func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName string, tabletType string) map[string]*cluster.VttabletProcess {

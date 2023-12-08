@@ -97,15 +97,16 @@ func TestFKExt(t *testing.T) {
 
 	cellName := fkextConfig.cell
 	cells := []string{cellName}
-	vc = NewVitessCluster(t, t.Name(), cells, fkextConfig.ClusterConfig)
-
-	require.NotNil(t, vc)
+	vc = NewVitessCluster(t, &clusterOptions{
+		cells:         cells,
+		clusterConfig: fkextConfig.ClusterConfig,
+	})
 	allCellNames = cellName
 	defaultCellName := cellName
 	defaultCell = vc.Cells[defaultCellName]
 	cell := vc.Cells[cellName]
 
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
 	sourceKeyspace := fkextConfig.sourceKeyspaceName
 	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, "0", FKExtSourceVSchema, FKExtSourceSchema, 0, 0, 100, nil)

@@ -15,7 +15,7 @@ func TestMoveTablesBuffering(t *testing.T) {
 	defaultRdonly = 1
 	vc = setupMinimalCluster(t)
 	defer vtgateConn.Close()
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
 	currentWorkflowType = wrangler.MoveTablesWorkflow
 	setupMinimalCustomerKeyspace(t)

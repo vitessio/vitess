@@ -41,13 +41,9 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 	extendedTimeout := defaultTimeout * 4
 
 	defaultCellName := "zone1"
-	allCells := []string{"zone1"}
 	allCellNames = "zone1"
-	vc = NewVitessCluster(t, "TestVSchemaChanges", allCells, mainClusterConfig)
-
-	require.NotNil(t, vc)
-
-	defer vc.TearDown(t)
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
 
 	defaultCell = vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, 1, 0, 100, sourceKsOpts)

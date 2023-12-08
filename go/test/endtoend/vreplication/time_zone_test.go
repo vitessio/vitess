@@ -41,12 +41,10 @@ func TestMoveTablesTZ(t *testing.T) {
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	ksReverseWorkflow := fmt.Sprintf("%s.%s_reverse", sourceKs, workflow)
 
-	vc = NewVitessCluster(t, "TestCellAliasVreplicationWorkflow", []string{"zone1"}, mainClusterConfig)
-	require.NotNil(t, vc)
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
 	defaultCell = vc.Cells[defaultCellName]
 	cells := []*Cell{defaultCell}
-
-	defer vc.TearDown(t)
 
 	cell1 := vc.Cells["zone1"]
 	vc.AddKeyspace(t, []*Cell{cell1}, sourceKs, "0", initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)

@@ -50,13 +50,10 @@ create table customer(cid int, name varbinary(128), meta json default null, typ 
 	const sourceKs = "stress_src"
 	const targetKs = "stress_tgt"
 
-	allCells := []string{defaultCellName}
 	allCellNames = defaultCellName
 
-	vc = NewVitessCluster(t, "TestReplicationStress", allCells, mainClusterConfig)
-	require.NotNil(t, vc)
-
-	defer vc.TearDown(t)
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
 
 	defaultCell = vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, "0", initialStressVSchema, initialStressSchema, 0, 0, 100, nil)

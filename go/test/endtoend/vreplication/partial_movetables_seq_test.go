@@ -169,13 +169,12 @@ func initPartialMoveTablesComplexTestCase(t *testing.T, name string) *vrepTestCa
 
 func (tc *vrepTestCase) teardown() {
 	tc.vtgateConn.Close()
-	vc.TearDown(tc.t)
+	vc.TearDown()
 }
 
 func (tc *vrepTestCase) setupCluster() {
-	cells := []string{"zone1"}
 
-	tc.vc = NewVitessCluster(tc.t, tc.testName, cells, mainClusterConfig)
+	tc.vc = NewVitessCluster(tc.t, nil)
 	vc = tc.vc // for backward compatibility since vc is used globally in this package
 	require.NotNil(tc.t, tc.vc)
 	tc.setupKeyspaces([]string{"commerce", "seqSrc"})

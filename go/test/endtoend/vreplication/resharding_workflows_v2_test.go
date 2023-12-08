@@ -297,7 +297,7 @@ func TestBasicV2Workflows(t *testing.T) {
 
 	vc = setupCluster(t)
 	defer vtgateConn.Close()
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
 	// Internal tables like the lifecycle ones for OnlineDDL should be ignored
 	ddlSQL := "ALTER TABLE customer MODIFY cid bigint UNSIGNED"
@@ -608,10 +608,9 @@ func testRestOfWorkflow(t *testing.T) {
 }
 
 func setupCluster(t *testing.T) *VitessCluster {
-	cells := []string{"zone1", "zone2"}
+	vc = NewVitessCluster(t, &clusterOptions{cells: []string{"zone1", "zone2"}})
+	defer vc.TearDown()
 
-	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", cells, mainClusterConfig)
-	require.NotNil(t, vc)
 	defaultCellName := "zone1"
 	allCellNames = defaultCellName
 	defaultCell = vc.Cells[defaultCellName]
@@ -672,10 +671,9 @@ func setupCustomer2Keyspace(t *testing.T) {
 }
 
 func setupMinimalCluster(t *testing.T) *VitessCluster {
-	cells := []string{"zone1"}
+	vc = NewVitessCluster(t, nil)
+	vc.TearDown()
 
-	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", cells, mainClusterConfig)
-	require.NotNil(t, vc)
 	defaultCellName := "zone1"
 	allCellNames = defaultCellName
 	defaultCell = vc.Cells[defaultCellName]
@@ -715,7 +713,7 @@ func setupMinimalCustomerKeyspace(t *testing.T) {
 
 func TestSwitchReadsWritesInAnyOrder(t *testing.T) {
 	vc = setupCluster(t)
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 	moveCustomerTableSwitchFlows(t, []*Cell{vc.Cells["zone1"]}, "zone1")
 }
 

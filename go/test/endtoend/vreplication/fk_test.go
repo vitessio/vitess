@@ -49,17 +49,15 @@ func TestFKWorkflow(t *testing.T) {
 	defer func() { extraVTTabletArgs = nil }()
 
 	cellName := "zone"
-	cells := []string{cellName}
-	vc = NewVitessCluster(t, "TestFKWorkflow", cells, mainClusterConfig)
+	vc = NewVitessCluster(t, nil)
 
-	require.NotNil(t, vc)
 	allCellNames = cellName
 	defaultCellName := cellName
 	defaultCell = vc.Cells[defaultCellName]
 	sourceKeyspace := "fksource"
 	shardName := "0"
 
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
 	cell := vc.Cells[cellName]
 	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, shardName, initialFKSourceVSchema, initialFKSchema, 0, 0, 100, sourceKsOpts)

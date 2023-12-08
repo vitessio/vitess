@@ -104,7 +104,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	}()
 	vc = setupMinimalCluster(t)
 	defer vtgateConn.Close()
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 	setupMinimalCustomerKeyspace(t)
 
 	// Move customer table from unsharded product keyspace to

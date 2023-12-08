@@ -128,8 +128,8 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	newColumn := "ddltest"
 	cell := "zone1"
 	shard := "0"
-	vc = NewVitessCluster(t, t.Name(), []string{cell}, mainClusterConfig)
-	defer vc.TearDown(t)
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
 	defaultCell = vc.Cells[cell]
 
 	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
@@ -234,8 +234,8 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	cell := "zone1"
 	table := "customer"
 	shard := "0"
-	vc = NewVitessCluster(t, "TestVreplicationCopyThrottling", []string{cell}, mainClusterConfig)
-	defer vc.TearDown(t)
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
 	defaultCell = vc.Cells[cell]
 	// To test vstreamer source throttling for the MoveTables operation
 	maxSourceTrxHistory := int64(5)
@@ -306,9 +306,8 @@ func testBasicVreplicationWorkflow(t *testing.T, binlogRowImage string) {
 // If limited == true, we only run a limited set of workflows.
 func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string) {
 	defaultCellName := "zone1"
-	allCells := []string{"zone1"}
 	allCellNames = "zone1"
-	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", allCells, mainClusterConfig)
+	vc = NewVitessCluster(t, nil)
 
 	require.NotNil(t, vc)
 	// Keep the cluster processes minimal to deal with CI resource constraints
@@ -320,7 +319,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir))
 		defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir)
 	}
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
 	defaultCell = vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
@@ -432,14 +431,12 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 	allCellNames = strings.Join(cells, ",")
 
-	vc = NewVitessCluster(t, "TestMultiCellVreplicationWorkflow", cells, mainClusterConfig)
-	require.NotNil(t, vc)
+	vc = NewVitessCluster(t, &clusterOptions{cells: cells})
+	defer vc.TearDown()
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
 	keyspace := "product"
 	shard := "0"
-
-	defer vc.TearDown(t)
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
@@ -463,13 +460,12 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 
 func TestVStreamFlushBinlog(t *testing.T) {
 	defaultCellName := "zone1"
-	allCells := []string{defaultCellName}
 	allCellNames = defaultCellName
 	workflow := "test_vstream_p2c"
 	shard := "0"
-	vc = NewVitessCluster(t, "TestVStreamBinlogFlush", allCells, mainClusterConfig)
+	vc = NewVitessCluster(t, nil)
 	require.NotNil(t, vc)
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 	defaultCell = vc.Cells[defaultCellName]
 
 	// Keep the cluster processes minimal (no rdonly and no replica tablets)
@@ -637,8 +633,9 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 		mainClusterConfig.vreplicationCompressGTID = false
 		extraVTTabletArgs = oldVTTabletExtraArgs
 	}()
-	vc = NewVitessCluster(t, "TestCellAliasVreplicationWorkflow", cells, mainClusterConfig)
-	require.NotNil(t, vc)
+	vc = NewVitessCluster(t, &clusterOptions{cells: cells})
+	defer vc.TearDown()
+
 	allCellNames = "zone1,zone2"
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
@@ -647,7 +644,6 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 
 	require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir))
 	defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir)
-	defer vc.TearDown(t)
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]

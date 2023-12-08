@@ -58,15 +58,8 @@ func prs(t *testing.T, keyspace, shard string) {
 // TestSidecarDB launches a Vitess cluster and ensures that the expected sidecar tables are created. We also drop/alter
 // tables and ensure the next tablet init will recreate the sidecar database to the desired schema.
 func TestSidecarDB(t *testing.T) {
-	cells := []string{"zone1"}
-
-	vc = NewVitessCluster(t, "TestSidecarDB", cells, mainClusterConfig)
-	require.NotNil(t, vc)
-	allCellNames = "zone1"
-	defaultCellName := "zone1"
-	defaultCell = vc.Cells[defaultCellName]
-
-	defer vc.TearDown(t)
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
 
 	keyspace := "product"
 	shard := "0"

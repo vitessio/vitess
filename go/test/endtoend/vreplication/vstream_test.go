@@ -44,14 +44,13 @@ import (
 //   - We stream only from the primary and while streaming we reparent to a replica and then back to the original primary
 func testVStreamWithFailover(t *testing.T, failover bool) {
 	defaultCellName := "zone1"
-	cells := []string{"zone1"}
 	allCellNames = "zone1"
-	vc = NewVitessCluster(t, "TestVStreamWithFailover", cells, mainClusterConfig)
+	vc = NewVitessCluster(t, nil)
 
 	require.NotNil(t, vc)
 	defaultReplicas = 2
 	defaultRdonly = 0
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
 	defaultCell = vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
@@ -236,15 +235,14 @@ type numEvents struct {
 // tests the StopOnReshard flag
 func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID int) *numEvents {
 	defaultCellName := "zone1"
-	allCells := []string{"zone1"}
 	allCellNames = "zone1"
-	vc = NewVitessCluster(t, "TestVStreamStopOnReshard", allCells, mainClusterConfig)
+	vc = NewVitessCluster(t, nil)
 
 	require.NotNil(t, vc)
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
 	defer func() { defaultReplicas = 1 }()
 
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
 	defaultCell = vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "unsharded", "0", vschemaUnsharded, schemaUnsharded, defaultReplicas, defaultRdonly, baseTabletID+100, nil)
@@ -387,15 +385,14 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEvents {
 	defaultCellName := "zone1"
 	allCellNames = defaultCellName
-	allCells := []string{allCellNames}
-	vc = NewVitessCluster(t, "VStreamCopyMultiKeyspaceReshard", allCells, mainClusterConfig)
+	vc = NewVitessCluster(t, nil)
 
 	require.NotNil(t, vc)
 	ogdr := defaultReplicas
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
 	defer func(dr int) { defaultReplicas = dr }(ogdr)
 
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
 	defaultCell = vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "unsharded", "0", vschemaUnsharded, schemaUnsharded, defaultReplicas, defaultRdonly, baseTabletID+100, nil)

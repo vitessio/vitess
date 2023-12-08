@@ -49,14 +49,12 @@ func insertInitialDataIntoExternalCluster(t *testing.T, conn *mysql.Conn) {
 // Each time we need to create vt processes in the "other" cluster we need to set the appropriate VTDATAROOT
 func TestVtctlMigrate(t *testing.T) {
 	defaultCellName := "zone1"
-	cells := []string{"zone1"}
 	allCellNames = "zone1"
-	vc = NewVitessCluster(t, "TestMigrate", cells, mainClusterConfig)
+	vc = NewVitessCluster(t, nil)
 
-	require.NotNil(t, vc, "failed to create VitessCluster")
 	defaultReplicas = 0
 	defaultRdonly = 0
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
 	defaultCell = vc.Cells[defaultCellName]
 	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
@@ -73,10 +71,8 @@ func TestVtctlMigrate(t *testing.T) {
 
 	// create external cluster
 	extCell := "extcell1"
-	extCells := []string{extCell}
-	extVc := NewVitessCluster(t, "TestMigrateExternal", extCells, externalClusterConfig)
-	require.NotNil(t, extVc)
-	defer extVc.TearDown(t)
+	extVc := NewVitessCluster(t, &clusterOptions{cells: []string{"extcell1"}, clusterConfig: externalClusterConfig})
+	defer extVc.TearDown()
 
 	extCell2 := extVc.Cells[extCell]
 	extVc.AddKeyspace(t, []*Cell{extCell2}, "rating", "0", initialExternalVSchema, initialExternalSchema, 0, 0, 1000, nil)
@@ -176,14 +172,12 @@ func TestVtctlMigrate(t *testing.T) {
 // Each time we need to create vt processes in the "other" cluster we need to set the appropriate VTDATAROOT
 func TestVtctldMigrate(t *testing.T) {
 	defaultCellName := "zone1"
-	cells := []string{"zone1"}
 	allCellNames = "zone1"
-	vc = NewVitessCluster(t, "TestMigrateVtctld", cells, mainClusterConfig)
+	vc = NewVitessCluster(t, nil)
 
-	require.NotNil(t, vc, "failed to create VitessCluster")
 	defaultReplicas = 0
 	defaultRdonly = 0
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
 	defaultCell = vc.Cells[defaultCellName]
 	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0",
@@ -202,9 +196,11 @@ func TestVtctldMigrate(t *testing.T) {
 	// create external cluster
 	extCell := "extcell1"
 	extCells := []string{extCell}
-	extVc := NewVitessCluster(t, t.Name(), extCells, externalClusterConfig)
-	require.NotNil(t, extVc)
-	defer extVc.TearDown(t)
+	extVc := NewVitessCluster(t, &clusterOptions{
+		cells:         extCells,
+		clusterConfig: externalClusterConfig,
+	})
+	defer extVc.TearDown()
 
 	extCell2 := extVc.Cells[extCell]
 	extVc.AddKeyspace(t, []*Cell{extCell2}, "rating", "0",
