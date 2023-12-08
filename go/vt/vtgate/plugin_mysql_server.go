@@ -550,17 +550,10 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 	}
 
 	if mysqlServerSocketPath != "" {
-		// Let's create this unix socket with permissions to all users. In this way,
-		// clients can connect to vtgate mysql server without being vtgate user
-		oldMask := syscall.Umask(000)
-		srv.unixListener, err = newMysqlUnixSocket(mysqlServerSocketPath, authServer, srv.vtgateHandle)
-		_ = syscall.Umask(oldMask)
+		err = setupUnixSocket(srv, authServer, mysqlServerSocketPath)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
-			return nil
 		}
-		// Listen for unix socket
-		go srv.unixListener.Accept()
 	}
 	return srv
 }

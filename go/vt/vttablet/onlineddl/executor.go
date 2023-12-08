@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/syscallutil"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -2044,10 +2045,10 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 			foundRunning = true
 			// Because pt-osc doesn't offer much control, we take a brute force approach to killing it,
 			// revoking its privileges, and cleaning up its triggers.
-			if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
+			if err := syscallutil.Kill(pid, syscall.SIGTERM); err != nil {
 				return foundRunning, nil
 			}
-			if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
+			if err := syscallutil.Kill(pid, syscall.SIGKILL); err != nil {
 				return foundRunning, nil
 			}
 			if err := e.dropOnlineDDLUser(ctx); err != nil {
