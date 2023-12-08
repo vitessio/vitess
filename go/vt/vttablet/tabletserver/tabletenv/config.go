@@ -395,6 +395,8 @@ func (cfg *TabletConfig) UnmarshalJSON(data []byte) (err error) {
 		SchemaChangeReloadTimeout        string `json:"schemaChangeReloadTimeout,omitempty"`
 	}
 
+	tmp.TCProxy = TCProxy(*cfg)
+
 	if err = json.Unmarshal(data, &tmp); err != nil {
 		return err
 	}
@@ -487,8 +489,6 @@ func (cfg *ConnPoolConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.Timeout = 0
 	}
 
 	if tmp.IdleTimeout != "" {
@@ -496,8 +496,6 @@ func (cfg *ConnPoolConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.IdleTimeout = 0
 	}
 
 	if tmp.MaxLifetime != "" {
@@ -505,8 +503,6 @@ func (cfg *ConnPoolConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.MaxLifetime = 0
 	}
 
 	cfg.Size = tmp.Size
@@ -552,8 +548,6 @@ func (cfg *OlapConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.TxTimeout = 0
 	}
 
 	return nil
@@ -605,8 +599,6 @@ func (cfg *OltpConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.QueryTimeout = 0
 	}
 
 	if tmp.TxTimeout != "" {
@@ -614,8 +606,6 @@ func (cfg *OltpConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.TxTimeout = 0
 	}
 
 	return nil
@@ -675,8 +665,6 @@ func (cfg *HealthcheckConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.Interval = 0
 	}
 
 	if tmp.DegradedThreshold != "" {
@@ -684,8 +672,6 @@ func (cfg *HealthcheckConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.DegradedThreshold = 0
 	}
 
 	if tmp.UnhealthyThreshold != "" {
@@ -693,8 +679,6 @@ func (cfg *HealthcheckConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.UnhealthyThreshold = 0
 	}
 
 	return nil
@@ -739,8 +723,6 @@ func (cfg *GracePeriodsConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.Shutdown = 0
 	}
 
 	if tmp.Transition != "" {
@@ -748,8 +730,6 @@ func (cfg *GracePeriodsConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.Transition = 0
 	}
 
 	return nil
@@ -799,8 +779,6 @@ func (cfg *ReplicationTrackerConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.HeartbeatInterval = 0
 	}
 
 	if tmp.HeartbeatOnDemand != "" {
@@ -808,8 +786,6 @@ func (cfg *ReplicationTrackerConfig) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		cfg.HeartbeatOnDemand = 0
 	}
 
 	cfg.Mode = tmp.Mode
