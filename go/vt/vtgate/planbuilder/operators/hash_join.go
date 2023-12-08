@@ -133,6 +133,8 @@ func (hj *HashJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	}
 
 	needsProj := false
+	lID := TableID(hj.LHS)
+	rID := TableID(hj.RHS)
 	eexprs := slice.Map(hj.columns.columns, func(in hashJoinColumn) *ProjExpr {
 		var column *ProjExpr
 		var pureOffset bool
@@ -141,9 +143,9 @@ func (hj *HashJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		case Unknown:
 			column, pureOffset = hj.addColumn(ctx, in.expr)
 		case Left:
-			column, pureOffset = hj.addSingleSidedColumn(ctx, in.expr, TableID(hj.LHS), lhsOffset)
+			column, pureOffset = hj.addSingleSidedColumn(ctx, in.expr, lID, hj.LHS, lhsOffset)
 		case Right:
-			column, pureOffset = hj.addSingleSidedColumn(ctx, in.expr, TableID(hj.RHS), rhsOffset)
+			column, pureOffset = hj.addSingleSidedColumn(ctx, in.expr, rID, hj.RHS, rhsOffset)
 		default:
 			panic("not expected")
 		}
@@ -378,6 +380,7 @@ func (hj *HashJoin) addSingleSidedColumn(
 	ctx *plancontext.PlanningContext,
 	in sqlparser.Expr,
 	tableID semantics.TableSet,
+	op Operator,
 	offsetter func(int) int,
 ) (*ProjExpr, bool) {
 	r := new(replacer)
@@ -418,8 +421,8 @@ func (hj *HashJoin) addSingleSidedColumn(
 			return len(hj.ColumnOffsets) - 1
 		}
 
-		if lOffset := check(hj.LHS); lOffset >= 0 {
-			r.replaceExpr = sqlparser.NewOffset(lOffset, expr)
+		if offset := check(op); offset >= 0 {
+			r.replaceExpr = sqlparser.NewOffset(offset, expr)
 			return false // we want to stop going down the expression tree and start coming back up again
 		}
 

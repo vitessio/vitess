@@ -423,7 +423,39 @@ func pushAggregationThroughHashJoin(ctx *plancontext.PlanningContext, rootAggr *
 		panic(err)
 	}
 
+	// The two sides of the hash comparisons are added as grouping expressions
+	for _, cmp := range join.JoinComparisons {
+		lhs.addGrouping(ctx, NewGroupBy(cmp.LHS, cmp.LHS))
+		columns.addLeft(cmp.LHS)
+
+		rhs.addGrouping(ctx, NewGroupBy(cmp.RHS, cmp.RHS))
+		columns.addRight(cmp.RHS)
+	}
+
+	// The grouping columns need to be pushed down as grouping columns on the respective sides
+	for _, groupBy := range rootAggr.Grouping {
+		expr, err := rootAggr.QP.GetSimplifiedExpr(ctx, groupBy.Inner)
+		if err != nil {
+			panic(err)
+		}
+		deps := ctx.SemTable.RecursiveDeps(expr)
+		switch {
+		case deps.IsSolvedBy(lhs.tableID):
+			lhs.addGrouping(ctx, groupBy)
+			columns.addLeft(expr)
+		case deps.IsSolvedBy(rhs.tableID):
+			rhs.addGrouping(ctx, groupBy)
+			columns.addRight(expr)
+		case deps.IsSolvedBy(lhs.tableID.Merge(rhs.tableID)):
+			// TODO: Support this as well
+			return nil, nil
+		default:
+			panic(vterrors.VT13001(fmt.Sprintf("grouping with bad dependencies %s", groupBy.SimplifiedExpr)))
+		}
+	}
+
 	join.LHS, join.RHS = lhs.pushed, rhs.pushed
+	join.columns = columns
 
 	if !rootAggr.Original {
 		// we only keep the root aggregation, if this aggregator was created
