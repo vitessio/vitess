@@ -6444,117 +6444,123 @@
     }
   },
   {
-    "QueryType": "SELECT",
-    "Original": "select count(*) from user left join (select col, bar from user_extra limit 10) ue on user.col = ue.col group by user.foo, ue.bar",
-    "Instructions": {
-      "OperatorType": "Aggregate",
-      "Variant": "Ordered",
-      "Aggregates": "sum_count_star(0) AS count(*)",
-      "GroupBy": "(1|2), (3|4)",
-      "ResultColumns": 1,
-      "Inputs": [
-        {
-          "OperatorType": "Projection",
-          "Expressions": [
-            "count(*) * coalesce(count(*), 1) as count(*)",
-            ":0 as foo",
-            ":1 as weight_string(`user`.foo)",
-            ":2 as bar",
-            ":3 as weight_string(ue.bar)"
-          ],
-          "Inputs": [
-            {
-              "OperatorType": "Sort",
-              "Variant": "Memory",
-              "OrderBy": "(0|1) ASC, (2|3) ASC",
-              "Inputs": [
-                {
-                  "OperatorType": "Projection",
-                  "Expressions": [
-                    "`user`.foo as foo",
-                    "weight_string(`user`.foo) as weight_string(`user`.foo)",
-                    "ue.bar as bar",
-                    "weight_string(ue.bar) as weight_string(ue.bar)",
-                    "count(*) as count(*)",
-                    "count(*) as count(*)"
-                  ],
-                  "Inputs": [
-                    {
-                      "OperatorType": "Join",
-                      "Variant": "HashLeftJoin",
-                      "Collation": "binary",
-                      "ComparisonType": "INT16",
-                      "JoinColumnIndexes": "-2,2,3,-1,1",
-                      "Predicate": "`user`.col = ue.col",
-                      "TableName": "`user`_user_extra",
-                      "Inputs": [
-                        {
-                          "OperatorType": "Route",
-                          "Variant": "Scatter",
-                          "Keyspace": {
-                            "Name": "user",
-                            "Sharded": true
+    "comment": "count(*) push down through left hash join",
+    "query": "select count(*) from user left join (select col, bar from user_extra limit 10) ue on user.col = ue.col group by user.foo, ue.bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user left join (select col, bar from user_extra limit 10) ue on user.col = ue.col group by user.foo, ue.bar",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "GroupBy": "(1|2), (3|4)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "count(*) * coalesce(count(*), 1) as count(*)",
+              ":4 as foo",
+              ":6 as weight_string(`user`.foo)",
+              ":5 as bar",
+              ":7 as weight_string(ue.bar)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(4|6) ASC, (5|7) ASC",
+                "Inputs": [
+                  {
+                    "OperatorType": "Projection",
+                    "Expressions": [
+                      "count(*) as count(*)",
+                      "count(*) as count(*)",
+                      "`user`.col as col",
+                      "ue.col as col",
+                      "`user`.foo as foo",
+                      "ue.bar as bar",
+                      "weight_string(`user`.foo) as weight_string(`user`.foo)",
+                      "weight_string(ue.bar) as weight_string(ue.bar)"
+                    ],
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "HashLeftJoin",
+                        "Collation": "binary",
+                        "ComparisonType": "INT16",
+                        "JoinColumnIndexes": "-1,1,-2,2,-3,3",
+                        "Predicate": "`user`.col = ue.col",
+                        "TableName": "`user`_user_extra",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select count(*), `user`.col, `user`.foo from `user` where 1 != 1 group by `user`.col, `user`.foo",
+                            "Query": "select count(*), `user`.col, `user`.foo from `user` group by `user`.col, `user`.foo",
+                            "Table": "`user`"
                           },
-                          "FieldQuery": "select count(*), `user`.foo, `user`.col from `user` where 1 != 1 group by `user`.foo",
-                          "Query": "select count(*), `user`.foo, `user`.col from `user` group by `user`.foo",
-                          "Table": "`user`"
-                        },
-                        {
-                          "OperatorType": "Aggregate",
-                          "Variant": "Ordered",
-                          "Aggregates": "count_star(0), any_value(3)",
-                          "GroupBy": "(1|2)",
-                          "Inputs": [
-                            {
-                              "OperatorType": "SimpleProjection",
-                              "Columns": [
-                                2,
-                                1,
-                                3,
-                                0
-                              ],
-                              "Inputs": [
-                                {
-                                  "OperatorType": "Sort",
-                                  "Variant": "Memory",
-                                  "OrderBy": "(1|3) ASC",
-                                  "Inputs": [
-                                    {
-                                      "OperatorType": "Limit",
-                                      "Count": "10",
-                                      "Inputs": [
-                                        {
-                                          "OperatorType": "Route",
-                                          "Variant": "Scatter",
-                                          "Keyspace": {
-                                            "Name": "user",
-                                            "Sharded": true
-                                          },
-                                          "FieldQuery": "select col, bar, 1, weight_string(bar) from (select col, bar from user_extra where 1 != 1) as ue where 1 != 1",
-                                          "Query": "select col, bar, 1, weight_string(bar) from (select col, bar from user_extra) as ue limit :__upper_limit",
-                                          "Table": "user_extra"
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
+                          {
+                            "OperatorType": "Aggregate",
+                            "Variant": "Ordered",
+                            "Aggregates": "count_star(0)",
+                            "GroupBy": "1, (2|3)",
+                            "Inputs": [
+                              {
+                                "OperatorType": "SimpleProjection",
+                                "Columns": [
+                                  2,
+                                  0,
+                                  1,
+                                  3
+                                ],
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Sort",
+                                    "Variant": "Memory",
+                                    "OrderBy": "0 ASC, (1|3) ASC",
+                                    "Inputs": [
+                                      {
+                                        "OperatorType": "Limit",
+                                        "Count": "10",
+                                        "Inputs": [
+                                          {
+                                            "OperatorType": "Route",
+                                            "Variant": "Scatter",
+                                            "Keyspace": {
+                                              "Name": "user",
+                                              "Sharded": true
+                                            },
+                                            "FieldQuery": "select col, bar, 1, weight_string(bar) from (select col, bar from user_extra where 1 != 1) as ue where 1 != 1",
+                                            "Query": "select col, bar, 1, weight_string(bar) from (select col, bar from user_extra) as ue limit :__upper_limit",
+                                            "Table": "user_extra"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
       ]
-    },
-    "TablesUsed": [
-      "user.user",
-      "user.user_extra"
-    ]
+    }
   }
 ]
