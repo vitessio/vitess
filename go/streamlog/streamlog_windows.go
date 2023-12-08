@@ -20,6 +20,10 @@ package streamlog
 
 import (
 	"os"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
-func setupRotate(ch chan os.Signal) {}
+func setupRotate(ch chan os.Signal) {
+	log.Warningf("signal based log rotation is not supported on Windows")
+}
