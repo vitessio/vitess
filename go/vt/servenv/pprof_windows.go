@@ -1,7 +1,7 @@
-//go:build !windows
+//go:build windows
 
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,19 +16,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package events
+package servenv
 
 import (
-	"fmt"
-	"log/syslog"
-
-	"vitess.io/vitess/go/event/syslogger"
+	"vitess.io/vitess/go/vt/log"
 )
 
-// Syslog writes the event to syslog.
-func (sc *ShardChange) Syslog() (syslog.Priority, string) {
-	return syslog.LOG_INFO, fmt.Sprintf("%s/%s [shard] %s value: %s",
-		sc.KeyspaceName, sc.ShardName, sc.Status, sc.Shard.String())
+func pprofInit() {
+	log.Warningf("pprof is not supported on Windows")
 }
-
-var _ syslogger.Syslogger = (*ShardChange)(nil) // compile-time interface check
