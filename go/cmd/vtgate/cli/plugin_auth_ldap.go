@@ -19,10 +19,21 @@ package cli
 // This plugin imports ldapauthserver to register the LDAP implementation of AuthServer.
 
 import (
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/ldapauthserver"
 	"vitess.io/vitess/go/vt/vtgate"
 )
 
+var (
+	ldapAuthConfigFile   string
+	ldapAuthConfigString string
+	ldapAuthMethod       string
+)
+
 func init() {
-	vtgate.RegisterPluginInitializer(func() { ldapauthserver.Init() })
+	Main.Flags().StringVar(&ldapAuthConfigFile, "mysql_ldap_auth_config_file", "", "JSON File from which to read LDAP server config.")
+	Main.Flags().StringVar(&ldapAuthConfigString, "mysql_ldap_auth_config_string", "", "JSON representation of LDAP server config.")
+	Main.Flags().StringVar(&ldapAuthMethod, "mysql_ldap_auth_method", string(mysql.MysqlClearPassword), "client-side authentication method to use. Supported values: mysql_clear_password, dialog.")
+
+	vtgate.RegisterPluginInitializer(func() { ldapauthserver.Init(ldapAuthConfigFile, ldapAuthConfigString, ldapAuthMethod) })
 }
