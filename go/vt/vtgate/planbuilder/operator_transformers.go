@@ -590,7 +590,7 @@ func autoIncGenerate(gen *operators.Generate) *engine.Generate {
 	}
 }
 
-func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mids sqlparser.Values, suffix string) {
+func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mids sqlparser.Values, suffix sqlparser.OnDup) {
 	mids, isValues := ins.Rows.(sqlparser.Values)
 	prefixFormat := "insert %v%sinto %v%v "
 	if isValues {
@@ -605,9 +605,7 @@ func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mids sqlp
 		ins.Table, ins.Columns)
 	prefix = prefixBuf.String()
 
-	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	suffixBuf.Myprintf("%v", ins.OnDup)
-	suffix = suffixBuf.String()
+	suffix = ins.OnDup
 	return
 }
 
