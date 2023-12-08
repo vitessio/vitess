@@ -278,7 +278,7 @@ func lhsOffset(i int) int { return (i * -1) - 1 }
 func rhsOffset(i int) int { return i + 1 }
 func (hj *HashJoin) addColumn(ctx *plancontext.PlanningContext, in sqlparser.Expr) (*ProjExpr, bool) {
 	lId, rId := TableID(hj.LHS), TableID(hj.RHS)
-	r := new(replacer) // this is the expression we will put in instead of whatever we find there	pre := func(node, parent sqlparser.SQLNode) bool {
+	r := new(replacer) // this is the expression we will put in instead of whatever we find there
 	pre := func(node, parent sqlparser.SQLNode) bool {
 		expr, ok := node.(sqlparser.Expr)
 		if !ok {
