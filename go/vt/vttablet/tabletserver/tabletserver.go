@@ -551,6 +551,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 			logStats.OriginalSQL = beginSQL
 			if beginSQL != "" {
 				tsv.stats.QueryTimings.Record("BEGIN", startTime)
+				// With a tabletenv.LocalContext() the target can be nil.
 				if target != nil {
 					tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), startTime)
 				}
@@ -609,6 +610,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 			// handlePanicAndSendLogStats doesn't log the no-op.
 			if commitSQL != "" {
 				tsv.stats.QueryTimings.Record("COMMIT", startTime)
+				// With a tabletenv.LocalContext() the target is nil.
 				if target != nil {
 					tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), startTime)
 				}
@@ -629,6 +631,7 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, t
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("ROLLBACK", time.Now())
+			// With a tabletenv.LocalContext() the target is nil.
 			if target != nil {
 				defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
 			}
@@ -1246,6 +1249,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
+			// With a tabletenv.LocalContext() the target is nil.
 			if target != nil {
 				defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
 			}
@@ -1294,6 +1298,7 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
+			// With a tabletenv.LocalContext() the target is nil.
 			if target != nil {
 				defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
 			}
@@ -1350,6 +1355,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 		target, options, allowOnShutdown,
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
+			// With a tabletenv.LocalContext() the target is nil.
 			if target != nil {
 				defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
 			}
@@ -1403,6 +1409,7 @@ func (tsv *TabletServer) ReserveStreamExecute(
 		target, options, allowOnShutdown,
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
+			// With a tabletenv.LocalContext() the target is nil.
 			if target != nil {
 				defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
 			}
@@ -1435,6 +1442,7 @@ func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, tr
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RELEASE", time.Now())
+			// With a tabletenv.LocalContext() the target is nil.
 			if target != nil {
 				defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
 			}
@@ -1521,6 +1529,7 @@ func (tsv *TabletServer) execRequest(
 		span.Annotate("workload_name", options.WorkloadName)
 	}
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
+	// With a tabletenv.LocalContext() the target is nil.
 	if target != nil {
 		span.Annotate("cell", target.Cell)
 		span.Annotate("shard", target.Shard)
