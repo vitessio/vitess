@@ -602,7 +602,7 @@ func (tsv *TabletServer) resolveTargetType(ctx context.Context, target *querypb.
 		return topodatapb.TabletType_UNKNOWN, ErrNoTarget
 	}
 	if tsv.sm.Target() == nil {
-		return topodatapb.TabletType_UNKNOWN, ErrNoTarget
+		return topodatapb.TabletType_UNKNOWN, nil // This is true, and does not block the request.
 	}
 	return tsv.sm.Target().TabletType, nil
 }
