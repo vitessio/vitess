@@ -34,6 +34,7 @@ var (
 	buildGitRev           = ""
 	buildGitBranch        = ""
 	jenkinsBuildNumberStr = ""
+	buildValues           []string
 
 	// version registers the command line flag to expose build info.
 	version bool
@@ -130,7 +131,7 @@ func init() {
 	stats.NewString("GoArch").Set(AppVersion.goArch)
 
 	buildLabels := []string{"BuildHost", "BuildUser", "BuildTimestamp", "BuildVersion", "BuildGitRev", "BuildGitBranch", "BuildNumber"}
-	buildValues := []string{
+	buildValues = []string{
 		AppVersion.buildHost,
 		AppVersion.buildUser,
 		fmt.Sprintf("%v", AppVersion.buildTime),
