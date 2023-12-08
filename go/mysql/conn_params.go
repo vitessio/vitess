@@ -17,6 +17,8 @@ limitations under the License.
 package mysql
 
 import (
+	"time"
+
 	"vitess.io/vitess/go/vt/vttls"
 )
 
@@ -57,6 +59,9 @@ type ConnParams struct {
 	// for informative purposes. It has no programmatic value. Returning this field is
 	// disabled by default.
 	EnableQueryInfo bool
+
+	// FlushDelay is the delay after which buffered response will be flushed to the client.
+	FlushDelay time.Duration
 }
 
 // EnableSSL will set the right flag on the parameters.

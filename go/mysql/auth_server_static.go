@@ -27,33 +27,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/spf13/pflag"
-
 	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
-
-var (
-	mysqlAuthServerStaticFile           string
-	mysqlAuthServerStaticString         string
-	mysqlAuthServerStaticReloadInterval time.Duration
-	mysqlServerFlushDelay               = 100 * time.Millisecond
-)
-
-func init() {
-	servenv.OnParseFor("vtgate", func(fs *pflag.FlagSet) {
-		fs.StringVar(&mysqlAuthServerStaticFile, "mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
-		fs.StringVar(&mysqlAuthServerStaticString, "mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
-		fs.DurationVar(&mysqlAuthServerStaticReloadInterval, "mysql_auth_static_reload_interval", 0, "Ticker to reload credentials")
-		fs.DurationVar(&mysqlServerFlushDelay, "mysql_server_flush_delay", mysqlServerFlushDelay, "Delay after which buffered response will be flushed to the client.")
-	})
-}
 
 const (
 	localhostName = "localhost"
@@ -94,7 +75,7 @@ type AuthServerStaticEntry struct {
 }
 
 // InitAuthServerStatic Handles initializing the AuthServerStatic if necessary.
-func InitAuthServerStatic() {
+func InitAuthServerStatic(mysqlAuthServerStaticFile, mysqlAuthServerStaticString string, mysqlAuthServerStaticReloadInterval time.Duration) {
 	// Check parameters.
 	if mysqlAuthServerStaticFile == "" && mysqlAuthServerStaticString == "" {
 		// Not configured, nothing to do.

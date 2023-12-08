@@ -189,7 +189,7 @@ func New(t testing.TB) *DB {
 	authServer := mysql.NewAuthServerNone()
 
 	// Start listening.
-	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false, 0)
+	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false, 0, 0, "8.0.30-Vitess")
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
