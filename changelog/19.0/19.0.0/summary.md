@@ -10,6 +10,7 @@
     - [New MySQL Image](#mysql-image)
   - **[New Stats](#new-stats)**
     - [Stream Consolidations](#stream-consolidations)
+    - [Build Version in `/debug/vars`](#build-version-in-debug-vars)
   - **[VTGate](#vtgate)**
     - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
   - **[Vttestserver](#vttestserver)**
@@ -52,6 +53,10 @@ Several tags are available to let you choose what version of MySQL you want to u
 #### <a id="stream-consolidations"/>Stream Consolidations
 
 Prior to 19.0 VTTablet reported how much time non-streaming executions spend waiting for consolidations to occur. In 19.0, VTTablet reports a similar stat for streaming executions in `/debug/vars` stat `Waits.Histograms.StreamConsolidations`.
+
+#### <a id="build-version-in-debug-vars"/>Build Version in `/debug/vars`
+
+The build version (e.g., `19.0.0-SNAPSHOT`) has been added to `/debug/vars`, allowing users to programatically inspect Vitess components' build version at runtime.
 
 ### <a id="vtgate"/>VTGate
 
