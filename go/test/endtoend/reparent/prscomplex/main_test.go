@@ -67,8 +67,8 @@ func TestMain(m *testing.M) {
 			"--queryserver-config-pool-size=3",
 			"--queryserver-config-stream-pool-size=3",
 			"--queryserver-config-transaction-cap=2",
-			"--queryserver-config-transaction-timeout=20",
-			"--shutdown_grace_period=3",
+			"--queryserver-config-transaction-timeout=20s",
+			"--shutdown_grace_period=3s",
 			"--queryserver-config-schema-change-signal=false")
 		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false)
 		if err != nil {
