@@ -44,6 +44,8 @@ import (
 )
 
 const (
+	DefaultFlushDelay = 100 * time.Millisecond
+
 	// connBufferSize is how much we buffer for reading and
 	// writing. It is also how much we allocate for ephemeral buffers.
 	connBufferSize = 16 * 1024
@@ -129,6 +131,7 @@ type Conn struct {
 
 	bufferedReader *bufio.Reader
 	flushTimer     *time.Timer
+	flushDelay     time.Duration
 	header         [packetHeaderSize]byte
 
 	// Keep track of how and of the buffer we allocated for an
@@ -247,10 +250,14 @@ var readersPool = sync.Pool{New: func() any { return bufio.NewReaderSize(nil, co
 
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
-func newConn(conn net.Conn) *Conn {
+func newConn(conn net.Conn, flushDelay time.Duration) *Conn {
+	if flushDelay == 0 {
+		flushDelay = DefaultFlushDelay
+	}
 	return &Conn{
 		conn:           conn,
 		bufferedReader: bufio.NewReaderSize(conn, connBufferSize),
+		flushDelay:     flushDelay,
 	}
 }
 
@@ -275,6 +282,7 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 		listener:    listener,
 		PrepareData: make(map[uint32]*PrepareData),
 		keepAliveOn: enabledKeepAlive,
+		flushDelay:  listener.flushDelay,
 	}
 
 	if listener.connReadBufferSize > 0 {
@@ -348,7 +356,7 @@ func (c *Conn) returnReader() {
 // startFlushTimer must be called while holding lock on bufMu.
 func (c *Conn) startFlushTimer() {
 	if c.flushTimer == nil {
-		c.flushTimer = time.AfterFunc(mysqlServerFlushDelay, func() {
+		c.flushTimer = time.AfterFunc(c.flushDelay, func() {
 			c.bufMu.Lock()
 			defer c.bufMu.Unlock()
 
@@ -358,7 +366,7 @@ func (c *Conn) startFlushTimer() {
 			c.bufferedWriter.Flush()
 		})
 	} else {
-		c.flushTimer.Reset(mysqlServerFlushDelay)
+		c.flushTimer.Reset(c.flushDelay)
 	}
 }
 

@@ -74,6 +74,8 @@ var (
 
 	mysqlDefaultWorkloadName = "OLTP"
 	mysqlDefaultWorkload     int32
+
+	mysqlServerFlushDelay = 100 * time.Millisecond
 )
 
 func registerPluginFlags(fs *pflag.FlagSet) {
@@ -97,6 +99,7 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&mysqlQueryTimeout, "mysql_server_query_timeout", mysqlQueryTimeout, "mysql query timeout")
 	fs.BoolVar(&mysqlConnBufferPooling, "mysql-server-pool-conn-read-buffers", mysqlConnBufferPooling, "If set, the server will pool incoming connection read buffers")
 	fs.DurationVar(&mysqlKeepAlivePeriod, "mysql-server-keepalive-period", mysqlKeepAlivePeriod, "TCP period between keep-alives")
+	fs.DurationVar(&mysqlServerFlushDelay, "mysql_server_flush_delay", mysqlServerFlushDelay, "Delay after which buffered response will be flushed to the client.")
 	fs.StringVar(&mysqlDefaultWorkloadName, "mysql_default_workload", mysqlDefaultWorkloadName, "Default session workload (OLTP, OLAP, DBA)")
 }
 
@@ -526,11 +529,12 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 			mysqlProxyProtocol,
 			mysqlConnBufferPooling,
 			mysqlKeepAlivePeriod,
+			mysqlServerFlushDelay,
+			servenv.MySQLServerVersion(),
 		)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
 		}
-		srv.tcpListener.ServerVersion = servenv.MySQLServerVersion()
 		if mysqlSslCert != "" && mysqlSslKey != "" {
 			tlsVersion, err := vttls.TLSVersionToNumber(mysqlTLSMinVersion)
 			if err != nil {
@@ -578,6 +582,8 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 		false,
 		mysqlConnBufferPooling,
 		mysqlKeepAlivePeriod,
+		mysqlServerFlushDelay,
+		servenv.MySQLServerVersion(),
 	)
 
 	switch err := err.(type) {
@@ -610,6 +616,8 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 			false,
 			mysqlConnBufferPooling,
 			mysqlKeepAlivePeriod,
+			mysqlServerFlushDelay,
+			servenv.MySQLServerVersion(),
 		)
 		return listener, listenerErr
 	default:
