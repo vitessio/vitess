@@ -347,12 +347,12 @@ func TestFlushLock(t *testing.T) {
 
 	// replica: fail it
 	utils.Exec(t, conn, "use @replica")
-	_, err := utils.ExecAllowError(t, conn, "flush tables t1, t2 with read lock")
+	_, err := utils.ExecAllowError(t, conn, "flush tables ks.t1, ks.t2 with read lock")
 	require.ErrorContains(t, err, "VT09012: FLUSH statement with REPLICA tablet not allowed")
 
 	// primary: should work
 	utils.Exec(t, conn, "use @primary")
-	utils.Exec(t, conn, "flush tables t1, t2 with read lock")
+	utils.Exec(t, conn, "flush tables ks.t1, ks.t2 with read lock")
 
 	var cnt atomic.Int32
 	go func() {
@@ -362,7 +362,7 @@ func TestFlushLock(t *testing.T) {
 		defer conn2.Close()
 
 		cnt.Add(1)
-		utils.Exec(t, conn2, "select * from t1 for update")
+		utils.Exec(t, conn2, "select * from ks.t1 for update")
 		cnt.Add(1)
 	}()
 	for cnt.Load() == 0 {
