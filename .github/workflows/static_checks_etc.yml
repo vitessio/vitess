@@ -97,6 +97,10 @@ jobs:
               - 'changelog/**'
               - './go/tools/releases/**'
               - '.github/workflows/static_checks_etc.yml'
+            workflows:
+              - '.github/**'
+              - 'Makefile'
+              - 'test/ci_workflow_gen.go'
 
       - name: Set up Go
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
@@ -211,6 +215,21 @@ jobs:
           fi
           echo 'We wish to maintain a consistent changelog directory, please run `go run ./go/tools/releases/releases.go`, commit and push again.'
           echo 'Running `go run ./go/tools/releases/releases.go` on CI yields the following changes:'
+          echo "$output"
+          echo ""
+          exit 1
+
+      - name: Check make generate_ci_workflows
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
+        run: |
+          set -e
+          make generate_ci_workflows
+          output=$(git status -s)
+          if [ -z "${output}" ]; then
+            exit 0
+          fi
+          echo 'Please run `make generate_ci_workflows`, commit and push again.'
+          echo 'Running `make generate_ci_workflows` on CI yields the following changes:'
           echo "$output"
           echo ""
           exit 1
