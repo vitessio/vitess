@@ -374,10 +374,7 @@ func pushAggregationThroughApplyJoin(ctx *plancontext.PlanningContext, rootAggr 
 		panic(err)
 	}
 
-	groupingJCs := splitGroupingToLeftAndRight(ctx, rootAggr, lhs, rhs)
-	for _, col := range groupingJCs {
-		join.JoinColumns.add(col)
-	}
+	splitGroupingToLeftAndRight(ctx, rootAggr, lhs, rhs, join.JoinColumns)
 
 	// We need to add any columns coming from the lhs of the join to the group by on that side
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
@@ -426,9 +423,6 @@ func pushAggregationThroughHashJoin(ctx *plancontext.PlanningContext, rootAggr *
 		panic(err)
 	}
 
-	if len(rootAggr.Grouping) > 0 {
-		return nil, nil
-	}
 	join.LHS, join.RHS = lhs.pushed, rhs.pushed
 
 	if !rootAggr.Original {
@@ -475,9 +469,12 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, rootAgg
 	}
 }
 
-func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Aggregator, lhs, rhs *joinPusher) []applyJoinColumn {
-	var groupingJCs []applyJoinColumn
-
+func splitGroupingToLeftAndRight(
+	ctx *plancontext.PlanningContext,
+	rootAggr *Aggregator,
+	lhs, rhs *joinPusher,
+	columns joinColumns,
+) {
 	for _, groupBy := range rootAggr.Grouping {
 		expr, err := rootAggr.QP.GetSimplifiedExpr(ctx, groupBy.Inner)
 		if err != nil {
@@ -487,16 +484,10 @@ func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Agg
 		switch {
 		case deps.IsSolvedBy(lhs.tableID):
 			lhs.addGrouping(ctx, groupBy)
-			groupingJCs = append(groupingJCs, applyJoinColumn{
-				Original: expr,
-				LHSExprs: []BindVarExpr{{Expr: expr}},
-			})
+			columns.addLeft(expr)
 		case deps.IsSolvedBy(rhs.tableID):
 			rhs.addGrouping(ctx, groupBy)
-			groupingJCs = append(groupingJCs, applyJoinColumn{
-				Original: expr,
-				RHSExpr:  expr,
-			})
+			columns.addRight(expr)
 		case deps.IsSolvedBy(lhs.tableID.Merge(rhs.tableID)):
 			jc := breakExpressionInLHSandRHSForApplyJoin(ctx, groupBy.SimplifiedExpr, lhs.tableID)
 			for _, lhsExpr := range jc.LHSExprs {
@@ -508,7 +499,6 @@ func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Agg
 			panic(vterrors.VT13001(fmt.Sprintf("grouping with bad dependencies %s", groupBy.SimplifiedExpr)))
 		}
 	}
-	return groupingJCs
 }
 
 // splitAggrColumnsToLeftAndRight pushes all aggregations on the aggregator above a join and
