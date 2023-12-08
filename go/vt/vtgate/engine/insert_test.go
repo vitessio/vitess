@@ -213,9 +213,7 @@ func TestInsertShardedSimple(t *testing.T) {
 		sqlparser.Values{
 			{&sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
 		},
-		/*sqlparser.OnDup{
-			&sqlparser.UpdateExpr{Name: sqlparser.NewColName(" suffix"), Expr: &sqlparser.NullVal{}},
-		}*/nil,
+		nil,
 	)
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -254,9 +252,6 @@ func TestInsertShardedSimple(t *testing.T) {
 			{&sqlparser.Argument{Name: "_id_1", Type: sqltypes.Int64}},
 			{&sqlparser.Argument{Name: "_id_2", Type: sqltypes.Int64}},
 		},
-		/*sqlparser.OnDup{
-			&sqlparser.UpdateExpr{Name: sqlparser.NewColName(" suffix"), Expr: &sqlparser.NullVal{}},
-		}*/
 		nil,
 	)
 	vc = newDMLTestVCursor("-20", "20-")
@@ -298,9 +293,6 @@ func TestInsertShardedSimple(t *testing.T) {
 			{&sqlparser.Argument{Name: "_id_1", Type: sqltypes.Int64}},
 			{&sqlparser.Argument{Name: "_id_2", Type: sqltypes.Int64}},
 		},
-		/*sqlparser.OnDup{
-			&sqlparser.UpdateExpr{Name: sqlparser.NewColName(" suffix"), Expr: &sqlparser.NullVal{}},
-		}*/
 		nil,
 	)
 	ins.MultiShardAutocommit = true
