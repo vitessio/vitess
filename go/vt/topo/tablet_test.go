@@ -29,9 +29,10 @@ import (
 
 func TestServerGetTabletsByCell(t *testing.T) {
 	tests := []struct {
-		name    string
-		tablets int
-		opt     *topo.GetTabletsByCellOptions
+		name      string
+		tablets   int
+		opt       *topo.GetTabletsByCellOptions
+		listError error
 	}{
 		{
 			name:    "negative concurrency",
@@ -50,6 +51,12 @@ func TestServerGetTabletsByCell(t *testing.T) {
 			tablets: 32,
 			opt:     &topo.GetTabletsByCellOptions{Concurrency: 8},
 		},
+		{
+			name:      "sharded with list error",
+			tablets:   32,
+			opt:       &topo.GetTabletsByCellOptions{Concurrency: 8},
+			listError: topo.NewError(topo.ResourceExhausted, ""),
+		},
 	}
 
 	for _, tt := range tests {
@@ -58,8 +65,11 @@ func TestServerGetTabletsByCell(t *testing.T) {
 			defer cancel()
 
 			const cell = "zone1"
-			ts := memorytopo.NewServer(ctx, cell)
+			ts, factory := memorytopo.NewServerAndFactory(ctx, cell)
 			defer ts.Close()
+			if tt.listError != nil {
+				factory.SetListError(tt.listError)
+			}
 
 			// Create an ephemeral keyspace and generate shard records within
 			// the keyspace to fetch later.
