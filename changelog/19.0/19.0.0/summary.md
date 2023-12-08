@@ -56,7 +56,7 @@ Prior to 19.0 VTTablet reported how much time non-streaming executions spend wai
 
 #### <a id="build-version-in-debug-vars"/>Build Version in `/debug/vars`
 
-The build version (e.g., `19.0.0-SNAPSHOT`) has been added to `/debug/vars`, allowing users to programatically inspect Vitess components' build version at runtime.
+The build version (e.g., `19.0.0-SNAPSHOT`) has been added to `/debug/vars`, allowing users to programmatically inspect Vitess components' build version at runtime.
 
 ### <a id="vtgate"/>VTGate
 
