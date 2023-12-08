@@ -566,6 +566,33 @@ func TestTabletServerCommitPrepared(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestTabletServerWithNilTarget(t *testing.T) {
+	// A non-nil target is required when not using a local context.
+	ctx := tabletenv.LocalContext()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+		},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	db.AddQuery(executeSQL, executeSQLResult)
+
+	target := (*querypb.Target)(nil)
+	state, err := tsv.Begin(ctx, target, nil)
+	require.NoError(t, err)
+	_, err = tsv.Execute(ctx, target, executeSQL, nil, state.TransactionID, 0, nil)
+	require.NoError(t, err)
+	_, err = tsv.Rollback(ctx, target, state.TransactionID)
+	require.NoError(t, err)
+}
+
 func TestSmallerTimeout(t *testing.T) {
 	testcases := []struct {
 		t1, t2, want time.Duration
