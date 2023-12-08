@@ -17,9 +17,13 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
@@ -334,6 +338,52 @@ func TestFlush(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 	utils.Exec(t, conn, "flush local tables t1, t2")
+}
+
+// TestFlushLock tests that ftwrl and unlock tables should unblock other session connections to execute the query.
+func TestFlushLock(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	// replica: fail it
+	utils.Exec(t, conn, "use @replica")
+	_, err := utils.ExecAllowError(t, conn, "flush tables ks.t1, ks.t2 with read lock")
+	require.ErrorContains(t, err, "VT09012: FLUSH statement with REPLICA tablet not allowed")
+
+	// primary: should work
+	utils.Exec(t, conn, "use @primary")
+	utils.Exec(t, conn, "flush tables ks.t1, ks.t2 with read lock")
+
+	var cnt atomic.Int32
+	go func() {
+		ctx := context.Background()
+		conn2, err := mysql.Connect(ctx, &vtParams)
+		require.NoError(t, err)
+		defer conn2.Close()
+
+		cnt.Add(1)
+		utils.Exec(t, conn2, "select * from ks.t1 for update")
+		cnt.Add(1)
+	}()
+	for cnt.Load() == 0 {
+	}
+	// added sleep to let the query execute inside the go routine, which should be blocked.
+	time.Sleep(1 * time.Second)
+	require.EqualValues(t, 1, cnt.Load())
+
+	// unlock it
+	utils.Exec(t, conn, "unlock tables")
+
+	// now wait for go routine to complete.
+	timeout := time.After(3 * time.Second)
+	for cnt.Load() != 2 {
+		select {
+		case <-timeout:
+			t.Fatalf("test timeout waiting for select query to complete")
+		default:
+
+		}
+	}
 }
 
 func TestShowVariables(t *testing.T) {

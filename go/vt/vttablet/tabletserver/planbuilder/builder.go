@@ -219,3 +219,21 @@ func analyzeDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 	}
 	return &Plan{PlanID: PlanDDL, FullQuery: fullQuery, FullStmt: stmt, NeedsReservedConn: stmt.IsTemporary()}, nil
 }
+
+func analyzeFlush(stmt *sqlparser.Flush, tables map[string]*schema.Table) (*Plan, error) {
+	plan := &Plan{PlanID: PlanFlush, FullQuery: GenerateFullQuery(stmt)}
+
+	for _, tbl := range stmt.TableNames {
+		if schemaTbl, ok := tables[tbl.Name.String()]; ok {
+			plan.AllTables = append(plan.AllTables, schemaTbl)
+		}
+	}
+	if len(plan.AllTables) == 1 {
+		plan.Table = plan.AllTables[0]
+	}
+
+	if stmt.WithLock {
+		plan.NeedsReservedConn = true
+	}
+	return plan, nil
+}

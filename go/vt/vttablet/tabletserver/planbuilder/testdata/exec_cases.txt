@@ -939,6 +939,25 @@ options:PassthroughDMLs
   "FullQuery": "flush tables a, b"
 }
 
+# flush statement with read lock
+"flush tables a,b with read lock"
+{
+  "PlanID": "Flush",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "flush tables a, b with read lock",
+  "NeedsReservedConn": true
+}
+
 # call proc
 "call getAllTheThings()"
 {

@@ -97,7 +97,7 @@
       "QueryType": "UNLOCK_TABLES",
       "Original": "unlock tables",
       "Instructions": {
-        "OperatorType": "Rows"
+        "OperatorType": "UnlockTables"
       }
     }
   },
