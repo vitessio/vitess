@@ -49,6 +49,6 @@ func TestVersionString(t *testing.T) {
 }
 
 func TestBuildVersionStats(t *testing.T) {
-	buildVersion := buildVersion.Get()
+	buildVersion := statsBuildVersion.Get()
 	assert.Equal(t, buildVersion, versionName)
 }
