@@ -63,7 +63,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 		}
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--queryserver-config-query-timeout=9000",
+			"--queryserver-config-query-timeout=9000s",
 			"--queryserver-config-pool-size=3",
 			"--queryserver-config-stream-pool-size=3",
 			"--queryserver-config-transaction-cap=2",
