@@ -24,13 +24,11 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -304,7 +302,7 @@ nextRow:
 	// We only need to check the first row. Number of cols per row
 	// is guaranteed by the engine to be uniform.
 	if len(trimmedRowsCols[0]) != len(lkp.FromColumns) {
-		return fmt.Errorf("lookup.Create: column vindex count does not match the columns in the lookup: %d vs %v", len(trimmedRowsCols[0]), lkp.FromColumns)
+		return vterrors.Wrapf(vterrors.VT03006(), "lookup.Create: column vindex count does not match the columns in the lookup: %d vs %v", len(trimmedRowsCols[0]), lkp.FromColumns)
 	}
 	sort.Sort(&sorter{rowsColValues: trimmedRowsCols, toValues: trimmedToValues})
 
@@ -348,7 +346,7 @@ nextRow:
 	}
 
 	if _, err := vcursor.Execute(ctx, "VindexCreate", buf.String(), bindVars, true /* rollbackOnError */, co); err != nil {
-		return fmt.Errorf("lookup.Create: %v", err)
+		return vterrors.Wrap(err, "lookup.Create")
 	}
 	return nil
 }

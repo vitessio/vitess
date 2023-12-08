@@ -23,12 +23,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestInsertNeg(t *testing.T) {
@@ -788,4 +788,41 @@ func TestRowCountExceed(t *testing.T) {
 	}
 
 	utils.AssertContainsError(t, conn, "select id1 from t1 where id1 < 1000", `Row count exceeded 100`)
+}
+
+func TestLookupErrorMetric(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	var errCount float64
+	apiErr := getVar(t, "VtgateApiErrorCounts")
+	if apiErr != nil {
+		mapErrors := apiErr.(map[string]interface{})
+		val, exists := mapErrors["Execute.ks.primary.ALREADY_EXISTS"]
+		if exists {
+			errCount = val.(float64)
+		}
+	}
+
+	utils.Exec(t, conn, `insert into t1 values (1,1)`)
+	_, err := utils.ExecAllowError(t, conn, `insert into t1 values (2,1)`)
+	require.ErrorContains(t, err, `(errno 1062) (sqlstate 23000)`)
+
+	apiErr = getVar(t, "VtgateApiErrorCounts")
+	require.NotNil(t, apiErr)
+	mapErrors := apiErr.(map[string]interface{})
+	val, exists := mapErrors["Execute.ks.primary.ALREADY_EXISTS"]
+	require.True(t, exists)
+	require.EqualValues(t, errCount+1, val)
+}
+
+func getVar(t *testing.T, key string) interface{} {
+	vars, err := clusterInstance.VtgateProcess.GetVars()
+	require.NoError(t, err)
+
+	val, exists := vars[key]
+	if !exists {
+		return nil
+	}
+	return val
 }
