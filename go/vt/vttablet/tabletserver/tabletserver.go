@@ -602,7 +602,7 @@ func (tsv *TabletServer) resolveTargetType(ctx context.Context, target *querypb.
 		return topodatapb.TabletType_UNKNOWN, ErrNoTarget
 	}
 	if tsv.sm.Target() == nil {
-		return topodatapb.TabletType_UNKNOWN, nil // This is true, and does not block the request.
+		return topodatapb.TabletType_UNKNOWN, nil // This is true, and does not block the request
 	}
 	return tsv.sm.Target().TabletType, nil
 }
@@ -1471,7 +1471,6 @@ func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, tr
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RELEASE", time.Now())
-
 			targetType, err := tsv.resolveTargetType(ctx, target)
 			if err != nil {
 				return err
