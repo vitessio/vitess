@@ -303,7 +303,7 @@ func TestTxPoolWaitTimeoutError(t *testing.T) {
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
 	env.Config().TxPool.MaxWaiters = 0
-	_ = env.Config().TxPool.TimeoutSeconds.Set("1s")
+	env.Config().TxPool.Timeout = time.Second
 	// given
 	db, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
@@ -425,7 +425,7 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
 	env.Config().TxPool.MaxWaiters = 0
-	_ = env.Config().Oltp.TxTimeoutSeconds.Set("1s")
+	env.Config().Oltp.TxTimeout = time.Second
 	_, txPool, limiter, closer := setupWithEnv(t, env)
 	defer closer()
 	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
@@ -474,7 +474,7 @@ func TestTxTimeoutDoesNotKillShortLivedTransactions(t *testing.T) {
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
 	env.Config().TxPool.MaxWaiters = 0
-	_ = env.Config().Oltp.TxTimeoutSeconds.Set("1s")
+	env.Config().Oltp.TxTimeout = time.Second
 	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
@@ -507,8 +507,8 @@ func TestTxTimeoutKillsOlapTransactions(t *testing.T) {
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
 	env.Config().TxPool.MaxWaiters = 0
-	_ = env.Config().Oltp.TxTimeoutSeconds.Set("1s")
-	_ = env.Config().Olap.TxTimeoutSeconds.Set("2s")
+	env.Config().Oltp.TxTimeout = time.Second
+	env.Config().Olap.TxTimeout = 2 * time.Second
 	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
@@ -545,8 +545,8 @@ func TestTxTimeoutNotEnforcedForZeroLengthTimeouts(t *testing.T) {
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 2
 	env.Config().TxPool.MaxWaiters = 0
-	_ = env.Config().Oltp.TxTimeoutSeconds.Set("0s")
-	_ = env.Config().Olap.TxTimeoutSeconds.Set("0s")
+	env.Config().Oltp.TxTimeout = 0
+	env.Config().Olap.TxTimeout = 0
 	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
@@ -588,8 +588,8 @@ func TestTxTimeoutReservedConn(t *testing.T) {
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
 	env.Config().TxPool.MaxWaiters = 0
-	_ = env.Config().Oltp.TxTimeoutSeconds.Set("1s")
-	_ = env.Config().Olap.TxTimeoutSeconds.Set("2s")
+	env.Config().Oltp.TxTimeout = time.Second
+	env.Config().Olap.TxTimeout = 2 * time.Second
 	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 	startingRcKills := txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]
@@ -631,8 +631,8 @@ func TestTxTimeoutReusedReservedConn(t *testing.T) {
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
 	env.Config().TxPool.MaxWaiters = 0
-	_ = env.Config().Oltp.TxTimeoutSeconds.Set("1s")
-	_ = env.Config().Olap.TxTimeoutSeconds.Set("2s")
+	env.Config().Oltp.TxTimeout = time.Second
+	env.Config().Olap.TxTimeout = 2 * time.Second
 	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 	startingRcKills := txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]
@@ -814,12 +814,12 @@ func newTxPoolWithEnv(env tabletenv.Env) (*TxPool, *fakeLimiter) {
 func newEnv(exporterName string) tabletenv.Env {
 	config := tabletenv.NewDefaultConfig()
 	config.TxPool.Size = 300
-	_ = config.Oltp.TxTimeoutSeconds.Set("30s")
-	_ = config.TxPool.TimeoutSeconds.Set("40s")
+	config.Oltp.TxTimeout = 30 * time.Second
+	config.TxPool.Timeout = 40 * time.Second
 	config.TxPool.MaxWaiters = 500000
-	_ = config.OltpReadPool.IdleTimeoutSeconds.Set("30s")
-	_ = config.OlapReadPool.IdleTimeoutSeconds.Set("30s")
-	_ = config.TxPool.IdleTimeoutSeconds.Set("30s")
+	config.OltpReadPool.IdleTimeout = 30 * time.Second
+	config.OlapReadPool.IdleTimeout = 30 * time.Second
+	config.TxPool.IdleTimeout = 30 * time.Second
 	env := tabletenv.NewEnv(config, exporterName)
 	return env
 }

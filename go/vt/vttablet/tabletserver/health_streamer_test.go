@@ -216,7 +216,7 @@ func TestReloadSchema(t *testing.T) {
 			defer db.Close()
 			config := newConfig(db)
 			config.SignalWhenSchemaChange = testcase.enableSchemaChange
-			_ = config.SchemaReloadIntervalSeconds.Set("100ms")
+			config.SchemaReloadInterval = 100 * time.Millisecond
 
 			env := tabletenv.NewEnv(config, "ReplTrackerTest")
 			alias := &topodatapb.TabletAlias{
@@ -333,7 +333,7 @@ func TestReloadView(t *testing.T) {
 	defer db.Close()
 	config := newConfig(db)
 	config.SignalWhenSchemaChange = true
-	_ = config.SchemaReloadIntervalSeconds.Set("100ms")
+	config.SchemaReloadInterval = 100 * time.Millisecond
 	config.EnableViews = true
 
 	env := tabletenv.NewEnv(config, "TestReloadView")
