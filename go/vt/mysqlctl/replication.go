@@ -377,7 +377,7 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos replication.P
 	if result.IsNull() {
 		return fmt.Errorf("%v(%v) failed: replication is probably stopped", waitCommandName, query)
 	}
-	if result.ToString() == "-1" {
+	if result.ToString() == "1" {
 		return fmt.Errorf("timed out waiting for position %v", targetPos)
 	}
 	return nil
