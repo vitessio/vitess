@@ -750,9 +750,9 @@ func tryPushDistinct(in *Distinct) (Operator, *ApplyResult) {
 		in.PushedPerformance = true
 
 		return in, Rewrote("push down distinct under union")
-	case *ApplyJoin:
-		src.LHS = &Distinct{Source: src.LHS}
-		src.RHS = &Distinct{Source: src.RHS}
+	case JoinOp:
+		src.SetLHS(&Distinct{Source: src.GetLHS()})
+		src.SetRHS(&Distinct{Source: src.GetRHS()})
 		in.PushedPerformance = true
 
 		if in.Required {
