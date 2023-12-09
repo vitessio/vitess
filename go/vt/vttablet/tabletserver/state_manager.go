@@ -65,6 +65,8 @@ func (state servingState) String() string {
 // transitionRetryInterval is for tests.
 var transitionRetryInterval = 1 * time.Second
 
+var ErrNoTarget = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
+
 // stateManager manages state transition for all the TabletServer
 // subcomponents.
 type stateManager struct {
@@ -432,7 +434,7 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 		}
 	} else {
 		if !tabletenv.IsLocalContext(ctx) {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
+			return ErrNoTarget
 		}
 	}
 	return nil

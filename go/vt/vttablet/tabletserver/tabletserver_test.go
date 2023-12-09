@@ -563,6 +563,78 @@ func TestTabletServerCommitPrepared(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestTabletServerWithNilTarget confirms that a nil target is
+// handled correctly. This means that when a local context is
+// used, the target type is inferred from the local tablet's
+// latest target type.
+// And if it's not a local context then we return an error.
+func TestTabletServerWithNilTarget(t *testing.T) {
+	// A non-nil target is required when not using a local context.
+	ctx := tabletenv.LocalContext()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	// With a nil target, the local tablet's latest target type is
+	// what should be used as the inferred target type for our local
+	// calls.
+	target := (*querypb.Target)(nil)
+	localTargetType := topodatapb.TabletType_RDONLY // Use a non-default type
+	err := tsv.SetServingType(localTargetType, time.Now(), true, "test")
+	require.NoError(t, err)
+
+	baseKey := "TabletServerTest" // Our TabletServer's name
+	fullKey := fmt.Sprintf("%s.%s", baseKey, localTargetType.String())
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+		},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	// BEGIN gets transmuted to this since it's a RDONLY tablet.
+	db.AddQuery("start transaction read only", &sqltypes.Result{})
+	db.AddQuery(executeSQL, executeSQLResult)
+
+	expectedCount := tsv.stats.QueryTimingsByTabletType.Counts()[fullKey]
+
+	state, err := tsv.Begin(ctx, target, nil)
+	require.NoError(t, err)
+	expectedCount++
+	require.Equal(t, expectedCount, tsv.stats.QueryTimingsByTabletType.Counts()[fullKey])
+
+	_, err = tsv.Execute(ctx, target, executeSQL, nil, state.TransactionID, 0, nil)
+	require.NoError(t, err)
+	expectedCount++
+	require.Equal(t, expectedCount, tsv.stats.QueryTimingsByTabletType.Counts()[fullKey])
+
+	_, err = tsv.Rollback(ctx, target, state.TransactionID)
+	require.NoError(t, err)
+	expectedCount++
+	require.Equal(t, expectedCount, tsv.stats.QueryTimingsByTabletType.Counts()[fullKey])
+
+	state, err = tsv.Begin(ctx, target, nil)
+	require.NoError(t, err)
+	expectedCount++
+	require.Equal(t, expectedCount, tsv.stats.QueryTimingsByTabletType.Counts()[fullKey])
+
+	_, err = tsv.Commit(ctx, target, state.TransactionID)
+	require.NoError(t, err)
+	expectedCount++
+	require.Equal(t, expectedCount, tsv.stats.QueryTimingsByTabletType.Counts()[fullKey])
+
+	// Finally be sure that we return an error now as expected when NOT
+	// using a local context but passing a nil target.
+	nonLocalCtx := context.Background()
+	_, err = tsv.Begin(nonLocalCtx, target, nil)
+	require.True(t, errors.Is(err, ErrNoTarget))
+	_, err = tsv.resolveTargetType(nonLocalCtx, target)
+	require.True(t, errors.Is(err, ErrNoTarget))
+}
+
 func TestSmallerTimeout(t *testing.T) {
 	testcases := []struct {
 		t1, t2, want time.Duration
