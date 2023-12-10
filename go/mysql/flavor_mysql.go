@@ -18,14 +18,12 @@ package mysql
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -55,7 +53,7 @@ func (mysqlFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {
 		return nil, err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_executed: %#v", qr)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for gtid_executed: %#v", qr)
 	}
 	return replication.ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
@@ -68,7 +66,7 @@ func (mysqlFlavor) purgedGTIDSet(c *Conn) (replication.GTIDSet, error) {
 		return nil, err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_purged: %#v", qr)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for gtid_purged: %#v", qr)
 	}
 	return replication.ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
@@ -81,7 +79,7 @@ func (mysqlFlavor) serverUUID(c *Conn) (string, error) {
 		return "", err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for server_uuid: %#v", qr)
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for server_uuid: %#v", qr)
 	}
 	return qr.Rows[0][0].ToString(), nil
 }
@@ -93,7 +91,7 @@ func (mysqlFlavor) gtidMode(c *Conn) (string, error) {
 		return "", err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_mode: %#v", qr)
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for gtid_mode: %#v", qr)
 	}
 	return qr.Rows[0][0].ToString(), nil
 }
@@ -138,7 +136,7 @@ func (mysqlFlavor) startSQLThreadCommand() string {
 func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos replication.Position) error {
 	gtidSet, ok := startPos.GTIDSet.(replication.Mysql56GTIDSet)
 	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
 	}
 
 	// Build the command.
@@ -246,20 +244,20 @@ func (mysqlFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos replicati
 	// For WAIT_FOR_EXECUTED_GTID_SET(), the return value is the state of the query, where
 	// 0 represents success, and 1 represents timeout. Any other failures generate an error.
 	if len(result.Rows) != 1 || len(result.Rows[0]) != 1 {
-		return errors.New("invalid results")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid results: %#v", result)
 	}
 	val := result.Rows[0][0]
 	state, err := val.ToInt64()
 	if err != nil {
-		return fmt.Errorf("invalid result of %v", val)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid result of %#v", val)
 	}
 	switch state {
 	case 0:
 		return nil
 	case 1:
-		return fmt.Errorf("timed out waiting for position %v", pos)
+		return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
 	default:
-		return fmt.Errorf("invalid result of %v", state)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid result of %d", state)
 	}
 }
 

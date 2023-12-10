@@ -18,7 +18,6 @@ package mysql
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -271,14 +270,14 @@ func (flv *filePosFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, err
 func (flv *filePosFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos replication.Position) error {
 	filePosPos, ok := pos.GTIDSet.(replication.FilePosGTID)
 	if !ok {
-		return fmt.Errorf("position is not filePos compatible: %#v", pos.GTIDSet)
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "position is not filePos compatible: %#v", pos.GTIDSet)
 	}
 
 	query := fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d)", filePosPos.File, filePosPos.Pos)
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := time.Until(deadline)
 		if timeout <= 0 {
-			return fmt.Errorf("timed out waiting for position %v", pos)
+			return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
 		}
 		query = fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d, %.6f)", filePosPos.File, filePosPos.Pos, timeout.Seconds())
 	}
@@ -297,23 +296,23 @@ func (flv *filePosFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos re
 	// is waiting, the function returns NULL. If the replica is past the
 	// specified position, the function returns immediately.
 	if len(result.Rows) != 1 || len(result.Rows[0]) != 1 {
-		return errors.New("invalid results")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid results: %#v", result)
 	}
 	val := result.Rows[0][0]
 	if val.IsNull() {
-		return errors.New("replication is not running")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "replication is not running")
 	}
 	state, err := val.ToInt64()
 	if err != nil {
-		return fmt.Errorf("invalid result of %v", val)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid result of %#v", val)
 	}
 	switch {
 	case state == -1:
-		return fmt.Errorf("timed out waiting for position %v", pos)
+		return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
 	case state >= 0:
 		return nil
 	default:
-		return fmt.Errorf("invalid result of %v", state)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid result of %d", state)
 	}
 }
 

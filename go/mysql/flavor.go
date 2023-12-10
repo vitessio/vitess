@@ -147,7 +147,8 @@ type flavor interface {
 	primaryStatus(c *Conn) (replication.PrimaryStatus, error)
 
 	// waitUntilPosition waits until the given position is reached or
-	// until the context expires and returns an error if we did not succeed.
+	// until the context expires. It returns an error if we did not
+	// succeed.
 	waitUntilPosition(ctx context.Context, c *Conn, pos replication.Position) error
 
 	baseShowTables() string

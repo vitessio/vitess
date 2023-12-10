@@ -19,15 +19,15 @@ package mysql
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // mariadbFlavor implements the Flavor interface for MariaDB.
@@ -49,7 +49,7 @@ func (mariadbFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {
 		return nil, err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_binlog_pos: %#v", qr)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for gtid_binlog_pos: %#v", qr)
 	}
 
 	return replication.ParseMariadbGTIDSet(qr.Rows[0][0].ToString())
@@ -235,7 +235,7 @@ func (mariadbFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos replica
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := time.Until(deadline)
 		if timeout <= 0 {
-			return vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
+			return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
 		}
 		query = fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s', %.6f)", pos, timeout.Seconds())
 	}
@@ -248,20 +248,20 @@ func (mariadbFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos replica
 	// For MASTER_GTID_WAIT(), if the wait completes without a timeout 0 is
 	// returned and -1 if there was a timeout.
 	if len(result.Rows) != 1 || len(result.Rows[0]) != 1 {
-		return errors.New("invalid results")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid results: %#v", result)
 	}
 	val := result.Rows[0][0]
 	state, err := val.ToInt64()
 	if err != nil {
-		return fmt.Errorf("invalid result of %v", val)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid result of %#v", val)
 	}
 	switch state {
 	case 0:
 		return nil
 	case -1:
-		return fmt.Errorf("timed out waiting for position %v", pos)
+		return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
 	default:
-		return fmt.Errorf("invalid result of %v", state)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid result of %d", state)
 	}
 }
 

@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type ResetSuperReadOnlyFunc func() error
@@ -333,7 +334,7 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos replication.P
 		// position is most likely reached. So, check the position first.
 		mpos, err := conn.Conn.PrimaryFilePosition()
 		if err != nil {
-			return fmt.Errorf("WaitSourcePos: PrimaryFilePosition failed: %v", err)
+			return vterrors.Wrapf(err, "WaitSourcePos: PrimaryFilePosition failed")
 		}
 		if mpos.AtLeast(targetPos) {
 			return nil
@@ -343,7 +344,7 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos replication.P
 		// position is most likely reached. So, check the position first.
 		mpos, err := conn.Conn.PrimaryPosition()
 		if err != nil {
-			return fmt.Errorf("WaitSourcePos: PrimaryPosition failed: %v", err)
+			return vterrors.Wrapf(err, "WaitSourcePos: PrimaryPosition failed")
 		}
 		if mpos.AtLeast(targetPos) {
 			return nil
@@ -351,7 +352,7 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos replication.P
 	}
 
 	if err := conn.Conn.WaitUntilPosition(ctx, targetPos); err != nil {
-		return fmt.Errorf("WaitSourcePos failed: %v", err)
+		return vterrors.Wrapf(err, "WaitSourcePos failed")
 	}
 	return nil
 }
