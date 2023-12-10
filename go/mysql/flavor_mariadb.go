@@ -19,6 +19,7 @@ package mysql
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -223,22 +224,45 @@ func (m mariadbFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, error)
 	return status, err
 }
 
-// waitUntilPositionCommand is part of the Flavor interface.
+// waitUntilPosition is part of the Flavor interface.
 //
 // Note: Unlike MASTER_POS_WAIT(), MASTER_GTID_WAIT() will continue waiting even
 // if the sql thread stops. If that is a problem, we'll have to change this.
-func (mariadbFlavor) waitUntilPositionCommand(ctx context.Context, pos replication.Position) (string, error) {
+func (mariadbFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos replication.Position) error {
+	// Omit the timeout to wait indefinitely. In MariaDB, a timeout of 0 means
+	// return immediately.
+	query := fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s')", pos)
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := time.Until(deadline)
 		if timeout <= 0 {
-			return "", vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
+			return vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
 		}
-		return fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s', %.6f)", pos, timeout.Seconds()), nil
+		query = fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s', %.6f)", pos, timeout.Seconds())
 	}
 
-	// Omit the timeout to wait indefinitely. In MariaDB, a timeout of 0 means
-	// return immediately.
-	return fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s')", pos), nil
+	result, err := c.ExecuteFetch(query, 1, false)
+	if err != nil {
+		return err
+	}
+
+	// For MASTER_GTID_WAIT(), if the wait completes without a timeout 0 is
+	// returned and -1 if there was a timeout.
+	if len(result.Rows) != 1 || len(result.Rows[0]) != 1 {
+		return errors.New("invalid results")
+	}
+	val := result.Rows[0][0]
+	state, err := val.ToInt64()
+	if err != nil {
+		return fmt.Errorf("invalid result of %v", val)
+	}
+	switch state {
+	case 0:
+		return nil
+	case -1:
+		return fmt.Errorf("timed out waiting for position %v", pos)
+	default:
+		return fmt.Errorf("invalid result of %v", state)
+	}
 }
 
 // readBinlogEvent is part of the Flavor interface.

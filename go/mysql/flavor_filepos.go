@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -266,22 +267,54 @@ func (flv *filePosFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, err
 	return replication.ParseFilePosPrimaryStatus(resultMap)
 }
 
-// waitUntilPositionCommand is part of the Flavor interface.
-func (flv *filePosFlavor) waitUntilPositionCommand(ctx context.Context, pos replication.Position) (string, error) {
+// waitUntilPosition is part of the Flavor interface.
+func (flv *filePosFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos replication.Position) error {
 	filePosPos, ok := pos.GTIDSet.(replication.FilePosGTID)
 	if !ok {
-		return "", fmt.Errorf("Position is not filePos compatible: %#v", pos.GTIDSet)
+		return fmt.Errorf("position is not filePos compatible: %#v", pos.GTIDSet)
 	}
 
+	query := fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d)", filePosPos.File, filePosPos.Pos)
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := time.Until(deadline)
 		if timeout <= 0 {
-			return "", fmt.Errorf("timed out waiting for position %v", pos)
+			return fmt.Errorf("timed out waiting for position %v", pos)
 		}
-		return fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d, %.6f)", filePosPos.File, filePosPos.Pos, timeout.Seconds()), nil
+		query = fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d, %.6f)", filePosPos.File, filePosPos.Pos, timeout.Seconds())
 	}
 
-	return fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d)", filePosPos.File, filePosPos.Pos), nil
+	result, err := c.ExecuteFetch(query, 1, false)
+	if err != nil {
+		return err
+	}
+
+	// For MASTER_POS_WAIT(), the return value is the number of log events
+	// the replica had to wait for to advance to the specified position.
+	// The function returns NULL if the replica SQL thread is not started,
+	// the replica's source information is not initialized, the arguments
+	// are incorrect, or an error occurs. It returns -1 if the timeout has
+	// been exceeded. If the replica SQL thread stops while MASTER_POS_WAIT()
+	// is waiting, the function returns NULL. If the replica is past the
+	// specified position, the function returns immediately.
+	if len(result.Rows) != 1 || len(result.Rows[0]) != 1 {
+		return errors.New("invalid results")
+	}
+	val := result.Rows[0][0]
+	if val.IsNull() {
+		return errors.New("replication is not running")
+	}
+	state, err := val.ToInt64()
+	if err != nil {
+		return fmt.Errorf("invalid result of %v", val)
+	}
+	switch {
+	case state == -1:
+		return fmt.Errorf("timed out waiting for position %v", pos)
+	case state >= 0:
+		return nil
+	default:
+		return fmt.Errorf("invalid result of %v", state)
+	}
 }
 
 func (*filePosFlavor) startReplicationUntilAfter(pos replication.Position) string {
