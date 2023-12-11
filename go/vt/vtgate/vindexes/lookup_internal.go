@@ -141,7 +141,7 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 // Lookup performs a lookup for the ids.
 func (lkp *lookupInternal) Lookup(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, co vtgatepb.CommitOrder) ([]*sqltypes.Result, error) {
 	if vcursor == nil {
-		return nil, fmt.Errorf("cannot perform lookup: no vcursor provided")
+		return nil, vterrors.VT13001("cannot perform lookup: no vcursor provided")
 	}
 	results := make([]*sqltypes.Result, 0, len(ids))
 	if lkp.Autocommit {
@@ -157,14 +157,14 @@ func (lkp *lookupInternal) Lookup(ctx context.Context, vcursor VCursor, ids []sq
 		// for integral types, batch query all ids and then map them back to the input order
 		vars, err := sqltypes.BuildBindVariable(ids)
 		if err != nil {
-			return nil, fmt.Errorf("lookup.Map: %v", err)
+			return nil, vterrors.Wrap(err, "lookup.Map")
 		}
 		bindVars := map[string]*querypb.BindVariable{
 			lkp.FromColumns[0]: vars,
 		}
 		result, err := vcursor.Execute(ctx, "VindexLookup", sel, bindVars, false /* rollbackOnError */, co)
 		if err != nil {
-			return nil, fmt.Errorf("lookup.Map: %v", err)
+			return nil, vterrors.Wrap(err, "lookup.Map")
 		}
 		resultMap := make(map[string][][]sqltypes.Value)
 		for _, row := range result.Rows {
@@ -181,7 +181,7 @@ func (lkp *lookupInternal) Lookup(ctx context.Context, vcursor VCursor, ids []sq
 		for _, id := range ids {
 			vars, err := sqltypes.BuildBindVariable([]any{id})
 			if err != nil {
-				return nil, fmt.Errorf("lookup.Map: %v", err)
+				return nil, vterrors.Wrap(err, "lookup.Map")
 			}
 			bindVars := map[string]*querypb.BindVariable{
 				lkp.FromColumns[0]: vars,
@@ -189,7 +189,7 @@ func (lkp *lookupInternal) Lookup(ctx context.Context, vcursor VCursor, ids []sq
 			var result *sqltypes.Result
 			result, err = vcursor.Execute(ctx, "VindexLookup", sel, bindVars, false /* rollbackOnError */, co)
 			if err != nil {
-				return nil, fmt.Errorf("lookup.Map: %v", err)
+				return nil, vterrors.Wrap(err, "lookup.Map")
 			}
 			rows := make([][]sqltypes.Value, 0, len(result.Rows))
 			for _, row := range result.Rows {
@@ -221,7 +221,7 @@ func (lkp *lookupInternal) VerifyCustom(ctx context.Context, vcursor VCursor, id
 		}
 		result, err := vcursor.Execute(ctx, "VindexVerify", lkp.ver, bindVars, false /* rollbackOnError */, co)
 		if err != nil {
-			return nil, fmt.Errorf("lookup.Verify: %v", err)
+			return nil, vterrors.Wrap(err, "lookup.Verify")
 		}
 		out[i] = (len(result.Rows) != 0)
 	}
@@ -288,7 +288,8 @@ nextRow:
 		for j, col := range row {
 			if col.IsNull() {
 				if !lkp.IgnoreNulls {
-					return fmt.Errorf("lookup.Create: input has null values: row: %d, col: %d", i, j)
+					cols := strings.Join(lkp.FromColumns, ",")
+					return vterrors.Wrapf(vterrors.VT03027(cols), "lookup.Create: input has null values: row: %d, col: %d", i, j)
 				}
 				continue nextRow
 			}
@@ -302,7 +303,7 @@ nextRow:
 	// We only need to check the first row. Number of cols per row
 	// is guaranteed by the engine to be uniform.
 	if len(trimmedRowsCols[0]) != len(lkp.FromColumns) {
-		return vterrors.Wrapf(vterrors.VT03006(), "lookup.Create: column vindex count does not match the columns in the lookup: %d vs %v", len(trimmedRowsCols[0]), lkp.FromColumns)
+		return vterrors.Wrapf(vterrors.VT03006(), "lookup.Create: (columns, count): (%v, %d)", lkp.FromColumns, len(trimmedRowsCols[0]))
 	}
 	sort.Sort(&sorter{rowsColValues: trimmedRowsCols, toValues: trimmedToValues})
 
@@ -378,7 +379,7 @@ func (lkp *lookupInternal) Delete(ctx context.Context, vcursor VCursor, rowsColV
 	// We only need to check the first row. Number of cols per row
 	// is guaranteed by the engine to be uniform.
 	if len(rowsColValues[0]) != len(lkp.FromColumns) {
-		return fmt.Errorf("lookup.Delete: column vindex count does not match the columns in the lookup: %d vs %v", len(rowsColValues[0]), lkp.FromColumns)
+		return vterrors.Wrapf(vterrors.VT03006(), "lookup.Delete: (columns, count): (%v, %d)", lkp.FromColumns, len(rowsColValues[0]))
 	}
 	for _, column := range rowsColValues {
 		bindVars := make(map[string]*querypb.BindVariable, len(rowsColValues))
@@ -388,7 +389,7 @@ func (lkp *lookupInternal) Delete(ctx context.Context, vcursor VCursor, rowsColV
 		bindVars[lkp.To] = sqltypes.ValueBindVariable(value)
 		_, err := vcursor.Execute(ctx, "VindexDelete", lkp.del, bindVars, true /* rollbackOnError */, co)
 		if err != nil {
-			return fmt.Errorf("lookup.Delete: %v", err)
+			return vterrors.Wrap(err, "lookup.Delete")
 		}
 	}
 	return nil

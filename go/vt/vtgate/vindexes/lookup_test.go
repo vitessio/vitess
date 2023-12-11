@@ -369,7 +369,7 @@ func TestLookupNonUniqueNew(t *testing.T) {
 func TestLookupNilVCursor(t *testing.T) {
 	lnu := createLookup(t, "lookup", false /* writeOnly */)
 	_, err := lnu.Map(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	require.EqualError(t, err, "cannot perform lookup: no vcursor provided")
+	require.EqualError(t, err, "VT13001: [BUG] cannot perform lookup: no vcursor provided")
 }
 
 func TestLookupNonUniqueMap(t *testing.T) {
@@ -620,7 +620,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 
 	// With ignore_nulls off
 	err = lnu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NULL}}, [][]byte{[]byte("test2"), []byte("test1")}, true /* ignoreMode */)
-	assert.EqualError(t, err, "lookup.Create: input has null values: row: 1, col: 0")
+	assert.EqualError(t, err, "lookup.Create: input has null values: row: 1, col: 0: VT03027: Column 'fromc' cannot be null")
 
 	// With ignore_nulls on
 	vc.queries = nil
@@ -644,7 +644,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 
 	// Test column mismatch.
 	err = lnu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
-	assert.EqualError(t, err, "lookup.Create: column vindex count does not match the columns in the lookup: 2 vs [fromc]")
+	assert.EqualError(t, err, "lookup.Create: (columns, count): ([fromc], 2): VT03006: column count does not match value count with the row")
 }
 
 func TestLookupNonUniqueCreateAutocommit(t *testing.T) {
@@ -710,7 +710,7 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 
 	// Test column count fail.
 	err = lnu.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
-	assert.EqualError(t, err, "lookup.Delete: column vindex count does not match the columns in the lookup: 2 vs [fromc]")
+	assert.EqualError(t, err, "lookup.Delete: (columns, count): ([fromc], 2): VT03006: column count does not match value count with the row")
 }
 
 func TestLookupNonUniqueDeleteAutocommit(t *testing.T) {
