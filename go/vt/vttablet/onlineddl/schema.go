@@ -526,8 +526,6 @@ const (
 	sqlAnalyzeTable                        = "ANALYZE NO_WRITE_TO_BINLOG TABLE `%a`"
 	sqlShowCreateTable                     = "SHOW CREATE TABLE `%a`"
 	sqlShowVariablesLikePreserveForeignKey = "show global variables like 'rename_table_preserve_foreign_key'"
-	sqlEnablePreserveForeignKey            = "set @@rename_table_preserve_foreign_key = 1"
-	sqlDisablePreserveForeignKey           = "set @@rename_table_preserve_foreign_key = 0"
 	sqlShowVariablesLikeFastAnalyzeTable   = "show global variables like 'fast_analyze_table'"
 	sqlEnableFastAnalyzeTable              = "set @@fast_analyze_table = 1"
 	sqlDisableFastAnalyzeTable             = "set @@fast_analyze_table = 0"
