@@ -35,15 +35,13 @@ import (
 func TestMultipleConcurrentVDiffs(t *testing.T) {
 	cellName := "zone1"
 	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
 
-	require.NotNil(t, vc)
 	allCellNames = cellName
 	defaultCellName := cellName
 	defaultCell = vc.Cells[defaultCellName]
 	sourceKeyspace := "product"
 	shardName := "0"
-
-	defer vc.TearDown()
 
 	cell := vc.Cells[cellName]
 	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, shardName, initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)

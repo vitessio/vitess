@@ -48,7 +48,7 @@ func TestFKWorkflow(t *testing.T) {
 	}
 	defer func() { extraVTTabletArgs = nil }()
 
-	cellName := "zone"
+	cellName := "zone1"
 	vc = NewVitessCluster(t, nil)
 
 	allCellNames = cellName

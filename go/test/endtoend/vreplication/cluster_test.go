@@ -116,6 +116,9 @@ type Keyspace struct {
 	VSchema       string
 	Schema        string
 	SidecarDBName string
+
+	numReplicas int
+	numRDOnly   int
 }
 
 // Shard represents a Vitess shard in a keyspace
