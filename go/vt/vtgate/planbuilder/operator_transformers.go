@@ -605,7 +605,11 @@ func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mids sqlp
 		ins.Table, ins.Columns)
 	prefix = prefixBuf.String()
 
-	suffix = ins.OnDup
+	suffix = sqlparser.CopyOnRewrite(ins.OnDup, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		if tblName, ok := cursor.Node().(sqlparser.TableName); ok {
+			cursor.Replace(sqlparser.NewTableName(tblName.Name.String()))
+		}
+	}, nil).(sqlparser.OnDup)
 	return
 }
 
