@@ -133,6 +133,7 @@ func TestRestart(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	err := primaryTablet.MysqlctldProcess.Stop()
 	require.Nil(t, err)
+	cluster.PrintFiles(t, primaryTablet.TabletUID, "error.log")
 	primaryTablet.MysqlctldProcess.CleanupFiles(primaryTablet.TabletUID)
 	err = primaryTablet.MysqlctldProcess.Start()
 	require.Nil(t, err)

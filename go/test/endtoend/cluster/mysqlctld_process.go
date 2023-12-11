@@ -23,7 +23,10 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
@@ -148,6 +151,42 @@ func (mysqlctld *MysqlctldProcess) Stop() error {
 // CleanupFiles clean the mysql files to make sure we can start the same process again
 func (mysqlctld *MysqlctldProcess) CleanupFiles(tabletUID int) {
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)))
+}
+
+func PrintFiles(t *testing.T, tabletUID int, files ...string) {
+	dir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID))
+	var directories []string
+	directories = append(directories, dir)
+
+	for len(directories) > 0 {
+		dir = directories[0]
+		directories = directories[1:]
+		entries, err := os.ReadDir(dir)
+		require.NoError(t, err)
+		for _, entry := range entries {
+			name := path.Join(dir, entry.Name())
+			if entry.IsDir() {
+				directories = append(directories, name)
+				continue
+			}
+			if len(files) != 0 {
+				fileFound := false
+				for _, file := range files {
+					if strings.EqualFold(entry.Name(), file) {
+						fileFound = true
+						break
+					}
+				}
+				if !fileFound {
+					continue
+				}
+			}
+			res, err := os.ReadFile(name)
+			require.NoError(t, err)
+			log.Errorf("READING FILE - %v", name)
+			log.Errorf("%v", string(res))
+		}
+	}
 }
 
 // MysqlCtldProcessInstance returns a Mysqlctld handle for mysqlctld process
