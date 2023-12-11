@@ -190,7 +190,7 @@ var (
 	vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
 		"Number of events that had to wait because the skew across shards was too high")
 
-	vindexUnknownParams = stats.NewGauge("VindexUnknownParameters", "Number of parameterss unrecognized by Vindexes")
+	vindexUnknownParams = stats.NewGauge("VindexUnknownParameters", "Number of parameters unrecognized by Vindexes")
 
 	timings = stats.NewMultiTimings(
 		"VtgateApi",
