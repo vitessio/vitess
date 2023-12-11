@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/require"
@@ -206,7 +207,7 @@ func TestStreamRowsUnicode(t *testing.T) {
 		engine = savedEngine
 	}()
 	engine = customEngine(t, func(in mysql.ConnParams) mysql.ConnParams {
-		in.Charset = "latin1"
+		in.Charset = collations.CollationLatin1Swedish
 		return in
 	})
 	defer engine.Close()

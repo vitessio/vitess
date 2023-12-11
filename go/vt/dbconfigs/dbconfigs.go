@@ -26,13 +26,13 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vttls"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttls"
 	"vitess.io/vitess/go/yaml2"
 )
 
@@ -338,8 +338,13 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
 
 		// If the connection params has a charset defined, it will not be overridden by the
 		// global configuration.
-		if dbcfgs.Charset != "" && cp.Charset == "" {
-			cp.Charset = dbcfgs.Charset
+		if dbcfgs.Charset != "" && cp.Charset == collations.Unknown {
+			ch, err := collations.Local().ParseConnectionCharset(dbcfgs.Charset)
+			if err != nil {
+				log.Warningf("Error parsing charset %s: %v", dbcfgs.Charset, err)
+				ch = collations.Local().DefaultConnectionCharset()
+			}
+			cp.Charset = ch
 		}
 
 		if dbcfgs.Flags != 0 {

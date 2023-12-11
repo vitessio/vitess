@@ -214,6 +214,9 @@ type Listener struct {
 
 	// flushDelay is the delay after which buffered response will be flushed to the client.
 	flushDelay time.Duration
+
+	// charset is the default server side character set to use for the connection
+	charset collations.ID
 }
 
 // NewFromListener creates a new mysql listener from an existing net.Listener
@@ -386,7 +389,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	defer connCount.Add(-1)
 
 	// First build and send the server handshake packet.
-	serverAuthPluginData, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig.Load() != nil)
+	serverAuthPluginData, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, uint8(l.charset), l.TLSConfig.Load() != nil)
 	if err != nil {
 		if err != io.EOF {
 			log.Errorf("Cannot send HandshakeV10 packet to %s: %v", c, err)
@@ -567,7 +570,7 @@ func (l *Listener) Shutdown() {
 
 // writeHandshakeV10 writes the Initial Handshake Packet, server side.
 // It returns the salt data.
-func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, enableTLS bool) ([]byte, error) {
+func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, charset uint8, enableTLS bool) ([]byte, error) {
 	capabilities := CapabilityClientLongPassword |
 		CapabilityClientFoundRows |
 		CapabilityClientLongFlag |
@@ -642,7 +645,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 	pos = writeUint16(data, pos, uint16(capabilities))
 
 	// Character set.
-	pos = writeByte(data, pos, collations.Local().DefaultConnectionCharset())
+	pos = writeByte(data, pos, charset)
 
 	// Status flag.
 	pos = writeUint16(data, pos, c.StatusFlags)
