@@ -1,4 +1,4 @@
-##Github CI Workflows
+## Github CI Workflows
 
 This document has a short outline of how tests are run in CI, how to add new tests and where these are configured.
 
