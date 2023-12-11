@@ -663,6 +663,11 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				if err := tablet.Vttablet.Setup(); err != nil {
 					t.Fatalf(err.Error())
 				}
+				query := "SET GLOBAL time_zone = '+00:00';"
+				qr, err := tablet.Vttablet.QueryTablet(query, tablet.Vttablet.Keyspace, false)
+				if err != nil {
+					t.Fatalf("failed to set time_zone: %v, output: %v", err, qr)
+				}
 			}
 		}
 		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
