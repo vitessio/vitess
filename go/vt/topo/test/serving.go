@@ -50,12 +50,6 @@ func checkSrvKeyspace(t *testing.T, ctx context.Context, ts *topo.Server) {
 				},
 			},
 		},
-		ServedFrom: []*topodatapb.SrvKeyspace_ServedFrom{
-			{
-				TabletType: topodatapb.TabletType_REPLICA,
-				Keyspace:   "other_keyspace",
-			},
-		},
 	}
 	if err := ts.UpdateSrvKeyspace(ctx, LocalCellName, "test_keyspace", srvKeyspace); err != nil {
 		t.Errorf("UpdateSrvKeyspace(1): %v", err)
