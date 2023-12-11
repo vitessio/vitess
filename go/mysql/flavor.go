@@ -146,11 +146,10 @@ type flavor interface {
 	// with parsed executed position.
 	primaryStatus(c *Conn) (replication.PrimaryStatus, error)
 
-	// waitUntilPositionCommand returns the SQL command to issue
-	// to wait until the given position, until the context
-	// expires.  The command returns -1 if it times out. It
-	// returns NULL if GTIDs are not enabled.
-	waitUntilPositionCommand(ctx context.Context, pos replication.Position) (string, error)
+	// waitUntilPosition waits until the given position is reached or
+	// until the context expires. It returns an error if we did not
+	// succeed.
+	waitUntilPosition(ctx context.Context, c *Conn, pos replication.Position) error
 
 	baseShowTables() string
 	baseShowTablesWithSizes() string
@@ -166,7 +165,8 @@ type CapableOf func(capability FlavorCapability) (bool, error)
 var flavors = make(map[string]func() flavor)
 
 // ServerVersionAtLeast returns true if current server is at least given value.
-// Example: if input is []int{8, 0, 23}... the function returns 'true' if we're on MySQL 8.0.23, 8.0.24, ...
+// Example: if input is []int{8, 0, 23}... the function returns 'true' if we're
+// on MySQL 8.0.23, 8.0.24, ...
 func ServerVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
 	versionPrefix := strings.Split(serverVersion, "-")[0]
 	versionTokens := strings.Split(versionPrefix, ".")
@@ -448,21 +448,18 @@ func (c *Conn) ShowPrimaryStatus() (replication.PrimaryStatus, error) {
 	return c.flavor.primaryStatus(c)
 }
 
-// WaitUntilPositionCommand returns the SQL command to issue
-// to wait until the given position, until the context
-// expires.  The command returns -1 if it times out. It
-// returns NULL if GTIDs are not enabled.
-func (c *Conn) WaitUntilPositionCommand(ctx context.Context, pos replication.Position) (string, error) {
-	return c.flavor.waitUntilPositionCommand(ctx, pos)
+// WaitUntilPosition waits until the given position is reached or until the
+// context expires. It returns an error if we did not succeed.
+func (c *Conn) WaitUntilPosition(ctx context.Context, pos replication.Position) error {
+	return c.flavor.waitUntilPosition(ctx, c, pos)
 }
 
-// WaitUntilFilePositionCommand returns the SQL command to issue
-// to wait until the given position, until the context
-// expires for the file position flavor.  The command returns -1 if it times out. It
-// returns NULL if GTIDs are not enabled.
-func (c *Conn) WaitUntilFilePositionCommand(ctx context.Context, pos replication.Position) (string, error) {
+// WaitUntilFilePosition waits until the given position is reached or until
+// the context expires for the file position flavor. It returns an error if
+// we did not succeed.
+func (c *Conn) WaitUntilFilePosition(ctx context.Context, pos replication.Position) error {
 	filePosFlavor := filePosFlavor{}
-	return filePosFlavor.waitUntilPositionCommand(ctx, pos)
+	return filePosFlavor.waitUntilPosition(ctx, c, pos)
 }
 
 // BaseShowTables returns a query that shows tables

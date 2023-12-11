@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type ResetSuperReadOnlyFunc func() error
@@ -315,7 +316,8 @@ func (mysqld *Mysqld) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) 
 	return resetFunc, nil
 }
 
-// WaitSourcePos lets replicas wait to given replication position
+// WaitSourcePos lets replicas wait for the given replication position to
+// be reached.
 func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos replication.Position) error {
 	// Get a connection.
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
@@ -324,61 +326,33 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos replication.P
 	}
 	defer conn.Recycle()
 
-	// First check if filePos flavored Position was passed in. If so, we can't defer to the flavor in the connection,
-	// unless that flavor is also filePos.
-	waitCommandName := "WaitUntilPositionCommand"
-	var query string
+	// First check if filePos flavored Position was passed in. If so, we
+	// can't defer to the flavor in the connection, unless that flavor is
+	// also filePos.
 	if targetPos.MatchesFlavor(replication.FilePosFlavorID) {
-		// If we are the primary, WaitUntilFilePositionCommand will fail.
-		// But position is most likely reached. So, check the position
-		// first.
+		// If we are the primary, WaitUntilFilePosition will fail. But
+		// position is most likely reached. So, check the position first.
 		mpos, err := conn.Conn.PrimaryFilePosition()
 		if err != nil {
-			return fmt.Errorf("WaitSourcePos: PrimaryFilePosition failed: %v", err)
+			return vterrors.Wrapf(err, "WaitSourcePos: PrimaryFilePosition failed")
 		}
 		if mpos.AtLeast(targetPos) {
 			return nil
 		}
-
-		// Find the query to run, run it.
-		query, err = conn.Conn.WaitUntilFilePositionCommand(ctx, targetPos)
-		if err != nil {
-			return err
-		}
-		waitCommandName = "WaitUntilFilePositionCommand"
 	} else {
-		// If we are the primary, WaitUntilPositionCommand will fail.
-		// But position is most likely reached. So, check the position
-		// first.
+		// If we are the primary, WaitUntilPosition will fail. But
+		// position is most likely reached. So, check the position first.
 		mpos, err := conn.Conn.PrimaryPosition()
 		if err != nil {
-			return fmt.Errorf("WaitSourcePos: PrimaryPosition failed: %v", err)
+			return vterrors.Wrapf(err, "WaitSourcePos: PrimaryPosition failed")
 		}
 		if mpos.AtLeast(targetPos) {
 			return nil
 		}
-
-		// Find the query to run, run it.
-		query, err = conn.Conn.WaitUntilPositionCommand(ctx, targetPos)
-		if err != nil {
-			return err
-		}
 	}
 
-	qr, err := mysqld.FetchSuperQuery(ctx, query)
-	if err != nil {
-		return fmt.Errorf("%v(%v) failed: %v", waitCommandName, query, err)
-	}
-
-	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return fmt.Errorf("unexpected result format from %v(%v): %#v", waitCommandName, query, qr)
-	}
-	result := qr.Rows[0][0]
-	if result.IsNull() {
-		return fmt.Errorf("%v(%v) failed: replication is probably stopped", waitCommandName, query)
-	}
-	if result.ToString() == "-1" {
-		return fmt.Errorf("timed out waiting for position %v", targetPos)
+	if err := conn.Conn.WaitUntilPosition(ctx, targetPos); err != nil {
+		return vterrors.Wrapf(err, "WaitSourcePos failed")
 	}
 	return nil
 }
