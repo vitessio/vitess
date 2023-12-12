@@ -71,6 +71,8 @@ var ErrNoTarget = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
 // stateManager manages state transition for all the TabletServer
 // subcomponents.
 type stateManager struct {
+	ctx    context.Context
+	cancel context.CancelFunc
 	// transitioning is a semaphore that must to be obtained
 	// before attempting a state transition. To prevent deadlocks,
 	// this must be acquired before the mu lock. We use a semaphore
@@ -100,7 +102,7 @@ type stateManager struct {
 	reason         string
 	transitionErr  error
 
-	requests sync.WaitGroup
+	requestsCounter atomic.Int64
 
 	// QueryList does not have an Open or Close.
 	statelessql *QueryList
@@ -401,13 +403,13 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 	if err != nil {
 		return err
 	}
-	sm.requests.Add(1)
+	sm.requestsCounter.Add(1)
 	return nil
 }
 
 // EndRequest unregisters the current request (a waitgroup) as done.
 func (sm *stateManager) EndRequest() {
-	sm.requests.Done()
+	sm.requestsCounter.Add(-1)
 }
 
 // VerifyTarget allows requests to be executed even in non-serving state.
@@ -487,7 +489,7 @@ func (sm *stateManager) unservePrimary() error {
 func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) error {
 	// We are likely transitioning from primary. We have to honor
 	// the shutdown grace period.
-	cancel := sm.handleShutdownGracePeriod()
+	cancel := sm.handleShutdownGracePeriod(nil)
 	defer cancel()
 
 	sm.ddle.Close()
@@ -540,8 +542,10 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 }
 
 func (sm *stateManager) unserveCommon() {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	log.Infof("Started execution of unserveCommon")
-	cancel := sm.handleShutdownGracePeriod()
+	cancel := sm.handleShutdownGracePeriod(&wg)
 	log.Infof("Finished execution of handleShutdownGracePeriod")
 	defer cancel()
 
@@ -560,16 +564,45 @@ func (sm *stateManager) unserveCommon() {
 	log.Info("Finished Killing all OLAP queries. Started tracker close")
 	sm.tracker.Close()
 	log.Infof("Finished tracker close. Started wait for requests")
-	sm.requests.Wait()
+	// If there is not shutdown grace period, then we should wait for all the requests to be empty.
+	if sm.shutdownGracePeriod == 0 {
+		sm.waitForRequestsToBeEmpty()
+	} else {
+		// We quickly check if the requests are empty or not.
+		// If they are, then we don't need to wait for the shutdown to complete.
+		count := sm.requestsCounter.Load()
+		if count == 0 {
+			return
+		}
+		// Otherwise, we should wait for all olap queries to be killed.
+		// We don't need to wait for requests to be empty since we have ensured all the queries against MySQL have been killed.
+		wg.Wait()
+	}
+
 	log.Infof("Finished wait for requests. Finished execution of unserveCommon")
 }
 
-func (sm *stateManager) handleShutdownGracePeriod() (cancel func()) {
+func (sm *stateManager) waitForRequestsToBeEmpty() {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		count := sm.requestsCounter.Load()
+		if count == 0 {
+			return
+		}
+		<-ticker.C
+	}
+}
+
+func (sm *stateManager) handleShutdownGracePeriod(wg *sync.WaitGroup) (cancel func()) {
 	if sm.shutdownGracePeriod == 0 {
 		return func() {}
 	}
 	ctx, cancel := context.WithCancel(context.TODO())
 	go func() {
+		if wg != nil {
+			defer wg.Done()
+		}
 		if err := timer.SleepContext(ctx, sm.shutdownGracePeriod); err != nil {
 			return
 		}
