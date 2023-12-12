@@ -82,6 +82,7 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_backups_manual.yml'
+            - 'examples/**'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
