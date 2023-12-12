@@ -443,21 +443,20 @@ func (ts *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) e
 		return err
 	}
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(tablet.Alias), TabletFile)
-	if _, err = conn.Create(ctx, tabletPath, data); err != nil {
+	if _, err := conn.Create(ctx, tabletPath, data); err != nil {
 		return err
 	}
 
-	if updateErr := UpdateTabletReplicationData(ctx, ts, tablet); updateErr != nil {
-		return updateErr
+	if err := UpdateTabletReplicationData(ctx, ts, tablet); err != nil {
+		return err
 	}
 
-	if err == nil {
-		event.Dispatch(&events.TabletChange{
-			Tablet: tablet,
-			Status: "created",
-		})
-	}
-	return err
+	event.Dispatch(&events.TabletChange{
+		Tablet: tablet,
+		Status: "created",
+	})
+
+	return nil
 }
 
 // DeleteTablet wraps the underlying conn.Delete

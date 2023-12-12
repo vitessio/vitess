@@ -214,6 +214,18 @@ func (s *Schema) normalize() error {
 		return true
 	}
 
+	// Utility map and function to only record one foreign-key error per table. We make this limitation
+	// because the search algorithm below could review the same table twice, thus potentially unnecessarily duplicating
+	// found errors.
+	entityFkErrors := map[string]error{}
+	addEntityFkError := func(e Entity, err error) error {
+		if _, ok := entityFkErrors[e.Name()]; ok {
+			// error already recorded for this entity
+			return nil
+		}
+		entityFkErrors[e.Name()] = err
+		return err
+	}
 	// We now iterate all tables. We iterate "dependency levels":
 	// - first we want all tables that don't have foreign keys or which only reference themselves
 	// - then we only want tables that reference 1st level tables. these are 2nd level tables
@@ -239,6 +251,16 @@ func (s *Schema) normalize() error {
 				if referencedTableName != name {
 					nonSelfReferenceNames = append(nonSelfReferenceNames, referencedTableName)
 				}
+				referencedEntity, ok := s.named[referencedTableName]
+				if !ok {
+					errs = errors.Join(errs, addEntityFkError(t, &ForeignKeyNonexistentReferencedTableError{Table: name, ReferencedTable: referencedTableName}))
+					continue
+				}
+				if _, ok := referencedEntity.(*CreateViewEntity); ok {
+					errs = errors.Join(errs, addEntityFkError(t, &ForeignKeyReferencesViewError{Table: name, ReferencedView: referencedTableName}))
+					continue
+				}
+
 				fkParents[referencedTableName] = true
 			}
 			if allNamesFoundInLowerLevel(nonSelfReferenceNames, iterationLevel) {
@@ -302,7 +324,8 @@ func (s *Schema) normalize() error {
 			if _, ok := dependencyLevels[t.Name()]; !ok {
 				// We _know_ that in this iteration, at least one foreign key is not found.
 				// We return the first one.
-				return &ForeignKeyDependencyUnresolvedError{Table: t.Name()}
+				errs = errors.Join(errs, addEntityFkError(t, &ForeignKeyDependencyUnresolvedError{Table: t.Name()}))
+				s.sorted = append(s.sorted, t)
 			}
 		}
 		for _, v := range s.views {
@@ -327,12 +350,26 @@ func (s *Schema) normalize() error {
 			return errors.Join(errs, err)
 		}
 	}
-	colTypeEqualForForeignKey := func(a, b *sqlparser.ColumnType) bool {
-		return a.Type == b.Type &&
-			a.Unsigned == b.Unsigned &&
-			a.Zerofill == b.Zerofill &&
-			sqlparser.Equals.ColumnCharset(a.Charset, b.Charset) &&
-			sqlparser.Equals.SliceOfString(a.EnumValues, b.EnumValues)
+	colTypeCompatibleForForeignKey := func(child, parent *sqlparser.ColumnType) bool {
+		if child.Type == parent.Type {
+			return true
+		}
+		if child.Type == "char" && parent.Type == "varchar" {
+			return true
+		}
+		return false
+	}
+	colTypeEqualForForeignKey := func(child, parent *sqlparser.ColumnType) bool {
+		if colTypeCompatibleForForeignKey(child, parent) &&
+			child.Unsigned == parent.Unsigned &&
+			child.Zerofill == parent.Zerofill &&
+			sqlparser.Equals.ColumnCharset(child.Charset, parent.Charset) &&
+			child.Options.Collate == parent.Options.Collate &&
+			sqlparser.Equals.SliceOfString(child.EnumValues, parent.EnumValues) {
+			// Complete identify (other than precision which is ignored)
+			return true
+		}
+		return false
 	}
 
 	// Now validate foreign key columns:
@@ -356,7 +393,12 @@ func (s *Schema) normalize() error {
 				continue
 			}
 			referencedTableName := check.ReferenceDefinition.ReferencedTable.Name.String()
-			referencedTable := s.Table(referencedTableName) // we know this exists because we validated foreign key dependencies earlier on
+			referencedTable := s.Table(referencedTableName)
+			if referencedTable == nil {
+				// This can happen because earlier, when we validated existence of reference table, we took note
+				// of nonexisting tables, but kept on going.
+				continue
+			}
 
 			referencedColumns := map[string]*sqlparser.ColumnDefinition{}
 			for _, col := range referencedTable.CreateTable.TableSpec.Columns {

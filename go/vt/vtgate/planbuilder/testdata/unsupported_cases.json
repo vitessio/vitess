@@ -378,5 +378,10 @@
     "comment": "Alias cannot clash with base tables",
     "query": "WITH user AS (SELECT col FROM user) SELECT * FROM user",
     "plan": "VT12001: unsupported: do not support CTE that use the CTE alias inside the CTE query"
+  },
+  {
+    "comment": "correlated subqueries in select expressions are unsupported",
+    "query": "SELECT (SELECT sum(user.name) FROM music LIMIT 1) FROM user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   }
 ]

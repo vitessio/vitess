@@ -557,11 +557,6 @@ func (vttablet *VttabletProcess) getDBSystemValues(placeholder string, value str
 	return "", nil
 }
 
-// ToggleProfiling enables or disables the configured CPU profiler on this vttablet
-func (vttablet *VttabletProcess) ToggleProfiling() error {
-	return vttablet.proc.Process.Signal(syscall.SIGUSR1)
-}
-
 // WaitForVReplicationToCatchup waits for "workflow" to finish copying
 func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, sidecarDBName string, duration time.Duration) {
 	if sidecarDBName == "" {

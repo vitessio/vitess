@@ -23,10 +23,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/spf13/pflag"
 
@@ -215,7 +213,7 @@ func (logger *StreamLogger[T]) ServeLogs(url string, logf LogFormatter) {
 // it.
 func (logger *StreamLogger[T]) LogToFile(path string, logf LogFormatter) (chan T, error) {
 	rotateChan := make(chan os.Signal, 1)
-	signal.Notify(rotateChan, syscall.SIGUSR2)
+	setupRotate(rotateChan)
 
 	logChan := logger.Subscribe("FileLog")
 	formatParams := map[string][]string{"full": {}}

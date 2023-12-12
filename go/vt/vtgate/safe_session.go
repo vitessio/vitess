@@ -572,6 +572,26 @@ func (session *SafeSession) TimeZone() *time.Location {
 	return loc
 }
 
+// ForeignKeyChecks returns the foreign_key_checks stored in system_variables map in the session.
+func (session *SafeSession) ForeignKeyChecks() *bool {
+	session.mu.Lock()
+	fkVal, ok := session.SystemVariables[sysvars.ForeignKeyChecks]
+	session.mu.Unlock()
+
+	if !ok {
+		return nil
+	}
+	switch strings.ToLower(fkVal) {
+	case "off", "0":
+		fkCheckBool := false
+		return &fkCheckBool
+	case "on", "1":
+		fkCheckBool := true
+		return &fkCheckBool
+	}
+	return nil
+}
+
 // SetOptions sets the options
 func (session *SafeSession) SetOptions(options *querypb.ExecuteOptions) {
 	session.mu.Lock()

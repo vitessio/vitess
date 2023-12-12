@@ -117,7 +117,7 @@ func CreateTablet(
 		Type:           initTabletType,
 		DbNameOverride: dbname,
 	}
-	if err := tm.Start(tablet, 0); err != nil {
+	if err := tm.Start(tablet, nil); err != nil {
 		return err
 	}
 
@@ -291,95 +291,72 @@ func CreateKs(
 ) (uint32, error) {
 	keyspace := kpb.Name
 
-	if kpb.ServedFrom != "" {
-		// if we have a redirect, create a completely redirected
-		// keyspace and no tablet
-		if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
-			ServedFroms: []*topodatapb.Keyspace_ServedFrom{
-				{
-					TabletType: topodatapb.TabletType_PRIMARY,
-					Keyspace:   kpb.ServedFrom,
-				},
-				{
-					TabletType: topodatapb.TabletType_REPLICA,
-					Keyspace:   kpb.ServedFrom,
-				},
-				{
-					TabletType: topodatapb.TabletType_RDONLY,
-					Keyspace:   kpb.ServedFrom,
-				},
-			},
-		}); err != nil {
-			return 0, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
-		}
-	} else {
-		// create a regular keyspace
-		if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
-			return 0, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
+	// create a regular keyspace
+	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
+		return 0, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
+	}
+
+	// iterate through the shards
+	for _, spb := range kpb.Shards {
+		shard := spb.Name
+		if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
+			return 0, fmt.Errorf("CreateShard(%v:%v) failed: %v", keyspace, shard, err)
 		}
 
-		// iterate through the shards
-		for _, spb := range kpb.Shards {
-			shard := spb.Name
-			if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
-				return 0, fmt.Errorf("CreateShard(%v:%v) failed: %v", keyspace, shard, err)
+		for _, cell := range tpb.Cells {
+			dbname := spb.DbNameOverride
+			if dbname == "" {
+				dbname = fmt.Sprintf("vt_%v_%v", keyspace, shard)
 			}
 
-			for _, cell := range tpb.Cells {
-				dbname := spb.DbNameOverride
-				if dbname == "" {
-					dbname = fmt.Sprintf("vt_%v_%v", keyspace, shard)
+			replicas := int(kpb.ReplicaCount)
+			if replicas == 0 {
+				// 2 replicas in order to ensure the primary cell has a primary and a replica
+				replicas = 2
+			}
+			rdonlys := int(kpb.RdonlyCount)
+			if rdonlys == 0 {
+				rdonlys = 1
+			}
+
+			if ensureDatabase {
+				// Create Database if not exist
+				conn, err := mysqld.GetDbaConnection(context.TODO())
+				if err != nil {
+					return 0, fmt.Errorf("GetConnection failed: %v", err)
+				}
+				defer conn.Close()
+
+				_, err = conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS `"+dbname+"`", 1, false)
+				if err != nil {
+					return 0, fmt.Errorf("error ensuring database exists: %v", err)
 				}
 
-				replicas := int(kpb.ReplicaCount)
-				if replicas == 0 {
-					// 2 replicas in order to ensure the primary cell has a primary and a replica
-					replicas = 2
-				}
-				rdonlys := int(kpb.RdonlyCount)
-				if rdonlys == 0 {
-					rdonlys = 1
-				}
+			}
+			if cell == tpb.Cells[0] {
+				replicas--
 
-				if ensureDatabase {
-					// Create Database if not exist
-					conn, err := mysqld.GetDbaConnection(context.TODO())
-					if err != nil {
-						return 0, fmt.Errorf("GetConnection failed: %v", err)
-					}
-					defer conn.Close()
-
-					_, err = conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS `"+dbname+"`", 1, false)
-					if err != nil {
-						return 0, fmt.Errorf("error ensuring database exists: %v", err)
-					}
-
+				// create the primary
+				if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_PRIMARY, mysqld, dbcfgs.Clone()); err != nil {
+					return 0, err
 				}
-				if cell == tpb.Cells[0] {
-					replicas--
+				uid++
+			}
 
-					// create the primary
-					if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_PRIMARY, mysqld, dbcfgs.Clone()); err != nil {
-						return 0, err
-					}
-					uid++
+			for i := 0; i < replicas; i++ {
+				// create a replica tablet
+				if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, dbcfgs.Clone()); err != nil {
+					return 0, err
 				}
+				uid++
+			}
 
-				for i := 0; i < replicas; i++ {
-					// create a replica tablet
-					if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, dbcfgs.Clone()); err != nil {
-						return 0, err
-					}
-					uid++
+			for i := 0; i < rdonlys; i++ {
+				// create a rdonly tablet
+				if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs.Clone()); err != nil {
+					return 0, err
 				}
-
-				for i := 0; i < rdonlys; i++ {
-					// create a rdonly tablet
-					if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs.Clone()); err != nil {
-						return 0, err
-					}
-					uid++
-				}
+				uid++
 			}
 		}
 	}

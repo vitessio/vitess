@@ -76,8 +76,8 @@ func createFuzzingSocketPair() (net.Listener, *Conn, *Conn) {
 	}
 
 	// Create a Conn on both sides.
-	cConn := newConn(clientConn)
-	sConn := newConn(serverConn)
+	cConn := newConn(clientConn, DefaultFlushDelay)
+	sConn := newConn(serverConn, DefaultFlushDelay)
 
 	return listener, sConn, cConn
 }
@@ -196,7 +196,7 @@ func FuzzHandleNextCommand(data []byte) int {
 		writeToPass: []bool{false},
 		pos:         -1,
 		queryPacket: data,
-	})
+	}, DefaultFlushDelay)
 	sConn.PrepareData = map[uint32]*PrepareData{}
 
 	handler := &fuzztestRun{}
@@ -327,7 +327,7 @@ func FuzzTLSServer(data []byte) int {
 		Password: "password1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, 0, "8.0.30-Vitess")
 	if err != nil {
 		return -1
 	}

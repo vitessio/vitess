@@ -109,6 +109,10 @@ type Config struct {
 	// cluster startup if the data directory does not already exist.
 	PersistentMode bool
 
+	// VtCombo bind address.
+	// vtcombo will bind to this address when running the servenv.
+	VtComboBindAddress string
+
 	// MySQL protocol bind address.
 	// vtcombo will bind to this address when exposing the mysql protocol socket
 	MySQLBindHost string
@@ -488,11 +492,6 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 	}
 
 	for _, kpb := range db.Topology.Keyspaces {
-		if kpb.ServedFrom != "" {
-			// redirected keyspaces have no underlying database
-			continue
-		}
-
 		keyspace := kpb.Name
 		keyspaceDir := path.Join(db.SchemaDir, keyspace)
 
@@ -565,9 +564,6 @@ func (db *LocalCluster) createDatabases() error {
 
 	var sql []string
 	for _, kpb := range db.Topology.Keyspaces {
-		if kpb.ServedFrom != "" {
-			continue
-		}
 		for _, dbname := range db.shardNames(kpb) {
 			sql = append(sql, fmt.Sprintf("create database `%s`", dbname))
 		}
@@ -641,6 +637,7 @@ func (db *LocalCluster) JSONConfig() any {
 	}
 
 	config := map[string]any{
+		"bind_address":       db.vt.BindAddress,
 		"port":               db.vt.Port,
 		"socket":             db.mysql.UnixSocket(),
 		"vtcombo_mysql_port": db.Env.PortForProtocol("vtcombo_mysql_port", ""),
@@ -783,7 +780,7 @@ func (db *LocalCluster) VTProcess() *VtProcess {
 // a pointer to the interface. To read this vschema, the caller must convert it to a map
 func (vt *VtProcess) ReadVSchema() (*interface{}, error) {
 	httpClient := &http.Client{Timeout: 5 * time.Second}
-	resp, err := httpClient.Get(fmt.Sprintf("http://%s:%d/debug/vschema", "127.0.0.1", vt.Port))
+	resp, err := httpClient.Get(fmt.Sprintf("http://%s:%d/debug/vschema", vt.BindAddress, vt.Port))
 	if err != nil {
 		return nil, err
 	}

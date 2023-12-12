@@ -417,6 +417,32 @@ func TestAggregateLeftJoin(t *testing.T) {
 	mcmp.AssertMatches("SELECT avg(t1.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[DECIMAL(0.5000)]]`)
 	mcmp.AssertMatches("SELECT avg(t2.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[DECIMAL(1.0000)]]`)
 	mcmp.AssertMatches("SELECT count(*) FROM t2 LEFT JOIN t1 ON t1.t1_id = t2.id WHERE IFNULL(t1.name, 'NOTSET') = 'r'", `[[INT64(1)]]`)
+
+	aggregations := []string{
+		"count(t1.shardkey)",
+		"count(t2.shardkey)",
+		"sum(t1.shardkey)",
+		"sum(t2.shardkey)",
+		"avg(t1.shardkey)",
+		"avg(t2.shardkey)",
+		"count(*)",
+	}
+
+	grouping := []string{
+		"t1.t1_id",
+		"t1.shardKey",
+		"t1.value",
+		"t2.id",
+		"t2.shardKey",
+	}
+
+	// quickly construct a big number of left join aggregation queries that have to be executed using the hash join
+	for _, agg := range aggregations {
+		for _, gb := range grouping {
+			query := fmt.Sprintf("SELECT %s FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by %s", agg, gb)
+			mcmp.Exec(query)
+		}
+	}
 }
 
 // TestScalarAggregate tests validates that only count is returned and no additional field is returned.gst

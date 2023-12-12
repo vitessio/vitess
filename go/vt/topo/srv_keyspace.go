@@ -137,7 +137,7 @@ func (ts *Server) GetShardServingCells(ctx context.Context, si *ShardInfo) (serv
 	var mu sync.Mutex
 	for _, cell := range cells {
 		wg.Add(1)
-		go func(cell, keyspace string) {
+		go func(cell string) {
 			defer wg.Done()
 			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, si.keyspace)
 			switch {
@@ -166,7 +166,7 @@ func (ts *Server) GetShardServingCells(ctx context.Context, si *ShardInfo) (serv
 				rec.RecordError(err)
 				return
 			}
-		}(cell, si.Keyspace())
+		}(cell)
 	}
 	wg.Wait()
 	if rec.HasErrors() {
@@ -188,7 +188,7 @@ func (ts *Server) GetShardServingTypes(ctx context.Context, si *ShardInfo) (serv
 	var mu sync.Mutex
 	for _, cell := range cells {
 		wg.Add(1)
-		go func(cell, keyspace string) {
+		go func(cell string) {
 			defer wg.Done()
 			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, si.keyspace)
 			switch {
@@ -223,7 +223,7 @@ func (ts *Server) GetShardServingTypes(ctx context.Context, si *ShardInfo) (serv
 				rec.RecordError(err)
 				return
 			}
-		}(cell, si.Keyspace())
+		}(cell)
 	}
 	wg.Wait()
 	if rec.HasErrors() {
@@ -613,10 +613,8 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 			case IsErrType(err, NoNode):
 				// Assuming this cell is not active, nothing to do.
 			default:
-				if err != nil {
-					rec.RecordError(err)
-					return
-				}
+				rec.RecordError(err)
+				return
 			}
 		}(cell, keyspace)
 	}

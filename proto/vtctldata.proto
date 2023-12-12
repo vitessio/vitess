@@ -472,9 +472,8 @@ message CreateKeyspaceRequest {
   // OBSOLETE topodata.KeyspaceIdType sharding_column_type = 5;
   reserved 5;
 
-  // ServedFroms specifies a set of db_type:keyspace pairs used to serve
-  // traffic for the keyspace.
-  repeated topodata.Keyspace.ServedFrom served_froms = 6;
+  // OBSOLETE: repeated topodata.Keyspace.ServedFrom served_froms = 6;
+  reserved 6;
 
   // Type is the type of the keyspace to create.
   topodata.KeyspaceType type = 7;
@@ -1437,19 +1436,6 @@ message SetKeyspaceDurabilityPolicyRequest {
 }
 
 message SetKeyspaceDurabilityPolicyResponse {
-  // Keyspace is the updated keyspace record.
-  topodata.Keyspace keyspace = 1;
-}
-
-message SetKeyspaceServedFromRequest {
-  string keyspace = 1;
-  topodata.TabletType tablet_type = 2;
-  repeated string cells = 3;
-  bool remove = 4;
-  string source_keyspace = 5;
-}
-
-message SetKeyspaceServedFromResponse {
   // Keyspace is the updated keyspace record.
   topodata.Keyspace keyspace = 1;
 }

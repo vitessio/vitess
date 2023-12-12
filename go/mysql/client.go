@@ -106,7 +106,7 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 		}
 
 		// Send the connection back, so the other side can close it.
-		c := newConn(conn)
+		c := newConn(conn, params.FlushDelay)
 		status <- connectResult{
 			c: c,
 		}

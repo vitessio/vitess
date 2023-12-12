@@ -8,8 +8,13 @@
     - [VTTablet Flags](#vttablet-flags)
   - **[Docker](#docker)**
     - [New MySQL Image](#mysql-image)
+  - **[New Stats](#new-stats)**
+    - [Stream Consolidations](#stream-consolidations)
+    - [Build Version in `/debug/vars`](#build-version-in-debug-vars)
   - **[VTGate](#vtgate)**
     - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
+  - **[Vttestserver](#vttestserver)**
+    - [`--vtcombo-bind-host` flag](#vtcombo-bind-host)
   - **[Query Compatibility](#query-compatibility)**
     - [`SHOW VSCHEMA KEYSPACES` Query](#show-vschema-keyspaces)
   - **[Planned Reparent Shard](#planned-reparent-shard)**
@@ -43,11 +48,27 @@ This lightweight image is a replacement of `vitess/lite` to only run `mysqld`.
 
 Several tags are available to let you choose what version of MySQL you want to use: `vitess/mysql:8.0.30`, `vitess/mysql:8.0.34`.
 
+### <a id="new-stats"/>new stats
+
+#### <a id="stream-consolidations"/>Stream Consolidations
+
+Prior to 19.0 VTTablet reported how much time non-streaming executions spend waiting for consolidations to occur. In 19.0, VTTablet reports a similar stat for streaming executions in `/debug/vars` stat `Waits.Histograms.StreamConsolidations`.
+
+#### <a id="build-version-in-debug-vars"/>Build Version in `/debug/vars`
+
+The build version (e.g., `19.0.0-SNAPSHOT`) has been added to `/debug/vars`, allowing users to programmatically inspect Vitess components' build version at runtime.
+
 ### <a id="vtgate"/>VTGate
 
 #### <a id="fk-checks-vitess-aware"/>`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable
 
 When VTGate receives a query to change the `FOREIGN_KEY_CHECKS` value for a session, instead of sending the value down to MySQL, VTGate now keeps track of the value and changes the queries by adding `SET_VAR(FOREIGN_KEY_CHECKS=On/Off)` style query optimizer hints wherever required. 
+
+### <a id="vttestserver"/>Vttestserver
+
+#### <a id="vtcombo-bind-host"/>`--vtcombo-bind-host` flag
+
+A new flag `--vtcombo-bind-host` has been added to vttestserver that allows the users to configure the bind host that vtcombo uses. This is especially useful when running vttestserver as a docker image and you want to run vtctld commands and look at the vtcombo `/debug/status` dashboard.
 
 ### <a id="query-compatibility"/>Query Compatibility
 

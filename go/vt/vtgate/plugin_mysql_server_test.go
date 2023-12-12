@@ -348,7 +348,7 @@ func TestGracefulShutdown(t *testing.T) {
 
 	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected})
 	th := &testHandler{}
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, "8.0.30-Vitess")
 	require.NoError(t, err)
 	defer listener.Close()
 
@@ -378,7 +378,7 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 
 	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected})
 	th := &testHandler{}
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, "8.0.30-Vitess")
 	require.NoError(t, err)
 	defer listener.Close()
 

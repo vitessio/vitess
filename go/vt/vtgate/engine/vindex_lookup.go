@@ -228,10 +228,6 @@ func (vr *VindexLookup) executeBatch(ctx context.Context, vcursor VCursor, ids [
 		result, err = vcursor.ExecutePrimitive(ctx, vr.Lookup, bindVars, false)
 	}
 	if err != nil {
-		return nil, err
-	}
-
-	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed while running the lookup query")
 	}
 	resultMap := make(map[string][][]sqltypes.Value)

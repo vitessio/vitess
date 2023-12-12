@@ -201,7 +201,7 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 		QueryServiceControl: tabletservermock.NewController(),
 		VDiffEngine:         vdiff2.NewEngine(config, wr.TopoServer(), ft.Tablet),
 	}
-	if err := ft.TM.Start(ft.Tablet, 0); err != nil {
+	if err := ft.TM.Start(ft.Tablet, nil); err != nil {
 		t.Fatal(err)
 	}
 	ft.Tablet = ft.TM.Tablet()

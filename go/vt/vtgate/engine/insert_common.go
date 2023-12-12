@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -73,7 +75,7 @@ type (
 
 		// Prefix, Suffix are for sharded insert plans.
 		Prefix string
-		Suffix string
+		Suffix sqlparser.OnDup
 
 		// Insert needs tx handling
 		txNeeded
