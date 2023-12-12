@@ -4899,5 +4899,33 @@
     "comment": "insert row values greater than number of columns",
     "query": "insert into user(one, two, three) values (1, 2, 3, 4)",
     "plan": "VT03006: column count does not match value count at row 1"
+  },
+  {
+    "comment": "insert on duplicate key update with database qualifier",
+    "query": "insert into user.music(id, user_id, col) values (1, 2, 3) on duplicate key update user.music.col = 5",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user.music(id, user_id, col) values (1, 2, 3) on duplicate key update user.music.col = 5",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "InsertIgnore": true,
+        "Query": "insert into music(id, user_id, col) values (:_id_0, :_user_id_0, 3) on duplicate key update music.col = 5",
+        "TableName": "music",
+        "VindexValues": {
+          "music_user_map": "1",
+          "user_index": "2"
+        }
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
   }
+
 ]
