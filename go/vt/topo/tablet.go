@@ -288,7 +288,6 @@ func (ts *Server) GetTabletAliasesByCell(ctx context.Context, cell string) ([]*t
 // Server.FindAllShardsInKeyspace.
 type GetTabletsByCellOptions struct {
 	// Concurrency controls the maximum number of concurrent calls to GetTablet.
-	// For backwards compatibility, concurrency of 0 is considered unlimited.
 	Concurrency int64
 }
 
@@ -545,16 +544,18 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 			if err := sem.Acquire(ctx, 1); err != nil {
 				// Only happens if context is cancelled.
 				mu.Lock()
+				defer mu.Unlock()
 				log.Warningf("%v: %v", tabletAlias, err)
 				// We only need to set this on the first error.
 				if returnErr == nil {
 					returnErr = NewError(PartialResult, tabletAlias.GetCell())
 				}
-				mu.Unlock()
+				return
 			}
 			tabletInfo, err := ts.GetTablet(ctx, tabletAlias)
 			sem.Release(1)
 			mu.Lock()
+			defer mu.Unlock()
 			if err != nil {
 				log.Warningf("%v: %v", tabletAlias, err)
 				// There can be data races removing nodes - ignore them for now.
@@ -565,7 +566,6 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 			} else {
 				tabletMap[topoproto.TabletAliasString(tabletAlias)] = tabletInfo
 			}
-			mu.Unlock()
 		}(tabletAlias)
 	}
 	wg.Wait()
