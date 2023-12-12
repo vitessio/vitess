@@ -198,6 +198,12 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result,
 	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource) (*TablePlan, error) {
 
+	planError := func(err error, query string) error {
+		// Use the error string here to ensure things are uniform across
+		// vterrors (from parse) and errors (all others).
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s in query: %s", err.Error(), query)
+	}
+
 	filter := rule.Filter
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
@@ -215,7 +221,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	}
 	sel, fromTable, err := analyzeSelectFrom(query)
 	if err != nil {
-		return nil, err
+		return nil, planError(err, query)
 	}
 	sendRule := &binlogdatapb.Rule{
 		Match: fromTable,
@@ -231,10 +237,10 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		// If it's a "select *", we return a partial plan, and complete
 		// it when we get back field info from the stream.
 		if len(sel.SelectExprs) != 1 {
-			return nil, fmt.Errorf("unsupported mix of '*' and columns in query: %v", sqlparser.String(sel))
+			return nil, planError(fmt.Errorf("unsupported mix of '*' and columns"), sqlparser.String(sel))
 		}
 		if !expr.TableName.IsEmpty() {
-			return nil, fmt.Errorf("unsupported qualifier for '*' expression: %v", sqlparser.String(expr))
+			return nil, planError(fmt.Errorf("unsupported qualifier for '*' expression"), sqlparser.String(expr))
 		}
 		sendRule.Filter = query
 		tablePlan := &TablePlan{
@@ -263,7 +269,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
-		return nil, err
+		return nil, planError(err, sqlparser.String(sel))
 	}
 	// It's possible that the target table does not materialize all
 	// the primary keys of the source table. In such situations,
@@ -278,7 +284,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		}
 	}
 	if err := tpb.analyzeGroupBy(sel.GroupBy); err != nil {
-		return nil, err
+		return nil, planError(err, sqlparser.String(sel))
 	}
 	targetKeyColumnNames, err := textutil.SplitUnescape(rule.TargetUniqueKeyColumns, ",")
 	if err != nil {
@@ -377,25 +383,25 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 func analyzeSelectFrom(query string) (sel *sqlparser.Select, from string, err error) {
 	statement, err := sqlparser.Parse(query)
 	if err != nil {
-		return nil, "", vterrors.Wrapf(err, "failed to parse query %q", query)
+		return nil, "", err
 	}
 	sel, ok := statement.(*sqlparser.Select)
 	if !ok {
-		return nil, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported non-select statement in query: %s", sqlparser.String(statement))
+		return nil, "", fmt.Errorf("unsupported non-select statement")
 	}
 	if sel.Distinct {
-		return nil, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported distinct clause in query: %s", sqlparser.String(sel))
+		return nil, "", fmt.Errorf("unsupported distinct clause")
 	}
 	if len(sel.From) > 1 {
-		return nil, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported multi-table query: %s", sqlparser.String(sel))
+		return nil, "", fmt.Errorf("unsupported multi-table usage")
 	}
 	node, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported expression (%T) in from clause: %s", sel.From[0], sqlparser.String(sel))
+		return nil, "", fmt.Errorf("unsupported from expression (%T)", sel.From[0])
 	}
 	fromTable := sqlparser.GetTableName(node.Expr)
 	if fromTable.IsEmpty() {
-		return nil, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported from source (%T) in query: %s", node.Expr, sqlparser.String(sel))
+		return nil, "", fmt.Errorf("unsupported from source (%T)", node.Expr)
 	}
 	return sel, fromTable.String(), nil
 }
