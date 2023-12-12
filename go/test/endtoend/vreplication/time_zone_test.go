@@ -49,8 +49,6 @@ func TestMoveTablesTZ(t *testing.T) {
 	cell1 := vc.Cells["zone1"]
 	vc.AddKeyspace(t, []*Cell{cell1}, sourceKs, "0", initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
 
-	vtgate = cell1.Vtgates[0]
-	require.NotNil(t, vtgate)
 	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKs, shard)
 	require.NoError(t, err)
 

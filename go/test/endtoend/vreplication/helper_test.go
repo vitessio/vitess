@@ -103,6 +103,19 @@ func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	require.NoError(t, err)
 	return qr
 }
+func getConnectionNoError(t *testing.T, hostname string, port int) *mysql.Conn {
+	vtParams := mysql.ConnParams{
+		Host:  hostname,
+		Port:  port,
+		Uname: "vt_dba",
+	}
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		return nil
+	}
+	return conn
+}
 
 func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 	vtParams := mysql.ConnParams{

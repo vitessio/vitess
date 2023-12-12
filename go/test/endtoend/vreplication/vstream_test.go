@@ -219,8 +219,10 @@ const vschemaSharded = `
 `
 
 func insertRow(keyspace, table string, id int) {
-	vtgateConn, closeConn := getVTGateConn()
-	defer closeConn()
+	vtgateConn := getConnectionNoError(vc.t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	if vtgateConn == nil {
+		return
+	}
 	vtgateConn.ExecuteFetch(fmt.Sprintf("use %s;", keyspace), 1000, false)
 	vtgateConn.ExecuteFetch("begin", 1000, false)
 	_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s (name) values ('%s%d')", table, table, id), 1000, false)
@@ -232,8 +234,8 @@ func insertRow(keyspace, table string, id int) {
 
 type numEvents struct {
 	numRowEvents, numJournalEvents                            int64
-	numLessThan80Events, numGreaterThan80Events               int64
-	numLessThan40Events, numGreaterThan40Events               int64
+	numDash80Events, num80DashEvents                          int64
+	numDash40Events, num40DashEvents                          int64
 	numShard0BeforeReshardEvents, numShard0AfterReshardEvents int64
 }
 
@@ -328,13 +330,13 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 						shard := ev.RowEvent.Shard
 						switch shard {
 						case "-80":
-							ne.numLessThan80Events++
+							ne.numDash80Events++
 						case "80-":
-							ne.numGreaterThan80Events++
+							ne.num80DashEvents++
 						case "-40":
-							ne.numLessThan40Events++
+							ne.numDash40Events++
 						case "40-":
-							ne.numGreaterThan40Events++
+							ne.num40DashEvents++
 						}
 						ne.numRowEvents++
 					case binlogdatapb.VEventType_JOURNAL:
@@ -470,13 +472,13 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 								ne.numShard0BeforeReshardEvents++
 							}
 						case "-80":
-							ne.numLessThan80Events++
+							ne.numDash80Events++
 						case "80-":
-							ne.numGreaterThan80Events++
+							ne.num80DashEvents++
 						case "-40":
-							ne.numLessThan40Events++
+							ne.numDash40Events++
 						case "40-":
-							ne.numGreaterThan40Events++
+							ne.num40DashEvents++
 						}
 						ne.numRowEvents++
 					case binlogdatapb.VEventType_JOURNAL:
@@ -524,7 +526,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	customerResult := execVtgateQuery(t, vtgateConn, "sharded", "select count(*) from customer")
 	insertedCustomerRows, err := customerResult.Rows[0][0].ToCastInt64()
 	require.NoError(t, err)
-	require.Equal(t, insertedCustomerRows, ne.numLessThan80Events+ne.numGreaterThan80Events+ne.numLessThan40Events+ne.numGreaterThan40Events)
+	require.Equal(t, insertedCustomerRows, ne.numDash80Events+ne.num80DashEvents+ne.numDash40Events+ne.num40DashEvents)
 	return ne
 }
 
@@ -536,20 +538,20 @@ func TestVStreamStopOnReshardTrue(t *testing.T) {
 	ne := testVStreamStopOnReshardFlag(t, true, 1000)
 	require.Greater(t, ne.numJournalEvents, int64(0))
 	require.NotZero(t, ne.numRowEvents)
-	require.NotZero(t, ne.numLessThan80Events)
-	require.NotZero(t, ne.numGreaterThan80Events)
-	require.Zero(t, ne.numLessThan40Events)
-	require.Zero(t, ne.numGreaterThan40Events)
+	require.NotZero(t, ne.numDash80Events)
+	require.NotZero(t, ne.num80DashEvents)
+	require.Zero(t, ne.numDash40Events)
+	require.Zero(t, ne.num40DashEvents)
 }
 
 func TestVStreamStopOnReshardFalse(t *testing.T) {
 	ne := testVStreamStopOnReshardFlag(t, false, 2000)
 	require.Equal(t, int64(0), ne.numJournalEvents)
 	require.NotZero(t, ne.numRowEvents)
-	require.NotZero(t, ne.numLessThan80Events)
-	require.NotZero(t, ne.numGreaterThan80Events)
-	require.NotZero(t, ne.numLessThan40Events)
-	require.NotZero(t, ne.numGreaterThan40Events)
+	require.NotZero(t, ne.numDash80Events)
+	require.NotZero(t, ne.num80DashEvents)
+	require.NotZero(t, ne.numDash40Events)
+	require.NotZero(t, ne.num40DashEvents)
 }
 
 func TestVStreamWithKeyspacesToWatch(t *testing.T) {
@@ -566,8 +568,8 @@ func TestVStreamCopyMultiKeyspaceReshard(t *testing.T) {
 	require.NotZero(t, ne.numRowEvents)
 	require.NotZero(t, ne.numShard0BeforeReshardEvents)
 	require.NotZero(t, ne.numShard0AfterReshardEvents)
-	require.NotZero(t, ne.numLessThan80Events)
-	require.NotZero(t, ne.numGreaterThan80Events)
-	require.NotZero(t, ne.numLessThan40Events)
-	require.NotZero(t, ne.numGreaterThan40Events)
+	require.NotZero(t, ne.numDash80Events)
+	require.NotZero(t, ne.num80DashEvents)
+	require.NotZero(t, ne.numDash40Events)
+	require.NotZero(t, ne.num40DashEvents)
 }
