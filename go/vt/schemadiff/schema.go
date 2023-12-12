@@ -350,12 +350,26 @@ func (s *Schema) normalize() error {
 			return errors.Join(errs, err)
 		}
 	}
-	colTypeEqualForForeignKey := func(a, b *sqlparser.ColumnType) bool {
-		return a.Type == b.Type &&
-			a.Unsigned == b.Unsigned &&
-			a.Zerofill == b.Zerofill &&
-			sqlparser.Equals.ColumnCharset(a.Charset, b.Charset) &&
-			sqlparser.Equals.SliceOfString(a.EnumValues, b.EnumValues)
+	colTypeCompatibleForForeignKey := func(child, parent *sqlparser.ColumnType) bool {
+		if child.Type == parent.Type {
+			return true
+		}
+		if child.Type == "char" && parent.Type == "varchar" {
+			return true
+		}
+		return false
+	}
+	colTypeEqualForForeignKey := func(child, parent *sqlparser.ColumnType) bool {
+		if colTypeCompatibleForForeignKey(child, parent) &&
+			child.Unsigned == parent.Unsigned &&
+			child.Zerofill == parent.Zerofill &&
+			sqlparser.Equals.ColumnCharset(child.Charset, parent.Charset) &&
+			child.Options.Collate == parent.Options.Collate &&
+			sqlparser.Equals.SliceOfString(child.EnumValues, parent.EnumValues) {
+			// Complete identify (other than precision which is ignored)
+			return true
+		}
+		return false
 	}
 
 	// Now validate foreign key columns:
