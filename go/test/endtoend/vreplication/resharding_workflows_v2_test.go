@@ -672,7 +672,6 @@ func setupCustomer2Keyspace(t *testing.T) {
 
 func setupMinimalCluster(t *testing.T) *VitessCluster {
 	vc = NewVitessCluster(t, nil)
-	vc.TearDown()
 
 	defaultCellName := "zone1"
 	allCellNames = defaultCellName
