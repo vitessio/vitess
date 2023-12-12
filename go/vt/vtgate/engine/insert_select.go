@@ -56,7 +56,7 @@ func newInsertSelect(
 	keyspace *vindexes.Keyspace,
 	table *vindexes.Table,
 	prefix string,
-	suffix string,
+	suffix sqlparser.OnDup,
 	vv [][]int,
 	input Primitive,
 ) *InsertSelect {
@@ -172,7 +172,7 @@ func (ins *InsertSelect) getInsertUnshardedQuery(rows []sqltypes.Row, bindVars m
 		}
 		mids = append(mids, row)
 	}
-	return ins.Prefix + sqlparser.String(mids) + ins.Suffix
+	return ins.Prefix + sqlparser.String(mids) + sqlparser.String(ins.Suffix)
 }
 
 func (ins *InsertSelect) insertIntoShardedTable(
@@ -270,7 +270,7 @@ func (ins *InsertSelect) getInsertShardedQueries(
 				mids = append(mids, row)
 			}
 		}
-		rewritten := ins.Prefix + sqlparser.String(mids) + ins.Suffix
+		rewritten := ins.Prefix + sqlparser.String(mids) + sqlparser.String(ins.Suffix)
 		queries[i] = &querypb.BoundQuery{
 			Sql:           rewritten,
 			BindVariables: bvs,
