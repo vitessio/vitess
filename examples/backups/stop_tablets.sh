@@ -34,19 +34,19 @@ for tablet in 100 200 300; do
       for ((i=0; i<30; i++)); do
           # Redirect stderr to a temporary file
           temp_file=$(mktemp)
-          rm -Rf $VTDATAROOT/vt_0000000$uid 2>$temp_file
+          rm -Rf $VTDATAROOT/vt_0000000$uid 2>"$temp_file"
 
-          if grep -q 'Directory not empty' $temp_file; then
+          if grep -q 'Directory not empty' "$temp_file"; then
               echo "Directory not empty, retrying..."
-          elif [ ! -s $temp_file ]; then
+          elif [ ! -s "$temp_file" ]; then
               echo "Deletion succeeded."
-              rm -f $temp_file
+              rm -f "$temp_file"
               break
           else
               echo "An error occurred."
-              cat $temp_file
+              cat "$temp_file"
           fi
-          rm -f $temp_file
+          rm -f "$temp_file"
           sleep 1
       done
     done
