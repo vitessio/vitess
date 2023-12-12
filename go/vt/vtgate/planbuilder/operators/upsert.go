@@ -88,7 +88,7 @@ func createUpsertOperator(ctx *plancontext.PlanningContext, ins *sqlparser.Inser
 
 	upsert := &Upsert{}
 	for _, row := range rows {
-		var whereExpr sqlparser.Expr
+		var comparisons []sqlparser.Expr
 		for _, pIdx := range pIndexes {
 			var expr sqlparser.Expr
 			if pIdx.idx == -1 {
@@ -96,9 +96,10 @@ func createUpsertOperator(ctx *plancontext.PlanningContext, ins *sqlparser.Inser
 			} else {
 				expr = row[pIdx.idx]
 			}
-			equalExpr := sqlparser.NewComparisonExpr(sqlparser.EqualOp, sqlparser.NewColName(pIdx.col.String()), expr, nil)
-			whereExpr = sqlparser.AndExpressions(whereExpr, equalExpr)
+			comparisons = append(comparisons,
+				sqlparser.NewComparisonExpr(sqlparser.EqualOp, sqlparser.NewColName(pIdx.col.String()), expr, nil))
 		}
+		whereExpr := sqlparser.AndExpressions(comparisons...)
 
 		var updExprs sqlparser.UpdateExprs
 		for _, ue := range ins.OnDup {
