@@ -38,7 +38,7 @@ import java.util.concurrent.TimeoutException;
  * <p>
  * For users who want to get results synchronously, we provide {@link #checkedGet()} as a
  * convenience method. Unlike {@link #get()}, it throws only {@code SQLException}, so e.g. {@code
- * vtgateConn.execute(...).checkedGet()} behaves the same as our old synchronous API.
+ * vtgateConn2.execute(...).checkedGet()} behaves the same as our old synchronous API.
  *
  * <p>
  * The additional methods are similar to the {@code CheckedFuture} interface (marked as beta), but
@@ -60,7 +60,7 @@ public class SQLFuture<V> extends SimpleForwardingListenableFuture<V> {
    *
    * <p>
    * This can be used to effectively turn the Vitess client into a synchronous API. For example:
-   * {@code Cursor cursor = vtgateConn.execute(...).checkedGet();}
+   * {@code Cursor cursor = vtgateConn2.execute(...).checkedGet();}
    */
   public V checkedGet() throws SQLException {
     try {
@@ -78,7 +78,7 @@ public class SQLFuture<V> extends SimpleForwardingListenableFuture<V> {
    *
    * <p>
    * This can be used to effectively turn the Vitess client into a synchronous API. For example:
-   * {@code Cursor cursor = vtgateConn.execute(...).checkedGet();}
+   * {@code Cursor cursor = vtgateConn2.execute(...).checkedGet();}
    */
   public V checkedGet(long timeout, TimeUnit unit) throws TimeoutException, SQLException {
     try {

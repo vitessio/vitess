@@ -117,7 +117,7 @@ func TestFKExt(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKeyspace, "0"), 1, shardStatusWaitTimeout))
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
@@ -297,7 +297,7 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 }
 
 func areRowCountsEqual(t *testing.T) bool {
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	parentRowCount := getRowCount(t, vtgateConn, "target2.parent")
 	childRowCount := getRowCount(t, vtgateConn, "target2.child")

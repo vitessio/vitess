@@ -54,7 +54,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKs, shard)
 	require.NoError(t, err)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 

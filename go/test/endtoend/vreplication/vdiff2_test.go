@@ -139,7 +139,7 @@ func TestVDiff2(t *testing.T) {
 		require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, sourceKs, shard))
 	}
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
@@ -378,6 +378,8 @@ func testNoOrphanedData(t *testing.T, keyspace, workflow string, shards []string
 
 func testResume(t *testing.T, tc *testCase, cells string) {
 	t.Run("Resume", func(t *testing.T) {
+		vtgateConn, closeConn := getVTGateConn()
+		defer closeConn()
 		ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
 
 		// confirm the last VDiff is in the expected completed state
@@ -421,6 +423,8 @@ func testStop(t *testing.T, ksWorkflow, cells string) {
 
 func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 	t.Run("Auto retry on error", func(t *testing.T) {
+		vtgateConn, closeConn := getVTGateConn()
+		defer closeConn()
 		ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
 
 		// confirm the last VDiff is in the expected completed state

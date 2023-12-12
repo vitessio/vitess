@@ -881,6 +881,13 @@ func (vc *VitessCluster) GetVTGateConn(t *testing.T) *mysql.Conn {
 	return getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 }
 
+func getVTGateConn() (*mysql.Conn, func()) {
+	vtgateConn := vc.GetVTGateConn(vc.t)
+	return vtgateConn, func() {
+		vtgateConn.Close()
+	}
+}
+
 func (vc *VitessCluster) startQuery(t *testing.T, query string) (func(t *testing.T), func(t *testing.T)) {
 	conn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	_, err := conn.ExecuteFetch("begin", 1000, false)

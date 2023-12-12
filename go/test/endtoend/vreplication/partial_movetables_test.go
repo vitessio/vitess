@@ -103,7 +103,6 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 		extraVTGateArgs = origExtraVTGateArgs
 	}()
 	vc = setupMinimalCluster(t)
-	defer vtgateConn.Close()
 	defer vc.TearDown()
 	setupMinimalCustomerKeyspace(t)
 
@@ -159,6 +158,8 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	catchup(t, targetTab1, wfName, "Partial MoveTables Customer to Customer2")
 	vdiffSideBySide(t, ksWf, "")
 
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	waitForRowCount(t, vtgateConn, "customer", "customer", 3)      // customer: all shards
 	waitForRowCount(t, vtgateConn, "customer2", "customer", 3)     // customer2: all shards
 	waitForRowCount(t, vtgateConn, "customer2:80-", "customer", 2) // customer2: 80-

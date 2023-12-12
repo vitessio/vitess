@@ -64,7 +64,7 @@ func TestVtctlMigrate(t *testing.T) {
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate, "failed to get vtgate")
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
@@ -191,7 +191,7 @@ func TestVtctldMigrate(t *testing.T) {
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate, "failed to get vtgate")
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)

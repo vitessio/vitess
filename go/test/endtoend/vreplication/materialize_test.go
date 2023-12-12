@@ -86,7 +86,7 @@ func testShardedMaterialize(t *testing.T, useVtctldClient bool) {
 	err = cluster.WaitForHealthyShard(vc.VtctldClient, ks2, shard)
 	require.NoError(t, err)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	_, err = vtgateConn.ExecuteFetch(initDataQuery, 0, false)
@@ -204,7 +204,7 @@ func testMaterialize(t *testing.T, useVtctldClient bool) {
 	err = cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, shard)
 	require.NoError(t, err)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 

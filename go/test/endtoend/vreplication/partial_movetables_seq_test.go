@@ -173,13 +173,11 @@ func (tc *vrepTestCase) teardown() {
 }
 
 func (tc *vrepTestCase) setupCluster() {
-
 	tc.vc = NewVitessCluster(tc.t, nil)
 	vc = tc.vc // for backward compatibility since vc is used globally in this package
 	require.NotNil(tc.t, tc.vc)
 	tc.setupKeyspaces([]string{"commerce", "seqSrc"})
 	tc.vtgateConn = getConnection(tc.t, tc.vc.ClusterConfig.hostname, tc.vc.ClusterConfig.vtgateMySQLPort)
-	vtgateConn = tc.vtgateConn // for backward compatibility since vtgateConn is used globally in this package
 }
 
 func (tc *vrepTestCase) initData() {
@@ -335,6 +333,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	shard := "80-"
 	var wf80Dash, wfDash80 *workflow
 	currentCustomerCount = getCustomerCount(t, "before customer2.80-")
+	vtgateConn, closeConn := getVTGateConn()
 	t.Run("Start MoveTables on customer2.80-", func(t *testing.T) {
 		// Now setup the customer2 keyspace so we can do a partial move tables for one of the two shards: 80-.
 		defaultRdonly = 0
@@ -360,8 +359,10 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	shardMinus80RoutedQuery := "select name from customer where cid = 2 and noexistcol = 'foo'"
 
 	// Reset any existing vtgate connection state.
-	vtgateConn.Close()
-	vtgateConn = getConnection(t, tc.vc.ClusterConfig.hostname, tc.vc.ClusterConfig.vtgateMySQLPort)
+	closeConn()
+
+	vtgateConn, closeConn = getVTGateConn()
+	defer closeConn()
 	t.Run("Confirm routing rules", func(t *testing.T) {
 
 		// Global routing rules should be in place with everything going to the source keyspace (customer).
@@ -536,6 +537,8 @@ var newCustomerCount = int64(201)
 var lastCustomerId int64
 
 func getCustomerCount(t *testing.T, msg string) int64 {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	qr := execVtgateQuery(t, vtgateConn, "", "select count(*) from customer")
 	require.NotNil(t, qr)
 	count, err := qr.Rows[0][0].ToInt64()
@@ -544,6 +547,8 @@ func getCustomerCount(t *testing.T, msg string) int64 {
 }
 
 func confirmLastCustomerIdHasIncreased(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	qr := execVtgateQuery(t, vtgateConn, "", "select cid from customer order by cid desc limit 1")
 	require.NotNil(t, qr)
 	currentCustomerId, err := qr.Rows[0][0].ToInt64()
@@ -553,6 +558,8 @@ func confirmLastCustomerIdHasIncreased(t *testing.T) {
 }
 
 func insertCustomers(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	for i := int64(1); i < newCustomerCount+1; i++ {
 		execVtgateQuery(t, vtgateConn, "customer@primary", fmt.Sprintf("insert into customer(name) values ('name-%d')", currentCustomerCount+i))
 	}

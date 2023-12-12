@@ -63,7 +63,7 @@ create table customer(cid int, name varbinary(128), meta json default null, typ 
 	err := cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
 	require.NoError(t, err)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 
 	verifyClusterHealth(t, vc)

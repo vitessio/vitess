@@ -68,7 +68,7 @@ func TestFKWorkflow(t *testing.T) {
 	require.NoError(t, err)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKeyspace, shardName), 1, 30*time.Second)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
@@ -140,6 +140,8 @@ func TestFKWorkflow(t *testing.T) {
 
 func insertInitialFKData(t *testing.T) {
 	t.Run("insertInitialFKData", func(t *testing.T) {
+		vtgateConn, closeConn := getVTGateConn()
+		defer closeConn()
 		sourceKeyspace := "fksource"
 		shard := "0"
 		db := fmt.Sprintf("%s:%s", sourceKeyspace, shard)
@@ -275,6 +277,8 @@ func (ls *fkLoadSimulator) delete() {
 
 func (ls *fkLoadSimulator) exec(query string) *sqltypes.Result {
 	t := ls.t
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	qr := execVtgateQuery(t, vtgateConn, "fksource", query)
 	require.NotNil(t, qr)
 	return qr

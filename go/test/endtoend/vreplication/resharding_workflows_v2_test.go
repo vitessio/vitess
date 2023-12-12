@@ -227,6 +227,8 @@ func validateReadsRoute(t *testing.T, tabletTypes string, tablet *cluster.Vttabl
 	if tabletTypes == "" {
 		tabletTypes = "replica,rdonly"
 	}
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	for _, tt := range []string{"replica", "rdonly"} {
 		destination := fmt.Sprintf("%s:%s@%s", tablet.Keyspace, tablet.Shard, tt)
 		if strings.Contains(tabletTypes, tt) {
@@ -244,6 +246,8 @@ func validateReadsRouteToTarget(t *testing.T, tabletTypes string) {
 }
 
 func validateWritesRouteToSource(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	insertQuery := "insert into customer(name, cid) values('tempCustomer2', 200)"
 	matchInsertQuery := "insert into customer(`name`, cid) values"
 	assertQueryExecutesOnTablet(t, vtgateConn, sourceTab, "customer", insertQuery, matchInsertQuery)
@@ -251,6 +255,8 @@ func validateWritesRouteToSource(t *testing.T) {
 }
 
 func validateWritesRouteToTarget(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	insertQuery := "insert into customer(name, cid) values('tempCustomer3', 101)"
 	matchInsertQuery := "insert into customer(`name`, cid) values"
 	assertQueryExecutesOnTablet(t, vtgateConn, targetTab2, "customer", insertQuery, matchInsertQuery)
@@ -296,7 +302,6 @@ func TestBasicV2Workflows(t *testing.T) {
 	}()
 
 	vc = setupCluster(t)
-	defer vtgateConn.Close()
 	defer vc.TearDown()
 
 	// Internal tables like the lifecycle ones for OnlineDDL should be ignored
@@ -342,6 +347,8 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 		"", workflowActionComplete, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
 
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	// sanity check
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput("GetVSchema", "product")
 	require.NoError(t, err)
@@ -406,6 +413,8 @@ func testReplicatingWithPKEnumCols(t *testing.T) {
 	// when we re-insert the same row values and ultimately VDiff shows the table as
 	// being identical in both keyspaces.
 
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	// typ is an enum, with soho having a stored and binlogged value of 2
 	deleteQuery := "delete from customer where cid = 2 and typ = 'soho'"
 	insertQuery := "insert into customer(cid, name, typ, sport, meta) values(2, 'Paül','soho','cricket',convert(x'7b7d' using utf8mb4))"
@@ -418,6 +427,8 @@ func testReplicatingWithPKEnumCols(t *testing.T) {
 }
 
 func testReshardV2Workflow(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	currentWorkflowType = wrangler.ReshardWorkflow
 
 	// create internal tables on the original customer shards that should be
@@ -445,6 +456,8 @@ func testReshardV2Workflow(t *testing.T) {
 }
 
 func testMoveTablesV2Workflow(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	currentWorkflowType = wrangler.MoveTablesWorkflow
 
 	// test basic forward and reverse flows
@@ -626,7 +639,7 @@ func setupCluster(t *testing.T) *VitessCluster {
 	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2, 30*time.Second))
 	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "product", "0"), 1, 30*time.Second))
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	defer getVTGateConn()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 
@@ -686,7 +699,6 @@ func setupMinimalCluster(t *testing.T) *VitessCluster {
 	require.NoError(t, err)
 	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1, 30*time.Second))
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 

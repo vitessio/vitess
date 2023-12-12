@@ -50,10 +50,10 @@ import (
 )
 
 var (
-	vc                     *VitessCluster
-	vtgate                 *cluster.VtgateProcess
-	defaultCell            *Cell
-	vtgateConn             *mysql.Conn
+	vc          *VitessCluster
+	vtgate      *cluster.VtgateProcess
+	defaultCell *Cell
+	//vtgateConn             *mysql.Conn
 	defaultRdonly          int
 	defaultReplicas        int
 	allCellNames           string
@@ -145,7 +145,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	require.NoError(t, err)
 	verifyClusterHealth(t, vc)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	sourceTab = vc.getPrimaryTablet(t, sourceKs, shard)
 	targetTab := vc.getPrimaryTablet(t, targetKs, shard)
@@ -323,7 +323,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 	err := cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
 	require.NoError(t, err)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
@@ -450,7 +450,7 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	require.NoError(t, err)
 	verifyClusterHealth(t, vc)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	sourceTab = vc.getPrimaryTablet(t, sourceKs, shard)
 
@@ -467,7 +467,7 @@ func TestVStreamFlushBinlog(t *testing.T) {
 
 	// Generate a lot of binlog event bytes
 	targetBinlogSize := vstreamer.GetBinlogRotationThreshold() + 1024
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	queryF := "insert into db_order_test (c_uuid, dbstuff, created_at) values ('%d', '%s', now())"
 	for i := 100; i < 10000; i++ {
 		randStr, err := randHex(6500)
@@ -611,7 +611,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	require.NoError(t, err)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2, 30*time.Second)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
@@ -723,7 +723,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		// The wait in the next code block which checks that customer.dec80 is updated, also confirms that the
 		// blob-related dmls we execute here are vreplicated.
 		insertIntoBlobTable(t)
-
+		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		defer vtgateConn.Close()
 		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
 		dec80Replicated := false
 		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set dec80 = 0")
@@ -910,6 +911,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 func validateRollupReplicates(t *testing.T) {
 	t.Run("validateRollupReplicates", func(t *testing.T) {
 		insertMoreProducts(t)
+		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		defer vtgateConn.Close()
 		waitForRowCount(t, vtgateConn, "product", "rollup", 1)
 		waitForQueryResult(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
 			`[[VARCHAR("total") INT32(5)]]`)
@@ -918,6 +921,8 @@ func validateRollupReplicates(t *testing.T) {
 
 func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias string) {
 	t.Run("reshardCustomer2to4Split", func(t *testing.T) {
+		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		defer vtgateConn.Close()
 		ksName := "customer"
 		counts := map[string]int{"zone1-600": 4, "zone1-700": 5, "zone1-800": 6, "zone1-900": 5}
 		reshard(t, ksName, "customer", "c2c4", "-80,80-", "-40,40-80,80-c0,c0-",
@@ -931,6 +936,8 @@ func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias str
 
 func reshardMerchant2to3SplitMerge(t *testing.T) {
 	t.Run("reshardMerchant2to3SplitMerge", func(t *testing.T) {
+		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		defer vtgateConn.Close()
 		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-1600": 0, "zone1-1700": 2, "zone1-1800": 0}
 		reshard(t, ksName, "merchant", "m2m3", "-80,80-", "-40,40-c0,c0-",
@@ -978,6 +985,8 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 
 func reshardMerchant3to1Merge(t *testing.T) {
 	t.Run("reshardMerchant3to1Merge", func(t *testing.T) {
+		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		defer vtgateConn.Close()
 		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-2000": 3}
 		reshard(t, ksName, "merchant", "m3m1", "-40,40-c0,c0-", "0",
@@ -1068,6 +1077,8 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 
 func shardOrders(t *testing.T) {
 	t.Run("shardOrders", func(t *testing.T) {
+		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		defer vtgateConn.Close()
 		workflow := "o2c"
 		cell := defaultCell.Name
 		sourceKs := "product"
@@ -1110,6 +1121,8 @@ func checkThatVDiffFails(t *testing.T, keyspace, workflow string) {
 
 func shardMerchant(t *testing.T) {
 	t.Run("shardMerchant", func(t *testing.T) {
+		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		defer vtgateConn.Close()
 		workflow := "p2m"
 		cell := defaultCell.Name
 		sourceKs := "product"
@@ -1263,6 +1276,8 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 
 func materializeRollup(t *testing.T, useVtctldClient bool) {
 	t.Run("materializeRollup", func(t *testing.T) {
+		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		defer vtgateConn.Close()
 		keyspace := "product"
 		workflow := "rollup"
 		applyVSchema(t, materializeSalesVSchema, keyspace)
@@ -1277,6 +1292,8 @@ func materializeRollup(t *testing.T, useVtctldClient bool) {
 
 func materializeSales(t *testing.T, useVtctldClient bool) {
 	t.Run("materializeSales", func(t *testing.T) {
+		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		defer vtgateConn.Close()
 		keyspace := "product"
 		applyVSchema(t, materializeSalesVSchema, keyspace)
 		materialize(t, materializeSalesSpec, useVtctldClient)
@@ -1290,6 +1307,8 @@ func materializeSales(t *testing.T, useVtctldClient bool) {
 
 func materializeMerchantSales(t *testing.T, useVtctldClient bool) {
 	t.Run("materializeMerchantSales", func(t *testing.T) {
+		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		defer vtgateConn.Close()
 		workflow := "msales"
 		materialize(t, materializeMerchantSalesSpec, useVtctldClient)
 		merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, merchantKeyspace, "primary")
@@ -1304,6 +1323,8 @@ func materializeMerchantSales(t *testing.T, useVtctldClient bool) {
 
 func materializeMerchantOrders(t *testing.T, useVtctldClient bool) {
 	t.Run("materializeMerchantOrders", func(t *testing.T) {
+		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		defer vtgateConn.Close()
 		workflow := "morders"
 		keyspace := merchantKeyspace
 		applyVSchema(t, merchantOrdersVSchema, keyspace)
